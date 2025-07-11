@@ -1,5 +1,5 @@
 // Aagedal VideoLoop Converter 2.0
-// Copyright © 2025 Truls Aagedal
+// Copyright 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This program is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@ struct VideoFileRowView: View {
     let onCancel: () -> Void
     let onDelete: () -> Void
     let onReset: () -> Void
+    /// Indicates if this row is selected in the list
+    var isSelected: Bool = false
     
     // Show yellow warning icon when VideoLoop preset is used on clips longer than 15 s
     private var showDurationWarning: Bool {
@@ -25,11 +27,13 @@ struct VideoFileRowView: View {
     
     var body: some View {
         ZStack {
-            Rectangle()
-                .opacity(0.4)
-                .foregroundColor(.indigo)
-                .cornerRadius(8)
-                .shadow(radius: 8)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(NSColor.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(isSelected ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: isSelected ? 2 : 0.8)
+                )
+                .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
             
             HStack {
                 // Thumbnail
@@ -157,6 +161,7 @@ struct VideoFileRowView: View {
                 .padding()
             }
         }
+        .padding(.horizontal, 4)
     }
     
     private var progressText: String {

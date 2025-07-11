@@ -53,7 +53,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack {
             // File list with drag and drop support
             VideoFileListView(
                 droppedFiles: $droppedFiles,
