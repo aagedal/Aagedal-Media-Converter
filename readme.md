@@ -1,4 +1,4 @@
-# Aagedal VideoLoop Converter 2.0
+# Aagedal VideoLoop Converter
 
 A lightweight macOS application for converting video files into formats that **loop seamlessly** and play reliably across platforms and web browsers. Powered by FFmpeg under the hood and written entirely in Swift / SwiftUI.
 
