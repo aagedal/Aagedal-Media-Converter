@@ -265,13 +265,13 @@ actor FFMPEGConverter {
         var ffmpegArgs = preset.ffmpegArguments
         
         // Replace the placeholder comment with the actual comment if it exists
-        if let commentIndex = ffmpegArgs.firstIndex(of: "ADD USER COMMENT HERE") {
+        if let metadataValueIndex = ffmpegArgs.firstIndex(where: { $0.contains("comment=Date generated:") }) {
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyyMMdd"
             let currentDateString = dateFormatter.string(from: Date())
-            
-            let commentMetadata = "Date generated: \(currentDateString)" + (comment.isEmpty ? "" : " | \(comment)")
-            ffmpegArgs[commentIndex] = commentMetadata
+            let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+            let commentSuffix = trimmedComment.isEmpty ? "" : " | \(trimmedComment)"
+            ffmpegArgs[metadataValueIndex] = "comment=Date generated: \(currentDateString)\(commentSuffix)"
         }
         
         arguments.append(contentsOf: ffmpegArgs)

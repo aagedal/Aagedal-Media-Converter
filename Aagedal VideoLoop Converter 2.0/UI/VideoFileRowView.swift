@@ -19,15 +19,14 @@ struct VideoFileRowView: View {
     let onReset: () -> Void
     /// Indicates if this row is selected in the list
     var isSelected: Bool = false
-    
+
     // Show yellow warning icon when VideoLoop preset is used on clips longer than 15 s
     private var showDurationWarning: Bool {
         (preset == .videoLoop || preset == .videoLoopWithAudio) && file.durationSeconds > 15
     }
-    
-    @State private var isEditingComment = false
-    @State private var editedComment = ""
-    
+
+    @FocusState private var isCommentFocused: Bool
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -46,7 +45,8 @@ struct VideoFileRowView: View {
                             .frame(width: 150, height: 150)
                             .cornerRadius(9)
                             .foregroundColor(.black)
-                            .padding(2)
+                            .padding(.vertical, 12)
+                            .padding(.leading, 12)
                         
                         if let data = file.thumbnailData, let nsImage = NSImage(data: data) {
                             Image(nsImage: nsImage)
@@ -60,7 +60,6 @@ struct VideoFileRowView: View {
                                 .font(.largeTitle)
                         }
                     }
-                    .padding(.leading)
                     
                     VStack(alignment: .leading, spacing: 4) {
                         // Input and output file names
@@ -138,7 +137,7 @@ struct VideoFileRowView: View {
                                 }
                                 .buttonStyle(BorderlessButtonStyle())
                                 .help("Cancel conversion")
-                            } else if file.status == .done || file.status == .failed {
+                            } else {
                                 Button(action: onDelete) {
                                     Image(systemName: "trash")
                                         .foregroundColor(.red)
@@ -146,74 +145,64 @@ struct VideoFileRowView: View {
                                 .buttonStyle(BorderlessButtonStyle())
                                 .help("Remove from list")
                                 
-                                Button(action: onReset) {
-                                    Image(systemName: "arrow.counterclockwise")
-                                        .foregroundStyle(file.status == .converting || file.status == .waiting ? .gray : .blue)
+                                if file.status != .waiting {
+                                    Button(action: onReset) {
+                                        Image(systemName: "arrow.counterclockwise")
+                                            .foregroundStyle(file.status == .converting || file.status == .waiting ? .gray : .blue)
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
+                                    .help("Reset conversion")
+                                    .disabled(file.status == .converting || file.status == .waiting)
                                 }
-                                .buttonStyle(BorderlessButtonStyle())
-                                .help("Reset conversion")
-                                .disabled(file.status == .converting || file.status == .waiting)
                             }
                         }
+                        commentEditor
                     }
                     .padding()
-                }
-                
-                // Comment section
-                HStack {
-                    if isEditingComment {
-                        HStack {
-                            TextField("Add a comment...", text: $editedComment, onCommit: {
-                                file.comment = editedComment
-                                isEditingComment = false
-                            })
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .frame(maxWidth: .infinity)
-                            
-                            Button(action: {
-                                isEditingComment = false
-                            }) {
-                                Image(systemName: "xmark.circle")
-                                    .foregroundColor(.gray)
-                            }
-                            .buttonStyle(BorderlessButtonStyle())
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
-                    } else {
-                        HStack {
-                            if file.comment.isEmpty {
-                                Text("No comment")
-                                    .font(.subheadline)
-                                    .foregroundColor(.gray)
-                                    .italic()
-                            } else {
-                                Text(file.comment)
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                    .lineLimit(2)
-                            }
-                            
-                            Spacer()
-                            
-                            Button(action: {
-                                editedComment = file.comment
-                                isEditingComment = true
-                            }) {
-                                Image(systemName: "pencil")
-                                    .foregroundColor(.gray)
-                            }
-                            .buttonStyle(BorderlessButtonStyle())
-                            .help("Edit comment")
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
-                    }
                 }
             }
         }
         .padding(.horizontal, 4)
     }
+
+    private var commentEditor: some View {
+        let commentBinding = Binding(
+            get: { file.comment },
+            set: { file.comment = $0 }
+        )
+        return ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(NSColor.textBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                )
+                .frame(maxWidth: .infinity)
+            TextEditor(text: commentBinding)
+                .font(.subheadline)
+                .foregroundColor(.primary)
+                .background(Color.clear)
+                .scrollContentBackground(.hidden)
+                .focused($isCommentFocused)
+                .frame(height: 20)
+                .onTapGesture {
+                    isCommentFocused = true
+                }
+                .padding(.horizontal, 3)
+                .padding(.top, 6)
+            if file.comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Add a comment (single line)...")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .allowsHitTesting(false)
+                    .padding(.horizontal, 7)
+                    .padding(.top, 6)
+            }
+        }
+        .contentShape(Rectangle())
+        .padding(.top, 35)
+        .frame(height: 20)
+   }
     
     private var progressText: String {
         switch file.status {
