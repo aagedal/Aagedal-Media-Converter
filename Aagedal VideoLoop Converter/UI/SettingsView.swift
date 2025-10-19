@@ -79,11 +79,10 @@ struct SettingsView: View {
                                 Text(preset.displayName).tag(preset)
                             }
                         }
-                        .pickerStyle(.segmented)
+                        .pickerStyle(.automatic)
                         .labelsHidden()
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .layoutPriority(1)
                         
+                        Spacer()
                         Button(action: setSelectedPresetAsDefault) {
                             if isSelectedPresetDefault {
                                 Text("Default")
