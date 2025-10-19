@@ -102,18 +102,17 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         let currentDateString = dateFormatter.string(from: Date())
 
         
-        let commonArgs = [
+        var commonArgs = [
             "-hide_banner",
         ]
-        
+
+        let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+
         switch self {
         case .videoLoop:
-            return commonArgs + [
+            var args = commonArgs + [
                 "-bitexact",
                 "-bsf:v", "filter_units=remove_types=6",
-                "-map_metadata", "-1",
-                "-metadata", "encoder=' '",
-                "-metadata:s:v:0", "encoder=' '",
 
                 // TODO: Implement UI text box for user comment to be added to the comment metadata.
                 "-metadata", "comment=Date generated: \(currentDateString) ADD USER COMMENT HERE",
@@ -130,17 +129,13 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-an",
                 "-vf", "yadif=0,scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
             ]
-
-
-            // ffmpeg -i "/Users/traag222/Movies/VideoLoopExports/Sequence_02_loop.mp4" -c:v libx264 -bitexact -bsf:v 'filter_units=remove_types=6' -map_metadata -1 -metadata encoder=' ' -metadata:s:v:0 encoder=' '  -metadata comment="Processed on $(date +%Y%m%d)" seq_output.mp4
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+            return args
             
         case .videoLoopWithAudio:
-            return commonArgs + [
-                                "-bitexact",
+            var args = commonArgs + [
+                "-bitexact",
                 "-bsf:v", "filter_units=remove_types=6",
-                "-map_metadata", "-1",
-                "-metadata", "encoder=' '",
-                "-metadata:s:v:0", "encoder=' '",
 
                 // TODO: Implement UI text box for user comment to be added to the comment metadata.
                 "-metadata", "comment=Date generated: \(currentDateString) ADD USER COMMENT HERE",
@@ -158,9 +153,11 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-b:a", "192k",
                 "-vf", "yadif=0,scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+            return args
             
         case .tvQualityHD:
-            return commonArgs + [
+            var args = commonArgs + [
                 "-pix_fmt", "p010le",
                 "-c:v", "hevc_videotoolbox",
                 "-b:v", "18M",
@@ -169,13 +166,13 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-c:a", "pcm_s24le",
                 "-map", "0:v",
                 "-map", "0:a",
-                "-map_metadata", "0",
-                "-map_chapters", "0",
                 "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
             
         case .tvQuality4K:
-            return commonArgs + [
+            var args = commonArgs + [
                 "-pix_fmt", "p010le",
                 "-c:v", "hevc_videotoolbox",
                 "-b:v", "60M",
@@ -184,20 +181,23 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-c:a", "pcm_s24le",
                 "-map", "0:v",
                 "-map", "0:a",
-                "-map_metadata", "0",
-                "-map_chapters", "0",
                 "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),2160,-2)':h='if(lte(iw,ih),-2,2160)'"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
             
         case .animatedAVIF:
-            return commonArgs + [
+            var args = commonArgs + [
                 "-pix_fmt", "p010le",
                 "-vcodec", "libsvtav1",
                 "-crf", "33", "-an",
                 "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),720,-2)':h='if(lte(iw,ih),-2,720)'"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+            return args
+            
         case .hevcProxy1080p:
-            return commonArgs + [
+            var args = commonArgs + [
                 "-pix_fmt", "p010le",
                 "-c:v", "hevc_videotoolbox",
                 "-b:v", "6M",
@@ -207,30 +207,30 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-map", "0:v",
                 "-c:a", "pcm_s24le",
                 "-map", "0:a",
-                "-map_metadata", "0",
-                "-map_chapters", "0"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
         case .prores:
-            return commonArgs + [
+            var args = commonArgs + [
                 "-pix_fmt", "yuv422p10le",
                 "-vcodec", "prores_videotoolbox",
                 "-profile:v", "standard",
                 "-c:a", "pcm_s24le",
                 "-map", "0:v",
                 "-map", "0:a",
-                "-map_metadata", "0",
-                "-map_chapters", "0"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
         case .audioUncompressedWAV:
-            return commonArgs + [
-                "-map_metadata", "-1",
+            var args = commonArgs + [
                 "-vn",
                 "-map", "0:a",
                 "-c:a", "pcm_s24le"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+            return args
         case .audioStereoAAC:
-            return commonArgs + [
-                "-map_metadata", "-1",
+            var args = commonArgs + [
                 "-vn",
                 "-map", "0:a",
                 "-ac", "2",
@@ -238,10 +238,59 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-b:a", "192k",
                 "-movflags", "+faststart"
             ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+            return args
         case .custom:
             let customArgs = Self.parseCustomCommand(Self.customCommandString())
             return commonArgs + customArgs
         }
+    }
+
+    private static func applyMetadataStrategy(to args: inout [String], preserveMetadata: Bool, defaultMap: String = "-1") {
+        removeArgumentPair("-map_metadata", from: &args)
+        removeArgumentPair("-map_chapters", from: &args)
+        removeArgumentPair("-metadata", value: "encoder=' '", from: &args)
+        removeArgumentPair("-metadata:s:v:0", value: "encoder=' '", from: &args)
+
+        if preserveMetadata {
+            if defaultMap != "-1" {
+                appendArgumentPair("-map_metadata", value: defaultMap, to: &args)
+                appendArgumentPair("-map_chapters", value: defaultMap, to: &args)
+            }
+        } else {
+            appendArgumentPair("-map_metadata", value: "-1", to: &args)
+            appendArgumentPair("-map_chapters", value: "-1", to: &args)
+            appendArgumentPair("-metadata", value: "encoder=' '", to: &args)
+            appendArgumentPair("-metadata:s:v:0", value: "encoder=' '", to: &args)
+        }
+    }
+
+    private static func removeArgumentPair(_ key: String, value: String? = nil, from args: inout [String]) {
+        var index = 0
+        while index < args.count {
+            if args[index] == key {
+                let hasValue = value == nil || (index + 1 < args.count && args[index + 1] == value!)
+                if hasValue {
+                    args.remove(at: index)
+                    if index < args.count {
+                        args.remove(at: index)
+                    }
+                    continue
+                }
+            }
+            index += 1
+        }
+    }
+
+    private static func appendArgumentPair(_ key: String, value: String, to args: inout [String]) {
+        var index = 0
+        while index < args.count - 1 {
+            if args[index] == key && args[index + 1] == value {
+                return
+            }
+            index += 1
+        }
+        args.append(contentsOf: [key, value])
     }
 
     private static func customFileSuffix() -> String {

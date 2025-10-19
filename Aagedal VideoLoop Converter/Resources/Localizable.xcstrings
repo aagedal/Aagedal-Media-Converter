@@ -191,6 +191,9 @@
         }
       }
     },
+    "By default, metadata such as title, comment, and encoder tags are stripped to keep output files clean. Enable this to keep all metadata untouched." : {
+
+    },
     "Cancel all conversions" : {
       "localizations" : {
         "en" : {
@@ -598,6 +601,9 @@
         }
       }
     },
+    "Metadata" : {
+
+    },
     "mp4" : {
       "localizations" : {
         "nb" : {
@@ -721,6 +727,9 @@
           }
         }
       }
+    },
+    "Preserve all original metadata" : {
+
     },
     "Preset" : {
       "localizations" : {
@@ -1073,6 +1082,9 @@
           }
         }
       }
+    },
+    "When enabled, the original file's metadata is kept intact during conversion" : {
+
     }
   },
   "version" : "1.1"
