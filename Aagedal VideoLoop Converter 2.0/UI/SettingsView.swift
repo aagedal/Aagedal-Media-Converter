@@ -48,7 +48,7 @@ struct SettingsView: View {
                 
                 Text("FFMPEG frontend with focus on creating videoloops: small .mp4-files are intended to loop infinitely and automatically inline on websites. This works as a modern replacement for GIFs.")
                     .font(.body)
-                    .padding(.bottom, 8)
+                    .padding(8)
                 
                 // Divider()
                 
@@ -90,21 +90,20 @@ struct SettingsView: View {
                         .help("Change default output folder")
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(8)
             }
             
             // Preset Information Section
             Section(header: Text("Preset Information")) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading) {
                     // Segmented Control for Preset Selection
                     Picker("Preset", selection: $selectedPreset) {
                         ForEach(ExportPreset.allCases) { preset in
                             Text(preset.displayName).tag(preset)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.automatic)
                     .labelsHidden()
-                    .padding(.bottom, 8)
                     
                     // Preset Description
                     VStack(alignment: .leading, spacing: 8) {
@@ -120,7 +119,6 @@ struct SettingsView: View {
                     .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
                     .cornerRadius(8)
                 }
-                .padding(.vertical, 8)
             }
             
             // Links Section
@@ -156,9 +154,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 650, height: isPresentedAsSheet ? 600 : 600)
+        .frame(width: 600, height: isPresentedAsSheet ? 680 : 580)
         .navigationTitle("About Aagedal Video Loop Converter")
-        .padding(.top, isPresentedAsSheet ? 30 : 0)
+        .padding(.top, isPresentedAsSheet ? 120 : 00)
     }
     
     // MARK: - Helpers

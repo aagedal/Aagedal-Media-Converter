@@ -218,20 +218,20 @@ struct VideoFileListView: View {
     // MARK: - Row Builder
     @ViewBuilder
     private func cardRow(for index: Int) -> some View {
-        let file = droppedFiles[index]
+        // Get a binding to the file in the array
+        let file = $droppedFiles[index]
         VideoFileRowView(
             file: file,
             preset: preset,
             onCancel: {
-                Task { await ConversionManager.shared.cancelItem(with: file.id) }
+                Task { await ConversionManager.shared.cancelItem(with: file.wrappedValue.id) }
             },
             onDelete: {
                 onDelete(IndexSet(integer: index))
             },
             onReset: {
                 onReset(index)
-            },
-            isSelected: selection.contains(index)
+            }
         )
         .padding([.vertical], 4)
         .listRowSeparator(.hidden)
@@ -282,4 +282,60 @@ struct VideoFileListView_Previews: PreviewProvider {
             preset: .videoLoop
         )
     }
+}
+
+private func generateThumbnailWithFFmpeg(from url: URL) -> NSImage? {
+    let tempDir = FileManager.default.temporaryDirectory
+    let outputURL = tempDir.appendingPathComponent(UUID().uuidString).appendingPathExtension("jpg")
+    
+    let process = Process()
+    process.executableURL = Bundle.main.url(forResource: "ffmpeg", withExtension: nil)
+    
+    // Get video duration
+    let durationProcess = Process()
+    durationProcess.executableURL = Bundle.main.url(forResource: "ffprobe", withExtension: nil)
+    durationProcess.arguments = [
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        url.path
+    ]
+    
+    let durationPipe = Pipe()
+    durationProcess.standardOutput = durationPipe
+    
+    do {
+        try durationProcess.run()
+        durationProcess.waitUntilExit()
+        
+        let durationData = durationPipe.fileHandleForReading.readDataToEndOfFile()
+        if let durationString = String(data: durationData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           let duration = Double(durationString) {
+            
+            // Seek to 10% of the video to avoid intros/black screens
+            let seekTime = min(10, duration * 0.1)
+            
+            process.arguments = [
+                "-ss", String(seekTime),
+                "-i", url.path,
+                "-vframes", "1",
+                "-q:v", "2", // Quality (2-31, lower is better)
+                "-vf", "scale=320:-1", // Scale width to 320px, maintain aspect ratio
+                "-y", // Overwrite output file if it exists
+                outputURL.path
+            ]
+            
+            try process.run()
+            process.waitUntilExit()
+            
+            if let image = NSImage(contentsOf: outputURL) {
+                try? FileManager.default.removeItem(at: outputURL)
+                return image
+            }
+        }
+    } catch {
+        print("Error generating thumbnail with FFmpeg: \(error)")
+    }
+    
+    return nil
 }

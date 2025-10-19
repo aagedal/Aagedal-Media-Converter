@@ -1,5 +1,5 @@
 // Aagedal VideoLoop Converter 2.0
-// Copyright © 2025 Truls Aagedal
+// Copyright 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This program is free software: you can redistribute it and/or modify
@@ -141,6 +141,7 @@ actor ConversionManager: Sendable {
             inputURL: inputURL,
             outputURL: outputURL,
             preset: preset,
+            comment: nextFile.comment,
             progressUpdate: { progress, eta in
                 Task { @MainActor in
                     if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {

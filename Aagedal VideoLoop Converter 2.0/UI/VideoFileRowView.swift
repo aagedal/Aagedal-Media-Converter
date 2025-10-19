@@ -12,7 +12,7 @@ import AVFoundation
 import AppKit
 
 struct VideoFileRowView: View {
-    let file: VideoItem
+    @Binding var file: VideoItem
     let preset: ExportPreset
     let onCancel: () -> Void
     let onDelete: () -> Void
@@ -25,6 +25,9 @@ struct VideoFileRowView: View {
         (preset == .videoLoop || preset == .videoLoopWithAudio) && file.durationSeconds > 15
     }
     
+    @State private var isEditingComment = false
+    @State private var editedComment = ""
+    
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -35,130 +38,178 @@ struct VideoFileRowView: View {
                 )
                 .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
             
-            HStack {
-                // Thumbnail
-                ZStack {
-                    Rectangle()
-                        .frame(width: 100, height: 100)
-                        .cornerRadius(9)
-                        .foregroundColor(.black)
-                        .padding(2)
-                    
-                    if let data = file.thumbnailData, let nsImage = NSImage(data: data) {
-                        Image(nsImage: nsImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 100, height: 100)
-                            .cornerRadius(4)
-                    } else {
-                        Image(systemName: "film")
-                            .padding()
-                            .font(.largeTitle)
+            VStack(spacing: 0) {
+                HStack {
+                    // Thumbnail
+                    ZStack {
+                        Rectangle()
+                            .frame(width: 150, height: 150)
+                            .cornerRadius(9)
+                            .foregroundColor(.black)
+                            .padding(2)
+                        
+                        if let data = file.thumbnailData, let nsImage = NSImage(data: data) {
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 150, height: 150)
+                                .cornerRadius(4)
+                        } else {
+                            Image(systemName: "film")
+                                .padding()
+                                .font(.largeTitle)
+                        }
                     }
-                }
-                .padding(.leading)
-                
-                // File info
-                VStack(alignment: .leading, spacing: 4) {
-                    // Input and output file names
-                    HStack {
-                        Text(file.name)
-                            .font(.headline)
-                        // Duration warning icon
-                        Text("→")
-                        HStack(spacing: 4) {
-                            Text(generateOutputFilename(from: file.name))
+                    .padding(.leading)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Input and output file names
+                        HStack {
+                            Text(file.name)
                                 .font(.headline)
-                                .foregroundColor((file.status == .waiting && file.outputFileExists) ? .orange : .primary)
-                            
-                            if file.status == .waiting && file.outputFileExists, let outputURL = file.outputURL {
-                                Button(action: {
-                                    NSWorkspace.shared.activateFileViewerSelecting([outputURL])
-                                }) {
-                                    Image(systemName: "magnifyingglass.circle.fill")
-                                        .foregroundColor(.orange)
-                                        .help("Output file already exists. Click to show in Finder")
+                            // Duration warning icon
+                            Text("→")
+                            HStack(spacing: 4) {
+                                Text(generateOutputFilename(from: file.name))
+                                    .font(.headline)
+                                    .foregroundColor((file.status == .waiting && file.outputFileExists) ? .orange : .primary)
+                                
+                                if file.status == .waiting && file.outputFileExists, let outputURL = file.outputURL {
+                                    Button(action: {
+                                        NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+                                    }) {
+                                        Image(systemName: "magnifyingglass.circle.fill")
+                                            .foregroundColor(.orange)
+                                            .help("Output file already exists. Click to show in Finder")
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
                                 }
-                                .buttonStyle(BorderlessButtonStyle())
-                            }
-                            
-                            if file.status == .done, let outputURL = file.outputURL {
-                                Button(action: {
-                                    NSWorkspace.shared.activateFileViewerSelecting([outputURL])
-                                }) {
-                                    Image(systemName: "magnifyingglass.circle.fill")
-                                        .foregroundColor(.blue)
-                                        .help("Show in Finder")
+                                
+                                if file.status == .done, let outputURL = file.outputURL {
+                                    Button(action: {
+                                        NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+                                    }) {
+                                        Image(systemName: "magnifyingglass.circle.fill")
+                                            .foregroundColor(.blue)
+                                            .help("Show in Finder")
+                                    }
+                                    .buttonStyle(BorderlessButtonStyle())
                                 }
-                                .buttonStyle(BorderlessButtonStyle())
                             }
-                        }
-                        Spacer()
-                    }
-                    
-                    // Progress and status
-                    if file.status == .converting {
-                        ProgressView(value: file.progress)
-                            .progressViewStyle(LinearProgressViewStyle())
-                    }
-                    
-                    // Metadata
-                    HStack {
-                        Text("Duration: \(file.duration)")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                        if showDurationWarning {
-                            Image(systemName: "exclamationmark.triangle.fill").font(.subheadline)
-                                .foregroundColor(.yellow)
-                                .help("Duration exceeds 15 seconds. VideoLoops are best suited for shorter videos.")
+                            Spacer()
                         }
                         
-                        Text("•")
-                            .foregroundColor(.gray)
+                        // Progress and status
+                        if file.status == .converting {
+                            ProgressView(value: file.progress)
+                                .progressViewStyle(LinearProgressViewStyle())
+                        }
                         
-                        Text("Input Size: \(file.formattedSize)")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                        
-                        Spacer()
-                        
-                        // Status
-                        Text(progressText)
-                            .font(.subheadline)
-                            .foregroundColor(statusColor)
-                        
-                        // Action buttons
-                        HStack(spacing: 8) {
-                            // Cancel/Delete button
+                        // Metadata
+                        HStack {
+                            Text("Duration: \(file.duration)")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            if showDurationWarning {
+                                Image(systemName: "exclamationmark.triangle.fill").font(.subheadline)
+                                    .foregroundColor(.yellow)
+                                    .help("Duration exceeds 15 seconds. VideoLoops are best suited for shorter videos.")
+                            }
+                            
+                            Text("•")
+                                .foregroundColor(.gray)
+                            
+                            Text("Input Size: \(file.formattedSize)")
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                            
+                            Spacer()
+                            
+                            // Status
+                            Text(progressText)
+                                .font(.subheadline)
+                                .foregroundColor(statusColor)
+                            
+                            // Action buttons
                             if file.status == .converting {
                                 Button(action: onCancel) {
-                                    Image(systemName: "xmark.circle.fill")
+                                    Image(systemName: "xmark.circle")
                                         .foregroundColor(.red)
                                 }
                                 .buttonStyle(BorderlessButtonStyle())
                                 .help("Cancel conversion")
-                            } else {
+                            } else if file.status == .done || file.status == .failed {
                                 Button(action: onDelete) {
-                                    Image(systemName: "delete.backward")
+                                    Image(systemName: "trash")
                                         .foregroundColor(.red)
                                 }
                                 .buttonStyle(BorderlessButtonStyle())
-                                .disabled(file.status == .converting) // Disable delete during conversion
-                                .help(file.status == .converting ? "Cannot delete while converting" : "Delete from list")
+                                .help("Remove from list")
+                                
+                                Button(action: onReset) {
+                                    Image(systemName: "arrow.counterclockwise")
+                                        .foregroundStyle(file.status == .converting || file.status == .waiting ? .gray : .blue)
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                                .help("Reset conversion")
+                                .disabled(file.status == .converting || file.status == .waiting)
                             }
-                            
-                            // Reset button
-                            Button(action: onReset) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .foregroundStyle(file.status == .converting || file.status == .waiting ? .gray : .blue)
-                            }
-                            .buttonStyle(BorderlessButtonStyle())
-                            .help("Reset conversion")
-                            .disabled(file.status == .converting || file.status == .waiting)
                         }
                     }
+                    .padding()
                 }
-                .padding()
+                
+                // Comment section
+                HStack {
+                    if isEditingComment {
+                        HStack {
+                            TextField("Add a comment...", text: $editedComment, onCommit: {
+                                file.comment = editedComment
+                                isEditingComment = false
+                            })
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .frame(maxWidth: .infinity)
+                            
+                            Button(action: {
+                                isEditingComment = false
+                            }) {
+                                Image(systemName: "xmark.circle")
+                                    .foregroundColor(.gray)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                    } else {
+                        HStack {
+                            if file.comment.isEmpty {
+                                Text("No comment")
+                                    .font(.subheadline)
+                                    .foregroundColor(.gray)
+                                    .italic()
+                            } else {
+                                Text(file.comment)
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(2)
+                            }
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                editedComment = file.comment
+                                isEditingComment = true
+                            }) {
+                                Image(systemName: "pencil")
+                                    .foregroundColor(.gray)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                            .help("Edit comment")
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                    }
+                }
             }
         }
         .padding(.horizontal, 4)
@@ -201,8 +252,8 @@ struct VideoFileRowView: View {
 }
 
 struct VideoFileRowView_Previews: PreviewProvider {
-    static var previews: some View {
-        let item = VideoItem(
+    struct Preview: View {
+        @State private var item = VideoItem(
             url: URL(fileURLWithPath: "/path/to/video.mp4"),
             name: "Sample Video",
             size: 1024 * 1024 * 100, // 100MB
@@ -211,25 +262,31 @@ struct VideoFileRowView_Previews: PreviewProvider {
             status: .waiting,
             progress: 0.0,
             eta: nil,
-            outputURL: nil
+            outputURL: nil,
+            comment: "This is a sample comment"
         )
         
-        return VideoFileRowView(
-            file: item,
-            preset: .videoLoop,
-            onCancel: {},
-            onDelete: {},
-            onReset: {}
-        )
-        .frame(width: 800, height: 120)
-        .padding()
+        var body: some View {
+            VideoFileRowView(
+                file: $item,
+                preset: .videoLoop,
+                onCancel: {},
+                onDelete: {},
+                onReset: {}
+            )
+            .frame(width: 800, height: 150)
+            .padding()
+        }
+    }
+    
+    static var previews: some View {
+        Preview()
     }
 }
 
-
 struct VideoFileRowView_Previews2: PreviewProvider {
-    static var previews: some View {
-        let item = VideoItem(
+    struct Preview: View {
+        @State private var item = VideoItem(
             url: URL(fileURLWithPath: "/path/to/video2.mp4"),
             name: "Sample Video 2",
             size: 1024 * 1024 * 100, // 100MB
@@ -237,18 +294,25 @@ struct VideoFileRowView_Previews2: PreviewProvider {
             thumbnailData: nil,
             status: .converting,
             progress: 0.3,
-            eta: nil,
-            outputURL: nil
+            eta: "00:01:23",
+            outputURL: nil,
+            comment: "This is another sample comment"
         )
         
-        return VideoFileRowView(
-            file: item,
-            preset: .videoLoop,
-            onCancel: {},
-            onDelete: {},
-            onReset: {}
-        )
-        .frame(width: 800, height: 120)
-        .padding()
+        var body: some View {
+            VideoFileRowView(
+                file: $item,
+                preset: .videoLoop,
+                onCancel: {},
+                onDelete: {},
+                onReset: {}
+            )
+            .frame(width: 800, height: 150)
+            .padding()
+        }
+    }
+    
+    static var previews: some View {
+        Preview()
     }
 }

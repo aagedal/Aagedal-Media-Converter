@@ -134,7 +134,7 @@ struct ContentView: View {
                             }
                         }
                     } label: {
-                        Label("Output", systemImage: "folder")
+                        Label("Output", systemImage: "folder.badge.gearshape")
                             .foregroundColor(.accentColor)
                     }
                     .help("Select output folder")

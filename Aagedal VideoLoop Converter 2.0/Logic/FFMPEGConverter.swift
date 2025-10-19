@@ -1,5 +1,5 @@
 // Aagedal VideoLoop Converter 2.0
-// Copyright © 2025 Truls Aagedal
+// Copyright 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This program is free software: you can redistribute it and/or modify
@@ -76,9 +76,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     
     var ffmpegArguments: [String] {
 
-let dateFormatter = DateFormatter()
-dateFormatter.dateFormat = "yyyyMMdd"
-let todayString = dateFormatter.string(from: Date())
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyyMMdd"
+        let currentDateString = dateFormatter.string(from: Date())
 
         
         let commonArgs = [
@@ -93,7 +93,9 @@ let todayString = dateFormatter.string(from: Date())
                 "-map_metadata", "-1",
                 "-metadata", "encoder=' '",
                 "-metadata:s:v:0", "encoder=' '",
-                "-metadata", "comment=\(todayString) USER COMMENT HERE, TODO: Implement UI text box.",
+
+                // TODO: Implement UI text box for user comment to be added to the comment metadata.
+                "-metadata", "comment=Date generated: \(currentDateString) ADD USER COMMENT HERE",
                 "-pix_fmt", "yuv420p",
                 "-vcodec", "libx264",
                 "-movflags", "+faststart",
@@ -118,7 +120,9 @@ let todayString = dateFormatter.string(from: Date())
                 "-map_metadata", "-1",
                 "-metadata", "encoder=' '",
                 "-metadata:s:v:0", "encoder=' '",
-                "-metadata", "comment=\(todayString) USER COMMENT HERE, TODO: Implement UI text box.",
+
+                // TODO: Implement UI text box for user comment to be added to the comment metadata.
+                "-metadata", "comment=Date generated: \(currentDateString) ADD USER COMMENT HERE",
                 "-pix_fmt", "yuv420p",
                 "-vcodec", "libx264",
                 "-movflags", "+faststart",
@@ -208,12 +212,14 @@ actor FFMPEGConverter {
     ///   - inputURL: The source video file URL
     ///   - outputURL: The destination URL (without extension)
     ///   - preset: The export preset to use
+    ///   - comment: The comment to be added to the metadata
     ///   - progressUpdate: Callback for progress updates (progress: Double, status: String?)
     ///   - completion: Callback for completion (success: Bool)
     func convert(
         inputURL: URL,
         outputURL: URL,
         preset: ExportPreset = .videoLoop,
+        comment: String = "",
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool) -> Void
     ) async {
@@ -254,7 +260,21 @@ actor FFMPEGConverter {
         
         // Build FFmpeg arguments
         var arguments = ["-y", "-i", inputURL.path]
-        arguments.append(contentsOf: preset.ffmpegArguments)
+        
+        // Get the base arguments for the preset
+        var ffmpegArgs = preset.ffmpegArguments
+        
+        // Replace the placeholder comment with the actual comment if it exists
+        if let commentIndex = ffmpegArgs.firstIndex(of: "ADD USER COMMENT HERE") {
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyyMMdd"
+            let currentDateString = dateFormatter.string(from: Date())
+            
+            let commentMetadata = "Date generated: \(currentDateString)" + (comment.isEmpty ? "" : " | \(comment)")
+            ffmpegArgs[commentIndex] = commentMetadata
+        }
+        
+        arguments.append(contentsOf: ffmpegArgs)
         arguments.append(outputFileURL.path)
         
         process.arguments = arguments

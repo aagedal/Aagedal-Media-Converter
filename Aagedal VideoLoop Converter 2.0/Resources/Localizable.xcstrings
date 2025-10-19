@@ -70,6 +70,9 @@
     "Add ${video} to the encode queue" : {
 
     },
+    "Add a comment..." : {
+
+    },
     "Add files to begin conversion" : {
       "localizations" : {
         "en" : {
@@ -144,6 +147,7 @@
       }
     },
     "Cannot delete while converting" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -230,6 +234,7 @@
       }
     },
     "Delete from list" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -327,6 +332,9 @@
         }
       }
     },
+    "Edit comment" : {
+
+    },
     "FFMPEG frontend with focus on creating videoloops: small .mp4-files are intended to loop infinitely and automatically inline on websites. This works as a modern replacement for GIFs." : {
       "localizations" : {
         "en" : {
@@ -416,6 +424,9 @@
           }
         }
       }
+    },
+    "No comment" : {
+
     },
     "No files ready to convert" : {
       "comment" : "A button that either cancels or starts all conversions depending on the current state.",
@@ -665,6 +676,9 @@
           }
         }
       }
+    },
+    "Remove from list" : {
+
     },
     "Reset conversion" : {
       "localizations" : {

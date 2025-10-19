@@ -1,5 +1,5 @@
 // Aagedal VideoLoop Converter 2.0
-// Copyright © 2025 Truls Aagedal
+// Copyright 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@ struct VideoFileUtils: Sendable {
         return AppConstants.supportedVideoExtensions.contains(fileExtension)
     }
     
-    static func createVideoItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop) async -> VideoItem? {
+    static func createVideoItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") async -> VideoItem? {
         guard isVideoFile(url: url) else { return nil }
         
         let name = url.lastPathComponent
@@ -71,7 +71,8 @@ struct VideoFileUtils: Sendable {
             status: .waiting,
             progress: 0.0,
             eta: nil,
-            outputURL: outputURL
+            outputURL: outputURL,
+            comment: comment
         )
     }
     // utility to format seconds into hh:mm:ss or mm:ss
@@ -194,6 +195,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var progress: Double
     var eta: String?
     var outputURL: URL?
+    var comment: String = ""
     
     /// Human-readable file size string (<1 MB ⇒ KB, 1–600 MB ⇒ MB, ≥600 MB ⇒ GB)
     var formattedSize: String {
