@@ -42,17 +42,15 @@ struct VideoFileRowView: View {
                     // Thumbnail
                     ZStack {
                         Rectangle()
-                            .frame(width: 150, height: 150)
+                            .frame(width: 200, height: 150)
                             .cornerRadius(9)
                             .foregroundColor(.black)
-                            .padding(.vertical, 12)
-                            .padding(.leading, 12)
                         
                         if let data = file.thumbnailData, let nsImage = NSImage(data: data) {
                             Image(nsImage: nsImage)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .frame(width: 150, height: 150)
+                                .frame(width: 200, height: 150)
                                 .cornerRadius(4)
                         } else {
                             Image(systemName: "film")

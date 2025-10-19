@@ -36,6 +36,7 @@
 		8EE6EEBA2C31FC6F007B629D /* Aagedal_VideoLoop_Converter_2_0UITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE6EEB92C31FC6F007B629D /* Aagedal_VideoLoop_Converter_2_0UITestsLaunchTests.swift */; };
 		8EFBDA912EA56F8E005ADDCF /* ffprobe in Resources */ = {isa = PBXBuildFile; fileRef = 8EFBDA902EA56F8E005ADDCF /* ffprobe */; };
 		8EFBDA922EA56F8E005ADDCF /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = 8EFBDA8F2EA56F8E005ADDCF /* ffmpeg */; };
+		8EFBDA942EA58975005ADDCF /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EFBDA932EA58975005ADDCF /* AboutView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -92,6 +93,7 @@
 		8EF6370F2E086024001F2A90 /* Aagedal_VideoLoop_Converter_2_0.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Aagedal_VideoLoop_Converter_2_0.entitlements; sourceTree = "<group>"; };
 		8EFBDA8F2EA56F8E005ADDCF /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
 		8EFBDA902EA56F8E005ADDCF /* ffprobe */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffprobe; sourceTree = "<group>"; };
+		8EFBDA932EA58975005ADDCF /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -158,6 +160,7 @@
 		8E0CA7A82C3416EF00EA7C37 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				8EFBDA932EA58975005ADDCF /* AboutView.swift */,
 				8EE0BB9B2E0892B70096171D /* SettingsView.swift */,
 				8E545D882C34030C0088C274 /* VideoFileListView.swift */,
 				8EE0BB9D2E089F520096171D /* DockProgressView.swift */,
@@ -410,6 +413,7 @@
 				8E545D852C33FD610088C274 /* DocumentPickerView.swift in Sources */,
 				8EE0BB9E2E089F520096171D /* DockProgressView.swift in Sources */,
 				8E545D872C33FD8C0088C274 /* VideoFilesUtil.swift in Sources */,
+				8EFBDA942EA58975005ADDCF /* AboutView.swift in Sources */,
 				8E0CA7AC2C3458A400EA7C37 /* ParsingUtils.swift in Sources */,
 				8E2C6BBF2E084BC200A9379F /* SecurityScopedBookmarkManager.swift in Sources */,
 				8E2C6BAF2E059AFC00A9379F /* AppConstants.swift in Sources */,

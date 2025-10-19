@@ -184,6 +184,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Application Settings")
+                    .padding(.horizontal, 8)
 
                 }
             }

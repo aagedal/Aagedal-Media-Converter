@@ -18,20 +18,37 @@ struct Aagedal_VideoLoop_Converter_2_0App: App {
             VStack {
                 ContentView()
             }
-        }.windowStyle(.automatic)
-            .windowToolbarStyle(.automatic)
-            .windowResizability(.contentMinSize)
-            // Add File → Import… menu command
-            .commands {
-                CommandGroup(after: .importExport) {
-                    Button("Import…") {
-                        NotificationCenter.default.post(name: .showFileImporter, object: nil)
-                    }
-                    .keyboardShortcut("i", modifiers: .command)
-                }
-            }
+        }
+        .windowStyle(.automatic)
+        .windowToolbarStyle(.automatic)
+        .windowResizability(.contentMinSize)
+        .commands {
+            MainAppCommands()
+        }
         Settings {
             SettingsView().keyboardShortcut(",",modifiers: .command)
+        }
+        Window("About Aagedal VideoLoop Converter", id: "about") {
+            AboutView()
+        }
+        .windowResizability(.contentSize)
+    }
+}
+
+struct MainAppCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(after: .importExport) {
+            Button("Import…") {
+                NotificationCenter.default.post(name: .showFileImporter, object: nil)
+            }
+            .keyboardShortcut("i", modifiers: .command)
+        }
+        CommandGroup(replacing: .appInfo) {
+            Button("About Aagedal VideoLoop Converter") {
+                openWindow(id: "about")
+            }
         }
     }
 }
