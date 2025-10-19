@@ -8,17 +8,14 @@
 // (at your option) any later version.
 
 import SwiftUI
-import AppKit
 
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
-    let isPresentedAsSheet: Bool
-    
-    init(isPresentedAsSheet: Bool = false) {
-        self.isPresentedAsSheet = isPresentedAsSheet
-    }
     @AppStorage("outputFolder") private var outputFolder = AppConstants.defaultOutputDirectory.path
     @AppStorage(AppConstants.includeDateTagPreferenceKey) private var includeDateTagByDefault = false
+    @AppStorage(AppConstants.customPresetCommandKey) private var customPresetCommand = "-c copy"
+    @AppStorage(AppConstants.customPresetSuffixKey) private var customPresetSuffix = "_custom"
+    @AppStorage(AppConstants.customPresetExtensionKey) private var customPresetExtension = "mp4"
+    @AppStorage(AppConstants.defaultPresetKey) private var storedDefaultPresetRawValue = ExportPreset.videoLoop.rawValue
     @State private var selectedPreset: ExportPreset = .videoLoop
     
     var body: some View {
@@ -76,13 +73,33 @@ struct SettingsView: View {
             Section(header: Text("Preset Information")) {
                 VStack(alignment: .leading) {
                     // Segmented Control for Preset Selection
-                    Picker("Preset", selection: $selectedPreset) {
-                        ForEach(ExportPreset.allCases) { preset in
-                            Text(preset.displayName).tag(preset)
+                    HStack(alignment: .center, spacing: 12) {
+                        Picker("Preset", selection: $selectedPreset) {
+                            ForEach(ExportPreset.allCases) { preset in
+                                Text(preset.displayName).tag(preset)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .layoutPriority(1)
+                        
+                        Button(action: setSelectedPresetAsDefault) {
+                            if isSelectedPresetDefault {
+                                Text("Default")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.green)
+                            } else {
+                                Text("Set as Default")
+                                    .font(.subheadline)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSelectedPresetDefault)
+                        .help(isSelectedPresetDefault ? "Current default preset" : "Set this preset as the default for new files")
                     }
-                    .pickerStyle(.automatic)
-                    .labelsHidden()
                     
                     // Preset Description
                     VStack(alignment: .leading, spacing: 10) {
@@ -113,23 +130,59 @@ struct SettingsView: View {
                     .cornerRadius(10)
                 }
             }
+            if selectedPreset == .custom {
+                Section(header: Text("Custom Preset")) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Specify the arguments passed to ffmpeg (without including the `ffmpeg` command itself).")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        TextEditor(text: $customPresetCommand)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(minHeight: 80)
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
+                            .onChange(of: customPresetCommand) { _, newValue in
+                                customPresetCommand = sanitizeCustomCommand(newValue)
+                            }
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Output file suffix")
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                                TextField("_custom", text: $customPresetSuffix)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onChange(of: customPresetSuffix) { _, newValue in
+                                        customPresetSuffix = sanitizeCustomSuffix(newValue)
+                                    }
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Output extension")
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                                TextField("mp4", text: $customPresetExtension)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onChange(of: customPresetExtension) { _, newValue in
+                                        customPresetExtension = sanitizeCustomExtension(newValue)
+                                    }
+                            }
+                        }
+                        Text("Example: `-c:v libx264 -crf 18 -preset slow -c:a copy` produces `filename\(customPresetSuffix).\(customPresetExtension)`.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
             
             // Links Section
             Section {
                 HStack(spacing: 20) {
                     // Left-aligned Close button (only shown in sheet)
-                    if isPresentedAsSheet {
-                        Button(action: { dismiss() }) {
-                            Text("Close")
-                                .foregroundColor(.red)
-                        }
-                        .buttonStyle(.plain)
-                        .keyboardShortcut(.cancelAction)
-                    } else {
-                        // Spacer to push content to the right when not in sheet mode
-                        Spacer()
-                    }
-                    
                     Spacer()
                     // Right-aligned links
                     HStack(spacing: 20) {
@@ -147,9 +200,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 600, height: isPresentedAsSheet ? 720 : 560)
+        .frame(width: 600, height: 560)
         .navigationTitle("About Aagedal Video Loop Converter")
-        .padding(.top, isPresentedAsSheet ? 120 : 0)
         .padding(.horizontal, 20)
     }
     
@@ -167,6 +219,37 @@ struct SettingsView: View {
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
             outputFolder = url.path
         }
+    }
+
+    private func sanitizeCustomSuffix(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "_custom" : (trimmed.hasPrefix("_") ? trimmed : "_" + trimmed)
+    }
+    
+    private func sanitizeCustomExtension(_ value: String) -> String {
+        var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix(".") {
+            trimmed.removeFirst()
+        }
+        trimmed = trimmed.replacingOccurrences(of: " ", with: "")
+        return trimmed.isEmpty ? "mp4" : trimmed.lowercased()
+    }
+    
+    private func sanitizeCustomCommand(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.controlCharacters))
+        return trimmed.isEmpty ? "-c copy" : trimmed
+    }
+
+    private var defaultPreset: ExportPreset {
+        ExportPreset(rawValue: storedDefaultPresetRawValue) ?? .videoLoop
+    }
+    
+    private var isSelectedPresetDefault: Bool {
+        selectedPreset == defaultPreset
+    }
+    
+    private func setSelectedPresetAsDefault() {
+        storedDefaultPresetRawValue = selectedPreset.rawValue
     }
 }
 

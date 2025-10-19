@@ -13,11 +13,14 @@ import OSLog
 enum ExportPreset: String, CaseIterable, Identifiable {
     case videoLoop = "VideoLoop"
     case videoLoopWithAudio = "VideoLoop w/Audio"
-    case tvQualityHD = "TV – HD"
-    case tvQuality4K = "TV – 4K"
+    case tvQualityHD = "TV — HD"
+    case tvQuality4K = "TV — 4K"
     case prores = "ProRes"
     case animatedAVIF = "Animated AVIF"
     case hevcProxy1080p = "HEVC Proxy"
+    case audioUncompressedWAV = "Audio only WAV (all channels)"
+    case audioStereoAAC = "Audio only AAC (stereo downmix)"
+    case custom = "Custom"
     
     var id: String { self.rawValue }
     
@@ -29,6 +32,12 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "mov"
         case .animatedAVIF:
             return "avif"
+        case .audioUncompressedWAV:
+            return "wav"
+        case .audioStereoAAC:
+            return "m4a"
+        case .custom:
+            return Self.customFileExtension()
         }
     }
     
@@ -52,6 +61,12 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return NSLocalizedString("PRESET_ANIMATED_AVIF_DESCRIPTION", comment: "Description for Animated AVIF preset")
         case .hevcProxy1080p:
             return NSLocalizedString("PRESET_HEVC_PROXY_DESCRIPTION", comment: "Description for HECV Proxy 1080p preset")
+        case .audioUncompressedWAV:
+            return NSLocalizedString("PRESET_AUDIO_WAV_DESCRIPTION", comment: "Description for Audio WAV preset")
+        case .audioStereoAAC:
+            return NSLocalizedString("PRESET_AUDIO_AAC_STEREO_DESCRIPTION", comment: "Description for Audio AAC Stereo preset")
+        case .custom:
+            return NSLocalizedString("PRESET_CUSTOM_DESCRIPTION", comment: "Description for Custom preset")
         }
     }
     
@@ -71,6 +86,12 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "_avif"
         case .hevcProxy1080p:
             return "_proxy_1080p"
+        case .audioUncompressedWAV:
+            return "_audio_wav"
+        case .audioStereoAAC:
+            return "_audio_aac"
+        case .custom:
+            return Self.customFileSuffix()
         }
     }
     
@@ -200,7 +221,95 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-map_metadata", "0",
                 "-map_chapters", "0"
             ]
+        case .audioUncompressedWAV:
+            return commonArgs + [
+                "-map_metadata", "-1",
+                "-vn",
+                "-map", "0:a",
+                "-c:a", "pcm_s24le"
+            ]
+        case .audioStereoAAC:
+            return commonArgs + [
+                "-map_metadata", "-1",
+                "-vn",
+                "-map", "0:a",
+                "-ac", "2",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart"
+            ]
+        case .custom:
+            let customArgs = Self.parseCustomCommand(Self.customCommandString())
+            return commonArgs + customArgs
         }
+    }
+
+    private static func customFileSuffix() -> String {
+        let stored = UserDefaults.standard.string(forKey: AppConstants.customPresetSuffixKey) ?? "_custom"
+        let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "_custom" : trimmed
+    }
+
+    private static func customFileExtension() -> String {
+        let stored = UserDefaults.standard.string(forKey: AppConstants.customPresetExtensionKey) ?? "mp4"
+        var trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix(".") {
+            trimmed.removeFirst()
+        }
+        trimmed = trimmed.replacingOccurrences(of: " ", with: "")
+        return trimmed.isEmpty ? "mp4" : trimmed.lowercased()
+    }
+
+    private static func customCommandString() -> String {
+        let stored = UserDefaults.standard.string(forKey: AppConstants.customPresetCommandKey) ?? "-c copy"
+        let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "-c copy" : trimmed
+    }
+
+    private static func parseCustomCommand(_ command: String) -> [String] {
+        var args: [String] = []
+        var current = ""
+        var quote: Character? = nil
+        var isEscaping = false
+        
+        for char in command {
+            if isEscaping {
+                current.append(char)
+                isEscaping = false
+                continue
+            }
+            
+            if char == "\\" {
+                isEscaping = true
+                continue
+            }
+            
+            if char == "\"" || char == "'" {
+                if quote == char {
+                    quote = nil
+                } else if quote == nil {
+                    quote = char
+                } else {
+                    current.append(char)
+                }
+                continue
+            }
+            
+            if char.isWhitespace && quote == nil {
+                if !current.isEmpty {
+                    args.append(current)
+                    current = ""
+                }
+            } else {
+                current.append(char)
+            }
+        }
+        
+        if !current.isEmpty {
+            args.append(current)
+        }
+        
+        return args
     }
 }
 

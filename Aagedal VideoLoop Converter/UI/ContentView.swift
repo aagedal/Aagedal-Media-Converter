@@ -37,10 +37,12 @@ struct ContentView: View {
     @State private var isConverting: Bool = false
     @State private var overallProgress: Double = 0.0
     @State private var isFileImporterPresented = false
+    @AppStorage(AppConstants.defaultPresetKey) private var storedDefaultPresetRawValue = ExportPreset.videoLoop.rawValue
     @State private var selectedPreset: ExportPreset = .videoLoop
+    @State private var hasInitializedPreset = false
+    @State private var hasUserChangedPreset = false
     @State private var dockProgressUpdater = DockProgressUpdater()
     @State private var progressTask: Task<Void, Never>?
-    @State private var isShowingSettings = false
     
     // Using shared AppConstants for supported file types
     private var supportedVideoTypes: [UTType] {
@@ -165,7 +167,7 @@ struct ContentView: View {
                 
                 // Preset Picker
                 ToolbarItem(placement: .automatic) {
-                    Picker("Preset", selection: $selectedPreset) {
+                    Picker("Preset", selection: toolbarPresetBinding) {
                         ForEach(ExportPreset.allCases) { preset in
                             Text(preset.displayName).tag(preset)
                         }
@@ -177,15 +179,12 @@ struct ContentView: View {
                     .help("Select export preset for all files")
                 }
                 ToolbarItem {
-                    Button {
-                        isShowingSettings = true
-                    } label: {
+                    SettingsLink {
                         Image(systemName: "info.circle").foregroundStyle(.blue)
                     }
                     .buttonStyle(.plain)
                     .help("Application Settings")
                     .padding(.horizontal, 8)
-
                 }
             }
             
@@ -203,14 +202,18 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            if !hasInitializedPreset {
+                selectedPreset = ExportPreset(rawValue: storedDefaultPresetRawValue) ?? .videoLoop
+                hasInitializedPreset = true
+                hasUserChangedPreset = false
+            }
             Task {
                 isConverting = await ConversionManager.shared.isConvertingStatus()
             }
         }
-        .frame(minWidth: 500, minHeight: 300)
-        .sheet(isPresented: $isShowingSettings) {
-            SettingsView(isPresentedAsSheet: true)
-                .frame(width: 600, height: 600)
+        .onChange(of: storedDefaultPresetRawValue) { _, newValue in
+            selectedPreset = ExportPreset(rawValue: newValue) ?? .videoLoop
+            hasUserChangedPreset = false
         }
         // Listen for menu command
         .onReceive(NotificationCenter.default.publisher(for: .showFileImporter)) { _ in
@@ -349,6 +352,16 @@ struct ContentView: View {
         isConverting = false
         // Reset dock progress immediately on cancel
         dockProgressUpdater.reset()
+    }
+    
+    private var toolbarPresetBinding: Binding<ExportPreset> {
+        Binding(
+            get: { selectedPreset },
+            set: { newValue in
+                hasUserChangedPreset = true
+                selectedPreset = newValue
+            }
+        )
     }
 }
 
