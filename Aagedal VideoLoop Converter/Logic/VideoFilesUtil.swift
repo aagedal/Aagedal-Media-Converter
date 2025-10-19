@@ -144,7 +144,9 @@ struct VideoFileUtils: Sendable {
         let assetImageGenerator = AVAssetImageGenerator(asset: asset)
         assetImageGenerator.appliesPreferredTrackTransform = true
         assetImageGenerator.apertureMode = .cleanAperture
-        assetImageGenerator.maximumSize = CGSize(width: 320, height: 180) // Thumbnail size
+        let displaySize = CGSize(width: 200, height: 150)
+        let scaleFactor = NSScreen.main?.backingScaleFactor ?? NSScreen.screens.first?.backingScaleFactor ?? 2.0
+        assetImageGenerator.maximumSize = CGSize(width: displaySize.width * scaleFactor, height: displaySize.height * scaleFactor) // Thumbnail size
         
         // Get a more representative timestamp (10% into the video)
         let duration = try? await asset.load(.duration)
