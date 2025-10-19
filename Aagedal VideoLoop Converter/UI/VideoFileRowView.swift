@@ -24,7 +24,6 @@ struct VideoFileRowView: View {
     private var showDurationWarning: Bool {
         (preset == .videoLoop || preset == .videoLoopWithAudio) && file.durationSeconds > 15
     }
-
     @FocusState private var isCommentFocused: Bool
 
     var body: some View {
@@ -71,26 +70,32 @@ struct VideoFileRowView: View {
                                     .font(.headline)
                                     .foregroundColor((file.status == .waiting && file.outputFileExists) ? .orange : .primary)
                                 
-                                if file.status == .waiting && file.outputFileExists, let outputURL = file.outputURL {
-                                    Button(action: {
-                                        NSWorkspace.shared.activateFileViewerSelecting([outputURL])
-                                    }) {
-                                        Image(systemName: "magnifyingglass.circle.fill")
-                                            .foregroundColor(.orange)
-                                            .help("Output file already exists. Click to show in Finder")
+                                if let outputURL = file.outputURL {
+                                    HStack(spacing: 6) {
+                                        if file.status == .waiting && file.outputFileExists {
+                                            Button(action: {
+                                                NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+                                            }) {
+                                                Image(systemName: "magnifyingglass.circle.fill")
+                                                    .foregroundColor(.orange)
+                                                    .help("Output file already exists. Click to show in Finder")
+                                            }
+                                            .buttonStyle(BorderlessButtonStyle())
+                                            dragIcon(for: outputURL, color: Color.orange)
+                                        }
+
+                                        if file.status == .done {
+                                            Button(action: {
+                                                NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+                                            }) {
+                                                Image(systemName: "magnifyingglass.circle.fill")
+                                                    .foregroundColor(.blue)
+                                                    .help("Show in Finder")
+                                            }
+                                            .buttonStyle(BorderlessButtonStyle())
+                                            dragIcon(for: outputURL, color: Color.blue)
+                                        }
                                     }
-                                    .buttonStyle(BorderlessButtonStyle())
-                                }
-                                
-                                if file.status == .done, let outputURL = file.outputURL {
-                                    Button(action: {
-                                        NSWorkspace.shared.activateFileViewerSelecting([outputURL])
-                                    }) {
-                                        Image(systemName: "magnifyingglass.circle.fill")
-                                            .foregroundColor(.blue)
-                                            .help("Show in Finder")
-                                    }
-                                    .buttonStyle(BorderlessButtonStyle())
                                 }
                             }
                             Spacer()
@@ -247,6 +252,17 @@ struct VideoFileRowView: View {
         let filename = (input as NSString).deletingPathExtension
         let sanitized = FileNameProcessor.processFileName(filename)
         return "\(sanitized)\(preset.fileSuffix).\(preset.fileExtension)"
+    }
+
+    private func dragIcon(for outputURL: URL, color: Color) -> some View {
+        Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+            .foregroundColor(color)
+            .help("Drag this icon to another app to share the exported file")
+            .onDrag {
+                let provider = NSItemProvider(object: outputURL as NSURL)
+                provider.suggestedName = outputURL.lastPathComponent
+                return provider
+            }
     }
 }
 

@@ -102,7 +102,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         let currentDateString = dateFormatter.string(from: Date())
 
         
-        var commonArgs = [
+        let commonArgs = [
             "-hide_banner",
         ]
 
