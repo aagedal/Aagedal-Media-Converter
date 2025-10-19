@@ -220,6 +220,7 @@ actor FFMPEGConverter {
         outputURL: URL,
         preset: ExportPreset = .videoLoop,
         comment: String = "",
+        includeDateTag: Bool = true,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool) -> Void
     ) async {
@@ -266,12 +267,24 @@ actor FFMPEGConverter {
         
         // Replace the placeholder comment with the actual comment if it exists
         if let metadataValueIndex = ffmpegArgs.firstIndex(where: { $0.contains("comment=Date generated:") }) {
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyyMMdd"
-            let currentDateString = dateFormatter.string(from: Date())
             let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
-            let commentSuffix = trimmedComment.isEmpty ? "" : " | \(trimmedComment)"
-            ffmpegArgs[metadataValueIndex] = "comment=Date generated: \(currentDateString)\(commentSuffix)"
+            if includeDateTag {
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyyMMdd"
+                let currentDateString = dateFormatter.string(from: Date())
+                let commentSuffix = trimmedComment.isEmpty ? "" : " | \(trimmedComment)"
+                ffmpegArgs[metadataValueIndex] = "comment=Date generated: \(currentDateString)\(commentSuffix)"
+            } else {
+                if trimmedComment.isEmpty {
+                    let metadataKeyIndex = metadataValueIndex - 1
+                    ffmpegArgs.remove(at: metadataValueIndex)
+                    if metadataKeyIndex >= 0 && metadataKeyIndex < ffmpegArgs.count && ffmpegArgs[metadataKeyIndex] == "-metadata" {
+                        ffmpegArgs.remove(at: metadataKeyIndex)
+                    }
+                } else {
+                    ffmpegArgs[metadataValueIndex] = "comment=\(trimmedComment)"
+                }
+            }
         }
         
         arguments.append(contentsOf: ffmpegArgs)

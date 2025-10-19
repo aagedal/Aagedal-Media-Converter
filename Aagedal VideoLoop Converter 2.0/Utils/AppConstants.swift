@@ -37,4 +37,5 @@ enum AppConstants {
     
     // Maximum thumbnail dimensions
     static let maxThumbnailSize = CGSize(width: 320, height: 320)
+    static let includeDateTagPreferenceKey = "includeDateTagByDefault"
 }

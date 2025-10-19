@@ -18,6 +18,7 @@ struct SettingsView: View {
         self.isPresentedAsSheet = isPresentedAsSheet
     }
     @AppStorage("outputFolder") private var outputFolder = AppConstants.defaultOutputDirectory.path
+    @AppStorage(AppConstants.includeDateTagPreferenceKey) private var includeDateTagByDefault = false
     @State private var selectedPreset: ExportPreset = .videoLoop
     
     var body: some View {
@@ -96,6 +97,11 @@ struct SettingsView: View {
             // Preset Information Section
             Section(header: Text("Preset Information")) {
                 VStack(alignment: .leading) {
+                    Toggle("Include date tag on new files", isOn: $includeDateTagByDefault)
+                        .toggleStyle(SwitchToggleStyle())
+                        .padding(.bottom, 8)
+                        .help("Controls whether newly added files include the \"Date generated\" metadata tag by default")
+
                     // Segmented Control for Preset Selection
                     Picker("Preset", selection: $selectedPreset) {
                         ForEach(ExportPreset.allCases) { preset in

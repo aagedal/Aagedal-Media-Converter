@@ -61,6 +61,7 @@ struct VideoFileUtils: Sendable {
             outputURL = URL(fileURLWithPath: outputFolder).appendingPathComponent(outputFileName)
         }
         
+        let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
         return VideoItem(
             url: url,
             name: name,
@@ -72,7 +73,8 @@ struct VideoFileUtils: Sendable {
             progress: 0.0,
             eta: nil,
             outputURL: outputURL,
-            comment: comment
+            comment: comment,
+            includeDateTag: includeDateTagByDefault
         )
     }
     // utility to format seconds into hh:mm:ss or mm:ss
@@ -196,6 +198,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var eta: String?
     var outputURL: URL?
     var comment: String = ""
+    var includeDateTag: Bool = true
     
     /// Human-readable file size string (<1 MB ⇒ KB, 1–600 MB ⇒ MB, ≥600 MB ⇒ GB)
     var formattedSize: String {

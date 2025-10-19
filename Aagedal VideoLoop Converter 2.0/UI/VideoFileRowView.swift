@@ -156,6 +156,7 @@ struct VideoFileRowView: View {
                                 }
                             }
                         }
+                        includeDateTagToggle
                         commentEditor
                     }
                     .padding()
@@ -200,9 +201,20 @@ struct VideoFileRowView: View {
             }
         }
         .contentShape(Rectangle())
-        .padding(.top, 35)
+        .padding(.top, 12)
         .frame(height: 20)
    }
+
+    private var includeDateTagToggle: some View {
+        let includeDateBinding = Binding(
+            get: { file.includeDateTag },
+            set: { file.includeDateTag = $0 }
+        )
+        return Toggle("Include date tag", isOn: includeDateBinding)
+            .font(.subheadline)
+            .toggleStyle(SwitchToggleStyle())
+            .padding(.top, 12)
+    }
     
     private var progressText: String {
         switch file.status {

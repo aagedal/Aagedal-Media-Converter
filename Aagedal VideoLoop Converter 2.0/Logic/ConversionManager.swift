@@ -142,6 +142,7 @@ actor ConversionManager: Sendable {
             outputURL: outputURL,
             preset: preset,
             comment: nextFile.comment,
+            includeDateTag: nextFile.includeDateTag,
             progressUpdate: { progress, eta in
                 Task { @MainActor in
                     if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {
