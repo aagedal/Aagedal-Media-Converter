@@ -423,26 +423,46 @@ actor FFMPEGConverter {
         // Get the base arguments for the preset
         var ffmpegArgs = preset.ffmpegArguments
         
-        // Replace the placeholder comment with the actual comment if it exists
-        if let metadataValueIndex = ffmpegArgs.firstIndex(where: { $0.contains("comment=Date generated:") }) {
-            let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        let commentMetadataValue: String? = {
             if includeDateTag {
                 let dateFormatter = DateFormatter()
                 dateFormatter.dateFormat = "yyyyMMdd"
                 let currentDateString = dateFormatter.string(from: Date())
                 let commentSuffix = trimmedComment.isEmpty ? "" : " | \(trimmedComment)"
-                ffmpegArgs[metadataValueIndex] = "comment=Date generated: \(currentDateString)\(commentSuffix)"
+                return "comment=Date generated: \(currentDateString)\(commentSuffix)"
+            } else if !trimmedComment.isEmpty {
+                return "comment=\(trimmedComment)"
             } else {
-                if trimmedComment.isEmpty {
-                    let metadataKeyIndex = metadataValueIndex - 1
-                    ffmpegArgs.remove(at: metadataValueIndex)
-                    if metadataKeyIndex >= 0 && metadataKeyIndex < ffmpegArgs.count && ffmpegArgs[metadataKeyIndex] == "-metadata" {
-                        ffmpegArgs.remove(at: metadataKeyIndex)
-                    }
-                } else {
-                    ffmpegArgs[metadataValueIndex] = "comment=\(trimmedComment)"
+                return nil
+            }
+        }()
+        
+        // Replace the placeholder comment with the actual comment if it exists
+        if let metadataValueIndex = ffmpegArgs.firstIndex(where: { $0.contains("comment=Date generated:") }) {
+            if let commentMetadataValue {
+                ffmpegArgs[metadataValueIndex] = commentMetadataValue
+            } else {
+                let metadataKeyIndex = metadataValueIndex - 1
+                ffmpegArgs.remove(at: metadataValueIndex)
+                if metadataKeyIndex >= 0 && metadataKeyIndex < ffmpegArgs.count && ffmpegArgs[metadataKeyIndex] == "-metadata" {
+                    ffmpegArgs.remove(at: metadataKeyIndex)
                 }
             }
+        }
+
+        // Ensure comment metadata is present for presets without placeholders (e.g., hardware encoders)
+        var hasCommentMetadata = false
+        var metadataScanIndex = 0
+        while metadataScanIndex < ffmpegArgs.count - 1 {
+            if ffmpegArgs[metadataScanIndex] == "-metadata" && ffmpegArgs[metadataScanIndex + 1].hasPrefix("comment=") {
+                hasCommentMetadata = true
+                break
+            }
+            metadataScanIndex += 1
+        }
+        if !hasCommentMetadata, let commentMetadataValue {
+            ffmpegArgs.append(contentsOf: ["-metadata", commentMetadataValue])
         }
         
         arguments.append(contentsOf: ffmpegArgs)
