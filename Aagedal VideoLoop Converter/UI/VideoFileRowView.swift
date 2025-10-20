@@ -13,6 +13,7 @@ import AppKit
 
 struct VideoFileRowView: View {
     @Binding var file: VideoItem
+    @Binding var focusedCommentID: UUID?
     let preset: ExportPreset
     let onCancel: () -> Void
     let onDelete: () -> Void
@@ -144,7 +145,7 @@ struct VideoFileRowView: View {
                                 .help("Cancel conversion")
                             } else {
                                 Button(action: onDelete) {
-                                    Image(systemName: "trash")
+                                    Image(systemName: "clear")
                                         .foregroundColor(.red)
                                 }
                                 .buttonStyle(BorderlessButtonStyle())
@@ -192,10 +193,25 @@ struct VideoFileRowView: View {
                 .focused($isCommentFocused)
                 .frame(height: 20)
                 .onTapGesture {
-                    isCommentFocused = true
+                    focusedCommentID = file.id
                 }
                 .padding(.horizontal, 3)
                 .padding(.top, 6)
+                .onChange(of: focusedCommentID) { _, newValue in
+                    let shouldFocus = newValue == file.id
+                    if shouldFocus != isCommentFocused {
+                        isCommentFocused = shouldFocus
+                    }
+                }
+                .onChange(of: isCommentFocused) { _, isFocused in
+                    if isFocused {
+                        if focusedCommentID != file.id {
+                            focusedCommentID = file.id
+                        }
+                    } else if focusedCommentID == file.id {
+                        focusedCommentID = nil
+                    }
+                }
             if file.comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text("Add a comment (single line)...")
                     .font(.subheadline)
@@ -310,10 +326,12 @@ struct VideoFileRowView_Previews: PreviewProvider {
             outputURL: nil,
             comment: "This is a sample comment"
         )
+        @State private var focusedCommentID: UUID?
         
         var body: some View {
             VideoFileRowView(
                 file: $item,
+                focusedCommentID: $focusedCommentID,
                 preset: .videoLoop,
                 onCancel: {},
                 onDelete: {},
@@ -343,10 +361,12 @@ struct VideoFileRowView_Previews2: PreviewProvider {
             outputURL: nil,
             comment: "This is another sample comment"
         )
+        @State private var focusedCommentID: UUID?
         
         var body: some View {
             VideoFileRowView(
                 file: $item,
+                focusedCommentID: $focusedCommentID,
                 preset: .videoLoop,
                 onCancel: {},
                 onDelete: {},

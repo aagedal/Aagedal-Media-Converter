@@ -158,7 +158,7 @@ struct ContentView: View {
                         // Ensure dock progress is reset when clearing the list
                         dockProgressUpdater.reset()
                     } label: {
-                        Label("Clear", systemImage: "trash")
+                        Label("Clear", systemImage: "square.stack.3d.up.slash")
                             .foregroundStyle((droppedFiles.isEmpty || isConverting) ? Color.gray : Color.red)
                     }
                     .help("Remove all files from the list")

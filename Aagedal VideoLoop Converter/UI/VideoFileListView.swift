@@ -10,6 +10,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
+import Carbon.HIToolbox
 
 struct VideoFileListView: View {
     @Binding var droppedFiles: [VideoItem]
@@ -23,6 +24,7 @@ struct VideoFileListView: View {
     @State private var isTargeted = false
     /// Selected row indices for built-in multi-selection
     @State private var selection = Set<Int>()
+    @State private var focusedCommentID: UUID?
 
     var body: some View {
         ZStack {
@@ -78,12 +80,19 @@ struct VideoFileListView: View {
             return handleDrop(providers: providers)
         }
         .overlay(alignment: .topLeading) {
-            Button(action: deleteSelectedItems) {
-                EmptyView()
+            ZStack {
+                KeyEventHandlingView(
+                    onTabForward: { focusComment(forward: true) },
+                    onTabBackward: { focusComment(forward: false) }
+                )
+
+                Button(action: deleteSelectedItems) {
+                    EmptyView()
+                }
+                .keyboardShortcut(.delete, modifiers: [.command])
+                .frame(width: 0, height: 0)
+                .opacity(0)
             }
-            .keyboardShortcut(.delete, modifiers: [.command])
-            .frame(width: 0, height: 0)
-            .opacity(0)
         }
     }
 
@@ -222,12 +231,41 @@ struct VideoFileListView: View {
             return "Failed"
         }
     }
-    
+
+    private func focusComment(forward: Bool) {
+        guard !droppedFiles.isEmpty else { return }
+
+        let sortedSelection = selection.sorted()
+
+        if let currentIndex = sortedSelection.first {
+            let currentID = droppedFiles[currentIndex].id
+            if focusedCommentID != currentID {
+                focusedCommentID = currentID
+                return
+            }
+
+            let delta = forward ? 1 : -1
+            let nextIndex = (currentIndex + delta + droppedFiles.count) % droppedFiles.count
+            selection = [nextIndex]
+            focusedCommentID = droppedFiles[nextIndex].id
+        } else if let focusedID = focusedCommentID,
+                  let currentIndex = droppedFiles.firstIndex(where: { $0.id == focusedID }) {
+            let delta = forward ? 1 : -1
+            let nextIndex = (currentIndex + delta + droppedFiles.count) % droppedFiles.count
+            selection = [nextIndex]
+            focusedCommentID = droppedFiles[nextIndex].id
+        } else {
+            selection = [forward ? 0 : max(droppedFiles.count - 1, 0)]
+            focusedCommentID = droppedFiles[selection.first ?? 0].id
+        }
+    }
+
     private func deleteSelectedItems() {
         let indices = IndexSet(selection)
         guard !indices.isEmpty else { return }
         onDelete(indices)
         selection.removeAll()
+        focusedCommentID = nil
     }
     
     // MARK: - Row Builder
@@ -237,6 +275,7 @@ struct VideoFileListView: View {
         let file = $droppedFiles[index]
         VideoFileRowView(
             file: file,
+            focusedCommentID: $focusedCommentID,
             preset: preset,
             onCancel: {
                 Task { await ConversionManager.shared.cancelItem(with: file.wrappedValue.id) }
@@ -353,4 +392,67 @@ private func generateThumbnailWithFFmpeg(from url: URL) -> NSImage? {
     }
     
     return nil
+}
+
+private struct KeyEventHandlingView: NSViewRepresentable {
+    var onTabForward: () -> Void
+    var onTabBackward: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onForward: onTabForward, onBackward: onTabBackward)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        context.coordinator.install()
+        let view = NSView(frame: .zero)
+        view.isHidden = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onForward = onTabForward
+        context.coordinator.onBackward = onTabBackward
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.teardown()
+    }
+
+    final class Coordinator {
+        var onForward: () -> Void
+        var onBackward: () -> Void
+        private var monitor: Any?
+
+        init(onForward: @escaping () -> Void, onBackward: @escaping () -> Void) {
+            self.onForward = onForward
+            self.onBackward = onBackward
+        }
+
+        func install() {
+            guard monitor == nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self else { return event }
+                guard event.keyCode == kVK_Tab else { return event }
+
+                let disallowedModifiers: NSEvent.ModifierFlags = [.command, .option, .control]
+                if !event.modifierFlags.intersection(disallowedModifiers).isEmpty {
+                    return event
+                }
+
+                if event.modifierFlags.contains(.shift) {
+                    self.onBackward()
+                } else {
+                    self.onForward()
+                }
+                return nil
+            }
+        }
+
+        func teardown() {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
+    }
 }
