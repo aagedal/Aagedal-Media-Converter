@@ -82,8 +82,8 @@ struct VideoFileListView: View {
         .overlay(alignment: .topLeading) {
             ZStack {
                 KeyEventHandlingView(
-                    onTabForward: { focusComment(forward: true) },
-                    onTabBackward: { focusComment(forward: false) }
+                    onTabForward: { handleTabPress(forward: true) },
+                    onTabBackward: { handleTabPress(forward: false) }
                 )
 
                 Button(action: deleteSelectedItems) {
@@ -232,32 +232,46 @@ struct VideoFileListView: View {
         }
     }
 
-    private func focusComment(forward: Bool) {
+    private func handleTabPress(forward: Bool) {
+        focusComment(forward: forward, currentFocused: focusedCommentID)
+    }
+
+    private func focusComment(forward: Bool, currentFocused: UUID?) {
         guard !droppedFiles.isEmpty else { return }
 
         let sortedSelection = selection.sorted()
 
         if let currentIndex = sortedSelection.first {
             let currentID = droppedFiles[currentIndex].id
-            if focusedCommentID != currentID {
+            if currentFocused == currentID,
+               let nextIndex = nextIndex(from: currentIndex, forward: forward) {
+                selection = [nextIndex]
+                focusedCommentID = droppedFiles[nextIndex].id
+            } else {
                 focusedCommentID = currentID
-                return
             }
-
-            let delta = forward ? 1 : -1
-            let nextIndex = (currentIndex + delta + droppedFiles.count) % droppedFiles.count
-            selection = [nextIndex]
-            focusedCommentID = droppedFiles[nextIndex].id
-        } else if let focusedID = focusedCommentID,
-                  let currentIndex = droppedFiles.firstIndex(where: { $0.id == focusedID }) {
-            let delta = forward ? 1 : -1
-            let nextIndex = (currentIndex + delta + droppedFiles.count) % droppedFiles.count
-            selection = [nextIndex]
-            focusedCommentID = droppedFiles[nextIndex].id
-        } else {
-            selection = [forward ? 0 : max(droppedFiles.count - 1, 0)]
-            focusedCommentID = droppedFiles[selection.first ?? 0].id
+            return
         }
+
+        if let currentFocused,
+           let currentIndex = droppedFiles.firstIndex(where: { $0.id == currentFocused }) {
+            if let nextIndex = nextIndex(from: currentIndex, forward: forward) {
+                selection = [nextIndex]
+                focusedCommentID = droppedFiles[nextIndex].id
+            }
+            return
+        }
+
+        let startIndex = forward ? 0 : max(droppedFiles.count - 1, 0)
+        selection = [startIndex]
+        focusedCommentID = droppedFiles[startIndex].id
+    }
+
+    private func nextIndex(from currentIndex: Int, forward: Bool) -> Int? {
+        guard !droppedFiles.isEmpty else { return nil }
+        let delta = forward ? 1 : -1
+        let nextIndex = (currentIndex + delta + droppedFiles.count) % droppedFiles.count
+        return nextIndex
     }
 
     private func deleteSelectedItems() {
@@ -285,6 +299,16 @@ struct VideoFileListView: View {
             },
             onReset: {
                 onReset(index)
+            },
+            isSelected: selection.contains(index),
+            onCommentFocusChange: { id, isFocused in
+                guard droppedFiles[index].id == id else { return }
+                if isFocused {
+                    selection = [index]
+                    focusedCommentID = id
+                } else if focusedCommentID == id {
+                    focusedCommentID = nil
+                }
             }
         )
         .padding([.vertical], 4)
@@ -439,6 +463,7 @@ private struct KeyEventHandlingView: NSViewRepresentable {
                     return event
                 }
 
+                // Always handle Tab for comment field cycling
                 if event.modifierFlags.contains(.shift) {
                     self.onBackward()
                 } else {

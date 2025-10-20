@@ -20,14 +20,16 @@ struct VideoFileRowView: View {
     let onReset: () -> Void
     /// Indicates if this row is selected in the list
     var isSelected: Bool = false
+    var onCommentFocusChange: (UUID, Bool) -> Void = { _, _ in }
 
     // Show yellow warning icon when VideoLoop preset is used on clips longer than 15 s
     private var showDurationWarning: Bool {
         (preset == .videoLoop || preset == .videoLoopWithAudio) && file.durationSeconds > 15
     }
-    @FocusState private var isCommentFocused: Bool
+    @FocusState private var isCommentFieldFocused: Bool
 
     var body: some View {
+        let _ = print("🎨 Row rendered - isSelected: \(isSelected), focusedID: \(focusedCommentID?.uuidString.prefix(8) ?? "nil"), myID: \(file.id.uuidString.prefix(8))")
         ZStack {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(NSColor.controlBackgroundColor))
@@ -162,14 +164,25 @@ struct VideoFileRowView: View {
                                 }
                             }
                         }
-                        includeDateTagToggle
-                        commentEditor
+                        commentSection
                     }
                     .padding()
                 }
             }
         }
         .padding(.horizontal, 4)
+    }
+
+    private var commentSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack{
+                includeDateTagToggle
+            }.frame(width: 150, alignment: .trailing)
+                .padding(.bottom, 6)
+            commentEditor
+        }
+        .padding(.top, 12)
+        
     }
 
     private var commentEditor: some View {
@@ -185,45 +198,53 @@ struct VideoFileRowView: View {
                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                 )
                 .frame(maxWidth: .infinity)
-            TextEditor(text: commentBinding)
+            TextField("", text: commentBinding, axis: .horizontal)
+                .textFieldStyle(.plain)
                 .font(.subheadline)
-                .foregroundColor(.primary)
-                .background(Color.clear)
-                .scrollContentBackground(.hidden)
-                .focused($isCommentFocused)
+                .lineLimit(1)
+                .focused($isCommentFieldFocused)
                 .frame(height: 20)
-                .onTapGesture {
+                .padding(.horizontal, 5)
+                .padding(.top, 1)
+                .onSubmit {
+                    isCommentFieldFocused = false
+                    focusedCommentID = nil
+                }
+            .onChange(of: focusedCommentID) { oldValue, newValue in
+                print("📍 focusedCommentID changed: \(oldValue?.uuidString.prefix(8) ?? "nil") → \(newValue?.uuidString.prefix(8) ?? "nil"), myID: \(file.id.uuidString.prefix(8))")
+                isCommentFieldFocused = (newValue == file.id)
+            }
+            .onChange(of: isCommentFieldFocused) { _, isFocused in
+                print("✏️ isCommentFieldFocused changed to \(isFocused) for file \(file.id.uuidString.prefix(8))")
+                if isFocused {
                     focusedCommentID = file.id
+                    onCommentFocusChange(file.id, true)
+                } else if focusedCommentID == file.id {
+                    focusedCommentID = nil
+                    onCommentFocusChange(file.id, false)
                 }
-                .padding(.horizontal, 3)
-                .padding(.top, 6)
-                .onChange(of: focusedCommentID) { _, newValue in
-                    let shouldFocus = newValue == file.id
-                    if shouldFocus != isCommentFocused {
-                        isCommentFocused = shouldFocus
-                    }
-                }
-                .onChange(of: isCommentFocused) { _, isFocused in
-                    if isFocused {
-                        if focusedCommentID != file.id {
-                            focusedCommentID = file.id
-                        }
-                    } else if focusedCommentID == file.id {
-                        focusedCommentID = nil
-                    }
-                }
+            }
             if file.comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text("Add a comment (single line)...")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                     .allowsHitTesting(false)
-                    .padding(.horizontal, 7)
-                    .padding(.top, 6)
+                    .padding(.horizontal, 5)
+                    .padding(.top, 4)
             }
         }
-        .contentShape(Rectangle())
-        .padding(.top, 12)
         .frame(height: 20)
+        .onChange(of: isSelected) { _, selected in
+            print("📌 Row selection changed to \(selected) for file \(file.id.uuidString.prefix(8))")
+            if selected && !isCommentFieldFocused {
+                // When row is selected, focus the comment field
+                print("  ➡️ Auto-focusing comment field because row was selected")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    focusedCommentID = file.id
+                    isCommentFieldFocused = true
+                }
+            }
+        }
    }
 
     private var includeDateTagToggle: some View {
@@ -232,9 +253,10 @@ struct VideoFileRowView: View {
             set: { file.includeDateTag = $0 }
         )
         return Toggle("Include date tag", isOn: includeDateBinding)
+            .controlSize(.mini)
             .font(.subheadline)
             .toggleStyle(SwitchToggleStyle())
-            .padding(.top, 12)
+            .help("Include 'Date generated: YYYYMMDD' in the video metadata comment field.")
     }
     
     private var progressText: String {
