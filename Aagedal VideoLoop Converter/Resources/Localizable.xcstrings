@@ -233,23 +233,6 @@
         }
       }
     },
-    "Cannot delete while converting" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cannot delete while converting"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kan ikke slette mens filen konverterer"
-          }
-        }
-      }
-    },
     "Change default output folder" : {
       "localizations" : {
         "en" : {
@@ -278,23 +261,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rens listen"
-          }
-        }
-      }
-    },
-    "Close" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lukk"
           }
         }
       }
@@ -397,23 +363,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Standard eksport mappe"
-          }
-        }
-      }
-    },
-    "Delete from list" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete from list"
-          }
-        },
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Slett fra listen"
           }
         }
       }
