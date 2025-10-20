@@ -35,6 +35,10 @@ struct AboutView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
+
+            Text("Current FFMPEG version: 8.0")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
         }
         .padding(24)
         .frame(width: 420, height: 320)
