@@ -186,6 +186,7 @@ struct VideoFileRowView: View {
     }
 
     private var commentEditor: some View {
+        let commentIsEditable = file.status == .waiting
         let commentBinding = Binding(
             get: { file.comment },
             set: { file.comment = $0 }
@@ -203,6 +204,8 @@ struct VideoFileRowView: View {
                 .font(.subheadline)
                 .lineLimit(1)
                 .focused($isCommentFieldFocused)
+                .disabled(!commentIsEditable)
+                .opacity(commentIsEditable ? 1 : 0.6)
                 .frame(height: 20)
                 .padding(.horizontal, 5)
                 .padding(.top, 1)
@@ -212,10 +215,25 @@ struct VideoFileRowView: View {
                 }
             .onChange(of: focusedCommentID) { oldValue, newValue in
                 print("📍 focusedCommentID changed: \(oldValue?.uuidString.prefix(8) ?? "nil") → \(newValue?.uuidString.prefix(8) ?? "nil"), myID: \(file.id.uuidString.prefix(8))")
+                guard commentIsEditable else {
+                    if isCommentFieldFocused {
+                        isCommentFieldFocused = false
+                    }
+                    return
+                }
                 isCommentFieldFocused = (newValue == file.id)
             }
             .onChange(of: isCommentFieldFocused) { _, isFocused in
                 print("✏️ isCommentFieldFocused changed to \(isFocused) for file \(file.id.uuidString.prefix(8))")
+                guard commentIsEditable else {
+                    if isFocused {
+                        isCommentFieldFocused = false
+                    }
+                    if focusedCommentID == file.id {
+                        focusedCommentID = nil
+                    }
+                    return
+                }
                 if isFocused {
                     focusedCommentID = file.id
                     onCommentFocusChange(file.id, true)
@@ -236,6 +254,15 @@ struct VideoFileRowView: View {
         .frame(height: 20)
         .onChange(of: isSelected) { _, selected in
             print("📌 Row selection changed to \(selected) for file \(file.id.uuidString.prefix(8))")
+            guard commentIsEditable else {
+                if isCommentFieldFocused {
+                    isCommentFieldFocused = false
+                }
+                if focusedCommentID == file.id {
+                    focusedCommentID = nil
+                }
+                return
+            }
             if selected && !isCommentFieldFocused {
                 // When row is selected, focus the comment field
                 print("  ➡️ Auto-focusing comment field because row was selected")
