@@ -121,7 +121,7 @@ struct VideoFileRowView: View {
                         }
                         
                         // Metadata
-                        HStack {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
                             Text("Duration: \(file.duration)")
                                 .font(.subheadline)
                                 .foregroundColor(.gray)
@@ -137,6 +137,14 @@ struct VideoFileRowView: View {
                             Text("Input Size: \(file.formattedSize)")
                                 .font(.subheadline)
                                 .foregroundColor(.gray)
+                                
+                            if file.status == .waiting && file.outputFileExists {
+                                Text("•")
+                                    .foregroundColor(.gray)
+                                Text("Existing file will be overwritten")
+                                    .font(.subheadline)
+                                    .foregroundColor(.orange)
+                            }
                             
                             Spacer()
                             

@@ -36,7 +36,7 @@ struct AboutView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Text("Current FFMPEG version: 8.0")
+            Text("FFMPEG version: 8.0")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
