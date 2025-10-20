@@ -44,9 +44,11 @@ Note that most of this app is vibe-coded.
 
 ## Keyboard shortcuts
 Command + Enter → Start Encoding
+
 Command + Backspace → Remove current clip from encoding queue
 
 Tab → Select metadata comment text field of the first clip, or cycle to the next clip if a clip is already selected
+
 Shift + Tab → Select metadata comment text field of the last clip, or cycle to the previous clip if a clip is already selected
 
 Command + , → Open Settings
