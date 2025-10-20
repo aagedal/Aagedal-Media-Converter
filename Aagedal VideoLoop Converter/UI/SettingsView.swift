@@ -213,7 +213,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 600, height: 560)
-        .navigationTitle("About Aagedal Video Loop Converter")
+        .navigationTitle("Settings – Aagedal VideoLoop Converter")
         .padding(.horizontal, 20)
     }
     
