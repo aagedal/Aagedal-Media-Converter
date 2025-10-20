@@ -100,19 +100,14 @@ This is a sparetime project, and I don't know when I will update it.
 
 #### Missing features?
 1. App Intents for other formats than VideoLoop. (+ testing for macOS 26 Spotlight actions.)
-2. Ability to change the default encoding format. (This would be easy to implement, actually not sure why I didn't add it to this release. Probably a 2.1 release.)
 3. FFMPEG is currently used for all decodes and encodes. Ideally I think I should use the macOS native tools when possible. But don't worry, x264 is here to stay for VideoLoop encoding, at least until Apple improves their native software encoder.
 4. Add the ability to encode a VideoLoop using the Apple native APIs, both software and hardware, as to make it easier to compare how much (or little) improvements you get from x264.
 5. New preset for high bitrate 12-bit 4:4:4 VP9 encoding for archival?
 6. Change infrastructure so that the user can prefer to use ffmpeg installed using Homebrew. (If this app isn't updated, the user could still get support for new input formats.)
 7. Make it possible to install this app using Homebrew cask.
 8. New preset for Animated JPEG XL? Animated AVIF will likely remain better, but this could be an interesting addition.
-9. Update the preset UI, to be more usable with more presets.
-10. Add ability to reorder list, and the ability to shift select multiple list items for deletion or resetting of status.
+9. Add the ability to shift select multiple list items for deletion or resetting of status.
 
-
-### Unlikely to be implemented
-1. Custom bitrate settings and resolution settings. There are other more complex apps for that. I just needed a few simple presets for my own common workflows.
 
 ---
 
