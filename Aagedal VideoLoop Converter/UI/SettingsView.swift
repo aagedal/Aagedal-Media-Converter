@@ -67,7 +67,7 @@ struct SettingsView: View {
                     Toggle("Preserve all original metadata", isOn: $preserveMetadataByDefault)
                         .toggleStyle(SwitchToggleStyle())
                         .help("When enabled, the original file's metadata is kept intact during conversion")
-                    Text("By default, metadata such as title, comment, and encoder tags are stripped to keep output files clean. Enable this to keep all metadata untouched.")
+                    Text("By default, metadata such as title, timecode, and encoder tags are stripped to keep output files clean. Enable this to keep all metadata untouched. However, color related metadata (including HDR) will always be preserved, to assure an accurate viewing experience.")
                         .font(Font.caption.italic())
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

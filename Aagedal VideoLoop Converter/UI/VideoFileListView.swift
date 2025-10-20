@@ -77,6 +77,14 @@ struct VideoFileListView: View {
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             return handleDrop(providers: providers)
         }
+        .overlay(alignment: .topLeading) {
+            Button(action: deleteSelectedItems) {
+                EmptyView()
+            }
+            .keyboardShortcut(.delete, modifiers: [.command])
+            .frame(width: 0, height: 0)
+            .opacity(0)
+        }
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -213,6 +221,13 @@ struct VideoFileListView: View {
         case .failed:
             return "Failed"
         }
+    }
+    
+    private func deleteSelectedItems() {
+        let indices = IndexSet(selection)
+        guard !indices.isEmpty else { return }
+        onDelete(indices)
+        selection.removeAll()
     }
     
     // MARK: - Row Builder
