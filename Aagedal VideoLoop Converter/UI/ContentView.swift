@@ -211,6 +211,12 @@ struct ContentView: View {
                 hasInitializedPreset = true
                 hasUserChangedPreset = false
             }
+            let storedFolderURL = URL(fileURLWithPath: outputFolder)
+            if storedFolderURL.path != currentOutputFolder.path {
+                currentOutputFolder = storedFolderURL
+            } else {
+                refreshExpectedOutputURLs(for: selectedPreset)
+            }
             Task {
                 isConverting = await ConversionManager.shared.isConvertingStatus()
             }
@@ -218,6 +224,14 @@ struct ContentView: View {
         .onChange(of: storedDefaultPresetRawValue) { _, newValue in
             selectedPreset = ExportPreset(rawValue: newValue) ?? .videoLoop
             hasUserChangedPreset = false
+        }
+        .onChange(of: outputFolder) { _, newValue in
+            let updatedFolderURL = URL(fileURLWithPath: newValue)
+            if updatedFolderURL.path != currentOutputFolder.path {
+                currentOutputFolder = updatedFolderURL
+            } else {
+                refreshExpectedOutputURLs(for: selectedPreset)
+            }
         }
         // Listen for menu command
         .onReceive(NotificationCenter.default.publisher(for: .showFileImporter)) { _ in
