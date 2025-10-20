@@ -32,6 +32,7 @@ struct ContentView: View {
             if currentOutputFolder.path != outputFolder {
                 outputFolder = currentOutputFolder.path
             }
+            refreshExpectedOutputURLs(for: selectedPreset)
         }
     }
     @State private var isConverting: Bool = false
@@ -68,6 +69,9 @@ struct ContentView: View {
                 onReset: { index in
                     if index < droppedFiles.count {
                         droppedFiles[index].status = .waiting
+                        droppedFiles[index].progress = 0.0
+                        droppedFiles[index].eta = nil
+                        droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
                     }
                 },
                 preset: selectedPreset
@@ -354,12 +358,25 @@ struct ContentView: View {
         dockProgressUpdater.reset()
     }
     
+    private func refreshExpectedOutputURLs(for preset: ExportPreset) {
+        for index in droppedFiles.indices where droppedFiles[index].status == .waiting {
+            droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: preset)
+        }
+    }
+
+    private func expectedOutputURL(for item: VideoItem, preset: ExportPreset) -> URL? {
+        let sanitizedBaseName = FileNameProcessor.processFileName(item.url.deletingPathExtension().lastPathComponent)
+        let outputFileName = sanitizedBaseName + preset.fileSuffix + "." + preset.fileExtension
+        return currentOutputFolder.appendingPathComponent(outputFileName)
+    }
+
     private var toolbarPresetBinding: Binding<ExportPreset> {
         Binding(
             get: { selectedPreset },
             set: { newValue in
                 hasUserChangedPreset = true
                 selectedPreset = newValue
+                refreshExpectedOutputURLs(for: newValue)
             }
         )
     }

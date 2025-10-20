@@ -71,7 +71,7 @@ struct VideoFileRowView: View {
                             // Duration warning icon
                             Text("→")
                             HStack(spacing: 4) {
-                                Text(generateOutputFilename(from: file.name))
+                                Text(displayOutputFilename())
                                     .font(.headline)
                                     .foregroundColor((file.status == .waiting && file.outputFileExists) ? .orange : .primary)
                                 
@@ -83,10 +83,14 @@ struct VideoFileRowView: View {
                                             }) {
                                                 Image(systemName: "magnifyingglass.circle.fill")
                                                     .foregroundColor(.orange)
-                                                    .help("Output file already exists. Click to show in Finder")
+                                                    .help("Output file already exists and will be overwritten during conversion. Click to show in Finder.")
                                             }
                                             .buttonStyle(BorderlessButtonStyle())
-                                            dragIcon(for: outputURL, color: Color.orange)
+                                            dragIcon(
+                                                for: outputURL,
+                                                color: Color.orange,
+                                                helpText: "Output file already exists and will be overwritten during conversion. Drag to share or archive before converting."
+                                            )
                                         }
 
                                         if file.status == .done {
@@ -98,7 +102,11 @@ struct VideoFileRowView: View {
                                                     .help("Show in Finder")
                                             }
                                             .buttonStyle(BorderlessButtonStyle())
-                                            dragIcon(for: outputURL, color: Color.blue)
+                                            dragIcon(
+                                                for: outputURL,
+                                                color: Color.blue,
+                                                helpText: "Drag this icon to share the exported file with other apps."
+                                            )
                                         }
                                     }
                                 }
@@ -315,16 +323,23 @@ struct VideoFileRowView: View {
         }
     }
     
+    private func displayOutputFilename() -> String {
+        if let outputURL = file.outputURL {
+            return outputURL.lastPathComponent
+        }
+        return generateOutputFilename(from: file.name)
+    }
+
     private func generateOutputFilename(from input: String) -> String {
         let filename = (input as NSString).deletingPathExtension
         let sanitized = FileNameProcessor.processFileName(filename)
         return "\(sanitized)\(preset.fileSuffix).\(preset.fileExtension)"
     }
 
-    private func dragIcon(for outputURL: URL, color: Color) -> some View {
+    private func dragIcon(for outputURL: URL, color: Color, helpText: String) -> some View {
         Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
             .foregroundColor(color)
-            .help("Drag this icon to another app to share the exported file")
+            .help(helpText)
             .onDrag {
                 let provider = NSItemProvider(object: outputURL as NSURL)
                 provider.suggestedName = outputURL.lastPathComponent
