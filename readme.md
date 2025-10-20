@@ -17,14 +17,23 @@ Note that most of this app is vibe-coded.
 - Batch conversion with per-file progress and overall dock progress indicator
 - **Export Presets**  
   • Video Loop (silent) — x264 very slow 1080p max resolution, keeping original aspect ratio, removing all audio channels, nice for compact web distribution such as GIF-replacements, slow export
+  
   • Video Loop w/ Audio — same as above but keeping a stereo AAC track
+
   • TV Quality HD / 4K — HEVC hardware encoding for fast high quality exports, compatible with most editing software, 10-bit 4:2:0, limit resolution to either 1080p or 2160p
+
   • ProRes — High quality file maintaining original resolution
+
   • Animated AVIF — Another GIF-alternative without sound. Doesn't need special web-code to loop, but less hardware and software compatibility than VideoLoops
+
   • HEVC Proxy 1080p — Compact proxy file format, 10-bit 4:2:0, can be used fast file sharing
+
   • Audio Only AAC — Extract a small stereo audio file from video
+
   • Audio Only WAV — Extract uncompressed audio from video, keeping all audio channels
+
   • Custom FFMPEG preset — Note that this is less tested and there may not be feedback if the command doesn't work. Use at own risk, and preferably test the command in a terminal before adding to the app.
+  
 - Set default preset in the settings menu
 - Set default export location
 - Add metadata comment with optional date tag (YYYYMMDD)
