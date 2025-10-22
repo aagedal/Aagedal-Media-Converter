@@ -422,6 +422,8 @@ actor FFMPEGConverter {
         
         // Get the base arguments for the preset
         var ffmpegArgs = preset.ffmpegArguments
+
+        await Self.adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
         
         let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
         let commentMetadataValue: String? = {
@@ -518,6 +520,121 @@ actor FFMPEGConverter {
 
     private class DurationBox: @unchecked Sendable {
         var value: Double? = nil
+    }
+
+    private struct AudioStreamInfo: Decodable {
+        let index: Int?
+        let channels: Int?
+        let channelLayout: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case index
+            case channels
+            case channelLayout = "channel_layout"
+        }
+    }
+
+    private struct FFProbeStreamsResponse: Decodable {
+        let streams: [AudioStreamInfo]
+    }
+
+    private static func adjustArgumentsForInput(preset: ExportPreset, inputURL: URL, ffmpegArgs: inout [String]) async {
+        guard preset == .audioUncompressedWAV else { return }
+        guard let ffprobePath = Bundle.main.path(forResource: "ffprobe", ofType: nil) else { return }
+
+        guard let audioStreams = await fetchAudioStreams(ffprobePath: ffprobePath, url: inputURL), audioStreams.count > 1 else {
+            return
+        }
+
+        removeArgumentPair("-map", value: "0:a", from: &ffmpegArgs)
+
+        let totalChannels = audioStreams.compactMap { $0.channels }.reduce(0, +)
+        let filterInputs = audioStreams.indices.map { "[0:a:\($0)]" }.joined()
+        let filterGraph = "\(filterInputs)amerge=inputs=\(audioStreams.count)[aout]"
+
+        ffmpegArgs.append(contentsOf: ["-filter_complex", filterGraph, "-map", "[aout]"])
+
+        if totalChannels > 0 {
+            ffmpegArgs.append(contentsOf: ["-ac", "\(totalChannels)"])
+        }
+    }
+
+    private static func fetchAudioStreams(ffprobePath: String, url: URL) async -> [AudioStreamInfo]? {
+        let process = Process()
+        let pipe = Pipe()
+
+        process.executableURL = URL(fileURLWithPath: ffprobePath)
+        process.arguments = [
+            "-v", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=index,channels,channel_layout",
+            "-of", "json",
+            url.path
+        ]
+        process.standardOutput = pipe
+
+        do {
+            let timeout: TimeInterval = 5.0
+
+            try process.run()
+
+            let outputData = try await withThrowingTaskGroup(of: Data.self) { group -> Data? in
+                group.addTask {
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    process.terminate()
+                    return data
+                }
+
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    process.terminate()
+                    throw NSError(domain: "com.aagedal.videoconverter.ffprobe", code: -2, userInfo: [NSLocalizedDescriptionKey: "FFprobe audio stream timeout"])
+                }
+
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
+            }
+
+            guard let outputData, !outputData.isEmpty else {
+                Logger().warning("FFprobe returned no audio stream data for \(url.lastPathComponent)")
+                return []
+            }
+
+            do {
+                let response = try JSONDecoder().decode(FFProbeStreamsResponse.self, from: outputData)
+                Logger().debug("FFprobe audio streams for \(url.lastPathComponent): \(response.streams.map { $0.channels ?? 0 })")
+                return response.streams
+            } catch {
+                Logger().error("Failed to decode FFprobe audio stream data for \(url.lastPathComponent): \(error.localizedDescription)")
+                return nil
+            }
+        } catch {
+            Logger().error("FFprobe audio stream extraction failed for \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private static func removeArgumentPair(_ key: String, value: String?, from args: inout [String]) {
+        var index = 0
+        while index < args.count {
+            if args[index] == key {
+                if let value {
+                    if index + 1 < args.count, args[index + 1] == value {
+                        args.remove(at: index)
+                        args.remove(at: index)
+                        continue
+                    }
+                } else {
+                    args.remove(at: index)
+                    if index < args.count {
+                        args.remove(at: index)
+                    }
+                    continue
+                }
+            }
+            index += 1
+        }
     }
     
     /// Processes FFmpeg output to extract progress and duration information
