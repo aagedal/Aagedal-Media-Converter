@@ -1,11 +1,13 @@
 # Aagedal VideoLoop Converter
 
-A lightweight macOS application for converting video files into formats that **loop seamlessly** and play reliably across platforms and web browsers. Powered by FFmpeg under the hood and written entirely in Swift / SwiftUI.
+A lightweight minimal macOS application for simple batch encoding of video files. Powered by FFMPEG and FFPROBE under the hood and written entirely in Swift / SwiftUI.
 
-Note that most of this version of the app is vibe-coded.
+Removes almost all metdata by default. Fully private local only processing.
 
-<img width="940" alt="SCR-20250624-sxdp-2" src="https://github.com/user-attachments/assets/9e5de672-1881-482b-aada-3ea7d2194d21" />
-<img width="981" alt="SCR-20250624-syba" src="https://github.com/user-attachments/assets/1219abd7-445c-493e-a95e-ffa3bb229c11" />
+Note that most of this app is vibe-coded.
+
+
+![Screenshot 2025-10-20 at 23 42 36](https://github.com/user-attachments/assets/3ab4f6c8-6b68-4674-a262-c994e7d3e05a)
 
 ---
 
@@ -14,15 +16,51 @@ Note that most of this version of the app is vibe-coded.
 - **Drag-and-Drop** or File Picker import
 - Batch conversion with per-file progress and overall dock progress indicator
 - **Export Presets**  
-  • Video Loop (silent)  
-  • Video Loop w/ Audio  
-  • TV Quality HD / 4K  
-  • ProRes (editing)  
-  • Animated AVIF  
-  • HEVC Proxy 1080 p
+  • Video Loop (silent) — x264 very slow 1080p max resolution, keeping original aspect ratio, removing all audio channels, nice for compact web distribution such as GIF-replacements, slow export
+  
+  • Video Loop w/ Audio — same as above but keeping a stereo AAC track
+
+  • TV Quality HD / 4K — HEVC hardware encoding for fast high quality exports, compatible with most editing software, 10-bit 4:2:0, limit resolution to either 1080p or 2160p
+
+  • ProRes — High quality file maintaining original resolution
+
+  • Animated AVIF — Another GIF-alternative without sound. Doesn't need special web-code to loop, but less hardware and software compatibility than VideoLoops
+
+  • HEVC Proxy 1080p — Compact proxy file format, 10-bit 4:2:0, can be used fast file sharing
+
+  • Audio Only AAC — Extract a small stereo audio file from video
+
+  • Audio Only WAV — Extract uncompressed audio from video, keeping all audio channels
+
+  • Custom FFMPEG preset — Note that this is less tested and there may not be feedback if the command doesn't work. Use at own risk, and preferably test the command in a terminal before adding to the app.
+  
+- Set default preset in the settings menu
+- Set default export location
+- Add metadata comment with optional date tag (YYYYMMDD)
+- Drag to rearrange encoding queue
+- Warning if file already exists
+- Draggable icon on encoded files, making it possible to open the new file directly in another app to copy to a new directory. (Useful for fast sharing to Slack or Web-services)
+- Icon to open the file in the export directory
+- Thumbnail preview with checkerboard background to clearly see original aspect ratio
 - Automatic duration warning if a VideoLoop clip exceeds 15s (short videos are best for auto-playing and looping on webpages)
 - Sandboxed with Security-Scoped Bookmarks for persistent file access
 - Language support: English and Norwegian
+
+
+![Screenshot 2025-10-20 at 23 43 00](https://github.com/user-attachments/assets/ac5a09de-4d4c-4226-8a8a-b8925406e537)
+
+---
+
+## Keyboard shortcuts
+Command + Enter → Start Encoding
+
+Command + Backspace → Remove current clip from encoding queue
+
+Tab → Select metadata comment text field of the first clip, or cycle to the next clip if a clip is already selected
+
+Shift + Tab → Select metadata comment text field of the last clip, or cycle to the previous clip if a clip is already selected
+
+Command + , → Open Settings
 
 ---
 
@@ -67,37 +105,24 @@ Not tested with macOS 26 Tahoe, but in macOS 15 you have two available App Short
 
 ---
 
-## Preset Details
-
-| Preset | Extension | Purpose | Notes |
-|--------|-----------|---------|-------|
-| Video Loop | .mp4 | Small, silent loops for web GIF replacement. x264 very slow for high quality vs. file size. | H.264, CRF 23, 1080p max |
-| Video Loop w/ Audio | .mp4 | Same as above, but with added aac audio track. Selects first audio track, downsamples if more than two channels (stereo). | H.264 @192 kbps AAC audio |
-| TV Quality HD | .mov | High-bitrate HEVC for HD playback. HW encoding. Keeps all audio tracks, but encodes them as LPCM. | 10-bit 4:2:0, 18 Mbps |
-| TV Quality 4K | .mov | 4K HEVC variant. Likely also good for YouTube. HW encoding. Keeps all audio tracks, but encodes them as LPCM. | 10-bit 4:2:0, 60 Mbps |
-| ProRes | .mov | Editing master | Apple ProRes 422. HW encoding. Keeps all audio tracks, but encodes them as LPCM.|
-| Animated AVIF | .avif | Modern GIF replacement. WARNING: Playback on Apple Devices before M3 / A17 Pro is bad. Also often larger than the x264 encode with the same quality, even if the encode speed is about the same. | AV1 (svtav1) encoder 720p max |
-| HEVC Proxy 1080p | .mov | Low-bitrate proxy for NLEs. HW encoding. Keeps all audio tracks, but encodes them as LPCM. | 6 Mbps, 10-bit, 1080p resolution. |
+## Known issues
+- Unable to render thumbnails for some MXF-files, this does not affect conversion. (Likely the FFMPEG thumbnail generation fallback is not working as intended. Other thumbnails generated by native macOS APIs IIRC.)
 
 ---
 ## Plans for the future?
 This is a sparetime project, and I don't know when I will update it.
 
+
 #### Missing features?
 1. App Intents for other formats than VideoLoop. (+ testing for macOS 26 Spotlight actions.)
-2. Ability to change the default encoding format. (This would be easy to implement, actually not sure why I didn't add it to this release. Probably a 2.1 release.)
 3. FFMPEG is currently used for all decodes and encodes. Ideally I think I should use the macOS native tools when possible. But don't worry, x264 is here to stay for VideoLoop encoding, at least until Apple improves their native software encoder.
 4. Add the ability to encode a VideoLoop using the Apple native APIs, both software and hardware, as to make it easier to compare how much (or little) improvements you get from x264.
 5. New preset for high bitrate 12-bit 4:4:4 VP9 encoding for archival?
 6. Change infrastructure so that the user can prefer to use ffmpeg installed using Homebrew. (If this app isn't updated, the user could still get support for new input formats.)
 7. Make it possible to install this app using Homebrew cask.
 8. New preset for Animated JPEG XL? Animated AVIF will likely remain better, but this could be an interesting addition.
-9. Update the preset UI, to be more usable with more presets.
-10. Add ability to reorder list, and the ability to shift select multiple list items for deletion or resetting of status.
+9. Add the ability to shift select multiple list items for deletion or resetting of status.
 
-
-### Unlikely to be implemented
-1. Custom bitrate settings and resolution settings. There are other more complex apps for that. I just needed a few simple presets for my own common workflows.
 
 ---
 
