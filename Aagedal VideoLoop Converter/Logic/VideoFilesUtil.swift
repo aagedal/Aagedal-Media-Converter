@@ -175,6 +175,9 @@ struct VideoFileUtils: Sendable {
             
             guard let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
                 print("Failed to create PNG data from thumbnail")
+                if let fallbackData = await getVideoThumbnailWithFFmpeg(url: url) {
+                    return fallbackData
+                }
                 return nil
             }
             
@@ -182,8 +185,92 @@ struct VideoFileUtils: Sendable {
             
         } catch {
             print("Error generating thumbnail for \(url.lastPathComponent): \(error.localizedDescription)")
+            if let fallbackData = await getVideoThumbnailWithFFmpeg(url: url) {
+                return fallbackData
+            }
             return nil
         }
+    }
+
+    private static func getVideoThumbnailWithFFmpeg(url: URL) async -> Data? {
+        guard let ffmpegURL = Bundle.main.url(forResource: "ffmpeg", withExtension: nil) else {
+            Logger().warning("FFmpeg binary not found in bundle; cannot generate fallback thumbnail for \(url.lastPathComponent)")
+            return nil
+        }
+        guard let ffprobeURL = Bundle.main.url(forResource: "ffprobe", withExtension: nil) else {
+            Logger().warning("FFprobe binary not found in bundle; cannot generate fallback thumbnail for \(url.lastPathComponent)")
+            return nil
+        }
+
+        return await Task.detached(priority: .userInitiated) { () -> Data? in
+            let tempDir = FileManager.default.temporaryDirectory
+            let outputURL = tempDir.appendingPathComponent(UUID().uuidString).appendingPathExtension("jpg")
+            defer { try? FileManager.default.removeItem(at: outputURL) }
+
+            var seekTime: Double = 1.0
+            do {
+                let durationProcess = Process()
+                durationProcess.executableURL = ffprobeURL
+                durationProcess.arguments = [
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    url.path
+                ]
+
+                let durationPipe = Pipe()
+                durationProcess.standardOutput = durationPipe
+
+                try durationProcess.run()
+                durationProcess.waitUntilExit()
+
+                let durationData = durationPipe.fileHandleForReading.readDataToEndOfFile()
+                if let durationString = String(data: durationData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   let duration = Double(durationString), duration > 0 {
+                    seekTime = min(10, max(duration * 0.1, 0.5))
+                }
+            } catch {
+                Logger().error("FFprobe fallback failed for \(url.lastPathComponent): \(error.localizedDescription)")
+            }
+
+            do {
+                // Match AVFoundation thumbnail size with HiDPI scaling
+                let displaySize = CGSize(width: 200, height: 150)
+                let scaleFactor = await MainActor.run {
+                    NSScreen.main?.backingScaleFactor ?? NSScreen.screens.first?.backingScaleFactor ?? 2.0
+                }
+                let maxWidth = Int(displaySize.width * scaleFactor)
+                let maxHeight = Int(displaySize.height * scaleFactor)
+                
+                let process = Process()
+                process.executableURL = ffmpegURL
+                process.arguments = [
+                    "-hide_banner",
+                    "-loglevel", "error",
+                    "-ss", String(seekTime),
+                    "-i", url.path,
+                    "-vframes", "1",
+                    "-q:v", "2",
+                    "-vf", "scale=iw*sar:ih,scale=\(maxWidth):\(maxHeight):force_original_aspect_ratio=decrease",
+                    "-y",
+                    outputURL.path
+                ]
+                process.standardError = Pipe()
+
+                try process.run()
+                process.waitUntilExit()
+
+                guard process.terminationStatus == 0 else {
+                    Logger().error("FFmpeg thumbnail process failed for \(url.lastPathComponent) with status \(process.terminationStatus)")
+                    return nil
+                }
+
+                return try? Data(contentsOf: outputURL)
+            } catch {
+                Logger().error("FFmpeg fallback failed for \(url.lastPathComponent): \(error.localizedDescription)")
+                return nil
+            }
+        }.value
     }
 }
 
