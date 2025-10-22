@@ -225,6 +225,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             var args = commonArgs + [
                 "-vn",
                 "-map", "0:a",
+                "-rf64", "auto",
                 "-c:a", "pcm_s24le"
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
