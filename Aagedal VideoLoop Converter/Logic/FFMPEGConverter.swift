@@ -20,7 +20,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     case hevcProxy1080p = "HEVC Proxy"
     case audioUncompressedWAV = "Audio only WAV (all channels)"
     case audioStereoAAC = "Audio only AAC (stereo downmix)"
-    case custom = "Custom"
+    case custom1 = "Custom"
+    case custom2 = "Custom 2"
+    case custom3 = "Custom 3"
     
     var id: String { self.rawValue }
     
@@ -36,12 +38,16 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "wav"
         case .audioStereoAAC:
             return "m4a"
-        case .custom:
-            return Self.customFileExtension()
+        case .custom1, .custom2, .custom3:
+            guard let slot = customSlotIndex else { return "mp4" }
+            return Self.customFileExtension(for: slot)
         }
     }
     
     var displayName: String {
+        if let slot = customSlotIndex {
+            return Self.customDisplayName(for: slot)
+        }
         return self.rawValue
     }
     
@@ -65,7 +71,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return NSLocalizedString("PRESET_AUDIO_WAV_DESCRIPTION", comment: "Description for Audio WAV preset")
         case .audioStereoAAC:
             return NSLocalizedString("PRESET_AUDIO_AAC_STEREO_DESCRIPTION", comment: "Description for Audio AAC Stereo preset")
-        case .custom:
+        case .custom1, .custom2, .custom3:
             return NSLocalizedString("PRESET_CUSTOM_DESCRIPTION", comment: "Description for Custom preset")
         }
     }
@@ -90,8 +96,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "_audio_wav"
         case .audioStereoAAC:
             return "_audio_aac"
-        case .custom:
-            return Self.customFileSuffix()
+        case .custom1, .custom2, .custom3:
+            guard let slot = customSlotIndex else { return "_custom" }
+            return Self.customFileSuffix(for: slot)
         }
     }
     
@@ -239,12 +246,26 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-b:a", "192k",
                 "-movflags", "+faststart"
             ]
-            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+            ExportPreset.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
             return args
-        case .custom:
-            let customArgs = Self.parseCustomCommand(Self.customCommandString())
+        case .custom1, .custom2, .custom3:
+            guard let slot = customSlotIndex else { return commonArgs }
+            let customArgs = ExportPreset.parseCustomCommand(ExportPreset.customCommandString(for: slot))
             return commonArgs + customArgs
         }
+    }
+
+    var customSlotIndex: Int? {
+        switch self {
+        case .custom1: return 0
+        case .custom2: return 1
+        case .custom3: return 2
+        default: return nil
+        }
+    }
+    
+    var isCustom: Bool {
+        customSlotIndex != nil
     }
 
     private static func applyMetadataStrategy(to args: inout [String], preserveMetadata: Bool, defaultMap: String = "-1") {
@@ -294,26 +315,81 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         args.append(contentsOf: [key, value])
     }
 
-    private static func customFileSuffix() -> String {
-        let stored = UserDefaults.standard.string(forKey: AppConstants.customPresetSuffixKey) ?? "_custom"
-        let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "_custom" : trimmed
+    private static func customDisplayName(for slot: Int) -> String {
+        let defaults = UserDefaults.standard
+        let nameKeys = [
+            AppConstants.customPreset1NameKey,
+            AppConstants.customPreset2NameKey,
+            AppConstants.customPreset3NameKey
+        ]
+        let prefixes = AppConstants.customPresetPrefixes
+        let fallbackSuffixes = AppConstants.defaultCustomPresetNameSuffixes
+        let prefix = slot < prefixes.count ? prefixes[slot] : "C\(slot + 1):"
+        let fallbackSuffix = slot < fallbackSuffixes.count ? fallbackSuffixes[slot] : "Custom Preset"
+        let nameKey = slot < nameKeys.count ? nameKeys[slot] : nil
+        let storedSuffix = nameKey.flatMap { defaults.string(forKey: $0) }
+        let sanitizedSuffix = sanitizeCustomNameSuffix(storedSuffix, fallback: fallbackSuffix)
+        return "\(prefix) \(sanitizedSuffix)"
     }
 
-    private static func customFileExtension() -> String {
-        let stored = UserDefaults.standard.string(forKey: AppConstants.customPresetExtensionKey) ?? "mp4"
-        var trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix(".") {
-            trimmed.removeFirst()
+    private static func sanitizeCustomNameSuffix(_ value: String?, fallback: String) -> String {
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        if trimPrefixIfPresent(trimmed, prefix: "C1:") || trimPrefixIfPresent(trimmed, prefix: "C2:") || trimPrefixIfPresent(trimmed, prefix: "C3:") {
+            let noPrefix = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true).last?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return noPrefix.isEmpty ? fallback : noPrefix
         }
-        trimmed = trimmed.replacingOccurrences(of: " ", with: "")
-        return trimmed.isEmpty ? "mp4" : trimmed.lowercased()
+        return trimmed
     }
-
-    private static func customCommandString() -> String {
-        let stored = UserDefaults.standard.string(forKey: AppConstants.customPresetCommandKey) ?? "-c copy"
+    
+    private static func trimPrefixIfPresent(_ value: String, prefix: String) -> Bool {
+        value.lowercased().hasPrefix(prefix.lowercased())
+    }
+    
+    private static func customFileSuffix(for slot: Int) -> String {
+        let defaults = UserDefaults.standard
+        let keys = [
+            AppConstants.customPreset1SuffixKey,
+            AppConstants.customPreset2SuffixKey,
+            AppConstants.customPreset3SuffixKey
+        ]
+        let fallback = slot < AppConstants.defaultCustomPresetSuffixes.count ? AppConstants.defaultCustomPresetSuffixes[slot] : "_c\(slot + 1)"
+        let key = slot < keys.count ? keys[slot] : nil
+        let stored = key.flatMap { defaults.string(forKey: $0) } ?? fallback
         let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "-c copy" : trimmed
+        return trimmed.isEmpty ? fallback : (trimmed.hasPrefix("_") ? trimmed : "_" + trimmed)
+    }
+    
+    private static func customFileExtension(for slot: Int) -> String {
+        let defaults = UserDefaults.standard
+        let keys = [
+            AppConstants.customPreset1ExtensionKey,
+            AppConstants.customPreset2ExtensionKey,
+            AppConstants.customPreset3ExtensionKey
+        ]
+        let fallback = slot < AppConstants.defaultCustomPresetExtensions.count ? AppConstants.defaultCustomPresetExtensions[slot] : "mp4"
+        let key = slot < keys.count ? keys[slot] : nil
+        var stored = key.flatMap { defaults.string(forKey: $0) } ?? fallback
+        stored = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        if stored.hasPrefix(".") {
+            stored.removeFirst()
+        }
+        stored = stored.replacingOccurrences(of: " ", with: "")
+        return stored.isEmpty ? fallback : stored.lowercased()
+    }
+    
+    private static func customCommandString(for slot: Int) -> String {
+        let defaults = UserDefaults.standard
+        let keys = [
+            AppConstants.customPreset1CommandKey,
+            AppConstants.customPreset2CommandKey,
+            AppConstants.customPreset3CommandKey
+        ]
+        let fallback = slot < AppConstants.defaultCustomPresetCommands.count ? AppConstants.defaultCustomPresetCommands[slot] : "-c copy"
+        let key = slot < keys.count ? keys[slot] : nil
+        let stored = key.flatMap { defaults.string(forKey: $0) } ?? fallback
+        let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
     }
 
     private static func parseCustomCommand(_ command: String) -> [String] {

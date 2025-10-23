@@ -13,9 +13,18 @@ struct SettingsView: View {
     @AppStorage("outputFolder") private var outputFolder = AppConstants.defaultOutputDirectory.path
     @AppStorage(AppConstants.includeDateTagPreferenceKey) private var includeDateTagByDefault = false
     @AppStorage(AppConstants.preserveMetadataPreferenceKey) private var preserveMetadataByDefault = false
-    @AppStorage(AppConstants.customPresetCommandKey) private var customPresetCommand = "-c copy"
-    @AppStorage(AppConstants.customPresetSuffixKey) private var customPresetSuffix = "_custom"
-    @AppStorage(AppConstants.customPresetExtensionKey) private var customPresetExtension = "mp4"
+    @AppStorage(AppConstants.customPreset1CommandKey) private var customPreset1Command = AppConstants.defaultCustomPresetCommands[0]
+    @AppStorage(AppConstants.customPreset1SuffixKey) private var customPreset1Suffix = AppConstants.defaultCustomPresetSuffixes[0]
+    @AppStorage(AppConstants.customPreset1ExtensionKey) private var customPreset1Extension = AppConstants.defaultCustomPresetExtensions[0]
+    @AppStorage(AppConstants.customPreset1NameKey) private var customPreset1Name = AppConstants.defaultCustomPresetNameSuffixes[0]
+    @AppStorage(AppConstants.customPreset2CommandKey) private var customPreset2Command = AppConstants.defaultCustomPresetCommands[1]
+    @AppStorage(AppConstants.customPreset2SuffixKey) private var customPreset2Suffix = AppConstants.defaultCustomPresetSuffixes[1]
+    @AppStorage(AppConstants.customPreset2ExtensionKey) private var customPreset2Extension = AppConstants.defaultCustomPresetExtensions[1]
+    @AppStorage(AppConstants.customPreset2NameKey) private var customPreset2Name = AppConstants.defaultCustomPresetNameSuffixes[1]
+    @AppStorage(AppConstants.customPreset3CommandKey) private var customPreset3Command = AppConstants.defaultCustomPresetCommands[2]
+    @AppStorage(AppConstants.customPreset3SuffixKey) private var customPreset3Suffix = AppConstants.defaultCustomPresetSuffixes[2]
+    @AppStorage(AppConstants.customPreset3ExtensionKey) private var customPreset3Extension = AppConstants.defaultCustomPresetExtensions[2]
+    @AppStorage(AppConstants.customPreset3NameKey) private var customPreset3Name = AppConstants.defaultCustomPresetNameSuffixes[2]
     @AppStorage(AppConstants.defaultPresetKey) private var storedDefaultPresetRawValue = ExportPreset.videoLoop.rawValue
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @AppStorage(AppConstants.watchFolderIgnoreOlderThan24hKey) private var watchFolderIgnoreOlderThan24h = false
@@ -243,14 +252,20 @@ struct SettingsView: View {
                     .cornerRadius(10)
                 }
             }
-            if selectedPreset == .custom {
+            if selectedPreset.isCustom {
                 Section(header: Text("Custom Preset")) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Specify the arguments passed to ffmpeg (without including the `ffmpeg` command itself).")
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        TextEditor(text: $customPresetCommand)
+                    let slot = selectedPreset.customSlotIndex ?? 0
+                    VStack(alignment: .leading, spacing: 16) {
+                        presetNameField(for: slot)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Specify the arguments passed to ffmpeg (without including the `ffmpeg` command itself).")
+                                .font(.callout)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            TextEditor(text: Binding(
+                                get: { customCommand(for: slot) },
+                                set: { updateCustomCommand($0, slot: slot) }
+                            ))
                             .font(.system(.body, design: .monospaced))
                             .frame(minHeight: 80)
                             .cornerRadius(6)
@@ -258,32 +273,30 @@ struct SettingsView: View {
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
-                            .onChange(of: customPresetCommand) { _, newValue in
-                                customPresetCommand = sanitizeCustomCommand(newValue)
-                            }
-                        HStack {
+                        }
+                        HStack(alignment: .top, spacing: 16) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Output file suffix")
                                     .font(.footnote)
                                     .foregroundColor(.secondary)
-                                TextField("_custom", text: $customPresetSuffix)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onChange(of: customPresetSuffix) { _, newValue in
-                                        customPresetSuffix = sanitizeCustomSuffix(newValue)
-                                    }
+                                TextField("_c\(slot + 1)", text: Binding(
+                                    get: { customSuffix(for: slot) },
+                                    set: { updateCustomSuffix($0, slot: slot) }
+                                ))
+                                .textFieldStyle(.roundedBorder)
                             }
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Output extension")
                                     .font(.footnote)
                                     .foregroundColor(.secondary)
-                                TextField("mp4", text: $customPresetExtension)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onChange(of: customPresetExtension) { _, newValue in
-                                        customPresetExtension = sanitizeCustomExtension(newValue)
-                                    }
+                                TextField("mp4", text: Binding(
+                                    get: { customExtension(for: slot) },
+                                    set: { updateCustomExtension($0, slot: slot) }
+                                ))
+                                .textFieldStyle(.roundedBorder)
                             }
                         }
-                        Text("Example: `-c:v libx264 -crf 18 -preset slow -c:a copy` produces `filename\(customPresetSuffix).\(customPresetExtension)`.")
+                        Text("Example: `-c:v libx264 -crf 18 -preset slow -c:a copy` produces `filename\(customSuffix(for: slot)).\(customExtension(for: slot))`.")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -417,23 +430,175 @@ struct SettingsView: View {
         }
     }
 
-    private func sanitizeCustomSuffix(_ value: String) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "_custom" : (trimmed.hasPrefix("_") ? trimmed : "_" + trimmed)
+    private func customCommand(for slot: Int) -> String {
+        switch slot {
+        case 0: return customPreset1Command
+        case 1: return customPreset2Command
+        case 2: return customPreset3Command
+        default: return AppConstants.defaultCustomPresetCommands.indices.contains(slot)
+            ? AppConstants.defaultCustomPresetCommands[slot]
+            : "-c copy"
+        }
     }
     
-    private func sanitizeCustomExtension(_ value: String) -> String {
+    private func customSuffix(for slot: Int) -> String {
+        switch slot {
+        case 0: return customPreset1Suffix
+        case 1: return customPreset2Suffix
+        case 2: return customPreset3Suffix
+        default: return AppConstants.defaultCustomPresetSuffixes.indices.contains(slot)
+            ? AppConstants.defaultCustomPresetSuffixes[slot]
+            : "_c\(slot + 1)"
+        }
+    }
+    
+    private func customExtension(for slot: Int) -> String {
+        switch slot {
+        case 0: return customPreset1Extension
+        case 1: return customPreset2Extension
+        case 2: return customPreset3Extension
+        default: return AppConstants.defaultCustomPresetExtensions.indices.contains(slot)
+            ? AppConstants.defaultCustomPresetExtensions[slot]
+            : "mp4"
+        }
+    }
+    
+    private func customNamePrefix(for slot: Int) -> String {
+        let prefixes = AppConstants.customPresetPrefixes
+        return prefixes.indices.contains(slot) ? prefixes[slot] : "C\(slot + 1):"
+    }
+    
+    private func customNameSuffix(for slot: Int) -> String {
+        let fallback = AppConstants.defaultCustomPresetNameSuffixes.indices.contains(slot)
+            ? AppConstants.defaultCustomPresetNameSuffixes[slot]
+            : "Custom Preset"
+        let prefix = customNamePrefix(for: slot)
+        let stored: String
+        switch slot {
+        case 0: stored = customPreset1Name
+        case 1: stored = customPreset2Name
+        case 2: stored = customPreset3Name
+        default: stored = fallback
+        }
+        let sanitized = sanitizeCustomNameSuffix(stored, prefix: prefix, fallback: fallback)
+        if sanitized != stored {
+            updateStoredNameSuffix(sanitized, slot: slot)
+        }
+        return sanitized
+    }
+    
+    private func customDisplayName(for slot: Int) -> String {
+        "\(customNamePrefix(for: slot)) \(customNameSuffix(for: slot))"
+    }
+    
+    private func updateCustomCommand(_ value: String, slot: Int) {
+        let defaults = AppConstants.defaultCustomPresetCommands
+        let fallback = defaults.indices.contains(slot) ? defaults[slot] : "-c copy"
+        let sanitized = sanitizeCustomCommand(value, fallback: fallback)
+        switch slot {
+        case 0: customPreset1Command = sanitized
+        case 1: customPreset2Command = sanitized
+        case 2: customPreset3Command = sanitized
+        default: break
+        }
+    }
+    
+    private func updateCustomSuffix(_ value: String, slot: Int) {
+        let defaults = AppConstants.defaultCustomPresetSuffixes
+        let fallback = defaults.indices.contains(slot) ? defaults[slot] : "_c\(slot + 1)"
+        let sanitized = sanitizeCustomSuffix(value, fallback: fallback)
+        switch slot {
+        case 0: customPreset1Suffix = sanitized
+        case 1: customPreset2Suffix = sanitized
+        case 2: customPreset3Suffix = sanitized
+        default: break
+        }
+    }
+    
+    private func updateCustomExtension(_ value: String, slot: Int) {
+        let defaults = AppConstants.defaultCustomPresetExtensions
+        let fallback = defaults.indices.contains(slot) ? defaults[slot] : "mp4"
+        let sanitized = sanitizeCustomExtension(value, fallback: fallback)
+        switch slot {
+        case 0: customPreset1Extension = sanitized
+        case 1: customPreset2Extension = sanitized
+        case 2: customPreset3Extension = sanitized
+        default: break
+        }
+    }
+    
+    private func updateCustomNameSuffix(_ value: String, slot: Int) {
+        let fallback = AppConstants.defaultCustomPresetNameSuffixes.indices.contains(slot)
+            ? AppConstants.defaultCustomPresetNameSuffixes[slot]
+            : "Custom Preset"
+        let prefix = customNamePrefix(for: slot)
+        let sanitized = sanitizeCustomNameSuffix(value, prefix: prefix, fallback: fallback)
+        updateStoredNameSuffix(sanitized, slot: slot)
+    }
+    
+    private func updateStoredNameSuffix(_ value: String, slot: Int) {
+        switch slot {
+        case 0: customPreset1Name = value
+        case 1: customPreset2Name = value
+        case 2: customPreset3Name = value
+        default: break
+        }
+    }
+    
+    @ViewBuilder
+    private func presetNameField(for slot: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Display name")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                Text(customNamePrefix(for: slot))
+                    .font(.body.monospaced())
+                TextField("Custom Preset", text: Binding(
+                    get: { customNameSuffix(for: slot) },
+                    set: { updateCustomNameSuffix($0, slot: slot) }
+                ))
+                .textFieldStyle(.roundedBorder)
+            }
+        }
+    }
+    
+    private func sanitizeCustomSuffix(_ value: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        return trimmed.hasPrefix("_") ? trimmed : "_" + trimmed
+    }
+    
+    private func sanitizeCustomExtension(_ value: String, fallback: String) -> String {
         var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix(".") {
             trimmed.removeFirst()
         }
         trimmed = trimmed.replacingOccurrences(of: " ", with: "")
-        return trimmed.isEmpty ? "mp4" : trimmed.lowercased()
+        return trimmed.isEmpty ? fallback : trimmed.lowercased()
     }
     
-    private func sanitizeCustomCommand(_ value: String) -> String {
+    private func sanitizeCustomCommand(_ value: String, fallback: String) -> String {
         let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.controlCharacters))
-        return trimmed.isEmpty ? "-c copy" : trimmed
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+    
+    private func sanitizeCustomNameSuffix(_ value: String, prefix: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        let lowercasedPrefix = prefix.lowercased()
+        var remainder = trimmed
+        if trimmed.lowercased().hasPrefix(lowercasedPrefix) {
+            let cutoff = trimmed.index(trimmed.startIndex, offsetBy: prefix.count)
+            remainder = String(trimmed[cutoff...])
+        }
+        remainder = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
+        if remainder.first == ":" {
+            remainder.removeFirst()
+            remainder = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let cleaned = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? fallback : cleaned
     }
 
     private var defaultPreset: ExportPreset {

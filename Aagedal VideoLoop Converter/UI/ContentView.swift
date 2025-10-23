@@ -44,6 +44,9 @@ struct ContentView: View {
     @State private var hasUserChangedPreset = false
     @State private var dockProgressUpdater = DockProgressUpdater()
     @State private var progressTask: Task<Void, Never>?
+    @AppStorage(AppConstants.customPreset1NameKey) private var customPreset1Name = AppConstants.defaultCustomPresetDisplayNames[0]
+    @AppStorage(AppConstants.customPreset2NameKey) private var customPreset2Name = AppConstants.defaultCustomPresetDisplayNames[1]
+    @AppStorage(AppConstants.customPreset3NameKey) private var customPreset3Name = AppConstants.defaultCustomPresetDisplayNames[2]
     @AppStorage(AppConstants.watchFolderModeKey) private var watchFolderModeEnabled = false
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @State private var watchFolderManager = WatchFolderManager()
@@ -186,7 +189,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .automatic) {
                     Picker("Preset", selection: toolbarPresetBinding) {
                         ForEach(ExportPreset.allCases) { preset in
-                            Text(preset.displayName).tag(preset)
+                            Text(displayName(for: preset)).tag(preset)
                         }
                     }
                     .pickerStyle(.menu)
@@ -397,6 +400,40 @@ struct ContentView: View {
         for index in droppedFiles.indices where droppedFiles[index].status == .waiting {
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: preset)
         }
+    }
+
+    private func displayName(for preset: ExportPreset) -> String {
+        guard let slot = preset.customSlotIndex else {
+            return preset.displayName
+        }
+        let prefixes = AppConstants.customPresetPrefixes
+        let fallbackSuffixes = AppConstants.defaultCustomPresetNameSuffixes
+        let prefix = prefixes.indices.contains(slot) ? prefixes[slot] : "C\(slot + 1):"
+        let fallbackSuffix = fallbackSuffixes.indices.contains(slot) ? fallbackSuffixes[slot] : "Custom Preset"
+        let storedSuffix: String
+        switch slot {
+        case 0: storedSuffix = customPreset1Name
+        case 1: storedSuffix = customPreset2Name
+        case 2: storedSuffix = customPreset3Name
+        default: storedSuffix = fallbackSuffix
+        }
+        let sanitizedSuffix = sanitizeCustomNameSuffix(storedSuffix, prefix: prefix, fallback: fallbackSuffix)
+        return "\(prefix) \(sanitizedSuffix)"
+    }
+
+    private func sanitizeCustomNameSuffix(_ value: String, prefix: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return fallback }
+        if trimmed.lowercased().hasPrefix(prefix.lowercased()) {
+            let cutoff = trimmed.index(trimmed.startIndex, offsetBy: prefix.count)
+            let remainder = trimmed[cutoff...].trimmingCharacters(in: .whitespacesAndNewlines)
+            return remainder.isEmpty ? fallback : remainder
+        }
+        if let colonIndex = trimmed.firstIndex(of: ":") {
+            let remainder = trimmed[trimmed.index(after: colonIndex)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            return remainder.isEmpty ? fallback : remainder
+        }
+        return trimmed
     }
 
     private func expectedOutputURL(for item: VideoItem, preset: ExportPreset) -> URL? {

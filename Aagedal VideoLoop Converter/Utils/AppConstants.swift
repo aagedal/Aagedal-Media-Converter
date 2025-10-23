@@ -42,6 +42,18 @@ enum AppConstants {
     static let customPresetCommandKey = "customPresetFFmpegCommand"
     static let customPresetSuffixKey = "customPresetFileSuffix"
     static let customPresetExtensionKey = "customPresetFileExtension"
+    static let customPreset1NameKey = "customPreset1DisplayName"
+    static let customPreset2NameKey = "customPreset2DisplayName"
+    static let customPreset3NameKey = "customPreset3DisplayName"
+    static let customPreset1CommandKey = customPresetCommandKey
+    static let customPreset1SuffixKey = customPresetSuffixKey
+    static let customPreset1ExtensionKey = customPresetExtensionKey
+    static let customPreset2CommandKey = "customPreset2FFmpegCommand"
+    static let customPreset2SuffixKey = "customPreset2FileSuffix"
+    static let customPreset2ExtensionKey = "customPreset2FileExtension"
+    static let customPreset3CommandKey = "customPreset3FFmpegCommand"
+    static let customPreset3SuffixKey = "customPreset3FileSuffix"
+    static let customPreset3ExtensionKey = "customPreset3FileExtension"
     static let defaultPresetKey = "defaultExportPreset"
     static let watchFolderModeKey = "watchFolderModeEnabled"
     static let watchFolderPathKey = "watchFolderPath"
@@ -56,4 +68,23 @@ enum AppConstants {
     static let defaultWatchFolderIgnoreDurationUnitRaw = WatchFolderDurationUnit.hours.rawValue
     static let defaultWatchFolderDeleteDurationValue = 7
     static let defaultWatchFolderDeleteDurationUnitRaw = WatchFolderDurationUnit.days.rawValue
+    static let customPresetPrefixes = ["C1:", "C2:", "C3:"]
+    static let defaultCustomPresetDisplayNames = [
+        "C1: Custom Preset",
+        "C2: Custom Preset",
+        "C3: Custom Preset"
+    ]
+    static let defaultCustomPresetNameSuffixes = [
+        "Custom Preset",
+        "Custom Preset",
+        "Custom Preset"
+    ]
+    static let defaultCustomPresetFullNames = [
+        "C1: Custom Preset",
+        "C2: Custom Preset",
+        "C3: Custom Preset"
+    ]
+    static let defaultCustomPresetCommands = ["-c copy", "-c copy", "-c copy"]
+    static let defaultCustomPresetSuffixes = ["_c1", "_c2", "_c3"]
+    static let defaultCustomPresetExtensions = ["mp4", "mp4", "mp4"]
 }
