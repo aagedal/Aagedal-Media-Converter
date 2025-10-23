@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(AppConstants.customPresetSuffixKey) private var customPresetSuffix = "_custom"
     @AppStorage(AppConstants.customPresetExtensionKey) private var customPresetExtension = "mp4"
     @AppStorage(AppConstants.defaultPresetKey) private var storedDefaultPresetRawValue = ExportPreset.videoLoop.rawValue
+    @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @State private var selectedPreset: ExportPreset = .videoLoop
     
     var body: some View {
@@ -60,6 +61,65 @@ struct SettingsView: View {
                     }
                 }
                 .padding(8)
+            }
+            
+            Section(header: Text("Watch Folder")) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Watch Folder:")
+                        .font(.headline)
+                    
+                    if watchFolderPath.isEmpty {
+                        Text("No folder selected")
+                            .foregroundColor(.secondary)
+                            .italic()
+                    } else {
+                        HStack {
+                            Text(watchFolderPath)
+                                .truncationMode(.middle)
+                                .lineLimit(1)
+                                .help(watchFolderPath)
+                            
+                            Button(action: {
+                                let url = URL(fileURLWithPath: watchFolderPath)
+                                guard FileManager.default.fileExists(atPath: url.path) else {
+                                    // If the saved folder doesn't exist, clear it
+                                    watchFolderPath = ""
+                                    return
+                                }
+                                NSWorkspace.shared.activateFileViewerSelecting([url])
+                            }) {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .foregroundColor(.accentColor)
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                            .help("Show in Finder")
+                        }
+                    }
+                    
+                    HStack {
+                        Button(action: {
+                            selectWatchFolder()
+                        }) {
+                            Label(watchFolderPath.isEmpty ? "Select Folder" : "Change Folder", systemImage: "folder.badge.plus")
+                        }
+                        
+                        if !watchFolderPath.isEmpty {
+                            Button(action: {
+                                watchFolderPath = ""
+                            }) {
+                                Label("Clear", systemImage: "xmark.circle")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                }
+                .padding(8)
+                
+                Text("When Watch Folder Mode is enabled in the toolbar, the app will automatically scan this folder every 5 seconds for new video files and add them to the conversion queue.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
             }
             
             Section(header: Text("Metadata")) {
@@ -230,6 +290,25 @@ struct SettingsView: View {
             // Ensure directory exists
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
             outputFolder = url.path
+        }
+    }
+    
+    private func selectWatchFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select Watch Folder"
+        panel.message = "Choose a folder to watch for new video files"
+        
+        if !watchFolderPath.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: watchFolderPath)
+        }
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            watchFolderPath = url.path
+            // Save security-scoped bookmark for the watch folder
+            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
         }
     }
 

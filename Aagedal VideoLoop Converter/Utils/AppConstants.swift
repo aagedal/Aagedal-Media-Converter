@@ -43,4 +43,6 @@ enum AppConstants {
     static let customPresetSuffixKey = "customPresetFileSuffix"
     static let customPresetExtensionKey = "customPresetFileExtension"
     static let defaultPresetKey = "defaultExportPreset"
+    static let watchFolderModeKey = "watchFolderModeEnabled"
+    static let watchFolderPathKey = "watchFolderPath"
 }

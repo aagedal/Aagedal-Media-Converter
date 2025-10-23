@@ -44,6 +44,10 @@ struct ContentView: View {
     @State private var hasUserChangedPreset = false
     @State private var dockProgressUpdater = DockProgressUpdater()
     @State private var progressTask: Task<Void, Never>?
+    @AppStorage(AppConstants.watchFolderModeKey) private var watchFolderModeEnabled = false
+    @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
+    @State private var watchFolderManager = WatchFolderManager()
+    @State private var autoEncodeTask: Task<Void, Never>?
     
     // Using shared AppConstants for supported file types
     private var supportedVideoTypes: [UTType] {
@@ -118,6 +122,15 @@ struct ContentView: View {
                           (isConverting ? "Cancel all conversions" : (canStartConversion ? "Start converting all files" : "No files ready to convert")))
                 }
                 
+                
+                // Watch Folder Mode Toggle
+                ToolbarItem(placement: .automatic) {
+                    Toggle(isOn: $watchFolderModeEnabled) {
+                        Label("Watch Mode", systemImage: watchFolderModeEnabled ? "eye.fill" : "eye")
+                    }
+                    .toggleStyle(.button)
+                    .help(watchFolderPath.isEmpty ? "Select a watch folder to enable Watch Mode" : (watchFolderModeEnabled ? "Stop watching \(watchFolderPath)" : "Start watching \(watchFolderPath)"))
+                }
                 
                 // Import button
                 ToolbarItem(placement: .automatic) {
@@ -236,6 +249,14 @@ struct ContentView: View {
         // Listen for menu command
         .onReceive(NotificationCenter.default.publisher(for: .showFileImporter)) { _ in
             isFileImporterPresented = true
+        }
+        .onChange(of: watchFolderModeEnabled) { _, newValue in
+            handleWatchModeChange(enabled: newValue)
+        }
+        .onChange(of: droppedFiles.count) { oldCount, newCount in
+            if watchFolderModeEnabled && newCount > oldCount {
+                scheduleAutoEncode()
+            }
         }
         // Listen for App Intent to enqueue file
         .onReceive(NotificationCenter.default.publisher(for: .enqueueFileURL)) { notification in
@@ -393,6 +414,87 @@ struct ContentView: View {
                 refreshExpectedOutputURLs(for: newValue)
             }
         )
+    }
+    
+    // MARK: - Watch Folder Management
+    
+    private func handleWatchModeChange(enabled: Bool) {
+        Task {
+            if enabled {
+                if watchFolderPath.isEmpty {
+                    let selectedFolder = await MainActor.run { promptForWatchFolderSelection() }
+                    guard let folderURL = selectedFolder else {
+                        await MainActor.run {
+                            watchFolderModeEnabled = false
+                        }
+                        return
+                    }
+                    await MainActor.run {
+                        watchFolderPath = folderURL.path
+                    }
+                    _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: folderURL)
+                }
+                
+                await watchFolderManager.startMonitoring(folderPath: watchFolderPath) { newFileURLs in
+                    Task { @MainActor in
+                        await self.addFilesFromWatchFolder(newFileURLs)
+                    }
+                }
+            } else {
+                await watchFolderManager.stopMonitoring()
+                autoEncodeTask?.cancel()
+                autoEncodeTask = nil
+            }
+        }
+    }
+    
+    @MainActor
+    private func addFilesFromWatchFolder(_ urls: [URL]) async {
+        for url in urls {
+            // Check if file already exists in the list
+            guard !droppedFiles.contains(where: { $0.url == url }) else {
+                continue
+            }
+            
+            if let videoItem = await VideoFileUtils.createVideoItem(
+                from: url,
+                outputFolder: outputFolder,
+                preset: selectedPreset
+            ) {
+                droppedFiles.append(videoItem)
+            }
+        }
+    }
+    
+    private func scheduleAutoEncode() {
+        // Cancel any existing scheduled task
+        autoEncodeTask?.cancel()
+        
+        // Schedule encoding after 2 second delay
+        autoEncodeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            
+            guard !Task.isCancelled else { return }
+            
+            // Only start if not already converting and there are files waiting
+            if !isConverting && canStartConversion {
+                await startConversion()
+            }
+        }
+    }
+
+    @MainActor
+    private func promptForWatchFolderSelection() -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Select Watch Folder"
+        panel.message = "Choose a folder to watch for new video files"
+        if !watchFolderPath.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: watchFolderPath)
+        }
+        return panel.runModal() == .OK ? panel.url : nil
     }
 }
 
