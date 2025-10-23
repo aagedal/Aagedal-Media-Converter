@@ -34,6 +34,8 @@ struct SettingsView: View {
     @AppStorage(AppConstants.watchFolderDeleteDurationValueKey) private var watchFolderDeleteDurationValue = AppConstants.defaultWatchFolderDeleteDurationValue
     @AppStorage(AppConstants.watchFolderDeleteDurationUnitKey) private var watchFolderDeleteDurationUnitRaw = AppConstants.defaultWatchFolderDeleteDurationUnitRaw
     @State private var selectedPreset: ExportPreset = .videoLoop
+    @FocusState private var focusedCustomCommandSlot: Int?
+    @State private var previousFocusedCustomCommandSlot: Int?
     
     var body: some View {
         Form {
@@ -273,6 +275,7 @@ struct SettingsView: View {
                                 RoundedRectangle(cornerRadius: 6)
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
+                            .focused($focusedCustomCommandSlot, equals: slot)
                         }
                         HStack(alignment: .top, spacing: 16) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -307,20 +310,17 @@ struct SettingsView: View {
             
             // Links Section
             Section {
-                HStack(spacing: 20) {
-                    // Left-aligned Close button (only shown in sheet)
-                    Spacer()
-                    // Right-aligned links
-                    HStack(spacing: 20) {
-                        Link("GitHub Project", destination: URL(string: "https://github.com/yourusername/Aagedal-VideoLoop-Converter-2.0")!)
-                            .foregroundColor(.blue)
-                            .buttonStyle(.plain)
-                        
-                        Link("Developer Website", destination: URL(string: "https://aagedal.me")!)
-                            .foregroundColor(.blue)
-                            .buttonStyle(.plain)
-                    }
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Support and Documentation", systemImage: "questionmark.circle")
+                        .font(.headline)
+                    Link("Visit Documentation", destination: URL(string: "https://example.com/docs")!)
+                    Link("Contact Support", destination: URL(string: "mailto:support@example.com")!)
                 }
+                .padding(.vertical, 4)
+            } footer: {
+                Text("For additional assistance, please visit our support page or contact us via email.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.horizontal, 8)
             }
@@ -329,6 +329,18 @@ struct SettingsView: View {
         .frame(width: 600, height: 560)
         .navigationTitle("Settings – Aagedal VideoLoop Converter")
         .padding(.horizontal, 20)
+        .onChange(of: focusedCustomCommandSlot) { _, newValue in
+            if let previous = previousFocusedCustomCommandSlot, previous != newValue {
+                finalizeCustomCommand(for: previous)
+            }
+            previousFocusedCustomCommandSlot = newValue
+        }
+        .onDisappear {
+            if let previous = previousFocusedCustomCommandSlot {
+                finalizeCustomCommand(for: previous)
+                previousFocusedCustomCommandSlot = nil
+            }
+        }
     }
     
     // MARK: - Helpers
@@ -579,8 +591,26 @@ struct SettingsView: View {
     }
     
     private func sanitizeCustomCommand(_ value: String, fallback: String) -> String {
-        let trimmed = value.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.controlCharacters))
-        return trimmed.isEmpty ? fallback : trimmed
+        let withoutControlCharacters = value.trimmingCharacters(in: .controlCharacters)
+        let trimmedWhitespace = withoutControlCharacters.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedWhitespace.isEmpty {
+            return fallback
+        }
+        return withoutControlCharacters
+    }
+    
+    private func finalizeCustomCommand(for slot: Int) {
+        let current = customCommand(for: slot)
+        let trimmedTrailing = trimTrailingWhitespace(from: current)
+        updateCustomCommand(trimmedTrailing, slot: slot)
+    }
+    
+    private func trimTrailingWhitespace(from value: String) -> String {
+        var result = value
+        while let last = result.last, last.isWhitespace || last.isNewline {
+            result.removeLast()
+        }
+        return result
     }
     
     private func sanitizeCustomNameSuffix(_ value: String, prefix: String, fallback: String) -> String {
