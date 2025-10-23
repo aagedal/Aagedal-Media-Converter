@@ -176,6 +176,9 @@
         }
       }
     },
+    "Automatically delete files older than 7 days" : {
+
+    },
     "By default, metadata such as title, timecode, and encoder tags are stripped to keep output files clean. Enable this to keep all metadata untouched. However, color related metadata (including HDR) will always be preserved, to assure an accurate viewing experience." : {
       "localizations" : {
         "nb" : {
@@ -507,6 +510,9 @@
         }
       }
     },
+    "Ignore files older than 24 hours" : {
+
+    },
     "Import" : {
       "localizations" : {
         "en" : {
@@ -731,6 +737,9 @@
           }
         }
       }
+    },
+    "Permanently remove files that have been in the watch folder for more than a week" : {
+
     },
     "Preserve all original metadata" : {
       "localizations" : {
@@ -1085,6 +1094,9 @@
           }
         }
       }
+    },
+    "Skip files that were added to the watch folder more than 24 hours ago" : {
+
     },
     "Specify the arguments passed to ffmpeg (without including the `ffmpeg` command itself)." : {
       "localizations" : {

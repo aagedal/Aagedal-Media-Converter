@@ -15,6 +15,8 @@ actor WatchFolderManager {
     private var monitorTask: Task<Void, Never>?
     private var trackedFiles: [URL: Int64] = [:] // URL -> file size
     private var isMonitoring = false
+    private let oneDay: TimeInterval = 24 * 60 * 60
+    private let oneWeek: TimeInterval = 7 * 24 * 60 * 60
     
     /// Start monitoring the specified folder
     func startMonitoring(
@@ -70,51 +72,63 @@ actor WatchFolderManager {
         
         guard let enumerator = FileManager.default.enumerator(
             at: folderURL,
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey],
             options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
         ) else {
             Logger().error("Failed to create file enumerator for: \(folderPath)")
             return
         }
         
+        let ignoreOlderThan24h = UserDefaults.standard.bool(forKey: AppConstants.watchFolderIgnoreOlderThan24hKey)
+        let autoDeleteOlderThanWeek = UserDefaults.standard.bool(forKey: AppConstants.watchFolderAutoDeleteOlderThanWeekKey)
+        let now = Date()
         var currentFiles: [URL: Int64] = [:]
         var stableFiles: [URL] = []
         
         // Convert enumerator to array for async iteration
         let fileURLs = enumerator.allObjects.compactMap { $0 as? URL }
         
-        // Scan current files in folder
         for fileURL in fileURLs {
-            // Check if it's a regular file
-            guard let isRegularFile = try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile,
-                  isRegularFile else {
+            guard AppConstants.supportedVideoExtensions.contains(fileURL.pathExtension.lowercased()) else {
                 continue
             }
             
-            // Check if it's a supported video file
-            let fileExtension = fileURL.pathExtension.lowercased()
-            guard AppConstants.supportedVideoExtensions.contains(fileExtension) else {
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey]),
+                  resourceValues.isRegularFile == true,
+                  let fileSize = resourceValues.fileSize else {
+                continue
+            }
+
+            let relevantDate = resourceValues.addedToDirectoryDate ?? resourceValues.creationDate ?? resourceValues.contentModificationDate ?? now
+            let fileAge = now.timeIntervalSince(relevantDate)
+            
+            if autoDeleteOlderThanWeek && fileAge > oneWeek {
+                do {
+                    try FileManager.default.removeItem(at: fileURL)
+                    Logger().info("Deleted watch folder file older than one week: \(fileURL.lastPathComponent)")
+                } catch {
+                    Logger().error("Failed to delete old watch folder file \(fileURL.lastPathComponent): \(error.localizedDescription)")
+                }
+                trackedFiles.removeValue(forKey: fileURL)
                 continue
             }
             
-            // Get file size
-            guard let fileSize = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+            if ignoreOlderThan24h && fileAge > oneDay {
+                Logger().info("Ignoring watch folder file older than 24h: \(fileURL.lastPathComponent)")
+                trackedFiles.removeValue(forKey: fileURL)
                 continue
             }
             
             currentFiles[fileURL] = Int64(fileSize)
             
-            // Check if file was tracked before and hasn't grown
             if let previousSize = trackedFiles[fileURL] {
                 if fileSize == previousSize && fileSize > 0 {
-                    // File size hasn't changed - it's stable
                     stableFiles.append(fileURL)
                     Logger().info("File stable and ready: \(fileURL.lastPathComponent) (\(fileSize) bytes)")
                 } else if fileSize > previousSize {
                     Logger().info("File still growing: \(fileURL.lastPathComponent) (\(previousSize) -> \(fileSize) bytes)")
                 }
             } else {
-                // New file detected - track it but don't add yet
                 Logger().info("New file detected (tracking): \(fileURL.lastPathComponent) (\(fileSize) bytes)")
             }
         }

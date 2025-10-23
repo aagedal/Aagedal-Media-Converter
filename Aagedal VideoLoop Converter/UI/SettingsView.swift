@@ -18,6 +18,8 @@ struct SettingsView: View {
     @AppStorage(AppConstants.customPresetExtensionKey) private var customPresetExtension = "mp4"
     @AppStorage(AppConstants.defaultPresetKey) private var storedDefaultPresetRawValue = ExportPreset.videoLoop.rawValue
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
+    @AppStorage(AppConstants.watchFolderIgnoreOlderThan24hKey) private var watchFolderIgnoreOlderThan24h = false
+    @AppStorage(AppConstants.watchFolderAutoDeleteOlderThanWeekKey) private var watchFolderAutoDeleteOlderThanWeek = false
     @State private var selectedPreset: ExportPreset = .videoLoop
     
     var body: some View {
@@ -120,6 +122,13 @@ struct SettingsView: View {
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 4)
+                Toggle("Ignore files added more than 24 hours ago", isOn: $watchFolderIgnoreOlderThan24h)
+                    .toggleStyle(SwitchToggleStyle())
+                    .help("Skip files that were added to the watch folder more than 24 hours ago")
+                    .padding(.top, 6)
+                Toggle("Automatically delete files added to the watch folder more than 7 days ago", isOn: $watchFolderAutoDeleteOlderThanWeek)
+                    .toggleStyle(SwitchToggleStyle())
+                    .help("Permanently remove files that have been in the watch folder for more than a week")
             }
             
             Section(header: Text("Metadata")) {
