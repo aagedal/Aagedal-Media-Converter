@@ -13,6 +13,17 @@ import AppKit
 
 @main
 struct Aagedal_VideoLoop_Converter_2_0App: App {
+    init() {
+        UserDefaults.standard.register(defaults: [
+            AppConstants.watchFolderIgnoreOlderThan24hKey: false,
+            AppConstants.watchFolderAutoDeleteOlderThanWeekKey: false,
+            AppConstants.watchFolderIgnoreDurationValueKey: AppConstants.defaultWatchFolderIgnoreDurationValue,
+            AppConstants.watchFolderIgnoreDurationUnitKey: AppConstants.defaultWatchFolderIgnoreDurationUnitRaw,
+            AppConstants.watchFolderDeleteDurationValueKey: AppConstants.defaultWatchFolderDeleteDurationValue,
+            AppConstants.watchFolderDeleteDurationUnitKey: AppConstants.defaultWatchFolderDeleteDurationUnitRaw
+        ])
+    }
+    
     var body: some Scene {
         WindowGroup {
             VStack {

@@ -15,8 +15,6 @@ actor WatchFolderManager {
     private var monitorTask: Task<Void, Never>?
     private var trackedFiles: [URL: Int64] = [:] // URL -> file size
     private var isMonitoring = false
-    private let oneDay: TimeInterval = 24 * 60 * 60
-    private let oneWeek: TimeInterval = 7 * 24 * 60 * 60
     
     /// Start monitoring the specified folder
     func startMonitoring(
@@ -78,9 +76,8 @@ actor WatchFolderManager {
             Logger().error("Failed to create file enumerator for: \(folderPath)")
             return
         }
-        
-        let ignoreOlderThan24h = UserDefaults.standard.bool(forKey: AppConstants.watchFolderIgnoreOlderThan24hKey)
-        let autoDeleteOlderThanWeek = UserDefaults.standard.bool(forKey: AppConstants.watchFolderAutoDeleteOlderThanWeekKey)
+
+        let settings = loadDurationSettings()
         let now = Date()
         var currentFiles: [URL: Int64] = [:]
         var stableFiles: [URL] = []
@@ -102,19 +99,27 @@ actor WatchFolderManager {
             let relevantDate = resourceValues.addedToDirectoryDate ?? resourceValues.creationDate ?? resourceValues.contentModificationDate ?? now
             let fileAge = now.timeIntervalSince(relevantDate)
             
-            if autoDeleteOlderThanWeek && fileAge > oneWeek {
+            if settings.deleteEnabled, let deleteThreshold = settings.deleteThreshold, fileAge > deleteThreshold {
                 do {
                     try FileManager.default.removeItem(at: fileURL)
-                    Logger().info("Deleted watch folder file older than one week: \(fileURL.lastPathComponent)")
+                    if let description = settings.deleteDescription {
+                        Logger().info("Deleted watch folder file older than \(description): \(fileURL.lastPathComponent)")
+                    } else {
+                        Logger().info("Deleted watch folder file exceeding delete threshold: \(fileURL.lastPathComponent)")
+                    }
                 } catch {
                     Logger().error("Failed to delete old watch folder file \(fileURL.lastPathComponent): \(error.localizedDescription)")
                 }
                 trackedFiles.removeValue(forKey: fileURL)
                 continue
             }
-            
-            if ignoreOlderThan24h && fileAge > oneDay {
-                Logger().info("Ignoring watch folder file older than 24h: \(fileURL.lastPathComponent)")
+
+            if settings.ignoreEnabled, let ignoreThreshold = settings.ignoreThreshold, fileAge > ignoreThreshold {
+                if let description = settings.ignoreDescription {
+                    Logger().info("Ignoring watch folder file older than \(description): \(fileURL.lastPathComponent)")
+                } else {
+                    Logger().info("Ignoring watch folder file exceeding ignore threshold: \(fileURL.lastPathComponent)")
+                }
                 trackedFiles.removeValue(forKey: fileURL)
                 continue
             }
@@ -150,5 +155,54 @@ actor WatchFolderManager {
     
     func isCurrentlyMonitoring() -> Bool {
         return isMonitoring
+    }
+}
+
+private extension WatchFolderManager {
+    struct DurationSettings {
+        var ignoreEnabled: Bool
+        var ignoreThreshold: TimeInterval?
+        var ignoreDescription: String?
+        var deleteEnabled: Bool
+        var deleteThreshold: TimeInterval?
+        var deleteDescription: String?
+    }
+    
+    func loadDurationSettings() -> DurationSettings {
+        let defaults = UserDefaults.standard
+        let ignoreEnabled = defaults.bool(forKey: AppConstants.watchFolderIgnoreOlderThan24hKey)
+        let deleteEnabled = defaults.bool(forKey: AppConstants.watchFolderAutoDeleteOlderThanWeekKey)
+        let ignoreValueRaw = defaults.object(forKey: AppConstants.watchFolderIgnoreDurationValueKey) as? NSNumber
+        let ignoreValue = AppConstants.watchFolderDurationValues.contains(ignoreValueRaw?.intValue ?? 0)
+            ? ignoreValueRaw!.intValue
+            : AppConstants.defaultWatchFolderIgnoreDurationValue
+        let ignoreUnitRaw = defaults.string(forKey: AppConstants.watchFolderIgnoreDurationUnitKey) ?? AppConstants.defaultWatchFolderIgnoreDurationUnitRaw
+        let deleteValueRaw = defaults.object(forKey: AppConstants.watchFolderDeleteDurationValueKey) as? NSNumber
+        let deleteValue = AppConstants.watchFolderDurationValues.contains(deleteValueRaw?.intValue ?? 0)
+            ? deleteValueRaw!.intValue
+            : AppConstants.defaultWatchFolderDeleteDurationValue
+        let deleteUnitRaw = defaults.string(forKey: AppConstants.watchFolderDeleteDurationUnitKey) ?? AppConstants.defaultWatchFolderDeleteDurationUnitRaw
+        let ignoreUnit = WatchFolderDurationUnit(rawValue: ignoreUnitRaw) ?? .hours
+        let deleteUnit = WatchFolderDurationUnit(rawValue: deleteUnitRaw) ?? .days
+        let ignoreThreshold: TimeInterval? = ignoreEnabled ? TimeInterval(ignoreValue) * ignoreUnit.secondsMultiplier : nil
+        let deleteThreshold: TimeInterval? = deleteEnabled ? TimeInterval(deleteValue) * deleteUnit.secondsMultiplier : nil
+        return DurationSettings(
+            ignoreEnabled: ignoreEnabled,
+            ignoreThreshold: ignoreThreshold,
+            ignoreDescription: ignoreEnabled ? describeThreshold(value: ignoreValue, unit: ignoreUnit) : nil,
+            deleteEnabled: deleteEnabled,
+            deleteThreshold: deleteThreshold,
+            deleteDescription: deleteEnabled ? describeThreshold(value: deleteValue, unit: deleteUnit) : nil
+        )
+    }
+    
+    func describeThreshold(value: Int, unit: WatchFolderDurationUnit) -> String {
+        let unitName: String
+        switch unit {
+        case .minutes: unitName = value == 1 ? "minute" : "minutes"
+        case .hours: unitName = value == 1 ? "hour" : "hours"
+        case .days: unitName = value == 1 ? "day" : "days"
+        }
+        return "\(value) \(unitName)"
     }
 }

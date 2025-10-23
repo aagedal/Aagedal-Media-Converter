@@ -47,4 +47,13 @@ enum AppConstants {
     static let watchFolderPathKey = "watchFolderPath"
     static let watchFolderIgnoreOlderThan24hKey = "watchFolderIgnoreOlderThan24h"
     static let watchFolderAutoDeleteOlderThanWeekKey = "watchFolderAutoDeleteOlderThanWeek"
+    static let watchFolderIgnoreDurationValueKey = "watchFolderIgnoreDurationValue"
+    static let watchFolderIgnoreDurationUnitKey = "watchFolderIgnoreDurationUnit"
+    static let watchFolderDeleteDurationValueKey = "watchFolderDeleteDurationValue"
+    static let watchFolderDeleteDurationUnitKey = "watchFolderDeleteDurationUnit"
+    static let watchFolderDurationValues: [Int] = [1, 3, 5, 7, 10, 14, 24, 31]
+    static let defaultWatchFolderIgnoreDurationValue = 24
+    static let defaultWatchFolderIgnoreDurationUnitRaw = WatchFolderDurationUnit.hours.rawValue
+    static let defaultWatchFolderDeleteDurationValue = 7
+    static let defaultWatchFolderDeleteDurationUnitRaw = WatchFolderDurationUnit.days.rawValue
 }
