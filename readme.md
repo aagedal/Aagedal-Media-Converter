@@ -15,6 +15,7 @@ Note that most of this app is vibe-coded.
 
 - **Drag-and-Drop** or File Picker import
 - Batch conversion with per-file progress and overall dock progress indicator
+- Watch Folder, with optional auto-delete after a set time.
 - **Export Presets**  
   • Video Loop (silent) — x264 very slow 1080p max resolution, keeping original aspect ratio, removing all audio channels, nice for compact web distribution such as GIF-replacements, slow export
   
@@ -32,7 +33,7 @@ Note that most of this app is vibe-coded.
 
   • Audio Only WAV — Extract uncompressed audio from video, keeping all audio channels
 
-  • Custom FFMPEG preset — Note that this is less tested and there may not be feedback if the command doesn't work. Use at own risk, and preferably test the command in a terminal before adding to the app.
+  • 3 Custom FFMPEG presets, which can be named.
   
 - Set default preset in the settings menu
 - Set default export location
