@@ -311,10 +311,13 @@ struct SettingsView: View {
             // Links Section
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Support and Documentation", systemImage: "questionmark.circle")
+                    Label("Source code and author website", systemImage: "questionmark.circle")
                         .font(.headline)
-                    Link("Visit Documentation", destination: URL(string: "https://example.com/docs")!)
-                    Link("Contact Support", destination: URL(string: "mailto:support@example.com")!)
+                    HStack {
+                        Link("GitHub Repository", destination: URL(string: "https://github.com/aagedal/Aagedal-VideoLoop-Converter/tree/main")!)
+                        Spacer()
+                        Link("Developer Website", destination: URL(string: "https://aagedal.me/about")!)
+                    }.padding(8)
                 }
                 .padding(.vertical, 4)
             } footer: {
