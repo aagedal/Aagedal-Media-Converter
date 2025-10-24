@@ -69,7 +69,7 @@ Command + , → Open Settings
 
 |                | Minimum |
 |----------------|---------|
-| macOS          | 15.0 (Sonoma) |
+| macOS          | 15.0 (Sonoma) or later |
 | Hardware       | Apple Silicon (M1 or later) |
 
 
