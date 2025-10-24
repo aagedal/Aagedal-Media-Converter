@@ -6,8 +6,7 @@ Removes almost all metdata by default. Fully private local only processing.
 
 Note that most of this app is vibe-coded.
 
-
-![Screenshot 2025-10-20 at 23 42 36](https://github.com/user-attachments/assets/3ab4f6c8-6b68-4674-a262-c994e7d3e05a)
+![Screenshot 2025-10-24 at 10 16 22](https://github.com/user-attachments/assets/7771b95b-cb5b-42f3-ad24-a7c43f9a12c5)
 
 ---
 
@@ -15,6 +14,7 @@ Note that most of this app is vibe-coded.
 
 - **Drag-and-Drop** or File Picker import
 - Batch conversion with per-file progress and overall dock progress indicator
+- Watch Folder, with optional auto-delete after a set time.
 - **Export Presets**  
   • Video Loop (silent) — x264 very slow 1080p max resolution, keeping original aspect ratio, removing all audio channels, nice for compact web distribution such as GIF-replacements, slow export
   
@@ -32,7 +32,7 @@ Note that most of this app is vibe-coded.
 
   • Audio Only WAV — Extract uncompressed audio from video, keeping all audio channels
 
-  • Custom FFMPEG preset — Note that this is less tested and there may not be feedback if the command doesn't work. Use at own risk, and preferably test the command in a terminal before adding to the app.
+  • 3 Custom FFMPEG presets, which can be named.
   
 - Set default preset in the settings menu
 - Set default export location
@@ -46,8 +46,9 @@ Note that most of this app is vibe-coded.
 - Sandboxed with Security-Scoped Bookmarks for persistent file access
 - Language support: English and Norwegian
 
+![Screenshot 2025-10-24 at 10 17 09](https://github.com/user-attachments/assets/7f1fdd16-7029-47fe-97a5-1727d071985e)
+![Screenshot 2025-10-24 at 10 18 03](https://github.com/user-attachments/assets/b0d65667-4c14-4db4-8db1-a29c3b78848d)
 
-![Screenshot 2025-10-20 at 23 43 00](https://github.com/user-attachments/assets/ac5a09de-4d4c-4226-8a8a-b8925406e537)
 
 ---
 
@@ -68,7 +69,7 @@ Command + , → Open Settings
 
 |                | Minimum |
 |----------------|---------|
-| macOS          | 15.0 (Sonoma) |
+| macOS          | 15.0 (Sonoma) or later |
 | Hardware       | Apple Silicon (M1 or later) |
 
 
