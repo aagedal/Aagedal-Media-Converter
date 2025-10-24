@@ -6,8 +6,7 @@ Removes almost all metdata by default. Fully private local only processing.
 
 Note that most of this app is vibe-coded.
 
-
-![Screenshot 2025-10-20 at 23 42 36](https://github.com/user-attachments/assets/3ab4f6c8-6b68-4674-a262-c994e7d3e05a)
+![Screenshot 2025-10-24 at 10 16 22](https://github.com/user-attachments/assets/7771b95b-cb5b-42f3-ad24-a7c43f9a12c5)
 
 ---
 
@@ -47,8 +46,9 @@ Note that most of this app is vibe-coded.
 - Sandboxed with Security-Scoped Bookmarks for persistent file access
 - Language support: English and Norwegian
 
+![Screenshot 2025-10-24 at 10 17 09](https://github.com/user-attachments/assets/7f1fdd16-7029-47fe-97a5-1727d071985e)
+![Screenshot 2025-10-24 at 10 18 03](https://github.com/user-attachments/assets/b0d65667-4c14-4db4-8db1-a29c3b78848d)
 
-![Screenshot 2025-10-20 at 23 43 00](https://github.com/user-attachments/assets/ac5a09de-4d4c-4226-8a8a-b8925406e537)
 
 ---
 
