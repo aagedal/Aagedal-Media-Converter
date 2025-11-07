@@ -6,7 +6,9 @@ Removes almost all metdata by default. Fully private local only processing.
 
 Note that most of this app is vibe-coded.
 
-![Screenshot 2025-10-24 at 10 16 22](https://github.com/user-attachments/assets/7771b95b-cb5b-42f3-ad24-a7c43f9a12c5)
+
+<img width="963" height="648" alt="SCR-20251107-tcjf" src="https://github.com/user-attachments/assets/614fe3c8-be03-4ff1-b200-84c141a1341e" />
+
 
 ---
 
@@ -58,6 +60,7 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 - Thumbnail preview with checkerboard background to clearly see original aspect ratio
 - Automatic duration warning if a VideoLoop clip exceeds 15s (short videos are best for auto-playing and looping on webpages)
 - Sandboxed with Security-Scoped Bookmarks for persistent file access
+- Auto remove spaces and special characters. æ, ø, å is replaced with ae, o and aa.
 - Language support: English and Norwegian
 
 ![Screenshot 2025-10-24 at 10 17 09](https://github.com/user-attachments/assets/7f1fdd16-7029-47fe-97a5-1727d071985e)
