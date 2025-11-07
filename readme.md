@@ -1,4 +1,4 @@
-# Aagedal VideoLoop Converter
+# Aagedal Media Converter
 
 A lightweight minimal macOS application for simple batch encoding of video files. Powered by FFMPEG and FFPROBE under the hood and written entirely in Swift / SwiftUI.
 
@@ -14,7 +14,7 @@ Note that most of this app is vibe-coded.
 
 ### Homebrew
 ```bash
-brew tap aagedal/casks && brew install --cask aagedal-video-loop-converter
+brew tap aagedal/casks && brew install --cask aagedal-media-converter
 ```
 
 ### Manual download
