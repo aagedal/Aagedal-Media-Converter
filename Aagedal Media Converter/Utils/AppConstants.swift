@@ -21,7 +21,18 @@ enum AppConstants {
     }()
     
     // Supported video file extensions (lowercase)
-    static let supportedVideoExtensions: Set<String> = ["mov", "mp4", "m4v", "avi", "mkv", "flv", "wmv", "mxf"]
+    static let supportedVideoExtensions: Set<String> = [
+        "3g2", "3gp", "3gp2", "3gpp",
+        "amv", "asf", "avi", "avs", "drc",
+        "dv", "f4v", "flv", "gxf", "ismv",
+        "m1v", "m2p", "m2t", "m2ts", "m2v",
+        "m4v", "mk3d", "mkv", "mod", "mov",
+        "mp2", "mp2v", "mp4", "mp4v", "mpe",
+        "mpeg", "mpg", "mpv", "mts", "mxf",
+        "ogm", "ogv", "qt", "rm", "rmvb",
+        "roq", "svi", "tod", "trp", "ts",
+        "vob", "webm", "wmv", "wtv", "y4m"
+    ]
     
     // Supported UTType identifiers for file picker
     static let supportedVideoTypes: [String] = [
