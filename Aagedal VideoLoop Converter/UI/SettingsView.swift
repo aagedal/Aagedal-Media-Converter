@@ -320,12 +320,6 @@ struct SettingsView: View {
                     }.padding(8)
                 }
                 .padding(.vertical, 4)
-            } footer: {
-                Text("For additional assistance, please visit our support page or contact us via email.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.horizontal, 8)
             }
         }
         .formStyle(.grouped)
