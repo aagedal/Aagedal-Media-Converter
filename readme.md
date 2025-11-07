@@ -10,6 +10,20 @@ Note that most of this app is vibe-coded.
 
 ---
 
+## Installation
+
+### Homebrew
+```bash
+brew tap aagedal/casks && brew install --cask aagedal-video-loop-converter
+```
+
+### Manual download
+[Latest version (2.6.1)](https://github.com/aagedal/Aagedal-VideoLoop-Converter/releases/download/v.2.6.1/AagedalVideoLoop_Converter_2-6-1.zip)
+
+
+---
+
+
 ## Key Features
 
 - **Drag-and-Drop** or File Picker import
