@@ -33,6 +33,7 @@ struct SettingsView: View {
     @AppStorage(AppConstants.watchFolderIgnoreDurationUnitKey) private var watchFolderIgnoreDurationUnitRaw = AppConstants.defaultWatchFolderIgnoreDurationUnitRaw
     @AppStorage(AppConstants.watchFolderDeleteDurationValueKey) private var watchFolderDeleteDurationValue = AppConstants.defaultWatchFolderDeleteDurationValue
     @AppStorage(AppConstants.watchFolderDeleteDurationUnitKey) private var watchFolderDeleteDurationUnitRaw = AppConstants.defaultWatchFolderDeleteDurationUnitRaw
+    @AppStorage(AppConstants.screenshotDirectoryKey) private var screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path
     @State private var selectedPreset: ExportPreset = .videoLoop
     @FocusState private var focusedCustomCommandSlot: Int?
     @State private var previousFocusedCustomCommandSlot: Int?
@@ -80,6 +81,56 @@ struct SettingsView: View {
                 .padding(8)
             }
             
+            Section(header: Text("Screenshots")) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Default Screenshot Folder:")
+                        .font(.headline)
+
+                    HStack {
+                        Text(screenshotDirectoryPath)
+                            .truncationMode(.middle)
+                            .lineLimit(1)
+                            .help(screenshotDirectoryPath)
+
+                        Button(action: {
+                            let url = URL(fileURLWithPath: screenshotDirectoryPath)
+                            guard FileManager.default.fileExists(atPath: url.path) else {
+                                screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path
+                                return
+                            }
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }) {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help("Show in Finder")
+
+                        Button(action: {
+                            selectScreenshotDirectory()
+                        }) {
+                            Image(systemName: "camera.on.rectangle")
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help("Change screenshot folder")
+
+                        Button(action: {
+                            screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path
+                        }) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help("Reset to Downloads")
+                    }
+                }
+                .padding(8)
+                Text("Frames captured from the preview will be saved as JPEGs into this folder.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
             Section(header: Text("Watch Folder")) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Watch Folder:")
@@ -387,6 +438,20 @@ struct SettingsView: View {
             // Ensure directory exists
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
             outputFolder = url.path
+        }
+    }
+
+    private func selectScreenshotDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: screenshotDirectoryPath)
+
+        if panel.runModal() == .OK, let url = panel.url {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            screenshotDirectoryPath = url.path
+            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
         }
     }
 

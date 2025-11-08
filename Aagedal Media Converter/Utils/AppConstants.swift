@@ -19,6 +19,14 @@ enum AppConstants {
         try? FileManager.default.createDirectory(at: defaultDir, withIntermediateDirectories: true)
         return defaultDir
     }()
+
+    static let defaultScreenshotDirectory: URL = {
+        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+        let fallback = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
+        let directory = downloads ?? fallback
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }()
     
     // Directory for cached preview assets (thumbnails, waveforms, etc.)
     static let previewCacheDirectory: URL = {
@@ -108,4 +116,6 @@ enum AppConstants {
     static let defaultCustomPresetCommands = ["-c copy", "-c copy", "-c copy"]
     static let defaultCustomPresetSuffixes = ["_c1", "_c2", "_c3"]
     static let defaultCustomPresetExtensions = ["mp4", "mp4", "mp4"]
+
+    static let screenshotDirectoryKey = "screenshotDirectory"
 }

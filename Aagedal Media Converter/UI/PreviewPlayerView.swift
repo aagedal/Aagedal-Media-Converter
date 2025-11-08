@@ -20,6 +20,12 @@ struct TrailingIconLabelStyle: LabelStyle {
     }
 }
 
+private struct ScreenshotFeedback: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
 extension LabelStyle where Self == TrailingIconLabelStyle {
     static var trailingIcon: TrailingIconLabelStyle { TrailingIconLabelStyle() }
 }
@@ -65,6 +71,7 @@ struct PreviewPlayerView: View {
     @StateObject private var controller: PreviewPlayerController
     @State private var activeTrimGestures: Int = 0
     @State private var currentPlaybackTime: Double = 0
+    @State private var screenshotFeedback: ScreenshotFeedback?
 
     init(item: Binding<VideoItem>) {
         self._item = item
@@ -98,6 +105,13 @@ struct PreviewPlayerView: View {
             Task { @MainActor in controller.teardown() }
         }
         .onChange(of: item) { _, newValue in controller.updateVideoItem(newValue) }
+        .alert(item: $screenshotFeedback) { feedback in
+            Alert(
+                title: Text(feedback.title),
+                message: Text(feedback.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     private var playerAspectRatio: CGFloat {
@@ -252,7 +266,14 @@ struct PreviewPlayerView: View {
                     }
                     .disabled(item.trimStart == nil && item.trimEnd == nil)
                     .help("Reset trim points")
-                    
+
+                    Button(action: captureScreenshot) {
+                        Label("Capture frame", systemImage: "camera")
+                            .labelStyle(.iconOnly)
+                    }
+                    .disabled(controller.isCapturingScreenshot)
+                    .help("Save the current frame as a JPEG")
+
                     Toggle(isOn: loopBinding) {
                         Label("Loop", systemImage: "repeat")
                             .labelStyle(.iconOnly)
@@ -312,6 +333,27 @@ struct PreviewPlayerView: View {
                 item.loopPlayback = newValue
             }
         )
+    }
+
+    private func captureScreenshot() {
+        Task {
+            let defaults = UserDefaults.standard
+            let directoryPath = defaults.string(forKey: AppConstants.screenshotDirectoryKey) ?? AppConstants.defaultScreenshotDirectory.path
+            let directoryURL = URL(fileURLWithPath: directoryPath, isDirectory: true)
+
+            do {
+                let savedURL = try await controller.captureScreenshot(to: directoryURL)
+                screenshotFeedback = ScreenshotFeedback(
+                    title: "Frame saved",
+                    message: savedURL.path
+                )
+            } catch {
+                screenshotFeedback = ScreenshotFeedback(
+                    title: "Capture failed",
+                    message: error.localizedDescription
+                )
+            }
+        }
     }
 
     private func handleTrimEditingChanged(_ editing: Bool) {
@@ -460,6 +502,7 @@ final class PreviewPlayerController: ObservableObject {
     @Published private(set) var currentPlaybackTime: Double = 0
     @Published private(set) var previewAssets: PreviewAssets?
     @Published private(set) var isLoadingPreviewAssets = false
+    @Published private(set) var isCapturingScreenshot = false
 
     private var videoItem: VideoItem
     private var session: HLSPreviewSession?
@@ -471,7 +514,46 @@ final class PreviewPlayerController: ObservableObject {
     private var playbackTimeObserver: Any?
     private var hasSecurityScope = false
     weak var playerView: AVPlayerView?
-    
+
+    enum ScreenshotError: LocalizedError {
+        case ffmpegMissing
+        case videoUnavailable
+        case captureInProgress
+        case securityScopeDenied
+        case processFailed(String)
+        case outputUnavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .ffmpegMissing:
+                return "FFmpeg binary not found in application bundle."
+            case .videoUnavailable:
+                return "No active video to capture from."
+            case .captureInProgress:
+                return "Screenshot capture is already in progress."
+            case .securityScopeDenied:
+                return "Unable to access the selected screenshot directory."
+            case .processFailed(let message):
+                return "FFmpeg failed: \(message)"
+            case .outputUnavailable:
+                return "FFmpeg reported success but the output file is missing."
+            }
+        }
+    }
+
+    private enum SecurityAccess {
+        case none
+        case direct(URL)
+        case bookmark(URL)
+    }
+
+    private static let screenshotDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+
     var playbackTimePublisher: Published<Double>.Publisher { $currentPlaybackTime }
 
     init(videoItem: VideoItem) {
@@ -590,6 +672,144 @@ final class PreviewPlayerController: ObservableObject {
         // Try to get window from playerView first, fallback to key window
         let window = playerView?.window ?? NSApp.keyWindow
         window?.toggleFullScreen(nil)
+    }
+
+    func captureScreenshot(to directory: URL) async throws -> URL {
+        guard !isCapturingScreenshot else {
+            throw ScreenshotError.captureInProgress
+        }
+
+        guard player != nil else {
+            throw ScreenshotError.videoUnavailable
+        }
+
+        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
+            throw ScreenshotError.ffmpegMissing
+        }
+
+        isCapturingScreenshot = true
+        defer { isCapturingScreenshot = false }
+
+        let captureTime = getCurrentTime() ?? videoItem.effectiveTrimStart
+
+        let sanitizedBaseName = FileNameProcessor.processFileName(videoItem.url.deletingPathExtension().lastPathComponent)
+        let timestamp = Self.screenshotDateFormatter.string(from: Date())
+        let timeComponent = String(format: "%.3f", captureTime).replacingOccurrences(of: ".", with: "-")
+        let fileName = "\(sanitizedBaseName)_\(timestamp)_t\(timeComponent).jpg"
+        let outputDirectory = directory
+
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let outputURL = outputDirectory.appendingPathComponent(fileName)
+
+        var directoryAccess: SecurityAccess = .none
+        if outputDirectory.startAccessingSecurityScopedResource() {
+            directoryAccess = .direct(outputDirectory)
+        } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: outputDirectory) {
+            directoryAccess = .bookmark(outputDirectory)
+        }
+
+        var videoAccess: SecurityAccess = .none
+        if !hasSecurityScope {
+            let sourceURL = videoItem.url
+            if sourceURL.startAccessingSecurityScopedResource() {
+                videoAccess = .direct(sourceURL)
+            } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: sourceURL) {
+                videoAccess = .bookmark(sourceURL)
+            }
+        }
+
+        defer {
+            switch directoryAccess {
+            case .direct(let url):
+                url.stopAccessingSecurityScopedResource()
+            case .bookmark(let url):
+                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
+            case .none:
+                break
+            }
+
+            switch videoAccess {
+            case .direct(let url):
+                url.stopAccessingSecurityScopedResource()
+            case .bookmark(let url):
+                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
+            case .none:
+                break
+            }
+        }
+
+        if case .none = directoryAccess {
+            let reachable = (try? outputDirectory.checkResourceIsReachable()) ?? false
+            guard reachable else {
+                throw ScreenshotError.securityScopeDenied
+            }
+        }
+
+        let ffmpegURL = URL(fileURLWithPath: ffmpegPath)
+
+        var arguments: [String] = [
+            "-hide_banner",
+            "-loglevel", "error",
+            "-i", videoItem.url.path,
+            "-ss", String(format: "%.6f", captureTime),
+            "-frames:v", "1",
+            "-q:v", "2"
+        ]
+
+        if let width = videoItem.metadata?.videoStream?.width, let height = videoItem.metadata?.videoStream?.height, width > 0, height > 0 {
+            arguments += ["-vf", "scale=\(width):\(height):flags=bicubic"]
+        }
+
+        arguments += [
+            "-y",
+            outputURL.path
+        ]
+
+        do {
+            try await runFFmpegCapture(executable: ffmpegURL, arguments: arguments)
+        } catch let error as ScreenshotError {
+            throw error
+        } catch {
+            throw ScreenshotError.processFailed(error.localizedDescription)
+        }
+
+        guard fileManager.fileExists(atPath: outputURL.path) else {
+            throw ScreenshotError.outputUnavailable
+        }
+
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots").info("Saved screenshot to \(outputURL.path, privacy: .public)")
+        return outputURL
+    }
+
+    private func runFFmpegCapture(executable: URL, arguments: [String]) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            Task.detached(priority: .userInitiated) {
+                let process = Process()
+                process.executableURL = executable
+                process.arguments = arguments
+                process.standardOutput = Pipe()
+                let stderrPipe = Pipe()
+                process.standardError = stderrPipe
+
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                process.waitUntilExit()
+
+                if process.terminationStatus == 0 {
+                    continuation.resume(returning: ())
+                } else {
+                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                    let message = String(data: stderrData, encoding: .utf8) ?? "Unknown ffmpeg error"
+                    continuation.resume(throwing: ScreenshotError.processFailed(message.trimmingCharacters(in: .whitespacesAndNewlines)))
+                }
+            }
+        }
     }
 
     private func installLoopObserver(for item: AVPlayerItem) {
