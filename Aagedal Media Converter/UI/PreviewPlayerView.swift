@@ -16,8 +16,6 @@ struct PreviewPlayerView: View {
     @StateObject private var controller: PreviewPlayerController
     @State private var activeTrimGestures: Int = 0
     @State private var currentPlaybackTime: Double = 0
-    @FocusState private var isFocused: Bool
-    @StateObject private var keyboardHandler = KeyboardShortcutHandler()
 
     init(item: Binding<VideoItem>) {
         self._item = item
@@ -43,61 +41,10 @@ struct PreviewPlayerView: View {
         .padding(24)
         .frame(minWidth: 920, idealWidth: 1080, minHeight: 640, idealHeight: 720)
         .background(Color(NSColor.windowBackgroundColor))
-        .focusable()
-        .focused($isFocused)
         .onAppear {
             controller.preparePreview(startTime: item.effectiveTrimStart)
-            // Make the window key and give it focus
-            DispatchQueue.main.async {
-                // Make the window key so it receives events
-                NSApp.keyWindow?.makeKey()
-                // Also set SwiftUI focus
-                isFocused = true
-            }
-            // Set up keyboard shortcuts with captured values
-            keyboardHandler.configure(
-                onI: { option in
-                    if option {
-                        item.trimStart = nil
-                    } else {
-                        if let currentTime = controller.getCurrentTime() {
-                            let duration = max(item.durationSeconds, 0)
-                            let clamped = max(0, min(currentTime, duration))
-                            item.trimStart = clamped <= 0.05 ? nil : clamped
-                            if let end = item.trimEnd, end < item.effectiveTrimStart {
-                                item.trimEnd = item.trimStart
-                            }
-                        }
-                    }
-                },
-                onO: { option in
-                    if option {
-                        item.trimEnd = nil
-                    } else {
-                        if let currentTime = controller.getCurrentTime() {
-                            let duration = max(item.durationSeconds, 0)
-                            let clamped = max(0, min(currentTime, duration))
-                            let minEnd = item.effectiveTrimStart
-                            let sanitizedValue = max(clamped, minEnd)
-                            if sanitizedValue >= duration - 0.05 {
-                                item.trimEnd = nil
-                            } else {
-                                item.trimEnd = sanitizedValue
-                            }
-                        }
-                    }
-                },
-                onL: {
-                    item.loopPlayback.toggle()
-                },
-                onF: {
-                    controller.toggleFullscreen()
-                }
-            )
-            keyboardHandler.startMonitoring()
         }
         .onDisappear {
-            keyboardHandler.stopMonitoring()
             Task { @MainActor in controller.teardown() }
         }
         .onChange(of: item) { _, newValue in controller.updateVideoItem(newValue) }
@@ -106,7 +53,11 @@ struct PreviewPlayerView: View {
     @ViewBuilder
     private var content: some View {
         if let player = controller.player {
-            PlayerContainerView(player: player, controller: controller)
+            PlayerContainerView(
+                player: player,
+                controller: controller,
+                keyHandler: handleKeyCommand
+            )
         } else if controller.isPreparing {
             VStack(spacing: 12) {
                 ProgressView().progressViewStyle(.circular)
@@ -168,7 +119,7 @@ struct PreviewPlayerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Trim & Loop")
                         .font(.headline)
-                    Text("I/O: set in/out • ⌥I/⌥O: clear • ⌘L: loop • ⌘F: fullscreen")
+                    Text("I/O: set in/out • ⌥I/⌥O: clear • ⌘L: loop")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -370,6 +321,52 @@ struct PreviewPlayerView: View {
             }
         }
     }
+
+    private func handleKeyCommand(key: String, modifiers: NSEvent.ModifierFlags) -> Bool {
+        let lowerKey = key.lowercased()
+
+        if modifiers.contains(.command) {
+            switch lowerKey {
+            case "l":
+                item.loopPlayback.toggle()
+                return true
+            case "f":
+                controller.toggleFullscreen()
+                return true
+            default:
+                return false
+            }
+        }
+
+        if modifiers.contains(.option) {
+            switch lowerKey {
+            case "i":
+                handleTrimInPoint(clearToStart: true)
+                return true
+            case "o":
+                handleTrimOutPoint(clearToEnd: true)
+                return true
+            default:
+                return false
+            }
+        }
+
+        let disallowedModifiers = modifiers.intersection([.command, .option, .control])
+        if !disallowedModifiers.isEmpty {
+            return false
+        }
+
+        switch lowerKey {
+        case "i":
+            handleTrimInPoint(clearToStart: false)
+            return true
+        case "o":
+            handleTrimOutPoint(clearToEnd: false)
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 private final class WeakPreviewPlayerController: @unchecked Sendable {
@@ -377,102 +374,6 @@ private final class WeakPreviewPlayerController: @unchecked Sendable {
 
     init(_ value: PreviewPlayerController) {
         self.value = value
-    }
-}
-
-// MARK: - Keyboard Shortcut Handler
-
-final class KeyboardShortcutHandler: ObservableObject {
-    private var monitor: Any?
-    private var onI: (@MainActor (Bool) -> Void)?
-    private var onO: (@MainActor (Bool) -> Void)?
-    private var onL: (@MainActor () -> Void)?
-    private var onF: (@MainActor () -> Void)?
-    
-    func configure(
-        onI: @escaping @MainActor (Bool) -> Void,
-        onO: @escaping @MainActor (Bool) -> Void,
-        onL: @escaping @MainActor () -> Void,
-        onF: @escaping @MainActor () -> Void
-    ) {
-        self.onI = onI
-        self.onO = onO
-        self.onL = onL
-        self.onF = onF
-    }
-    
-    func startMonitoring() {
-        stopMonitoring()
-        
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self else { return event }
-            
-            // Get the key character
-            guard let characters = event.charactersIgnoringModifiers?.lowercased() else {
-                return event
-            }
-            
-            let modifiers = event.modifierFlags
-            
-            // Handle Command+L and Command+F
-            if modifiers.contains(.command) {
-                if characters == "l" {
-                    if let onL = self.onL {
-                        Task { @MainActor in onL() }
-                    }
-                    return nil // Consume the event
-                } else if characters == "f" {
-                    if let onF = self.onF {
-                        Task { @MainActor in onF() }
-                    }
-                    return nil // Consume the event
-                }
-            }
-            
-            // Handle Option+I and Option+O
-            if modifiers.contains(.option) {
-                if characters == "i" {
-                    if let onI = self.onI {
-                        Task { @MainActor in onI(true) }
-                    }
-                    return nil // Consume the event
-                } else if characters == "o" {
-                    if let onO = self.onO {
-                        Task { @MainActor in onO(true) }
-                    }
-                    return nil // Consume the event
-                }
-            }
-            
-            // Plain I or O keys (without command/option/control modifiers)
-            let relevantModifiers = modifiers.intersection([.command, .option, .control])
-            if relevantModifiers.isEmpty {
-                if characters == "i" {
-                    if let onI = self.onI {
-                        Task { @MainActor in onI(false) }
-                    }
-                    return nil // Consume the event
-                } else if characters == "o" {
-                    if let onO = self.onO {
-                        Task { @MainActor in onO(false) }
-                    }
-                    return nil // Consume the event
-                }
-            }
-            
-            return event
-        }
-    }
-    
-    func stopMonitoring() {
-        if let monitor = monitor {
-            NSEvent.removeMonitor(monitor)
-            self.monitor = nil
-        }
-    }
-    
-    deinit {
-        stopMonitoring()
     }
 }
 
@@ -710,34 +611,87 @@ final class PreviewPlayerController: ObservableObject {
 private struct PlayerContainerView: NSViewRepresentable {
     let player: AVPlayer
     let controller: PreviewPlayerController
+    let keyHandler: (String, NSEvent.ModifierFlags) -> Bool
 
-    func makeNSView(context: Context) -> AVPlayerView {
-        let view = AVPlayerView()
-        view.controlsStyle = .floating
-        view.updatesNowPlayingInfoCenter = false
-        view.player = player
-        
-        // Customize controls
-        view.showsFullScreenToggleButton = true
-        view.showsFrameSteppingButtons = true
-        view.showsSharingServiceButton = false
-        view.showsTimecodes = true
-        
-        // Remove the fill screen button by accessing the video gravity control
-        view.videoGravity = .resizeAspect
-        view.allowsVideoFrameAnalysis = false
-        
-        // Store reference in controller for fullscreen control
-        Task { @MainActor in
-            controller.playerView = view
-        }
-        
+    func makeNSView(context: Context) -> ShortcutAwarePlayerView {
+        let view = ShortcutAwarePlayerView()
+        view.configure(
+            player: player,
+            controller: controller,
+            keyHandler: keyHandler
+        )
         return view
     }
 
-    func updateNSView(_ nsView: AVPlayerView, context: Context) {
-        if nsView.player !== player {
-            nsView.player = player
+    func updateNSView(_ nsView: ShortcutAwarePlayerView, context: Context) {
+        nsView.update(player: player, keyHandler: keyHandler)
+    }
+}
+
+private final class ShortcutAwarePlayerView: AVPlayerView {
+    private var keyHandler: ((String, NSEvent.ModifierFlags) -> Bool)?
+
+    func configure(
+        player: AVPlayer,
+        controller: PreviewPlayerController,
+        keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool
+    ) {
+        self.keyHandler = keyHandler
+        controlsStyle = .floating
+        updatesNowPlayingInfoCenter = false
+        showsFullScreenToggleButton = true
+        showsFrameSteppingButtons = true
+        showsSharingServiceButton = false
+        showsTimecodes = true
+        videoGravity = .resizeAspect
+        allowsVideoFrameAnalysis = false
+        self.player = player
+
+        Task { @MainActor in
+            controller.playerView = self
         }
+    }
+
+    func update(player: AVPlayer, keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool) {
+        self.keyHandler = keyHandler
+        if self.player !== player {
+            self.player = player
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        guard let window else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(self)
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else {
+            super.keyDown(with: event)
+            return
+        }
+
+        if keyHandler?(characters, event.modifierFlags) == true {
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        if keyHandler?(characters, event.modifierFlags) == true {
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
     }
 }
