@@ -307,7 +307,12 @@ private struct FFprobeResponse: Decodable {
                 colorRange: stream.colorRange,
                 chromaLocation: stream.chromaLocation,
                 fieldOrder: stream.fieldOrder,
-                isInterlaced: stream.fieldOrder.map { $0.lowercased().contains("interlaced") }
+                isInterlaced: stream.fieldOrder.map { 
+                    let value = $0.lowercased()
+                    // Field order values: progressive, tt (top first), bb (bottom first), tb, bt
+                    // Anything other than "progressive" or "unknown" is interlaced
+                    return value != "progressive" && value != "unknown"
+                }
             )
         }
 

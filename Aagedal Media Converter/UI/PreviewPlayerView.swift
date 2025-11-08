@@ -135,6 +135,29 @@ struct PreviewPlayerView: View {
                     )
                 }
                 .aspectRatio(playerAspectRatio, contentMode: .fit)
+                
+                if controller.isCapturingScreenshot {
+                    ZStack {
+                        Color.black.opacity(0.5)
+                        
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .scaleEffect(1.2)
+                                .tint(.white)
+                            
+                            Text("Capturing Still…")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .padding(24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.black.opacity(0.8))
+                        )
+                    }
+                    .transition(.opacity)
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -356,6 +379,7 @@ struct PreviewPlayerView: View {
         }
     }
 
+
     private func handleTrimEditingChanged(_ editing: Bool) {
         if editing {
             activeTrimGestures += 1
@@ -512,7 +536,9 @@ final class PreviewPlayerController: ObservableObject {
     private var loopObserver: Any?
     private var timeObserver: Any?
     private var playbackTimeObserver: Any?
+    private var playerItemStatusObserver: Any?
     private var hasSecurityScope = false
+    private var useHLSFallback = false
     weak var playerView: AVPlayerView?
 
     enum ScreenshotError: LocalizedError {
@@ -522,6 +548,7 @@ final class PreviewPlayerController: ObservableObject {
         case securityScopeDenied
         case processFailed(String)
         case outputUnavailable
+        case conversionFailed(String)
 
         var errorDescription: String? {
             switch self {
@@ -537,6 +564,8 @@ final class PreviewPlayerController: ObservableObject {
                 return "FFmpeg failed: \(message)"
             case .outputUnavailable:
                 return "FFmpeg reported success but the output file is missing."
+            case .conversionFailed(let message):
+                return "Image conversion failed: \(message)"
             }
         }
     }
@@ -547,12 +576,202 @@ final class PreviewPlayerController: ObservableObject {
         case bookmark(URL)
     }
 
+    private struct ScreenshotParameters {
+        let fileExtension: String
+        let codecArguments: [String]
+        let pixelFormat: String?
+    }
+
     private static let screenshotDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
+
+    private func screenshotParameters(for stream: VideoMetadata.VideoStream?) -> ScreenshotParameters {
+        guard let stream else {
+            return ScreenshotParameters(
+                fileExtension: "jpg",
+                codecArguments: ["-c:v", "mjpeg", "-q:v", "1"],
+                pixelFormat: "yuvj444p"
+            )
+        }
+
+        let transfer = stream.colorTransfer?.lowercased()
+        let primaries = stream.colorPrimaries?.lowercased()
+        let colorSpace = stream.colorSpace?.lowercased()
+        let bitDepth = stream.bitDepth ?? 8
+        let hdrTransfers: Set<String> = ["smpte2084", "arib-std-b67"]
+        let metadataIndicatesHDR = (transfer.map(hdrTransfers.contains) ?? false) || (primaries?.contains("2020") ?? false) || (colorSpace?.contains("2020") ?? false)
+
+        let codec = stream.codec?.lowercased()
+        let profile = stream.profile?.lowercased()
+        let codecLongName = stream.codecLongName?.lowercased()
+        
+        // Check for ProRes RAW in multiple ways:
+        // 1. Codec name contains "raw" (e.g., "prores_raw", "proresraw")
+        // 2. Profile contains "raw"
+        // 3. Codec long name contains "raw"
+        let isProResRAW = (codec?.contains("prores") == true && codec?.contains("raw") == true) ||
+                         (codec == "prores" && profile?.contains("raw") == true) ||
+                         (codecLongName?.contains("prores") == true && codecLongName?.contains("raw") == true)
+        
+        if bitDepth >= 10 || isProResRAW {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots").debug("Screenshot format detection - codec: \(codec ?? "nil", privacy: .public), profile: \(profile ?? "nil", privacy: .public), codecLongName: \(codecLongName ?? "nil", privacy: .public), bitDepth: \(bitDepth), isProResRAW: \(isProResRAW)")
+        }
+
+        var isHDR = metadataIndicatesHDR
+
+        if !isHDR {
+            if isProResRAW {
+                isHDR = true
+            } else if bitDepth >= 10 {
+                let primariesMissing = isMissingColorMetadata(stream.colorPrimaries)
+                let transferMissing = isMissingColorMetadata(stream.colorTransfer)
+                if primariesMissing && transferMissing {
+                    isHDR = true
+                }
+            }
+        }
+
+        if isHDR {
+            if isProResRAW {
+                return ScreenshotParameters(
+                    fileExtension: "png",
+                    codecArguments: [
+                        "-c:v", "png",
+                        "-compression_level", "1"
+                    ],
+                    pixelFormat: "rgb48be"
+                )
+            }
+            
+            let pixelFormat: String
+            if bitDepth >= 12 {
+                pixelFormat = "yuv420p12le"
+            } else {
+                pixelFormat = "yuv420p10le"
+            }
+
+            return ScreenshotParameters(
+                fileExtension: "avif",
+                codecArguments: [
+                    "-c:v", "libsvtav1",
+                    "-pix_fmt", pixelFormat,
+                    "-preset", "12",
+                    "-crf", "35",
+                    "-svtav1-params", "fast-decode=1:enable-overlays=0"
+                ],
+                pixelFormat: nil
+            )
+        }
+
+        return ScreenshotParameters(
+            fileExtension: "jpg",
+            codecArguments: ["-c:v", "mjpeg", "-q:v", "1"],
+            pixelFormat: "yuvj444p"
+        )
+    }
+
+    private func isMissingColorMetadata(_ value: String?) -> Bool {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return true
+        }
+
+        let normalized = value.lowercased()
+        return normalized == "unknown" || normalized == "unspecified" || normalized == "na"
+    }
+
+    private func appendColorArguments(from stream: VideoMetadata.VideoStream?, to arguments: inout [String]) {
+        guard let stream else { return }
+
+        let primaries = stream.colorPrimaries
+        let transfer = stream.colorTransfer
+        let space = stream.colorSpace
+        let range = stream.colorRange
+
+        if !isMissingColorMetadata(primaries), let normalized = normalizedColorPrimaries(primaries) {
+            arguments += ["-color_primaries", normalized]
+        }
+        if !isMissingColorMetadata(transfer), let normalized = normalizedColorTransfer(transfer) {
+            arguments += ["-color_trc", normalized]
+        }
+        if !isMissingColorMetadata(space), let normalized = normalizedColorSpace(space) {
+            arguments += ["-colorspace", normalized]
+        }
+        if !isMissingColorMetadata(range), let normalized = normalizedColorRange(range) {
+            arguments += ["-color_range", normalized]
+        }
+    }
+
+    private func normalizedColorPrimaries(_ value: String?) -> String? {
+        let mapping: [String: String] = [
+            "bt2020": "bt2020",
+            "bt2020-10": "bt2020",
+            "bt2020-12": "bt2020"
+        ]
+        return normalizedColorValue(value, allowed: [
+            "bt709",
+            "bt470bg",
+            "smpte170m",
+            "smpte240m",
+            "bt2020",
+            "smpte432",
+            "smpte432-1"
+        ], mapping: mapping)
+    }
+
+    private func normalizedColorTransfer(_ value: String?) -> String? {
+        let mapping: [String: String] = [
+            "bt2020-10": "bt2020-10",
+            "bt2020-12": "bt2020-12"
+        ]
+        return normalizedColorValue(value, allowed: [
+            "bt709",
+            "smpte2084",
+            "arib-std-b67",
+            "iec61966-2-4",
+            "bt470bg",
+            "smpte170m",
+            "bt2020-10",
+            "bt2020-12"
+        ], mapping: mapping)
+    }
+
+    private func normalizedColorSpace(_ value: String?) -> String? {
+        let mapping: [String: String] = [
+            "bt2020": "bt2020nc",
+            "bt2020-ncl": "bt2020nc",
+            "bt2020-cl": "bt2020c"
+        ]
+        return normalizedColorValue(value, allowed: [
+            "bt709",
+            "smpte170m",
+            "smpte240m",
+            "bt2020nc",
+            "bt2020c",
+            "bt2020ncl"
+        ], mapping: mapping)
+    }
+
+    private func normalizedColorRange(_ value: String?) -> String? {
+        return normalizedColorValue(value, allowed: ["tv", "pc"], mapping: [
+            "limited": "tv",
+            "full": "pc"
+        ])
+    }
+
+    private func normalizedColorValue(_ value: String?, allowed: [String], mapping: [String: String]) -> String? {
+        guard let raw = value?.lowercased() else { return nil }
+        if let mapped = mapping[raw] {
+            return mapped
+        }
+        if allowed.contains(raw) {
+            return raw
+        }
+        return nil
+    }
 
     var playbackTimePublisher: Published<Double>.Publisher { $currentPlaybackTime }
 
@@ -583,19 +802,28 @@ final class PreviewPlayerController: ObservableObject {
         errorMessage = nil
         isLoadingPreviewAssets = true
         previewAssets = nil
+        useHLSFallback = false
 
         let currentItem = videoItem
         
-        // Use AVPlayer directly with security-scoped resource access
+        // Try AVPlayer directly first with security-scoped resource access
         let url = currentItem.url
-        hasSecurityScope = url.startAccessingSecurityScopedResource() || 
-                          SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: url)
         
-        let asset = AVURLAsset(url: url)
+        // First try bookmark-based access (more reliable for sandboxed apps)
+        let bookmarkAccess = SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: url)
+        let directAccess = !bookmarkAccess && url.startAccessingSecurityScopedResource()
+        hasSecurityScope = bookmarkAccess || directAccess
+        
+        // Create asset with security-scoped access preference
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let playerItem = AVPlayerItem(asset: asset)
         let player = AVPlayer(playerItem: playerItem)
         
         self.player = player
+        
+        // Monitor player item status for failures, fallback to HLS if needed
+        installPlayerItemStatusObserver(for: playerItem, startTime: startTime)
+        
         self.isPreparing = false
         
         // Seek to start time but remain paused (don't auto-play)
@@ -620,6 +848,8 @@ final class PreviewPlayerController: ObservableObject {
         // Release security-scoped resource only if we acquired it
         if hasSecurityScope {
             let url = videoItem.url
+            // Try both release methods to ensure cleanup
+            SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
             url.stopAccessingSecurityScopedResource()
             hasSecurityScope = false
         }
@@ -634,6 +864,8 @@ final class PreviewPlayerController: ObservableObject {
         removeLoopObserver()
         removeTimeObserver()
         removePlaybackTimeObserver()
+        removePlayerItemStatusObserver()
+        useHLSFallback = false
     }
 
     func refreshPreviewForTrim() {
@@ -692,10 +924,11 @@ final class PreviewPlayerController: ObservableObject {
 
         let captureTime = getCurrentTime() ?? videoItem.effectiveTrimStart
 
+        let parameters = screenshotParameters(for: videoItem.metadata?.videoStream)
         let sanitizedBaseName = FileNameProcessor.processFileName(videoItem.url.deletingPathExtension().lastPathComponent)
         let timestamp = Self.screenshotDateFormatter.string(from: Date())
         let timeComponent = String(format: "%.3f", captureTime).replacingOccurrences(of: ".", with: "-")
-        let fileName = "\(sanitizedBaseName)_\(timestamp)_t\(timeComponent).jpg"
+        let fileName = "\(sanitizedBaseName)_\(timestamp)_t\(timeComponent).\(parameters.fileExtension)"
         let outputDirectory = directory
 
         let fileManager = FileManager.default
@@ -751,15 +984,18 @@ final class PreviewPlayerController: ObservableObject {
         var arguments: [String] = [
             "-hide_banner",
             "-loglevel", "error",
-            "-i", videoItem.url.path,
             "-ss", String(format: "%.6f", captureTime),
-            "-frames:v", "1",
-            "-q:v", "2"
+            "-i", videoItem.url.path,
+            "-frames:v", "1"
         ]
 
-        if let width = videoItem.metadata?.videoStream?.width, let height = videoItem.metadata?.videoStream?.height, width > 0, height > 0 {
-            arguments += ["-vf", "scale=\(width):\(height):flags=bicubic"]
+        if let pixelFormat = parameters.pixelFormat {
+            arguments += ["-pix_fmt", pixelFormat]
         }
+
+        appendColorArguments(from: videoItem.metadata?.videoStream, to: &arguments)
+
+        arguments += parameters.codecArguments
 
         arguments += [
             "-y",
@@ -923,6 +1159,161 @@ final class PreviewPlayerController: ObservableObject {
                 }
             }
             self.isLoadingPreviewAssets = false
+        }
+    }
+    
+    private func installPlayerItemStatusObserver(for playerItem: AVPlayerItem, startTime: TimeInterval) {
+        removePlayerItemStatusObserver()
+        
+        playerItemStatusObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                
+                switch item.status {
+                case .failed:
+                    // Direct playback failed, try HLS fallback
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .warning("Direct AVPlayer playback failed: \(item.error?.localizedDescription ?? "unknown error"). Falling back to HLS transcoding.")
+                    self.fallbackToHLS(startTime: startTime)
+                    
+                case .readyToPlay:
+                    // Check if video tracks exist and can be decoded
+                    // Some files (like APV) report ready because audio works, but video codec is unsupported
+                    let asset = item.asset
+                    let videoTracks = asset.tracks(withMediaType: .video)
+                    
+                    if !videoTracks.isEmpty {
+                        // Check if video tracks have valid format descriptions
+                        let hasValidVideoFormat = videoTracks.contains { track in
+                            guard let formatDescriptions = track.formatDescriptions as? [CMFormatDescription] else { return false }
+                            return !formatDescriptions.isEmpty
+                        }
+                        
+                        if !hasValidVideoFormat {
+                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                .warning("AVPlayer ready but video format invalid. Falling back to HLS transcoding.")
+                            self.fallbackToHLS(startTime: startTime)
+                            return
+                        }
+                        
+                        // Also check for common unsupported video codecs
+                        let hasUnsupportedCodec = videoTracks.contains { track in
+                            guard let formatDescriptions = track.formatDescriptions as? [CMFormatDescription] else { return false }
+                            return formatDescriptions.contains { desc in
+                                let codec = CMFormatDescriptionGetMediaSubType(desc)
+                                // APV codec and other unsupported codecs
+                                return codec == kCMVideoCodecType_AppleProRes4444XQ || 
+                                       codec == kCMVideoCodecType_AppleProResRAW ||
+                                       codec == kCMVideoCodecType_AppleProResRAWHQ ||
+                                       String(describing: codec).contains("apvx") // APV codec
+                            }
+                        }
+                        
+                        if hasUnsupportedCodec {
+                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                .warning("AVPlayer ready but video codec unsupported. Falling back to HLS transcoding.")
+                            self.fallbackToHLS(startTime: startTime)
+                            return
+                        }
+                    }
+                    
+                    // Direct playback successful
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .debug("Direct AVPlayer playback ready")
+                    
+                case .unknown:
+                    break
+                    
+                @unknown default:
+                    break
+                }
+            }
+        }
+    }
+    
+    private func removePlayerItemStatusObserver() {
+        if let playerItemStatusObserver {
+            (playerItemStatusObserver as? NSKeyValueObservation)?.invalidate()
+            self.playerItemStatusObserver = nil
+        }
+    }
+    
+    private func fallbackToHLS(startTime: TimeInterval) {
+        guard !useHLSFallback else {
+            // Already tried HLS, give up
+            errorMessage = "Unable to play this video format"
+            return
+        }
+        
+        useHLSFallback = true
+        isPreparing = true
+        
+        // Clean up old player and observers properly
+        if let oldPlayer = player {
+            if let obs = timeObserver {
+                oldPlayer.removeTimeObserver(obs)
+                timeObserver = nil
+            }
+            if let obs = playbackTimeObserver {
+                oldPlayer.removeTimeObserver(obs)
+                playbackTimeObserver = nil
+            }
+            oldPlayer.pause()
+        }
+        
+        if let obs = loopObserver {
+            NotificationCenter.default.removeObserver(obs)
+            loopObserver = nil
+        }
+        
+        if let obs = playerItemStatusObserver as? NSKeyValueObservation {
+            obs.invalidate()
+            playerItemStatusObserver = nil
+        }
+        
+        player = nil
+        loader = nil
+        
+        let currentItem = videoItem
+        
+        preparationTask = Task { @MainActor in
+            do {
+                let newSession = HLSPreviewSession(itemID: currentItem.id, sourceURL: currentItem.url)
+                let playlistURL = try await newSession.start(at: startTime)
+                
+                // Check if we were cancelled during HLS startup
+                try Task.checkCancellation()
+                
+                let newLoader = PreviewAssetResourceLoader(session: newSession, playlistURL: playlistURL)
+                let playerItem = newLoader.makePlayerItem()
+                let player = AVPlayer(playerItem: playerItem)
+                
+                self.session = newSession
+                self.loader = newLoader
+                self.player = player
+                self.isPreparing = false
+                
+                // Don't seek since HLS session already started at the right time
+                
+                installLoopObserver(for: playerItem)
+                installTimeObserver(for: player)
+                installPlaybackTimeObserver(for: player)
+                applyLoopSetting()
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("HLS fallback playback ready for item \(currentItem.id, privacy: .public)")
+                
+            } catch is CancellationError {
+                // Silently handle cancellation - user switched away from this preview
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("HLS fallback cancelled for item \(currentItem.id, privacy: .public)")
+                self.isPreparing = false
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("HLS fallback failed: \(error.localizedDescription, privacy: .public)")
+                self.isPreparing = false
+                self.errorMessage = "Unable to play this video: \(error.localizedDescription)"
+            }
         }
     }
 }

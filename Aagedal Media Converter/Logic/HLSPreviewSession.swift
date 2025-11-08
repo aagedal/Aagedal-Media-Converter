@@ -85,7 +85,18 @@ final class HLSPreviewSession: @unchecked Sendable {
         process.executableURL = URL(fileURLWithPath: ffmpegPath)
         process.currentDirectoryURL = sessionDirectory
         process.arguments = buildArguments(startTime: startTime)
-        process.standardError = Pipe()
+        
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        
+        // Log FFmpeg stderr asynchronously
+        let errorHandle = errorPipe.fileHandleForReading
+        errorHandle.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
+                self?.logger.debug("FFmpeg stderr: \(output, privacy: .public)")
+            }
+        }
 
         do {
             try process.run()
@@ -104,13 +115,26 @@ final class HLSPreviewSession: @unchecked Sendable {
             return playlistURL
         }
 
+        // On timeout, log what we can and capture any final stderr
         logger.error("Preview playlist timed out for item \(self.itemID, privacy: .public)")
+        errorHandle.readabilityHandler = nil
+        if let remainingData = try? errorHandle.readToEnd(),
+           !remainingData.isEmpty,
+           let output = String(data: remainingData, encoding: .utf8) {
+            logger.error("FFmpeg final output: \(output, privacy: .public)")
+        }
         throw SessionError.playlistTimeout
     }
 
     /// Stops the running FFmpeg process (if any) and releases security scope access.
     func stop() {
-        process?.terminate()
+        if let proc = process {
+            // Clean up stderr handler before terminating
+            if let errorPipe = proc.standardError as? Pipe {
+                errorPipe.fileHandleForReading.readabilityHandler = nil
+            }
+            proc.terminate()
+        }
         process = nil
         state = .stopped
         releaseSecurityScope()
@@ -155,7 +179,7 @@ final class HLSPreviewSession: @unchecked Sendable {
             "-y",
             "-ss", startString,
             "-i", sourceURL.path,
-            "-vf", "scale=min(1280,iw):-2",
+            "-vf", "scale='min(1280,iw)':-2",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-crf", "32",

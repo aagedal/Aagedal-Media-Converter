@@ -32,7 +32,6 @@ struct VideoFileRowView: View {
     @State private var showMetadata = false
 
     var body: some View {
-        let _ = print("🎨 Row rendered - isSelected: \(isSelected), focusedID: \(focusedCommentID?.uuidString.prefix(8) ?? "nil"), myID: \(file.id.uuidString.prefix(8))")
         ZStack {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(NSColor.controlBackgroundColor))

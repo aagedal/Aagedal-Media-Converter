@@ -22,3 +22,6 @@
     2. ✅ Preview data plumbing: expose cached asset URLs from `PreviewPlayerController` and surface loading state in SwiftUI.
     3. ✅ Build `TrimTimelineView`: custom layered control combining filmstrip, waveform, playhead, and draggable trim handles.
     4. ✅ Visual states: gray out regions outside trim bounds and keep keyboard/drag interactions consistent.
+
+
+5. Fix scroll lag
