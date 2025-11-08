@@ -21,6 +21,7 @@ struct TrimTimelineView: View {
     let isLoading: Bool
     let step: Double
     let onEditingChanged: (Bool) -> Void
+    let onSeek: (Double) -> Void
 
     private let filmstripHeight: CGFloat = 72
     private let waveformHeight: CGFloat = 36
@@ -35,7 +36,8 @@ struct TrimTimelineView: View {
         waveformURL: URL?,
         isLoading: Bool,
         step: Double = 0.1,
-        onEditingChanged: @escaping (Bool) -> Void
+        onEditingChanged: @escaping (Bool) -> Void,
+        onSeek: @escaping (Double) -> Void
     ) {
         self._trimStart = trimStart
         self._trimEnd = trimEnd
@@ -46,6 +48,7 @@ struct TrimTimelineView: View {
         self.isLoading = isLoading
         self.step = step
         self.onEditingChanged = onEditingChanged
+        self.onSeek = onSeek
     }
 
 // MARK: - Interaction Layer
@@ -57,7 +60,7 @@ private struct TrimHandlesInteractionLayer: View {
     let step: Double
     let onEditingChanged: (Bool) -> Void
 
-    private let handleWidth: CGFloat = 28
+    private let handleWidth: CGFloat = 16
 
     @State private var startInitialValue: Double?
     @State private var endInitialValue: Double?
@@ -197,6 +200,14 @@ private struct TrimHandlesInteractionLayer: View {
                     playbackTime: playbackTime
                 )
                 .allowsHitTesting(false)
+                
+                // Scrubbing layer (behind handles)
+                TimelineScrubLayer(
+                    duration: duration,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd,
+                    onSeek: onSeek
+                )
                 
                 TrimHandlesInteractionLayer(
                     trimStart: $trimStart,
@@ -365,5 +376,66 @@ private struct TrimTimelineOverlay: View {
         guard duration > 0 else { return CGFloat(defaultValue) }
         let normalized = value / duration
         return CGFloat(min(max(normalized, 0), 1))
+    }
+}
+
+// MARK: - Scrubbing Layer
+
+private struct TimelineScrubLayer: View {
+    let duration: Double
+    let trimStart: Double
+    let trimEnd: Double
+    let onSeek: (Double) -> Void
+    
+    private let handleWidth: CGFloat = 20
+    private let handleMargin: CGFloat = 4
+    
+    @State private var isScrubbing = false
+    
+    var body: some View {
+        GeometryReader { geometry in
+            Rectangle()
+                .fill(Color.clear)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard duration > 0 else { return }
+                            
+                            // Check if click is near a handle - if so, don't scrub
+                            let width = geometry.size.width
+                            let startX = position(for: trimStart, width: width)
+                            let endX = position(for: trimEnd, width: width)
+                            let clickX = value.location.x
+                            
+                            let nearStartHandle = abs(clickX - startX) < (handleWidth / 2 + handleMargin)
+                            let nearEndHandle = abs(clickX - endX) < (handleWidth / 2 + handleMargin)
+                            
+                            if nearStartHandle || nearEndHandle {
+                                return
+                            }
+                            
+                            if !isScrubbing {
+                                isScrubbing = true
+                            }
+                            let time = timeForPosition(clickX, width: width)
+                            onSeek(time)
+                        }
+                        .onEnded { _ in
+                            isScrubbing = false
+                        }
+                )
+        }
+    }
+    
+    private func position(for value: Double, width: CGFloat) -> CGFloat {
+        guard duration > 0 else { return 0 }
+        return CGFloat(value / duration) * width
+    }
+    
+    private func timeForPosition(_ x: CGFloat, width: CGFloat) -> Double {
+        guard width > 0 else { return 0 }
+        let fraction = Double(max(0, min(x, width)) / width)
+        return max(0, min(duration, duration * fraction))
     }
 }

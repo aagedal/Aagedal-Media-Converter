@@ -152,7 +152,10 @@ struct PreviewPlayerView: View {
                     waveformURL: controller.previewAssets?.waveform,
                     isLoading: controller.isLoadingPreviewAssets,
                     step: 0.1,
-                    onEditingChanged: handleTrimEditingChanged
+                    onEditingChanged: handleTrimEditingChanged,
+                    onSeek: { time in
+                        controller.seekTo(time)
+                    }
                 )
                 .onReceive(controller.playbackTimePublisher) { time in
                     currentPlaybackTime = time
