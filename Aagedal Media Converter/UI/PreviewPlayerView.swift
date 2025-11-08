@@ -24,6 +24,41 @@ extension LabelStyle where Self == TrailingIconLabelStyle {
     static var trailingIcon: TrailingIconLabelStyle { TrailingIconLabelStyle() }
 }
 
+private struct CheckerboardBackground: View {
+    private let squareSize: CGFloat = 24
+    private let lightColor = Color.white.opacity(0.14)
+    private let darkColor = Color.white.opacity(0.06)
+
+    var body: some View {
+        Canvas { context, size in
+            guard squareSize > 0 else { return }
+
+            let columns = Int(ceil(size.width / squareSize))
+            let rows = Int(ceil(size.height / squareSize))
+
+            for row in 0..<rows {
+                for column in 0..<columns {
+                    let origin = CGPoint(
+                        x: CGFloat(column) * squareSize,
+                        y: CGFloat(row) * squareSize
+                    )
+                    let rect = CGRect(
+                        origin: origin,
+                        size: CGSize(
+                            width: min(squareSize, size.width - origin.x),
+                            height: min(squareSize, size.height - origin.y)
+                        )
+                    )
+
+                    let color = ((row + column).isMultiple(of: 2) ? lightColor : darkColor)
+                    context.fill(Path(rect), with: .color(color))
+                }
+            }
+        }
+        .background(Color.black)
+    }
+}
+
 struct PreviewPlayerView: View {
     @Binding var item: VideoItem
     @Environment(\.dismiss) private var dismiss
@@ -75,12 +110,19 @@ struct PreviewPlayerView: View {
     @ViewBuilder
     private var content: some View {
         if let player = controller.player {
-            PlayerContainerView(
-                player: player,
-                controller: controller,
-                keyHandler: handleKeyCommand
-            )
-            .aspectRatio(playerAspectRatio, contentMode: .fit)
+            ZStack {
+                CheckerboardBackground()
+                
+                HStack {
+                    PlayerContainerView(
+                        player: player,
+                        controller: controller,
+                        keyHandler: handleKeyCommand
+                    )
+                }
+                .aspectRatio(playerAspectRatio, contentMode: .fit)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if controller.isPreparing {
             VStack(spacing: 12) {
