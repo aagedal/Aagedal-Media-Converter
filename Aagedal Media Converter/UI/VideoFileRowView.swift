@@ -29,6 +29,7 @@ struct VideoFileRowView: View {
     @FocusState private var isCommentFieldFocused: Bool
     @State private var isThumbnailHovered = false
     @State private var showPreview = false
+    @State private var showMetadata = false
 
     var body: some View {
         let _ = print("🎨 Row rendered - isSelected: \(isSelected), focusedID: \(focusedCommentID?.uuidString.prefix(8) ?? "nil"), myID: \(file.id.uuidString.prefix(8))")
@@ -87,19 +88,39 @@ struct VideoFileRowView: View {
                     }
                     .overlay {
                         if isThumbnailHovered {
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(Color.black.opacity(0.35))
-                                .frame(width: 200, height: 150)
-                                .overlay(
-                                    Image(systemName: "timeline.selection")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 52, height: 52)
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(Color.black.opacity(0.35))
+                                    .frame(width: 200, height: 150)
+                                    .allowsHitTesting(false)
+
+                                HStack(spacing: 12) {
+                                    Button {
+                                        showPreview = true
+                                    } label: {
+                                        Label("Preview", systemImage: "timeline.selection")
+                                            .labelStyle(.iconOnly)
+                                            .font(.system(size: 28, weight: .medium))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundColor(.white)
+                                    .help("Open preview and trim editor")
+
+                                    if file.metadata != nil {
+                                        Button {
+                                            showMetadata = true
+                                        } label: {
+                                            Label("Metadata", systemImage: "info.circle")
+                                                .labelStyle(.iconOnly)
+                                                .font(.system(size: 24, weight: .medium))
+                                        }
+                                        .buttonStyle(.plain)
                                         .foregroundColor(.white)
-                                        .shadow(radius: 4)
-                                )
-                                .allowsHitTesting(false)
-                                .transition(.opacity)
+                                        .help("View technical metadata")
+                                    }
+                                }
+                            }
+                            .transition(.opacity)
                         }
                     }
                     .onHover { hovering in
@@ -238,6 +259,9 @@ struct VideoFileRowView: View {
         .padding(.horizontal, 4)
         .sheet(isPresented: $showPreview) {
             PreviewPlayerView(item: $file)
+        }
+        .sheet(isPresented: $showMetadata) {
+            VideoMetadataView(item: $file)
         }
     }
 

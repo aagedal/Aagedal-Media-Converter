@@ -65,6 +65,13 @@ struct PreviewPlayerView: View {
         .onChange(of: item) { _, newValue in controller.updateVideoItem(newValue) }
     }
 
+    private var playerAspectRatio: CGFloat {
+        if let ratio = item.videoDisplayAspectRatio, ratio.isFinite, ratio > 0 {
+            return CGFloat(ratio)
+        }
+        return 16.0 / 9.0
+    }
+
     @ViewBuilder
     private var content: some View {
         if let player = controller.player {
@@ -73,6 +80,8 @@ struct PreviewPlayerView: View {
                 controller: controller,
                 keyHandler: handleKeyCommand
             )
+            .aspectRatio(playerAspectRatio, contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if controller.isPreparing {
             VStack(spacing: 12) {
                 ProgressView().progressViewStyle(.circular)
@@ -687,7 +696,7 @@ private final class ShortcutAwarePlayerView: AVPlayerView {
         keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool
     ) {
         self.keyHandler = keyHandler
-        controlsStyle = .floating
+        controlsStyle = .inline
         updatesNowPlayingInfoCenter = false
         showsFullScreenToggleButton = true
         showsFrameSteppingButtons = true

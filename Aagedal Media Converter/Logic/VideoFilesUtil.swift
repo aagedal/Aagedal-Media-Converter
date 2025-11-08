@@ -52,6 +52,14 @@ struct VideoFileUtils: Sendable {
         
         let durationString = formatDuration(seconds: durationSec)
         let thumbnailData = await getVideoThumbnail(url: url)
+
+        let metadata: VideoMetadata?
+        do {
+            metadata = try await VideoMetadataService.shared.metadata(for: url)
+        } catch {
+            Logger().warning("Failed to fetch metadata for \(fileName): \(error.localizedDescription)")
+            metadata = nil
+        }
         
         // Generate output URL if output folder is provided
         var outputURL: URL? = nil
@@ -74,7 +82,8 @@ struct VideoFileUtils: Sendable {
             eta: nil,
             outputURL: outputURL,
             comment: comment,
-            includeDateTag: includeDateTagByDefault
+            includeDateTag: includeDateTagByDefault,
+            metadata: metadata
         )
     }
     // utility to format seconds into hh:mm:ss or mm:ss
@@ -291,6 +300,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var trimStart: Double? = nil
     var trimEnd: Double? = nil
     var loopPlayback: Bool = false
+    var metadata: VideoMetadata?
     
     /// Human-readable file size string (<1 MB ⇒ KB, 1–600 MB ⇒ MB, ≥600 MB ⇒ GB)
     var formattedSize: String {
@@ -323,9 +333,38 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var trimmedDuration: Double {
         max(effectiveTrimEnd - effectiveTrimStart, 0)
     }
-    
+
     var outputFileExists: Bool {
         guard let outputURL = outputURL else { return false }
         return FileManager.default.fileExists(atPath: outputURL.path)
+    }
+
+    var metadataComment: String? {
+        guard let raw = metadata?.comment?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        return raw
+    }
+
+    var videoDisplayAspectRatio: Double? {
+        if let ratioValue = metadata?.videoStream?.displayAspectRatio?.doubleValue {
+            return ratioValue
+        }
+        if
+            let width = metadata?.videoStream?.width,
+            let height = metadata?.videoStream?.height,
+            width > 0,
+            height > 0
+        {
+            return Double(width) / Double(height)
+        }
+        return nil
+    }
+
+    var videoResolutionDescription: String? {
+        guard let width = metadata?.videoStream?.width, let height = metadata?.videoStream?.height else {
+            return nil
+        }
+        return "\(width) × \(height)"
     }
 }
