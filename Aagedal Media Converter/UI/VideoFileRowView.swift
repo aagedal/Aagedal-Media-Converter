@@ -91,7 +91,7 @@ struct VideoFileRowView: View {
                                 .fill(Color.black.opacity(0.35))
                                 .frame(width: 200, height: 150)
                                 .overlay(
-                                    Image(systemName: "play.circle.fill")
+                                    Image(systemName: "timeline.selection")
                                         .resizable()
                                         .scaledToFit()
                                         .frame(width: 52, height: 52)

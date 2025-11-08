@@ -17,34 +17,39 @@ struct RangeSlider: View {
     let step: Double
     var onEditingChanged: (Bool) -> Void = { _ in }
     
+    /// Visual customization
+    var trackColor: Color = Color.gray.opacity(0.3)
+    var activeTrackColor: Color = Color.accentColor
+    var handleFillColor: Color = Color.white
+    var handleStrokeColor: Color = Color.gray
+    var handleSize: CGFloat = 20
+    var trackHeight: CGFloat = 6
+    
     @State private var isDraggingLower = false
     @State private var isDraggingUpper = false
-    
-    private let handleSize: CGFloat = 20
-    private let trackHeight: CGFloat = 6
     
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 // Background track
                 RoundedRectangle(cornerRadius: trackHeight / 2)
-                    .fill(Color.gray.opacity(0.3))
+                    .fill(trackColor)
                     .frame(height: trackHeight)
                 
                 // Active range track
                 RoundedRectangle(cornerRadius: trackHeight / 2)
-                    .fill(Color.accentColor)
+                    .fill(activeTrackColor)
                     .frame(width: upperOffset(in: geometry.size.width) - lowerOffset(in: geometry.size.width), height: trackHeight)
                     .offset(x: lowerOffset(in: geometry.size.width))
                 
                 // Lower handle
                 Circle()
-                    .fill(Color.white)
+                    .fill(handleFillColor)
                     .frame(width: handleSize, height: handleSize)
                     .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
                     .overlay(
                         Circle()
-                            .stroke(isDraggingLower ? Color.accentColor : Color.gray, lineWidth: 2)
+                            .stroke(isDraggingLower ? activeTrackColor : handleStrokeColor, lineWidth: 2)
                     )
                     .offset(x: lowerOffset(in: geometry.size.width) - handleSize / 2)
                     .gesture(
@@ -65,12 +70,12 @@ struct RangeSlider: View {
                 
                 // Upper handle
                 Circle()
-                    .fill(Color.white)
+                    .fill(handleFillColor)
                     .frame(width: handleSize, height: handleSize)
                     .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
                     .overlay(
                         Circle()
-                            .stroke(isDraggingUpper ? Color.accentColor : Color.gray, lineWidth: 2)
+                            .stroke(isDraggingUpper ? activeTrackColor : handleStrokeColor, lineWidth: 2)
                     )
                     .offset(x: upperOffset(in: geometry.size.width) - handleSize / 2)
                     .gesture(

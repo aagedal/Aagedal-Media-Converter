@@ -20,10 +20,20 @@ enum AppConstants {
         return defaultDir
     }()
     
+    // Directory for cached preview assets (thumbnails, waveforms, etc.)
+    static let previewCacheDirectory: URL = {
+        let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let cacheDir = supportDir
+            .appendingPathComponent("AagedalMediaConverter", isDirectory: true)
+            .appendingPathComponent("PreviewAssets", isDirectory: true)
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        return cacheDir
+    }()
+    
     // Supported video file extensions (lowercase)
     static let supportedVideoExtensions: Set<String> = [
         "3g2", "3gp", "3gp2", "3gpp",
-        "amv", "asf", "avi", "avs", "drc",
+        "amv", "asf", "avi", "apv", "avs", "drc",
         "dv", "f4v", "flv", "gxf", "ismv",
         "m1v", "m2p", "m2t", "m2ts", "m2v",
         "m4v", "mk3d", "mkv", "mod", "mov",

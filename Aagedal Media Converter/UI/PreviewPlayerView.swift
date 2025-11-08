@@ -9,6 +9,20 @@
 
 import SwiftUI
 import AVKit
+import OSLog
+
+struct TrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.title
+            configuration.icon
+        }
+    }
+}
+
+extension LabelStyle where Self == TrailingIconLabelStyle {
+    static var trailingIcon: TrailingIconLabelStyle { TrailingIconLabelStyle() }
+}
 
 struct PreviewPlayerView: View {
     @Binding var item: VideoItem
@@ -23,7 +37,7 @@ struct PreviewPlayerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 8) {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black.opacity(0.9))
@@ -38,7 +52,8 @@ struct PreviewPlayerView: View {
 
             footer
         }
-        .padding(24)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .frame(minWidth: 920, idealWidth: 1080, minHeight: 640, idealHeight: 720)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
@@ -93,19 +108,31 @@ struct PreviewPlayerView: View {
 
     private var footer: some View {
         HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.name)
                     .font(.headline)
                     .lineLimit(1)
-                Text("Duration: \(item.duration)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 4) {
+                    Text("Input Duration: \(item.duration)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("| Trimmed duration: \(formattedTime(item.trimmedDuration))")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }.multilineTextAlignment(.leading)
             }
             Spacer()
+            VStack(alignment: .leading) {
+                Text("Keyboard shortcuts:").font(.headline)
+                Text("I/O: in/out • ⇧I/⇧O: jump • ⌥I/⌥O: clear • ⌘L: loop")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }.padding(.trailing, 10)
             Button(role: .cancel, action: dismiss.callAsFunction) {
                 Label("Close", systemImage: "xmark.circle.fill")
                     .labelStyle(.iconOnly)
                     .foregroundColor(.secondary)
+                    .font(.system(size: 24))
             }
             .buttonStyle(.plain)
             .help("Close preview")
@@ -114,103 +141,76 @@ struct PreviewPlayerView: View {
 
     private var trimControls: some View {
         let duration = max(item.durationSeconds, 0)
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Trim & Loop")
-                        .font(.headline)
-                    Text("I/O: set in/out • ⌥I/⌥O: clear • ⌘L: loop")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+        return VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
+                TrimTimelineView(
+                    trimStart: trimStartBinding,
+                    trimEnd: trimEndBinding,
+                    duration: duration,
+                    playbackTime: currentPlaybackTime,
+                    thumbnails: controller.previewAssets?.thumbnails,
+                    waveformURL: controller.previewAssets?.waveform,
+                    isLoading: controller.isLoadingPreviewAssets,
+                    step: 0.1,
+                    onEditingChanged: handleTrimEditingChanged
+                )
+                .onReceive(controller.playbackTimePublisher) { time in
+                    currentPlaybackTime = time
                 }
-                Spacer()
-                Button("Reset Trim") {
-                    item.trimStart = nil
-                    item.trimEnd = nil
-                    controller.refreshPreviewForTrim()
-                }
-                .disabled(item.trimStart == nil && item.trimEnd == nil)
-            }
+                HStack(spacing: 12) {
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    // Jump to start button
+                    
                     Button(action: {
                         controller.seekTo(item.effectiveTrimStart)
                     }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.left.to.line")
-                            Text("Start: \(formattedTime(item.effectiveTrimStart))")
-                        }
+                        Label("\(formattedTime(item.effectiveTrimStart))", systemImage: "arrow.left.to.line")
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.accentColor)
                     .help("Jump to trim start")
-                    
-                    Spacer()
-                    
-                    // Current playback position
-                    Text("⏱ \(formattedTime(currentPlaybackTime))")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(.primary)
-                    
-                    Spacer()
-                    
-                    // Jump to end button
+
+                    HStack {
+                        Label("\(formattedTime(currentPlaybackTime))", systemImage: "arrowtriangle.left.and.line.vertical.and.arrowtriangle.right")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .padding(0)
+                    }.padding(.horizontal, 30)
+
                     Button(action: {
                         controller.seekTo(item.effectiveTrimEnd)
                     }) {
-                        HStack(spacing: 4) {
-                            Text("End: \(formattedTime(item.effectiveTrimEnd))")
-                            Image(systemName: "arrow.right.to.line")
-                        }
+                        Label("\(formattedTime(item.effectiveTrimEnd))", systemImage: "arrow.right.to.line")
+                            .labelStyle(.trailingIcon)
                     }
                     .buttonStyle(.plain)
+                    .font(.system(.subheadline, design: .monospaced))
                     .foregroundColor(.accentColor)
                     .help("Jump to trim end")
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        item.trimStart = nil
+                        item.trimEnd = nil
+                        controller.refreshPreviewForTrim()
+                    }) {
+                        Label("Reset", systemImage: "arrow.counterclockwise")
+                        .labelStyle(.iconOnly)
+                    }
+                    .disabled(item.trimStart == nil && item.trimEnd == nil)
+                    .help("Reset trim points")
+                    
+                    Toggle(isOn: loopBinding) {
+                        Label("Loop", systemImage: "repeat")
+                            .labelStyle(.iconOnly)
+                    }
+                    .toggleStyle(.button)
+                    .help("Loop playback (⌘L)")
                 }
                 .font(.subheadline)
-                
-                // Visual playback position indicator
-                ZStack(alignment: .leading) {
-                    RangeSlider(
-                        lowerValue: trimStartBinding,
-                        upperValue: trimEndBinding,
-                        bounds: 0...duration,
-                        step: 0.1,
-                        onEditingChanged: handleTrimEditingChanged
-                    )
-                    .disabled(duration == 0)
-                    
-                    // Playback position indicator
-                    GeometryReader { geometry in
-                        let position = duration > 0 ? (currentPlaybackTime / duration) * geometry.size.width : 0
-                        Rectangle()
-                            .fill(Color.white)
-                            .frame(width: 2, height: 30)
-                            .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 0)
-                            .offset(x: position - 1, y: -5)
-                    }
-                }
-                .frame(height: 30)
-                .padding(.vertical, 4)
-                .onReceive(controller.playbackTimePublisher) { time in
-                    currentPlaybackTime = time
-                }
-            }
-
-            HStack {
-                Toggle("Loop playback", isOn: loopBinding)
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "scissors")
-                        .font(.caption)
-                    Text("Trimmed duration: \(formattedTime(item.trimmedDuration))")
-                }
-                .foregroundColor(.secondary)
+            
             }
         }
-        .padding(16)
+        .padding(12)
         .background(Color(NSColor.controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -351,7 +351,26 @@ struct PreviewPlayerView: View {
             }
         }
 
-        let disallowedModifiers = modifiers.intersection([.command, .option, .control])
+        // Check for Shift+I/O to jump to trim positions
+        // Must have shift, and must NOT have command/option/control
+        let hasShift = modifiers.contains(.shift)
+        let hasOtherModifiers = !modifiers.intersection([.command, .option, .control]).isEmpty
+        
+        if hasShift && !hasOtherModifiers {
+            switch lowerKey {
+            case "i":
+                controller.seekTo(item.effectiveTrimStart)
+                return true
+            case "o":
+                controller.seekTo(item.effectiveTrimEnd)
+                return true
+            default:
+                return false
+            }
+        }
+
+        // Check for plain I/O (no modifiers) to set trim positions
+        let disallowedModifiers = modifiers.intersection([.command, .option, .control, .shift])
         if !disallowedModifiers.isEmpty {
             return false
         }
@@ -385,11 +404,14 @@ final class PreviewPlayerController: ObservableObject {
     @Published private(set) var isPreparing = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var currentPlaybackTime: Double = 0
+    @Published private(set) var previewAssets: PreviewAssets?
+    @Published private(set) var isLoadingPreviewAssets = false
 
     private var videoItem: VideoItem
     private var session: HLSPreviewSession?
     private var loader: PreviewAssetResourceLoader?
     private var preparationTask: Task<Void, Never>?
+    private var previewAssetTask: Task<Void, Never>?
     private var loopObserver: Any?
     private var timeObserver: Any?
     private var playbackTimeObserver: Any?
@@ -408,6 +430,7 @@ final class PreviewPlayerController: ObservableObject {
 
         if previous.id != newValue.id || previous.url != newValue.url {
             preparePreview(startTime: newValue.effectiveTrimStart)
+            loadPreviewAssets(for: newValue.url)
         } else if previous.loopPlayback != newValue.loopPlayback {
             applyLoopSetting()
         } else if previous.trimStart != newValue.trimStart || previous.trimEnd != newValue.trimEnd {
@@ -422,6 +445,8 @@ final class PreviewPlayerController: ObservableObject {
         teardown()
         isPreparing = true
         errorMessage = nil
+        isLoadingPreviewAssets = true
+        previewAssets = nil
 
         let currentItem = videoItem
         
@@ -445,11 +470,14 @@ final class PreviewPlayerController: ObservableObject {
         installTimeObserver(for: player)
         installPlaybackTimeObserver(for: player)
         applyLoopSetting()
+        loadPreviewAssets(for: currentItem.url)
     }
 
     func teardown() {
         preparationTask?.cancel()
         preparationTask = nil
+        previewAssetTask?.cancel()
+        previewAssetTask = nil
 
         player?.pause()
         
@@ -603,6 +631,25 @@ final class PreviewPlayerController: ObservableObject {
 
     private func applyLoopSetting() {
         player?.actionAtItemEnd = videoItem.loopPlayback ? .none : .pause
+    }
+
+    private func loadPreviewAssets(for url: URL) {
+        previewAssetTask?.cancel()
+        isLoadingPreviewAssets = true
+        previewAssetTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let assets = try await PreviewAssetGenerator.shared.generateAssets(for: url)
+                try Task.checkCancellation()
+                self.previewAssets = assets
+            } catch {
+                self.previewAssets = nil
+                if (error as? CancellationError) == nil {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "PreviewAssets").error("Failed to load preview assets for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            self.isLoadingPreviewAssets = false
+        }
     }
 }
 
