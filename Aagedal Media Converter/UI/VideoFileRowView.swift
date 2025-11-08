@@ -27,6 +27,8 @@ struct VideoFileRowView: View {
         (preset == .videoLoop || preset == .videoLoopWithAudio) && file.durationSeconds > 15
     }
     @FocusState private var isCommentFieldFocused: Bool
+    @State private var isThumbnailHovered = false
+    @State private var showPreview = false
 
     var body: some View {
         let _ = print("🎨 Row rendered - isSelected: \(isSelected), focusedID: \(focusedCommentID?.uuidString.prefix(8) ?? "nil"), myID: \(file.id.uuidString.prefix(8))")
@@ -62,6 +64,53 @@ struct VideoFileRowView: View {
                                 .font(.largeTitle)
                         }
                     }
+                    .overlay(alignment: .topLeading) {
+                        // Trim indicator badge
+                        if file.trimStart != nil || file.trimEnd != nil {
+                            HStack(spacing: 4) {
+                                Image(systemName: "scissors")
+                                    .font(.caption2)
+                                Text(formattedTime(file.trimmedDuration))
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.accentColor)
+                            )
+                            .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                            .padding(8)
+                        }
+                    }
+                    .overlay {
+                        if isThumbnailHovered {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(Color.black.opacity(0.35))
+                                .frame(width: 200, height: 150)
+                                .overlay(
+                                    Image(systemName: "play.circle.fill")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 52, height: 52)
+                                        .foregroundColor(.white)
+                                        .shadow(radius: 4)
+                                )
+                                .allowsHitTesting(false)
+                                .transition(.opacity)
+                        }
+                    }
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            isThumbnailHovered = hovering
+                        }
+                    }
+                    .onTapGesture {
+                        showPreview = true
+                    }
+                    .help("Click to preview and trim video")
                     
                     VStack(alignment: .leading, spacing: 4) {
                         // Input and output file names
@@ -187,6 +236,9 @@ struct VideoFileRowView: View {
             }
         }
         .padding(.horizontal, 4)
+        .sheet(isPresented: $showPreview) {
+            PreviewPlayerView(item: $file)
+        }
     }
 
     private var commentSection: some View {
@@ -353,6 +405,19 @@ struct VideoFileRowView: View {
                 provider.suggestedName = outputURL.lastPathComponent
                 return provider
             }
+    }
+    
+    private func formattedTime(_ seconds: Double) -> String {
+        guard seconds.isFinite else { return "--:--" }
+        let totalSeconds = Int(seconds.rounded())
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let secs = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            return String(format: "%02d:%02d", minutes, secs)
+        }
     }
 }
 

@@ -131,8 +131,9 @@ actor ConversionManager: Sendable {
         
         // Update status to converting
         droppedFiles.wrappedValue[idx].status = .converting
-        
-        let inputURL = nextFile.url
+
+        let currentItem = droppedFiles.wrappedValue[idx]
+        let inputURL = currentItem.url
         let sanitizedBaseName = FileNameProcessor.processFileName(inputURL.deletingPathExtension().lastPathComponent)
         let outputFileName = sanitizedBaseName + preset.fileSuffix
         let outputURL = URL(fileURLWithPath: outputFolder).appendingPathComponent(outputFileName)
@@ -141,8 +142,10 @@ actor ConversionManager: Sendable {
             inputURL: inputURL,
             outputURL: outputURL,
             preset: preset,
-            comment: nextFile.comment,
-            includeDateTag: nextFile.includeDateTag,
+            comment: currentItem.comment,
+            includeDateTag: currentItem.includeDateTag,
+            trimStart: currentItem.trimStart,
+            trimEnd: currentItem.trimEnd,
             progressUpdate: { progress, eta in
                 Task { @MainActor in
                     if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {
@@ -265,19 +268,19 @@ actor ConversionManager: Sendable {
             progressContinuation?.yield(0.0)
             return
         }
-        
+
         // Total duration of active files (seconds)
         let totalDuration = activeFiles.reduce(0.0) { sum, file in
-            return sum + file.durationSeconds
+            sum + file.trimmedDuration
         }
         guard totalDuration > 0 else {
             progressContinuation?.yield(0.0)
             return
         }
-        
+
         // Completed duration so far (seconds)
         let completedDuration = activeFiles.reduce(0.0) { sum, file in
-            let durSec = file.durationSeconds
+            let durSec = file.trimmedDuration
             switch file.status {
             case .done:
                 return sum + durSec

@@ -456,6 +456,8 @@ actor FFMPEGConverter {
         preset: ExportPreset = .videoLoop,
         comment: String = "",
         includeDateTag: Bool = true,
+        trimStart: Double? = nil,
+        trimEnd: Double? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool) -> Void
     ) async {
@@ -495,7 +497,16 @@ actor FFMPEGConverter {
         process.executableURL = URL(fileURLWithPath: ffmpegPath)
         
         // Build FFmpeg arguments
-        var arguments = ["-y", "-i", inputURL.path]
+        var arguments = ["-y"]
+
+        let normalizedTrimStart = Self.normalizedTrimPoint(trimStart)
+        let normalizedTrimEnd = Self.normalizedTrimPoint(trimEnd)
+
+        if let normalizedTrimStart {
+            arguments.append(contentsOf: ["-ss", Self.ffmpegTimeString(from: normalizedTrimStart)])
+        }
+
+        arguments.append(contentsOf: ["-i", inputURL.path])
         
         // Get the base arguments for the preset
         var ffmpegArgs = preset.ffmpegArguments
@@ -544,6 +555,10 @@ actor FFMPEGConverter {
             ffmpegArgs.append(contentsOf: ["-metadata", commentMetadataValue])
         }
         
+        if let durationArgument = Self.trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
+            arguments.append(contentsOf: durationArgument)
+        }
+
         arguments.append(contentsOf: ffmpegArgs)
         arguments.append(outputFileURL.path)
         
@@ -556,14 +571,36 @@ actor FFMPEGConverter {
         process.standardError = errorPipe
         process.standardOutput = Pipe() // Still need to capture stdout to prevent hanging
 
+        // Calculate the effective duration for progress/ETA (trimmed duration if applicable)
+        let effectiveDuration: Double? = {
+            if let start = normalizedTrimStart, let end = normalizedTrimEnd {
+                return max(end - start, 0)
+            } else if let end = normalizedTrimEnd {
+                return end
+            }
+            return nil
+        }()
+        
         let totalDurationBox = DurationBox()
+        let effectiveDurationBox = DurationBox()
+        effectiveDurationBox.value = effectiveDuration
+        
         let errorReadabilityHandler: @Sendable (FileHandle) -> Void = { fileHandle in
             let data = fileHandle.availableData
             if let output = String(data: data, encoding: .utf8), !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 // Process the output through our handler
-                let (newTotalDuration, _) = Self.handleFFMPEGOutput(output, totalDuration: totalDurationBox.value, progressUpdate: progressUpdate)
+                let (newTotalDuration, _) = Self.handleFFMPEGOutput(
+                    output, 
+                    totalDuration: totalDurationBox.value, 
+                    effectiveDuration: effectiveDurationBox.value,
+                    progressUpdate: progressUpdate
+                )
                 if let newTotalDuration = newTotalDuration {
                     totalDurationBox.value = newTotalDuration
+                    // Set effective duration if not already set
+                    if effectiveDurationBox.value == nil {
+                        effectiveDurationBox.value = newTotalDuration
+                    }
                 }
             }
         }
@@ -589,6 +626,28 @@ actor FFMPEGConverter {
     func cancelConversion() async {
         currentProcess?.terminate()
         await setCurrentProcess(nil)
+    }
+
+    private static func normalizedTrimPoint(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, value > 0 else { return nil }
+        return max(value, 0)
+    }
+
+    private static func trimDurationArgument(start: Double?, end: Double?) -> [String]? {
+        switch (start, end) {
+        case let (nil, .some(endSeconds)) where endSeconds > 0:
+            return ["-to", ffmpegTimeString(from: endSeconds)]
+        case let (.some(startSeconds), .some(endSeconds)):
+            let duration = max(endSeconds - startSeconds, 0)
+            guard duration > 0 else { return nil }
+            return ["-t", ffmpegTimeString(from: duration)]
+        default:
+            return nil
+        }
+    }
+
+    private static func ffmpegTimeString(from seconds: Double) -> String {
+        String(format: "%.3f", seconds)
     }
 
     private func setCurrentProcess(_ process: Process?) async {
@@ -718,10 +777,12 @@ actor FFMPEGConverter {
     /// - Parameters:
     ///   - output: The FFmpeg output string to process
     ///   - totalDuration: The current total duration if already known
+    ///   - effectiveDuration: The effective duration for ETA calculation (trimmed duration if applicable)
     ///   - progressUpdate: Callback to report progress updates
     /// - Returns: A tuple containing the updated total duration (if found) and the current progress
     private static func handleFFMPEGOutput(_ output: String, 
-                                         totalDuration: Double?, 
+                                         totalDuration: Double?,
+                                         effectiveDuration: Double?,
                                          progressUpdate: @escaping @Sendable (Double, String?) -> Void) -> (Double?, (Double, String?)?) {
         var newTotalDuration = totalDuration
         
@@ -731,9 +792,12 @@ actor FFMPEGConverter {
             print("Total Duration: \(duration) seconds")
         }
         
+        // Use effective duration for progress calculation, fallback to total duration
+        let durationForProgress = effectiveDuration ?? newTotalDuration
+        
         // Parse and report progress if we have a valid duration
         var progressTuple: (Double, String?)? = nil
-        if let progress = ParsingUtils.parseProgress(from: output, totalDuration: newTotalDuration) {
+        if let progress = ParsingUtils.parseProgress(from: output, totalDuration: durationForProgress) {
             // Update progress on the main thread
             Task { @MainActor in
                 progressUpdate(progress.0, progress.1)

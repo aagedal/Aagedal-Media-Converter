@@ -288,6 +288,9 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var outputURL: URL?
     var comment: String = ""
     var includeDateTag: Bool = true
+    var trimStart: Double? = nil
+    var trimEnd: Double? = nil
+    var loopPlayback: Bool = false
     
     /// Human-readable file size string (<1 MB ⇒ KB, 1–600 MB ⇒ MB, ≥600 MB ⇒ GB)
     var formattedSize: String {
@@ -303,6 +306,22 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         } else {
             return String(format: "%.1f GB", bytes / gb)
         }
+    }
+    
+    /// Effective trim-in point in seconds (defaults to 0 when unset).
+    var effectiveTrimStart: Double {
+        trimStart ?? 0
+    }
+    
+    /// Effective trim-out point in seconds (defaults to full duration when unset).
+    var effectiveTrimEnd: Double {
+        let end = trimEnd ?? durationSeconds
+        return max(end, effectiveTrimStart)
+    }
+    
+    /// Duration of the trimmed range in seconds.
+    var trimmedDuration: Double {
+        max(effectiveTrimEnd - effectiveTrimStart, 0)
     }
     
     var outputFileExists: Bool {
