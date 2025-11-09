@@ -49,8 +49,7 @@ struct ContentView: View {
     @AppStorage(AppConstants.customPreset3NameKey) private var customPreset3Name = AppConstants.defaultCustomPresetDisplayNames[2]
     @AppStorage(AppConstants.watchFolderModeKey) private var watchFolderModeEnabled = false
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
-    @State private var watchFolderManager = WatchFolderManager()
-    @State private var autoEncodeTask: Task<Void, Never>?
+    @StateObject private var watchFolderCoordinator = WatchFolderCoordinator()
     
     // Using shared AppConstants for supported file types
     private var supportedVideoTypes: [UTType] {
@@ -103,139 +102,31 @@ struct ContentView: View {
                 await startProgressUpdates()
             }
             .toolbar {
-                // Convert/Cancel Button
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        Task { @MainActor in
-                            // Determine current conversion state from manager to stay in sync
-                            let currentlyConverting = await ConversionManager.shared.isConvertingStatus()
-                            isConverting = currentlyConverting
-                            if currentlyConverting {
-                                // Cancel ongoing conversions
-                                await cancelConversion()
-                            } else {
-                                // Start new conversions
-                                await startConversion()
-                            }
-                        }
-                    } label: {
-                        if isConverting {
-                            Image(systemName: "xmark.circle")
-                                .foregroundStyle(.red)
-                        } else {
-                            Image(systemName: "play.circle")
-                                .foregroundStyle((droppedFiles.isEmpty || !canStartConversion) ? .gray : .green)
-                        }
-                    }
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(droppedFiles.isEmpty || (!canStartConversion && !isConverting))
-                    .help(droppedFiles.isEmpty ?
-                          "Add files to begin conversion" :
-                          (isConverting ? "Cancel all conversions" : (canStartConversion ? "Start converting all files" : "No files ready to convert")))
-                }
-                
-                
-                // Watch Folder Mode Toggle
-                ToolbarItem(placement: .automatic) {
-                    Toggle(isOn: $watchFolderModeEnabled) {
-                        Label("Watch Mode", systemImage: watchFolderModeEnabled ? "eye.fill" : "eye")
-                    }
-                    .toggleStyle(.button)
-                    .help(watchFolderPath.isEmpty ? "Select a watch folder to enable Watch Mode" : (watchFolderModeEnabled ? "Stop watching \(watchFolderPath)" : "Start watching \(watchFolderPath)"))
-                }
-                
-                // Import button
-                ToolbarItem(placement: .automatic) {
-                    Button(action: { isFileImporterPresented = true }) {
-                        Label("Import", systemImage: "plus.circle")
-                            .foregroundColor(.accentColor)
-                    }
-                    .help("Import video files")
-                    .keyboardShortcut("i", modifiers: .command)
-                }
-                
-                // Output folder button
-                ToolbarItem(placement: .automatic) {
-                    Button {
+                ConversionToolbarView(
+                    isConverting: isConverting,
+                    canStartConversion: canStartConversion,
+                    hasFiles: !droppedFiles.isEmpty,
+                    watchFolderModeEnabled: $watchFolderModeEnabled,
+                    watchFolderPath: watchFolderPath,
+                    selectedPreset: toolbarPresetBinding,
+                    presets: ExportPreset.allCases,
+                    displayName: { displayName(for: $0) },
+                    onToggleConversion: handleConversionToggle,
+                    onImport: { isFileImporterPresented = true },
+                    onSelectOutputFolder: {
                         Task {
                             if let folder = await selectOutputFolder() {
-                                // This will trigger the didSet on currentOutputFolder
-                                // which will update the @AppStorage value
                                 currentOutputFolder = folder
                             }
                         }
-                    } label: {
-                        Label("Output", systemImage: "folder.badge.gearshape")
-                            .foregroundColor(.accentColor)
-                    }
-                    .help("Select output folder")
-                    .keyboardShortcut("o", modifiers: .command)
-                }
-                
-                // Spacer to push remaining items to the right
-                ToolbarItem(placement: .automatic) {
-                    Spacer()
-                }
-                
-                // Clear List button
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        // Only allow clearing if not currently converting
-                        guard !isConverting else { return }
-                        
-                        // Clean up cache for all items before clearing
-                        for file in droppedFiles {
-                            Task {
-                                await PreviewAssetGenerator.shared.cleanupAssets(for: file.url)
-                            }
-                        }
-                        
-                        droppedFiles.removeAll()
-                        overallProgress = 0.0
-                        // Ensure dock progress is reset when clearing the list
-                        dockProgressUpdater.reset()
-                    } label: {
-                        Label("Clear", systemImage: "square.stack.3d.up.slash")
-                            .foregroundStyle((droppedFiles.isEmpty || isConverting) ? Color.gray : Color.red)
-                    }
-                    .help("Remove all files from the list")
-                    .disabled(droppedFiles.isEmpty || isConverting)
-                }
-                
-                // Preset Picker
-                ToolbarItem(placement: .automatic) {
-                    Picker("Preset", selection: toolbarPresetBinding) {
-                        ForEach(ExportPreset.allCases) { preset in
-                            Text(displayName(for: preset)).tag(preset)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 150)
-                    .disabled(isConverting)
-                    .foregroundColor(.primary)
-                    .help("Select export preset for all files")
-                }
-                ToolbarItem {
-                    SettingsLink {
-                        Image(systemName: "info.circle").foregroundStyle(.blue)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Application Settings")
-                    .padding(.horizontal, 8)
-                }
+                    },
+                    onClear: clearAllFiles
+                )
             }
             
             // Overall progress bar
             if isConverting {
-                VStack(alignment: .leading) {
-                    Text("Overall Progress: \(Int(overallProgress * 100))%")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    ProgressView(value: overallProgress, total: 1.0)
-                        .progressViewStyle(LinearProgressViewStyle())
-                        .frame(height: 6)
-                }
-                .padding()
+                OverallProgressView(progress: overallProgress)
             }
         }
         .onAppear {
@@ -271,7 +162,7 @@ struct ContentView: View {
             isFileImporterPresented = true
         }
         .onChange(of: watchFolderModeEnabled) { _, newValue in
-            handleWatchModeChange(enabled: newValue)
+            handleWatchFolderToggle(newValue)
         }
         .onChange(of: droppedFiles.count) { oldCount, newCount in
             if watchFolderModeEnabled && newCount > oldCount {
@@ -392,6 +283,7 @@ struct ContentView: View {
         }
     }
     
+    @MainActor
     private func startConversion() async {
         isConverting = true
         // Initialize dock progress with 0% to show it immediately
@@ -402,15 +294,16 @@ struct ContentView: View {
                 outputFolder: currentOutputFolder.path,
                 preset: selectedPreset
             )
-        
-
+        watchFolderCoordinator.startConversion()
     }
-    
+
+    @MainActor
     private func cancelConversion() async {
         await ConversionManager.shared.cancelAllConversions()
         isConverting = false
         // Reset dock progress immediately on cancel
         dockProgressUpdater.reset()
+        watchFolderCoordinator.cancelConversion()
     }
     
     private func refreshExpectedOutputURLs(for preset: ExportPreset) {
@@ -472,36 +365,6 @@ struct ContentView: View {
     
     // MARK: - Watch Folder Management
     
-    private func handleWatchModeChange(enabled: Bool) {
-        Task {
-            if enabled {
-                if watchFolderPath.isEmpty {
-                    let selectedFolder = await MainActor.run { promptForWatchFolderSelection() }
-                    guard let folderURL = selectedFolder else {
-                        await MainActor.run {
-                            watchFolderModeEnabled = false
-                        }
-                        return
-                    }
-                    await MainActor.run {
-                        watchFolderPath = folderURL.path
-                    }
-                    _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: folderURL)
-                }
-                
-                await watchFolderManager.startMonitoring(folderPath: watchFolderPath) { newFileURLs in
-                    Task { @MainActor in
-                        await self.addFilesFromWatchFolder(newFileURLs)
-                    }
-                }
-            } else {
-                await watchFolderManager.stopMonitoring()
-                autoEncodeTask?.cancel()
-                autoEncodeTask = nil
-            }
-        }
-    }
-    
     @MainActor
     private func addFilesFromWatchFolder(_ urls: [URL]) async {
         for url in urls {
@@ -521,18 +384,12 @@ struct ContentView: View {
     }
     
     private func scheduleAutoEncode() {
-        // Cancel any existing scheduled task
-        autoEncodeTask?.cancel()
-        
-        // Schedule encoding after 2 second delay
-        autoEncodeTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            
-            guard !Task.isCancelled else { return }
-            
-            // Only start if not already converting and there are files waiting
-            if !isConverting && canStartConversion {
-                await startConversion()
+        Task { @MainActor in
+            watchFolderCoordinator.scheduleAutoEncode {
+                let shouldStart = await MainActor.run { !isConverting && canStartConversion }
+                if shouldStart {
+                    await startConversion()
+                }
             }
         }
     }
@@ -549,6 +406,56 @@ struct ContentView: View {
             panel.directoryURL = URL(fileURLWithPath: watchFolderPath)
         }
         return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    private func handleConversionToggle() {
+        Task { @MainActor in
+            let currentlyConverting = await ConversionManager.shared.isConvertingStatus()
+            isConverting = currentlyConverting
+            if currentlyConverting {
+                await cancelConversion()
+            } else {
+                await startConversion()
+            }
+        }
+    }
+
+    @MainActor
+    private func clearAllFiles() {
+        guard !isConverting else { return }
+
+        for file in droppedFiles {
+            Task {
+                await PreviewAssetGenerator.shared.cleanupAssets(for: file.url)
+            }
+        }
+
+        droppedFiles.removeAll()
+        overallProgress = 0.0
+        dockProgressUpdater.reset()
+    }
+
+    private func handleWatchFolderToggle(_ enabled: Bool) {
+        Task { @MainActor in
+            if enabled {
+                let success = await watchFolderCoordinator.enableWatchMode(
+                    currentPath: watchFolderPath,
+                    promptForFolder: { await promptForWatchFolderSelection() },
+                    updatePath: { newPath in
+                        Task { @MainActor in
+                            watchFolderPath = newPath
+                        }
+                    },
+                    onNewFiles: { urls in await addFilesFromWatchFolder(urls) }
+                )
+
+                if !success {
+                    watchFolderModeEnabled = false
+                }
+            } else {
+                await watchFolderCoordinator.disableWatchMode()
+            }
+        }
     }
 }
 
