@@ -31,6 +31,8 @@ struct VideoFileRowView: View {
     @State private var showPreview = false
     @State private var showMetadata = false
     @State private var cachedThumbnail: NSImage?
+    @State private var localComment: String = ""
+    @State private var isBeingDeleted = false
 
     var body: some View {
         ZStack {
@@ -232,7 +234,15 @@ struct VideoFileRowView: View {
                                 .buttonStyle(BorderlessButtonStyle())
                                 .help("Cancel conversion")
                             } else {
-                                Button(action: onDelete) {
+                                Button(action: {
+                                    // Set deletion flag and clear focus BEFORE deleting
+                                    isBeingDeleted = true
+                                    if isCommentFieldFocused || focusedCommentID == file.id {
+                                        isCommentFieldFocused = false
+                                        focusedCommentID = nil
+                                    }
+                                    onDelete()
+                                }) {
                                     Image(systemName: "clear")
                                         .foregroundColor(.red)
                                 }
@@ -277,6 +287,22 @@ struct VideoFileRowView: View {
             
             cachedThumbnail = image
         }
+        .onAppear {
+            // Initialize local comment from file
+            localComment = file.comment
+        }
+        .onChange(of: file.comment) { _, newComment in
+            // Sync local comment when file comment changes externally
+            if !isCommentFieldFocused {
+                localComment = newComment
+            }
+        }
+        .onChange(of: localComment) { _, newValue in
+            // Sync local comment back to file when changed (only if not being deleted)
+            if !isBeingDeleted && isCommentFieldFocused && file.status == .waiting {
+                file.comment = newValue
+            }
+        }
     }
 
     private var commentSection: some View {
@@ -294,8 +320,15 @@ struct VideoFileRowView: View {
     private var commentEditor: some View {
         let commentIsEditable = file.status == .waiting
         let commentBinding = Binding(
-            get: { file.comment },
-            set: { file.comment = $0 }
+            get: { 
+                // Return local copy - safe even if file is deleted
+                return localComment
+            },
+            set: { (newValue: String) in
+                // Update local copy immediately - don't access file here
+                localComment = newValue
+                // Sync will happen via onChange(of: localComment) below
+            }
         )
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -318,6 +351,15 @@ struct VideoFileRowView: View {
                 .onSubmit {
                     isCommentFieldFocused = false
                     focusedCommentID = nil
+                }
+                .onChange(of: file.status) { (_: ConversionManager.ConversionStatus, newStatus: ConversionManager.ConversionStatus) in
+                    // Clear focus if file is being deleted or processed
+                    if newStatus != .waiting && isCommentFieldFocused {
+                        isCommentFieldFocused = false
+                        if focusedCommentID == file.id {
+                            focusedCommentID = nil
+                        }
+                    }
                 }
             .onChange(of: focusedCommentID) { oldValue, newValue in
                 print("📍 focusedCommentID changed: \(oldValue?.uuidString.prefix(8) ?? "nil") → \(newValue?.uuidString.prefix(8) ?? "nil"), myID: \(file.id.uuidString.prefix(8))")
