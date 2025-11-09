@@ -1,0 +1,1652 @@
+// Aagedal Media Converter
+// Copyright © 2025 Truls Aagedal
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Controller for video preview playback, trimming, and screenshot capture.
+
+import SwiftUI
+import AppKit
+import AVKit
+import OSLog
+
+@MainActor
+final class PreviewPlayerController: ObservableObject {
+    @Published private(set) var player: AVPlayer?  // Video player (follower)
+    @Published private(set) var audioPlayer: AVPlayer?  // Audio player (master timeline)
+    @Published private(set) var isPreparing = false
+    @Published private(set) var errorMessage: String?
+    @Published private(set) var currentPlaybackTime: Double = 0
+    @Published private(set) var previewAssets: PreviewAssets?
+    @Published private(set) var isLoadingPreviewAssets = false
+    @Published private(set) var isCapturingScreenshot = false
+    @Published private(set) var isGeneratingFallbackPreview = false
+    @Published private(set) var fallbackPreviewRange: ClosedRange<Double>?
+    @Published private(set) var loadedChunks: Set<Int> = []
+    @Published private(set) var fallbackStillImage: NSImage?
+    @Published private(set) var fallbackStillTime: Double?
+    @Published private(set) var isGeneratingFallbackStill = false
+    @Published private(set) var isLoadingChunk = false
+    
+    // MARK: - Preview Configuration
+    private let chunkDuration: TimeInterval = 15.0
+    private let sectionDuration: TimeInterval = 60.0  // 1 minute sections
+    private let chunksPerSection: Int = 4  // 4 chunks per section (60s / 15s)
+    private let previewMaxShortEdge: Int = 720  // Resolution for transcoded preview chunks
+    private var currentChunkIndex: Int = 0
+    private var concatenatedSections: Set<Int> = []  // Track which sections have been concatenated
+
+    private var videoItem: VideoItem
+    private var mp4Session: MP4PreviewSession?
+    private var preparationTask: Task<Void, Never>?
+    private var chunkLoadTask: Task<Void, Never>?
+    private var previewAssetTask: Task<Void, Never>?
+    private var fallbackStillTask: Task<Void, Never>?
+    private var loopObserver: Any?
+    private var timeObserver: Any?
+    private var playbackTimeObserver: Any?
+    private var audioSyncObserver: Any?  // Syncs video to audio
+    private weak var timeObserverOwner: AVPlayer?
+    private weak var playbackTimeObserverOwner: AVPlayer?
+    private weak var audioSyncObserverOwner: AVPlayer?
+    private var playerItemStatusObserver: Any?
+    private var hasSecurityScope = false
+    private var usePreviewFallback = false
+    private var isSwappingAudio = false  // Flag for audio track swap
+    private var composition: AVMutableComposition?  // Composition for audio+video
+    private var compositionVideoTrack: AVMutableCompositionTrack?  // Video track in composition
+    private var compositionAudioTrack: AVMutableCompositionTrack?  // Audio track in composition
+    weak var playerView: AVPlayerView?
+
+    enum ScreenshotError: LocalizedError {
+        case ffmpegMissing
+        case videoUnavailable
+        case captureInProgress
+        case securityScopeDenied
+        case processFailed(String)
+        case outputUnavailable
+        case conversionFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .ffmpegMissing:
+                return "FFmpeg binary not found in application bundle."
+            case .videoUnavailable:
+                return "No active video to capture from."
+            case .captureInProgress:
+                return "Screenshot capture is already in progress."
+            case .securityScopeDenied:
+                return "Unable to access the selected screenshot directory."
+            case .processFailed(let message):
+                return "FFmpeg failed: \(message)"
+            case .outputUnavailable:
+                return "FFmpeg reported success but the output file is missing."
+            case .conversionFailed(let message):
+                return "Image conversion failed: \(message)"
+            }
+        }
+    }
+
+    private enum SecurityAccess {
+        case none
+        case direct(URL)
+        case bookmark(URL)
+    }
+
+    private struct ScreenshotParameters {
+        let fileExtension: String
+        let codecArguments: [String]
+        let pixelFormat: String?
+    }
+
+    private static let screenshotDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+
+    private func screenshotParameters(for stream: VideoMetadata.VideoStream?) -> ScreenshotParameters {
+        guard let stream else {
+            return ScreenshotParameters(
+                fileExtension: "jpg",
+                codecArguments: ["-c:v", "mjpeg", "-q:v", "1"],
+                pixelFormat: "yuvj444p"
+            )
+        }
+
+        let transfer = stream.colorTransfer?.lowercased()
+        let primaries = stream.colorPrimaries?.lowercased()
+        let colorSpace = stream.colorSpace?.lowercased()
+        let bitDepth = stream.bitDepth ?? 8
+        let hdrTransfers: Set<String> = ["smpte2084", "arib-std-b67"]
+        let metadataIndicatesHDR = (transfer.map(hdrTransfers.contains) ?? false) || (primaries?.contains("2020") ?? false) || (colorSpace?.contains("2020") ?? false)
+
+        let codec = stream.codec?.lowercased()
+        let profile = stream.profile?.lowercased()
+        let codecLongName = stream.codecLongName?.lowercased()
+        
+        // Check for ProRes RAW in multiple ways:
+        // 1. Codec name contains "raw" (e.g., "prores_raw", "proresraw")
+        // 2. Profile contains "raw"
+        // 3. Codec long name contains "raw"
+        let isProResRAW = (codec?.contains("prores") == true && codec?.contains("raw") == true) ||
+                         (codec == "prores" && profile?.contains("raw") == true) ||
+                         (codecLongName?.contains("prores") == true && codecLongName?.contains("raw") == true)
+        
+        if bitDepth >= 10 || isProResRAW {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots").debug("Screenshot format detection - codec: \(codec ?? "nil", privacy: .public), profile: \(profile ?? "nil", privacy: .public), codecLongName: \(codecLongName ?? "nil", privacy: .public), bitDepth: \(bitDepth), isProResRAW: \(isProResRAW)")
+        }
+
+        var isHDR = metadataIndicatesHDR
+
+        if !isHDR {
+            if isProResRAW {
+                isHDR = true
+            } else if bitDepth >= 10 {
+                let primariesMissing = isMissingColorMetadata(stream.colorPrimaries)
+                let transferMissing = isMissingColorMetadata(stream.colorTransfer)
+                if primariesMissing && transferMissing {
+                    isHDR = true
+                }
+            }
+        }
+
+        if isHDR {
+            if isProResRAW {
+                return ScreenshotParameters(
+                    fileExtension: "png",
+                    codecArguments: [
+                        "-c:v", "png",
+                        "-compression_level", "1"
+                    ],
+                    pixelFormat: "rgb48be"
+                )
+            }
+            
+            let pixelFormat: String
+            if bitDepth >= 12 {
+                pixelFormat = "yuv420p12le"
+            } else {
+                pixelFormat = "yuv420p10le"
+            }
+
+            return ScreenshotParameters(
+                fileExtension: "avif",
+                codecArguments: [
+                    "-c:v", "libsvtav1",
+                    "-pix_fmt", pixelFormat,
+                    "-preset", "12",
+                    "-crf", "35",
+                    "-svtav1-params", "fast-decode=1:enable-overlays=0"
+                ],
+                pixelFormat: nil
+            )
+        }
+
+        return ScreenshotParameters(
+            fileExtension: "jpg",
+            codecArguments: ["-c:v", "mjpeg", "-q:v", "1"],
+            pixelFormat: "yuvj444p"
+        )
+    }
+
+    private func isMissingColorMetadata(_ value: String?) -> Bool {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return true
+        }
+
+        let normalized = value.lowercased()
+        return normalized == "unknown" || normalized == "unspecified" || normalized == "na"
+    }
+
+    private func appendColorArguments(from stream: VideoMetadata.VideoStream?, to arguments: inout [String]) {
+        guard let stream else { return }
+
+        let primaries = stream.colorPrimaries
+        let transfer = stream.colorTransfer
+        let space = stream.colorSpace
+        let range = stream.colorRange
+
+        if !isMissingColorMetadata(primaries), let normalized = normalizedColorPrimaries(primaries) {
+            arguments += ["-color_primaries", normalized]
+        }
+        if !isMissingColorMetadata(transfer), let normalized = normalizedColorTransfer(transfer) {
+            arguments += ["-color_trc", normalized]
+        }
+        if !isMissingColorMetadata(space), let normalized = normalizedColorSpace(space) {
+            arguments += ["-colorspace", normalized]
+        }
+        if !isMissingColorMetadata(range), let normalized = normalizedColorRange(range) {
+            arguments += ["-color_range", normalized]
+        }
+    }
+
+    private func normalizedColorPrimaries(_ value: String?) -> String? {
+        let mapping: [String: String] = [
+            "bt2020": "bt2020",
+            "bt2020-10": "bt2020",
+            "bt2020-12": "bt2020"
+        ]
+        return normalizedColorValue(value, allowed: [
+            "bt709",
+            "bt470bg",
+            "smpte170m",
+            "smpte240m",
+            "bt2020",
+            "smpte432",
+            "smpte432-1"
+        ], mapping: mapping)
+    }
+
+    private func normalizedColorTransfer(_ value: String?) -> String? {
+        let mapping: [String: String] = [
+            "bt2020-10": "bt2020-10",
+            "bt2020-12": "bt2020-12"
+        ]
+        return normalizedColorValue(value, allowed: [
+            "bt709",
+            "smpte2084",
+            "arib-std-b67",
+            "iec61966-2-4",
+            "bt470bg",
+            "smpte170m",
+            "bt2020-10",
+            "bt2020-12"
+        ], mapping: mapping)
+    }
+
+    private func normalizedColorSpace(_ value: String?) -> String? {
+        let mapping: [String: String] = [
+            "bt2020": "bt2020nc",
+            "bt2020-ncl": "bt2020nc",
+            "bt2020-cl": "bt2020c"
+        ]
+        return normalizedColorValue(value, allowed: [
+            "bt709",
+            "smpte170m",
+            "smpte240m",
+            "bt2020nc",
+            "bt2020c",
+            "bt2020ncl"
+        ], mapping: mapping)
+    }
+
+    private func normalizedColorRange(_ value: String?) -> String? {
+        return normalizedColorValue(value, allowed: ["tv", "pc"], mapping: [
+            "limited": "tv",
+            "full": "pc"
+        ])
+    }
+
+    private func normalizedColorValue(_ value: String?, allowed: [String], mapping: [String: String]) -> String? {
+        guard let raw = value?.lowercased() else { return nil }
+        if let mapped = mapping[raw] {
+            return mapped
+        }
+        if allowed.contains(raw) {
+            return raw
+        }
+        return nil
+    }
+
+    var playbackTimePublisher: Published<Double>.Publisher { $currentPlaybackTime }
+
+    init(videoItem: VideoItem) {
+        self.videoItem = videoItem
+    }
+
+    func updateVideoItem(_ newValue: VideoItem) {
+        let previous = videoItem
+        videoItem = newValue
+
+        if previous.id != newValue.id || previous.url != newValue.url {
+            preparePreview(startTime: newValue.effectiveTrimStart)
+            loadPreviewAssets(for: newValue.url)
+        } else if previous.loopPlayback != newValue.loopPlayback {
+            applyLoopSetting()
+        } else if previous.trimStart != newValue.trimStart || previous.trimEnd != newValue.trimEnd {
+            // Trim values changed, reinstall time observer with new boundaries
+            if let player = player {
+                installTimeObserver(for: player)
+            }
+        }
+    }
+
+    func preparePreview(startTime: TimeInterval) {
+        teardown()
+        isPreparing = true
+        errorMessage = nil
+        isLoadingPreviewAssets = true
+        previewAssets = nil
+        usePreviewFallback = false
+
+        let currentItem = videoItem
+        
+        // Try AVPlayer directly first with security-scoped resource access
+        let url = currentItem.url
+        
+        // First try bookmark-based access (more reliable for sandboxed apps)
+        let bookmarkAccess = SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: url)
+        let directAccess = !bookmarkAccess && url.startAccessingSecurityScopedResource()
+        hasSecurityScope = bookmarkAccess || directAccess
+        
+        // Create asset with security-scoped access preference
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+        let playerItem = AVPlayerItem(asset: asset)
+        let player = AVPlayer(playerItem: playerItem)
+        
+        self.player = player
+        
+        // Monitor player item status for failures, fallback to HLS if needed
+        installPlayerItemStatusObserver(for: playerItem, startTime: startTime)
+        
+        self.isPreparing = false
+        
+        // Seek to start time but remain paused (don't auto-play)
+        let seekTime = CMTime(seconds: startTime, preferredTimescale: 600)
+        player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        
+        installLoopObserver(for: playerItem)
+        installTimeObserver(for: player)
+        installPlaybackTimeObserver(for: player)
+        applyLoopSetting()
+        loadPreviewAssets(for: currentItem.url)
+    }
+    
+    // MARK: - AVMutableComposition Methods
+    
+    /// Creates composition with audio and video tracks
+    private func createComposition(audioURL: URL, videoURL: URL, videoDuration: TimeInterval) async throws {
+        let composition = AVMutableComposition()
+        
+        // Add audio track
+        guard let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw MP4PreviewSession.PreviewError.failedToStart("Could not create audio track")
+        }
+        
+        let audioAsset = AVURLAsset(url: audioURL)
+        let audioSourceTracks = try await audioAsset.loadTracks(withMediaType: .audio)
+        guard let audioSourceTrack = audioSourceTracks.first else {
+            throw MP4PreviewSession.PreviewError.failedToStart("No audio track in source")
+        }
+        
+        let audioDuration = try await audioAsset.load(.duration)
+        try audioTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: audioDuration),
+            of: audioSourceTrack,
+            at: .zero
+        )
+        
+        // Add video track (initial chunk)
+        guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw MP4PreviewSession.PreviewError.failedToStart("Could not create video track")
+        }
+        
+        let videoAsset = AVURLAsset(url: videoURL)
+        let videoSourceTracks = try await videoAsset.loadTracks(withMediaType: .video)
+        guard let videoSourceTrack = videoSourceTracks.first else {
+            throw MP4PreviewSession.PreviewError.failedToStart("No video track in source")
+        }
+        
+        let videoChunkDuration = CMTime(seconds: videoDuration, preferredTimescale: 600)
+        try videoTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: videoChunkDuration),
+            of: videoSourceTrack,
+            at: .zero
+        )
+        
+        // Store references
+        self.composition = composition
+        self.compositionAudioTrack = audioTrack
+        self.compositionVideoTrack = videoTrack
+        
+        // Create player with composition
+        let playerItem = AVPlayerItem(asset: composition)
+        let player = AVPlayer(playerItem: playerItem)
+        self.player = player
+        
+        installLoopObserver(for: playerItem)
+        installTimeObserver(for: player)
+        installPlaybackTimeObserver(for: player)
+        applyLoopSetting()
+    }
+    
+    /// Generates full audio track and swaps it in seamlessly
+    private func generateAndSwapFullAudio(session: MP4PreviewSession) async {
+        do {
+            let fullAudioURL = try await session.generateFullAudioTrack()
+            
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                .info("Full audio track generated, swapping...")
+            
+            _ = await MainActor.run {
+                Task { @MainActor [weak self] in
+                    try? await self?.swapAudioTrack(newAudioURL: fullAudioURL)
+                }
+            }
+        } catch {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                .warning("Failed to generate full audio track: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+    
+    /// Swaps audio track in composition while maintaining playback position
+    private func swapAudioTrack(newAudioURL: URL) async throws {
+        guard let composition = self.composition,
+              let audioTrack = self.compositionAudioTrack,
+              let player = self.player else { return }
+        
+        self.isSwappingAudio = true
+        defer { self.isSwappingAudio = false }
+        
+        // Save current playback state
+        let currentTime = player.currentTime()
+        let isPlaying = (player.rate > 0)
+        
+        // Remove old audio
+        audioTrack.removeTimeRange(CMTimeRange(start: .zero, duration: composition.duration))
+        
+        // Insert new full audio
+        let audioAsset = AVURLAsset(url: newAudioURL)
+        let audioSourceTracks = try await audioAsset.loadTracks(withMediaType: .audio)
+        guard let audioSourceTrack = audioSourceTracks.first else { return }
+        
+        let audioDuration = try await audioAsset.load(.duration)
+        try audioTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: audioDuration),
+            of: audioSourceTrack,
+            at: .zero
+        )
+        
+        // Update fallback preview range to full duration
+        self.fallbackPreviewRange = 0...audioDuration.seconds
+        
+        // Restore playback state
+        await player.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        if isPlaying {
+            player.play()
+        }
+        
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+            .info("Audio track swapped to full duration: \(audioDuration.seconds, privacy: .public)s")
+    }
+    
+    /// Rebuilds the video track in the composition with all loaded chunks/sections
+    /// This ensures the composition accurately reflects which files are available and prevents FigFilePlayer errors
+    private func rebuildCompositionVideoTrack() async throws -> CMTime {
+        guard let composition = self.composition,
+              let videoTrack = self.compositionVideoTrack,
+              let session = self.mp4Session else {
+            throw MP4PreviewSession.PreviewError.outputMissing
+        }
+        
+        // Clear entire video track
+        videoTrack.removeTimeRange(CMTimeRange(start: .zero, duration: composition.duration))
+        
+        // Rebuild video track using sections/chunks as appropriate
+        var currentInsertTime = CMTime.zero
+        let totalChunks = Int(ceil(self.videoItem.durationSeconds / self.chunkDuration))
+        
+        var processedChunks = 0
+        while processedChunks < totalChunks {
+            let chunkSection = processedChunks / self.chunksPerSection
+            
+            // Check if this section is concatenated
+            if self.concatenatedSections.contains(chunkSection) {
+                // Use section file
+                let sectionURL = session.sectionURL(for: chunkSection)
+                
+                // Ensure section file exists
+                guard FileManager.default.fileExists(atPath: sectionURL.path) else {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .warning("Section file missing: \(sectionURL.path, privacy: .public), removing from concatenated set")
+                    self.concatenatedSections.remove(chunkSection)
+                    let firstChunk = chunkSection * self.chunksPerSection
+                    let lastChunk = min(firstChunk + self.chunksPerSection - 1, totalChunks - 1)
+                    processedChunks = lastChunk + 1
+                    continue
+                }
+                
+                let sectionAsset = AVURLAsset(url: sectionURL)
+                let sectionVideoTracks = try await sectionAsset.loadTracks(withMediaType: .video)
+                
+                if let sectionVideoTrack = sectionVideoTracks.first {
+                    let sectionDuration = try await sectionAsset.load(.duration)
+                    try videoTrack.insertTimeRange(
+                        CMTimeRange(start: .zero, duration: sectionDuration),
+                        of: sectionVideoTrack,
+                        at: currentInsertTime
+                    )
+                    currentInsertTime = CMTimeAdd(currentInsertTime, sectionDuration)
+                    
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .debug("Inserted section \(chunkSection, privacy: .public) at \(currentInsertTime.seconds, privacy: .public)s")
+                }
+                
+                // Skip all chunks in this section
+                let firstChunk = chunkSection * self.chunksPerSection
+                let lastChunk = min(firstChunk + self.chunksPerSection - 1, totalChunks - 1)
+                processedChunks = lastChunk + 1
+            } else {
+                // Use individual chunk if loaded
+                if self.loadedChunks.contains(processedChunks) {
+                    let chunkURL = session.chunkURL(for: processedChunks)
+                    
+                    // Ensure chunk file exists
+                    guard FileManager.default.fileExists(atPath: chunkURL.path) else {
+                        Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                            .warning("Chunk file missing: \(chunkURL.path, privacy: .public), skipping")
+                        processedChunks += 1
+                        continue
+                    }
+                    
+                    let chunkAsset = AVURLAsset(url: chunkURL)
+                    let chunkVideoTracks = try await chunkAsset.loadTracks(withMediaType: .video)
+                    
+                    if let chunkVideoTrack = chunkVideoTracks.first {
+                        let chunkDuration = try await chunkAsset.load(.duration)
+                        try videoTrack.insertTimeRange(
+                            CMTimeRange(start: .zero, duration: chunkDuration),
+                            of: chunkVideoTrack,
+                            at: currentInsertTime
+                        )
+                        currentInsertTime = CMTimeAdd(currentInsertTime, chunkDuration)
+                    }
+                }
+                processedChunks += 1
+            }
+        }
+        
+        return currentInsertTime
+    }
+
+    func teardown() {
+        preparationTask?.cancel()
+        preparationTask = nil
+        chunkLoadTask?.cancel()
+        chunkLoadTask = nil
+        previewAssetTask?.cancel()
+        previewAssetTask = nil
+        fallbackStillTask?.cancel()
+        fallbackStillTask = nil
+
+        player?.pause()
+        
+        // Release security-scoped resource only if we acquired it
+        if hasSecurityScope {
+            let url = videoItem.url
+            // Try both release methods to ensure cleanup
+            SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
+            url.stopAccessingSecurityScopedResource()
+            hasSecurityScope = false
+        }
+        
+        player = nil
+        if let session = mp4Session {
+            mp4Session = nil
+            Task { await session.cancel(); await session.cleanup() }
+        }
+
+        isPreparing = false
+        isGeneratingFallbackPreview = false
+        isLoadingChunk = false
+        isGeneratingFallbackStill = false
+        fallbackPreviewRange = nil
+        loadedChunks = []
+        currentChunkIndex = 0
+        fallbackStillImage = nil
+        fallbackStillTime = nil
+        removeLoopObserver()
+        removeTimeObserver()
+        removePlaybackTimeObserver()
+        removePlayerItemStatusObserver()
+        usePreviewFallback = false
+        composition = nil
+        compositionVideoTrack = nil
+        compositionAudioTrack = nil
+        isSwappingAudio = false
+    }
+
+    func refreshPreviewForTrim() {
+        guard let player else {
+            preparePreview(startTime: videoItem.effectiveTrimStart)
+            return
+        }
+        
+        // Check if currently playing
+        let isPlaying = player.rate > 0
+        
+        // Seek to the new trim start position
+        let seekTime = CMTime(seconds: videoItem.effectiveTrimStart, preferredTimescale: 600)
+        player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+            Task { @MainActor [weak self] in
+                guard finished, let self = self, isPlaying else { return }
+                // Only resume playback if it was playing before
+                self.player?.play()
+            }
+        }
+    }
+    
+    func seekTo(_ time: Double) {
+        // Update playback time immediately for UI responsiveness
+        currentPlaybackTime = time
+        
+        guard let player else { return }
+        
+        // If using composition-based fallback (continuous audio)
+        if usePreviewFallback, composition != nil {
+            let targetChunk = Int(time / chunkDuration)
+            
+            // Load chunk if needed (triggers in background)
+            if targetChunk != currentChunkIndex && !isLoadingChunk {
+                loadChunkForTime(time)
+            }
+            
+            // Seek to absolute time in composition (audio continues)
+            let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+            player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            return
+        }
+        
+        // If using legacy fallback preview with chunks (old system)
+        if usePreviewFallback {
+            let targetChunk = Int(time / chunkDuration)
+            
+            // Check if we need to load a different chunk (forward OR backward)
+            if targetChunk != currentChunkIndex {
+                // Load the chunk for this time
+                loadChunkForTime(time)
+                return
+            }
+            
+            // Same chunk - check if within range
+            if let range = fallbackPreviewRange {
+                if time >= range.lowerBound && time <= range.upperBound {
+                    // Within current chunk range - seek to relative position
+                    let timeInChunk = time - range.lowerBound
+                    let cmTime = CMTime(seconds: timeInChunk, preferredTimescale: 600)
+                    player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    return
+                } else {
+                    // Outside chunk range but same chunk index (at edge) - generate still
+                    generateFallbackStillIfNeeded(for: time)
+                    player.pause()
+                    return
+                }
+            }
+        }
+        
+        // Not using fallback - seek normally
+        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+    
+    func getCurrentTime() -> TimeInterval? {
+        guard let player else { return nil }
+        let currentTime = player.currentTime()
+        guard currentTime.seconds.isFinite else { return nil }
+        
+        // For composition-based playback, time is already absolute
+        if usePreviewFallback, composition != nil {
+            return currentTime.seconds
+        }
+        
+        // For legacy chunked playback, calculate absolute time
+        if usePreviewFallback, let previewRange = fallbackPreviewRange {
+            return previewRange.lowerBound + currentTime.seconds
+        }
+        
+        return currentTime.seconds
+    }
+    
+    func toggleFullscreen() {
+        // Try to get window from playerView first, fallback to key window
+        let window = playerView?.window ?? NSApp.keyWindow
+        window?.toggleFullScreen(nil)
+    }
+
+    func captureScreenshot(to directory: URL) async throws -> URL {
+        guard !isCapturingScreenshot else {
+            throw ScreenshotError.captureInProgress
+        }
+
+        guard player != nil else {
+            throw ScreenshotError.videoUnavailable
+        }
+
+        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
+            throw ScreenshotError.ffmpegMissing
+        }
+
+        isCapturingScreenshot = true
+        defer { isCapturingScreenshot = false }
+
+        let captureTime = getCurrentTime() ?? videoItem.effectiveTrimStart
+
+        let parameters = screenshotParameters(for: videoItem.metadata?.videoStream)
+        let sanitizedBaseName = FileNameProcessor.processFileName(videoItem.url.deletingPathExtension().lastPathComponent)
+        let timestamp = Self.screenshotDateFormatter.string(from: Date())
+        let timeComponent = String(format: "%.3f", captureTime).replacingOccurrences(of: ".", with: "-")
+        let fileName = "\(sanitizedBaseName)_\(timestamp)_t\(timeComponent).\(parameters.fileExtension)"
+        let outputDirectory = directory
+
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let outputURL = outputDirectory.appendingPathComponent(fileName)
+
+        var directoryAccess: SecurityAccess = .none
+        if outputDirectory.startAccessingSecurityScopedResource() {
+            directoryAccess = .direct(outputDirectory)
+        } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: outputDirectory) {
+            directoryAccess = .bookmark(outputDirectory)
+        }
+
+        var videoAccess: SecurityAccess = .none
+        if !hasSecurityScope {
+            let sourceURL = videoItem.url
+            if sourceURL.startAccessingSecurityScopedResource() {
+                videoAccess = .direct(sourceURL)
+            } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: sourceURL) {
+                videoAccess = .bookmark(sourceURL)
+            }
+        }
+
+        defer {
+            switch directoryAccess {
+            case .direct(let url):
+                url.stopAccessingSecurityScopedResource()
+            case .bookmark(let url):
+                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
+            case .none:
+                break
+            }
+
+            switch videoAccess {
+            case .direct(let url):
+                url.stopAccessingSecurityScopedResource()
+            case .bookmark(let url):
+                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
+            case .none:
+                break
+            }
+        }
+
+        if case .none = directoryAccess {
+            let reachable = (try? outputDirectory.checkResourceIsReachable()) ?? false
+            guard reachable else {
+                throw ScreenshotError.securityScopeDenied
+            }
+        }
+
+        let ffmpegURL = URL(fileURLWithPath: ffmpegPath)
+
+        var arguments: [String] = [
+            "-hide_banner",
+            "-loglevel", "error",
+            "-ss", String(format: "%.6f", captureTime),
+            "-i", videoItem.url.path,
+            "-frames:v", "1"
+        ]
+        
+        // Build video filter to handle pixel aspect ratio and deinterlacing
+        var filterComponents: [String] = []
+        
+        // Always apply SAR (Sample Aspect Ratio) scaling to correct for non-square pixels
+        filterComponents.append("scale=iw*sar:ih")
+        
+        // Check if source is interlaced and needs deinterlacing
+        if let videoStream = videoItem.metadata?.videoStream,
+           let fieldOrder = videoStream.fieldOrder?.lowercased(),
+           fieldOrder != "progressive" && fieldOrder != "unknown" {
+            // Source is interlaced, apply yadif deinterlacer
+            filterComponents.append("yadif=mode=send_frame:parity=auto:deint=all")
+        }
+        
+        // Combine filters if we have any
+        if !filterComponents.isEmpty {
+            arguments += ["-vf", filterComponents.joined(separator: ",")]
+        }
+
+        if let pixelFormat = parameters.pixelFormat {
+            arguments += ["-pix_fmt", pixelFormat]
+        }
+
+        appendColorArguments(from: videoItem.metadata?.videoStream, to: &arguments)
+
+        arguments += parameters.codecArguments
+
+        arguments += [
+            "-y",
+            outputURL.path
+        ]
+
+        do {
+            try await runFFmpegCapture(executable: ffmpegURL, arguments: arguments)
+        } catch let error as ScreenshotError {
+            throw error
+        } catch {
+            throw ScreenshotError.processFailed(error.localizedDescription)
+        }
+
+        guard fileManager.fileExists(atPath: outputURL.path) else {
+            throw ScreenshotError.outputUnavailable
+        }
+
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots").info("Saved screenshot to \(outputURL.path, privacy: .public)")
+        return outputURL
+    }
+
+    private func runFFmpegCapture(executable: URL, arguments: [String]) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            Task.detached(priority: .userInitiated) {
+                let process = Process()
+                process.executableURL = executable
+                process.arguments = arguments
+                process.standardOutput = Pipe()
+                let stderrPipe = Pipe()
+                process.standardError = stderrPipe
+
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                process.waitUntilExit()
+
+                if process.terminationStatus == 0 {
+                    continuation.resume(returning: ())
+                } else {
+                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                    let message = String(data: stderrData, encoding: .utf8) ?? "Unknown ffmpeg error"
+                    continuation.resume(throwing: ScreenshotError.processFailed(message.trimmingCharacters(in: .whitespacesAndNewlines)))
+                }
+            }
+        }
+    }
+    
+    func generateFallbackStillIfNeeded(for time: TimeInterval) {
+        // Only generate if we're using fallback preview and the time is outside the preview range
+        guard usePreviewFallback else { return }
+        guard let range = fallbackPreviewRange else { return }
+        
+        // If within range, no still needed
+        if range.contains(time) { return }
+        
+        // If we already have a still for this time (within 1 second tolerance), don't regenerate
+        if let existingTime = fallbackStillTime, abs(existingTime - time) < 1.0 { return }
+        
+        // If already generating, don't start another
+        guard !isGeneratingFallbackStill else { return }
+        
+        fallbackStillTask?.cancel()
+        fallbackStillTask = Task { @MainActor in
+            isGeneratingFallbackStill = true
+            defer { isGeneratingFallbackStill = false }
+            
+            do {
+                let stillImage = try await generateStillImage(at: time)
+                self.fallbackStillImage = stillImage
+                self.fallbackStillTime = time
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Generated fallback still for time \(time, privacy: .public)s")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("Failed to generate fallback still: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
+    private func generateStillImage(at time: TimeInterval) async throws -> NSImage {
+        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
+            throw ScreenshotError.ffmpegMissing
+        }
+        
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("jpg")
+        
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+        
+        let sourceURL = videoItem.url
+        var videoAccess: SecurityAccess = .none
+        if !hasSecurityScope {
+            if sourceURL.startAccessingSecurityScopedResource() {
+                videoAccess = .direct(sourceURL)
+            } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: sourceURL) {
+                videoAccess = .bookmark(sourceURL)
+            }
+        }
+        
+        defer {
+            switch videoAccess {
+            case .direct(let url):
+                url.stopAccessingSecurityScopedResource()
+            case .bookmark(let url):
+                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
+            case .none:
+                break
+            }
+        }
+        
+        // Build video filter to handle pixel aspect ratio, deinterlacing, and scaling
+        var filterComponents: [String] = []
+        
+        // Always apply SAR (Sample Aspect Ratio) scaling to correct for non-square pixels
+        filterComponents.append("scale=iw*sar:ih")
+        
+        // Check if source is interlaced and needs deinterlacing
+        if let videoStream = videoItem.metadata?.videoStream,
+           let fieldOrder = videoStream.fieldOrder?.lowercased(),
+           fieldOrder != "progressive" && fieldOrder != "unknown" {
+            // Source is interlaced, apply yadif deinterlacer
+            filterComponents.append("yadif=mode=send_frame:parity=auto:deint=all")
+        }
+        
+        // Scale to 1080p for preview
+        filterComponents.append("scale='if(gt(a,1),-2,1080)':'if(gt(a,1),1080,-2)'")
+        
+        let arguments = [
+            "-hide_banner",
+            "-loglevel", "error",
+            "-ss", String(format: "%.6f", time),
+            "-i", sourceURL.path,
+            "-frames:v", "1",
+            "-vf", filterComponents.joined(separator: ","),
+            "-q:v", "2",
+            "-y",
+            tempURL.path
+        ]
+        
+        let ffmpegURL = URL(fileURLWithPath: ffmpegPath)
+        try await runFFmpegCapture(executable: ffmpegURL, arguments: arguments)
+        
+        guard let image = NSImage(contentsOf: tempURL) else {
+            throw ScreenshotError.conversionFailed("Could not load generated image")
+        }
+        
+        return image
+    }
+
+    private func installLoopObserver(for item: AVPlayerItem) {
+        removeLoopObserver()
+        loopObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handlePlaybackEnded()
+            }
+        }
+    }
+
+    private func removeLoopObserver() {
+        if let loopObserver {
+            NotificationCenter.default.removeObserver(loopObserver)
+            self.loopObserver = nil
+        }
+    }
+    
+    private func installTimeObserver(for player: AVPlayer) {
+        removeTimeObserver()
+
+        // Check playback position every 0.1 seconds
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserverOwner = player
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+
+                // For composition-based fallback, still enforce trim boundaries if looping
+                if self.usePreviewFallback, self.composition != nil {
+                    let currentTime = time.seconds
+                    
+                    // Enforce trim boundaries when looping is enabled
+                    guard self.videoItem.loopPlayback else { return }
+                    
+                    let trimStart = self.videoItem.effectiveTrimStart
+                    let trimEnd = self.videoItem.effectiveTrimEnd
+                    let tolerance = 0.05
+                    
+                    // Keep playback within trim boundaries
+                    if currentTime < trimStart - tolerance {
+                        // Before trim start - load correct chunk and seek
+                        let targetChunk = Int(trimStart / self.chunkDuration)
+                        if targetChunk != self.currentChunkIndex {
+                            self.loadChunkForTime(trimStart)
+                        } else {
+                            let startTime = CMTime(seconds: trimStart, preferredTimescale: 600)
+                            self.player?.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                        }
+                    } else if currentTime >= trimEnd - tolerance {
+                        // At trim end - loop back to trim start
+                        let targetChunk = Int(trimStart / self.chunkDuration)
+                        if targetChunk != self.currentChunkIndex {
+                            // Need to load different chunk for trim start
+                            self.loadChunkForTime(trimStart)
+                        } else {
+                            // Same chunk - just seek
+                            let startTime = CMTime(seconds: trimStart, preferredTimescale: 600)
+                            self.player?.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                        }
+                    }
+                    return
+                }
+                
+                // For legacy chunked fallback, check if we need to switch chunks
+                if self.usePreviewFallback, let previewRange = self.fallbackPreviewRange {
+                    let currentTime = time.seconds
+                    let chunkDuration = previewRange.upperBound - previewRange.lowerBound
+                    let isPlaying = (self.player?.rate ?? 0) > 0
+                    
+                    // Only auto-switch during playback, not when paused/stepping frames
+                    if isPlaying {
+                        // Check if we've crossed chunk boundaries (forward or backward)
+                        if currentTime >= chunkDuration - 1.0 {
+                            // Approaching end - load next chunk
+                            let nextChunkIndex = self.currentChunkIndex + 1
+                            let totalChunks = Int(ceil(self.videoItem.durationSeconds / self.chunkDuration))
+                            
+                            if nextChunkIndex < totalChunks && !self.isLoadingChunk {
+                                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                    .info("Auto-switching to next chunk \\(nextChunkIndex, privacy: .public) for continuous playback")
+                                self.loadChunkForTime(Double(nextChunkIndex) * self.chunkDuration)
+                                return
+                            }
+                        } else if currentTime < 1.0 && self.currentChunkIndex > 0 {
+                            // Near beginning while playing backward - check if should load previous chunk
+                            let absoluteTime = previewRange.lowerBound + currentTime
+                            let targetChunk = Int(absoluteTime / self.chunkDuration)
+                            
+                            if targetChunk < self.currentChunkIndex && !self.isLoadingChunk {
+                                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                    .info("Auto-switching to previous chunk \\(targetChunk, privacy: .public)")
+                                self.loadChunkForTime(Double(targetChunk) * self.chunkDuration)
+                                return
+                            }
+                        }
+                    }
+                    return
+                }
+
+                let currentTime = time.seconds
+                
+                // Only enforce trim boundaries when looping is enabled and not using fallback
+                guard self.videoItem.loopPlayback else { return }
+
+                let trimStart = self.videoItem.effectiveTrimStart
+                let trimEnd = self.videoItem.effectiveTrimEnd
+
+                // Small tolerance to avoid seeking when already at target (prevents playback freeze)
+                let tolerance = 0.05
+
+                // Enforce trim boundaries: keep playback within trimStart...trimEnd
+                if currentTime < trimStart - tolerance {
+                    // Significantly before trim start, seek to trim start
+                    let startTime = CMTime(seconds: trimStart, preferredTimescale: 600)
+                    self.player?.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                } else if currentTime >= trimEnd - tolerance {
+                    // At or past trim end, loop back to trim start
+                    let startTime = CMTime(seconds: trimStart, preferredTimescale: 600)
+                    self.player?.seek(to: startTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                }
+            }
+        }
+    }
+
+    private func removeTimeObserver() {
+        if let timeObserver {
+            let owner = timeObserverOwner ?? player
+            owner?.removeTimeObserver(timeObserver)
+            self.timeObserver = nil
+            self.timeObserverOwner = nil
+        }
+    }
+
+    private func installPlaybackTimeObserver(for player: AVPlayer) {
+        removePlaybackTimeObserver()
+
+        // Update playback time more frequently for smooth UI updates (every 0.05 seconds)
+        let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
+        playbackTimeObserverOwner = player
+        playbackTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let currentTime = time.seconds
+                if currentTime.isFinite {
+                    // For composition-based playback, use composition time directly
+                    if self.usePreviewFallback, self.composition != nil {
+                        // Composition time is absolute across full audio duration
+                        self.currentPlaybackTime = currentTime
+                        
+                        // Check if we need to load a different video chunk
+                        let neededChunkIndex = Int(currentTime / self.chunkDuration)
+                        if neededChunkIndex != self.currentChunkIndex && !self.isLoadingChunk {
+                            self.loadChunkForTime(currentTime)
+                        }
+                    } else if self.usePreviewFallback, let range = self.fallbackPreviewRange {
+                        // Legacy chunk-based playback (fallback)
+                        let absoluteTime = range.lowerBound + currentTime
+                        self.currentPlaybackTime = absoluteTime
+                    } else {
+                        // Native playback
+                        self.currentPlaybackTime = currentTime
+                    }
+                }
+            }
+        }
+    }
+    
+    private func removePlaybackTimeObserver() {
+        if let playbackTimeObserver {
+            let owner = playbackTimeObserverOwner ?? player
+            owner?.removeTimeObserver(playbackTimeObserver)
+            self.playbackTimeObserver = nil
+            self.playbackTimeObserverOwner = nil
+        }
+    }
+
+    private func handlePlaybackEnded() {
+        guard videoItem.loopPlayback, let player else { return }
+        let target = CMTime(seconds: videoItem.effectiveTrimStart, preferredTimescale: 600)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+            player.play()
+        }
+    }
+
+    private func applyLoopSetting() {
+        player?.actionAtItemEnd = videoItem.loopPlayback ? .none : .pause
+    }
+
+    private func loadPreviewAssets(for url: URL) {
+        previewAssetTask?.cancel()
+        isLoadingPreviewAssets = true
+        previewAssetTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let assets = try await PreviewAssetGenerator.shared.generateAssets(for: url)
+                try Task.checkCancellation()
+                self.previewAssets = assets
+            } catch {
+                self.previewAssets = nil
+                if (error as? CancellationError) == nil {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "PreviewAssets").error("Failed to load preview assets for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            self.isLoadingPreviewAssets = false
+        }
+    }
+    
+    private func installPlayerItemStatusObserver(for playerItem: AVPlayerItem, startTime: TimeInterval) {
+        removePlayerItemStatusObserver()
+        
+        playerItemStatusObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                
+                switch item.status {
+                case .failed:
+                    // Direct playback failed, try HLS fallback
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .warning("Direct AVPlayer playback failed: \(item.error?.localizedDescription ?? "unknown error"). Preparing MP4 fallback preview.")
+                    self.fallbackToPreview(startTime: startTime)
+                    
+                case .readyToPlay:
+                    // Check if video tracks exist and can be decoded
+                    // Some files (like APV) report ready because audio works, but video codec is unsupported
+                    let asset = item.asset
+                    
+                    Task {
+                        do {
+                            let videoTracks = try await asset.loadTracks(withMediaType: .video)
+                            
+                            if !videoTracks.isEmpty {
+                                // Check if video tracks have valid format descriptions
+                                var hasValidVideoFormat = false
+                                for track in videoTracks {
+                                    let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
+                                    if !formatDescriptions.isEmpty {
+                                        hasValidVideoFormat = true
+                                        break
+                                    }
+                                }
+                                
+                                if !hasValidVideoFormat {
+                                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                        .warning("AVPlayer ready but video format invalid. Preparing MP4 fallback preview.")
+                                    self.fallbackToPreview(startTime: startTime)
+                                    return
+                                }
+                                
+                                // Check for truly unsupported video codecs (like APV)
+                                for track in videoTracks {
+                                    let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
+                                    for desc in formatDescriptions {
+                                        let codec = CMFormatDescriptionGetMediaSubType(desc)
+                                        let codecBytes: [UInt8] = [
+                                            UInt8((codec >> 24) & 0xFF),
+                                            UInt8((codec >> 16) & 0xFF),
+                                            UInt8((codec >> 8) & 0xFF),
+                                            UInt8(codec & 0xFF)
+                                        ]
+                                        let codecString: String
+                                        if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters),
+                                           fourCC.count == 4 {
+                                            codecString = fourCC
+                                        } else {
+                                            codecString = String(format: "%08X", codec)
+                                        }
+                                        
+                                        Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                            .debug("Video codec detected: '\(codecString)' (raw: \(codec))")
+                                        
+                                        // Check for truly unsupported codecs
+                                        // Only APV codecs are unsupported - all ProRes variants work with AVPlayer
+                                        if codecString == "apv1" || codecString == "apvx" {
+                                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                                .warning("AVPlayer ready but codec '\(codecString)' unsupported. Preparing MP4 fallback preview.")
+                                            self.fallbackToPreview(startTime: startTime)
+                                            return
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Direct playback successful
+                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                .debug("Direct AVPlayer playback ready")
+                                
+                        } catch {
+                            // If we can't load tracks, assume it's okay and let AVPlayer try
+                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                .debug("Could not verify video tracks, proceeding with playback")
+                        }
+                    }
+                    
+                case .unknown:
+                    break
+                    
+                @unknown default:
+                    break
+                }
+            }
+        }
+    }
+    
+    private func removePlayerItemStatusObserver() {
+        if let playerItemStatusObserver {
+            (playerItemStatusObserver as? NSKeyValueObservation)?.invalidate()
+            self.playerItemStatusObserver = nil
+        }
+    }
+    
+    private func fallbackToPreview(startTime: TimeInterval) {
+        guard !usePreviewFallback else {
+            errorMessage = "Unable to play this video format"
+            return
+        }
+
+        usePreviewFallback = true
+        isPreparing = true
+        errorMessage = nil
+
+        let currentItem = videoItem
+        
+        // Use the same fingerprint-based cache directory as preview assets
+        Task { @MainActor in
+            do {
+                let cacheDirectory = try await PreviewAssetGenerator.shared.getAssetDirectory(for: currentItem.url)
+                self.mp4Session = MP4PreviewSession(sourceURL: currentItem.url, cacheDirectory: cacheDirectory)
+                self.startFallbackGeneration(startTime: startTime, currentItem: currentItem)
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("Failed to create cache directory for fallback preview: \(error.localizedDescription, privacy: .public)")
+                self.errorMessage = "Unable to prepare preview: \(error.localizedDescription)"
+                self.isPreparing = false
+            }
+        }
+    }
+    
+    private func startFallbackGeneration(startTime: TimeInterval, currentItem: VideoItem) {
+
+        preparationTask = Task { @MainActor in
+            defer { 
+                self.isPreparing = false
+                self.isGeneratingFallbackPreview = false
+            }
+            
+            self.isGeneratingFallbackPreview = true
+
+            do {
+                guard let session = self.mp4Session else {
+                    throw MP4PreviewSession.PreviewError.outputMissing
+                }
+
+                // Generate 15s audio chunk first (for quick start)
+                let audioChunkURL = try await session.generateAudioChunk(durationLimit: self.chunkDuration)
+                try Task.checkCancellation()
+                
+                // Generate initial video chunk 0 (0-15s, no audio)
+                let chunkIndex = 0
+                let chunkResult = try await session.generatePreviewChunk(chunkIndex: chunkIndex, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                try Task.checkCancellation()
+
+                // Track the loaded chunk
+                self.loadedChunks.insert(chunkIndex)
+                self.currentChunkIndex = chunkIndex
+                
+                // Update preview range
+                let rangeStart = chunkResult.startTime
+                let rangeEnd = chunkResult.startTime + chunkResult.duration
+                self.fallbackPreviewRange = rangeStart...rangeEnd
+
+                // Create AVMutableComposition with audio + video
+                try await self.createComposition(audioURL: audioChunkURL, videoURL: chunkResult.url, videoDuration: chunkResult.duration)
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("MP4 composition playback ready (chunk \(chunkIndex, privacy: .public), 15s) for item \(currentItem.id, privacy: .public)")
+
+                // Background: generate full audio track and swap it in
+                Task.detached(priority: .utility) { [weak self] in
+                    await self?.generateAndSwapFullAudio(session: session)
+                }
+                
+                // Background: preload adjacent chunks
+                self.loadAdjacentChunksInBackground(currentChunk: chunkIndex)
+
+            } catch is CancellationError {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("MP4 fallback cancelled for item \(currentItem.id, privacy: .public)")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("MP4 fallback failed: \(error.localizedDescription, privacy: .public)")
+                self.errorMessage = "Unable to play this video: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    /// Preloads chunks adjacent to the current chunk in the background
+    private func loadAdjacentChunksInBackground(currentChunk: Int) {
+        chunkLoadTask?.cancel()
+        chunkLoadTask = Task { @MainActor in
+            guard let session = self.mp4Session else { return }
+            
+            // Load next chunk (chunk 1 after chunk 0)
+            let nextChunk = currentChunk + 1
+            
+            do {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Preloading adjacent chunk \(nextChunk, privacy: .public)")
+                
+                let _ = try await session.generatePreviewChunk(chunkIndex: nextChunk, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                
+                try Task.checkCancellation()
+                
+                self.loadedChunks.insert(nextChunk)
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Preloaded chunk \(nextChunk, privacy: .public)")
+                
+            } catch is CancellationError {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("Chunk preloading cancelled")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .warning("Failed to preload chunk: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
+    /// Loads and switches to a specific chunk for a given time
+    func loadChunkForTime(_ time: TimeInterval) {
+        let chunkIndex = Int(time / chunkDuration)
+        let sectionIndex = chunkIndex / chunksPerSection
+        
+        // Check if this time is in a concatenated section
+        if concatenatedSections.contains(sectionIndex) {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                .debug("Time \(time, privacy: .public)s is in concatenated section \(sectionIndex, privacy: .public), composition already has section file")
+            // Just update current chunk index for tracking, don't load anything
+            self.currentChunkIndex = chunkIndex
+            return
+        }
+        
+        // Already on this chunk
+        if chunkIndex == currentChunkIndex { return }
+        
+        // Don't try to load if already loading
+        guard !isLoadingChunk else { return }
+        
+        chunkLoadTask?.cancel()
+        chunkLoadTask = Task { @MainActor in
+            self.isLoadingChunk = true
+            defer { self.isLoadingChunk = false }
+            
+            do {
+                guard let session = self.mp4Session else { return }
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Loading chunk \(chunkIndex, privacy: .public) for time \(time, privacy: .public)s")
+                
+                _ = try await session.generatePreviewChunk(chunkIndex: chunkIndex, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                
+                try Task.checkCancellation()
+                
+                // Track the loaded chunk
+                self.loadedChunks.insert(chunkIndex)
+                self.currentChunkIndex = chunkIndex
+                
+                // Update composition video track (audio continues uninterrupted)
+                // We need to rebuild the entire composition to prevent referencing missing chunk files
+                if let composition = self.composition, let player = self.player {
+                    // Preserve playback state
+                    let currentTime = player.currentTime()
+                    let wasPlaying = (player.rate > 0)
+                    
+                    // Rebuild video track with all loaded chunks/sections
+                    let totalVideoDuration = try await self.rebuildCompositionVideoTrack()
+                    
+                    // Recreate player item with rebuilt composition
+                    let newPlayerItem = AVPlayerItem(asset: composition)
+                    player.replaceCurrentItem(with: newPlayerItem)
+                    
+                    // Reinstall observers for new item
+                    self.removeLoopObserver()
+                    self.installLoopObserver(for: newPlayerItem)
+                    
+                    // Restore playback state
+                    await player.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    
+                    if wasPlaying {
+                        player.play()
+                    }
+                    
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .info("Rebuilt composition with chunk \(chunkIndex, privacy: .public), total video duration: \(totalVideoDuration.seconds, privacy: .public)s")
+                }
+                
+                // Check if section is complete and should be concatenated
+                self.checkAndConcatenateSection(for: chunkIndex)
+                
+                // Preload adjacent chunks
+                self.loadAdjacentChunksInBackground(currentChunk: chunkIndex)
+                
+            } catch is CancellationError {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("Chunk loading cancelled")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("Failed to load chunk: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
+    /// Checks if a section is complete and concatenates chunks if needed
+    private func checkAndConcatenateSection(for chunkIndex: Int) {
+        let sectionIndex = chunkIndex / chunksPerSection
+        
+        // Skip if already concatenated
+        guard !concatenatedSections.contains(sectionIndex) else { return }
+        
+        // Determine which chunks belong to this section
+        let firstChunkInSection = sectionIndex * chunksPerSection
+        let totalChunks = Int(ceil(videoItem.durationSeconds / chunkDuration))
+        let lastChunkInSection = min(firstChunkInSection + chunksPerSection - 1, totalChunks - 1)
+        
+        let chunksInSection = Set(firstChunkInSection...lastChunkInSection)
+        
+        // Check if all chunks in this section are loaded
+        guard chunksInSection.isSubset(of: loadedChunks) else {
+            return  // Not all chunks loaded yet
+        }
+        
+        // All chunks loaded - concatenate in background
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self, let session = await self.mp4Session else { return }
+            
+            do {
+                let chunkIndices = Array(chunksInSection).sorted()
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Section \(sectionIndex, privacy: .public) complete, concatenating chunks \(chunkIndices, privacy: .public)")
+                
+                let sectionURL = try await session.concatenateSection(
+                    chunkIndices: chunkIndices,
+                    sectionIndex: sectionIndex
+                )
+                
+                await MainActor.run {
+                    self.concatenatedSections.insert(sectionIndex)
+                    
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .info("Section \(sectionIndex, privacy: .public) concatenated, now using seamless 60s file")
+                    
+                    // If currently playing in this section, update composition to use concatenated file
+                    let currentSection = self.currentChunkIndex / self.chunksPerSection
+                    if currentSection == sectionIndex {
+                        self.useConcatenatedSection(sectionIndex: sectionIndex, sectionURL: sectionURL)
+                    }
+                    
+                    // Schedule cleanup of individual chunk files after a safety delay
+                    Task.detached(priority: .utility) { [weak self] in
+                        // Wait 15 seconds to ensure composition update is complete and stable
+                        try? await Task.sleep(for: .seconds(15))
+                        
+                        guard let self = self, let session = await self.mp4Session else { return }
+                        self.cleanupChunksForSection(sectionIndex: sectionIndex, chunkIndices: chunkIndices, session: session)
+                    }
+                }
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .warning("Failed to concatenate section \(sectionIndex, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
+    /// Cleans up individual chunk files after section concatenation
+    /// Called with a delay to ensure composition has fully transitioned to section file
+    nonisolated private func cleanupChunksForSection(sectionIndex: Int, chunkIndices: [Int], session: MP4PreviewSession) {
+        let fileManager = FileManager.default
+        var deletedCount = 0
+        
+        for chunkIndex in chunkIndices {
+            let chunkURL = session.chunkURL(for: chunkIndex)
+            
+            // Verify file exists before attempting deletion
+            guard fileManager.fileExists(atPath: chunkURL.path) else { continue }
+            
+            do {
+                try fileManager.removeItem(at: chunkURL)
+                deletedCount += 1
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("Deleted chunk file: \(chunkURL.lastPathComponent, privacy: .public)")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .warning("Failed to delete chunk \(chunkIndex, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        
+        if deletedCount > 0 {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                .info("Cleaned up \(deletedCount, privacy: .public) chunk files for section \(sectionIndex, privacy: .public), now using single section file")
+        }
+    }
+    
+    /// Updates composition to use a concatenated section file instead of individual chunks
+    /// Rebuilds the entire video track to avoid timeline corruption
+    private func useConcatenatedSection(sectionIndex: Int, sectionURL: URL) {
+        guard let composition = self.composition,
+              let player = self.player else { return }
+        
+        // Preserve playback state
+        let currentTime = player.currentTime()
+        let wasPlaying = (player.rate > 0)
+        
+        Task { @MainActor in
+            do {
+                // Rebuild video track with all loaded chunks/sections
+                let totalVideoDuration = try await self.rebuildCompositionVideoTrack()
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Rebuilt composition with concatenated section \(sectionIndex, privacy: .public), total duration: \(totalVideoDuration.seconds, privacy: .public)s")
+                
+                // Create new player item with rebuilt composition
+                let newPlayerItem = AVPlayerItem(asset: composition)
+                
+                // Replace player item
+                player.replaceCurrentItem(with: newPlayerItem)
+                
+                // Reinstall observers for new player item
+                self.removeLoopObserver()
+                self.installLoopObserver(for: newPlayerItem)
+                
+                // Restore playback state
+                await player.seek(to: currentTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                
+                if wasPlaying {
+                    player.play()
+                }
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Composition update complete - seamless playback enabled for section \(sectionIndex, privacy: .public)")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("Failed to update composition with section: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
+    /// Helper to determine which video file to use for a given time
+    private func videoFileForTime(_ time: TimeInterval) -> (url: URL, startTime: TimeInterval, duration: TimeInterval)? {
+        guard let session = mp4Session else { return nil }
+        
+        let sectionIndex = Int(time / sectionDuration)
+        
+        // Check if this section has been concatenated
+        if concatenatedSections.contains(sectionIndex) {
+            let sectionStart = TimeInterval(sectionIndex) * sectionDuration
+            let sectionEnd = min(sectionStart + sectionDuration, videoItem.durationSeconds)
+            return (
+                url: session.sectionURL(for: sectionIndex),
+                startTime: sectionStart,
+                duration: sectionEnd - sectionStart
+            )
+        } else {
+            // Use individual chunk
+            let chunkIndex = Int(time / chunkDuration)
+            let chunkStart = TimeInterval(chunkIndex) * chunkDuration
+            let chunkEnd = min(chunkStart + chunkDuration, videoItem.durationSeconds)
+            return (
+                url: session.chunkURL(for: chunkIndex),
+                startTime: chunkStart,
+                duration: chunkEnd - chunkStart
+            )
+        }
+    }
+    
+}

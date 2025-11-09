@@ -34,7 +34,7 @@ final class WatchFolderCoordinator: ObservableObject {
     func enableWatchMode(
         currentPath: String,
         promptForFolder: @escaping @Sendable () async -> URL?,
-        updatePath: @escaping @Sendable (String) -> Void,
+        updatePath: @escaping @Sendable (String) async -> Void,
         onNewFiles: @escaping @Sendable ([URL]) async -> Void
     ) async -> Bool {
         var folderPath = currentPath
@@ -44,7 +44,7 @@ final class WatchFolderCoordinator: ObservableObject {
                 return false
             }
             folderPath = folderURL.path
-            updatePath(folderPath)
+            await updatePath(folderPath)
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: folderURL)
         }
 

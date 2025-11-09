@@ -459,34 +459,6 @@ struct VideoFileRowView: View {
     }
 }
 
-private struct CheckerboardBackground: View {
-    var tileSize: CGFloat = 10
-    var lightColor: Color = Color.gray.opacity(0.1)
-    var darkColor: Color = Color.gray.opacity(0.25)
-
-    var body: some View {
-        GeometryReader { geometry in
-            Canvas { context, size in
-                let columns = Int(ceil(size.width / tileSize))
-                let rows = Int(ceil(size.height / tileSize))
-
-                for row in 0..<rows {
-                    for column in 0..<columns {
-                        let color = (row + column).isMultiple(of: 2) ? lightColor : darkColor
-                        let rect = CGRect(
-                            x: CGFloat(column) * tileSize,
-                            y: CGFloat(row) * tileSize,
-                            width: tileSize,
-                            height: tileSize
-                        )
-                        context.fill(Path(rect), with: .color(color))
-                    }
-                }
-            }
-        }
-    }
-}
-
 struct VideoFileRowView_Previews: PreviewProvider {
     struct Preview: View {
         @State private var item = VideoItem(
