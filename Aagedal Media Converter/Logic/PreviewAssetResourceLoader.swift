@@ -10,6 +10,7 @@
 import AVFoundation
 import Foundation
 import OSLog
+import UniformTypeIdentifiers
 
 /// Handles AVAssetResourceLoader callbacks for FFmpeg-backed preview assets without spinning up an HTTP server.
 final class PreviewAssetResourceLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
@@ -51,21 +52,26 @@ final class PreviewAssetResourceLoader: NSObject, AVAssetResourceLoaderDelegate,
         queue.async { [weak self, session = session, logger = logger, customScheme = customScheme] in
             guard let self else { return }
             do {
-                let data: Data
                 if url.path.hasSuffix(".m3u8") {
                     let playlistData = try self.rewrittenPlaylistData(session: session, customScheme: customScheme)
-                    self.fillContentInformation(for: loadingRequest, mimeType: "application/vnd.apple.mpegurl", contentLength: Int64(playlistData.count))
-                    data = playlistData
-                } else {
-                    let relativePath = Self.relativePath(for: url)
-                    let fileURL = session.resolveResource(relativePath: relativePath)
-                    data = try Data(contentsOf: fileURL)
-                    let mimeType = fileURL.pathExtension == "mp4" ? "video/mp4" : "video/MP2T"
-                    self.fillContentInformation(for: loadingRequest, mimeType: mimeType, contentLength: Int64(data.count))
+                    self.fillContentInformation(for: loadingRequest, fileExtension: "m3u8", contentLength: Int64(playlistData.count))
+                    if let dataRequest = loadingRequest.dataRequest {
+                        logger.debug("Serving playlist for item \(session.itemID, privacy: .public) size=\(playlistData.count, privacy: .public)")
+                        self.respond(to: dataRequest, with: playlistData)
+                    }
+                    loadingRequest.finishLoading()
+                    return
                 }
 
+                let relativePath = Self.relativePath(for: url)
+                let fileURL = session.resolveResource(relativePath: relativePath)
+                let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+                let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+                logger.debug("Serving segment \(fileURL.lastPathComponent, privacy: .public) size=\(fileSize, privacy: .public) for item \(session.itemID, privacy: .public)")
+                self.fillContentInformation(for: loadingRequest, fileExtension: fileURL.pathExtension, contentLength: fileSize)
+
                 if let dataRequest = loadingRequest.dataRequest {
-                    dataRequest.respond(with: data)
+                    try self.respond(to: dataRequest, fileURL: fileURL, fileSize: fileSize)
                 }
                 loadingRequest.finishLoading()
             } catch {
@@ -101,11 +107,63 @@ final class PreviewAssetResourceLoader: NSObject, AVAssetResourceLoaderDelegate,
         return rewritten.joined(separator: "\n").data(using: .utf8) ?? Data()
     }
 
-    private func fillContentInformation(for loadingRequest: AVAssetResourceLoadingRequest, mimeType: String, contentLength: Int64) {
+    private func fillContentInformation(for loadingRequest: AVAssetResourceLoadingRequest, fileExtension: String, contentLength: Int64) {
         guard let info = loadingRequest.contentInformationRequest else { return }
-        info.contentType = mimeType
+        if let type = UTType(filenameExtension: fileExtension.lowercased()) {
+            info.contentType = type.identifier
+        } else if fileExtension.isEmpty, let type = UTType(filenameExtension: "bin") {
+            info.contentType = type.identifier
+        }
         info.contentLength = contentLength
         info.isByteRangeAccessSupported = true
+    }
+
+    private func respond(to dataRequest: AVAssetResourceLoadingDataRequest, with data: Data) {
+        let requestedOffset = Int(dataRequest.currentOffset > 0 ? dataRequest.currentOffset : dataRequest.requestedOffset)
+        guard requestedOffset < data.count else { return }
+
+        let endOffset: Int
+        if dataRequest.requestsAllDataToEndOfResource || dataRequest.requestedLength == 0 {
+            endOffset = data.count
+        } else {
+            endOffset = min(data.count, requestedOffset + Int(dataRequest.requestedLength))
+        }
+
+        guard endOffset > requestedOffset else { return }
+        let chunk = data[requestedOffset..<endOffset]
+        dataRequest.respond(with: chunk)
+    }
+
+    private func respond(to dataRequest: AVAssetResourceLoadingDataRequest, fileURL: URL, fileSize: Int64) throws {
+        let requestedOffset = dataRequest.currentOffset > 0 ? dataRequest.currentOffset : dataRequest.requestedOffset
+        guard requestedOffset < fileSize else { return }
+
+        let remainingLength: Int64
+        if dataRequest.requestsAllDataToEndOfResource || dataRequest.requestedLength == 0 {
+            remainingLength = fileSize - requestedOffset
+        } else {
+            remainingLength = min(Int64(dataRequest.requestedLength), fileSize - requestedOffset)
+        }
+
+        guard remainingLength > 0 else { return }
+
+        logger.debug("Segment request offset=\(requestedOffset, privacy: .public) length=\(remainingLength, privacy: .public) for \(fileURL.lastPathComponent, privacy: .public)")
+
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+        try handle.seek(toOffset: UInt64(requestedOffset))
+
+        var bytesRemaining = remainingLength
+        while bytesRemaining > 0 {
+            let chunkSize = Int(min(bytesRemaining, Int64(64 * 1024)))
+            guard let chunk = try handle.read(upToCount: chunkSize), !chunk.isEmpty else { break }
+            dataRequest.respond(with: chunk)
+            bytesRemaining -= Int64(chunk.count)
+        }
+
+        if bytesRemaining > 0 {
+            logger.error("Segment request for \(fileURL.lastPathComponent, privacy: .public) ended with \(bytesRemaining, privacy: .public) bytes remaining")
+        }
     }
 
     private static func relativePath(for url: URL) -> String {

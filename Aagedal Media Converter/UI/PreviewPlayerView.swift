@@ -529,16 +529,17 @@ final class PreviewPlayerController: ObservableObject {
     @Published private(set) var isCapturingScreenshot = false
 
     private var videoItem: VideoItem
-    private var session: HLSPreviewSession?
-    private var loader: PreviewAssetResourceLoader?
+    private var mp4Session: MP4PreviewSession?
     private var preparationTask: Task<Void, Never>?
     private var previewAssetTask: Task<Void, Never>?
     private var loopObserver: Any?
     private var timeObserver: Any?
     private var playbackTimeObserver: Any?
+    private weak var timeObserverOwner: AVPlayer?
+    private weak var playbackTimeObserverOwner: AVPlayer?
     private var playerItemStatusObserver: Any?
     private var hasSecurityScope = false
-    private var useHLSFallback = false
+    private var usePreviewFallback = false
     weak var playerView: AVPlayerView?
 
     enum ScreenshotError: LocalizedError {
@@ -802,7 +803,7 @@ final class PreviewPlayerController: ObservableObject {
         errorMessage = nil
         isLoadingPreviewAssets = true
         previewAssets = nil
-        useHLSFallback = false
+        usePreviewFallback = false
 
         let currentItem = videoItem
         
@@ -855,17 +856,17 @@ final class PreviewPlayerController: ObservableObject {
         }
         
         player = nil
-        loader = nil
+        if let session = mp4Session {
+            mp4Session = nil
+            Task { await session.cancel(); await session.cleanup() }
+        }
 
-        session?.stop()
-        session?.cleanup()
-        session = nil
         isPreparing = false
         removeLoopObserver()
         removeTimeObserver()
         removePlaybackTimeObserver()
         removePlayerItemStatusObserver()
-        useHLSFallback = false
+        usePreviewFallback = false
     }
 
     func refreshPreviewForTrim() {
@@ -1070,23 +1071,24 @@ final class PreviewPlayerController: ObservableObject {
     
     private func installTimeObserver(for player: AVPlayer) {
         removeTimeObserver()
-        
+
         // Check playback position every 0.1 seconds
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserverOwner = player
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                
+
                 // Only enforce trim boundaries when looping is enabled
                 guard self.videoItem.loopPlayback else { return }
-                
+
                 let currentTime = time.seconds
                 let trimStart = self.videoItem.effectiveTrimStart
                 let trimEnd = self.videoItem.effectiveTrimEnd
-                
+
                 // Small tolerance to avoid seeking when already at target (prevents playback freeze)
                 let tolerance = 0.05
-                
+
                 // Enforce trim boundaries: keep playback within trimStart...trimEnd
                 if currentTime < trimStart - tolerance {
                     // Significantly before trim start, seek to trim start
@@ -1100,19 +1102,22 @@ final class PreviewPlayerController: ObservableObject {
             }
         }
     }
-    
+
     private func removeTimeObserver() {
-        if let timeObserver, let player {
-            player.removeTimeObserver(timeObserver)
+        if let timeObserver {
+            let owner = timeObserverOwner ?? player
+            owner?.removeTimeObserver(timeObserver)
             self.timeObserver = nil
+            self.timeObserverOwner = nil
         }
     }
-    
+
     private func installPlaybackTimeObserver(for player: AVPlayer) {
         removePlaybackTimeObserver()
-        
+
         // Update playback time more frequently for smooth UI updates (every 0.05 seconds)
         let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
+        playbackTimeObserverOwner = player
         playbackTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
@@ -1125,9 +1130,11 @@ final class PreviewPlayerController: ObservableObject {
     }
     
     private func removePlaybackTimeObserver() {
-        if let playbackTimeObserver, let player {
-            player.removeTimeObserver(playbackTimeObserver)
+        if let playbackTimeObserver {
+            let owner = playbackTimeObserverOwner ?? player
+            owner?.removeTimeObserver(playbackTimeObserver)
             self.playbackTimeObserver = nil
+            self.playbackTimeObserverOwner = nil
         }
     }
 
@@ -1173,53 +1180,83 @@ final class PreviewPlayerController: ObservableObject {
                 case .failed:
                     // Direct playback failed, try HLS fallback
                     Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                        .warning("Direct AVPlayer playback failed: \(item.error?.localizedDescription ?? "unknown error"). Falling back to HLS transcoding.")
-                    self.fallbackToHLS(startTime: startTime)
+                        .warning("Direct AVPlayer playback failed: \(item.error?.localizedDescription ?? "unknown error"). Preparing MP4 fallback preview.")
+                    self.fallbackToPreview(startTime: startTime)
                     
                 case .readyToPlay:
                     // Check if video tracks exist and can be decoded
                     // Some files (like APV) report ready because audio works, but video codec is unsupported
                     let asset = item.asset
-                    let videoTracks = asset.tracks(withMediaType: .video)
                     
-                    if !videoTracks.isEmpty {
-                        // Check if video tracks have valid format descriptions
-                        let hasValidVideoFormat = videoTracks.contains { track in
-                            guard let formatDescriptions = track.formatDescriptions as? [CMFormatDescription] else { return false }
-                            return !formatDescriptions.isEmpty
-                        }
-                        
-                        if !hasValidVideoFormat {
-                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                                .warning("AVPlayer ready but video format invalid. Falling back to HLS transcoding.")
-                            self.fallbackToHLS(startTime: startTime)
-                            return
-                        }
-                        
-                        // Also check for common unsupported video codecs
-                        let hasUnsupportedCodec = videoTracks.contains { track in
-                            guard let formatDescriptions = track.formatDescriptions as? [CMFormatDescription] else { return false }
-                            return formatDescriptions.contains { desc in
-                                let codec = CMFormatDescriptionGetMediaSubType(desc)
-                                // APV codec and other unsupported codecs
-                                return codec == kCMVideoCodecType_AppleProRes4444XQ || 
-                                       codec == kCMVideoCodecType_AppleProResRAW ||
-                                       codec == kCMVideoCodecType_AppleProResRAWHQ ||
-                                       String(describing: codec).contains("apvx") // APV codec
+                    Task {
+                        do {
+                            let videoTracks = try await asset.loadTracks(withMediaType: .video)
+                            
+                            if !videoTracks.isEmpty {
+                                // Check if video tracks have valid format descriptions
+                                var hasValidVideoFormat = false
+                                for track in videoTracks {
+                                    let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
+                                    if !formatDescriptions.isEmpty {
+                                        hasValidVideoFormat = true
+                                        break
+                                    }
+                                }
+                                
+                                if !hasValidVideoFormat {
+                                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                        .warning("AVPlayer ready but video format invalid. Preparing MP4 fallback preview.")
+                                    self.fallbackToPreview(startTime: startTime)
+                                    return
+                                }
+                                
+                                // Check for truly unsupported video codecs (like APV)
+                                for track in videoTracks {
+                                    let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
+                                    for desc in formatDescriptions {
+                                        let codec = CMFormatDescriptionGetMediaSubType(desc)
+                                        let codecBytes: [UInt8] = [
+                                            UInt8((codec >> 24) & 0xFF),
+                                            UInt8((codec >> 16) & 0xFF),
+                                            UInt8((codec >> 8) & 0xFF),
+                                            UInt8(codec & 0xFF)
+                                        ]
+                                        let codecString: String
+                                        if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters),
+                                           fourCC.count == 4 {
+                                            codecString = fourCC
+                                        } else {
+                                            codecString = String(format: "%08X", codec)
+                                        }
+                                        
+                                        Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                            .debug("Video codec detected: '\(codecString)' (raw: \(codec))")
+                                        
+                                        // Check for unsupported codecs
+                                        // APV codec variants, old/uncommon ProRes variants not supported by AVPlayer
+                                        if codecString == "apv1" || codecString == "apvx" ||
+                                           codecString == "apch" || codecString == "apcs" ||
+                                           codecString == "apco" || codecString == "ap4x" ||
+                                           codecString == "ap4h" {
+                                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                                .warning("AVPlayer ready but codec '\(codecString)' unsupported. Preparing MP4 fallback preview.")
+                                            self.fallbackToPreview(startTime: startTime)
+                                            return
+                                        }
+                                    }
+                                }
                             }
-                        }
-                        
-                        if hasUnsupportedCodec {
+                            
+                            // Direct playback successful
                             Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                                .warning("AVPlayer ready but video codec unsupported. Falling back to HLS transcoding.")
-                            self.fallbackToHLS(startTime: startTime)
-                            return
+                                .debug("Direct AVPlayer playback ready")
+                                
+                        } catch {
+                            // If we can't load tracks, assume it's okay and let AVPlayer try
+                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                .debug("Could not verify video tracks, proceeding with playback")
                         }
                     }
-                    
-                    // Direct playback successful
-                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                        .debug("Direct AVPlayer playback ready")
                     
                 case .unknown:
                     break
@@ -1238,80 +1275,54 @@ final class PreviewPlayerController: ObservableObject {
         }
     }
     
-    private func fallbackToHLS(startTime: TimeInterval) {
-        guard !useHLSFallback else {
-            // Already tried HLS, give up
+    private func fallbackToPreview(startTime: TimeInterval) {
+        guard !usePreviewFallback else {
             errorMessage = "Unable to play this video format"
             return
         }
-        
-        useHLSFallback = true
+
+        usePreviewFallback = true
         isPreparing = true
-        
-        // Clean up old player and observers properly
-        if let oldPlayer = player {
-            if let obs = timeObserver {
-                oldPlayer.removeTimeObserver(obs)
-                timeObserver = nil
-            }
-            if let obs = playbackTimeObserver {
-                oldPlayer.removeTimeObserver(obs)
-                playbackTimeObserver = nil
-            }
-            oldPlayer.pause()
-        }
-        
-        if let obs = loopObserver {
-            NotificationCenter.default.removeObserver(obs)
-            loopObserver = nil
-        }
-        
-        if let obs = playerItemStatusObserver as? NSKeyValueObservation {
-            obs.invalidate()
-            playerItemStatusObserver = nil
-        }
-        
-        player = nil
-        loader = nil
-        
+        errorMessage = nil
+
         let currentItem = videoItem
-        
+        let cacheDirectory = AppConstants.previewCacheDirectory.appendingPathComponent(currentItem.id.uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+
+        mp4Session = MP4PreviewSession(sourceURL: currentItem.url, cacheDirectory: cacheDirectory)
+
         preparationTask = Task { @MainActor in
+            defer { self.isPreparing = false }
+
             do {
-                let newSession = HLSPreviewSession(itemID: currentItem.id, sourceURL: currentItem.url)
-                let playlistURL = try await newSession.start(at: startTime)
-                
-                // Check if we were cancelled during HLS startup
+                guard let session = self.mp4Session else {
+                    throw MP4PreviewSession.PreviewError.outputMissing
+                }
+
+                let previewURL = try await session.generatePreview(startTime: startTime, durationLimit: 30, maxShortEdge: 480)
+
                 try Task.checkCancellation()
-                
-                let newLoader = PreviewAssetResourceLoader(session: newSession, playlistURL: playlistURL)
-                let playerItem = newLoader.makePlayerItem()
+
+                let asset = AVURLAsset(url: previewURL)
+                let playerItem = AVPlayerItem(asset: asset)
                 let player = AVPlayer(playerItem: playerItem)
-                
-                self.session = newSession
-                self.loader = newLoader
+
                 self.player = player
-                self.isPreparing = false
-                
-                // Don't seek since HLS session already started at the right time
-                
+
                 installLoopObserver(for: playerItem)
                 installTimeObserver(for: player)
                 installPlaybackTimeObserver(for: player)
                 applyLoopSetting()
-                
+
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .info("HLS fallback playback ready for item \(currentItem.id, privacy: .public)")
-                
+                    .info("MP4 fallback playback ready for item \(currentItem.id, privacy: .public)")
+
             } catch is CancellationError {
-                // Silently handle cancellation - user switched away from this preview
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .debug("HLS fallback cancelled for item \(currentItem.id, privacy: .public)")
-                self.isPreparing = false
+                    .debug("MP4 fallback cancelled for item \(currentItem.id, privacy: .public)")
             } catch {
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .error("HLS fallback failed: \(error.localizedDescription, privacy: .public)")
-                self.isPreparing = false
+                    .error("MP4 fallback failed: \(error.localizedDescription, privacy: .public)")
                 self.errorMessage = "Unable to play this video: \(error.localizedDescription)"
             }
         }

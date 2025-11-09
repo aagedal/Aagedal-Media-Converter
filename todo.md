@@ -25,3 +25,8 @@
 
 
 5. Fix scroll lag
+
+6. Replace HLS preview with MP4 preview
+    1. ✅ Prototype MP4 preview pipeline: generate short low-res file and load via AVPlayer
+    2. Add on-demand still frame capture placeholder for paused state
+    3. Evaluate behaviour on large files and outline UX (overlay prompt/partial encode)
