@@ -51,15 +51,11 @@ struct VideoFileUtils: Sendable {
         }
         
         let durationString = formatDuration(seconds: durationSec)
-        let thumbnailData = await getVideoThumbnail(url: url)
-
-        let metadata: VideoMetadata?
-        do {
-            metadata = try await VideoMetadataService.shared.metadata(for: url)
-        } catch {
-            Logger().warning("Failed to fetch metadata for \(fileName): \(error.localizedDescription)")
-            metadata = nil
-        }
+        
+        // Get cached thumbnail directly without waiting for waveform generation
+        print(" [createVideoItem] Getting cached thumbnail for: \(fileName)")
+        let thumbnailData = await getCachedThumbnail(url: url)
+        print(" [createVideoItem] Thumbnail obtained (nil: \(thumbnailData == nil))")
         
         // Generate output URL if output folder is provided
         var outputURL: URL? = nil
@@ -70,21 +66,78 @@ struct VideoFileUtils: Sendable {
         }
         
         let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
-        return VideoItem(
+        
+        // Create VideoItem with thumbnail but without metadata for fast UI response
+        print(" [createVideoItem] Creating VideoItem object (metadata will be fetched in background)")
+        let videoItem = VideoItem(
             url: url,
             name: name,
             size: size,
             duration: durationString,
             durationSeconds: durationSec,
-            thumbnailData: thumbnailData,
+            thumbnailData: thumbnailData,  // Already cached, loaded immediately
             status: .waiting,
             progress: 0.0,
             eta: nil,
             outputURL: outputURL,
             comment: comment,
             includeDateTag: includeDateTagByDefault,
-            metadata: metadata
+            metadata: nil  // Will be fetched in background
         )
+        print(" [createVideoItem] VideoItem created successfully: \(name)")
+        return videoItem
+    }
+    
+    /// Fetches metadata for a video item in the background
+    /// This allows the UI to be responsive while heavy operations complete
+    static func fetchMetadata(for url: URL) async -> VideoMetadata? {
+        let fileName = url.lastPathComponent
+        let startTime = Date()
+        
+        print(" [fetchMetadata] ⏱️ Starting for: \(fileName) at \(startTime)")
+        
+        // Fetch metadata with timeout
+        let metadata: VideoMetadata?
+        do {
+            metadata = try await withThrowingTaskGroup(of: VideoMetadata?.self) { group in
+                group.addTask {
+                    print(" [fetchMetadata] 🔄 Calling VideoMetadataService for: \(fileName)")
+                    let result = try await VideoMetadataService.shared.metadata(for: url)
+                    let elapsed = Date().timeIntervalSince(startTime)
+                    print(" [fetchMetadata] ✅ VideoMetadataService returned after \(String(format: "%.2f", elapsed))s for: \(fileName)")
+                    return result
+                }
+                
+                group.addTask {
+                    for i in 1...15 {
+                        try await Task.sleep(for: .seconds(1))
+                        print(" [fetchMetadata] ⏳ Waiting... \(i)s elapsed for: \(fileName)")
+                    }
+                    print(" [fetchMetadata] ⏰ Timeout reached (15s) for: \(fileName)")
+                    throw CancellationError()
+                }
+                
+                let result = try await group.next()
+                group.cancelAll()
+                return result ?? nil
+            }
+            let totalElapsed = Date().timeIntervalSince(startTime)
+            print(" [fetchMetadata] ✅ Metadata fetched successfully after \(String(format: "%.2f", totalElapsed))s for: \(fileName)")
+        } catch is CancellationError {
+            let totalElapsed = Date().timeIntervalSince(startTime)
+            Logger().warning("Metadata fetch timed out for \(fileName) after \(String(format: "%.2f", totalElapsed)) seconds")
+            print(" [fetchMetadata] ⏰ Metadata fetch timed out after \(String(format: "%.2f", totalElapsed))s for: \(fileName)")
+            metadata = nil
+        } catch {
+            let totalElapsed = Date().timeIntervalSince(startTime)
+            Logger().warning("Failed to fetch metadata for \(fileName): \(error.localizedDescription)")
+            print(" [fetchMetadata] ❌ Metadata fetch failed after \(String(format: "%.2f", totalElapsed))s: \(error.localizedDescription) for: \(fileName)")
+            metadata = nil
+        }
+        
+        let totalElapsed = Date().timeIntervalSince(startTime)
+        print(" [fetchMetadata] 🏁 Completed for: \(fileName) after \(String(format: "%.2f", totalElapsed))s (metadata: \(metadata != nil))")
+        return metadata
     }
     // utility to format seconds into hh:mm:ss or mm:ss
     private static func formatDuration(seconds: Double) -> String {
@@ -145,6 +198,59 @@ struct VideoFileUtils: Sendable {
             return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
         } else {
             return String(format: "%02d:%02d", minutes, seconds)
+        }
+    }
+    
+    /// Gets cached thumbnail or generates row thumbnail if needed (fast, no waveform)
+    static func getCachedThumbnail(url: URL) async -> Data? {
+        let fileName = url.lastPathComponent
+        do {
+            // Get the asset directory where thumbnails are cached
+            let assetDirectory = try await PreviewAssetGenerator.shared.getAssetDirectory(for: url)
+            print(" [getCachedThumbnail] Asset directory: \(assetDirectory.path)")
+            
+            // Try to load row thumbnail first (correct filename: row_thumb.jpg)
+            let rowThumbnailURL = assetDirectory.appendingPathComponent("row_thumb.jpg")
+            let rowExists = FileManager.default.fileExists(atPath: rowThumbnailURL.path)
+            print(" [getCachedThumbnail] Row thumbnail exists: \(rowExists)")
+            
+            if rowExists {
+                do {
+                    let thumbnailData = try Data(contentsOf: rowThumbnailURL)
+                    print(" [getCachedThumbnail] ✅ Loaded cached row thumbnail (\(thumbnailData.count) bytes) for: \(fileName)")
+                    return thumbnailData
+                } catch {
+                    print(" [getCachedThumbnail] ❌ Failed to read row thumbnail: \(error.localizedDescription)")
+                }
+            }
+            
+            // If row thumbnail doesn't exist, generate it now (fast, just the thumbnail)
+            print(" [getCachedThumbnail] 🔨 Generating row thumbnail on-demand for: \(fileName)")
+            if let thumbnailData = try? await PreviewAssetGenerator.shared.generateRowThumbnail(for: url) {
+                print(" [getCachedThumbnail] ✅ Generated row thumbnail (\(thumbnailData.count) bytes) for: \(fileName)")
+                return thumbnailData
+            }
+            
+            // Fallback to first filmstrip thumbnail if row thumbnail generation failed (correct filename: thumb_0.jpg)
+            let firstThumbnailURL = assetDirectory.appendingPathComponent("thumb_0.jpg")
+            let filmstripExists = FileManager.default.fileExists(atPath: firstThumbnailURL.path)
+            print(" [getCachedThumbnail] Filmstrip thumbnail exists: \(filmstripExists)")
+            
+            if filmstripExists {
+                do {
+                    let thumbnailData = try Data(contentsOf: firstThumbnailURL)
+                    print(" [getCachedThumbnail] ✅ Loaded filmstrip thumbnail (\(thumbnailData.count) bytes) for: \(fileName)")
+                    return thumbnailData
+                } catch {
+                    print(" [getCachedThumbnail] ❌ Failed to read filmstrip thumbnail: \(error.localizedDescription)")
+                }
+            }
+            
+            print(" [getCachedThumbnail] ⚠️ No thumbnails available for: \(fileName)")
+            return nil
+        } catch {
+            print(" [getCachedThumbnail] ❌ Error loading thumbnail for \(fileName): \(error.localizedDescription)")
+            return nil
         }
     }
     

@@ -214,6 +214,53 @@ actor PreviewAssetGenerator {
         logger.info("Asset generation complete. Row thumbnail: \(generatedRowThumbnail != nil), filmstrip: \(expectedThumbnailURLs.count), waveform: \(generatedWaveformURL != nil)")
         return PreviewAssets(rowThumbnail: generatedRowThumbnail, thumbnails: expectedThumbnailURLs, waveform: generatedWaveformURL)
     }
+    
+    /// Generates only the row thumbnail (fast, no waveform or filmstrip)
+    /// Returns the thumbnail data if successful
+    func generateRowThumbnail(for url: URL) async throws -> Data? {
+        logger.info("Generating row thumbnail on-demand for \(url.lastPathComponent, privacy: .public)")
+        let accessGranted = self.startAccessingSecurityScope(for: url)
+        defer { if accessGranted { url.stopAccessingSecurityScopedResource() } }
+        
+        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
+            logger.error("FFmpeg binary not found in bundle")
+            throw PreviewAssetError.ffmpegBinaryMissing
+        }
+        guard let ffprobePath = Bundle.main.path(forResource: "ffprobe", ofType: nil) else {
+            logger.error("FFprobe binary not found in bundle")
+            throw PreviewAssetError.ffprobeBinaryMissing
+        }
+        
+        let assetDirectory = try ensureAssetDirectory(for: url)
+        let rowThumbnailURL = assetDirectory.appendingPathComponent("row_thumb.jpg", isDirectory: false)
+        
+        // Check if already exists
+        if fileManager.fileExists(atPath: rowThumbnailURL.path) {
+            logger.info("Row thumbnail already cached")
+            return try? Data(contentsOf: rowThumbnailURL)
+        }
+        
+        guard let duration = try await determineDuration(for: url, ffprobePath: ffprobePath) else {
+            throw PreviewAssetError.durationUnavailable
+        }
+        
+        let hdrType = try await detectHDRRequirement(for: url, ffprobePath: ffprobePath)
+        
+        try await generateRowThumbnail(
+            url: url,
+            ffmpegPath: ffmpegPath,
+            duration: duration,
+            destination: rowThumbnailURL,
+            hdrType: hdrType
+        )
+        
+        if fileManager.fileExists(atPath: rowThumbnailURL.path) {
+            logger.info("Row thumbnail generated successfully")
+            return try? Data(contentsOf: rowThumbnailURL)
+        }
+        
+        return nil
+    }
 
     // MARK: - Helpers
 

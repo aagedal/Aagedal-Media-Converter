@@ -97,14 +97,25 @@ struct VideoMetadataView: View {
 
     private var audioSection: some View {
         section(title: "Audio") {
-            if let stream = metadata?.audioStream {
-                infoRow("Codec", value: stream.codecLongName ?? stream.codec)
-                infoRow("Profile", value: stream.profile)
-                infoRow("Sample Rate", value: formatSampleRate(stream.sampleRate))
-                infoRow("Channels", value: stream.channels.map(String.init))
-                infoRow("Channel Layout", value: stream.channelLayout)
-                infoRow("Bit Depth", value: stream.bitDepth.map { "\($0)-bit" })
-                infoRow("Bit Rate", value: formatBitRate(stream.bitRate))
+            if let audioStreams = metadata?.audioStreams, !audioStreams.isEmpty {
+                ForEach(audioStreams.indices, id: \.self) { index in
+                    let stream = audioStreams[index]
+                    if audioStreams.count > 1 {
+                        Text("Stream \(index + 1)")
+                            .font(.body)
+                            .fontWeight(.bold)
+                            .foregroundColor(.secondary)
+                            .padding(.top, index > 0 ? 12 : 0)
+                            .padding(.bottom, 2)
+                    }
+                    infoRow("Codec", value: stream.codecLongName ?? stream.codec)
+                    infoRow("Profile", value: stream.profile)
+                    infoRow("Sample Rate", value: formatSampleRate(stream.sampleRate))
+                    infoRow("Channels", value: stream.channels.map(String.init))
+                    infoRow("Channel Layout", value: stream.channelLayout)
+                    infoRow("Bit Depth", value: stream.bitDepth.map { "\($0)-bit" })
+                    infoRow("Bit Rate", value: formatBitRate(stream.bitRate))
+                }
             } else {
                 Text("No audio stream detected.")
                     .font(.subheadline)
@@ -117,10 +128,10 @@ struct VideoMetadataView: View {
     private func section<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title.uppercased())
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-                .padding(.bottom, 4)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+                .padding(.bottom, 6)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

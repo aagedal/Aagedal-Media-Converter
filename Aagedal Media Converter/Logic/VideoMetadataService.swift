@@ -125,13 +125,14 @@ struct VideoMetadata: Equatable, Sendable {
     }
 
     let videoStream: VideoStream?
-    let audioStream: AudioStream?
+    let audioStreams: [AudioStream]
 }
 
 enum VideoMetadataError: Error {
     case ffprobeMissing
     case processFailed(String)
     case decodingFailed(String)
+    case timeout
 }
 
 actor VideoMetadataService {
@@ -185,9 +186,11 @@ actor VideoMetadataService {
                 process.executableURL = URL(fileURLWithPath: ffprobePath)
                 process.arguments = [
                     "-v", "error",
+                    "-select_streams", "v",  // Only probe video streams
+                    "-select_streams", "a",  // and audio streams (skip subtitles)
                     "-show_format",
                     "-show_streams",
-                    "-print_format", "json",
+                    "-of", "json",
                     url.path
                 ]
 
@@ -203,7 +206,26 @@ actor VideoMetadataService {
                     return
                 }
 
-                process.waitUntilExit()
+                // Wait with timeout (10 seconds - must be less than fetchMetadata timeout)
+                let timeoutSeconds: TimeInterval = 10
+                let checkInterval: TimeInterval = 0.5
+                var elapsed: TimeInterval = 0
+                
+                while process.isRunning && elapsed < timeoutSeconds {
+                    try? await Task.sleep(for: .seconds(checkInterval))
+                    elapsed += checkInterval
+                }
+                
+                if process.isRunning {
+                    // Timeout - terminate the process
+                    process.terminate()
+                    try? await Task.sleep(for: .seconds(0.1))  // Give it a moment to terminate
+                    if process.isRunning {
+                        process.interrupt()  // Force kill if still running
+                    }
+                    continuation.resume(throwing: VideoMetadataError.timeout)
+                    return
+                }
 
                 let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
                 let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
@@ -274,6 +296,7 @@ private struct FFprobeResponse: Decodable {
 
         struct Disposition: Decodable {
             let defaultStream: Int?
+            let attachedPic: Int?
         }
     }
 
@@ -284,10 +307,15 @@ private struct FFprobeResponse: Decodable {
     func toVideoMetadata() -> VideoMetadata {
         let formatMetadata = format
 
-        let videoStream = streams.first { $0.codecType == "video" }
-        let audioStream = streams.first { $0.codecType == "audio" }
+        // Find first video stream that is NOT an attached picture (cover art)
+        let videoStream = streams.first { stream in
+            stream.codecType == "video" && stream.disposition?.attachedPic != 1
+        }
+        
+        // Get all audio streams
+        let audioStreams = streams.filter { $0.codecType == "audio" }
 
-        let formatComment = formatMetadata?.tags?.comment ?? videoStream?.tags?.comment ?? audioStream?.tags?.comment
+        let formatComment = formatMetadata?.tags?.comment ?? videoStream?.tags?.comment
 
         let video = videoStream.map { stream -> VideoMetadata.VideoStream in
             let frameRateString = stream.avgFrameRate ?? stream.rFrameRate
@@ -316,7 +344,7 @@ private struct FFprobeResponse: Decodable {
             )
         }
 
-        let audio = audioStream.map { stream -> VideoMetadata.AudioStream in
+        let audio = audioStreams.map { stream -> VideoMetadata.AudioStream in
             return VideoMetadata.AudioStream(
                 codec: stream.codecName,
                 codecLongName: stream.codecLongName,
@@ -337,7 +365,7 @@ private struct FFprobeResponse: Decodable {
             bitRate: formatMetadata?.bitRate.flatMap { Int64($0) },
             comment: formatComment,
             videoStream: video,
-            audioStream: audio
+            audioStreams: audio
         )
     }
 }

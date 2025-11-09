@@ -205,6 +205,20 @@ struct VideoFileListView: View {
             if !self.droppedFiles.contains(where: { $0.url == videoItem.url }) {
                 self.droppedFiles.append(videoItem)
                 print(" Added video item to list. Total items: \(self.droppedFiles.count)")
+                
+                // Fetch metadata in background (thumbnail already loaded)
+                let itemIndex = self.droppedFiles.count - 1
+                Task.detached(priority: .utility) {
+                    let metadata = await VideoFileUtils.fetchMetadata(for: url)
+                    
+                    await MainActor.run {
+                        // Update the item with fetched metadata
+                        if itemIndex < self.droppedFiles.count && self.droppedFiles[itemIndex].url == url {
+                            self.droppedFiles[itemIndex].metadata = metadata
+                            print(" Updated video item with metadata: \(videoItem.name)")
+                        }
+                    }
+                }
             } else {
                 print(" Video item already exists in list")
             }

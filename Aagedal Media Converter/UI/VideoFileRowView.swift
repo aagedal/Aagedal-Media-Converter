@@ -30,6 +30,7 @@ struct VideoFileRowView: View {
     @State private var isThumbnailHovered = false
     @State private var showPreview = false
     @State private var showMetadata = false
+    @State private var cachedThumbnail: NSImage?
 
     var body: some View {
         ZStack {
@@ -52,8 +53,8 @@ struct VideoFileRowView: View {
                             .stroke(Color.black.opacity(0.2), lineWidth: 1)
                             .frame(width: 200, height: 150)
 
-                        if let data = file.thumbnailData, let nsImage = NSImage(data: data) {
-                            Image(nsImage: nsImage)
+                        if let cachedImage = cachedThumbnail {
+                            Image(nsImage: cachedImage)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 200, height: 150)
@@ -261,6 +262,20 @@ struct VideoFileRowView: View {
         }
         .sheet(isPresented: $showMetadata) {
             VideoMetadataView(item: $file)
+        }
+        .task(id: file.thumbnailData) {
+            // Decode thumbnail asynchronously off main thread
+            guard let data = file.thumbnailData else {
+                cachedThumbnail = nil
+                return
+            }
+            
+            // Simple async decode - let SwiftUI handle aspect ratio
+            let image = await Task.detached(priority: .userInitiated) { () -> NSImage? in
+                NSImage(data: data)
+            }.value
+            
+            cachedThumbnail = image
         }
     }
 
