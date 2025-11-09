@@ -22,6 +22,11 @@ struct Aagedal_Media_Converter_App: App {
             AppConstants.watchFolderDeleteDurationValueKey: AppConstants.defaultWatchFolderDeleteDurationValue,
             AppConstants.watchFolderDeleteDurationUnitKey: AppConstants.defaultWatchFolderDeleteDurationUnitRaw
         ])
+        
+        // Clean up old preview cache on app launch (older than 7 days)
+        Task {
+            await PreviewAssetGenerator.shared.cleanupOldCache(olderThanDays: 7)
+        }
     }
     
     var body: some Scene {

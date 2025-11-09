@@ -8,6 +8,7 @@
 // (at your option) any later version.
 
 import SwiftUI
+import AppKit
 import AVKit
 import OSLog
 
@@ -158,6 +159,35 @@ struct PreviewPlayerView: View {
                     }
                     .transition(.opacity)
                 }
+                
+                if controller.isGeneratingFallbackPreview {
+                    ZStack {
+                        Color.black.opacity(0.5)
+                        
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .scaleEffect(1.2)
+                                .tint(.white)
+                            
+                            Text("Generating Preview…")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            
+                            Text("This format requires transcoding for playback")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.8))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                        .padding(24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.black.opacity(0.8))
+                        )
+                    }
+                    .transition(.opacity)
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -207,6 +237,12 @@ struct PreviewPlayerView: View {
                     Text("| Trimmed duration: \(formattedTime(item.trimmedDuration))")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                    
+                    if let range = controller.fallbackPreviewRange {
+                        Text("| Preview: \(formattedTime(range.lowerBound))–\(formattedTime(range.upperBound))")
+                            .font(.subheadline)
+                            .foregroundColor(.orange)
+                    }
                 }.multilineTextAlignment(.leading)
             }
             Spacer()
@@ -527,11 +563,17 @@ final class PreviewPlayerController: ObservableObject {
     @Published private(set) var previewAssets: PreviewAssets?
     @Published private(set) var isLoadingPreviewAssets = false
     @Published private(set) var isCapturingScreenshot = false
+    @Published private(set) var isGeneratingFallbackPreview = false
+    @Published private(set) var fallbackPreviewRange: ClosedRange<Double>?
+    @Published private(set) var fallbackStillImage: NSImage?
+    @Published private(set) var fallbackStillTime: Double?
+    @Published private(set) var isGeneratingFallbackStill = false
 
     private var videoItem: VideoItem
     private var mp4Session: MP4PreviewSession?
     private var preparationTask: Task<Void, Never>?
     private var previewAssetTask: Task<Void, Never>?
+    private var fallbackStillTask: Task<Void, Never>?
     private var loopObserver: Any?
     private var timeObserver: Any?
     private var playbackTimeObserver: Any?
@@ -843,6 +885,8 @@ final class PreviewPlayerController: ObservableObject {
         preparationTask = nil
         previewAssetTask?.cancel()
         previewAssetTask = nil
+        fallbackStillTask?.cancel()
+        fallbackStillTask = nil
 
         player?.pause()
         
@@ -862,6 +906,11 @@ final class PreviewPlayerController: ObservableObject {
         }
 
         isPreparing = false
+        isGeneratingFallbackPreview = false
+        isGeneratingFallbackStill = false
+        fallbackPreviewRange = nil
+        fallbackStillImage = nil
+        fallbackStillTime = nil
         removeLoopObserver()
         removeTimeObserver()
         removePlaybackTimeObserver()
@@ -989,6 +1038,25 @@ final class PreviewPlayerController: ObservableObject {
             "-i", videoItem.url.path,
             "-frames:v", "1"
         ]
+        
+        // Build video filter to handle pixel aspect ratio and deinterlacing
+        var filterComponents: [String] = []
+        
+        // Always apply SAR (Sample Aspect Ratio) scaling to correct for non-square pixels
+        filterComponents.append("scale=iw*sar:ih")
+        
+        // Check if source is interlaced and needs deinterlacing
+        if let videoStream = videoItem.metadata?.videoStream,
+           let fieldOrder = videoStream.fieldOrder?.lowercased(),
+           fieldOrder != "progressive" && fieldOrder != "unknown" {
+            // Source is interlaced, apply yadif deinterlacer
+            filterComponents.append("yadif=mode=send_frame:parity=auto:deint=all")
+        }
+        
+        // Combine filters if we have any
+        if !filterComponents.isEmpty {
+            arguments += ["-vf", filterComponents.joined(separator: ",")]
+        }
 
         if let pixelFormat = parameters.pixelFormat {
             arguments += ["-pix_fmt", pixelFormat]
@@ -1047,6 +1115,112 @@ final class PreviewPlayerController: ObservableObject {
                 }
             }
         }
+    }
+    
+    func generateFallbackStillIfNeeded(for time: TimeInterval) {
+        // Only generate if we're using fallback preview and the time is outside the preview range
+        guard usePreviewFallback else { return }
+        guard let range = fallbackPreviewRange else { return }
+        
+        // If within range, no still needed
+        if range.contains(time) { return }
+        
+        // If we already have a still for this time (within 1 second tolerance), don't regenerate
+        if let existingTime = fallbackStillTime, abs(existingTime - time) < 1.0 { return }
+        
+        // If already generating, don't start another
+        guard !isGeneratingFallbackStill else { return }
+        
+        fallbackStillTask?.cancel()
+        fallbackStillTask = Task { @MainActor in
+            isGeneratingFallbackStill = true
+            defer { isGeneratingFallbackStill = false }
+            
+            do {
+                let stillImage = try await generateStillImage(at: time)
+                self.fallbackStillImage = stillImage
+                self.fallbackStillTime = time
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Generated fallback still for time \(time, privacy: .public)s")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("Failed to generate fallback still: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
+    private func generateStillImage(at time: TimeInterval) async throws -> NSImage {
+        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
+            throw ScreenshotError.ffmpegMissing
+        }
+        
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("jpg")
+        
+        defer {
+            try? FileManager.default.removeItem(at: tempURL)
+        }
+        
+        let sourceURL = videoItem.url
+        var videoAccess: SecurityAccess = .none
+        if !hasSecurityScope {
+            if sourceURL.startAccessingSecurityScopedResource() {
+                videoAccess = .direct(sourceURL)
+            } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: sourceURL) {
+                videoAccess = .bookmark(sourceURL)
+            }
+        }
+        
+        defer {
+            switch videoAccess {
+            case .direct(let url):
+                url.stopAccessingSecurityScopedResource()
+            case .bookmark(let url):
+                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
+            case .none:
+                break
+            }
+        }
+        
+        // Build video filter to handle pixel aspect ratio, deinterlacing, and scaling
+        var filterComponents: [String] = []
+        
+        // Always apply SAR (Sample Aspect Ratio) scaling to correct for non-square pixels
+        filterComponents.append("scale=iw*sar:ih")
+        
+        // Check if source is interlaced and needs deinterlacing
+        if let videoStream = videoItem.metadata?.videoStream,
+           let fieldOrder = videoStream.fieldOrder?.lowercased(),
+           fieldOrder != "progressive" && fieldOrder != "unknown" {
+            // Source is interlaced, apply yadif deinterlacer
+            filterComponents.append("yadif=mode=send_frame:parity=auto:deint=all")
+        }
+        
+        // Scale to 1080p for preview
+        filterComponents.append("scale='if(gt(a,1),-2,1080)':'if(gt(a,1),1080,-2)'")
+        
+        let arguments = [
+            "-hide_banner",
+            "-loglevel", "error",
+            "-ss", String(format: "%.6f", time),
+            "-i", sourceURL.path,
+            "-frames:v", "1",
+            "-vf", filterComponents.joined(separator: ","),
+            "-q:v", "2",
+            "-y",
+            tempURL.path
+        ]
+        
+        let ffmpegURL = URL(fileURLWithPath: ffmpegPath)
+        try await runFFmpegCapture(executable: ffmpegURL, arguments: arguments)
+        
+        guard let image = NSImage(contentsOf: tempURL) else {
+            throw ScreenshotError.conversionFailed("Could not load generated image")
+        }
+        
+        return image
     }
 
     private func installLoopObserver(for item: AVPlayerItem) {
@@ -1286,24 +1460,47 @@ final class PreviewPlayerController: ObservableObject {
         errorMessage = nil
 
         let currentItem = videoItem
-        let cacheDirectory = AppConstants.previewCacheDirectory.appendingPathComponent(currentItem.id.uuidString, isDirectory: true)
-        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-
-        mp4Session = MP4PreviewSession(sourceURL: currentItem.url, cacheDirectory: cacheDirectory)
+        
+        // Use the same fingerprint-based cache directory as preview assets
+        Task { @MainActor in
+            do {
+                let cacheDirectory = try await PreviewAssetGenerator.shared.getAssetDirectory(for: currentItem.url)
+                self.mp4Session = MP4PreviewSession(sourceURL: currentItem.url, cacheDirectory: cacheDirectory)
+                self.startFallbackGeneration(startTime: startTime, currentItem: currentItem)
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("Failed to create cache directory for fallback preview: \(error.localizedDescription, privacy: .public)")
+                self.errorMessage = "Unable to prepare preview: \(error.localizedDescription)"
+                self.isPreparing = false
+            }
+        }
+    }
+    
+    private func startFallbackGeneration(startTime: TimeInterval, currentItem: VideoItem) {
 
         preparationTask = Task { @MainActor in
-            defer { self.isPreparing = false }
+            defer { 
+                self.isPreparing = false
+                self.isGeneratingFallbackPreview = false
+            }
+            
+            self.isGeneratingFallbackPreview = true
 
             do {
                 guard let session = self.mp4Session else {
                     throw MP4PreviewSession.PreviewError.outputMissing
                 }
 
-                let previewURL = try await session.generatePreview(startTime: startTime, durationLimit: 30, maxShortEdge: 480)
+                let previewResult = try await session.generatePreview(startTime: startTime, durationLimit: 30, maxShortEdge: 480)
 
                 try Task.checkCancellation()
 
-                let asset = AVURLAsset(url: previewURL)
+                // Track the range covered by the fallback preview
+                let rangeStart = previewResult.startTime
+                let rangeEnd = previewResult.startTime + previewResult.duration
+                self.fallbackPreviewRange = rangeStart...rangeEnd
+
+                let asset = AVURLAsset(url: previewResult.url)
                 let playerItem = AVPlayerItem(asset: asset)
                 let player = AVPlayer(playerItem: playerItem)
 
@@ -1315,7 +1512,7 @@ final class PreviewPlayerController: ObservableObject {
                 applyLoopSetting()
 
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .info("MP4 fallback playback ready for item \(currentItem.id, privacy: .public)")
+                    .info("MP4 fallback playback ready for item \(currentItem.id, privacy: .public), preview range: \(rangeStart, privacy: .public)s - \(rangeEnd, privacy: .public)s")
 
             } catch is CancellationError {
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")

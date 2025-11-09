@@ -44,6 +44,84 @@ actor PreviewAssetGenerator {
     private let thumbnailCount = 6
     private let waveformSize = "1000x90"
 
+    /// Returns the asset directory for a given video URL, creating it if needed
+    func getAssetDirectory(for url: URL) throws -> URL {
+        try ensureAssetDirectory(for: url)
+    }
+    
+    /// Cleans up all cached assets for a given video URL
+    func cleanupAssets(for url: URL) {
+        do {
+            let directory = try ensureAssetDirectory(for: url)
+            if fileManager.fileExists(atPath: directory.path) {
+                try fileManager.removeItem(at: directory)
+                logger.info("Cleaned up asset directory for \(url.lastPathComponent, privacy: .public)")
+            }
+        } catch {
+            logger.error("Failed to cleanup assets for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+    
+    /// Cleans up old cached assets that haven't been accessed in the specified number of days
+    func cleanupOldCache(olderThanDays days: Int = 7) async {
+        let baseDirectory = AppConstants.previewCacheDirectory
+        guard fileManager.fileExists(atPath: baseDirectory.path) else {
+            logger.info("Cache directory does not exist, no cleanup needed")
+            return
+        }
+        
+        let cutoffDate = Date().addingTimeInterval(-Double(days) * 24 * 60 * 60)
+        logger.info("Cleaning up cache older than \(cutoffDate, privacy: .public)")
+        
+        do {
+            let contents = try fileManager.contentsOfDirectory(
+                at: baseDirectory,
+                includingPropertiesForKeys: [.contentAccessDateKey],
+                options: []
+            )
+            
+            var removedCount = 0
+            var totalSize: Int64 = 0
+            
+            for itemURL in contents {
+                guard itemURL.hasDirectoryPath else { continue }
+                
+                do {
+                    let resourceValues = try itemURL.resourceValues(forKeys: [.contentAccessDateKey])
+                    let accessDate = resourceValues.contentAccessDate ?? Date.distantPast
+                    
+                    if accessDate < cutoffDate {
+                        // Calculate size before removal using recursive directory listing
+                        var directorySize: Int64 = 0
+                        if let fileURLs = fileManager.enumerator(at: itemURL, includingPropertiesForKeys: [.fileSizeKey])?.allObjects as? [URL] {
+                            for fileURL in fileURLs {
+                                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                                    directorySize += Int64(size)
+                                }
+                            }
+                        }
+                        totalSize += directorySize
+                        
+                        try fileManager.removeItem(at: itemURL)
+                        removedCount += 1
+                        logger.debug("Removed old cache directory: \(itemURL.lastPathComponent, privacy: .public)")
+                    }
+                } catch {
+                    logger.warning("Failed to check/remove cache item \(itemURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            
+            if removedCount > 0 {
+                let sizeMB = Double(totalSize) / (1024 * 1024)
+                logger.info("Cleaned up \(removedCount) old cache directories, freed \(String(format: "%.1f", sizeMB)) MB")
+            } else {
+                logger.info("No old cache directories to clean up")
+            }
+        } catch {
+            logger.error("Failed to enumerate cache directory: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+    
     func generateAssets(for url: URL) async throws -> PreviewAssets {
         logger.info("Starting asset generation for \(url.lastPathComponent, privacy: .public)")
         let accessGranted = self.startAccessingSecurityScope(for: url)
@@ -175,13 +253,16 @@ actor PreviewAssetGenerator {
         for index in missingIndices {
             let destination = expectedFiles[index]
             let position = positionForThumbnail(at: index, total: thumbnailCount, duration: duration)
+            
+            // Apply SAR scaling to correct pixel aspect ratio, then scale to target width
+            // This ensures anamorphic videos display with correct aspect ratio
             let arguments: [String] = [
                 "-hide_banner",
                 "-loglevel", "error",
                 "-ss", String(format: "%.3f", position),
                 "-i", url.path,
                 "-frames:v", "1",
-                "-vf", "scale=320:-1",
+                "-vf", "scale=iw*sar:ih,scale=320:-1",
                 "-pix_fmt", "yuvj420p",
                 "-y",
                 destination.path

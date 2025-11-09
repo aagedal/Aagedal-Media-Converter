@@ -71,6 +71,15 @@ struct ContentView: View {
                 onFileImport: { isFileImporterPresented = true },
                 onDoubleClick: { isFileImporterPresented = true },
                 onDelete: { indexSet in
+                    // Clean up cache for removed items
+                    for index in indexSet {
+                        if index < droppedFiles.count {
+                            let fileURL = droppedFiles[index].url
+                            Task {
+                                await PreviewAssetGenerator.shared.cleanupAssets(for: fileURL)
+                            }
+                        }
+                    }
                     droppedFiles.remove(atOffsets: indexSet)
                 },
                 onReset: { index in
@@ -173,6 +182,14 @@ struct ContentView: View {
                     Button {
                         // Only allow clearing if not currently converting
                         guard !isConverting else { return }
+                        
+                        // Clean up cache for all items before clearing
+                        for file in droppedFiles {
+                            Task {
+                                await PreviewAssetGenerator.shared.cleanupAssets(for: file.url)
+                            }
+                        }
+                        
                         droppedFiles.removeAll()
                         overallProgress = 0.0
                         // Ensure dock progress is reset when clearing the list

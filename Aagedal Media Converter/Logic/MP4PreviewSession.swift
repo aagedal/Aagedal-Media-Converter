@@ -8,10 +8,16 @@
 // (at your option) any later version.
 
 import Foundation
+import AVFoundation
 import OSLog
 
 /// Manages creation and lifecycle of a temporary low-resolution MP4 preview clip.
 actor MP4PreviewSession {
+    struct PreviewResult: Sendable {
+        let url: URL
+        let startTime: TimeInterval
+        let duration: TimeInterval
+    }
     enum PreviewError: Error, LocalizedError {
         case ffmpegNotFound
         case failedToStart(String)
@@ -49,7 +55,7 @@ actor MP4PreviewSession {
     ///   - startTime: Timestamp in seconds to start encoding from.
     ///   - durationLimit: Maximum duration of the preview.
     ///   - maxShortEdge: Maximum pixel length for the shorter video edge.
-    func generatePreview(startTime: TimeInterval, durationLimit: TimeInterval = 30, maxShortEdge: Int = 480) async throws -> URL {
+    func generatePreview(startTime: TimeInterval, durationLimit: TimeInterval = 30, maxShortEdge: Int = 480) async throws -> PreviewResult {
         logger.info("Transcoding MP4 preview for \(self.sourceURL.lastPathComponent, privacy: .public)")
 
         guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
@@ -62,6 +68,8 @@ actor MP4PreviewSession {
 
         self.isCancelled = false
 
+        let safeStart = max(0, startTime)
+
         let arguments = self.buildArguments(
             startTime: startTime,
             durationLimit: durationLimit,
@@ -70,7 +78,17 @@ actor MP4PreviewSession {
 
         try Task.checkCancellation()
 
-        return try await self.runFFmpeg(executablePath: ffmpegPath, arguments: arguments)
+        let previewURL = try await self.runFFmpeg(executablePath: ffmpegPath, arguments: arguments)
+
+        let asset = AVURLAsset(url: previewURL)
+        let loadedDuration = try await asset.load(.duration)
+        let durationSeconds = loadedDuration.seconds.isFinite ? loadedDuration.seconds : durationLimit
+
+        return PreviewResult(
+            url: previewURL,
+            startTime: safeStart,
+            duration: max(0, durationSeconds)
+        )
     }
 
     func cancel() {
