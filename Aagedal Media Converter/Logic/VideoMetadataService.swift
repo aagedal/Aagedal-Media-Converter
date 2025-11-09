@@ -173,26 +173,57 @@ actor VideoMetadataService {
             throw VideoMetadataError.ffprobeMissing
         }
 
-        let jsonData = try await runFFprobeJSON(url: url, ffprobePath: ffprobePath)
-        let metadata = try parseMetadata(jsonData: jsonData)
+        let formatResponse = try await fetchFFprobeResponse(
+            url: url,
+            ffprobePath: ffprobePath,
+            arguments: [
+                "-v", "error",
+                "-show_format",
+                "-of", "json"
+            ]
+        )
+
+        let videoResponse = try await fetchFFprobeResponse(
+            url: url,
+            ffprobePath: ffprobePath,
+            arguments: [
+                "-v", "error",
+                "-select_streams", "v",
+                "-show_streams",
+                "-of", "json"
+            ],
+            allowNoStreams: true
+        )
+
+        let audioResponse = try await fetchFFprobeResponse(
+            url: url,
+            ffprobePath: ffprobePath,
+            arguments: [
+                "-v", "error",
+                "-select_streams", "a",
+                "-show_streams",
+                "-of", "json"
+            ],
+            allowNoStreams: true
+        )
+
+        let metadata = try buildMetadata(
+            format: formatResponse.format,
+            videoStreams: videoResponse.streams,
+            audioStreams: audioResponse.streams
+        )
         cache.setObject(CachedMetadata(metadata: metadata), forKey: url as NSURL)
         return metadata
     }
 
-    private func runFFprobeJSON(url: URL, ffprobePath: String) async throws -> Data {
+    private func runFFprobeJSON(url: URL, ffprobePath: String, arguments: [String]) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             Task.detached(priority: .userInitiated) {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: ffprobePath)
-                process.arguments = [
-                    "-v", "error",
-                    "-select_streams", "v",  // Only probe video streams
-                    "-select_streams", "a",  // and audio streams (skip subtitles)
-                    "-show_format",
-                    "-show_streams",
-                    "-of", "json",
-                    url.path
-                ]
+                var args = arguments
+                args.append(url.path)
+                process.arguments = args
 
                 let stdoutPipe = Pipe()
                 let stderrPipe = Pipe()
@@ -240,23 +271,110 @@ actor VideoMetadataService {
         }
     }
 
-    private func parseMetadata(jsonData: Data) throws -> VideoMetadata {
+    private func fetchFFprobeResponse(url: URL, ffprobePath: String, arguments: [String], allowNoStreams: Bool = false) async throws -> FFprobeResponse {
+        do {
+            let data = try await runFFprobeJSON(url: url, ffprobePath: ffprobePath, arguments: arguments)
+            return try decodeFFprobeResponse(jsonData: data)
+        } catch VideoMetadataError.processFailed(let message) {
+            if allowNoStreams, message.contains("Stream specifier") {
+                return FFprobeResponse(format: nil, streams: [])
+            }
+            throw VideoMetadataError.processFailed(message)
+        }
+    }
+
+    private func decodeFFprobeResponse(jsonData: Data) throws -> FFprobeResponse {
         do {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
-            let response = try decoder.decode(FFprobeResponse.self, from: jsonData)
-            return response.toVideoMetadata()
+            return try decoder.decode(FFprobeResponse.self, from: jsonData)
         } catch {
             let message = String(data: jsonData, encoding: .utf8) ?? "<non-UTF8>"
             logger.error("Failed to decode ffprobe JSON: \(message)")
             throw VideoMetadataError.decodingFailed(error.localizedDescription)
         }
     }
+
+    private func buildMetadata(format: FFprobeResponse.Format?, videoStreams: [FFprobeResponse.Stream], audioStreams: [FFprobeResponse.Stream]) throws -> VideoMetadata {
+        let primaryVideoStream = videoStreams.first { stream in
+            stream.codecType == "video" && stream.disposition?.attachedPic != 1
+        }
+
+        let filteredAudioStreams = audioStreams.filter { $0.codecType == "audio" }
+
+        let formatComment = format?.tags?.comment ?? primaryVideoStream?.tags?.comment ?? filteredAudioStreams.first?.tags?.comment
+
+        let video = primaryVideoStream.map { stream -> VideoMetadata.VideoStream in
+            let frameRateString = stream.avgFrameRate ?? stream.rFrameRate
+            return VideoMetadata.VideoStream(
+                codec: stream.codecName,
+                codecLongName: stream.codecLongName,
+                profile: stream.profile,
+                width: stream.width,
+                height: stream.height,
+                pixelAspectRatio: stream.sampleAspectRatio.flatMap(VideoMetadata.Ratio.init(ratioString:)),
+                displayAspectRatio: stream.displayAspectRatio.flatMap(VideoMetadata.Ratio.init(ratioString:)),
+                frameRate: frameRateString.flatMap(VideoMetadata.FrameRate.init(frameRateString:)),
+                bitDepth: stream.bitsPerRawSample.flatMap { Int($0) },
+                colorPrimaries: stream.colorPrimaries,
+                colorTransfer: stream.colorTransfer,
+                colorSpace: stream.colorSpace,
+                colorRange: stream.colorRange,
+                chromaLocation: stream.chromaLocation,
+                fieldOrder: stream.fieldOrder,
+                isInterlaced: stream.fieldOrder.map {
+                    let value = $0.lowercased()
+                    return value != "progressive" && value != "unknown"
+                }
+            )
+        }
+
+        let audio = filteredAudioStreams.map { stream -> VideoMetadata.AudioStream in
+            VideoMetadata.AudioStream(
+                codec: stream.codecName,
+                codecLongName: stream.codecLongName,
+                profile: stream.profile,
+                sampleRate: stream.sampleRate.flatMap { Int($0) },
+                channels: stream.channels,
+                channelLayout: stream.channelLayout,
+                bitDepth: stream.bitsPerRawSample.flatMap { Int($0) },
+                bitRate: stream.bitRate.flatMap { Int64($0) }
+            )
+        }
+
+        return VideoMetadata(
+            duration: format?.duration.flatMap { Double($0) },
+            formatName: format?.formatName,
+            containerLongName: format?.formatLongName,
+            sizeBytes: format?.size.flatMap { Int64($0) },
+            bitRate: format?.bitRate.flatMap { Int64($0) },
+            comment: formatComment,
+            videoStream: video,
+            audioStreams: audio
+        )
+    }
+
 }
 
 private struct FFprobeResponse: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case format
+        case streams
+    }
+
     let format: Format?
     let streams: [Stream]
+
+    init(format: Format?, streams: [Stream]) {
+        self.format = format
+        self.streams = streams
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.format = try container.decodeIfPresent(Format.self, forKey: .format)
+        self.streams = try container.decodeIfPresent([Stream].self, forKey: .streams) ?? []
+    }
 
     struct Format: Decodable {
         let duration: String?
