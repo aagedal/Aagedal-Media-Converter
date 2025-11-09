@@ -40,6 +40,7 @@ actor MP4PreviewSession {
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
     private let sourceURL: URL
+    private let cacheDirectory: URL
     private let outputURL: URL
 
     private var process: Process?
@@ -47,6 +48,7 @@ actor MP4PreviewSession {
 
     init(sourceURL: URL, cacheDirectory: URL) {
         self.sourceURL = sourceURL
+        self.cacheDirectory = cacheDirectory
         self.outputURL = cacheDirectory.appendingPathComponent("preview.mp4")
     }
 
@@ -55,7 +57,7 @@ actor MP4PreviewSession {
     ///   - startTime: Timestamp in seconds to start encoding from.
     ///   - durationLimit: Maximum duration of the preview.
     ///   - maxShortEdge: Maximum pixel length for the shorter video edge.
-    func generatePreview(startTime: TimeInterval, durationLimit: TimeInterval = 30, maxShortEdge: Int = 480) async throws -> PreviewResult {
+    func generatePreview(startTime: TimeInterval, durationLimit: TimeInterval = 30, maxShortEdge: Int = 720) async throws -> PreviewResult {
         logger.info("Transcoding MP4 preview for \(self.sourceURL.lastPathComponent, privacy: .public)")
 
         guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
@@ -78,7 +80,7 @@ actor MP4PreviewSession {
 
         try Task.checkCancellation()
 
-        let previewURL = try await self.runFFmpeg(executablePath: ffmpegPath, arguments: arguments)
+        let previewURL = try await self.runFFmpeg(executablePath: ffmpegPath, arguments: arguments, outputURL: self.outputURL)
 
         let asset = AVURLAsset(url: previewURL)
         let loadedDuration = try await asset.load(.duration)
@@ -104,15 +106,83 @@ actor MP4PreviewSession {
         process?.terminate()
         process = nil
         try? FileManager.default.removeItem(at: outputURL)
+        // Note: Chunks are NOT cleaned up here - they persist for reuse
+        // Call cleanupAllChunks() explicitly when removing video from queue
+    }
+    
+    /// Explicitly clean up all preview chunks for this video
+    /// Call this when removing the video from queue or when cache cleanup is needed
+    func cleanupAllChunks() {
+        let fileManager = FileManager.default
+        do {
+            let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)
+            for fileURL in contents where fileURL.lastPathComponent.hasPrefix("preview_chunk_") {
+                try? fileManager.removeItem(at: fileURL)
+            }
+            logger.info("Cleaned up all preview chunks for \(self.sourceURL.lastPathComponent, privacy: .public)")
+        } catch {
+            logger.warning("Failed to clean up preview chunks: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+    
+    /// Generates a preview chunk for a specific time range (15 seconds)
+    func generatePreviewChunk(chunkIndex: Int, durationLimit: TimeInterval = 15, maxShortEdge: Int = 720) async throws -> PreviewResult {
+        let chunkURL = chunkURL(for: chunkIndex)
+        let startTime = Double(chunkIndex) * durationLimit
+        
+        // Skip if already exists
+        if FileManager.default.fileExists(atPath: chunkURL.path) {
+            logger.info("Using cached chunk \(chunkIndex, privacy: .public) from: \(chunkURL.path, privacy: .public)")
+            let asset = AVURLAsset(url: chunkURL)
+            let loadedDuration = try await asset.load(.duration)
+            let durationSeconds = loadedDuration.seconds.isFinite ? loadedDuration.seconds : durationLimit
+            return PreviewResult(
+                url: chunkURL,
+                startTime: startTime,
+                duration: max(0, durationSeconds)
+            )
+        }
+        
+        logger.info("Generating preview chunk \(chunkIndex, privacy: .public) (\(durationLimit, privacy: .public)s starting at \(startTime, privacy: .public)s) for \(self.sourceURL.lastPathComponent, privacy: .public)")
+        
+        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
+            throw PreviewError.ffmpegNotFound
+        }
+        
+        let arguments = self.buildArguments(
+            startTime: startTime,
+            durationLimit: durationLimit,
+            maxShortEdge: maxShortEdge,
+            outputPath: chunkURL.path
+        )
+        
+        try Task.checkCancellation()
+        
+        let previewURL = try await self.runFFmpeg(executablePath: ffmpegPath, arguments: arguments, outputURL: chunkURL)
+        
+        let asset = AVURLAsset(url: previewURL)
+        let loadedDuration = try await asset.load(.duration)
+        let durationSeconds = loadedDuration.seconds.isFinite ? loadedDuration.seconds : durationLimit
+        
+        return PreviewResult(
+            url: previewURL,
+            startTime: startTime,
+            duration: max(0, durationSeconds)
+        )
+    }
+    
+    private func chunkURL(for index: Int) -> URL {
+        cacheDirectory.appendingPathComponent("preview_chunk_\(index).mp4")
     }
 
     // MARK: - Helpers
 
-    private func buildArguments(startTime: TimeInterval, durationLimit: TimeInterval, maxShortEdge: Int) -> [String] {
+    private func buildArguments(startTime: TimeInterval, durationLimit: TimeInterval, maxShortEdge: Int, outputPath: String? = nil) -> [String] {
         let safeStart = max(0, startTime)
         let limitedDuration = max(1, durationLimit)
 
         let scaleFilter = "scale='if(gt(a,1),-2,\(maxShortEdge))':'if(gt(a,1),\(maxShortEdge),-2)'"
+        let output = outputPath ?? self.outputURL.path
 
         return [
             "-hide_banner",
@@ -125,21 +195,21 @@ actor MP4PreviewSession {
             "-probesize", "10M",
             "-vf", scaleFilter,
             "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-profile:v", "baseline",
-            "-level", "3.0",
+            "-preset", "fast",
+            "-profile:v", "main",
+            "-level", "4.0",
             "-pix_fmt", "yuv420p",
-            "-crf", "28",
-            "-maxrate", "1M",
-            "-bufsize", "2M",
+            "-crf", "23",
+            "-maxrate", "3M",
+            "-bufsize", "6M",
             "-c:a", "aac",
             "-ac", "2",
-            "-b:a", "96k",
-            self.outputURL.path
+            "-b:a", "128k",
+            output
         ]
     }
 
-    private func runFFmpeg(executablePath: String, arguments: [String]) async throws -> URL {
+    private func runFFmpeg(executablePath: String, arguments: [String], outputURL: URL) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executablePath)
@@ -167,7 +237,6 @@ actor MP4PreviewSession {
                 }
 
                 let cancelled = await self.isCancelled
-                let outputURL = self.outputURL
 
                 if cancelled {
                     continuation.resume(throwing: PreviewError.cancelled)

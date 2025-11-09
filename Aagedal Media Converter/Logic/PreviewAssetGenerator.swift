@@ -12,7 +12,8 @@ import OSLog
 import CryptoKit
 
 struct PreviewAssets: Sendable {
-    let thumbnails: [URL]
+    let rowThumbnail: URL?  // Large thumbnail for video row display
+    let thumbnails: [URL]  // Filmstrip thumbnails for timeline
     let waveform: URL?
 }
 
@@ -43,6 +44,7 @@ actor PreviewAssetGenerator {
     private let fileManager = FileManager.default
     private let thumbnailCount = 6
     private let waveformSize = "1000x90"
+    private let rowThumbnailSize = "640:-1"  // 640px width for row thumbnail
 
     /// Returns the asset directory for a given video URL, creating it if needed
     func getAssetDirectory(for url: URL) throws -> URL {
@@ -138,37 +140,61 @@ actor PreviewAssetGenerator {
 
         let assetDirectory = try ensureAssetDirectory(for: url)
         logger.info("Asset directory: \(assetDirectory.path, privacy: .public)")
+        let rowThumbnailURL = assetDirectory.appendingPathComponent("row_thumb.jpg", isDirectory: false)
         let expectedThumbnailURLs = (0..<thumbnailCount).map { index in
             assetDirectory.appendingPathComponent("thumb_\(index).jpg", isDirectory: false)
         }
         let waveformURL = assetDirectory.appendingPathComponent("waveform.png", isDirectory: false)
 
+        let rowThumbnailMissing = !fileManager.fileExists(atPath: rowThumbnailURL.path)
         let missingThumbnailIndices = expectedThumbnailURLs.enumerated().compactMap { index, url in
             fileManager.fileExists(atPath: url.path) ? nil : index
         }
         let waveformMissing = !fileManager.fileExists(atPath: waveformURL.path)
 
         // Short-circuit if everything already exists
-        if missingThumbnailIndices.isEmpty && !waveformMissing {
+        if !rowThumbnailMissing && missingThumbnailIndices.isEmpty && !waveformMissing {
             logger.info("All assets already cached")
-            return PreviewAssets(thumbnails: expectedThumbnailURLs, waveform: waveformURL)
+            return PreviewAssets(rowThumbnail: rowThumbnailURL, thumbnails: expectedThumbnailURLs, waveform: waveformURL)
         }
         
-        logger.info("Missing \(missingThumbnailIndices.count) thumbnails, waveform missing: \(waveformMissing)")
+        logger.info("Row thumbnail missing: \(rowThumbnailMissing), filmstrip thumbnails missing: \(missingThumbnailIndices.count), waveform missing: \(waveformMissing)")
 
         guard let duration = try await determineDuration(for: url, ffprobePath: ffprobePath) else {
             throw PreviewAssetError.durationUnavailable
         }
+        
+        // Detect if this is HDR/high bit depth content without color metadata
+        let hdrType = try await detectHDRRequirement(for: url, ffprobePath: ffprobePath)
 
-        if !missingThumbnailIndices.isEmpty {
-            try await generateThumbnails(
+        // Generate row thumbnail first (priority for UI responsiveness)
+        if rowThumbnailMissing {
+            try await generateRowThumbnail(
                 url: url,
                 ffmpegPath: ffmpegPath,
                 duration: duration,
-                assetDirectory: assetDirectory,
-                missingIndices: missingThumbnailIndices,
-                expectedFiles: expectedThumbnailURLs
+                destination: rowThumbnailURL,
+                hdrType: hdrType
             )
+        }
+
+        // Generate filmstrip thumbnails in background (async, non-blocking)
+        if !missingThumbnailIndices.isEmpty {
+            Task.detached(priority: .background) {
+                do {
+                    try await self.generateThumbnails(
+                        url: url,
+                        ffmpegPath: ffmpegPath,
+                        duration: duration,
+                        assetDirectory: assetDirectory,
+                        missingIndices: missingThumbnailIndices,
+                        expectedFiles: expectedThumbnailURLs,
+                        hdrType: hdrType
+                    )
+                } catch {
+                    self.logger.error("Background filmstrip generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
         }
 
         if waveformMissing {
@@ -183,9 +209,10 @@ actor PreviewAssetGenerator {
             }
         }
 
+        let generatedRowThumbnail = fileManager.fileExists(atPath: rowThumbnailURL.path) ? rowThumbnailURL : nil
         let generatedWaveformURL = fileManager.fileExists(atPath: waveformURL.path) ? waveformURL : nil
-        logger.info("Asset generation complete. Thumbnails: \(expectedThumbnailURLs.count), waveform: \(generatedWaveformURL != nil)")
-        return PreviewAssets(thumbnails: expectedThumbnailURLs, waveform: generatedWaveformURL)
+        logger.info("Asset generation complete. Row thumbnail: \(generatedRowThumbnail != nil), filmstrip: \(expectedThumbnailURLs.count), waveform: \(generatedWaveformURL != nil)")
+        return PreviewAssets(rowThumbnail: generatedRowThumbnail, thumbnails: expectedThumbnailURLs, waveform: generatedWaveformURL)
     }
 
     // MARK: - Helpers
@@ -248,21 +275,34 @@ actor PreviewAssetGenerator {
         duration: Double,
         assetDirectory: URL,
         missingIndices: [Int],
-        expectedFiles: [URL]
+        expectedFiles: [URL],
+        hdrType: HDRType
     ) async throws {
         for index in missingIndices {
             let destination = expectedFiles[index]
             let position = positionForThumbnail(at: index, total: thumbnailCount, duration: duration)
             
-            // Apply SAR scaling to correct pixel aspect ratio, then scale to target width
-            // This ensures anamorphic videos display with correct aspect ratio
+            // Apply SAR scaling, then scale to target width
+            var videoFilter = "scale=iw*sar:ih,scale=320:-1"
+            
+            switch hdrType {
+            case .none:
+                // Standard SDR content - just scale
+                break
+            case .proresRAW:
+                // ProRes RAW - let decoder handle color, ensure proper output format
+                videoFilter += ",format=yuv420p"
+            case .hdr10Bit:
+                // 10-bit+ HDR - apply full tonemapping chain
+                videoFilter += ",zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
+            }          
             let arguments: [String] = [
                 "-hide_banner",
                 "-loglevel", "error",
                 "-ss", String(format: "%.3f", position),
                 "-i", url.path,
                 "-frames:v", "1",
-                "-vf", "scale=iw*sar:ih,scale=320:-1",
+                "-vf", videoFilter,
                 "-pix_fmt", "yuvj420p",
                 "-y",
                 destination.path
@@ -295,6 +335,117 @@ actor PreviewAssetGenerator {
             destination.path
         ]
 
+        try await runProcess(
+            executable: URL(fileURLWithPath: ffmpegPath),
+            arguments: arguments
+        )
+    }
+    
+    /// HDR processing requirement types
+    private enum HDRType {
+        case none           // Standard SDR content
+        case proresRAW      // ProRes RAW (needs simple decoding, no tonemapping)
+        case hdr10Bit       // 10-bit+ HDR content (needs tonemapping)
+    }
+    
+    /// Detects HDR processing requirement (ProRes RAW, 10-bit+ without color metadata)
+    private func detectHDRRequirement(for url: URL, ffprobePath: String) async throws -> HDRType {
+        return try await runProcess(
+            executable: URL(fileURLWithPath: ffprobePath),
+            arguments: [
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=codec_name,pix_fmt,color_space,color_primaries,color_transfer",
+                "-of", "default=noprint_wrappers=1",
+                url.path
+            ]
+        ) { stdoutData, _ in
+            guard let output = String(data: stdoutData, encoding: .utf8) else { return .none }
+            
+            let lines = output.components(separatedBy: .newlines)
+            var codecName = ""
+            var pixFmt = ""
+            var colorSpace = ""
+            var colorPrimaries = ""
+            var colorTransfer = ""
+            
+            for line in lines {
+                let parts = line.split(separator: "=", maxSplits: 1)
+                guard parts.count == 2 else { continue }
+                let key = String(parts[0])
+                let value = String(parts[1])
+                
+                switch key {
+                case "codec_name": codecName = value
+                case "pix_fmt": pixFmt = value
+                case "color_space": colorSpace = value
+                case "color_primaries": colorPrimaries = value
+                case "color_transfer": colorTransfer = value
+                default: break
+                }
+            }
+            
+            // ProRes RAW requires special handling (simple decode, no tonemapping)
+            if codecName.contains("prores_ks") || codecName.contains("prores") {
+                if pixFmt.contains("rgb") || pixFmt.contains("bayer") {
+                    self.logger.info("Detected ProRes RAW - using simple color conversion")
+                    return .proresRAW
+                }
+            }
+            
+            // 10-bit or higher without color metadata needs tonemapping
+            let is10BitPlus = pixFmt.contains("10") || pixFmt.contains("12") || pixFmt.contains("16") || 
+                             pixFmt.contains("p010") || pixFmt.contains("p016")
+            let hasNoColorInfo = (colorSpace.isEmpty || colorSpace == "unknown") && 
+                                (colorPrimaries.isEmpty || colorPrimaries == "unknown") &&
+                                (colorTransfer.isEmpty || colorTransfer == "unknown")
+            
+            if is10BitPlus && hasNoColorInfo {
+                self.logger.info("Detected 10-bit+ content without color metadata - using HDR tonemapping")
+                return .hdr10Bit
+            }
+            
+            return .none
+        }
+    }
+    
+    /// Generates the large row thumbnail with HDR support
+    private func generateRowThumbnail(
+        url: URL,
+        ffmpegPath: String,
+        duration: Double,
+        destination: URL,
+        hdrType: HDRType
+    ) async throws {
+        let position = min(10, max(duration * 0.1, 0.5))
+        
+        // Apply SAR scaling, then scale to target size
+        var videoFilter = "scale=iw*sar:ih,scale=\(rowThumbnailSize)"
+        
+        switch hdrType {
+        case .none:
+            // Standard SDR content - just scale
+            break
+        case .proresRAW:
+            // ProRes RAW - let decoder handle color, just ensure proper output format
+            videoFilter += ",format=yuv420p"
+        case .hdr10Bit:
+            // 10-bit+ HDR - apply full tonemapping chain
+            videoFilter += ",zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
+        }
+        
+        let arguments: [String] = [
+            "-hide_banner",
+            "-loglevel", "error",
+            "-ss", String(format: "%.3f", position),
+            "-i", url.path,
+            "-frames:v", "1",
+            "-vf", videoFilter,
+            "-q:v", "2",
+            "-y",
+            destination.path
+        ]
+        
         try await runProcess(
             executable: URL(fileURLWithPath: ffmpegPath),
             arguments: arguments

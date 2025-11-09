@@ -73,6 +73,7 @@ struct PreviewPlayerView: View {
     @State private var activeTrimGestures: Int = 0
     @State private var currentPlaybackTime: Double = 0
     @State private var screenshotFeedback: ScreenshotFeedback?
+    @State private var showsPlaybackControls: Bool = false
 
     init(item: Binding<VideoItem>) {
         self._item = item
@@ -129,11 +130,22 @@ struct PreviewPlayerView: View {
                 CheckerboardBackground()
                 
                 HStack {
-                    PlayerContainerView(
-                        player: player,
-                        controller: controller,
-                        keyHandler: handleKeyCommand
-                    )
+                    // Show fallback still only if truly outside any loaded chunk
+                    if let stillImage = controller.fallbackStillImage,
+                       let previewRange = controller.fallbackPreviewRange,
+                       !previewRange.contains(currentPlaybackTime),
+                       !controller.isLoadingChunk {
+                        Image(nsImage: stillImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    } else {
+                        PlayerContainerView(
+                            player: player,
+                            controller: controller,
+                            showsPlaybackControls: showsPlaybackControls,
+                            keyHandler: handleKeyCommand
+                        )
+                    }
                 }
                 .aspectRatio(playerAspectRatio, contentMode: .fit)
                 
@@ -187,6 +199,47 @@ struct PreviewPlayerView: View {
                         )
                     }
                     .transition(.opacity)
+                }
+                
+                // Fallback preview indicator in lower-left corner
+                if controller.fallbackPreviewRange != nil && !controller.isGeneratingFallbackPreview {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            HStack {
+                                Image(systemName: "video.badge.waveform")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text("Low Quality Preview")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(Color.black.opacity(0.7))
+                            )
+                            .help("Unsupported format. Low quality preview files are generated.")
+                            .padding(12)
+                            
+                            Spacer()
+                            
+                            // AVPlayer controls toggle button (icon only)
+                            Button(action: { showsPlaybackControls.toggle() }) {
+                                Image(systemName: showsPlaybackControls ? "slider.horizontal.below.rectangle" : "slider.horizontal.below.square.filled.and.square")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .padding(8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(Color.black.opacity(0.7))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .help(showsPlaybackControls ? "Hide native AVPlayer controls" : "Show native AVPlayer controls")
+                            .padding(12)
+                        }
+                    }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -242,6 +295,16 @@ struct PreviewPlayerView: View {
                         Text("| Preview: \(formattedTime(range.lowerBound))–\(formattedTime(range.upperBound))")
                             .font(.subheadline)
                             .foregroundColor(.orange)
+                        
+                        if controller.isLoadingChunk {
+                            Text("(loading chunk…)")
+                                .font(.caption)
+                                .foregroundColor(.orange.opacity(0.7))
+                        } else if controller.loadedChunks.count > 1 {
+                            Text("(\(controller.loadedChunks.count) chunks loaded)")
+                                .font(.caption)
+                                .foregroundColor(.orange.opacity(0.7))
+                        }
                     }
                 }.multilineTextAlignment(.leading)
             }
@@ -275,6 +338,8 @@ struct PreviewPlayerView: View {
                     thumbnails: controller.previewAssets?.thumbnails,
                     waveformURL: controller.previewAssets?.waveform,
                     isLoading: controller.isLoadingPreviewAssets,
+                    fallbackPreviewRange: controller.fallbackPreviewRange,
+                    loadedChunks: controller.loadedChunks,
                     step: 0.1,
                     onEditingChanged: handleTrimEditingChanged,
                     onSeek: { time in
@@ -565,13 +630,21 @@ final class PreviewPlayerController: ObservableObject {
     @Published private(set) var isCapturingScreenshot = false
     @Published private(set) var isGeneratingFallbackPreview = false
     @Published private(set) var fallbackPreviewRange: ClosedRange<Double>?
+    @Published private(set) var loadedChunks: Set<Int> = []
     @Published private(set) var fallbackStillImage: NSImage?
     @Published private(set) var fallbackStillTime: Double?
     @Published private(set) var isGeneratingFallbackStill = false
+    @Published private(set) var isLoadingChunk = false
+    
+    // MARK: - Preview Configuration
+    private let chunkDuration: TimeInterval = 15.0
+    private let previewMaxShortEdge: Int = 720  // Resolution for transcoded preview chunks
+    private var currentChunkIndex: Int = 0
 
     private var videoItem: VideoItem
     private var mp4Session: MP4PreviewSession?
     private var preparationTask: Task<Void, Never>?
+    private var chunkLoadTask: Task<Void, Never>?
     private var previewAssetTask: Task<Void, Never>?
     private var fallbackStillTask: Task<Void, Never>?
     private var loopObserver: Any?
@@ -883,6 +956,8 @@ final class PreviewPlayerController: ObservableObject {
     func teardown() {
         preparationTask?.cancel()
         preparationTask = nil
+        chunkLoadTask?.cancel()
+        chunkLoadTask = nil
         previewAssetTask?.cancel()
         previewAssetTask = nil
         fallbackStillTask?.cancel()
@@ -907,8 +982,11 @@ final class PreviewPlayerController: ObservableObject {
 
         isPreparing = false
         isGeneratingFallbackPreview = false
+        isLoadingChunk = false
         isGeneratingFallbackStill = false
         fallbackPreviewRange = nil
+        loadedChunks = []
+        currentChunkIndex = 0
         fallbackStillImage = nil
         fallbackStillTime = nil
         removeLoopObserver()
@@ -938,16 +1016,56 @@ final class PreviewPlayerController: ObservableObject {
         }
     }
     
-    func seekTo(_ time: TimeInterval) {
+    func seekTo(_ time: Double) {
+        // Update playback time immediately for UI responsiveness
+        currentPlaybackTime = time
+        
         guard let player else { return }
-        let seekTime = CMTime(seconds: time, preferredTimescale: 600)
-        player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        
+        // If using fallback preview with chunks
+        if usePreviewFallback {
+            let targetChunk = Int(time / chunkDuration)
+            
+            // Check if we need to load a different chunk (forward OR backward)
+            if targetChunk != currentChunkIndex {
+                // Load the chunk for this time
+                loadChunkForTime(time)
+                return
+            }
+            
+            // Same chunk - check if within range
+            if let range = fallbackPreviewRange {
+                if time >= range.lowerBound && time <= range.upperBound {
+                    // Within current chunk range - seek to relative position
+                    let timeInChunk = time - range.lowerBound
+                    let cmTime = CMTime(seconds: timeInChunk, preferredTimescale: 600)
+                    player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                    return
+                } else {
+                    // Outside chunk range but same chunk index (at edge) - generate still
+                    generateFallbackStillIfNeeded(for: time)
+                    player.pause()
+                    return
+                }
+            }
+        }
+        
+        // Not using fallback - seek normally
+        let cmTime = CMTime(seconds: time, preferredTimescale: 600)
+        player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
     }
     
     func getCurrentTime() -> TimeInterval? {
         guard let player else { return nil }
         let currentTime = player.currentTime()
-        return currentTime.seconds.isFinite ? currentTime.seconds : nil
+        guard currentTime.seconds.isFinite else { return nil }
+        
+        // For chunked playback, return absolute time in video
+        if usePreviewFallback, let previewRange = fallbackPreviewRange {
+            return previewRange.lowerBound + currentTime.seconds
+        }
+        
+        return currentTime.seconds
     }
     
     func toggleFullscreen() {
@@ -1253,10 +1371,47 @@ final class PreviewPlayerController: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
 
-                // Only enforce trim boundaries when looping is enabled
-                guard self.videoItem.loopPlayback else { return }
+                // For chunked fallback, check if we need to switch chunks
+                if self.usePreviewFallback, let previewRange = self.fallbackPreviewRange {
+                    let currentTime = time.seconds
+                    let chunkDuration = previewRange.upperBound - previewRange.lowerBound
+                    let isPlaying = (self.player?.rate ?? 0) > 0
+                    
+                    // Only auto-switch during playback, not when paused/stepping frames
+                    if isPlaying {
+                        // Check if we've crossed chunk boundaries (forward or backward)
+                        if currentTime >= chunkDuration - 1.0 {
+                            // Approaching end - load next chunk
+                            let nextChunkIndex = self.currentChunkIndex + 1
+                            let totalChunks = Int(ceil(self.videoItem.durationSeconds / self.chunkDuration))
+                            
+                            if nextChunkIndex < totalChunks && !self.isLoadingChunk {
+                                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                    .info("Auto-switching to next chunk \\(nextChunkIndex, privacy: .public) for continuous playback")
+                                self.loadChunkForTime(Double(nextChunkIndex) * self.chunkDuration)
+                                return
+                            }
+                        } else if currentTime < 1.0 && self.currentChunkIndex > 0 {
+                            // Near beginning while playing backward - check if should load previous chunk
+                            let absoluteTime = previewRange.lowerBound + currentTime
+                            let targetChunk = Int(absoluteTime / self.chunkDuration)
+                            
+                            if targetChunk < self.currentChunkIndex && !self.isLoadingChunk {
+                                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                                    .info("Auto-switching to previous chunk \\(targetChunk, privacy: .public)")
+                                self.loadChunkForTime(Double(targetChunk) * self.chunkDuration)
+                                return
+                            }
+                        }
+                    }
+                    return
+                }
 
                 let currentTime = time.seconds
+                
+                // Only enforce trim boundaries when looping is enabled and not using fallback
+                guard self.videoItem.loopPlayback else { return }
+
                 let trimStart = self.videoItem.effectiveTrimStart
                 let trimEnd = self.videoItem.effectiveTrimEnd
 
@@ -1297,7 +1452,13 @@ final class PreviewPlayerController: ObservableObject {
                 guard let self = self else { return }
                 let currentTime = time.seconds
                 if currentTime.isFinite {
-                    self.currentPlaybackTime = currentTime
+                    // For chunked playback, calculate absolute time in video
+                    if self.usePreviewFallback, let range = self.fallbackPreviewRange {
+                        let absoluteTime = range.lowerBound + currentTime
+                        self.currentPlaybackTime = absoluteTime
+                    } else {
+                        self.currentPlaybackTime = currentTime
+                    }
                 }
             }
         }
@@ -1406,12 +1567,9 @@ final class PreviewPlayerController: ObservableObject {
                                         Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
                                             .debug("Video codec detected: '\(codecString)' (raw: \(codec))")
                                         
-                                        // Check for unsupported codecs
-                                        // APV codec variants, old/uncommon ProRes variants not supported by AVPlayer
-                                        if codecString == "apv1" || codecString == "apvx" ||
-                                           codecString == "apch" || codecString == "apcs" ||
-                                           codecString == "apco" || codecString == "ap4x" ||
-                                           codecString == "ap4h" {
+                                        // Check for truly unsupported codecs
+                                        // Only APV codecs are unsupported - all ProRes variants work with AVPlayer
+                                        if codecString == "apv1" || codecString == "apvx" {
                                             Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
                                                 .warning("AVPlayer ready but codec '\(codecString)' unsupported. Preparing MP4 fallback preview.")
                                             self.fallbackToPreview(startTime: startTime)
@@ -1491,16 +1649,22 @@ final class PreviewPlayerController: ObservableObject {
                     throw MP4PreviewSession.PreviewError.outputMissing
                 }
 
-                let previewResult = try await session.generatePreview(startTime: startTime, durationLimit: 30, maxShortEdge: 480)
+                // Generate initial chunk 0 (0-15s) for fast loading
+                let chunkIndex = 0
+                let chunkResult = try await session.generatePreviewChunk(chunkIndex: chunkIndex, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
 
                 try Task.checkCancellation()
 
-                // Track the range covered by the fallback preview
-                let rangeStart = previewResult.startTime
-                let rangeEnd = previewResult.startTime + previewResult.duration
+                // Track the loaded chunk
+                self.loadedChunks.insert(chunkIndex)
+                self.currentChunkIndex = chunkIndex
+                
+                // Update preview range
+                let rangeStart = chunkResult.startTime
+                let rangeEnd = chunkResult.startTime + chunkResult.duration
                 self.fallbackPreviewRange = rangeStart...rangeEnd
 
-                let asset = AVURLAsset(url: previewResult.url)
+                let asset = AVURLAsset(url: chunkResult.url)
                 let playerItem = AVPlayerItem(asset: asset)
                 let player = AVPlayer(playerItem: playerItem)
 
@@ -1512,7 +1676,10 @@ final class PreviewPlayerController: ObservableObject {
                 applyLoopSetting()
 
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .info("MP4 fallback playback ready for item \(currentItem.id, privacy: .public), preview range: \(rangeStart, privacy: .public)s - \(rangeEnd, privacy: .public)s")
+                    .info("MP4 fallback playback ready (chunk \(chunkIndex, privacy: .public), 15s) for item \(currentItem.id, privacy: .public), preview range: \(rangeStart, privacy: .public)s - \(rangeEnd, privacy: .public)s")
+
+                // Start loading adjacent chunks in background
+                self.loadAdjacentChunksInBackground(currentChunk: chunkIndex)
 
             } catch is CancellationError {
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
@@ -1524,6 +1691,132 @@ final class PreviewPlayerController: ObservableObject {
             }
         }
     }
+    
+    /// Preloads chunks adjacent to the current chunk in the background
+    private func loadAdjacentChunksInBackground(currentChunk: Int) {
+        chunkLoadTask?.cancel()
+        chunkLoadTask = Task { @MainActor in
+            guard let session = self.mp4Session else { return }
+            
+            // Load next chunk (chunk 1 after chunk 0)
+            let nextChunk = currentChunk + 1
+            
+            do {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Preloading adjacent chunk \(nextChunk, privacy: .public)")
+                
+                let _ = try await session.generatePreviewChunk(chunkIndex: nextChunk, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                
+                try Task.checkCancellation()
+                
+                self.loadedChunks.insert(nextChunk)
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Preloaded chunk \(nextChunk, privacy: .public)")
+                
+            } catch is CancellationError {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("Chunk preloading cancelled")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .warning("Failed to preload chunk: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
+    /// Loads and switches to a specific chunk for a given time
+    func loadChunkForTime(_ time: TimeInterval) {
+        let chunkIndex = Int(time / chunkDuration)
+        
+        // Already on this chunk
+        if chunkIndex == currentChunkIndex { return }
+        
+        // Don't try to load if already loading
+        guard !isLoadingChunk else { return }
+        
+        chunkLoadTask?.cancel()
+        chunkLoadTask = Task { @MainActor in
+            self.isLoadingChunk = true
+            defer { self.isLoadingChunk = false }
+            
+            do {
+                guard let session = self.mp4Session else { return }
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Loading chunk \(chunkIndex, privacy: .public) for time \(time, privacy: .public)s")
+                
+                let chunkResult = try await session.generatePreviewChunk(chunkIndex: chunkIndex, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                
+                try Task.checkCancellation()
+                
+                // Track the loaded chunk
+                self.loadedChunks.insert(chunkIndex)
+                self.currentChunkIndex = chunkIndex
+                
+                // Replace player with new chunk
+                let asset = AVURLAsset(url: chunkResult.url)
+                let playerItem = AVPlayerItem(asset: asset)
+                let newPlayer = AVPlayer(playerItem: playerItem)
+                
+                // Preserve playback state and rate
+                let currentRate = self.player?.rate ?? 0
+                let wasPlaying = currentRate > 0
+                
+                // Clean up old player observers
+                removeLoopObserver()
+                removeTimeObserver()
+                removePlaybackTimeObserver()
+                
+                // Set new player
+                self.player = newPlayer
+                
+                // Install new observers
+                installLoopObserver(for: playerItem)
+                installTimeObserver(for: newPlayer)
+                installPlaybackTimeObserver(for: newPlayer)
+                applyLoopSetting()
+                
+                // Seek to position within chunk and restore playback state
+                let timeInChunk = time - chunkResult.startTime
+                
+                // Clamp to valid chunk range
+                let clampedTimeInChunk = max(0, min(timeInChunk, chunkResult.duration))
+                let seekTime = CMTime(seconds: clampedTimeInChunk, preferredTimescale: 600)
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("Seeking to \\(clampedTimeInChunk, privacy: .public)s within chunk (requested time: \\(time, privacy: .public)s, chunk start: \\(chunkResult.startTime, privacy: .public)s)")
+                
+                await newPlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                
+                // Restore playback rate (handles play/pause and speed)
+                if wasPlaying && currentRate > 0 {
+                    // Use small delay to ensure player is ready
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        newPlayer.rate = currentRate
+                    }
+                }
+                
+                // Update preview range
+                let rangeStart = chunkResult.startTime
+                let rangeEnd = chunkResult.startTime + chunkResult.duration
+                self.fallbackPreviewRange = rangeStart...rangeEnd
+                
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .info("Loaded chunk \(chunkIndex, privacy: .public), preview range: \(rangeStart, privacy: .public)s - \(rangeEnd, privacy: .public)s")
+                
+                // Preload adjacent chunks
+                self.loadAdjacentChunksInBackground(currentChunk: chunkIndex)
+                
+            } catch is CancellationError {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .debug("Chunk loading cancelled")
+            } catch {
+                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                    .error("Failed to load chunk: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+    
 }
 
 // MARK: - Player Container
@@ -1531,6 +1824,7 @@ final class PreviewPlayerController: ObservableObject {
 private struct PlayerContainerView: NSViewRepresentable {
     let player: AVPlayer
     let controller: PreviewPlayerController
+    let showsPlaybackControls: Bool
     let keyHandler: (String, NSEvent.ModifierFlags) -> Bool
 
     func makeNSView(context: Context) -> ShortcutAwarePlayerView {
@@ -1538,13 +1832,14 @@ private struct PlayerContainerView: NSViewRepresentable {
         view.configure(
             player: player,
             controller: controller,
+            showsPlaybackControls: showsPlaybackControls,
             keyHandler: keyHandler
         )
         return view
     }
 
     func updateNSView(_ nsView: ShortcutAwarePlayerView, context: Context) {
-        nsView.update(player: player, keyHandler: keyHandler)
+        nsView.update(player: player, showsPlaybackControls: showsPlaybackControls, keyHandler: keyHandler)
     }
 }
 
@@ -1554,15 +1849,16 @@ private final class ShortcutAwarePlayerView: AVPlayerView {
     func configure(
         player: AVPlayer,
         controller: PreviewPlayerController,
+        showsPlaybackControls: Bool,
         keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool
     ) {
         self.keyHandler = keyHandler
-        controlsStyle = .inline
+        controlsStyle = showsPlaybackControls ? .inline : .none
         updatesNowPlayingInfoCenter = false
-        showsFullScreenToggleButton = true
-        showsFrameSteppingButtons = true
+        showsFullScreenToggleButton = showsPlaybackControls
+        showsFrameSteppingButtons = showsPlaybackControls
         showsSharingServiceButton = false
-        showsTimecodes = true
+        showsTimecodes = showsPlaybackControls
         videoGravity = .resizeAspect
         allowsVideoFrameAnalysis = false
         self.player = player
@@ -1572,11 +1868,17 @@ private final class ShortcutAwarePlayerView: AVPlayerView {
         }
     }
 
-    func update(player: AVPlayer, keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool) {
+    func update(player: AVPlayer, showsPlaybackControls: Bool, keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool) {
         self.keyHandler = keyHandler
         if self.player !== player {
             self.player = player
         }
+        
+        // Update controls visibility
+        controlsStyle = showsPlaybackControls ? .inline : .none
+        showsFullScreenToggleButton = showsPlaybackControls
+        showsFrameSteppingButtons = showsPlaybackControls
+        showsTimecodes = showsPlaybackControls
     }
 
     override func viewDidMoveToWindow() {
