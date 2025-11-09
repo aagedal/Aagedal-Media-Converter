@@ -139,6 +139,7 @@ Not tested with macOS 26 Tahoe, but in macOS 15 you have two available App Short
 2. Merge/combine queue items into single file
 3. Audio waveform visualization option when no video stream is available. (This would also imply adding support for audio file input).
 4. Add more app intents.
+5. Refactoring... The code is getting messy, making iterations slower and more complex. #procastination
 
 
 Note that this is a sparetime project. I this is a passion project I don't get paid for.
