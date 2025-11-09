@@ -14,21 +14,21 @@ import OSLog
 final class PreviewPlayerController: ObservableObject {
     // MARK: - Published State
     
-    @Published internal(set) var player: AVPlayer?
-    @Published internal(set) var audioPlayer: AVPlayer?
-    @Published internal(set) var isPreparing = false
-    @Published internal(set) var errorMessage: String?
-    @Published internal(set) var currentPlaybackTime: Double = 0
-    @Published internal(set) var previewAssets: PreviewAssets?
-    @Published internal(set) var isLoadingPreviewAssets = false
-    @Published internal(set) var isCapturingScreenshot = false
-    @Published internal(set) var isGeneratingFallbackPreview = false
-    @Published internal(set) var fallbackPreviewRange: ClosedRange<Double>?
-    @Published internal(set) var loadedChunks: Set<Int> = []
-    @Published internal(set) var fallbackStillImage: NSImage?
-    @Published internal(set) var fallbackStillTime: Double?
-    @Published internal(set) var isGeneratingFallbackStill = false
-    @Published internal(set) var isLoadingChunk = false
+    @Published var player: AVPlayer?
+    @Published var audioPlayer: AVPlayer?
+    @Published var isPreparing = false
+    @Published var errorMessage: String?
+    @Published var currentPlaybackTime: Double = 0
+    @Published var previewAssets: PreviewAssets?
+    @Published var isLoadingPreviewAssets = false
+    @Published var isCapturingScreenshot = false
+    @Published var isGeneratingFallbackPreview = false
+    @Published var fallbackPreviewRange: ClosedRange<Double>?
+    @Published var loadedChunks: Set<Int> = []
+    @Published var fallbackStillImage: NSImage?
+    @Published var fallbackStillTime: Double?
+    @Published var isGeneratingFallbackStill = false
+    @Published var isLoadingChunk = false
     
     // MARK: - Configuration
     
