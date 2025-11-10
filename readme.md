@@ -7,7 +7,8 @@ Removes almost all metdata by default. Fully private local only processing.
 Note that most of this app is vibe-coded.
 
 
-<img width="963" height="648" alt="SCR-20251107-tcjf" src="https://github.com/user-attachments/assets/614fe3c8-be03-4ff1-b200-84c141a1341e" />
+<img width="1161" height="990" alt="SCR-20251110-buqk" src="https://github.com/user-attachments/assets/60eb33ed-786a-4f57-b26c-81d9dc0db51a" />
+
 
 
 ---
@@ -63,8 +64,10 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 - Auto remove spaces and special characters. æ, ø, å is replaced with ae, o and aa.
 - Language support: English and Norwegian
 
-![Screenshot 2025-10-24 at 10 17 09](https://github.com/user-attachments/assets/7f1fdd16-7029-47fe-97a5-1727d071985e)
-![Screenshot 2025-10-24 at 10 18 03](https://github.com/user-attachments/assets/b0d65667-4c14-4db4-8db1-a29c3b78848d)
+![SCR-20251110-bulz](https://github.com/user-attachments/assets/b1aba332-0058-480a-8f29-5f7ce5da07c0)
+<img width="642" height="594" alt="SCR-20251110-bvdx" src="https://github.com/user-attachments/assets/58504f3c-0e28-41d1-af37-4f109aff96af" />
+<img width="642" height="594" alt="SCR-20251110-bvgm" src="https://github.com/user-attachments/assets/209d09ab-ff89-4436-957f-72c01763c0c0" />
+
 
 
 ---
