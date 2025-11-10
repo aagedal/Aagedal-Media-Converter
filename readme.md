@@ -29,9 +29,11 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 
 ## Key Features
 
-- **Drag-and-Drop** or File Picker import
+- Drag-and-Drop or File Picker import
 - Batch conversion with per-file progress and overall dock progress indicator
 - Watch Folder, with optional auto-delete after a set time.
+- Trim and preview files
+- Grab screenshots at source resolution. (Interlaced files are deinterlaced. Non-square pixel sources are exported as square.)
 - **Export Presets**  
   • Video Loop (silent) — x264 very slow 1080p max resolution, keeping original aspect ratio, removing all audio channels, nice for compact web distribution such as GIF-replacements, slow export
   
