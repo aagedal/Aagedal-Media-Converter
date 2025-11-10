@@ -93,18 +93,6 @@ Command + , → Open Settings
 | Hardware       | Apple Silicon (M1 or later) |
 
 
-## Building & Running
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/Aagedal-VideoLoop-Converter-2.0.git
-   cd Aagedal-VideoLoop-Converter-2.0
-   ```
-2. Open `Aagedal VideoLoop Converter 2.0.xcodeproj` in Xcode.
-3. Select the *Aagedal VideoLoop Converter 2.0* scheme and **Run** (⌘R).
-
-> The project uses Swift Strict Concurrency (`complete`) and upcoming language features—Xcode 16 is required.
-
 ---
 
 ## Usage
