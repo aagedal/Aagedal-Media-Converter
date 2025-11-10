@@ -134,10 +134,9 @@ actor MP4PreviewSession {
         }
     }
     
-    /// Generates a preview chunk for a specific time range (15 seconds)
-    func generatePreviewChunk(chunkIndex: Int, durationLimit: TimeInterval = 15, maxShortEdge: Int = 720) async throws -> PreviewResult {
+    /// Generates a preview chunk for a specific time range (duration varies by caller)
+    func generatePreviewChunk(chunkIndex: Int, startTime: TimeInterval, durationLimit: TimeInterval, maxShortEdge: Int = 720) async throws -> PreviewResult {
         let chunkURL = chunkURL(for: chunkIndex)
-        let startTime = Double(chunkIndex) * durationLimit
         
         // Skip if already exists
         if FileManager.default.fileExists(atPath: chunkURL.path) {
@@ -328,14 +327,11 @@ actor MP4PreviewSession {
             "-analyzeduration", "5M",
             "-probesize", "10M",
             "-vf", scaleFilter,
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-profile:v", "main",
-            "-level", "4.0",
-            "-pix_fmt", "yuv420p",
-            "-crf", "23",
+            "-c:v", "h264_videotoolbox",
+            "-b:v", "3M",
             "-maxrate", "3M",
             "-bufsize", "6M",
+            "-pix_fmt", "yuv420p",
             "-an",  // No audio (audio played separately for smooth playback)
             output
         ]

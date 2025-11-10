@@ -13,7 +13,7 @@ struct PreviewPlayerContent: View {
     let controller: PreviewPlayerController
     let showsPlaybackControls: Bool
     let togglePlaybackControls: () -> Void
-    let keyHandler: (String, NSEvent.ModifierFlags) -> Bool
+    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
     @Binding var currentPlaybackTime: Double
 
     private var playerAspectRatio: CGFloat {
@@ -186,7 +186,7 @@ private struct PlayerContainerView: NSViewRepresentable {
     let player: AVPlayer
     let controller: PreviewPlayerController
     let showsPlaybackControls: Bool
-    let keyHandler: (String, NSEvent.ModifierFlags) -> Bool
+    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
 
     func makeNSView(context: Context) -> AVPlayerView {
         let playerView = AVPlayerView()
@@ -222,9 +222,9 @@ private struct PlayerContainerView: NSViewRepresentable {
     final class Coordinator: NSObject {
         private var monitor: Any?
         var showsPlaybackControls: Bool = false
-        private let keyHandler: (String, NSEvent.ModifierFlags) -> Bool
+        private let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
 
-        init(keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool) {
+        init(keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool) {
             self.keyHandler = keyHandler
         }
 
@@ -236,7 +236,7 @@ private struct PlayerContainerView: NSViewRepresentable {
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self = self else { return event }
                 guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else { return event }
-                let handled = self.keyHandler(characters, event.modifierFlags)
+                let handled = self.keyHandler(characters, event.modifierFlags, event.specialKey)
                 return handled ? nil : event
             }
         }

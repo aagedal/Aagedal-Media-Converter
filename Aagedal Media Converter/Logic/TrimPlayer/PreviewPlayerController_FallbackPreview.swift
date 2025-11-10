@@ -9,6 +9,67 @@ import AVKit
 import OSLog
 
 extension PreviewPlayerController {
+    private struct CachedSegment {
+        let start: Double
+        let end: Double
+    }
+    
+    private var cachedSegments: [CachedSegment] {
+        var segments: [CachedSegment] = []
+        let totalDuration = videoItem.durationSeconds
+        let chunkLength = chunkDuration
+        let sectionLength = chunkDuration * Double(chunksPerSection)
+        
+        for sectionIndex in concatenatedSections {
+            let start = Double(sectionIndex) * sectionLength
+            let end = min(start + sectionLength, totalDuration)
+            guard end > start else { continue }
+            segments.append(CachedSegment(start: start, end: end))
+        }
+        
+        for chunkIndex in loadedChunks {
+            let sectionIndex = chunkIndex / chunksPerSection
+            if concatenatedSections.contains(sectionIndex) {
+                continue
+            }
+            let start = Double(chunkIndex) * chunkLength
+            let end = min(start + chunkLength, totalDuration)
+            guard end > start else { continue }
+            segments.append(CachedSegment(start: start, end: end))
+        }
+        
+        segments.sort { lhs, rhs in
+            if lhs.start == rhs.start {
+                return lhs.end < rhs.end
+            }
+            return lhs.start < rhs.start
+        }
+        return segments
+    }
+    
+    @discardableResult
+    func jumpToNextCachedSegmentStart() -> Bool {
+        guard usePreviewFallback, let currentTime = getCurrentTime() else { return false }
+        let tolerance = 0.05
+        if let segment = cachedSegments.first(where: { $0.start > currentTime + tolerance }) {
+            seekTo(segment.start)
+            return true
+        }
+        return false
+    }
+    
+    @discardableResult
+    func jumpToPreviousCachedSegmentEnd() -> Bool {
+        guard usePreviewFallback, let currentTime = getCurrentTime() else { return false }
+        let tolerance = 0.05
+        if let segment = cachedSegments.reversed().first(where: { $0.end < currentTime - tolerance }) {
+            let target = max(segment.end - tolerance, segment.start)
+            seekTo(target)
+            return true
+        }
+        return false
+    }
+    
     
     // MARK: - Fallback Preview Initialization
     
@@ -60,7 +121,13 @@ extension PreviewPlayerController {
                 
                 // Generate initial video chunk 0 (0-15s, no audio)
                 let chunkIndex = 0
-                let chunkResult = try await session.generatePreviewChunk(chunkIndex: chunkIndex, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                let chunkStart = Double(chunkIndex) * self.chunkDuration
+                let chunkResult = try await session.generatePreviewChunk(
+                    chunkIndex: chunkIndex,
+                    startTime: chunkStart,
+                    durationLimit: self.chunkDuration,
+                    maxShortEdge: self.previewMaxShortEdge
+                )
                 try Task.checkCancellation()
 
                 // Track the loaded chunk
@@ -228,7 +295,7 @@ extension PreviewPlayerController {
         videoTrack.removeTimeRange(CMTimeRange(start: .zero, duration: composition.duration))
         
         // Rebuild video track using sections/chunks as appropriate
-        var currentInsertTime = CMTime.zero
+        var maxVideoTime = CMTime.zero
         let totalChunks = Int(ceil(self.videoItem.durationSeconds / self.chunkDuration))
         
         var processedChunks = 0
@@ -256,15 +323,17 @@ extension PreviewPlayerController {
                 
                 if let sectionVideoTrack = sectionVideoTracks.first {
                     let sectionDuration = try await sectionAsset.load(.duration)
+                    let sectionStartSeconds = Double(chunkSection * self.chunksPerSection) * self.chunkDuration
+                    let insertTime = CMTime(seconds: sectionStartSeconds, preferredTimescale: 600)
                     try videoTrack.insertTimeRange(
                         CMTimeRange(start: .zero, duration: sectionDuration),
                         of: sectionVideoTrack,
-                        at: currentInsertTime
+                        at: insertTime
                     )
-                    currentInsertTime = CMTimeAdd(currentInsertTime, sectionDuration)
+                    maxVideoTime = max(maxVideoTime, CMTimeAdd(insertTime, sectionDuration))
                     
                     Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                        .debug("Inserted section \(chunkSection, privacy: .public) at \(currentInsertTime.seconds, privacy: .public)s")
+                        .debug("Inserted section \(chunkSection, privacy: .public) at \(insertTime.seconds, privacy: .public)s")
                 }
                 
                 // Skip all chunks in this section
@@ -289,19 +358,21 @@ extension PreviewPlayerController {
                     
                     if let chunkVideoTrack = chunkVideoTracks.first {
                         let chunkDuration = try await chunkAsset.load(.duration)
+                        let chunkStartSeconds = Double(processedChunks) * self.chunkDuration
+                        let insertTime = CMTime(seconds: chunkStartSeconds, preferredTimescale: 600)
                         try videoTrack.insertTimeRange(
                             CMTimeRange(start: .zero, duration: chunkDuration),
                             of: chunkVideoTrack,
-                            at: currentInsertTime
+                            at: insertTime
                         )
-                        currentInsertTime = CMTimeAdd(currentInsertTime, chunkDuration)
+                        maxVideoTime = max(maxVideoTime, CMTimeAdd(insertTime, chunkDuration))
                     }
                 }
                 processedChunks += 1
             }
         }
         
-        return currentInsertTime
+        return maxVideoTime
     }
     
     // MARK: - Chunk Loading
@@ -319,7 +390,13 @@ extension PreviewPlayerController {
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
                     .info("Preloading adjacent chunk \(nextChunk, privacy: .public)")
                 
-                let _ = try await session.generatePreviewChunk(chunkIndex: nextChunk, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                let nextChunkStart = Double(nextChunk) * self.chunkDuration
+                let _ = try await session.generatePreviewChunk(
+                    chunkIndex: nextChunk,
+                    startTime: nextChunkStart,
+                    durationLimit: self.chunkDuration,
+                    maxShortEdge: self.previewMaxShortEdge
+                )
                 
                 try Task.checkCancellation()
                 
@@ -369,7 +446,13 @@ extension PreviewPlayerController {
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
                     .info("Loading chunk \(chunkIndex, privacy: .public) for time \(time, privacy: .public)s")
                 
-                _ = try await session.generatePreviewChunk(chunkIndex: chunkIndex, durationLimit: self.chunkDuration, maxShortEdge: self.previewMaxShortEdge)
+                let chunkStart = Double(chunkIndex) * self.chunkDuration
+                _ = try await session.generatePreviewChunk(
+                    chunkIndex: chunkIndex,
+                    startTime: chunkStart,
+                    durationLimit: self.chunkDuration,
+                    maxShortEdge: self.previewMaxShortEdge
+                )
                 
                 try Task.checkCancellation()
                 

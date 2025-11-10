@@ -226,7 +226,17 @@ struct PreviewPlayerView: View {
         }
     }
 
-    private func handleKeyCommand(key: String, modifiers: NSEvent.ModifierFlags) -> Bool {
+    private func handleKeyCommand(key: String, modifiers: NSEvent.ModifierFlags, specialKey: NSEvent.SpecialKey? = nil) -> Bool {
+        if specialKey == .downArrow {
+            if controller.jumpToNextCachedSegmentStart() {
+                return true
+            }
+        } else if specialKey == .upArrow {
+            if controller.jumpToPreviousCachedSegmentEnd() {
+                return true
+            }
+        }
+
         let lowerKey = key.lowercased()
 
         if modifiers.contains(.command) {
@@ -298,7 +308,7 @@ private struct PlayerContainerView: NSViewRepresentable {
     let player: AVPlayer
     let controller: PreviewPlayerController
     let showsPlaybackControls: Bool
-    let keyHandler: (String, NSEvent.ModifierFlags) -> Bool
+    let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
 
     func makeNSView(context: Context) -> ShortcutAwarePlayerView {
         let view = ShortcutAwarePlayerView()
@@ -317,13 +327,13 @@ private struct PlayerContainerView: NSViewRepresentable {
 }
 
 private final class ShortcutAwarePlayerView: AVPlayerView {
-    private var keyHandler: ((String, NSEvent.ModifierFlags) -> Bool)?
+    private var keyHandler: ((String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool)?
 
     func configure(
         player: AVPlayer,
         controller: PreviewPlayerController,
         showsPlaybackControls: Bool,
-        keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool
+        keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
     ) {
         self.keyHandler = keyHandler
         controlsStyle = showsPlaybackControls ? .inline : .none
@@ -341,7 +351,7 @@ private final class ShortcutAwarePlayerView: AVPlayerView {
         }
     }
 
-    func update(player: AVPlayer, showsPlaybackControls: Bool, keyHandler: @escaping (String, NSEvent.ModifierFlags) -> Bool) {
+    func update(player: AVPlayer, showsPlaybackControls: Bool, keyHandler: @escaping (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool) {
         self.keyHandler = keyHandler
         if self.player !== player {
             self.player = player
@@ -371,7 +381,7 @@ private final class ShortcutAwarePlayerView: AVPlayerView {
             return
         }
 
-        if keyHandler?(characters, event.modifierFlags) == true {
+        if keyHandler?(characters, event.modifierFlags, event.specialKey) == true {
             return
         }
 
@@ -383,7 +393,7 @@ private final class ShortcutAwarePlayerView: AVPlayerView {
             return super.performKeyEquivalent(with: event)
         }
 
-        if keyHandler?(characters, event.modifierFlags) == true {
+        if keyHandler?(characters, event.modifierFlags, event.specialKey) == true {
             return true
         }
 
