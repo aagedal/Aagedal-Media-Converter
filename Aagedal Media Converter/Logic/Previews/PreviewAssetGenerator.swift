@@ -46,6 +46,69 @@ actor PreviewAssetGenerator {
     private let waveformSize = "1000x90"
     private let rowThumbnailSize = "640:-1"  // 640px width for row thumbnail
 
+    /// Clears the entire preview cache directory.
+    func cleanupAllCache() async {
+        let baseDirectory = AppConstants.previewCacheDirectory
+        guard fileManager.fileExists(atPath: baseDirectory.path) else {
+            logger.info("Cache directory does not exist, nothing to clear")
+            return
+        }
+
+        do {
+            var totalSize: Int64 = 0
+            if let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.fileSizeKey]) {
+                while let entry = enumerator.nextObject() as? URL {
+                    if let size = try? entry.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                        totalSize += Int64(size)
+                    }
+                }
+            }
+
+            try fileManager.removeItem(at: baseDirectory)
+            try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+
+            let sizeMB = Double(totalSize) / (1024 * 1024)
+            logger.info("Cleared preview cache directory, freed \(sizeMB, format: .fixed(precision: 1)) MB")
+        } catch {
+            logger.error("Failed to clear preview cache: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Calculates the current on-disk size of the preview cache directory in bytes.
+    func cacheDirectorySizeInBytes() async -> Int64 {
+        let baseDirectory = AppConstants.previewCacheDirectory
+        guard fileManager.fileExists(atPath: baseDirectory.path) else {
+            return 0
+        }
+
+        var totalSize: Int64 = 0
+        if let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.fileSizeKey]) {
+            while let entry = enumerator.nextObject() as? URL {
+                if let size = try? entry.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    totalSize += Int64(size)
+                }
+            }
+        }
+
+        return totalSize
+    }
+
+    /// Applies a cleanup policy by triggering the corresponding cleanup routine.
+    func applyCleanupPolicy(_ policy: PreviewCacheCleanupPolicy) async {
+        switch policy {
+        case .purgeOnLaunch:
+            await cleanupAllCache()
+        case .keepOneDay:
+            await cleanupOldCache(olderThanDays: 1)
+        case .keepThreeDays:
+            await cleanupOldCache(olderThanDays: 3)
+        case .keepSevenDays:
+            await cleanupOldCache(olderThanDays: 7)
+        case .manual:
+            logger.info("Preview cache cleanup set to manual; automatic cleanup skipped")
+        }
+    }
+
     /// Returns the asset directory for a given video URL, creating it if needed
     func getAssetDirectory(for url: URL) throws -> URL {
         try ensureAssetDirectory(for: url)

@@ -71,6 +71,35 @@ struct PreviewTrimControls: View {
             .help("Jump to trim end")
 
             Spacer()
+            
+            HStack(spacing: 10) {
+                Button(action: onCaptureScreenshot) {
+                    Label("Capture frame", systemImage: "camera")
+                        .labelStyle(.iconOnly)
+                }
+                .disabled(controller.isCapturingScreenshot)
+                .help("Save the current frame as an image")
+
+                Button {
+                    controller.revealLastScreenshotInFinder()
+                } label: {
+                    Image(systemName: "magnifyingglass.circle.fill")
+                        .help("Reveal last screenshot in Finder")
+                }
+                .disabled(controller.lastScreenshotURL == nil)
+
+                // Draggable icon for last screenshot
+                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                    .help("Drag last screenshot to another app")
+                    .foregroundStyle(controller.lastScreenshotURL == nil ? .secondary : .primary)
+                    .opacity(controller.lastScreenshotURL == nil ? 0.5 : 1)
+                    .onDrag {
+                        controller.lastScreenshotDragItemProvider() ?? NSItemProvider()
+                    }
+                    .disabled(controller.lastScreenshotURL == nil)
+            }
+            
+            Spacer()
 
             Toggle(isOn: loopBinding) {
                 Label("Loop", systemImage: "repeat")
@@ -85,13 +114,6 @@ struct PreviewTrimControls: View {
             }
             .disabled(item.trimStart == nil && item.trimEnd == nil)
             .help("Reset trim points")
-
-            Button(action: onCaptureScreenshot) {
-                Label("Capture frame", systemImage: "camera")
-                    .labelStyle(.iconOnly)
-            }
-            .disabled(controller.isCapturingScreenshot)
-            .help("Save the current frame as an image")
         }
     }
 

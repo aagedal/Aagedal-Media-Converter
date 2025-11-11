@@ -20,15 +20,13 @@ struct Aagedal_Media_Converter_App: App {
             AppConstants.watchFolderIgnoreDurationValueKey: AppConstants.defaultWatchFolderIgnoreDurationValue,
             AppConstants.watchFolderIgnoreDurationUnitKey: AppConstants.defaultWatchFolderIgnoreDurationUnitRaw,
             AppConstants.watchFolderDeleteDurationValueKey: AppConstants.defaultWatchFolderDeleteDurationValue,
-            AppConstants.watchFolderDeleteDurationUnitKey: AppConstants.defaultWatchFolderDeleteDurationUnitRaw
+            AppConstants.watchFolderDeleteDurationUnitKey: AppConstants.defaultWatchFolderDeleteDurationUnitRaw,
+            AppConstants.previewCacheCleanupPolicyKey: AppConstants.defaultPreviewCacheCleanupPolicyRaw
         ])
-        
-        // Clean up old preview cache on app launch (older than 2 days for aggressive cleanup)
-        Task {
-            await PreviewAssetGenerator.shared.cleanupOldCache(olderThanDays: 2)
-        }
+
+        applyPreviewCacheCleanupPolicy()
     }
-    
+
     var body: some Scene {
         WindowGroup {
             VStack {
@@ -65,6 +63,18 @@ struct MainAppCommands: Commands {
             Button("About Aagedal Media Converter") {
                 openWindow(id: "about")
             }
+        }
+    }
+}
+
+private extension Aagedal_Media_Converter_App {
+    func applyPreviewCacheCleanupPolicy() {
+        let defaults = UserDefaults.standard
+        let storedPolicyRaw = defaults.string(forKey: AppConstants.previewCacheCleanupPolicyKey) ?? AppConstants.defaultPreviewCacheCleanupPolicyRaw
+        let policy = PreviewCacheCleanupPolicy(rawValue: storedPolicyRaw) ?? .purgeOnLaunch
+
+        Task {
+            await PreviewAssetGenerator.shared.applyCleanupPolicy(policy)
         }
     }
 }

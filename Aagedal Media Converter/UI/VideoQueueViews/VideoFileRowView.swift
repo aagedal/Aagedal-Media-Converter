@@ -95,32 +95,39 @@ struct VideoFileRowView: View {
                                     .fill(Color.black.opacity(0.35))
                                     .frame(width: 200, height: 150)
                                     .allowsHitTesting(false)
-
-                                HStack(spacing: 12) {
-                                    Button {
-                                        showPreview = true
-                                    } label: {
-                                        Label("Preview", systemImage: "timeline.selection")
-                                            .labelStyle(.iconOnly)
-                                            .font(.system(size: 28, weight: .medium))
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundColor(.white)
-                                    .help("Open preview and trim editor")
-
-                                    if file.metadata != nil {
+                                
+                                VStack {
+                                    Spacer()
+                                    HStack(spacing: 12) {
                                         Button {
-                                            showMetadata = true
+                                            showPreview = true
                                         } label: {
-                                            Label("Metadata", systemImage: "info.circle")
+                                            Label("Preview", systemImage: "timeline.selection")
                                                 .labelStyle(.iconOnly)
-                                                .font(.system(size: 24, weight: .medium))
+                                                .font(.system(size: 28, weight: .medium))
                                         }
                                         .buttonStyle(.plain)
                                         .foregroundColor(.white)
-                                        .help("View technical metadata")
-                                    }
+                                        .help("Open preview and trim editor")
+                                        
+                                        Spacer()
+
+                                        //if file.metadata != nil {
+                                            Button {
+                                                showMetadata = true
+                                            } label: {
+                                                Label("Metadata", systemImage: "info.circle")
+                                                    .labelStyle(.iconOnly)
+                                                    .font(.system(size: 24, weight: .medium))
+                                                    .disabled(file.metadata == nil)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .foregroundColor(.white)
+                                            .help("View technical metadata")
+                                        //}
+                                    }.padding(10)
                                 }
+
                             }
                             .transition(.opacity)
                         }

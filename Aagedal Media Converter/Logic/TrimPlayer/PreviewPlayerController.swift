@@ -15,7 +15,6 @@ final class PreviewPlayerController: ObservableObject {
     // MARK: - Published State
     
     @Published var player: AVPlayer?
-    @Published var audioPlayer: AVPlayer?
     @Published var isPreparing = false
     @Published var errorMessage: String?
     @Published var currentPlaybackTime: Double = 0
@@ -29,15 +28,15 @@ final class PreviewPlayerController: ObservableObject {
     @Published var fallbackStillTime: Double?
     @Published var isGeneratingFallbackStill = false
     @Published var isLoadingChunk = false
+    @Published var pendingChunkTime: Double?
     
     // MARK: - Configuration
     
     let chunkDuration: TimeInterval = 15.0
-    let sectionDuration: TimeInterval = 60.0
-    let chunksPerSection: Int = 4
     let previewMaxShortEdge: Int = 720
     var currentChunkIndex: Int = 0
-    var concatenatedSections: Set<Int> = []
+    var chunkDurations: [Int: TimeInterval] = [:]
+    var appliedChunks: Set<Int> = []
     
     // MARK: - State
     
@@ -57,11 +56,12 @@ final class PreviewPlayerController: ObservableObject {
     var playerItemStatusObserver: Any?
     var hasSecurityScope = false
     var usePreviewFallback = false
-    var isSwappingAudio = false
     var composition: AVMutableComposition?
     var compositionVideoTrack: AVMutableCompositionTrack?
     var compositionAudioTrack: AVMutableCompositionTrack?
     weak var playerView: AVPlayerView?
+    var previewAudioStreamIndices: [Int] = []
+    var selectedAudioTrackOrderIndex: Int = 0
     
     // MARK: - Initialization
     
@@ -132,6 +132,32 @@ final class PreviewPlayerController: ObservableObject {
         applyLoopSetting()
         loadPreviewAssets(for: currentItem.url)
     }
+
+    /// Determines the preferred ordering of audio stream indices based on metadata (default + channel count).
+    nonisolated func determineAudioStreamOrder(for item: VideoItem) async -> [Int] {
+        if let metadata = item.metadata {
+            return orderAudioStreams(from: metadata)
+        }
+        if let metadata = try? await VideoMetadataService.shared.metadata(for: item.url) {
+            return orderAudioStreams(from: metadata)
+        }
+        return []
+    }
+    
+    nonisolated private func orderAudioStreams(from metadata: VideoMetadata) -> [Int] {
+        guard !metadata.audioStreams.isEmpty else { return [] }
+        // Default stream first, fall back to original order, then by descending channel count.
+        let sorted = metadata.audioStreams.enumerated().sorted { lhs, rhs in
+            let lhsDefault = metadata.isDefaultAudioStream(index: lhs.offset)
+            let rhsDefault = metadata.isDefaultAudioStream(index: rhs.offset)
+            if lhsDefault != rhsDefault { return lhsDefault }
+            let lhsChannels = lhs.element.channels ?? 0
+            let rhsChannels = rhs.element.channels ?? 0
+            if lhsChannels != rhsChannels { return lhsChannels > rhsChannels }
+            return lhs.offset < rhs.offset
+        }
+        return sorted.map { $0.offset }
+    }
     
     func teardown() {
         preparationTask?.cancel()
@@ -142,7 +168,6 @@ final class PreviewPlayerController: ObservableObject {
         previewAssetTask = nil
         fallbackStillTask?.cancel()
         fallbackStillTask = nil
-
         player?.pause()
         
         // Release security-scoped resource only if we acquired it
@@ -167,6 +192,7 @@ final class PreviewPlayerController: ObservableObject {
         fallbackPreviewRange = nil
         loadedChunks = []
         currentChunkIndex = 0
+        chunkDurations.removeAll()
         fallbackStillImage = nil
         fallbackStillTime = nil
         removeLoopObserver()
@@ -177,7 +203,10 @@ final class PreviewPlayerController: ObservableObject {
         composition = nil
         compositionVideoTrack = nil
         compositionAudioTrack = nil
-        isSwappingAudio = false
+        pendingChunkTime = nil
+        appliedChunks.removeAll()
+        previewAudioStreamIndices = []
+        selectedAudioTrackOrderIndex = 0
     }
     
     // MARK: - Playback Control
@@ -231,6 +260,7 @@ final class PreviewPlayerController: ObservableObject {
             if targetChunk != currentChunkIndex {
                 // Load the chunk for this time
                 loadChunkForTime(time)
+                //scheduleQuickStillIfNeeded(for: time)
                 return
             }
             
@@ -245,6 +275,7 @@ final class PreviewPlayerController: ObservableObject {
                 } else {
                     // Outside chunk range but same chunk index (at edge) - generate still
                     generateFallbackStillIfNeeded(for: time)
+                    //scheduleQuickStillIfNeeded(for: time)
                     player.pause()
                     return
                 }
@@ -272,6 +303,124 @@ final class PreviewPlayerController: ObservableObject {
         }
         
         return currentTime.seconds
+    }
+    
+    func isChunkAvailable(for time: Double) -> Bool {
+        let chunkIndex = Int(time / chunkDuration)
+        if loadedChunks.contains(chunkIndex) {
+            return true
+        }
+        if let range = fallbackPreviewRange, range.contains(time) {
+            return true
+        }
+        return false
+    }
+    
+    func restoreCachedChunkState(from cacheDirectory: URL) async {
+        let fileManager = FileManager.default
+        var chunkIndices = Set<Int>()
+        let chunksDirectory = cacheDirectory.appendingPathComponent("chunks", isDirectory: true)
+        if fileManager.fileExists(atPath: chunksDirectory.path),
+           let chunkContents = try? fileManager.contentsOfDirectory(at: chunksDirectory, includingPropertiesForKeys: nil) {
+            for url in chunkContents {
+                let name = url.lastPathComponent
+                if let chunk = parseIndex(in: name, prefix: "preview_chunk_", suffix: ".mp4") {
+                    if await validatePreviewFile(at: url) {
+                        chunkIndices.insert(chunk)
+                        if let duration = await loadDuration(for: url) {
+                            chunkDurations[chunk] = duration
+                        }
+                    } else {
+                        try? fileManager.removeItem(at: url)
+                    }
+                }
+            }
+        }
+
+        // Backwards compatibility: older caches stored chunk/section files at the root of cacheDirectory
+        if let legacyContents = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil) {
+            for url in legacyContents where url.hasDirectoryPath == false {
+                let name = url.lastPathComponent
+                if let chunk = parseIndex(in: name, prefix: "preview_chunk_", suffix: ".mp4") {
+                    if await validatePreviewFile(at: url) {
+                        chunkIndices.insert(chunk)
+                        if let duration = await loadDuration(for: url) {
+                            chunkDurations[chunk] = duration
+                        }
+                    } else {
+                        try? fileManager.removeItem(at: url)
+                    }
+                }
+            }
+        }
+
+        loadedChunks = chunkIndices
+        updateFallbackCoverageRange()
+    }
+
+    func updateFallbackCoverageRange() {
+        guard !loadedChunks.isEmpty else {
+            fallbackPreviewRange = nil
+            return
+        }
+
+        let sortedChunks = loadedChunks.sorted()
+        guard let firstIndex = sortedChunks.first else {
+            fallbackPreviewRange = nil
+            return
+        }
+
+        let rangeStart = Double(firstIndex) * chunkDuration
+        var rangeEnd = rangeStart + (chunkDurations[firstIndex] ?? chunkDuration)
+        var previousIndex = firstIndex
+
+        for index in sortedChunks.dropFirst() {
+            if index != previousIndex + 1 {
+                break
+            }
+
+            let chunkStart = Double(index) * chunkDuration
+            let chunkEnd = chunkStart + (chunkDurations[index] ?? chunkDuration)
+            rangeEnd = max(rangeEnd, chunkEnd)
+            previousIndex = index
+        }
+
+        let newRange = rangeStart...rangeEnd
+        fallbackPreviewRange = newRange
+    }
+
+    private func loadDuration(for url: URL) async -> TimeInterval? {
+        let asset = AVURLAsset(url: url)
+        do {
+            let duration = try await asset.load(.duration)
+            guard duration.seconds.isFinite, duration.seconds > 0 else { return nil }
+            return duration.seconds
+        } catch {
+            return nil
+        }
+    }
+
+    private func parseIndex(in name: String, prefix: String, suffix: String) -> Int? {
+        guard name.hasPrefix(prefix), name.hasSuffix(suffix) else { return nil }
+        let start = name.index(name.startIndex, offsetBy: prefix.count)
+        let end = name.index(name.endIndex, offsetBy: -suffix.count)
+        guard start <= end else { return nil }
+        return Int(name[start..<end])
+    }
+
+    private func validatePreviewFile(at url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        do {
+            let tracks = try await asset.loadTracks(withMediaType: .video)
+            guard !tracks.isEmpty else { throw MP4PreviewSession.PreviewError.outputMissing }
+            let duration = try await asset.load(.duration)
+            guard duration.seconds.isFinite, duration.seconds > 0 else { throw MP4PreviewSession.PreviewError.outputMissing }
+            return true
+        } catch {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                .warning("Discarding invalid cached preview file \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
     
     func toggleFullscreen() {

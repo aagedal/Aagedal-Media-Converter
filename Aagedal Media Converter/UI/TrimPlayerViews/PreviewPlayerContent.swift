@@ -30,21 +30,12 @@ struct PreviewPlayerContent: View {
                     CheckerboardBackground()
 
                     HStack {
-                        if let stillImage = controller.fallbackStillImage,
-                           let previewRange = controller.fallbackPreviewRange,
-                           !previewRange.contains(currentPlaybackTime),
-                           !controller.isLoadingChunk {
-                            Image(nsImage: stillImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        } else {
                             PlayerContainerView(
                                 player: player,
                                 controller: controller,
                                 showsPlaybackControls: showsPlaybackControls,
                                 keyHandler: keyHandler
                             )
-                        }
                     }
                     .aspectRatio(playerAspectRatio, contentMode: .fit)
 
@@ -108,6 +99,17 @@ struct PreviewPlayerContent: View {
                 HStack {
                     fallbackBadge
                     Spacer()
+                    if controller.showScreenshotOverlay {
+                        Text("Screenshot saved")
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .transition(.opacity.combined(with: .scale))
+                            .animation(.easeOut(duration: 0.2), value: controller.showScreenshotOverlay)
+                            .padding(.bottom, 24)
+                            .frame(maxHeight: .infinity, alignment: .bottom)
+                    }
+                    Spacer()
                     toggleControlsButton
                 }
             }
@@ -143,6 +145,18 @@ struct PreviewPlayerContent: View {
             )
         }
         .transition(.opacity)
+    }
+
+    private func timeString(for seconds: Double) -> String {
+        let totalSeconds = max(0, Int(seconds.rounded()))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let secs = totalSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secs)
+        } else {
+            return String(format: "%d:%02d", minutes, secs)
+        }
     }
 
     private var fallbackBadge: some View {

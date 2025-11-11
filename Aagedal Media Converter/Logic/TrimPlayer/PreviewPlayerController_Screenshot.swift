@@ -11,6 +11,35 @@ import OSLog
 
 extension PreviewPlayerController {
     
+    // MARK: - Screenshot UI State
+    @MainActor
+    var lastScreenshotURL: URL? {
+        get { _lastScreenshotURL }
+        set { _lastScreenshotURL = newValue }
+    }
+
+    // Backing storage to avoid requiring changes in the main controller file
+    private static var _lastScreenshotURLStorage = [ObjectIdentifier: URL]()
+    private var _lastScreenshotURL: URL? {
+        get { Self._lastScreenshotURLStorage[ObjectIdentifier(self)] }
+        set { Self._lastScreenshotURLStorage[ObjectIdentifier(self)] = newValue }
+    }
+
+    @MainActor
+    var showScreenshotOverlay: Bool {
+        get { _showScreenshotOverlay ?? false }
+        set { _showScreenshotOverlay = newValue }
+    }
+
+    private static var _showScreenshotOverlayStorage = [ObjectIdentifier: Bool]()
+    private var _showScreenshotOverlay: Bool? {
+        get { Self._showScreenshotOverlayStorage[ObjectIdentifier(self)] }
+        set { Self._showScreenshotOverlayStorage[ObjectIdentifier(self)] = newValue }
+    }
+
+    /// Duration the transient overlay is visible after a successful capture.
+    private var screenshotOverlayDuration: TimeInterval { 1.6 }
+    
     enum ScreenshotError: LocalizedError {
         case ffmpegMissing
         case videoUnavailable
@@ -39,7 +68,7 @@ extension PreviewPlayerController {
             }
         }
     }
-
+    
     enum SecurityAccess {
         case none
         case direct(URL)
@@ -189,6 +218,12 @@ extension PreviewPlayerController {
         }
 
         Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots").info("Saved screenshot to \(outputURL.path, privacy: .public)")
+        
+        await MainActor.run {
+            self.lastScreenshotURL = outputURL
+            self.showScreenshotConfirmationOverlay()
+        }
+
         return outputURL
     }
 
@@ -222,9 +257,20 @@ extension PreviewPlayerController {
         }
     }
     
+    // MARK: - UI Helpers
+    @MainActor
+    func showScreenshotConfirmationOverlay() {
+        self.showScreenshotOverlay = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(self.screenshotOverlayDuration))
+            if Task.isCancelled { return }
+            self.showScreenshotOverlay = false
+        }
+    }
+    
     // MARK: - Fallback Still Generation
     
-    func generateFallbackStillIfNeeded(for time: TimeInterval) {
+    func generateFallbackStillIfNeeded(for time: TimeInterval, delay: TimeInterval = 0.0) {
         // Only generate if we're using fallback preview and the time is outside the preview range
         guard usePreviewFallback else { return }
         guard let range = fallbackPreviewRange else { return }
@@ -240,6 +286,10 @@ extension PreviewPlayerController {
         
         fallbackStillTask?.cancel()
         fallbackStillTask = Task { @MainActor in
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+                if Task.isCancelled { return }
+            }
             isGeneratingFallbackStill = true
             defer { isGeneratingFallbackStill = false }
             
@@ -516,5 +566,19 @@ extension PreviewPlayerController {
             return raw
         }
         return nil
+    }
+    
+    // MARK: - Last Screenshot Utilities
+    /// Reveals the last screenshot in Finder, if available.
+    func revealLastScreenshotInFinder() {
+        guard let url = lastScreenshotURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// Provides an NSItemProvider for dragging the last screenshot to other apps.
+    @MainActor
+    func lastScreenshotDragItemProvider() -> NSItemProvider? {
+        guard let url = lastScreenshotURL else { return nil }
+        return NSItemProvider(contentsOf: url)
     }
 }

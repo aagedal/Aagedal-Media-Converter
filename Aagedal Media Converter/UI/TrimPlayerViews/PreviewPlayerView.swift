@@ -11,19 +11,12 @@ import SwiftUI
 import AppKit
 import AVKit
 
-private struct ScreenshotFeedback: Identifiable {
-    let id = UUID()
-    let title: String
-    let message: String
-}
-
 struct PreviewPlayerView: View {
     @Binding var item: VideoItem
     @Environment(\.dismiss) private var dismiss
     @StateObject private var controller: PreviewPlayerController
     @State private var activeTrimGestures: Int = 0
     @State private var currentPlaybackTime: Double = 0
-    @State private var screenshotFeedback: ScreenshotFeedback?
     @State private var showsPlaybackControls: Bool = false
 
     init(item: Binding<VideoItem>) {
@@ -82,13 +75,6 @@ struct PreviewPlayerView: View {
             Task { @MainActor in controller.teardown() }
         }
         .onChange(of: item) { _, newValue in controller.updateVideoItem(newValue) }
-        .alert(item: $screenshotFeedback) { feedback in
-            Alert(
-                title: Text(feedback.title),
-                message: Text(feedback.message),
-                dismissButton: .default(Text("OK"))
-            )
-        }
     }
 
     private var trimStartBinding: Binding<Double> {
@@ -144,15 +130,12 @@ struct PreviewPlayerView: View {
 
             do {
                 let savedURL = try await controller.captureScreenshot(to: directoryURL)
-                screenshotFeedback = ScreenshotFeedback(
-                    title: "Frame saved",
-                    message: savedURL.path
-                )
+                await MainActor.run {
+                    controller.lastScreenshotURL = savedURL
+                    controller.showScreenshotConfirmationOverlay()
+                }
             } catch {
-                screenshotFeedback = ScreenshotFeedback(
-                    title: "Capture failed",
-                    message: error.localizedDescription
-                )
+                NSLog("Screenshot capture failed: \(error.localizedDescription)")
             }
         }
     }

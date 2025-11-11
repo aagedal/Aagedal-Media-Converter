@@ -42,18 +42,31 @@ actor MP4PreviewSession {
     private let sourceURL: URL
     private let cacheDirectory: URL
     private let outputURL: URL
-    private let audioTrackURL: URL
-    private let audioChunkURL: URL
+    private let audioStreamIndices: [Int]
 
     private var process: Process?
     private var isCancelled = false
 
-    init(sourceURL: URL, cacheDirectory: URL) {
+    init(sourceURL: URL, cacheDirectory: URL, audioStreamIndices: [Int]) {
         self.sourceURL = sourceURL
         self.cacheDirectory = cacheDirectory
         self.outputURL = cacheDirectory.appendingPathComponent("preview.mp4")
-        self.audioTrackURL = cacheDirectory.appendingPathComponent("preview_audio.m4a")
-        self.audioChunkURL = cacheDirectory.appendingPathComponent("preview_audio_chunk.m4a")
+        var seen = Set<Int>()
+        self.audioStreamIndices = audioStreamIndices.filter { value in
+            let inserted = seen.insert(value).inserted
+            return inserted
+        }
+
+        // Ensure chunk/section subdirectories exist for cleaner cache cleanup
+        let fileManager = FileManager.default
+        let chunksDir = cacheDirectory.appendingPathComponent("chunks", isDirectory: true)
+        let sectionsDir = cacheDirectory.appendingPathComponent("sections", isDirectory: true)
+        if !fileManager.fileExists(atPath: chunksDir.path) {
+            try? fileManager.createDirectory(at: chunksDir, withIntermediateDirectories: true)
+        }
+        if !fileManager.fileExists(atPath: sectionsDir.path) {
+            try? fileManager.createDirectory(at: sectionsDir, withIntermediateDirectories: true)
+        }
     }
 
     /// Generates a low-resolution MP4 preview clip.
@@ -110,23 +123,23 @@ actor MP4PreviewSession {
         process?.terminate()
         process = nil
         try? FileManager.default.removeItem(at: outputURL)
-        // Note: Audio files, chunks, and sections are NOT cleaned up here - they persist for reuse across sessions
-        // Call cleanupAllChunks() explicitly when removing video from queue or use app-wide cache cleanup
+        // Note: Audio/video chunk files persist for reuse across sessions. Call cleanupAllChunks() explicitly when removing video from queue or use app-wide cache cleanup.
     }
     
-    /// Explicitly clean up all preview files for this video (chunks, sections, and audio)
+    /// Explicitly clean up all preview files for this video (chunks and audio)
     /// Call this when removing the video from queue or during app-wide cache cleanup
     func cleanupAllChunks() {
         let fileManager = FileManager.default
         do {
-            let contents = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)
-            for fileURL in contents {
-                let filename = fileURL.lastPathComponent
-                if filename.hasPrefix("preview_chunk_") || 
-                   filename.hasPrefix("preview_section_") ||
-                   filename.hasPrefix("preview_audio") {
-                    try? fileManager.removeItem(at: fileURL)
-                }
+            let chunksDir = cacheDirectory.appendingPathComponent("chunks", isDirectory: true)
+            if fileManager.fileExists(atPath: chunksDir.path) {
+                try fileManager.removeItem(at: chunksDir)
+            }
+            try fileManager.createDirectory(at: chunksDir, withIntermediateDirectories: true)
+
+            let previewFile = outputURL
+            if fileManager.fileExists(atPath: previewFile.path) {
+                try? fileManager.removeItem(at: previewFile)
             }
             logger.info("Cleaned up all preview files for \(self.sourceURL.lastPathComponent, privacy: .public)")
         } catch {
@@ -181,133 +194,9 @@ actor MP4PreviewSession {
     
     /// Returns URL for a specific preview chunk (15 seconds each)
     nonisolated func chunkURL(for index: Int) -> URL {
-        cacheDirectory.appendingPathComponent("preview_chunk_\(index).mp4")
+        cacheDirectory.appendingPathComponent("chunks/preview_chunk_\(index).mp4")
     }
     
-    /// Returns URL for a concatenated section (60 seconds)
-    nonisolated func sectionURL(for sectionIndex: Int) -> URL {
-        cacheDirectory.appendingPathComponent("preview_section_\(sectionIndex).mp4")
-    }
-    
-    /// Returns URL for the 15-second audio chunk (for quick start)
-    func audioChunkFileURL() -> URL {
-        audioChunkURL
-    }
-    
-    /// Returns URL for the full audio track (for continuous playback)
-    func audioTrackFileURL() -> URL {
-        audioTrackURL
-    }
-    
-    /// Generates the initial 15-second audio chunk for quick playback start
-    func generateAudioChunk(durationLimit: TimeInterval = 15) async throws -> URL {
-        // Skip if already exists
-        if FileManager.default.fileExists(atPath: self.audioChunkURL.path) {
-            logger.info("Using cached audio chunk from: \(self.audioChunkURL.path, privacy: .public)")
-            return self.audioChunkURL
-        }
-        
-        logger.info("Generating 15s audio chunk for \(self.sourceURL.lastPathComponent, privacy: .public)")
-        
-        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
-            throw PreviewError.ffmpegNotFound
-        }
-        
-        let arguments: [String] = [
-            "-hide_banner",
-            "-nostdin",
-            "-y",
-            "-t", String(format: "%.3f", durationLimit),
-            "-i", sourceURL.path,
-            "-vn",  // No video
-            "-c:a", "aac",
-            "-ac", "2",
-            "-b:a", "128k",
-            self.audioChunkURL.path
-        ]
-        
-        try Task.checkCancellation()
-        return try await runFFmpeg(executablePath: ffmpegPath, arguments: arguments, outputURL: self.audioChunkURL)
-    }
-    
-    /// Generates the full audio track for continuous playback (runs in background)
-    func generateFullAudioTrack() async throws -> URL {
-        // Skip if already exists
-        if FileManager.default.fileExists(atPath: self.audioTrackURL.path) {
-            logger.info("Using cached full audio track from: \(self.audioTrackURL.path, privacy: .public)")
-            return self.audioTrackURL
-        }
-        
-        logger.info("Generating full audio track for \(self.sourceURL.lastPathComponent, privacy: .public)")
-        
-        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
-            throw PreviewError.ffmpegNotFound
-        }
-        
-        let arguments: [String] = [
-            "-hide_banner",
-            "-nostdin",
-            "-y",
-            "-i", sourceURL.path,
-            "-vn",  // No video
-            "-c:a", "aac",
-            "-ac", "2",
-            "-b:a", "128k",
-            self.audioTrackURL.path
-        ]
-        
-        try Task.checkCancellation()
-        return try await runFFmpeg(executablePath: ffmpegPath, arguments: arguments, outputURL: self.audioTrackURL)
-    }
-    
-    /// Concatenates multiple chunks into a single section file using FFmpeg concat demuxer (very fast - no re-encoding)
-    func concatenateSection(chunkIndices: [Int], sectionIndex: Int) async throws -> URL {
-        let sectionURL = self.sectionURL(for: sectionIndex)
-        
-        // Skip if already exists
-        if FileManager.default.fileExists(atPath: sectionURL.path) {
-            logger.info("Using cached section \(sectionIndex, privacy: .public) from: \(sectionURL.path, privacy: .public)")
-            return sectionURL
-        }
-        
-        logger.info("Concatenating \(chunkIndices.count, privacy: .public) chunks into section \(sectionIndex, privacy: .public)")
-        
-        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
-            throw PreviewError.ffmpegNotFound
-        }
-        
-        // Create concat list file
-        let concatListURL = cacheDirectory.appendingPathComponent("concat_section_\(sectionIndex).txt")
-        var concatList = ""
-        for chunkIndex in chunkIndices.sorted() {
-            let chunkURL = self.chunkURL(for: chunkIndex)
-            concatList += "file '\(chunkURL.path)'\n"
-        }
-        
-        try concatList.write(to: concatListURL, atomically: true, encoding: .utf8)
-        
-        // Use FFmpeg concat demuxer - just copies streams, no re-encoding (very fast!)
-        let arguments: [String] = [
-            "-hide_banner",
-            "-nostdin",
-            "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", concatListURL.path,
-            "-c", "copy",  // Copy streams without re-encoding
-            sectionURL.path
-        ]
-        
-        try Task.checkCancellation()
-        let result = try await runFFmpeg(executablePath: ffmpegPath, arguments: arguments, outputURL: sectionURL)
-        
-        // Clean up concat list file
-        try? FileManager.default.removeItem(at: concatListURL)
-        
-        logger.info("Section \(sectionIndex, privacy: .public) concatenated successfully")
-        return result
-    }
-
     // MARK: - Helpers
 
     private func buildArguments(startTime: TimeInterval, durationLimit: TimeInterval, maxShortEdge: Int, outputPath: String? = nil) -> [String] {
@@ -317,7 +206,7 @@ actor MP4PreviewSession {
         let scaleFilter = "scale='if(gt(a,1),-2,\(maxShortEdge))':'if(gt(a,1),\(maxShortEdge),-2)'"
         let output = outputPath ?? self.outputURL.path
 
-        return [
+        var arguments: [String] = [
             "-hide_banner",
             "-nostdin",
             "-y",
@@ -327,14 +216,24 @@ actor MP4PreviewSession {
             "-analyzeduration", "5M",
             "-probesize", "10M",
             "-vf", scaleFilter,
+            "-map", "0:v:0",
             "-c:v", "h264_videotoolbox",
             "-b:v", "3M",
             "-maxrate", "3M",
             "-bufsize", "6M",
-            "-pix_fmt", "yuv420p",
-            "-an",  // No audio (audio played separately for smooth playback)
-            output
+            "-pix_fmt", "yuv420p"
         ]
+
+        let targetAudioIndices = audioStreamIndices.isEmpty ? [0] : audioStreamIndices
+        for (outputIndex, streamIndex) in targetAudioIndices.enumerated() {
+            arguments.append(contentsOf: ["-map", "0:a:\(streamIndex)?"])
+            arguments.append(contentsOf: ["-c:a:\(outputIndex)", "aac"])
+            arguments.append(contentsOf: ["-b:a:\(outputIndex)", "128k"])
+            arguments.append(contentsOf: ["-ac:a:\(outputIndex)", "2"])
+        }
+
+        arguments.append(output)
+        return arguments
     }
 
     private func runFFmpeg(executablePath: String, arguments: [String], outputURL: URL) async throws -> URL {

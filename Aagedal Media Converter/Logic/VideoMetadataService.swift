@@ -122,10 +122,16 @@ struct VideoMetadata: Equatable, Sendable {
         let channelLayout: String?
         let bitDepth: Int?
         let bitRate: Int64?
+        let isDefault: Bool
     }
 
     let videoStream: VideoStream?
     let audioStreams: [AudioStream]
+
+    func isDefaultAudioStream(index: Int) -> Bool {
+        guard audioStreams.indices.contains(index) else { return false }
+        return audioStreams[index].isDefault
+    }
 }
 
 enum VideoMetadataError: Error {
@@ -338,7 +344,8 @@ actor VideoMetadataService {
                 channels: stream.channels,
                 channelLayout: stream.channelLayout,
                 bitDepth: stream.bitsPerRawSample.flatMap { Int($0) },
-                bitRate: stream.bitRate.flatMap { Int64($0) }
+                bitRate: stream.bitRate.flatMap { Int64($0) },
+                isDefault: (stream.disposition?.defaultStream == 1)
             )
         }
 
@@ -471,7 +478,8 @@ private struct FFprobeResponse: Decodable {
                 channels: stream.channels,
                 channelLayout: stream.channelLayout,
                 bitDepth: stream.bitsPerRawSample.flatMap { Int($0) },
-                bitRate: stream.bitRate.flatMap { Int64($0) }
+                bitRate: stream.bitRate.flatMap { Int64($0) },
+                isDefault: (stream.disposition?.defaultStream == 1)
             )
         }
 

@@ -24,8 +24,11 @@ struct PreviewPlayerFooter: View {
 
             Spacer()
 
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Keyboard shortcuts:").font(.headline)
+                Text("J/K/L: reverse • pause • play (use for smooth playback)")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
                 Text("I/O: in/out • ⇧I/⇧O: jump • ⌥I/⌥O: clear • ⌘L: loop")
                     .font(.subheadline)
                     .foregroundColor(.secondary)

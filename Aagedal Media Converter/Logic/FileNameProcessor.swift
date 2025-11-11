@@ -7,6 +7,8 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
+// TODO: Add user setting to enable or disable filename processing
+
 
 import Foundation
 

@@ -17,6 +17,7 @@ struct TrimTimelineView: View {
     let duration: Double
     let playbackTime: Double
     let thumbnails: [URL]?
+    let quickThumbnailImages: [NSImage]
     let waveformURL: URL?
     let isLoading: Bool
     let fallbackPreviewRange: ClosedRange<Double>?
@@ -36,6 +37,7 @@ struct TrimTimelineView: View {
         duration: Double,
         playbackTime: Double,
         thumbnails: [URL]?,
+        quickThumbnailImages: [NSImage] = [],
         waveformURL: URL?,
         isLoading: Bool,
         fallbackPreviewRange: ClosedRange<Double>? = nil,
@@ -49,6 +51,7 @@ struct TrimTimelineView: View {
         self.duration = duration
         self.playbackTime = playbackTime
         self.thumbnails = thumbnails
+        self.quickThumbnailImages = quickThumbnailImages
         self.waveformURL = waveformURL
         self.isLoading = isLoading
         self.fallbackPreviewRange = fallbackPreviewRange
@@ -273,6 +276,18 @@ private struct TrimHandlesInteractionLayer: View {
                     }
                     .frame(width: width / CGFloat(thumbnails.count), height: height)
                     .clipped()
+                }
+            }
+            .frame(width: width, height: height)
+            .background(Color.black.opacity(0.25))
+        } else if !quickThumbnailImages.isEmpty {
+            HStack(spacing: 0) {
+                ForEach(Array(quickThumbnailImages.enumerated()), id: \.0) { index, image in
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: width / CGFloat(max(1, quickThumbnailImages.count)), height: height)
+                        .clipped()
                 }
             }
             .frame(width: width, height: height)
