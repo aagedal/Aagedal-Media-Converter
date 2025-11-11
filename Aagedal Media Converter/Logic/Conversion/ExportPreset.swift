@@ -111,7 +111,6 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     var ffmpegArguments: [String] {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyyMMdd"
-        let currentDateString = dateFormatter.string(from: Date())
         
         let commonArgs = ["-hide_banner"]
         let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
@@ -121,7 +120,6 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             var args = commonArgs + [
                 "-bitexact",
                 "-bsf:v", "filter_units=remove_types=6",
-                "-metadata", "comment=Date generated: \(currentDateString) ADD USER COMMENT HERE",
                 "-pix_fmt", "yuv420p",
                 "-vcodec", "libx264",
                 "-movflags", "+faststart",
@@ -133,7 +131,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-profile:v", "main",
                 "-level:v", "4.0",
                 "-an",
-                "-vf", "yadif=0,scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
+                "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
             return args
@@ -141,7 +139,6 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             var args = commonArgs + [
                 "-bitexact",
                 "-bsf:v", "filter_units=remove_types=6",
-                "-metadata", "comment=Date generated: \(currentDateString) ADD USER COMMENT HERE",
                 "-pix_fmt", "yuv420p",
                 "-vcodec", "libx264",
                 "-movflags", "+faststart",
@@ -154,7 +151,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-level:v", "4.0",
                 "-c:a", "aac",
                 "-b:a", "192k",
-                "-vf", "yadif=0,scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
+                "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
             return args
@@ -442,3 +439,4 @@ extension ExportPreset {
         return args
     }
 }
+

@@ -100,14 +100,7 @@ struct PreviewPlayerContent: View {
                     fallbackBadge
                     Spacer()
                     if controller.showScreenshotOverlay {
-                        Text("Screenshot saved")
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .transition(.opacity.combined(with: .scale))
-                            .animation(.easeOut(duration: 0.2), value: controller.showScreenshotOverlay)
-                            .padding(.bottom, 24)
-                            .frame(maxHeight: .infinity, alignment: .bottom)
+                        screenshotBadge
                     }
                     Spacer()
                     toggleControlsButton
@@ -157,6 +150,23 @@ struct PreviewPlayerContent: View {
         } else {
             return String(format: "%d:%02d", minutes, secs)
         }
+    }
+    
+    private var screenshotBadge: some View {
+        HStack {
+            Image(systemName: "camera")
+            Text("Screenshot saved")
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.black.opacity(0.7))
+        )
+        .padding(12)
+        .transition(.opacity.combined(with: .scale))
+        .animation(.easeOut(duration: 0.2), value: controller.showScreenshotOverlay)
     }
 
     private var fallbackBadge: some View {

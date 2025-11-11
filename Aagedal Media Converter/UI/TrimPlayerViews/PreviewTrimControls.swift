@@ -85,18 +85,19 @@ struct PreviewTrimControls: View {
                 } label: {
                     Image(systemName: "magnifyingglass.circle.fill")
                         .help("Reveal last screenshot in Finder")
+                        .foregroundColor(controller.lastScreenshotURL == nil ? .gray : .blue)
                 }
-                .disabled(controller.lastScreenshotURL == nil)
+                .disabled(controller.lastScreenshotURL == nil ? true : false)
 
                 // Draggable icon for last screenshot
                 Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                     .help("Drag last screenshot to another app")
-                    .foregroundStyle(controller.lastScreenshotURL == nil ? .secondary : .primary)
+                    .foregroundColor(controller.lastScreenshotURL == nil ? .gray : .blue)
                     .opacity(controller.lastScreenshotURL == nil ? 0.5 : 1)
                     .onDrag {
                         controller.lastScreenshotDragItemProvider() ?? NSItemProvider()
                     }
-                    .disabled(controller.lastScreenshotURL == nil)
+                    .disabled(controller.lastScreenshotURL == nil ? true : false)
             }
             
             Spacer()

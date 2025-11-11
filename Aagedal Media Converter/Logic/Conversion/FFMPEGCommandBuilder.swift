@@ -46,6 +46,7 @@ enum FFMPEGCommandBuilder {
 
         var ffmpegArgs = preset.ffmpegArguments
         await adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+        await adjustDeinterlaceFilter(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
 
         applyCommentMetadata(
             to: &ffmpegArgs,
@@ -192,5 +193,59 @@ private extension FFMPEGCommandBuilder {
             }
             index += 1
         }
+    }
+
+    static func adjustDeinterlaceFilter(
+        inputURL: URL,
+        ffmpegArgs: inout [String]
+    ) async {
+        // Only proceed if a video filter graph exists
+        guard let vfIndex = ffmpegArgs.firstIndex(of: "-vf"), vfIndex + 1 < ffmpegArgs.count else {
+            return
+        }
+
+        let isInterlaced: Bool
+        if let metadata = try? await VideoMetadataService.shared.metadata(for: inputURL) {
+            isInterlaced = metadata.videoStream?.isInterlaced ?? false
+        } else {
+            isInterlaced = false
+        }
+
+        var filters = ffmpegArgs[vfIndex + 1]
+
+        if isInterlaced {
+            // Replace yadif with bwdif, or insert bwdif at the start if yadif is absent
+            if filters.contains("yadif") {
+                // Replace common forms of yadif invocation
+                filters = filters.replacingOccurrences(of: "yadif=0", with: "bwdif=mode=bob:parity=auto:deint=all")
+                filters = filters.replacingOccurrences(of: "yadif", with: "bwdif=mode=bob:parity=auto:deint=all")
+            } else {
+                // Prepend bwdif to existing chain
+                if filters.isEmpty {
+                    filters = "bwdif=mode=bob:parity=auto:deint=all"
+                } else {
+                    filters = "bwdif=mode=bob:parity=auto:deint=all," + filters
+                }
+            }
+        } else {
+            // Progressive source: remove any yadif occurrences entirely
+            let patterns = [
+                "yadif=0,",
+                ",yadif=0",
+                "yadif=0",
+                "yadif,",
+                ",yadif",
+                "yadif"
+            ]
+            for p in patterns {
+                filters = filters.replacingOccurrences(of: p, with: "")
+            }
+            // Clean up any accidental leading/trailing commas and whitespace
+            filters = filters.trimmingCharacters(in: .whitespacesAndNewlines)
+            while filters.hasPrefix(",") { filters.removeFirst() }
+            while filters.hasSuffix(",") { filters.removeLast() }
+        }
+
+        ffmpegArgs[vfIndex + 1] = filters
     }
 }

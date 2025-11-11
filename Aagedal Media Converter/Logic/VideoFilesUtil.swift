@@ -12,26 +12,71 @@ import Cocoa
 import OSLog
 
 struct VideoFileUtils: Sendable {
+    struct VideoItemDetails: Sendable {
+        let size: Int64
+        let duration: String
+        let durationSeconds: Double
+        let thumbnailData: Data?
+        let outputURL: URL?
+    }
+
     static func isVideoFile(url: URL) -> Bool {
         let fileExtension = url.pathExtension.lowercased()
         return AppConstants.supportedVideoExtensions.contains(fileExtension)
     }
-    
+
     static func createVideoItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") async -> VideoItem? {
+        guard var placeholder = makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset, comment: comment) else {
+            return nil
+        }
+
+        let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+        placeholder.apply(details: details)
+        placeholder.detailsLoaded = true
+        print(" [createVideoItem] VideoItem created successfully: \(placeholder.name)")
+        return placeholder
+    }
+
+    static func makePlaceholderItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") -> VideoItem? {
         guard isVideoFile(url: url) else { return nil }
-        
+
         let name = url.lastPathComponent
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-        
-        // First try to get duration using FFprobe, fall back to AVFoundation if not available
-        var durationSec: Double = 0.0
+        let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
+
+        let placeholder = VideoItem(
+            url: url,
+            name: name,
+            size: size,
+            duration: "--:--",
+            durationSeconds: 0.0,
+            thumbnailData: nil,
+            status: .waiting,
+            progress: 0.0,
+            eta: nil,
+            outputURL: makeOutputURL(for: url, outputFolder: outputFolder, preset: preset),
+            comment: comment,
+            includeDateTag: includeDateTagByDefault,
+            metadata: nil,
+            detailsLoaded: false
+        )
+
+        return placeholder
+    }
+
+    static func loadDetails(for url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop) async -> VideoItemDetails {
         let fileName = url.lastPathComponent
-        
-        // Try FFprobe if available
+        print(" [loadDetails] ⏱️ Starting for: \(fileName)")
+
+        // Compute size (cheap, but ensures we have up-to-date info)
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+
+        var durationSec: Double = 0.0
+
         if Bundle.main.path(forResource: "ffprobe", ofType: nil) != nil {
             Logger().info("Attempting to get duration using FFprobe for: \(fileName)")
             durationSec = await FFMPEGConverter.getVideoDuration(url: url) ?? 0.0
-            
+
             if durationSec > 0 {
                 Logger().info("Successfully got duration from FFprobe: \(durationSec) seconds for \(fileName)")
             } else {
@@ -40,8 +85,7 @@ struct VideoFileUtils: Sendable {
         } else {
             Logger().info("FFprobe not found in bundle, using AVFoundation for \(fileName)")
         }
-        
-        // If FFprobe failed or not available, use AVFoundation
+
         if durationSec <= 0 {
             Logger().info("Using AVFoundation to get duration for: \(fileName)")
             let asset = AVURLAsset(url: url)
@@ -49,43 +93,30 @@ struct VideoFileUtils: Sendable {
             durationSec = CMTimeGetSeconds(cmDuration ?? CMTime.zero)
             Logger().info("AVFoundation returned duration: \(durationSec) seconds for \(fileName)")
         }
-        
+
         let durationString = formatDuration(seconds: durationSec)
-        
-        // Get cached thumbnail directly without waiting for waveform generation
-        print(" [createVideoItem] Getting cached thumbnail for: \(fileName)")
+
+        print(" [loadDetails] Getting cached thumbnail for: \(fileName)")
         let thumbnailData = await getCachedThumbnail(url: url)
-        print(" [createVideoItem] Thumbnail obtained (nil: \(thumbnailData == nil))")
-        
-        // Generate output URL if output folder is provided
-        var outputURL: URL? = nil
-        if let outputFolder = outputFolder {
-            let sanitizedBaseName = FileNameProcessor.processFileName(url.deletingPathExtension().lastPathComponent)
-            let outputFileName = sanitizedBaseName + preset.fileSuffix + "." + preset.fileExtension
-            outputURL = URL(fileURLWithPath: outputFolder).appendingPathComponent(outputFileName)
-        }
-        
-        let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
-        
-        // Create VideoItem with thumbnail but without metadata for fast UI response
-        print(" [createVideoItem] Creating VideoItem object (metadata will be fetched in background)")
-        let videoItem = VideoItem(
-            url: url,
-            name: name,
+        print(" [loadDetails] Thumbnail obtained (nil: \(thumbnailData == nil))")
+
+        let outputURL = makeOutputURL(for: url, outputFolder: outputFolder, preset: preset)
+
+        print(" [loadDetails] ✅ Completed for: \(fileName)")
+        return VideoItemDetails(
             size: size,
             duration: durationString,
             durationSeconds: durationSec,
-            thumbnailData: thumbnailData,  // Already cached, loaded immediately
-            status: .waiting,
-            progress: 0.0,
-            eta: nil,
-            outputURL: outputURL,
-            comment: comment,
-            includeDateTag: includeDateTagByDefault,
-            metadata: nil  // Will be fetched in background
+            thumbnailData: thumbnailData,
+            outputURL: outputURL
         )
-        print(" [createVideoItem] VideoItem created successfully: \(name)")
-        return videoItem
+    }
+
+    private static func makeOutputURL(for url: URL, outputFolder: String?, preset: ExportPreset) -> URL? {
+        guard let outputFolder else { return nil }
+        let sanitizedBaseName = FileNameProcessor.processFileName(url.deletingPathExtension().lastPathComponent)
+        let outputFileName = sanitizedBaseName + preset.fileSuffix + "." + preset.fileExtension
+        return URL(fileURLWithPath: outputFolder).appendingPathComponent(outputFileName)
     }
     
     /// Fetches metadata for a video item in the background
@@ -298,6 +329,15 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var trimEnd: Double? = nil
     var loopPlayback: Bool = false
     var metadata: VideoMetadata?
+    var detailsLoaded: Bool = false
+
+    mutating func apply(details: VideoFileUtils.VideoItemDetails) {
+        size = details.size
+        duration = details.duration
+        durationSeconds = details.durationSeconds
+        thumbnailData = details.thumbnailData
+        outputURL = details.outputURL
+    }
     
     /// Human-readable file size string (<1 MB ⇒ KB, 1–600 MB ⇒ MB, ≥600 MB ⇒ GB)
     var formattedSize: String {

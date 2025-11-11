@@ -184,7 +184,7 @@ extension PreviewPlayerController {
            let fieldOrder = videoStream.fieldOrder?.lowercased(),
            fieldOrder != "progressive" && fieldOrder != "unknown" {
             // Source is interlaced, apply yadif deinterlacer
-            filterComponents.append("yadif=mode=send_frame:parity=auto:deint=all")
+            filterComponents.append("bwdif=mode=bob:parity=auto:deint=all")
         }
         
         // Combine filters if we have any
@@ -579,6 +579,8 @@ extension PreviewPlayerController {
     @MainActor
     func lastScreenshotDragItemProvider() -> NSItemProvider? {
         guard let url = lastScreenshotURL else { return nil }
-        return NSItemProvider(contentsOf: url)
+        let provider = NSItemProvider(object: url as NSURL)
+        provider.suggestedName = url.lastPathComponent
+        return provider
     }
 }
