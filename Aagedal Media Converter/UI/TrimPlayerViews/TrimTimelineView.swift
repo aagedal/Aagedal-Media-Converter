@@ -29,7 +29,7 @@ struct TrimTimelineView: View {
     private let filmstripHeight: CGFloat = 72
     private let waveformHeight: CGFloat = 36
     private let combinedHeight: CGFloat = 108
-    private let chunkDuration: TimeInterval = 15.0
+    private let chunkDuration: TimeInterval = 5.0
 
     init(
         trimStart: Binding<Double>,

@@ -62,9 +62,13 @@ struct VideoFileRowView: View {
                                 .frame(width: 200, height: 150)
                                 .cornerRadius(4)
                         } else {
-                            Image(systemName: "film")
-                                .padding()
-                                .font(.largeTitle)
+                            VStack {
+                                Image(systemName: "film")
+                                    .font(.largeTitle)
+                                Text("Generating thumbnail...")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
                         }
                     }
                     .overlay(alignment: .topLeading) {

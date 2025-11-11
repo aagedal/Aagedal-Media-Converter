@@ -118,7 +118,7 @@ extension PreviewPlayerController {
                 self.updateFallbackCoverageRange()
 
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .info("MP4 composition playback ready (chunk \(chunkIndex, privacy: .public), 15s) for item \(currentItem.id, privacy: .public)")
+                    .info("MP4 composition playback ready (chunk \(chunkIndex, privacy: .public), 5s) for item \(currentItem.id, privacy: .public)")
 
                 // Background: preload adjacent chunks
                 self.loadAdjacentChunksInBackground(currentChunk: chunkIndex)
@@ -236,6 +236,10 @@ extension PreviewPlayerController {
             let removeRange = CMTimeRange(start: insertTime, duration: previousDurationTime)
             videoTrack.removeTimeRange(removeRange)
             audioTrack.removeTimeRange(removeRange)
+        } else if insertTime < composition.duration {
+            let placeholderRange = CMTimeRange(start: insertTime, duration: newDurationTime)
+            videoTrack.removeTimeRange(placeholderRange)
+            audioTrack.removeTimeRange(placeholderRange)
         }
 
         if insertTime > composition.duration {
@@ -271,50 +275,80 @@ extension PreviewPlayerController {
 
     // MARK: - Chunk Loading
     
-    /// Preloads chunks adjacent to the current chunk in the background
+    /// Preloads upcoming chunks in the background to keep playback smooth
     private func loadAdjacentChunksInBackground(currentChunk: Int) {
-        chunkLoadTask?.cancel()
-        chunkLoadTask = Task { @MainActor in
+        chunkPreloadTask?.cancel()
+        chunkPreloadTask = Task { @MainActor in
             guard let session = self.mp4Session else { return }
-            
-            // Load next chunk (chunk 1 after chunk 0)
-            let nextChunk = currentChunk + 1
-            
-            guard !self.appliedChunks.contains(nextChunk) else { return }
 
-            do {
+            let totalChunks = Int(ceil(self.videoItem.durationSeconds / self.chunkDuration))
+            let lookaheadCount = 5
+
+            let lookbehindCount = 3
+            var targets: [Int] = []
+
+            if currentChunk > 0 {
+                for offset in 1...lookbehindCount {
+                    let previousChunk = currentChunk - offset
+                    if previousChunk < 0 { break }
+                    if self.appliedChunks.contains(previousChunk) { continue }
+                    targets.append(previousChunk)
+                }
+            }
+
+            for offset in 1...lookaheadCount {
+                let nextChunk = currentChunk + offset
+                if nextChunk >= totalChunks { break }
+                if self.appliedChunks.contains(nextChunk) { continue }
+                if targets.contains(nextChunk) { continue }
+                targets.append(nextChunk)
+            }
+
+            for chunk in targets {
+                if Task.isCancelled { return }
+
+                let directionDescription: String
+                if chunk < currentChunk {
+                    directionDescription = "backfill \(currentChunk - chunk)"
+                } else {
+                    directionDescription = "lookahead \(chunk - currentChunk)"
+                }
+
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .info("Preloading adjacent chunk \(nextChunk, privacy: .public)")
+                    .info("Preloading chunk \(chunk, privacy: .public) (\(directionDescription))")
 
-                let nextChunkStart = Double(nextChunk) * self.chunkDuration
-                let chunkResult = try await session.generatePreviewChunk(
-                    chunkIndex: nextChunk,
-                    startTime: nextChunkStart,
-                    durationLimit: self.chunkDuration,
-                    maxShortEdge: self.previewMaxShortEdge
-                )
+                do {
+                    let chunkStart = Double(chunk) * self.chunkDuration
+                    let chunkResult = try await session.generatePreviewChunk(
+                        chunkIndex: chunk,
+                        startTime: chunkStart,
+                        durationLimit: self.chunkDuration,
+                        maxShortEdge: self.previewMaxShortEdge
+                    )
 
-                try Task.checkCancellation()
+                    let previousDuration = self.chunkDurations[chunk]
+                    try await self.applyChunkToComposition(
+                        chunkIndex: chunk,
+                        newDuration: chunkResult.duration,
+                        previousDuration: previousDuration,
+                        session: session
+                    )
+                    self.loadedChunks.insert(chunk)
+                    self.updateFallbackCoverageRange()
 
-                self.loadedChunks.insert(nextChunk)
-                let previousDuration = self.chunkDurations[nextChunk]
-                try await self.applyChunkToComposition(
-                    chunkIndex: nextChunk,
-                    newDuration: chunkResult.duration,
-                    previousDuration: previousDuration,
-                    session: session
-                )
-                self.updateFallbackCoverageRange()
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .info("Preloaded chunk \(chunk, privacy: .public)")
 
-                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .info("Preloaded chunk \(nextChunk, privacy: .public)")
+                    if Task.isCancelled { return }
 
-            } catch is CancellationError {
-                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .debug("Chunk preloading cancelled")
-            } catch {
-                Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                    .warning("Failed to preload chunk: \(error.localizedDescription, privacy: .public)")
+                } catch is CancellationError {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .debug("Chunk preloading cancelled")
+                    return
+                } catch {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                        .warning("Failed to preload chunk \(chunk, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }
@@ -326,6 +360,7 @@ extension PreviewPlayerController {
         if appliedChunks.contains(chunkIndex), chunkDurations[chunkIndex] != nil {
             currentChunkIndex = chunkIndex
             pendingChunkTime = nil
+            loadAdjacentChunksInBackground(currentChunk: chunkIndex)
             return
         }
 
@@ -362,16 +397,15 @@ extension PreviewPlayerController {
                 
                 try Task.checkCancellation()
                 
-                // Track the loaded chunk
-                self.loadedChunks.insert(chunkIndex)
                 let previousDuration = self.chunkDurations[chunkIndex]
-                self.currentChunkIndex = chunkIndex
                 try await self.applyChunkToComposition(
                     chunkIndex: chunkIndex,
                     newDuration: chunkResult.duration,
                     previousDuration: previousDuration,
                     session: session
                 )
+                self.loadedChunks.insert(chunkIndex)
+                self.currentChunkIndex = chunkIndex
                 self.updateFallbackCoverageRange()
                 
                 Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")

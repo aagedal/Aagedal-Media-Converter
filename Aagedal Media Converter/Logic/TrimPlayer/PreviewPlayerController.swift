@@ -32,7 +32,7 @@ final class PreviewPlayerController: ObservableObject {
     
     // MARK: - Configuration
     
-    let chunkDuration: TimeInterval = 15.0
+    let chunkDuration: TimeInterval = 5.0
     let previewMaxShortEdge: Int = 720
     var currentChunkIndex: Int = 0
     var chunkDurations: [Int: TimeInterval] = [:]
@@ -44,6 +44,7 @@ final class PreviewPlayerController: ObservableObject {
     var mp4Session: MP4PreviewSession?
     var preparationTask: Task<Void, Never>?
     var chunkLoadTask: Task<Void, Never>?
+    var chunkPreloadTask: Task<Void, Never>?
     var previewAssetTask: Task<Void, Never>?
     var fallbackStillTask: Task<Void, Never>?
     var loopObserver: Any?
@@ -164,6 +165,8 @@ final class PreviewPlayerController: ObservableObject {
         preparationTask = nil
         chunkLoadTask?.cancel()
         chunkLoadTask = nil
+        chunkPreloadTask?.cancel()
+        chunkPreloadTask = nil
         previewAssetTask?.cancel()
         previewAssetTask = nil
         fallbackStillTask?.cancel()

@@ -25,6 +25,8 @@ struct VideoFileListView: View {
     /// Selected row indices for built-in multi-selection
     @State private var selection = Set<Int>()
     @State private var focusedCommentID: UUID?
+    @State private var importQueue: [NSItemProvider] = []
+    @State private var isProcessingBatch = false
 
     var body: some View {
         ZStack {
@@ -98,9 +100,34 @@ struct VideoFileListView: View {
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         print(" handleDrop called with \(providers.count) providers")
-        let supportedExtensions = AppConstants.supportedVideoExtensions
         var handled = false
+
+        importQueue.append(contentsOf: providers)
+        processNextImportBatch()
+        handled = true
         
+        print(" handleDrop returning: \(handled)")
+        return handled
+    }
+    
+    private func processNextImportBatch() {
+        guard !isProcessingBatch else { return }
+        isProcessingBatch = true
+        
+        Task { @MainActor in
+            defer { self.isProcessingBatch = false }
+            // Small delay gives the system time to deliver the rest of the drop
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            let providers = importQueue
+            importQueue.removeAll()
+            await self.importProviders(providers)
+        }
+    }
+    
+    @MainActor
+    private func importProviders(_ providers: [NSItemProvider]) async {
+        let supportedExtensions = AppConstants.supportedVideoExtensions
+
         for provider in providers {
             print(" Processing provider: \(provider)")
             // Use the proper API to load file URLs
@@ -126,14 +153,10 @@ struct VideoFileListView: View {
                         print(" Provider cannot load URL")
                     }
                 }
-                handled = true
             } else {
                 print(" Provider cannot load URL")
             }
         }
-        
-        print(" handleDrop returning: \(handled)")
-        return handled
     }
     
     @MainActor
@@ -177,13 +200,19 @@ struct VideoFileListView: View {
             print(" Using existing security-scoped resource access")
         }
         
-        defer {
+        var shouldReleaseImmediately = true
+        let releaseSecurityAccess: () -> Void = {
             if hasSecurityAccess {
                 url.stopAccessingSecurityScopedResource()
                 print(" Released security-scoped resource (drag and drop)")
             } else if needsBookmarkAccess {
                 SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: url)
                 print(" Released security-scoped resource (bookmark)")
+            }
+        }
+        defer {
+            if shouldReleaseImmediately {
+                releaseSecurityAccess()
             }
         }
         
@@ -195,36 +224,47 @@ struct VideoFileListView: View {
         let outputFolder = UserDefaults.standard.string(forKey: "outputFolder") 
             ?? AppConstants.defaultOutputDirectory.path
             
-        if let videoItem = await VideoFileUtils.createVideoItem(
-            from: url,
-            outputFolder: outputFolder,
-            preset: preset
-        ) {
-            print(" Created video item: \(videoItem.name)")
-            // Check for duplicates before adding
-            if !self.droppedFiles.contains(where: { $0.url == videoItem.url }) {
-                self.droppedFiles.append(videoItem)
-                print(" Added video item to list. Total items: \(self.droppedFiles.count)")
-                
-                // Fetch metadata in background (thumbnail already loaded)
-                let itemIndex = self.droppedFiles.count - 1
-                Task.detached(priority: .utility) {
-                    let metadata = await VideoFileUtils.fetchMetadata(for: url)
-                    
-                    await MainActor.run {
-                        // Update the item with fetched metadata
-                        if itemIndex < self.droppedFiles.count && self.droppedFiles[itemIndex].url == url {
-                            self.droppedFiles[itemIndex].metadata = metadata
-                            print(" Updated video item with metadata: \(videoItem.name)")
-                        }
-                    }
-                }
-            } else {
-                print(" Video item already exists in list")
-            }
-        } else {
-            print(" Failed to create video item")
+        guard let placeholder = VideoFileUtils.makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset) else {
+            print(" Failed to create placeholder video item")
+            return
         }
+
+        print(" [processFileURL] Placeholder created: \(placeholder.name)")
+
+        // Check for duplicates before adding
+        if self.droppedFiles.contains(where: { $0.url == placeholder.url }) {
+            print(" Video item already exists in list")
+            return
+        }
+
+        self.droppedFiles.append(placeholder)
+        let placeholderID = placeholder.id
+        print(" Added placeholder video item to list. Total items: \(self.droppedFiles.count)")
+
+        Task(priority: .utility) {
+            defer { releaseSecurityAccess() }
+
+            let bookmarkSaved = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+            print(" Bookmark saved: \(bookmarkSaved)")
+
+            let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            await MainActor.run {
+                if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
+                    self.droppedFiles[index].apply(details: details)
+                    self.droppedFiles[index].detailsLoaded = true
+                    print(" [processFileURL] Details applied for: \(self.droppedFiles[index].name)")
+                }
+            }
+
+            let metadata = await VideoFileUtils.fetchMetadata(for: url)
+            await MainActor.run {
+                if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
+                    self.droppedFiles[index].metadata = metadata
+                    print(" Updated video item with metadata: \(self.droppedFiles[index].name)")
+                }
+            }
+        }
+        shouldReleaseImmediately = false
     }
     
     private func progressText(for item: VideoItem) -> String {

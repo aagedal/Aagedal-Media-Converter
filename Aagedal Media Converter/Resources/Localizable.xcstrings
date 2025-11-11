@@ -622,6 +622,9 @@
     "Frames captured from the preview will be saved as JPEGs into this folder." : {
 
     },
+    "Generating thumbnail..." : {
+
+    },
     "GitHub Repository" : {
       "localizations" : {
         "nb" : {

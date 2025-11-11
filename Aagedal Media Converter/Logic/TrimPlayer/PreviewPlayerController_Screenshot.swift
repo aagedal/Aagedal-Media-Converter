@@ -183,8 +183,8 @@ extension PreviewPlayerController {
         if let videoStream = videoItem.metadata?.videoStream,
            let fieldOrder = videoStream.fieldOrder?.lowercased(),
            fieldOrder != "progressive" && fieldOrder != "unknown" {
-            // Source is interlaced, apply yadif deinterlacer
-            filterComponents.append("bwdif=mode=bob:parity=auto:deint=all")
+            // Source is interlaced, apply bwdif deinterlacer for still capture
+            filterComponents.append("bwdif=mode=send_frame:parity=auto:deint=all")
         }
         
         // Combine filters if we have any
@@ -351,8 +351,8 @@ extension PreviewPlayerController {
         if let videoStream = videoItem.metadata?.videoStream,
            let fieldOrder = videoStream.fieldOrder?.lowercased(),
            fieldOrder != "progressive" && fieldOrder != "unknown" {
-            // Source is interlaced, apply yadif deinterlacer
-            filterComponents.append("yadif=mode=send_frame:parity=auto:deint=all")
+            // Source is interlaced, apply bwdif deinterlacer
+            filterComponents.append("bwdif=mode=send_frame:parity=auto:deint=all")
         }
         
         // Scale to 1080p for preview

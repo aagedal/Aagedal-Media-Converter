@@ -112,6 +112,18 @@ struct VideoFileUtils: Sendable {
         )
     }
 
+    static func loadDetailsAsync(
+        for url: URL,
+        outputFolder: String? = nil,
+        preset: ExportPreset = .videoLoop,
+        completion: @MainActor @escaping (VideoItemDetails) -> Void
+    ) {
+        Task.detached(priority: .utility) {
+            let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            await completion(details)
+        }
+    }
+
     private static func makeOutputURL(for url: URL, outputFolder: String?, preset: ExportPreset) -> URL? {
         guard let outputFolder else { return nil }
         let sanitizedBaseName = FileNameProcessor.processFileName(url.deletingPathExtension().lastPathComponent)
