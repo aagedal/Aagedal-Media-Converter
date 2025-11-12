@@ -12,6 +12,15 @@ import OSLog
 
 @MainActor
 final class PreviewPlayerController: ObservableObject {
+    struct AudioTrackOption: Identifiable, Equatable {
+        let id: Int
+        let position: Int
+        let streamIndex: Int
+        let mediaOptionIndex: Int?
+        let title: String
+        let subtitle: String?
+    }
+
     // MARK: - Published State
     
     @Published var player: AVPlayer?
@@ -29,6 +38,7 @@ final class PreviewPlayerController: ObservableObject {
     @Published var isGeneratingFallbackStill = false
     @Published var isLoadingChunk = false
     @Published var pendingChunkTime: Double?
+    @Published var audioTrackOptions: [AudioTrackOption] = []
     
     // MARK: - Configuration
     
@@ -93,8 +103,8 @@ final class PreviewPlayerController: ObservableObject {
     
     // MARK: - Preview Preparation
     
-    func preparePreview(startTime: TimeInterval) {
-        teardown()
+    func preparePreview(startTime: TimeInterval, resetAudioSelection: Bool = true) {
+        teardown(resetAudioSelection: resetAudioSelection)
         isPreparing = true
         errorMessage = nil
         isLoadingPreviewAssets = true
@@ -122,6 +132,7 @@ final class PreviewPlayerController: ObservableObject {
         installPlayerItemStatusObserver(for: playerItem, startTime: startTime)
         
         self.isPreparing = false
+        refreshAudioTrackOptions(for: currentItem, playerItem: playerItem)
         
         // Seek to start time but remain paused (don't auto-play)
         let seekTime = CMTime(seconds: startTime, preferredTimescale: 600)
@@ -159,8 +170,163 @@ final class PreviewPlayerController: ObservableObject {
         }
         return sorted.map { $0.offset }
     }
+
+    private func refreshAudioTrackOptions(for item: VideoItem, playerItem: AVPlayerItem?) {
+        let existingSelection = selectedAudioTrackOrderIndex
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let metadata: VideoMetadata?
+            if let cached = item.metadata {
+                metadata = cached
+            } else {
+                metadata = try? await VideoMetadataService.shared.metadata(for: item.url)
+            }
+
+            let orderedIndices = metadata.map { self.orderAudioStreams(from: $0) } ?? []
+            let mediaGroup: AVMediaSelectionGroup?
+            if let playerItem {
+                mediaGroup = try? await playerItem.asset.loadMediaSelectionGroup(for: .audible)
+            } else {
+                mediaGroup = nil
+            }
+
+            if !orderedIndices.isEmpty {
+                self.previewAudioStreamIndices = orderedIndices
+            }
+
+            self.buildAudioTrackOptions(metadata: metadata, orderedIndices: orderedIndices, mediaGroup: mediaGroup)
+
+            if self.audioTrackOptions.isEmpty {
+                self.selectedAudioTrackOrderIndex = 0
+            } else {
+                let clamped = min(max(existingSelection, 0), self.audioTrackOptions.count - 1)
+                self.selectedAudioTrackOrderIndex = clamped
+            }
+
+            self.applySelectedAudioTrack()
+        }
+    }
+
+    private func buildAudioTrackOptions(metadata: VideoMetadata?, orderedIndices: [Int], mediaGroup: AVMediaSelectionGroup?) {
+        let metadataStreams = metadata?.audioStreams ?? []
+        let effectiveOrder = orderedIndices.isEmpty ? Array(metadataStreams.indices) : orderedIndices
+        let mediaOptions = mediaGroup?.options ?? []
+
+        if metadataStreams.isEmpty && mediaOptions.isEmpty {
+            audioTrackOptions = []
+            return
+        }
+
+        var options: [AudioTrackOption] = []
+        let count = max(effectiveOrder.count, mediaOptions.count)
+        for position in 0..<count {
+            let streamIndex = effectiveOrder.indices.contains(position) ? effectiveOrder[position] : position
+            let stream = metadataStreams.indices.contains(streamIndex) ? metadataStreams[streamIndex] : nil
+            let mediaOption = mediaOptions.indices.contains(position) ? mediaOptions[position] : nil
+            let mediaOptionIndex = mediaOptions.indices.contains(position) ? position : nil
+
+            let title: String
+            if let mediaOption {
+                title = mediaOption.displayName
+            } else if let stream {
+                title = stream.channelLayout ?? "Audio Track \(position + 1)"
+            } else {
+                title = "Audio Track \(position + 1)"
+            }
+
+            var details: [String] = []
+            if let stream {
+                if stream.isDefault {
+                    details.append("Default")
+                }
+                if let channels = stream.channels {
+                    details.append("\(channels) ch")
+                }
+                if let sampleRate = stream.sampleRate {
+                    details.append("\(sampleRate) Hz")
+                }
+                if let codec = stream.codecLongName ?? stream.codec {
+                    details.append(codec)
+                }
+            }
+
+            if let mediaOption, details.isEmpty {
+                if let locale = mediaOption.locale {
+                    details.append(locale.localizedString(forLanguageCode: locale.language.languageCode?.identifier ?? "") ?? locale.identifier)
+                }
+            }
+
+            options.append(
+                AudioTrackOption(
+                    id: streamIndex,
+                    position: position,
+                    streamIndex: streamIndex,
+                    mediaOptionIndex: mediaOptionIndex,
+                    title: title,
+                    subtitle: details.isEmpty ? nil : details.joined(separator: " • ")
+                )
+            )
+        }
+
+        audioTrackOptions = options
+    }
+
+    func selectAudioTrack(at position: Int) {
+        guard position != selectedAudioTrackOrderIndex else { return }
+        selectedAudioTrackOrderIndex = position
+        applySelectedAudioTrack()
+    }
+
+    private func applySelectedAudioTrack() {
+        if usePreviewFallback {
+            refreshFallbackAudioSelection()
+        } else {
+            applySelectedAudioTrackToCurrentPlayerItem()
+        }
+    }
+
+    private func applySelectedAudioTrackToCurrentPlayerItem() {
+        guard !usePreviewFallback,
+              !audioTrackOptions.isEmpty,
+              let playerItem = player?.currentItem else { return }
+
+        let desiredPosition = min(max(selectedAudioTrackOrderIndex, 0), audioTrackOptions.count - 1)
+
+        Task { @MainActor [weak playerItem, weak self] in
+            guard let self, let playerItem else { return }
+            let mediaGroup: AVMediaSelectionGroup?
+            do {
+                mediaGroup = try await playerItem.asset.loadMediaSelectionGroup(for: .audible)
+            } catch {
+                return
+            }
+            guard let mediaGroup, !mediaGroup.options.isEmpty else { return }
+
+            let option = self.audioTrackOptions[min(desiredPosition, self.audioTrackOptions.count - 1)]
+            let optionIndex: Int
+            if let mappedIndex = option.mediaOptionIndex, mediaGroup.options.indices.contains(mappedIndex) {
+                optionIndex = mappedIndex
+            } else {
+                optionIndex = min(desiredPosition, mediaGroup.options.count - 1)
+            }
+
+            guard mediaGroup.options.indices.contains(optionIndex) else { return }
+            let selectedOption = mediaGroup.options[optionIndex]
+
+            if playerItem.currentMediaSelection.selectedMediaOption(in: mediaGroup) != selectedOption {
+                playerItem.select(selectedOption, in: mediaGroup)
+            }
+        }
+    }
+
+    private func refreshFallbackAudioSelection() {
+        let currentTime = getCurrentTime() ?? videoItem.effectiveTrimStart
+        teardown(resetAudioSelection: false)
+        preparePreview(startTime: currentTime, resetAudioSelection: false)
+    }
     
-    func teardown() {
+    func teardown(resetAudioSelection: Bool = true) {
         preparationTask?.cancel()
         preparationTask = nil
         chunkLoadTask?.cancel()
@@ -209,7 +375,10 @@ final class PreviewPlayerController: ObservableObject {
         pendingChunkTime = nil
         appliedChunks.removeAll()
         previewAudioStreamIndices = []
-        selectedAudioTrackOrderIndex = 0
+        if resetAudioSelection {
+            selectedAudioTrackOrderIndex = 0
+        }
+        audioTrackOptions = []
     }
     
     // MARK: - Playback Control

@@ -8,7 +8,7 @@ import SwiftUI
 
 struct PreviewTrimControls: View {
     let item: VideoItem
-    let controller: PreviewPlayerController
+    @ObservedObject var controller: PreviewPlayerController
     @Binding var currentPlaybackTime: Double
     let onSeek: (Double) -> Void
     let onReset: () -> Void
@@ -98,8 +98,10 @@ struct PreviewTrimControls: View {
                         controller.lastScreenshotDragItemProvider() ?? NSItemProvider()
                     }
                     .disabled(controller.lastScreenshotURL == nil ? true : false)
-            }.padding(.trailing, 30)
-            
+            }
+            .padding(.trailing, 30)
+
+            audioTrackSelector
 
             Toggle(isOn: loopBinding) {
                 Label("Loop", systemImage: "repeat")
@@ -115,6 +117,39 @@ struct PreviewTrimControls: View {
             .disabled(item.trimStart == nil && item.trimEnd == nil)
             .help("Reset trim points")
         }
+    }
+
+    private var audioTrackSelector: some View {
+        Menu {
+            if controller.audioTrackOptions.isEmpty {
+                Text("No alternate audio tracks")
+            } else {
+                ForEach(controller.audioTrackOptions) { option in
+                    Button {
+                        controller.selectAudioTrack(at: option.position)
+                    } label: {
+                        HStack {
+                            Text(option.title)
+                            if let subtitle = option.subtitle, !subtitle.isEmpty {
+                                Text(subtitle)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            if option.position == controller.selectedAudioTrackOrderIndex {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    .disabled(option.position == controller.selectedAudioTrackOrderIndex)
+                }
+            }
+        } label: {
+            Label("Select audio track", systemImage: "speaker.wave.2.fill")
+                .labelStyle(.iconOnly)
+        }
+        .menuStyle(.borderlessButton)
+        .disabled(controller.audioTrackOptions.count <= 1)
+        .help(controller.audioTrackOptions.isEmpty ? "No alternate audio tracks" : "Select audio track")
     }
 
     private func formattedTime(_ seconds: Double) -> String {
