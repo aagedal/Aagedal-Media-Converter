@@ -440,6 +440,12 @@ final class PreviewPlayerController: ObservableObject {
         previewAssetTask = Task { [weak self] in
             guard let self else { return }
             do {
+                if let cached = await PreviewAssetGenerator.shared.cachedAssetsIfPresent(for: url),
+                   !cached.thumbnails.isEmpty || cached.waveform != nil {
+                    self.previewAssets = cached
+                    self.isLoadingPreviewAssets = false
+                    return
+                }
                 let assets = try await PreviewAssetGenerator.shared.generateAssets(for: url)
                 try Task.checkCancellation()
                 self.previewAssets = assets

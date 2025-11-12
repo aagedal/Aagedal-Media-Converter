@@ -112,6 +112,53 @@ struct VideoFileUtils: Sendable {
         )
     }
 
+    /// Schedules generation of heavy preview assets (filmstrip thumbnails, waveform, and first preview chunk)
+    /// after the lightweight metadata and row thumbnail are complete.
+    static func prefetchPreviewAssets(
+        for url: URL,
+        durationSeconds: Double,
+        previewChunkDuration: TimeInterval = 5.0
+    ) {
+        Task.detached(priority: .background) {
+            let fileName = url.lastPathComponent
+            do {
+                let generator = PreviewAssetGenerator.shared
+                let assets = try await generator.generateAssets(for: url)
+                print(" [prefetchPreviewAssets] ✅ Cached filmstrip/waveform for \(fileName) (\(assets.thumbnails.count) thumbnails, waveform: \(assets.waveform != nil))")
+            } catch {
+                print(" [prefetchPreviewAssets] ⚠️ Failed to generate preview assets for \(fileName): \(error.localizedDescription)")
+            }
+
+            guard durationSeconds > 0 else { return }
+
+            do {
+                let cacheDirectory = try await PreviewAssetGenerator.shared.getAssetDirectory(for: url)
+                let session = MP4PreviewSession(
+                    sourceURL: url,
+                    cacheDirectory: cacheDirectory,
+                    audioStreamIndices: []
+                )
+
+                let chunkIndex = 0
+                let chunkPath = session.chunkURL(for: chunkIndex)
+                if FileManager.default.fileExists(atPath: chunkPath.path) {
+                    print(" [prefetchPreviewAssets] Chunk #0 already cached for \(fileName)")
+                    return
+                }
+
+                let chunkDuration = min(previewChunkDuration, durationSeconds)
+                _ = try await session.generatePreviewChunk(
+                    chunkIndex: chunkIndex,
+                    startTime: 0,
+                    durationLimit: chunkDuration
+                )
+                print(" [prefetchPreviewAssets] ✅ Cached initial preview chunk for \(fileName)")
+            } catch {
+                print(" [prefetchPreviewAssets] ⚠️ Failed to prefetch preview chunk for \(fileName): \(error.localizedDescription)")
+            }
+        }
+    }
+
     static func loadDetailsAsync(
         for url: URL,
         outputFolder: String? = nil,

@@ -248,6 +248,7 @@ struct VideoFileListView: View {
             print(" Bookmark saved: \(bookmarkSaved)")
 
             let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            let durationSeconds = details.durationSeconds
             await MainActor.run {
                 if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
                     self.droppedFiles[index].apply(details: details)
@@ -261,6 +262,15 @@ struct VideoFileListView: View {
                 if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
                     self.droppedFiles[index].metadata = metadata
                     print(" Updated video item with metadata: \(self.droppedFiles[index].name)")
+
+                    let effectiveDuration = self.droppedFiles[index].durationSeconds
+                    let durationForPrefetch = effectiveDuration > 0 ? effectiveDuration : durationSeconds
+                    if durationForPrefetch > 0 {
+                        VideoFileUtils.prefetchPreviewAssets(
+                            for: url,
+                            durationSeconds: durationForPrefetch
+                        )
+                    }
                 }
             }
         }

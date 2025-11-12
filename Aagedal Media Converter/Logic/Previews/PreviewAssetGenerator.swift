@@ -45,6 +45,8 @@ actor PreviewAssetGenerator {
     private let thumbnailCount = 6
     private let waveformSize = "1000x90"
     private let rowThumbnailSize = "640:-1"  // 640px width for row thumbnail
+    private let waveformFilename = "waveform.jpg"
+    private let legacyWaveformFilename = "waveform.png"
 
     /// Clears the entire preview cache directory.
     func cleanupAllCache() async {
@@ -207,18 +209,20 @@ actor PreviewAssetGenerator {
         let expectedThumbnailURLs = (0..<thumbnailCount).map { index in
             assetDirectory.appendingPathComponent("thumb_\(index).jpg", isDirectory: false)
         }
-        let waveformURL = assetDirectory.appendingPathComponent("waveform.png", isDirectory: false)
+        let waveformURL = assetDirectory.appendingPathComponent(waveformFilename, isDirectory: false)
+        let legacyWaveformURL = assetDirectory.appendingPathComponent(legacyWaveformFilename, isDirectory: false)
 
         let rowThumbnailMissing = !fileManager.fileExists(atPath: rowThumbnailURL.path)
         let missingThumbnailIndices = expectedThumbnailURLs.enumerated().compactMap { index, url in
             fileManager.fileExists(atPath: url.path) ? nil : index
         }
-        let waveformMissing = !fileManager.fileExists(atPath: waveformURL.path)
+        var existingWaveformURL = [waveformURL, legacyWaveformURL].first { fileManager.fileExists(atPath: $0.path) }
+        let waveformMissing = existingWaveformURL == nil
 
         // Short-circuit if everything already exists
         if !rowThumbnailMissing && missingThumbnailIndices.isEmpty && !waveformMissing {
             logger.info("All assets already cached")
-            return PreviewAssets(rowThumbnail: rowThumbnailURL, thumbnails: expectedThumbnailURLs, waveform: waveformURL)
+            return PreviewAssets(rowThumbnail: rowThumbnailURL, thumbnails: expectedThumbnailURLs, waveform: existingWaveformURL)
         }
         
         logger.info("Row thumbnail missing: \(rowThumbnailMissing), filmstrip thumbnails missing: \(missingThumbnailIndices.count), waveform missing: \(waveformMissing)")
@@ -241,21 +245,40 @@ actor PreviewAssetGenerator {
             )
         }
 
-        // Generate filmstrip thumbnails in background (async, non-blocking)
         if !missingThumbnailIndices.isEmpty {
-            Task.detached(priority: .background) {
-                do {
-                    try await self.generateThumbnails(
-                        url: url,
-                        ffmpegPath: ffmpegPath,
-                        duration: duration,
-                        assetDirectory: assetDirectory,
-                        missingIndices: missingThumbnailIndices,
-                        expectedFiles: expectedThumbnailURLs,
-                        hdrType: hdrType
-                    )
-                } catch {
-                    self.logger.error("Background filmstrip generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            await generateThumbnails(
+                url: url,
+                ffmpegPath: ffmpegPath,
+                duration: duration,
+                assetDirectory: assetDirectory,
+                missingIndices: missingThumbnailIndices,
+                expectedFiles: expectedThumbnailURLs,
+                hdrType: hdrType
+            )
+
+            var remainingMissing = expectedThumbnailURLs.enumerated().compactMap { index, url in
+                fileManager.fileExists(atPath: url.path) ? nil : index
+            }
+
+            if !remainingMissing.isEmpty {
+                logger.warning("Retrying filmstrip generation with simplified pipeline for \(remainingMissing.count) thumbnails of \(url.lastPathComponent, privacy: .public)")
+                await generateThumbnails(
+                    url: url,
+                    ffmpegPath: ffmpegPath,
+                    duration: duration,
+                    assetDirectory: assetDirectory,
+                    missingIndices: remainingMissing,
+                    expectedFiles: expectedThumbnailURLs,
+                    hdrType: .none,
+                    useSimplifiedFilter: true
+                )
+
+                remainingMissing = expectedThumbnailURLs.enumerated().compactMap { index, url in
+                    fileManager.fileExists(atPath: url.path) ? nil : index
+                }
+
+                if !remainingMissing.isEmpty {
+                    logger.error("Unable to generate \(remainingMissing.count) filmstrip thumbnails for \(url.lastPathComponent, privacy: .public) after fallback attempts")
                 }
             }
         }
@@ -267,15 +290,20 @@ actor PreviewAssetGenerator {
                     ffmpegPath: ffmpegPath,
                     destination: waveformURL
                 )
+                existingWaveformURL = fileManager.fileExists(atPath: waveformURL.path) ? waveformURL : existingWaveformURL
             } catch {
                 logger.warning("Waveform generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
 
         let generatedRowThumbnail = fileManager.fileExists(atPath: rowThumbnailURL.path) ? rowThumbnailURL : nil
-        let generatedWaveformURL = fileManager.fileExists(atPath: waveformURL.path) ? waveformURL : nil
-        logger.info("Asset generation complete. Row thumbnail: \(generatedRowThumbnail != nil), filmstrip: \(expectedThumbnailURLs.count), waveform: \(generatedWaveformURL != nil)")
-        return PreviewAssets(rowThumbnail: generatedRowThumbnail, thumbnails: expectedThumbnailURLs, waveform: generatedWaveformURL)
+        let availableThumbnails = expectedThumbnailURLs.filter { fileManager.fileExists(atPath: $0.path) }
+        if availableThumbnails.count < expectedThumbnailURLs.count {
+            logger.warning("Only \(availableThumbnails.count) / \(expectedThumbnailURLs.count) filmstrip thumbnails available for \(url.lastPathComponent, privacy: .public)")
+        }
+        let generatedWaveformURL = existingWaveformURL
+        logger.info("Asset generation complete. Row thumbnail: \(generatedRowThumbnail != nil), filmstrip: \(availableThumbnails.count), waveform: \(generatedWaveformURL != nil)")
+        return PreviewAssets(rowThumbnail: generatedRowThumbnail, thumbnails: availableThumbnails, waveform: generatedWaveformURL)
     }
     
     /// Generates only the row thumbnail (fast, no waveform or filmstrip)
@@ -386,26 +414,28 @@ actor PreviewAssetGenerator {
         assetDirectory: URL,
         missingIndices: [Int],
         expectedFiles: [URL],
-        hdrType: HDRType
-    ) async throws {
+        hdrType: HDRType,
+        useSimplifiedFilter: Bool = false
+    ) async {
+        guard !missingIndices.isEmpty else { return }
+
         for index in missingIndices {
             let destination = expectedFiles[index]
             let position = positionForThumbnail(at: index, total: thumbnailCount, duration: duration)
-            
-            // Apply SAR scaling, then scale to target width
+
             var videoFilter = "scale=iw*sar:ih,scale=320:-1"
-            
-            switch hdrType {
+
+            let effectiveHDRType: HDRType = useSimplifiedFilter ? .none : hdrType
+
+            switch effectiveHDRType {
             case .none:
-                // Standard SDR content - just scale
                 break
             case .proresRAW:
-                // ProRes RAW - let decoder handle color, ensure proper output format
                 videoFilter += ",format=yuv420p"
             case .hdr10Bit:
-                // 10-bit+ HDR - apply full tonemapping chain
                 videoFilter += ",zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
-            }          
+            }
+
             let arguments: [String] = [
                 "-hide_banner",
                 "-loglevel", "error",
@@ -423,11 +453,44 @@ actor PreviewAssetGenerator {
                     executable: URL(fileURLWithPath: ffmpegPath),
                     arguments: arguments
                 )
+                logger.debug("Generated thumbnail #\(index) for \(url.lastPathComponent, privacy: .public) at position \(position, privacy: .public)s")
             } catch {
                 logger.error("Thumbnail generation failed for index \(index) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                throw PreviewAssetError.generationFailed("thumbnail #\(index)")
+                // Remove any partial output to avoid stale corrupted files
+                try? fileManager.removeItem(at: destination)
             }
         }
+    }
+
+    func cachedAssetsIfPresent(for url: URL) -> PreviewAssets? {
+        guard let fingerprint = try? assetFingerprint(for: url) else { return nil }
+        let baseDirectory = AppConstants.previewCacheDirectory
+        let directory = baseDirectory.appendingPathComponent(fingerprint, isDirectory: true)
+
+        guard fileManager.fileExists(atPath: directory.path) else { return nil }
+
+        let rowThumbnailURL = directory.appendingPathComponent("row_thumb.jpg")
+        let rowThumbnail = fileManager.fileExists(atPath: rowThumbnailURL.path) ? rowThumbnailURL : nil
+
+        var thumbnails: [URL] = []
+        for index in 0..<thumbnailCount {
+            let candidate = directory.appendingPathComponent("thumb_\(index).jpg")
+            if fileManager.fileExists(atPath: candidate.path) {
+                thumbnails.append(candidate)
+            }
+        }
+
+        let waveformCandidates = [
+            directory.appendingPathComponent(waveformFilename),
+            directory.appendingPathComponent(legacyWaveformFilename)
+        ]
+        let waveform = waveformCandidates.first { fileManager.fileExists(atPath: $0.path) }
+
+        if rowThumbnail == nil && thumbnails.isEmpty && waveform == nil {
+            return nil
+        }
+
+        return PreviewAssets(rowThumbnail: rowThumbnail, thumbnails: thumbnails, waveform: waveform)
     }
 
     private func generateWaveform(
@@ -435,20 +498,55 @@ actor PreviewAssetGenerator {
         ffmpegPath: String,
         destination: URL
     ) async throws {
-        let arguments: [String] = [
+        let primaryArguments: [String] = [
             "-hide_banner",
             "-loglevel", "error",
             "-i", url.path,
-            "-filter_complex", "aformat=channel_layouts=mono,showwavespic=s=\(waveformSize):colors=FFFFFF",
+            "-filter_complex", "[0:a:0]aformat=channel_layouts=mono,showwavespic=s=\(waveformSize):colors=FFFFFF,format=yuv420p[out]",
+            "-map", "[out]",
+            "-an",
             "-frames:v", "1",
+            "-f", "image2",
+            "-c:v", "mjpeg",
+            "-q:v", "2",
+            "-pix_fmt", "yuvj420p",
             "-y",
             destination.path
         ]
+        logger.debug("Waveform primary command for \(url.lastPathComponent, privacy: .public): \(primaryArguments.joined(separator: " "), privacy: .public)")
+        do {
+            try await runProcess(
+                executable: URL(fileURLWithPath: ffmpegPath),
+                arguments: primaryArguments
+            )
+            logger.debug("Waveform primary pipeline succeeded for \(url.lastPathComponent, privacy: .public)")
+            return
+        } catch {
+            logger.warning("Primary waveform generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public). Retrying with fallback pipeline.")
+        }
+
+        let fallbackArguments: [String] = [
+            "-hide_banner",
+            "-loglevel", "error",
+            "-i", url.path,
+            "-filter_complex", "[0:a:0]aresample=48000,aformat=channel_layouts=mono,showwavespic=s=\(waveformSize):colors=FFFFFF,format=yuv420p[out]",
+            "-map", "[out]",
+            "-an",
+            "-frames:v", "1",
+            "-f", "image2",
+            "-c:v", "mjpeg",
+            "-q:v", "2",
+            "-pix_fmt", "yuvj420p",
+            "-y",
+            destination.path
+        ]
+        logger.debug("Waveform fallback command for \(url.lastPathComponent, privacy: .public): \(fallbackArguments.joined(separator: " "), privacy: .public)")
 
         try await runProcess(
             executable: URL(fileURLWithPath: ffmpegPath),
-            arguments: arguments
+            arguments: fallbackArguments
         )
+        logger.debug("Waveform fallback pipeline succeeded for \(url.lastPathComponent, privacy: .public)")
     }
     
     /// HDR processing requirement types

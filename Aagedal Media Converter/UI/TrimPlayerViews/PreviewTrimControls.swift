@@ -98,9 +98,8 @@ struct PreviewTrimControls: View {
                         controller.lastScreenshotDragItemProvider() ?? NSItemProvider()
                     }
                     .disabled(controller.lastScreenshotURL == nil ? true : false)
-            }
+            }.padding(.trailing, 30)
             
-            Spacer()
 
             Toggle(isOn: loopBinding) {
                 Label("Loop", systemImage: "repeat")
