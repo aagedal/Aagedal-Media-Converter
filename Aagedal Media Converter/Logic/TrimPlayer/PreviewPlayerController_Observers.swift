@@ -215,17 +215,103 @@ extension PreviewPlayerController {
         playerItemStatusObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+
+                let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
                 
                 switch item.status {
                 case .failed:
-                    // Direct playback failed, try HLS fallback
-                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                        .warning("Direct AVPlayer playback failed: \(item.error?.localizedDescription ?? "unknown error"). Preparing MP4 fallback preview.")
+                    let failureDescription = item.error?.localizedDescription ?? "unknown error"
+                    logger.warning("Direct AVPlayer playback failed (description: \(failureDescription, privacy: .public)). Preparing MP4 fallback preview.")
+                    
+                    if let error = item.error as NSError? {
+                        let userInfoKeys = error.userInfo.keys.map { String(describing: $0) }
+                        logger.warning("AVPlayer error details – domain: \(error.domain, privacy: .public), code: \(error.code, privacy: .public), userInfoKeys: \(userInfoKeys, privacy: .public)")
+                        
+                        if let failureReason = error.localizedFailureReason, !failureReason.isEmpty {
+                            logger.debug("AVPlayer failure reason: \(failureReason, privacy: .public)")
+                        }
+                        
+                        if let recoverySuggestion = error.localizedRecoverySuggestion, !recoverySuggestion.isEmpty {
+                            logger.debug("AVPlayer recovery suggestion: \(recoverySuggestion, privacy: .public)")
+                        }
+                        
+                        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+                            logger.warning("Underlying error – domain: \(underlying.domain, privacy: .public), code: \(underlying.code, privacy: .public), description: \(underlying.localizedDescription, privacy: .public)")
+                        }
+                    } else {
+                        logger.warning("AVPlayer item failed without NSError payload.")
+                    }
+                    
+                    if let urlAsset = item.asset as? AVURLAsset {
+                        let pathExtension = urlAsset.url.pathExtension
+                        logger.debug("Failing asset metadata – extension: \(pathExtension, privacy: .public)")
+                    } else {
+                        logger.debug("Failing asset type: \(String(describing: type(of: item.asset)), privacy: .public)")
+                    }
+                    
+                    let asset = item.asset
+                    Task {
+                        if let urlAsset = asset as? AVURLAsset {
+                            do {
+                                let resourceValues = try urlAsset.url.resourceValues(forKeys: [.typeIdentifierKey])
+                                if let uti = resourceValues.typeIdentifier {
+                                    logger.debug("Failing asset UTI: \(uti, privacy: .public)")
+                                } else {
+                                    logger.debug("Failing asset UTI unavailable")
+                                }
+                            } catch {
+                                logger.debug("Failed to read asset resource values: \(error.localizedDescription, privacy: .public)")
+                            }
+                        }
+
+                        do {
+                            let duration = try await asset.load(.duration)
+                            logger.debug("Failing asset duration: \(duration.seconds, privacy: .public)s")
+                        } catch {
+                            logger.debug("Failed to load asset duration: \(error.localizedDescription, privacy: .public)")
+                        }
+
+                        do {
+                            let videoTracks = try await asset.loadTracks(withMediaType: .video)
+                            if videoTracks.isEmpty {
+                                logger.warning("No video tracks available when inspecting failed asset.")
+                            }
+                            
+                            for track in videoTracks {
+                                let frameRate = try await track.load(.nominalFrameRate)
+                                let isPlayable = try await track.load(.isPlayable)
+                                let naturalSize = try await track.load(.naturalSize)
+                                let sizeDescription = "\(Int(naturalSize.width))x\(Int(naturalSize.height))"
+                                let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
+                                
+                                let codecNames: [String] = formatDescriptions.map { desc in
+                                    let codec = CMFormatDescriptionGetMediaSubType(desc)
+                                    let codecBytes: [UInt8] = [
+                                        UInt8((codec >> 24) & 0xFF),
+                                        UInt8((codec >> 16) & 0xFF),
+                                        UInt8((codec >> 8) & 0xFF),
+                                        UInt8(codec & 0xFF)
+                                    ]
+                                    
+                                    if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters),
+                                       fourCC.count == 4 {
+                                        return fourCC
+                                    }
+                                    
+                                    return String(format: "%08X", codec)
+                                }
+                                
+                                let codecSummary = codecNames.isEmpty ? "<none>" : codecNames.joined(separator: ",")
+                                logger.debug("Video track \(Int(track.trackID), privacy: .public) details – nominalFrameRate: \(frameRate, privacy: .public), naturalSize: \(sizeDescription, privacy: .public), isPlayable: \(isPlayable, privacy: .public), codecs: \(codecSummary, privacy: .public)")
+                            }
+                        } catch {
+                            logger.error("Failed to inspect asset tracks after AVPlayer failure: \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
+                    
                     self.fallbackToPreview(startTime: startTime)
                     
                 case .readyToPlay:
-                    // Check if video tracks exist and can be decoded
-                    // Some files (like APV) report ready because audio works, but video codec is unsupported
                     let asset = item.asset
                     
                     Task {
@@ -244,8 +330,7 @@ extension PreviewPlayerController {
                                 }
                                 
                                 if !hasValidVideoFormat {
-                                    Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                                        .warning("AVPlayer ready but video format invalid. Preparing MP4 fallback preview.")
+                                    logger.warning("AVPlayer ready but video format invalid. Preparing MP4 fallback preview.")
                                     self.fallbackToPreview(startTime: startTime)
                                     return
                                 }
@@ -269,14 +354,12 @@ extension PreviewPlayerController {
                                             codecString = String(format: "%08X", codec)
                                         }
                                         
-                                        Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                                            .debug("Video codec detected: '\(codecString)' (raw: \(codec))")
+                                        logger.debug("Video codec detected: '\(codecString)' (raw: \(codec))")
                                         
                                         // Check for truly unsupported codecs
                                         // Only APV codecs are unsupported - all ProRes variants work with AVPlayer
                                         if codecString == "apv1" || codecString == "apvx" {
-                                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                                                .warning("AVPlayer ready but codec '\(codecString)' unsupported. Preparing MP4 fallback preview.")
+                                            logger.warning("AVPlayer ready but codec '\(codecString)' unsupported. Preparing MP4 fallback preview.")
                                             self.fallbackToPreview(startTime: startTime)
                                             return
                                         }
@@ -285,13 +368,11 @@ extension PreviewPlayerController {
                             }
                             
                             // Direct playback successful
-                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                                .debug("Direct AVPlayer playback ready")
-                                
+                            logger.debug("Direct AVPlayer playback ready")
+                            
                         } catch {
                             // If we can't load tracks, assume it's okay and let AVPlayer try
-                            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
-                                .debug("Could not verify video tracks, proceeding with playback")
+                            logger.debug("Could not verify video tracks, proceeding with playback")
                         }
                     }
                     
