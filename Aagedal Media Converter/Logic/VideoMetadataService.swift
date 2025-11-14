@@ -114,6 +114,9 @@ struct VideoMetadata: Equatable, Sendable {
     }
 
     struct AudioStream: Equatable, Sendable {
+        let index: Int?
+        let languageCode: String?
+        let title: String?
         let codec: String?
         let codecLongName: String?
         let profile: String?
@@ -337,6 +340,9 @@ actor VideoMetadataService {
 
         let audio = filteredAudioStreams.map { stream -> VideoMetadata.AudioStream in
             VideoMetadata.AudioStream(
+                index: stream.index,
+                languageCode: stream.tags?.language?.lowercased(),
+                title: stream.tags?.title,
                 codec: stream.codecName,
                 codecLongName: stream.codecLongName,
                 profile: stream.profile,
@@ -427,6 +433,8 @@ private struct FFprobeResponse: Decodable {
 
     struct Tags: Decodable {
         let comment: String?
+        let language: String?
+        let title: String?
     }
 
     func toVideoMetadata() -> VideoMetadata {
@@ -471,6 +479,9 @@ private struct FFprobeResponse: Decodable {
 
         let audio = audioStreams.map { stream -> VideoMetadata.AudioStream in
             return VideoMetadata.AudioStream(
+                index: stream.index,
+                languageCode: stream.tags?.language?.lowercased(),
+                title: stream.tags?.title,
                 codec: stream.codecName,
                 codecLongName: stream.codecLongName,
                 profile: stream.profile,

@@ -113,9 +113,14 @@ struct VideoFileListView: View {
     private func processNextImportBatch() {
         guard !isProcessingBatch else { return }
         isProcessingBatch = true
-        
+
         Task { @MainActor in
-            defer { self.isProcessingBatch = false }
+            defer {
+                self.isProcessingBatch = false
+                if !self.importQueue.isEmpty {
+                    self.processNextImportBatch()
+                }
+            }
             // Small delay gives the system time to deliver the rest of the drop
             try? await Task.sleep(nanoseconds: 300_000_000)
             let providers = importQueue

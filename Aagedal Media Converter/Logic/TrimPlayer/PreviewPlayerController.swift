@@ -230,10 +230,10 @@ final class PreviewPlayerController: ObservableObject {
             let mediaOptionIndex = mediaOptions.indices.contains(position) ? position : nil
 
             let title: String
-            if let mediaOption {
+            if let stream {
+                title = self.formattedAudioTrackTitle(for: stream, position: position)
+            } else if let mediaOption {
                 title = mediaOption.displayName
-            } else if let stream {
-                title = stream.channelLayout ?? "Audio Track \(position + 1)"
             } else {
                 title = "Audio Track \(position + 1)"
             }
@@ -273,6 +273,34 @@ final class PreviewPlayerController: ObservableObject {
         }
 
         audioTrackOptions = options
+    }
+
+    private func formattedAudioTrackTitle(for stream: VideoMetadata.AudioStream, position: Int) -> String {
+        var components: [String] = []
+
+        if let index = stream.index {
+            components.append("#\(index)")
+        } else {
+            components.append("#\(position)")
+        }
+
+        if let language = stream.languageCode, !language.isEmpty {
+            components.append(language)
+        }
+
+        if let codecName = stream.codecLongName ?? stream.codec, !codecName.isEmpty {
+            components.append(codecName)
+        }
+
+        if let layout = stream.channelLayout, !layout.isEmpty {
+            components.append(layout)
+        }
+
+        if components.isEmpty {
+            return "Audio Track \(position + 1)"
+        }
+
+        return components.joined(separator: " – ")
     }
 
     func selectAudioTrack(at position: Int) {
