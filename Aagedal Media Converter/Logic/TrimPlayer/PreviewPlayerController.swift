@@ -27,7 +27,9 @@ final class PreviewPlayerController: ObservableObject {
     @Published var isPreparing = false
     @Published var errorMessage: String?
     @Published var currentPlaybackTime: Double = 0
-    @Published var previewAssets: PreviewAssets?
+    @Published var previewAssets: PreviewAssets? {
+        didSet { updateCurrentWaveform() }
+    }
     @Published var isLoadingPreviewAssets = false
     @Published var isCapturingScreenshot = false
     @Published var isGeneratingFallbackPreview = false
@@ -39,6 +41,7 @@ final class PreviewPlayerController: ObservableObject {
     @Published var isLoadingChunk = false
     @Published var pendingChunkTime: Double?
     @Published var audioTrackOptions: [AudioTrackOption] = []
+    @Published private(set) var currentWaveformURL: URL?
     
     // MARK: - Configuration
     
@@ -276,6 +279,7 @@ final class PreviewPlayerController: ObservableObject {
         guard position != selectedAudioTrackOrderIndex else { return }
         selectedAudioTrackOrderIndex = position
         applySelectedAudioTrack()
+        updateCurrentWaveform()
     }
 
     private func applySelectedAudioTrack() {
@@ -284,6 +288,7 @@ final class PreviewPlayerController: ObservableObject {
         } else {
             applySelectedAudioTrackToCurrentPlayerItem()
         }
+        updateCurrentWaveform()
     }
 
     private func applySelectedAudioTrackToCurrentPlayerItem() {
@@ -324,6 +329,17 @@ final class PreviewPlayerController: ObservableObject {
         let currentTime = getCurrentTime() ?? videoItem.effectiveTrimStart
         teardown(resetAudioSelection: false)
         preparePreview(startTime: currentTime, resetAudioSelection: false)
+    }
+
+    private func selectedAudioStreamIndex() -> Int? {
+        let position = selectedAudioTrackOrderIndex
+        guard audioTrackOptions.indices.contains(position) else { return nil }
+        return audioTrackOptions[position].streamIndex
+    }
+
+    private func updateCurrentWaveform() {
+        let streamIndex = selectedAudioStreamIndex()
+        currentWaveformURL = previewAssets?.waveform(forAudioStream: streamIndex)
     }
     
     func teardown(resetAudioSelection: Bool = true) {
@@ -379,6 +395,7 @@ final class PreviewPlayerController: ObservableObject {
             selectedAudioTrackOrderIndex = 0
         }
         audioTrackOptions = []
+        currentWaveformURL = nil
     }
     
     // MARK: - Playback Control
@@ -610,7 +627,7 @@ final class PreviewPlayerController: ObservableObject {
             guard let self else { return }
             do {
                 if let cached = await PreviewAssetGenerator.shared.cachedAssetsIfPresent(for: url),
-                   !cached.thumbnails.isEmpty || cached.waveform != nil {
+                   !cached.thumbnails.isEmpty || cached.waveform != nil || !cached.audioWaveforms.isEmpty {
                     self.previewAssets = cached
                     self.isLoadingPreviewAssets = false
                     return

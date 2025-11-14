@@ -28,7 +28,7 @@ struct PreviewTrimControls: View {
                     duration: duration,
                     playbackTime: currentPlaybackTime,
                     thumbnails: controller.previewAssets?.thumbnails,
-                    waveformURL: controller.previewAssets?.waveform,
+                    waveformURL: controller.currentWaveformURL,
                     isLoading: controller.isLoadingPreviewAssets,
                     fallbackPreviewRange: controller.fallbackPreviewRange,
                     loadedChunks: controller.loadedChunks,

@@ -1,5 +1,5 @@
 // Aagedal Media Converter
-// Copyright © 2025 Truls Aagedal
+// Copyright 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This program is free software: you can redistribute it and/or modify
@@ -12,9 +12,15 @@ import OSLog
 import CryptoKit
 
 struct PreviewAssets: Sendable {
-    let rowThumbnail: URL?  // Large thumbnail for video row display
-    let thumbnails: [URL]  // Filmstrip thumbnails for timeline
+    let rowThumbnail: URL?
+    let thumbnails: [URL]
     let waveform: URL?
+    let audioWaveforms: [Int: URL]
+
+    func waveform(forAudioStream streamIndex: Int?) -> URL? {
+        guard let streamIndex else { return waveform }
+        return audioWaveforms[streamIndex] ?? waveform
+    }
 }
 
 enum PreviewAssetError: Error, LocalizedError {
@@ -47,6 +53,7 @@ actor PreviewAssetGenerator {
     private let rowThumbnailSize = "640:-1"  // 640px width for row thumbnail
     private let waveformFilename = "waveform.jpg"
     private let legacyWaveformFilename = "waveform.png"
+    private func waveformFilename(for streamIndex: Int) -> String { "waveform_a\(streamIndex).jpg" }
 
     /// Clears the entire preview cache directory.
     func cleanupAllCache() async {
@@ -114,6 +121,45 @@ actor PreviewAssetGenerator {
     /// Returns the asset directory for a given video URL, creating it if needed
     func getAssetDirectory(for url: URL) throws -> URL {
         try ensureAssetDirectory(for: url)
+    }
+
+    /// Returns cached assets if all required files already exist on disk
+    func cachedAssetsIfPresent(for url: URL) async -> PreviewAssets? {
+        do {
+            let assetDirectory = try ensureAssetDirectory(for: url)
+            let rowThumbnailURL = assetDirectory.appendingPathComponent("row_thumb.jpg", isDirectory: false)
+            let thumbnails = (0..<thumbnailCount).map { assetDirectory.appendingPathComponent("thumb_\($0).jpg", isDirectory: false) }
+            let waveformURL = assetDirectory.appendingPathComponent(waveformFilename, isDirectory: false)
+            let legacyWaveformURL = assetDirectory.appendingPathComponent(legacyWaveformFilename, isDirectory: false)
+
+            let rowExists = fileManager.fileExists(atPath: rowThumbnailURL.path)
+            let thumbnailURLs = thumbnails.filter { fileManager.fileExists(atPath: $0.path) }
+            let waveform = [waveformURL, legacyWaveformURL].first { fileManager.fileExists(atPath: $0.path) }
+
+            var audioWaveforms: [Int: URL] = [:]
+            if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
+                metadata.audioStreams.enumerated().forEach { index, _ in
+                    let custom = assetDirectory.appendingPathComponent(waveformFilename(for: index), isDirectory: false)
+                    if fileManager.fileExists(atPath: custom.path) {
+                        audioWaveforms[index] = custom
+                    }
+                }
+            }
+
+            if !rowExists && thumbnailURLs.isEmpty && waveform == nil && audioWaveforms.isEmpty {
+                return nil
+            }
+
+            return PreviewAssets(
+                rowThumbnail: rowExists ? rowThumbnailURL : nil,
+                thumbnails: thumbnailURLs,
+                waveform: waveform,
+                audioWaveforms: audioWaveforms
+            )
+        } catch {
+            logger.debug("Failed to load cached assets for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
     
     /// Cleans up all cached assets for a given video URL
@@ -217,12 +263,21 @@ actor PreviewAssetGenerator {
             fileManager.fileExists(atPath: url.path) ? nil : index
         }
         var existingWaveformURL = [waveformURL, legacyWaveformURL].first { fileManager.fileExists(atPath: $0.path) }
+        var existingPerStreamWaveforms: [Int: URL] = [:]
+        if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
+            metadata.audioStreams.enumerated().forEach { index, _ in
+                let customURL = assetDirectory.appendingPathComponent(waveformFilename(for: index), isDirectory: false)
+                if fileManager.fileExists(atPath: customURL.path) {
+                    existingPerStreamWaveforms[index] = customURL
+                }
+            }
+        }
         let waveformMissing = existingWaveformURL == nil
 
         // Short-circuit if everything already exists
         if !rowThumbnailMissing && missingThumbnailIndices.isEmpty && !waveformMissing {
             logger.info("All assets already cached")
-            return PreviewAssets(rowThumbnail: rowThumbnailURL, thumbnails: expectedThumbnailURLs, waveform: existingWaveformURL)
+            return PreviewAssets(rowThumbnail: rowThumbnailURL, thumbnails: expectedThumbnailURLs, waveform: existingWaveformURL, audioWaveforms: existingPerStreamWaveforms)
         }
         
         logger.info("Row thumbnail missing: \(rowThumbnailMissing), filmstrip thumbnails missing: \(missingThumbnailIndices.count), waveform missing: \(waveformMissing)")
@@ -283,6 +338,11 @@ actor PreviewAssetGenerator {
             }
         }
 
+        var metadata: VideoMetadata?
+        if waveformMissing || existingPerStreamWaveforms.isEmpty {
+            metadata = try? await VideoMetadataService.shared.metadata(for: url)
+        }
+
         if waveformMissing {
             do {
                 try await generateWaveform(
@@ -296,6 +356,22 @@ actor PreviewAssetGenerator {
             }
         }
 
+        if existingPerStreamWaveforms.isEmpty, let metadata {
+            await generatePerStreamWaveforms(
+                url: url,
+                ffmpegPath: ffmpegPath,
+                assetDirectory: assetDirectory,
+                metadata: metadata,
+                fallbackWaveform: existingWaveformURL
+            )
+            metadata.audioStreams.enumerated().forEach { index, _ in
+                let customURL = assetDirectory.appendingPathComponent(waveformFilename(for: index), isDirectory: false)
+                if fileManager.fileExists(atPath: customURL.path) {
+                    existingPerStreamWaveforms[index] = customURL
+                }
+            }
+        }
+
         let generatedRowThumbnail = fileManager.fileExists(atPath: rowThumbnailURL.path) ? rowThumbnailURL : nil
         let availableThumbnails = expectedThumbnailURLs.filter { fileManager.fileExists(atPath: $0.path) }
         if availableThumbnails.count < expectedThumbnailURLs.count {
@@ -303,7 +379,12 @@ actor PreviewAssetGenerator {
         }
         let generatedWaveformURL = existingWaveformURL
         logger.info("Asset generation complete. Row thumbnail: \(generatedRowThumbnail != nil), filmstrip: \(availableThumbnails.count), waveform: \(generatedWaveformURL != nil)")
-        return PreviewAssets(rowThumbnail: generatedRowThumbnail, thumbnails: availableThumbnails, waveform: generatedWaveformURL)
+        return PreviewAssets(
+            rowThumbnail: generatedRowThumbnail,
+            thumbnails: availableThumbnails,
+            waveform: generatedWaveformURL,
+            audioWaveforms: existingPerStreamWaveforms
+        )
     }
     
     /// Generates only the row thumbnail (fast, no waveform or filmstrip)
@@ -462,47 +543,17 @@ actor PreviewAssetGenerator {
         }
     }
 
-    func cachedAssetsIfPresent(for url: URL) -> PreviewAssets? {
-        guard let fingerprint = try? assetFingerprint(for: url) else { return nil }
-        let baseDirectory = AppConstants.previewCacheDirectory
-        let directory = baseDirectory.appendingPathComponent(fingerprint, isDirectory: true)
-
-        guard fileManager.fileExists(atPath: directory.path) else { return nil }
-
-        let rowThumbnailURL = directory.appendingPathComponent("row_thumb.jpg")
-        let rowThumbnail = fileManager.fileExists(atPath: rowThumbnailURL.path) ? rowThumbnailURL : nil
-
-        var thumbnails: [URL] = []
-        for index in 0..<thumbnailCount {
-            let candidate = directory.appendingPathComponent("thumb_\(index).jpg")
-            if fileManager.fileExists(atPath: candidate.path) {
-                thumbnails.append(candidate)
-            }
-        }
-
-        let waveformCandidates = [
-            directory.appendingPathComponent(waveformFilename),
-            directory.appendingPathComponent(legacyWaveformFilename)
-        ]
-        let waveform = waveformCandidates.first { fileManager.fileExists(atPath: $0.path) }
-
-        if rowThumbnail == nil && thumbnails.isEmpty && waveform == nil {
-            return nil
-        }
-
-        return PreviewAssets(rowThumbnail: rowThumbnail, thumbnails: thumbnails, waveform: waveform)
-    }
-
     private func generateWaveform(
         url: URL,
         ffmpegPath: String,
-        destination: URL
+        destination: URL,
+        audioStreamIndex: Int = 0
     ) async throws {
         let primaryArguments: [String] = [
             "-hide_banner",
             "-loglevel", "error",
             "-i", url.path,
-            "-filter_complex", "[0:a:0]aformat=channel_layouts=mono,showwavespic=s=\(waveformSize):colors=FFFFFF,format=yuv420p[out]",
+            "-filter_complex", "[0:a:\(audioStreamIndex)]aformat=channel_layouts=mono,showwavespic=s=\(waveformSize):colors=FFFFFF,format=yuv420p[out]",
             "-map", "[out]",
             "-an",
             "-frames:v", "1",
@@ -529,7 +580,7 @@ actor PreviewAssetGenerator {
             "-hide_banner",
             "-loglevel", "error",
             "-i", url.path,
-            "-filter_complex", "[0:a:0]aresample=48000,aformat=channel_layouts=mono,showwavespic=s=\(waveformSize):colors=FFFFFF,format=yuv420p[out]",
+            "-filter_complex", "[0:a:\(audioStreamIndex)]aresample=48000,aformat=channel_layouts=mono,showwavespic=s=\(waveformSize):colors=FFFFFF,format=yuv420p[out]",
             "-map", "[out]",
             "-an",
             "-frames:v", "1",
@@ -548,7 +599,70 @@ actor PreviewAssetGenerator {
         )
         logger.debug("Waveform fallback pipeline succeeded for \(url.lastPathComponent, privacy: .public)")
     }
-    
+
+    private func generatePerStreamWaveforms(
+        url: URL,
+        ffmpegPath: String,
+        assetDirectory: URL,
+        metadata: VideoMetadata,
+        fallbackWaveform: URL?
+    ) async {
+        guard metadata.audioStreams.count > 1 else { return }
+
+        await withTaskGroup(of: Void.self) { group in
+            for (index, stream) in metadata.audioStreams.enumerated() {
+                let destination = assetDirectory.appendingPathComponent(waveformFilename(for: index), isDirectory: false)
+                if fileManager.fileExists(atPath: destination.path) {
+                    continue
+                }
+
+                group.addTask { [weak self, destination, stream, streamIndex = index] in
+                    guard let self else { return }
+                    await self.generateWaveformForStream(
+                        url: url,
+                        ffmpegPath: ffmpegPath,
+                        destination: destination,
+                        streamIndex: streamIndex,
+                        stream: stream,
+                        fallbackWaveform: fallbackWaveform
+                    )
+                }
+            }
+        }
+    }
+
+    private func generateWaveformForStream(
+        url: URL,
+        ffmpegPath: String,
+        destination: URL,
+        streamIndex: Int,
+        stream: VideoMetadata.AudioStream,
+        fallbackWaveform: URL?
+    ) async {
+        do {
+            try await generateWaveform(
+                url: url,
+                ffmpegPath: ffmpegPath,
+                destination: destination,
+                audioStreamIndex: streamIndex
+            )
+            return
+        } catch {
+            logger.warning("Waveform generation failed for audio stream #\(streamIndex) (\(stream.channelLayout ?? "unknown")) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+
+        guard let fallbackWaveform else { return }
+
+        do {
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.copyItem(at: fallbackWaveform, to: destination)
+        } catch {
+            logger.warning("Failed to copy fallback waveform for audio stream #\(streamIndex) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// HDR processing requirement types
     private enum HDRType {
         case none           // Standard SDR content
