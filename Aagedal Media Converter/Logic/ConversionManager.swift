@@ -129,6 +129,13 @@ actor ConversionManager: Sendable {
             return
         }
         
+        // Ensure details are loaded before conversion
+        if !droppedFiles.wrappedValue[idx].detailsLoaded {
+            let details = await VideoFileUtils.loadDetails(for: droppedFiles.wrappedValue[idx].url, outputFolder: outputFolder, preset: preset)
+            droppedFiles.wrappedValue[idx].apply(details: details)
+            droppedFiles.wrappedValue[idx].detailsLoaded = true
+        }
+        
         // Update status to converting
         droppedFiles.wrappedValue[idx].status = .converting
 

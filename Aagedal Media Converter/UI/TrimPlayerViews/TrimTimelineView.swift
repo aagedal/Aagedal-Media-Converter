@@ -199,8 +199,17 @@ private struct TrimHandlesInteractionLayer: View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
                 VStack(spacing: 0) {
-                    filmstripSection
-                    waveformSection
+                    // For audio-only files (no thumbnails), show waveform spanning full height
+                    if let thumbnails, !thumbnails.isEmpty {
+                        filmstripSection
+                        waveformSection
+                    } else {
+                        // Audio-only: waveform spans combined height
+                        GeometryReader { geo in
+                            waveformContent(width: geo.size.width)
+                        }
+                        .frame(height: combinedHeight)
+                    }
                 }
                 
                 TrimTimelineOverlay(
@@ -313,7 +322,7 @@ private struct TrimHandlesInteractionLayer: View {
                     )
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: waveformHeight)
+            .frame(maxWidth: .infinity)
             .clipped()
         } else {
             placeholderSection(

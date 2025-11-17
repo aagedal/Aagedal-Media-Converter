@@ -465,15 +465,26 @@ actor PreviewAssetGenerator {
         ffmpegPath: String,
         destination: URL
     ) async throws {
-        let request = makeAudioWaveformRequest(for: url)
-        let graph = FFMPEGCommandBuilder.waveformFilterGraph(for: request, includeAudioSplit: false)
+        let prefs = AudioWaveformPreferences.loadConfig()
+        let width = Int(prefs.resolution.width)
+        let height = Int(prefs.resolution.height)
+        let foreground = prefs.foregroundFFmpegColor
+        
+        // Use showwavespic for static waveform image
+        var filterChain = "[0:a]aformat=channel_layouts=mono,"
+        if prefs.normalizeAudio {
+            filterChain += "dynaudnorm=f=250:g=30:p=0.9,"
+        }
+        filterChain += "showwavespic=s=\(width)x\(height):colors=\(foreground.replacingOccurrences(of: "0x", with: "")),"
+        filterChain += "format=yuv420p[out]"
 
         let arguments: [String] = [
             "-hide_banner",
             "-loglevel", "error",
             "-i", url.path,
-            "-filter_complex", graph.filterComplex,
-            "-map", graph.videoMap,
+            "-filter_complex", filterChain,
+            "-map", "[out]",
+            "-an",
             "-frames:v", "1",
             "-f", "image2",
             "-c:v", "mjpeg",

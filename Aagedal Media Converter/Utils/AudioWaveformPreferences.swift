@@ -13,6 +13,7 @@ import CoreGraphics
 enum WaveformStyle: String, CaseIterable, Identifiable {
     case linear
     case circle
+    case compressed
 
     var id: String { rawValue }
 
@@ -22,6 +23,8 @@ enum WaveformStyle: String, CaseIterable, Identifiable {
             return "Linear"
         case .circle:
             return "Circular"
+        case .compressed:
+            return "Compressed"
         }
     }
 }

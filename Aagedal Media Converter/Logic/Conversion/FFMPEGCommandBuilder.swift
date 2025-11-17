@@ -159,6 +159,12 @@ extension FFMPEGCommandBuilder {
         if request.normalizeAudio {
             audioFilters.append("dynaudnorm=f=250:g=30:p=0.9")
         }
+
+        // Add optional dynamic range compression for the "compressed" style
+        if request.style == .compressed {
+            audioFilters.append("compand")
+        }
+
         let audioProcessing = audioFilters.joined(separator: ",")
 
         let waveInputLabel = includeAudioSplit ? "wavesrc" : "audproc"
@@ -174,14 +180,18 @@ extension FFMPEGCommandBuilder {
         // Generate background
         filterComplex += "color=c=\(background):s=\(resolution):d=1[bg];"
         
-        // Generate waveform with proper visibility settings
-        if request.style == .circle {
-            // Circular waveform
-            filterComplex += "[\(waveInputLabel)]showwaves=s=\(resolution):mode=p2p:draw=full:scale=sqrt:split_channels=0:colors=\(foreground)[wave];"
-        } else {
-            // Linear waveform
-            filterComplex += "[\(waveInputLabel)]showwaves=s=\(resolution):mode=line:draw=scale:scale=sqrt:split_channels=0:colors=\(foreground)[wave];"
+        // Generate waveform visuals for requested style
+        let waveformFilter: String
+        switch request.style {
+        case .circle:
+            waveformFilter = "showwaves=s=\(resolution):mode=p2p:draw=full:split_channels=0:colors=\(foreground)"
+        case .linear:
+            waveformFilter = "showwaves=s=\(resolution):mode=line:draw=scale:scale=sqrt:split_channels=0:colors=\(foreground)"
+        case .compressed:
+            waveformFilter = "showwaves=s=\(resolution):mode=p2p:draw=full:scale=sqrt:split_channels=0:colors=\(foreground)"
         }
+
+        filterComplex += "[\(waveInputLabel)]\(waveformFilter)[wave];"
         
         // Overlay waveform on background
         filterComplex += "[bg][wave]overlay=format=auto[outv]"
