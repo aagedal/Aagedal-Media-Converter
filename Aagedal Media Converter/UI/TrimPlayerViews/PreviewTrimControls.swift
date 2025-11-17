@@ -77,8 +77,8 @@ struct PreviewTrimControls: View {
                     Label("Capture frame", systemImage: "camera")
                         .labelStyle(.iconOnly)
                 }
-                .disabled(controller.isCapturingScreenshot)
-                .help("Save the current frame as an image")
+                .disabled(controller.isCapturingScreenshot || !item.hasVideoStream)
+                .help(item.hasVideoStream ? "Save the current frame as an image" : "Screenshot capture is unavailable for audio-only clips")
 
                 Button {
                     controller.revealLastScreenshotInFinder()
