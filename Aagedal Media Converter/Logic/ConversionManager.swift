@@ -138,6 +138,18 @@ actor ConversionManager: Sendable {
         let outputFileName = sanitizedBaseName + preset.fileSuffix
         let outputURL = URL(fileURLWithPath: outputFolder).appendingPathComponent(outputFileName)
 
+        let waveformRequest = currentItem.requiresWaveformVideo ? {
+            let config = AudioWaveformPreferences.loadConfig()
+            return WaveformVideoRequest(
+                width: Int(config.resolution.width),
+                height: Int(config.resolution.height),
+                backgroundHex: config.backgroundHex,
+                foregroundHex: config.foregroundHex,
+                normalizeAudio: config.normalizeAudio,
+                style: config.style
+            )
+        }() : nil
+
         await ffmpegConverter.convert(
             inputURL: inputURL,
             outputURL: outputURL,
@@ -146,6 +158,7 @@ actor ConversionManager: Sendable {
             includeDateTag: currentItem.includeDateTag,
             trimStart: currentItem.trimStart,
             trimEnd: currentItem.trimEnd,
+            waveformRequest: waveformRequest,
             progressUpdate: { progress, eta in
                 Task { @MainActor in
                     if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {

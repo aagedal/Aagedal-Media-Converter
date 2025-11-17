@@ -10,6 +10,7 @@
 import Foundation
 import OSLog
 import CryptoKit
+import AVFoundation
 
 struct PreviewAssets: Sendable {
     let rowThumbnail: URL?
@@ -234,10 +235,10 @@ actor PreviewAssetGenerator {
             logger.error("Failed to enumerate cache directory: \(error.localizedDescription, privacy: .public)")
         }
     }
-    
+
     func generateAssets(for url: URL) async throws -> PreviewAssets {
         logger.info("Starting asset generation for \(url.lastPathComponent, privacy: .public)")
-        let accessGranted = self.startAccessingSecurityScope(for: url)
+        let accessGranted = startAccessingSecurityScope(for: url)
         defer { if accessGranted { url.stopAccessingSecurityScopedResource() } }
 
         guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
@@ -258,10 +259,12 @@ actor PreviewAssetGenerator {
         let waveformURL = assetDirectory.appendingPathComponent(waveformFilename, isDirectory: false)
         let legacyWaveformURL = assetDirectory.appendingPathComponent(legacyWaveformFilename, isDirectory: false)
 
+        let hasVideoStream = await hasVideoStream(for: url)
+
         let rowThumbnailMissing = !fileManager.fileExists(atPath: rowThumbnailURL.path)
-        let missingThumbnailIndices = expectedThumbnailURLs.enumerated().compactMap { index, url in
+        let missingThumbnailIndices: [Int] = hasVideoStream ? expectedThumbnailURLs.enumerated().compactMap { index, url in
             fileManager.fileExists(atPath: url.path) ? nil : index
-        }
+        } : []
         var existingWaveformURL = [waveformURL, legacyWaveformURL].first { fileManager.fileExists(atPath: $0.path) }
         var existingPerStreamWaveforms: [Int: URL] = [:]
         if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
@@ -274,33 +277,44 @@ actor PreviewAssetGenerator {
         }
         let waveformMissing = existingWaveformURL == nil
 
-        // Short-circuit if everything already exists
         if !rowThumbnailMissing && missingThumbnailIndices.isEmpty && !waveformMissing {
             logger.info("All assets already cached")
-            return PreviewAssets(rowThumbnail: rowThumbnailURL, thumbnails: expectedThumbnailURLs, waveform: existingWaveformURL, audioWaveforms: existingPerStreamWaveforms)
-        }
-        
-        logger.info("Row thumbnail missing: \(rowThumbnailMissing), filmstrip thumbnails missing: \(missingThumbnailIndices.count), waveform missing: \(waveformMissing)")
-
-        guard let duration = try await determineDuration(for: url, ffprobePath: ffprobePath) else {
-            throw PreviewAssetError.durationUnavailable
-        }
-        
-        // Detect if this is HDR/high bit depth content without color metadata
-        let hdrType = try await detectHDRRequirement(for: url, ffprobePath: ffprobePath)
-
-        // Generate row thumbnail first (priority for UI responsiveness)
-        if rowThumbnailMissing {
-            try await generateRowThumbnail(
-                url: url,
-                ffmpegPath: ffmpegPath,
-                duration: duration,
-                destination: rowThumbnailURL,
-                hdrType: hdrType
+            return PreviewAssets(
+                rowThumbnail: rowThumbnailURL,
+                thumbnails: expectedThumbnailURLs,
+                waveform: existingWaveformURL,
+                audioWaveforms: existingPerStreamWaveforms
             )
         }
 
-        if !missingThumbnailIndices.isEmpty {
+        logger.info("Row thumbnail missing: \(rowThumbnailMissing), filmstrip thumbnails missing: \(missingThumbnailIndices.count), waveform missing: \(waveformMissing)")
+
+        let duration = try await determineDuration(for: url, ffprobePath: ffprobePath) ?? 0
+        if duration <= 0 {
+            throw PreviewAssetError.durationUnavailable
+        }
+
+        let hdrType: HDRType = hasVideoStream ? (try await detectHDRRequirement(for: url, ffprobePath: ffprobePath)) : .none
+
+        if rowThumbnailMissing {
+            if hasVideoStream {
+                try await generateRowThumbnail(
+                    url: url,
+                    ffmpegPath: ffmpegPath,
+                    duration: duration,
+                    destination: rowThumbnailURL,
+                    hdrType: hdrType
+                )
+            } else {
+                try await generateAudioRowThumbnail(
+                    url: url,
+                    ffmpegPath: ffmpegPath,
+                    destination: rowThumbnailURL
+                )
+            }
+        }
+
+        if hasVideoStream && !missingThumbnailIndices.isEmpty {
             await generateThumbnails(
                 url: url,
                 ffmpegPath: ffmpegPath,
@@ -336,6 +350,8 @@ actor PreviewAssetGenerator {
                     logger.error("Unable to generate \(remainingMissing.count) filmstrip thumbnails for \(url.lastPathComponent, privacy: .public) after fallback attempts")
                 }
             }
+        } else if !hasVideoStream {
+            logger.info("Skipping filmstrip thumbnails for \(url.lastPathComponent, privacy: .public) because no video stream was detected")
         }
 
         var metadata: VideoMetadata?
@@ -386,55 +402,92 @@ actor PreviewAssetGenerator {
             audioWaveforms: existingPerStreamWaveforms
         )
     }
-    
+
     /// Generates only the row thumbnail (fast, no waveform or filmstrip)
     /// Returns the thumbnail data if successful
     func generateRowThumbnail(for url: URL) async throws -> Data? {
         logger.info("Generating row thumbnail on-demand for \(url.lastPathComponent, privacy: .public)")
-        let accessGranted = self.startAccessingSecurityScope(for: url)
+        let accessGranted = startAccessingSecurityScope(for: url)
         defer { if accessGranted { url.stopAccessingSecurityScopedResource() } }
-        
+
         guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
             logger.error("FFmpeg binary not found in bundle")
             throw PreviewAssetError.ffmpegBinaryMissing
         }
-        guard let ffprobePath = Bundle.main.path(forResource: "ffprobe", ofType: nil) else {
-            logger.error("FFprobe binary not found in bundle")
-            throw PreviewAssetError.ffprobeBinaryMissing
-        }
-        
+
         let assetDirectory = try ensureAssetDirectory(for: url)
         let rowThumbnailURL = assetDirectory.appendingPathComponent("row_thumb.jpg", isDirectory: false)
-        
-        // Check if already exists
+
         if fileManager.fileExists(atPath: rowThumbnailURL.path) {
             logger.info("Row thumbnail already cached")
             return try? Data(contentsOf: rowThumbnailURL)
         }
-        
-        guard let duration = try await determineDuration(for: url, ffprobePath: ffprobePath) else {
-            throw PreviewAssetError.durationUnavailable
+
+        let hasVideoStream = await hasVideoStream(for: url)
+
+        if hasVideoStream {
+            guard let ffprobePath = Bundle.main.path(forResource: "ffprobe", ofType: nil) else {
+                logger.error("FFprobe binary not found in bundle")
+                throw PreviewAssetError.ffprobeBinaryMissing
+            }
+
+            guard let duration = try await determineDuration(for: url, ffprobePath: ffprobePath) else {
+                throw PreviewAssetError.durationUnavailable
+            }
+
+            let hdrType = try await detectHDRRequirement(for: url, ffprobePath: ffprobePath)
+
+            try await generateRowThumbnail(
+                url: url,
+                ffmpegPath: ffmpegPath,
+                duration: duration,
+                destination: rowThumbnailURL,
+                hdrType: hdrType
+            )
+        } else {
+            try await generateAudioRowThumbnail(
+                url: url,
+                ffmpegPath: ffmpegPath,
+                destination: rowThumbnailURL
+            )
         }
-        
-        let hdrType = try await detectHDRRequirement(for: url, ffprobePath: ffprobePath)
-        
-        try await generateRowThumbnail(
-            url: url,
-            ffmpegPath: ffmpegPath,
-            duration: duration,
-            destination: rowThumbnailURL,
-            hdrType: hdrType
-        )
-        
+
         if fileManager.fileExists(atPath: rowThumbnailURL.path) {
             logger.info("Row thumbnail generated successfully")
             return try? Data(contentsOf: rowThumbnailURL)
         }
-        
+
         return nil
     }
 
-    // MARK: - Helpers
+    private func generateAudioRowThumbnail(
+        url: URL,
+        ffmpegPath: String,
+        destination: URL
+    ) async throws {
+        let request = makeAudioWaveformRequest(for: url)
+        let graph = FFMPEGCommandBuilder.waveformFilterGraph(for: request, includeAudioSplit: false)
+
+        let arguments: [String] = [
+            "-hide_banner",
+            "-loglevel", "error",
+            "-i", url.path,
+            "-filter_complex", graph.filterComplex,
+            "-map", graph.videoMap,
+            "-frames:v", "1",
+            "-f", "image2",
+            "-c:v", "mjpeg",
+            "-q:v", "2",
+            "-pix_fmt", "yuvj420p",
+            "-y",
+            destination.path
+        ]
+
+        try await runProcess(
+            executable: URL(fileURLWithPath: ffmpegPath),
+            arguments: arguments
+        )
+    }
 
     private func ensureAssetDirectory(for url: URL) throws -> URL {
         let fingerprint = try assetFingerprint(for: url)
@@ -832,5 +885,39 @@ actor PreviewAssetGenerator {
     private func startAccessingSecurityScope(for url: URL) -> Bool {
         return url.startAccessingSecurityScopedResource() ||
             SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: url)
+    }
+
+    private func hasVideoStream(for url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        do {
+            let tracks = try await asset.loadTracks(withMediaType: .video)
+            if !tracks.isEmpty {
+                return true
+            }
+        } catch {
+            logger.debug("AVFoundation failed to inspect video tracks for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public). Falling back to FFprobe.")
+        }
+
+        // Fallback to FFprobe via VideoMetadataService for formats AVFoundation struggles with
+        if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
+            let hasVideo = metadata.videoStream != nil
+            logger.debug("FFprobe detected video stream: \(hasVideo) for \(url.lastPathComponent, privacy: .public)")
+            return hasVideo
+        }
+        
+        logger.warning("Both AVFoundation and FFprobe failed to determine video stream presence for \(url.lastPathComponent, privacy: .public)")
+        return false
+    }
+
+    private func makeAudioWaveformRequest(for url: URL) -> WaveformVideoRequest {
+        let prefs = AudioWaveformPreferences.loadConfig()
+        return WaveformVideoRequest(
+            width: Int(prefs.resolution.width),
+            height: Int(prefs.resolution.height),
+            backgroundHex: prefs.backgroundHex,
+            foregroundHex: prefs.foregroundHex,
+            normalizeAudio: prefs.normalizeAudio,
+            style: prefs.style
+        )
     }
 }

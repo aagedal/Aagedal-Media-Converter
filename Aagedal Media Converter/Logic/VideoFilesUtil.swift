@@ -18,6 +18,7 @@ struct VideoFileUtils: Sendable {
         let durationSeconds: Double
         let thumbnailData: Data?
         let outputURL: URL?
+        let hasVideoStream: Bool
     }
 
     static func isVideoFile(url: URL) -> Bool {
@@ -44,6 +45,8 @@ struct VideoFileUtils: Sendable {
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
         let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
 
+        let waveformEnabledDefault = UserDefaults.standard.bool(forKey: AppConstants.audioWaveformVideoDefaultEnabledKey)
+
         let placeholder = VideoItem(
             url: url,
             name: name,
@@ -58,7 +61,8 @@ struct VideoFileUtils: Sendable {
             comment: comment,
             includeDateTag: includeDateTagByDefault,
             metadata: nil,
-            detailsLoaded: false
+            detailsLoaded: false,
+            waveformVideoEnabled: waveformEnabledDefault
         )
 
         return placeholder
@@ -72,6 +76,7 @@ struct VideoFileUtils: Sendable {
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
 
         var durationSec: Double = 0.0
+        let asset = AVURLAsset(url: url)
 
         if Bundle.main.path(forResource: "ffprobe", ofType: nil) != nil {
             Logger().info("Attempting to get duration using FFprobe for: \(fileName)")
@@ -88,13 +93,15 @@ struct VideoFileUtils: Sendable {
 
         if durationSec <= 0 {
             Logger().info("Using AVFoundation to get duration for: \(fileName)")
-            let asset = AVURLAsset(url: url)
             let cmDuration = try? await asset.load(.duration)
             durationSec = CMTimeGetSeconds(cmDuration ?? CMTime.zero)
             Logger().info("AVFoundation returned duration: \(durationSec) seconds for \(fileName)")
         }
 
         let durationString = formatDuration(seconds: durationSec)
+
+        let videoTracks = try? await asset.loadTracks(withMediaType: .video)
+        let hasVideoStream = !(videoTracks ?? []).isEmpty
 
         print(" [loadDetails] Getting cached thumbnail for: \(fileName)")
         let thumbnailData = await getCachedThumbnail(url: url)
@@ -108,7 +115,8 @@ struct VideoFileUtils: Sendable {
             duration: durationString,
             durationSeconds: durationSec,
             thumbnailData: thumbnailData,
-            outputURL: outputURL
+            outputURL: outputURL,
+            hasVideoStream: hasVideoStream
         )
     }
 
@@ -133,10 +141,17 @@ struct VideoFileUtils: Sendable {
 
             do {
                 let cacheDirectory = try await PreviewAssetGenerator.shared.getAssetDirectory(for: url)
+                
+                // Determine if file has video stream for correct FFmpeg mapping
+                let asset = AVURLAsset(url: url)
+                let videoTracks = try? await asset.loadTracks(withMediaType: .video)
+                let hasVideo = !(videoTracks ?? []).isEmpty
+                
                 let session = MP4PreviewSession(
                     sourceURL: url,
                     cacheDirectory: cacheDirectory,
-                    audioStreamIndices: []
+                    audioStreamIndices: [],
+                    hasVideoStream: hasVideo
                 )
 
                 let chunkIndex = 0
@@ -200,7 +215,7 @@ struct VideoFileUtils: Sendable {
                 
                 group.addTask {
                     for i in 1...15 {
-                        try await Task.sleep(for: .seconds(1))
+                        try await Task.sleep(nanoseconds: 1_000_000_000)
                         print(" [fetchMetadata] ⏳ Waiting... \(i)s elapsed for: \(fileName)")
                     }
                     print(" [fetchMetadata] ⏰ Timeout reached (15s) for: \(fileName)")
@@ -389,6 +404,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var loopPlayback: Bool = false
     var metadata: VideoMetadata?
     var detailsLoaded: Bool = false
+    var waveformVideoEnabled: Bool = false
+    var hasVideoStream: Bool = true
 
     mutating func apply(details: VideoFileUtils.VideoItemDetails) {
         size = details.size
@@ -396,6 +413,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         durationSeconds = details.durationSeconds
         thumbnailData = details.thumbnailData
         outputURL = details.outputURL
+        hasVideoStream = details.hasVideoStream
     }
     
     /// Human-readable file size string (<1 MB ⇒ KB, 1–600 MB ⇒ MB, ≥600 MB ⇒ GB)
@@ -433,6 +451,10 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var outputFileExists: Bool {
         guard let outputURL = outputURL else { return false }
         return FileManager.default.fileExists(atPath: outputURL.path)
+    }
+
+    var requiresWaveformVideo: Bool {
+        !hasVideoStream && waveformVideoEnabled
     }
 
     var metadataComment: String? {

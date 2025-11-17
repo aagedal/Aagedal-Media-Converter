@@ -15,6 +15,7 @@
 // (at your option) any later version.
 
 import Foundation
+import OSLog
 
 struct FFMPEGCommand {
     let arguments: [String]
@@ -23,7 +24,29 @@ struct FFMPEGCommand {
     let effectiveDuration: Double?
 }
 
+struct WaveformVideoRequest {
+    let width: Int
+    let height: Int
+    let backgroundHex: String
+    let foregroundHex: String
+    let normalizeAudio: Bool
+    let style: WaveformStyle
+
+    var resolutionString: String {
+        "\(width)x\(height)"
+    }
+
+    var backgroundFFmpegColor: String {
+        "0x" + backgroundHex
+    }
+
+    var foregroundFFmpegColor: String {
+        "0x" + foregroundHex
+    }
+}
+
 enum FFMPEGCommandBuilder {
+    private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "WaveformCommand")
     static func buildCommand(
         inputURL: URL,
         outputFileURL: URL,
@@ -31,7 +54,8 @@ enum FFMPEGCommandBuilder {
         comment: String,
         includeDateTag: Bool,
         trimStart: Double?,
-        trimEnd: Double?
+        trimEnd: Double?,
+        waveformRequest: WaveformVideoRequest? = nil
     ) async -> FFMPEGCommand {
         var arguments = ["-y"]
 
@@ -43,6 +67,26 @@ enum FFMPEGCommandBuilder {
         }
 
         arguments.append(contentsOf: ["-i", inputURL.path])
+
+        if let waveformRequest {
+            logger.debug("Building waveform command with request: width=\(waveformRequest.width), height=\(waveformRequest.height), background=\(waveformRequest.backgroundHex, privacy: .public), foreground=\(waveformRequest.foregroundHex, privacy: .public), normalize=\(waveformRequest.normalizeAudio), style=\(waveformRequest.style.rawValue, privacy: .public)")
+            if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
+                arguments.append(contentsOf: durationArgument)
+            }
+
+            arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest))
+            logger.debug("Waveform ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
+            arguments.append(outputFileURL.path)
+
+            let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+
+            return FFMPEGCommand(
+                arguments: arguments,
+                normalizedTrimStart: normalizedTrimStart,
+                normalizedTrimEnd: normalizedTrimEnd,
+                effectiveDuration: effectiveDuration
+            )
+        }
 
         var ffmpegArgs = preset.ffmpegArguments
         await adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
@@ -72,7 +116,7 @@ enum FFMPEGCommandBuilder {
     }
 }
 
-private extension FFMPEGCommandBuilder {
+extension FFMPEGCommandBuilder {
     static func normalizedTrimPoint(_ value: Double?) -> Double? {
         guard let value, value.isFinite, value > 0 else { return nil }
         return max(value, 0)
@@ -102,6 +146,78 @@ private extension FFMPEGCommandBuilder {
             return end
         }
         return nil
+    }
+
+    static func waveformFilterGraph(for request: WaveformVideoRequest, includeAudioSplit: Bool) -> (filterComplex: String, videoMap: String, audioMap: String?) {
+        let finalWidth = evenDimension(max(request.width, 2))
+        let finalHeight = evenDimension(max(request.height, 2))
+        let resolution = "\(finalWidth)x\(finalHeight)"
+        let background = request.backgroundFFmpegColor
+        let foreground = request.foregroundFFmpegColor
+
+        var audioFilters = ["aformat=channel_layouts=stereo"]
+        if request.normalizeAudio {
+            audioFilters.append("dynaudnorm=f=250:g=30:p=0.9")
+        }
+        let audioProcessing = audioFilters.joined(separator: ",")
+
+        let waveInputLabel = includeAudioSplit ? "wavesrc" : "audproc"
+
+        // Simplified waveform generation without complex alpha manipulation
+        var filterComplex = "[0:a]\(audioProcessing)"
+        if includeAudioSplit {
+            filterComplex += ",asplit=2[\(waveInputLabel)][audout];"
+        } else {
+            filterComplex += "[\(waveInputLabel)];"
+        }
+
+        // Generate background
+        filterComplex += "color=c=\(background):s=\(resolution):d=1[bg];"
+        
+        // Generate waveform with proper visibility settings
+        if request.style == .circle {
+            // Circular waveform
+            filterComplex += "[\(waveInputLabel)]showwaves=s=\(resolution):mode=p2p:draw=full:scale=sqrt:split_channels=0:colors=\(foreground)[wave];"
+        } else {
+            // Linear waveform
+            filterComplex += "[\(waveInputLabel)]showwaves=s=\(resolution):mode=line:draw=scale:scale=sqrt:split_channels=0:colors=\(foreground)[wave];"
+        }
+        
+        // Overlay waveform on background
+        filterComplex += "[bg][wave]overlay=format=auto[outv]"
+
+        let audioMap = includeAudioSplit ? "[audout]" : nil
+        return (filterComplex, "[outv]", audioMap)
+    }
+
+    static func waveformCommandArguments(for request: WaveformVideoRequest) -> [String] {
+        let components = waveformFilterGraph(for: request, includeAudioSplit: true)
+
+        var arguments: [String] = [
+            "-filter_complex", components.filterComplex,
+            "-map", components.videoMap
+        ]
+
+        if let audioMap = components.audioMap {
+            arguments.append(contentsOf: ["-map", audioMap])
+        }
+
+        arguments.append(contentsOf: [
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-preset", "medium",
+            "-crf", "20",
+            "-movflags", "+faststart",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-shortest"
+        ])
+
+        return arguments
+    }
+
+    static func evenDimension(_ value: Int) -> Int {
+        value % 2 == 0 ? value : value + 1
     }
 
     static func applyCommentMetadata(to ffmpegArgs: inout [String], comment: String, includeDateTag: Bool) {

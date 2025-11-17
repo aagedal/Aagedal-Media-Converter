@@ -21,7 +21,15 @@ struct Aagedal_Media_Converter_App: App {
             AppConstants.watchFolderIgnoreDurationUnitKey: AppConstants.defaultWatchFolderIgnoreDurationUnitRaw,
             AppConstants.watchFolderDeleteDurationValueKey: AppConstants.defaultWatchFolderDeleteDurationValue,
             AppConstants.watchFolderDeleteDurationUnitKey: AppConstants.defaultWatchFolderDeleteDurationUnitRaw,
-            AppConstants.previewCacheCleanupPolicyKey: AppConstants.defaultPreviewCacheCleanupPolicyRaw
+            AppConstants.previewCacheCleanupPolicyKey: AppConstants.defaultPreviewCacheCleanupPolicyRaw,
+            AppConstants.audioWaveformVideoDefaultEnabledKey: true,
+            AppConstants.audioWaveformResolutionKey: "1280x720",
+            AppConstants.audioWaveformBackgroundColorKey: "#000000",
+            AppConstants.audioWaveformForegroundColorKey: "#FFFFFF",
+            AppConstants.audioWaveformNormalizeKey: false,
+            AppConstants.audioWaveformStyleKey: AppConstants.defaultAudioWaveformStyleRaw,
+            AppConstants.audioWaveformLineThicknessKey: AppConstants.defaultAudioWaveformLineThickness,
+            AppConstants.audioWaveformDetailLevelKey: AppConstants.defaultAudioWaveformDetailLevel
         ])
 
         applyPreviewCacheCleanupPolicy()

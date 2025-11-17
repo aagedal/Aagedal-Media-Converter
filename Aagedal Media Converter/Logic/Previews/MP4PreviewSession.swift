@@ -43,14 +43,16 @@ actor MP4PreviewSession {
     private let cacheDirectory: URL
     private let outputURL: URL
     private let audioStreamIndices: [Int]
+    private let hasVideoStream: Bool
 
     private var process: Process?
     private var isCancelled = false
 
-    init(sourceURL: URL, cacheDirectory: URL, audioStreamIndices: [Int]) {
+    init(sourceURL: URL, cacheDirectory: URL, audioStreamIndices: [Int], hasVideoStream: Bool = true) {
         self.sourceURL = sourceURL
         self.cacheDirectory = cacheDirectory
         self.outputURL = cacheDirectory.appendingPathComponent("preview.mp4")
+        self.hasVideoStream = hasVideoStream
         var seen = Set<Int>()
         self.audioStreamIndices = audioStreamIndices.filter { value in
             let inserted = seen.insert(value).inserted
@@ -203,7 +205,6 @@ actor MP4PreviewSession {
         let safeStart = max(0, startTime)
         let limitedDuration = max(1, durationLimit)
 
-        let scaleFilter = "scale='if(gt(a,1),-2,\(maxShortEdge))':'if(gt(a,1),\(maxShortEdge),-2)'"
         let output = outputPath ?? self.outputURL.path
 
         var arguments: [String] = [
@@ -214,15 +215,21 @@ actor MP4PreviewSession {
             "-i", sourceURL.path,
             "-t", String(format: "%.3f", limitedDuration),
             "-analyzeduration", "5M",
-            "-probesize", "10M",
-            "-vf", scaleFilter,
-            "-map", "0:v:0",
-            "-c:v", "h264_videotoolbox",
-            "-b:v", "3M",
-            "-maxrate", "3M",
-            "-bufsize", "6M",
-            "-pix_fmt", "yuv420p"
+            "-probesize", "10M"
         ]
+
+        if hasVideoStream {
+            let scaleFilter = "scale='if(gt(a,1),-2,\(maxShortEdge))':'if(gt(a,1),\(maxShortEdge),-2)'"
+            arguments.append(contentsOf: [
+                "-vf", scaleFilter,
+                "-map", "0:v:0",
+                "-c:v", "h264_videotoolbox",
+                "-b:v", "3M",
+                "-maxrate", "3M",
+                "-bufsize", "6M",
+                "-pix_fmt", "yuv420p"
+            ])
+        }
 
         let targetAudioIndices = audioStreamIndices.isEmpty ? [0] : audioStreamIndices
         for (outputIndex, streamIndex) in targetAudioIndices.enumerated() {

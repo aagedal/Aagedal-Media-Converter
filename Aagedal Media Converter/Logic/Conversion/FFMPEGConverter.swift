@@ -29,6 +29,7 @@ actor FFMPEGConverter {
         includeDateTag: Bool = true,
         trimStart: Double? = nil,
         trimEnd: Double? = nil,
+        waveformRequest: WaveformVideoRequest? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool) -> Void
     ) async {
@@ -75,7 +76,8 @@ actor FFMPEGConverter {
             comment: comment,
             includeDateTag: includeDateTag,
             trimStart: trimStart,
-            trimEnd: trimEnd
+            trimEnd: trimEnd,
+            waveformRequest: waveformRequest
         )
 
         process.arguments = command.arguments

@@ -67,7 +67,8 @@ extension PreviewPlayerController {
                 self.mp4Session = MP4PreviewSession(
                     sourceURL: currentItem.url,
                     cacheDirectory: cacheDirectory,
-                    audioStreamIndices: audioStreams
+                    audioStreamIndices: audioStreams,
+                    hasVideoStream: currentItem.hasVideoStream
                 )
                 await self.restoreCachedChunkState(from: cacheDirectory)
                 self.startFallbackGeneration(startTime: startTime, currentItem: currentItem)

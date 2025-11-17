@@ -35,12 +35,19 @@ struct SettingsView: View {
     @AppStorage(AppConstants.watchFolderDeleteDurationUnitKey) private var watchFolderDeleteDurationUnitRaw = AppConstants.defaultWatchFolderDeleteDurationUnitRaw
     @AppStorage(AppConstants.screenshotDirectoryKey) private var screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path
     @AppStorage(AppConstants.previewCacheCleanupPolicyKey) private var previewCacheCleanupPolicyRaw = AppConstants.defaultPreviewCacheCleanupPolicyRaw
+    @AppStorage(AppConstants.audioWaveformVideoDefaultEnabledKey) private var waveformVideoDefaultEnabled = true
+    @AppStorage(AppConstants.audioWaveformResolutionKey) private var waveformResolutionString = "1280x720"
+    @AppStorage(AppConstants.audioWaveformBackgroundColorKey) private var waveformBackgroundHex = "#000000"
+    @AppStorage(AppConstants.audioWaveformForegroundColorKey) private var waveformForegroundHex = "#FFFFFF"
+    @AppStorage(AppConstants.audioWaveformNormalizeKey) private var waveformNormalizeAudio = false
+    @AppStorage(AppConstants.audioWaveformStyleKey) private var waveformStyleRaw = AppConstants.defaultAudioWaveformStyleRaw
     @State private var selectedPreset: ExportPreset = .videoLoop
     @FocusState private var focusedCustomCommandSlot: Int?
     @State private var previousFocusedCustomCommandSlot: Int?
     @State private var isClearingPreviewCache = false
     @State private var previewCacheSizeBytes: Int64 = 0
-    
+    @State private var resolutionSanitizationTask: Task<Void, Never>?
+
     var body: some View {
         Form {
             Section(header: Text("Output Folder")) {
@@ -62,6 +69,7 @@ struct SettingsView: View {
                                 NSWorkspace.shared.activateFileViewerSelecting([AppConstants.defaultOutputDirectory])
                                 return
                             }
+
                             NSWorkspace.shared.activateFileViewerSelecting([url])
                         }) {
                             Image(systemName: "arrow.right.circle.fill")
@@ -83,6 +91,8 @@ struct SettingsView: View {
                 }
                 .padding(8)
             }
+
+            waveformSection
             
             Section(header: Text("Screenshots")) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -443,9 +453,125 @@ struct SettingsView: View {
                 finalizeCustomCommand(for: previous)
                 previousFocusedCustomCommandSlot = nil
             }
+            resolutionSanitizationTask?.cancel()
+            sanitizeWaveformResolution()
+            sanitizeWaveformColors()
         }
     }
-    
+
+    private var waveformSection: some View {
+        Section(header: Text("Audio Waveform Video")) {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle("Enable waveform video by default", isOn: $waveformVideoDefaultEnabled)
+                    .toggleStyle(SwitchToggleStyle())
+                    .help("When enabled, newly added audio-only files will generate waveform videos unless disabled per item.")
+
+                Toggle("Normalize audio levels", isOn: $waveformNormalizeAudio)
+                    .toggleStyle(SwitchToggleStyle())
+                    .help("Applies dynamic normalization before rendering the waveform and exporting audio to keep amplitudes consistent.")
+
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Resolution (e.g. 1280x720)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("1280x720", text: $waveformResolutionString)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(sanitizeWaveformResolution)
+                            .onChange(of: waveformResolutionString) { _, newValue in
+                                scheduleResolutionSanitization(for: newValue)
+                            }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Background HEX")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("#000000", text: $waveformBackgroundHex)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(sanitizeWaveformColors)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Waveform HEX")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("#FFFFFF", text: $waveformForegroundHex)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(sanitizeWaveformColors)
+                    }
+                }
+
+                Picker(
+                    "Waveform style",
+                    selection: Binding(
+                        get: { WaveformStyle(rawValue: waveformStyleRaw) ?? .linear },
+                        set: { waveformStyleRaw = $0.rawValue }
+                    )
+                ) {
+                    ForEach(WaveformStyle.allCases) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+                .pickerStyle(MenuPickerStyle())
+                .help("Choose the visual appearance used when rendering waveform videos.")
+
+                HStack {
+                    Spacer()
+                    Button(role: .destructive) {
+                        resetWaveformDefaults()
+                    } label: {
+                        Label("Reset to Defaults", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Restore waveform color and normalization settings to their default values.")
+                }
+
+                Text("These defaults control waveform video generation for audio-only media. Colors should be six-digit HEX values.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(8)
+            .onDisappear {
+                sanitizeWaveformResolution()
+                sanitizeWaveformColors()
+            }
+        }
+    }
+
+    private func scheduleResolutionSanitization(for newValue: String) {
+        resolutionSanitizationTask?.cancel()
+        resolutionSanitizationTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard newValue == waveformResolutionString else { return }
+            sanitizeWaveformResolution()
+        }
+    }
+
+    private func sanitizeWaveformResolution() {
+        let trimmed = waveformResolutionString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let (width, height) = AudioWaveformPreferences.parseResolution(trimmed) {
+            waveformResolutionString = "\(width)x\(height)"
+        } else {
+            waveformResolutionString = "1280x720"
+        }
+    }
+
+    private func sanitizeWaveformColors() {
+        waveformBackgroundHex = "#" + AudioWaveformPreferences.sanitizeHex(waveformBackgroundHex, fallback: "000000")
+        waveformForegroundHex = "#" + AudioWaveformPreferences.sanitizeHex(waveformForegroundHex, fallback: "FFFFFF")
+    }
+
+    private func resetWaveformDefaults() {
+        waveformVideoDefaultEnabled = true
+        waveformResolutionString = "1280x720"
+        waveformBackgroundHex = "#000000"
+        waveformForegroundHex = "#FFFFFF"
+        waveformNormalizeAudio = false
+        waveformStyleRaw = AppConstants.defaultAudioWaveformStyleRaw
+    }
+
     // MARK: - Helpers
 
     private var ignoreDurationUnitBinding: Binding<WatchFolderDurationUnit> {

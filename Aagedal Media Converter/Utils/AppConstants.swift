@@ -38,18 +38,21 @@ enum AppConstants {
         return cacheDir
     }()
     
-    // Supported video file extensions (lowercase)
+    // Supported media file extensions (lowercase)
     static let supportedVideoExtensions: Set<String> = [
         "3g2", "3gp", "3gp2", "3gpp",
-        "amv", "asf", "avi", "apv", "avs", "drc",
-        "dv", "f4v", "flv", "gxf", "ismv",
-        "m1v", "m2p", "m2t", "m2ts", "m2v",
-        "m4v", "mk3d", "mkv", "mod", "mov",
-        "mp2", "mp2v", "mp4", "mp4v", "mpe",
-        "mpeg", "mpg", "mpv", "mts", "mxf",
-        "ogm", "ogv", "qt", "rm", "rmvb",
-        "roq", "svi", "tod", "trp", "ts",
-        "vob", "webm", "wmv", "wtv", "y4m"
+        "aac", "aif", "aiff", "alac", "amv",
+        "asf", "avi", "apv", "avs", "drc",
+        "dv", "f4v", "flac", "flv", "gxf",
+        "ismv", "m1v", "m2p", "m2t", "m2ts",
+        "m2v", "m4a", "m4b", "m4v", "mk3d",
+        "mkv", "mod", "mov", "mp2", "mp2v",
+        "mp3", "mp4", "mp4v", "mpe", "mpeg",
+        "mpg", "mpv", "mts", "mxf", "oga",
+        "ogg", "ogm", "ogv", "opus", "qt",
+        "rm", "rmvb", "roq", "svi", "tod",
+        "trp", "ts", "vob", "wav", "webm",
+        "wma", "wmv", "wtv", "y4m"
     ]
     
     // Supported UTType identifiers for file picker
@@ -61,8 +64,25 @@ enum AppConstants {
         "com.apple.m4v-video",
         "public.avi",
         "com.apple.m4v-video",
-        "public.mpeg-4-audio"
+        "public.mpeg-4-audio",
+        "public.audio",
+        "com.apple.coreaudio-format",
+        "com.microsoft.waveform-audio",
+        "com.apple.protected-mpeg-4-audio"
     ]
+
+    // Audio waveform rendering defaults
+    static let audioWaveformVideoDefaultEnabledKey = "audioWaveformVideoDefaultEnabled"
+    static let audioWaveformResolutionKey = "audioWaveformResolution"
+    static let audioWaveformBackgroundColorKey = "audioWaveformBackgroundColor"
+    static let audioWaveformForegroundColorKey = "audioWaveformForegroundColor"
+    static let audioWaveformNormalizeKey = "audioWaveformNormalize"
+    static let audioWaveformStyleKey = "audioWaveformStyle"
+    static let defaultAudioWaveformStyleRaw = "linear"
+    static let audioWaveformLineThicknessKey = "audioWaveformLineThickness"
+    static let audioWaveformDetailLevelKey = "audioWaveformDetailLevel"
+    static let defaultAudioWaveformLineThickness = 2.0
+    static let defaultAudioWaveformDetailLevel = 1.0
     
     // Maximum thumbnail dimensions
     static let maxThumbnailSize = CGSize(width: 320, height: 320)

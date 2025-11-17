@@ -319,8 +319,9 @@ struct VideoFileRowView: View {
     private var commentSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack{
+                waveformToggle.padding(.trailing, 40)
                 includeDateTagToggle
-            }.frame(width: 150, alignment: .trailing)
+            }.frame(width: 350, alignment: .trailing)
                 .padding(.bottom, 6)
             commentEditor
         }
@@ -432,6 +433,20 @@ struct VideoFileRowView: View {
             }
         }
    }
+
+    private var waveformToggle: some View {
+        let waveformBinding = Binding(
+            get: { file.waveformVideoEnabled },
+            set: { file.waveformVideoEnabled = $0 }
+        )
+        return Toggle("Waveform video", isOn: waveformBinding)
+            .controlSize(.mini)
+            .font(.subheadline)
+            .toggleStyle(SwitchToggleStyle())
+            .disabled(file.hasVideoStream)
+            .opacity(file.hasVideoStream ? 0.4 : 1.0)
+            .help(file.hasVideoStream ? "Waveform video is only available for audio-only sources." : "Generate a waveform video when exporting this item.")
+    }
 
     private var includeDateTagToggle: some View {
         let includeDateBinding = Binding(
