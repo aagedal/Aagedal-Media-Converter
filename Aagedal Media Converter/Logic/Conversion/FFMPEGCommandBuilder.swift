@@ -56,7 +56,8 @@ enum FFMPEGCommandBuilder {
         includeDateTag: Bool,
         trimStart: Double?,
         trimEnd: Double?,
-        waveformRequest: WaveformVideoRequest? = nil
+        waveformRequest: WaveformVideoRequest? = nil,
+        customInputArguments: [String]? = nil
     ) async -> FFMPEGCommand {
         var arguments = ["-y"]
 
@@ -67,7 +68,11 @@ enum FFMPEGCommandBuilder {
             arguments.append(contentsOf: ["-ss", ffmpegTimeString(from: normalizedTrimStart)])
         }
 
-        arguments.append(contentsOf: ["-i", inputURL.path])
+        if let customInputArguments {
+            arguments.append(contentsOf: customInputArguments)
+        } else {
+            arguments.append(contentsOf: ["-i", inputURL.path])
+        }
 
         if let waveformRequest {
             logger.debug("Building waveform command with request: width=\(waveformRequest.width), height=\(waveformRequest.height), background=\(waveformRequest.backgroundHex, privacy: .public), foreground=\(waveformRequest.foregroundHex, privacy: .public), normalize=\(waveformRequest.normalizeAudio), style=\(waveformRequest.style.rawValue, privacy: .public)")
@@ -366,17 +371,18 @@ extension FFMPEGCommandBuilder {
         var filters = ffmpegArgs[vfIndex + 1]
 
         if isInterlaced {
+            let bwdifFilter = "bwdif=mode=send_field:parity=auto:deint=all"
             // Replace yadif with bwdif, or insert bwdif at the start if yadif is absent
             if filters.contains("yadif") {
                 // Replace common forms of yadif invocation
-                filters = filters.replacingOccurrences(of: "yadif=0", with: "bwdif=mode=bob:parity=auto:deint=all")
-                filters = filters.replacingOccurrences(of: "yadif", with: "bwdif=mode=bob:parity=auto:deint=all")
+                filters = filters.replacingOccurrences(of: "yadif=0", with: bwdifFilter)
+                filters = filters.replacingOccurrences(of: "yadif", with: bwdifFilter)
             } else {
                 // Prepend bwdif to existing chain
                 if filters.isEmpty {
-                    filters = "bwdif=mode=bob:parity=auto:deint=all"
+                    filters = bwdifFilter
                 } else {
-                    filters = "bwdif=mode=bob:parity=auto:deint=all," + filters
+                    filters = bwdifFilter + "," + filters
                 }
             }
         } else {

@@ -100,8 +100,20 @@ struct VideoFileUtils: Sendable {
 
         let durationString = formatDuration(seconds: durationSec)
 
-        let videoTracks = try? await asset.loadTracks(withMediaType: .video)
-        let hasVideoStream = !(videoTracks ?? []).isEmpty
+        var hasVideoStream = false
+        do {
+            let videoTracks = try await asset.loadTracks(withMediaType: .video)
+            hasVideoStream = !videoTracks.isEmpty
+        } catch {
+            Logger().debug("AVFoundation failed to inspect video tracks for \(fileName): \(error.localizedDescription). Falling back to FFprobe")
+        }
+
+        if !hasVideoStream {
+            if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
+                hasVideoStream = metadata.videoStream != nil
+                Logger().debug("FFprobe detected video stream: \(hasVideoStream) for \(fileName)")
+            }
+        }
 
         print(" [loadDetails] Getting cached thumbnail for: \(fileName)")
         let thumbnailData = await getCachedThumbnail(url: url)

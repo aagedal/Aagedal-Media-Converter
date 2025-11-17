@@ -10,6 +10,17 @@
 import Foundation
 import OSLog
 
+private actor StderrCollector {
+    private var buffer = Data()
+    func append(_ data: Data) {
+        buffer.append(data)
+    }
+
+    func snapshot() -> Data {
+        buffer
+    }
+}
+
 actor FFMPEGConverter {
     private var currentProcess: Process?
 
@@ -30,6 +41,7 @@ actor FFMPEGConverter {
         trimStart: Double? = nil,
         trimEnd: Double? = nil,
         waveformRequest: WaveformVideoRequest? = nil,
+        customInputArguments: [String]? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool) -> Void
     ) async {
@@ -77,7 +89,8 @@ actor FFMPEGConverter {
             includeDateTag: includeDateTag,
             trimStart: trimStart,
             trimEnd: trimEnd,
-            waveformRequest: waveformRequest
+            waveformRequest: waveformRequest,
+            customInputArguments: customInputArguments
         )
 
         process.arguments = command.arguments
@@ -92,6 +105,7 @@ actor FFMPEGConverter {
         let totalDurationBox = DurationBox()
         let effectiveDurationBox = DurationBox()
         effectiveDurationBox.value = command.effectiveDuration
+        let stderrCollector = StderrCollector()
         
         let errorReadabilityHandler: @Sendable (FileHandle) -> Void = { fileHandle in
             let data = fileHandle.availableData
@@ -111,6 +125,10 @@ actor FFMPEGConverter {
                     }
                 }
             }
+
+            if !data.isEmpty {
+                Task { await stderrCollector.append(data) }
+            }
         }
 
         errorPipe.fileHandleForReading.readabilityHandler = errorReadabilityHandler
@@ -119,6 +137,11 @@ actor FFMPEGConverter {
             Task { [weak self] in
                 await self?.setCurrentProcess(nil)
                 let success = process.terminationStatus == 0
+                if !success {
+                    let collectedStderr = await stderrCollector.snapshot()
+                    let stderrString = String(data: collectedStderr, encoding: .utf8) ?? "(unable to decode ffmpeg stderr)"
+                    print("FFmpeg exited with code \(process.terminationStatus). Output:\n\(stderrString)\n-- end of ffmpeg log --")
+                }
                 completion(success)
             }
         }

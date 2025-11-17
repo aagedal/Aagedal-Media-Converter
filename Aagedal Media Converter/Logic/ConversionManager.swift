@@ -37,6 +37,18 @@ actor ConversionManager: Sendable {
     private var progressStream: AsyncStream<Double>?
     // Periodic task that yields overall progress every few seconds while converting
     private var progressTimerTask: Task<Void, Never>?
+    private struct MergePlan {
+        let itemIDs: [UUID]
+        let listFileURL: URL
+        let outputBaseURL: URL
+        let outputFolder: String
+        let preset: ExportPreset
+        let comment: String
+        let includeDateTag: Bool
+        let waveformRequest: WaveformVideoRequest?
+        var hasExecuted: Bool
+    }
+    private var mergePlan: MergePlan?
     
     func progressUpdates() -> AsyncStream<Double> {
         let stream = AsyncStream(Double.self) { continuation in
@@ -79,6 +91,172 @@ actor ConversionManager: Sendable {
         }
     }
 
+    private func buildMergePlan(
+        from items: [VideoItem],
+        preset: ExportPreset,
+        outputFolder: String
+    ) async -> MergePlan? {
+        guard case .compatible = await evaluateMergeCompatibility(for: items, preset: preset) else {
+            return nil
+        }
+
+        let waitingItems = items.filter { $0.status == .waiting }
+        guard waitingItems.count >= 2 else { return nil }
+
+        let orderedWaitingItems = waitingItems
+        let itemIDs = orderedWaitingItems.map { $0.id }
+
+        guard let listFileURL = createConcatListFile(for: orderedWaitingItems) else {
+            return nil
+        }
+
+        guard let firstItem = orderedWaitingItems.first else { return nil }
+
+        let baseOutputURL = URL(fileURLWithPath: outputFolder)
+            .appendingPathComponent(
+                FileNameProcessor.processFileName(firstItem.url.deletingPathExtension().lastPathComponent) + preset.fileSuffix
+            )
+
+        let waveformRequest: WaveformVideoRequest? = orderedWaitingItems.contains(where: { $0.requiresWaveformVideo }) ? {
+            let config = AudioWaveformPreferences.loadConfig()
+            return WaveformVideoRequest(
+                width: Int(config.resolution.width),
+                height: Int(config.resolution.height),
+                backgroundHex: config.backgroundHex,
+                foregroundHex: config.foregroundHex,
+                normalizeAudio: config.normalizeAudio,
+                style: config.style,
+                frameRate: config.frameRate
+            )
+        }() : nil
+
+        return MergePlan(
+            itemIDs: itemIDs,
+            listFileURL: listFileURL,
+            outputBaseURL: baseOutputURL,
+            outputFolder: outputFolder,
+            preset: preset,
+            comment: firstItem.comment,
+            includeDateTag: firstItem.includeDateTag,
+            waveformRequest: waveformRequest,
+            hasExecuted: false
+        )
+    }
+
+    private func executeMergePlan(droppedFiles: Binding<[VideoItem]>) async {
+        guard let plan = mergePlan else { return }
+
+        let indices: [Int] = plan.itemIDs.compactMap { id in
+            droppedFiles.wrappedValue.firstIndex(where: { $0.id == id })
+        }
+
+        guard indices.count == plan.itemIDs.count else {
+            cleanupMergeArtifacts(for: plan)
+            mergePlan = nil
+            await convertNextFile(droppedFiles: droppedFiles, outputFolder: plan.outputFolder, preset: plan.preset)
+            return
+        }
+
+        await MainActor.run {
+            for index in indices {
+                droppedFiles.wrappedValue[index].status = .converting
+                droppedFiles.wrappedValue[index].progress = 0
+                droppedFiles.wrappedValue[index].eta = nil
+            }
+        }
+
+        let inputItems = indices.compactMap { droppedFiles.wrappedValue[$0] }
+        guard let primaryInput = inputItems.first else {
+            cleanupMergeArtifacts(for: plan)
+            mergePlan = nil
+            return
+        }
+
+        let customInputs = ["-f", "concat", "-safe", "0", "-i", plan.listFileURL.path]
+
+        await ffmpegConverter.convert(
+            inputURL: primaryInput.url,
+            outputURL: plan.outputBaseURL,
+            preset: plan.preset,
+            comment: plan.comment,
+            includeDateTag: plan.includeDateTag,
+            trimStart: nil,
+            trimEnd: nil,
+            waveformRequest: plan.waveformRequest,
+            customInputArguments: customInputs,
+            progressUpdate: { progress, eta in
+                Task { @MainActor in
+                    for index in indices {
+                        droppedFiles.wrappedValue[index].progress = progress
+                        droppedFiles.wrappedValue[index].eta = eta
+                    }
+                }
+            }
+        ) { success in
+            Task { [weak self] in
+                guard let self else { return }
+                await self.handleMergeCompletion(
+                    plan: plan,
+                    indices: indices,
+                    success: success,
+                    droppedFiles: droppedFiles
+                )
+            }
+        }
+    }
+
+    private func createConcatListFile(for items: [VideoItem]) -> URL? {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("concat_\(UUID().uuidString).txt")
+        let content = items.map { item -> String in
+            let escapedPath = item.url.path.replacingOccurrences(of: "'", with: "'\\''")
+            return "file '\(escapedPath)'"
+        }.joined(separator: "\n")
+
+        do {
+            try content.write(to: tempURL, atomically: true, encoding: .utf8)
+            return tempURL
+        } catch {
+            return nil
+        }
+    }
+
+    private func cleanupMergeArtifacts(for plan: MergePlan) {
+        try? FileManager.default.removeItem(at: plan.listFileURL)
+    }
+
+    private func handleMergeCompletion(
+        plan: MergePlan,
+        indices: [Int],
+        success: Bool,
+        droppedFiles: Binding<[VideoItem]>
+    ) async {
+        let finalURL = plan.outputBaseURL.appendingPathExtension(plan.preset.fileExtension)
+
+        await MainActor.run {
+            for index in indices {
+                guard droppedFiles.wrappedValue.indices.contains(index) else { continue }
+                if droppedFiles.wrappedValue[index].status != .cancelled {
+                    droppedFiles.wrappedValue[index].status = success ? .done : .failed
+                    droppedFiles.wrappedValue[index].progress = success ? 1.0 : 0.0
+                    droppedFiles.wrappedValue[index].outputURL = success ? finalURL : nil
+                }
+            }
+        }
+
+        cleanupMergeArtifacts(for: plan)
+        mergePlan = nil
+
+        if isConverting {
+            await convertNextFile(
+                droppedFiles: droppedFiles,
+                outputFolder: plan.outputFolder,
+                preset: plan.preset
+            )
+        }
+    }
+
+
     private func stopProgressTimer() {
         progressTimerTask?.cancel()
         progressTimerTask = nil
@@ -88,16 +266,186 @@ actor ConversionManager: Sendable {
         return isConverting
     }
 
+    func evaluateMergeCompatibility(for items: [VideoItem], preset: ExportPreset) async -> MergeCompatibilityResult {
+        let waitingItems = items.filter { $0.status == .waiting }
+        guard waitingItems.count >= 2 else {
+            return .insufficientItems(waitingItems.count)
+        }
+
+        var resolvedMetadata: [UUID: VideoMetadata] = [:]
+        for item in waitingItems {
+            if Task.isCancelled { return .cancelled }
+
+            if item.trimStart != nil || item.trimEnd != nil {
+                return .trimmedClip(item)
+            }
+
+            if let metadata = item.metadata {
+                resolvedMetadata[item.id] = metadata
+                continue
+            }
+
+            do {
+                let metadata = try await VideoMetadataService.shared.metadata(for: item.url)
+                resolvedMetadata[item.id] = metadata
+            } catch {
+                return .metadataUnavailable(item)
+            }
+        }
+
+        guard let firstItem = waitingItems.first,
+              let referenceMetadata = resolvedMetadata[firstItem.id],
+              let referenceVideo = referenceMetadata.videoStream else {
+            return .missingVideoTrack
+        }
+
+        let referenceAudio = referenceMetadata.audioStreams.first
+
+        for item in waitingItems {
+            guard let metadata = resolvedMetadata[item.id], let video = metadata.videoStream else {
+                return .missingVideoTrack
+            }
+
+            if !stringsEqual(video.codec, referenceVideo.codec) {
+                return .videoCodecMismatch(item)
+            }
+
+            if video.width != referenceVideo.width || video.height != referenceVideo.height {
+                return .resolutionMismatch(item, expected: referenceVideo)
+            }
+
+            if !ratiosEqual(video.pixelAspectRatio, referenceVideo.pixelAspectRatio) {
+                return .pixelAspectMismatch(item)
+            }
+
+            if !frameRatesEqual(video.frameRate, referenceVideo.frameRate) {
+                return .frameRateMismatch(item)
+            }
+
+            switch (referenceAudio, metadata.audioStreams.first) {
+            case (nil, nil):
+                break
+            case (nil, .some), (.some, nil):
+                return .audioPresenceMismatch(item)
+            case let (.some(refAudio), .some(audio)):
+                if audio.channels != refAudio.channels {
+                    return .audioChannelMismatch(item)
+                }
+                if audio.sampleRate != refAudio.sampleRate {
+                    return .audioSampleRateMismatch(item)
+                }
+                if !stringsEqual(audio.codec, refAudio.codec) {
+                    return .audioCodecMismatch(item)
+                }
+            }
+        }
+
+        return .compatible
+    }
+
+    enum MergeCompatibilityResult {
+        case compatible
+        case insufficientItems(Int)
+        case metadataUnavailable(VideoItem)
+        case missingVideoTrack
+        case videoCodecMismatch(VideoItem)
+        case resolutionMismatch(VideoItem, expected: VideoMetadata.VideoStream)
+        case pixelAspectMismatch(VideoItem)
+        case frameRateMismatch(VideoItem)
+        case audioPresenceMismatch(VideoItem)
+        case audioChannelMismatch(VideoItem)
+        case audioSampleRateMismatch(VideoItem)
+        case audioCodecMismatch(VideoItem)
+        case trimmedClip(VideoItem)
+        case cancelled
+
+        var tooltip: String {
+            switch self {
+            case .compatible:
+                return "Enable to merge compatible clips into one export."
+            case .insufficientItems(let count):
+                return count == 0 ? "Add clips to enable merging." : "Need at least two queued clips to merge."
+            case .metadataUnavailable(let item):
+                return "Gathering metadata for \(item.name)…"
+            case .missingVideoTrack:
+                return "All clips must contain a video track for merging."
+            case .videoCodecMismatch:
+                return "Video codec mismatch between clips."
+            case .resolutionMismatch(let item, let expected):
+                let expectedRes = "\(expected.width ?? 0)x\(expected.height ?? 0)"
+                return "Resolution mismatch involving \(item.name). Expected \(expectedRes)."
+            case .pixelAspectMismatch:
+                return "Pixel aspect ratio mismatch between clips."
+            case .frameRateMismatch:
+                return "Frame rate mismatch between clips."
+            case .audioPresenceMismatch:
+                return "Some clips have audio while others do not."
+            case .audioChannelMismatch:
+                return "Audio channel count mismatch between clips."
+            case .audioSampleRateMismatch:
+                return "Audio sample rate mismatch between clips."
+            case .audioCodecMismatch:
+                return "Audio codec mismatch between clips."
+            case .trimmedClip:
+                return "Trimmed clips cannot be merged. Reset trims to enable merging."
+            case .cancelled:
+                return "Compatibility check cancelled."
+            }
+        }
+    }
+
+    private func stringsEqual(_ lhs: String?, _ rhs: String?) -> Bool {
+        (lhs?.lowercased() ?? "") == (rhs?.lowercased() ?? "")
+    }
+
+    private func ratiosEqual(_ lhs: VideoMetadata.Ratio?, _ rhs: VideoMetadata.Ratio?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return true
+        case let (lhs?, rhs?):
+            if let lhsValue = lhs.doubleValue, let rhsValue = rhs.doubleValue {
+                return abs(lhsValue - rhsValue) <= 0.001
+            }
+            return lhs.stringValue == rhs.stringValue
+        case let (nil, rhs?):
+            return isUnityRatio(rhs)
+        case let (lhs?, nil):
+            return isUnityRatio(lhs)
+        }
+    }
+
+    private func isUnityRatio(_ ratio: VideoMetadata.Ratio) -> Bool {
+        if let value = ratio.doubleValue {
+            return abs(value - 1.0) <= 0.001
+        }
+        let normalized = ratio.stringValue.replacingOccurrences(of: " ", with: "").lowercased()
+        return normalized == "1:1" || normalized == "1" || normalized == "0:1"
+    }
+
+    private func frameRatesEqual(_ lhs: VideoMetadata.FrameRate?, _ rhs: VideoMetadata.FrameRate?) -> Bool {
+        switch (lhs?.value, rhs?.value) {
+        case (nil, nil): return true
+        case let (lhs?, rhs?): return abs(lhs - rhs) <= 0.01
+        default: return lhs?.stringValue == rhs?.stringValue
+        }
+    }
+
     func startConversion(
         droppedFiles: Binding<[VideoItem]>,
         outputFolder: String,
-        preset: ExportPreset = .videoLoop
+        preset: ExportPreset = .videoLoop,
+        mergeClipsEnabled: Bool = false
     ) async {
         guard !self.isConverting else { return }
         self.isConverting = true
         self.currentDroppedFiles = droppedFiles
         self.currentOutputFolder = outputFolder
         self.currentPreset = preset
+        if mergeClipsEnabled {
+            self.mergePlan = await buildMergePlan(from: droppedFiles.wrappedValue, preset: preset, outputFolder: outputFolder)
+        } else {
+            self.mergePlan = nil
+        }
         progressContinuation?.yield(0.0)
         // Start periodic updates so dock appears immediately
         startProgressTimer(droppedFiles: droppedFiles)
@@ -115,7 +463,13 @@ actor ConversionManager: Sendable {
     ) async {
         // Update overall progress before starting next file
         await updateOverallProgress(droppedFiles: droppedFiles)
-        
+
+        if let plan = mergePlan, !plan.hasExecuted {
+            mergePlan?.hasExecuted = true
+            await executeMergePlan(droppedFiles: droppedFiles)
+            return
+        }
+
         guard let nextFile = droppedFiles.wrappedValue.first(where: { $0.status == .waiting }) else {
             self.isConverting = false
             progressContinuation?.yield(1.0)

@@ -206,7 +206,7 @@ private struct TrimHandlesInteractionLayer: View {
                     } else {
                         // Audio-only: waveform spans combined height
                         GeometryReader { geo in
-                            waveformContent(width: geo.size.width)
+                            waveformContent(width: geo.size.width, height: geo.size.height)
                         }
                         .frame(height: combinedHeight)
                     }
@@ -262,7 +262,7 @@ private struct TrimHandlesInteractionLayer: View {
 
     private var waveformSection: some View {
         GeometryReader { geometry in
-            waveformContent(width: geometry.size.width)
+            waveformContent(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(height: waveformHeight)
     }
@@ -307,13 +307,14 @@ private struct TrimHandlesInteractionLayer: View {
     }
 
     @ViewBuilder
-    private func waveformContent(width: CGFloat) -> some View {
+    private func waveformContent(width: CGFloat, height: CGFloat) -> some View {
         if let waveformURL {
             Group {
                 if let image = NSImage(contentsOf: waveformURL) {
                     Image(nsImage: image)
                         .resizable()
                         .scaledToFill()
+                        .frame(width: width, height: height)
                         .background(Color.black.opacity(0.35))
                 } else {
                     placeholderSection(
@@ -322,13 +323,13 @@ private struct TrimHandlesInteractionLayer: View {
                     )
                 }
             }
-            .frame(maxWidth: .infinity)
             .clipped()
         } else {
             placeholderSection(
                 systemName: "waveform",
                 text: isLoading ? "Generating waveform…" : "Waveform unavailable"
             )
+            .frame(width: width, height: height)
         }
     }
 

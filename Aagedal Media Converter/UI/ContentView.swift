@@ -50,6 +50,10 @@ struct ContentView: View {
     @AppStorage(AppConstants.watchFolderModeKey) private var watchFolderModeEnabled = false
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @StateObject private var watchFolderCoordinator = WatchFolderCoordinator()
+    @State private var mergeClipsEnabled = false
+    @State private var mergeClipsAvailable = false
+    @State private var mergeClipsTooltip = "Add at least two compatible clips to enable merging."
+    @State private var mergeCompatibilityTask: Task<Void, Never>? = nil
     
     // Using shared AppConstants for supported file types
     private var supportedVideoTypes: [UTType] {
@@ -111,6 +115,9 @@ struct ContentView: View {
                     selectedPreset: toolbarPresetBinding,
                     presets: ExportPreset.allCases,
                     displayName: { displayName(for: $0) },
+                    mergeClipsEnabled: $mergeClipsEnabled,
+                    mergeClipsAvailable: mergeClipsAvailable,
+                    mergeTooltip: mergeClipsTooltip,
                     onToggleConversion: handleConversionToggle,
                     onImport: { isFileImporterPresented = true },
                     onSelectOutputFolder: {
@@ -144,6 +151,7 @@ struct ContentView: View {
             Task {
                 isConverting = await ConversionManager.shared.isConvertingStatus()
             }
+            scheduleMergeCompatibilityEvaluation()
         }
         .onChange(of: storedDefaultPresetRawValue) { _, newValue in
             selectedPreset = ExportPreset(rawValue: newValue) ?? .videoLoop
@@ -163,6 +171,12 @@ struct ContentView: View {
         }
         .onChange(of: watchFolderModeEnabled) { _, newValue in
             handleWatchFolderToggle(newValue)
+        }
+        .onChange(of: droppedFiles) { _, _ in
+            scheduleMergeCompatibilityEvaluation()
+        }
+        .onChange(of: isConverting) { _, _ in
+            scheduleMergeCompatibilityEvaluation()
         }
         .onChange(of: droppedFiles.count) { oldCount, newCount in
             if watchFolderModeEnabled && newCount > oldCount {
@@ -292,7 +306,8 @@ struct ContentView: View {
         await ConversionManager.shared.startConversion(
                 droppedFiles: $droppedFiles,
                 outputFolder: currentOutputFolder.path,
-                preset: selectedPreset
+                preset: selectedPreset,
+                mergeClipsEnabled: mergeClipsEnabled
             )
         watchFolderCoordinator.startConversion()
     }
@@ -359,6 +374,7 @@ struct ContentView: View {
                 hasUserChangedPreset = true
                 selectedPreset = newValue
                 refreshExpectedOutputURLs(for: newValue)
+                scheduleMergeCompatibilityEvaluation()
             }
         )
     }
@@ -388,9 +404,52 @@ struct ContentView: View {
             watchFolderCoordinator.scheduleAutoEncode {
                 let shouldStart = await MainActor.run { !isConverting && canStartConversion }
                 if shouldStart {
+                    await evaluateMergeClipsState()
                     await startConversion()
                 }
             }
+        }
+    }
+
+    private func scheduleMergeCompatibilityEvaluation() {
+        mergeCompatibilityTask?.cancel()
+        mergeCompatibilityTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 200_000_000)
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else { return }
+            await evaluateMergeClipsState()
+        }
+    }
+
+    @MainActor
+    private func evaluateMergeClipsState() async {
+        mergeCompatibilityTask?.cancel()
+        mergeCompatibilityTask = nil
+
+        if isConverting {
+            mergeClipsAvailable = false
+            mergeClipsEnabled = false
+            mergeClipsTooltip = "Cannot toggle merging while conversion is running."
+            return
+        }
+
+        let result = await ConversionManager.shared.evaluateMergeCompatibility(for: droppedFiles, preset: selectedPreset)
+
+        switch result {
+        case .compatible:
+            let waitingCount = droppedFiles.filter { $0.status == .waiting }.count
+            mergeClipsAvailable = true
+            mergeClipsTooltip = mergeClipsEnabled ? "Clips will be merged into a single export." : "Enable to merge \(waitingCount) compatible clips into one export."
+        case .cancelled:
+            return
+        default:
+            mergeClipsAvailable = false
+            mergeClipsEnabled = false
+            mergeClipsTooltip = result.tooltip
         }
     }
 
