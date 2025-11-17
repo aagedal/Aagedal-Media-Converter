@@ -41,6 +41,7 @@ struct SettingsView: View {
     @AppStorage(AppConstants.audioWaveformForegroundColorKey) private var waveformForegroundHex = "#FFFFFF"
     @AppStorage(AppConstants.audioWaveformNormalizeKey) private var waveformNormalizeAudio = false
     @AppStorage(AppConstants.audioWaveformStyleKey) private var waveformStyleRaw = AppConstants.defaultAudioWaveformStyleRaw
+    @AppStorage(AppConstants.audioWaveformFrameRateKey) private var waveformFrameRate = AppConstants.defaultAudioWaveformFrameRate
     @State private var selectedPreset: ExportPreset = .videoLoop
     @FocusState private var focusedCustomCommandSlot: Int?
     @State private var previousFocusedCustomCommandSlot: Int?
@@ -487,19 +488,54 @@ struct SettingsView: View {
                         Text("Background HEX")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        TextField("#000000", text: $waveformBackgroundHex)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit(sanitizeWaveformColors)
+                        HStack(spacing: 8) {
+                            ColorPicker("", selection: Binding(
+                                get: { Color(hex: waveformBackgroundHex) },
+                                set: { waveformBackgroundHex = $0.toHexString(includeHash: true) }
+                            ))
+                            .labelsHidden()
+                            .frame(width: 36)
+
+                            TextField("#000000", text: $waveformBackgroundHex)
+                                .textFieldStyle(.roundedBorder)
+                                .onSubmit(sanitizeWaveformColors)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Waveform HEX")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        TextField("#FFFFFF", text: $waveformForegroundHex)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit(sanitizeWaveformColors)
+                        HStack(spacing: 8) {
+                            ColorPicker("", selection: Binding(
+                                get: { Color(hex: waveformForegroundHex) },
+                                set: { waveformForegroundHex = $0.toHexString(includeHash: true) }
+                            ))
+                            .labelsHidden()
+                            .frame(width: 36)
+
+                            TextField("#FFFFFF", text: $waveformForegroundHex)
+                                .textFieldStyle(.roundedBorder)
+                                .onSubmit(sanitizeWaveformColors)
+                        }
                     }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Frame Rate")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Picker("Frame Rate", selection: Binding(
+                        get: { Int(waveformFrameRate.rounded()) },
+                        set: { waveformFrameRate = Double($0) }
+                    )) {
+                        ForEach([15, 24, 25, 30, 50, 60], id: \.self) { rate in
+                            Text("\(rate) fps").tag(rate)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .help("Controls waveform animation smoothness. Higher frame rates increase render cost.")
                 }
 
                 Picker(
@@ -570,6 +606,7 @@ struct SettingsView: View {
         waveformForegroundHex = "#FFFFFF"
         waveformNormalizeAudio = false
         waveformStyleRaw = AppConstants.defaultAudioWaveformStyleRaw
+        waveformFrameRate = AppConstants.defaultAudioWaveformFrameRate
     }
 
     // MARK: - Helpers

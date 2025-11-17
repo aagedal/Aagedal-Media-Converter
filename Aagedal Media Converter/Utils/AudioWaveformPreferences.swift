@@ -9,11 +9,15 @@
 
 import Foundation
 import CoreGraphics
+import SwiftUI
+import AppKit
 
 enum WaveformStyle: String, CaseIterable, Identifiable {
     case linear
     case circle
     case compressed
+    case fisheye
+    case spectrogram
 
     var id: String { rawValue }
 
@@ -22,9 +26,13 @@ enum WaveformStyle: String, CaseIterable, Identifiable {
         case .linear:
             return "Linear"
         case .circle:
-            return "Circular"
+            return "Circular (slow)"
         case .compressed:
             return "Compressed"
+        case .fisheye:
+            return "Fisheye"
+        case .spectrogram:
+            return "Spectrogram"
         }
     }
 }
@@ -38,6 +46,7 @@ struct AudioWaveformPreferences {
         let foregroundHex: String
         let normalizeAudio: Bool
         let style: WaveformStyle
+        let frameRate: Double
 
         var resolutionString: String {
             "\(width)x\(height)"
@@ -49,6 +58,14 @@ struct AudioWaveformPreferences {
 
         var foregroundFFmpegColor: String {
             "0x" + foregroundHex
+        }
+
+        var backgroundColor: Color {
+            Color(hex: backgroundHex)
+        }
+
+        var foregroundColor: Color {
+            Color(hex: foregroundHex)
         }
     }
 
@@ -62,6 +79,7 @@ struct AudioWaveformPreferences {
         let normalize = defaults.bool(forKey: AppConstants.audioWaveformNormalizeKey)
         let styleRaw = defaults.string(forKey: AppConstants.audioWaveformStyleKey) ?? AppConstants.defaultAudioWaveformStyleRaw
         let style = WaveformStyle(rawValue: styleRaw) ?? .linear
+        let frameRate = sanitizeFrameRate(defaults.double(forKey: AppConstants.audioWaveformFrameRateKey))
 
         return WaveformVideoConfig(
             resolution: CGSize(width: width, height: height),
@@ -70,7 +88,8 @@ struct AudioWaveformPreferences {
             backgroundHex: background,
             foregroundHex: foreground,
             normalizeAudio: normalize,
-            style: style
+            style: style,
+            frameRate: frameRate
         )
     }
 
@@ -98,5 +117,37 @@ struct AudioWaveformPreferences {
             return fallback.uppercased()
         }
         return sanitized
+    }
+
+    static func sanitizeFrameRate(_ value: Double) -> Double {
+        let valid = value.isFinite && value >= 10 && value <= 120
+        if valid { return value }
+        if value == 0 { return AppConstants.defaultAudioWaveformFrameRate }
+        return min(max(value, 10), 120)
+    }
+}
+
+extension Color {
+    init(hex: String) {
+        let sanitized = AudioWaveformPreferences.sanitizeHex(hex, fallback: "000000")
+        var hexNumber: UInt64 = 0
+        Scanner(string: sanitized).scanHexInt64(&hexNumber)
+
+        let red = Double((hexNumber & 0xFF0000) >> 16) / 255.0
+        let green = Double((hexNumber & 0x00FF00) >> 8) / 255.0
+        let blue = Double(hexNumber & 0x0000FF) / 255.0
+
+        self.init(red: red, green: green, blue: blue)
+    }
+
+    func toHexString(includeHash: Bool = false) -> String {
+        guard let nsColor = NSColor(self).usingColorSpace(.sRGB) else {
+            return includeHash ? "#000000" : "000000"
+        }
+        let red = Int(round(nsColor.redComponent * 255))
+        let green = Int(round(nsColor.greenComponent * 255))
+        let blue = Int(round(nsColor.blueComponent * 255))
+        let hexString = String(format: "%02X%02X%02X", red, green, blue)
+        return includeHash ? "#" + hexString : hexString
     }
 }

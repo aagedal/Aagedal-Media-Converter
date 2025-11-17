@@ -45,6 +45,15 @@ struct ConversionToolbarView: ToolbarContent {
             .disabled(!hasFiles || (!canStartConversion && !isConverting))
             .help(hasFiles ? (isConverting ? "Cancel all conversions" : (canStartConversion ? "Start converting all files" : "No files ready to convert")) : "Add files to begin conversion")
         }
+        
+        //ToDo: Implement the logic behind this button
+//        ToolbarItem(placement: .automatic) {
+//            Toggle(isOn: <#T##Binding<Bool>#>) {
+//                Label("Merge Clips", systemImage: "play.square.stack.fill")
+//            }
+//            .toggleStyle(.button)
+//            .help("Activate to merge clips into a single video. Disabling this will keep each clip separate. Not available for all presets.")
+//        }
 
         ToolbarItem(placement: .automatic) {
             Toggle(isOn: $watchFolderModeEnabled) {

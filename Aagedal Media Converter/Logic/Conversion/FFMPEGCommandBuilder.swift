@@ -31,6 +31,7 @@ struct WaveformVideoRequest {
     let foregroundHex: String
     let normalizeAudio: Bool
     let style: WaveformStyle
+    let frameRate: Double
 
     var resolutionString: String {
         "\(width)x\(height)"
@@ -154,48 +155,58 @@ extension FFMPEGCommandBuilder {
         let resolution = "\(finalWidth)x\(finalHeight)"
         let background = request.backgroundFFmpegColor
         let foreground = request.foregroundFFmpegColor
+        let frameRateValue = max(1, Int(round(request.frameRate)))
 
-        var audioFilters = ["aformat=channel_layouts=stereo"]
+        let channelLayout = request.style == .circle ? "mono" : "stereo"
+        var audioFilters = ["aformat=channel_layouts=\(channelLayout)"]
         if request.normalizeAudio {
             audioFilters.append("dynaudnorm=f=250:g=30:p=0.9")
         }
 
-        // Add optional dynamic range compression for the "compressed" style
         if request.style == .compressed {
             audioFilters.append("compand")
         }
 
         let audioProcessing = audioFilters.joined(separator: ",")
-
         let waveInputLabel = includeAudioSplit ? "wavesrc" : "audproc"
 
-        // Simplified waveform generation without complex alpha manipulation
-        var filterComplex = "[0:a]\(audioProcessing)"
+        var segments: [String] = []
+        var audioSegment = "[0:a]\(audioProcessing)"
         if includeAudioSplit {
-            filterComplex += ",asplit=2[\(waveInputLabel)][audout];"
+            audioSegment += ",asplit=2[\(waveInputLabel)][audout]"
         } else {
-            filterComplex += "[\(waveInputLabel)];"
+            audioSegment += "[\(waveInputLabel)]"
         }
+        segments.append(audioSegment)
 
-        // Generate background
-        filterComplex += "color=c=\(background):s=\(resolution):d=1[bg];"
-        
-        // Generate waveform visuals for requested style
-        let waveformFilter: String
+        segments.append("color=c=\(background):s=\(resolution):d=1[bg]")
+
         switch request.style {
         case .circle:
-            waveformFilter = "showwaves=s=\(resolution):mode=p2p:draw=full:split_channels=0:colors=\(foreground)"
+            let showwavesArgs = "showwaves=s=\(resolution):mode=cline:draw=full:split_channels=0:colors=\(foreground):rate=\(frameRateValue)"
+            let polarExpression = "mod(W/PI*(PI+atan2(H/2-Y,X-W/2)),W)"
+            let radiusExpression = "H-2*hypot(H/2-Y,X-W/2)"
+            segments.append("[\(waveInputLabel)]\(showwavesArgs)[wave_linear]")
+            segments.append("[wave_linear]geq='p(\(polarExpression),\(radiusExpression))':a='alpha(\(polarExpression),\(radiusExpression))'[wave]")
         case .linear:
-            waveformFilter = "showwaves=s=\(resolution):mode=line:draw=scale:scale=sqrt:split_channels=0:colors=\(foreground)"
+            let waveformFilter = "showwaves=s=\(resolution):mode=cline:draw=scale:scale=sqrt:split_channels=0:colors=\(foreground):rate=\(frameRateValue)"
+            segments.append("[\(waveInputLabel)]\(waveformFilter)[wave]")
         case .compressed:
-            waveformFilter = "showwaves=s=\(resolution):mode=p2p:draw=full:scale=sqrt:split_channels=0:colors=\(foreground)"
+            let waveformFilter = "showwaves=s=\(resolution):mode=p2p:draw=full:scale=sqrt:split_channels=0:colors=\(foreground):rate=\(frameRateValue)"
+            segments.append("[\(waveInputLabel)]\(waveformFilter)[wave]")
+        case .fisheye:
+            let showwavesArgs = "showwaves=s=\(resolution):mode=cline:rate=\(frameRateValue):colors=\(foreground):draw=scale"
+            let fisheyeArgs = "v360=input=fisheye:output=equirect:interp=lanczos:w=\(finalWidth):h=\(finalHeight):ih_fov=360:iv_fov=180"
+            segments.append("[\(waveInputLabel)]\(showwavesArgs)[wave_linear]")
+            segments.append("[wave_linear]\(fisheyeArgs)[wave]")
+        case .spectrogram:
+            let spectrumArgs = "showspectrum=mode=separate:color=intensity:scale=log:slide=scroll:s=\(resolution):overlap=0.75"
+            segments.append("[\(waveInputLabel)]\(spectrumArgs)[wave]")
         }
 
-        filterComplex += "[\(waveInputLabel)]\(waveformFilter)[wave];"
-        
-        // Overlay waveform on background
-        filterComplex += "[bg][wave]overlay=format=auto[outv]"
+        segments.append("[bg][wave]overlay=format=auto[outv]")
 
+        let filterComplex = segments.joined(separator: ";")
         let audioMap = includeAudioSplit ? "[audout]" : nil
         return (filterComplex, "[outv]", audioMap)
     }
@@ -212,18 +223,33 @@ extension FFMPEGCommandBuilder {
             arguments.append(contentsOf: ["-map", audioMap])
         }
 
-        arguments.append(contentsOf: [
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            "-preset", "medium",
-            "-crf", "20",
-            "-movflags", "+faststart",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-shortest"
-        ])
+        if request.frameRate.isFinite, request.frameRate > 0 {
+            let sanitizedFrameRate = formattedFrameRateString(from: request.frameRate)
+            arguments.append(contentsOf: ["-r", sanitizedFrameRate])
+        }
+
+        arguments.append("-shortest")
 
         return arguments
+    }
+
+    private static func formattedFrameRateString(from value: Double) -> String {
+        guard value.isFinite, value > 0 else { return "1" }
+
+        let rounded = round(value * 1000) / 1000
+        if abs(rounded.rounded() - rounded) < 0.001 {
+            return String(Int(rounded.rounded()))
+        }
+
+        var string = String(format: "%.3f", rounded)
+        while string.last == "0" {
+            string.removeLast()
+        }
+        if string.last == "." {
+            string.removeLast()
+        }
+
+        return string.isEmpty ? "1" : string
     }
 
     static func evenDimension(_ value: Int) -> Int {

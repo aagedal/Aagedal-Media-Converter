@@ -153,7 +153,8 @@ actor ConversionManager: Sendable {
                 backgroundHex: config.backgroundHex,
                 foregroundHex: config.foregroundHex,
                 normalizeAudio: config.normalizeAudio,
-                style: config.style
+                style: config.style,
+                frameRate: config.frameRate
             )
         }() : nil
 
