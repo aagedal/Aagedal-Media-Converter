@@ -48,398 +48,28 @@ struct SettingsView: View {
     @State private var isClearingPreviewCache = false
     @State private var previewCacheSizeBytes: Int64 = 0
     @State private var resolutionSanitizationTask: Task<Void, Never>?
+    @State private var selectedTab: SettingsTab = .general
+
+    private enum SettingsTab: Hashable {
+        case general
+        case presets
+        case waveform
+    }
 
     var body: some View {
-        Form {
-            Section(header: Text("Output Folder")) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Default Output Folder:")
-                        .font(.headline)
-                    
-                    HStack {
-                        Text(outputFolder)
-                            .truncationMode(.middle)
-                            .lineLimit(1)
-                            .help(outputFolder)
-                        
-                        Button(action: {
-                            let url = URL(fileURLWithPath: outputFolder)
-                            guard FileManager.default.fileExists(atPath: url.path) else {
-                                // If the saved folder doesn't exist, reset to default
-                                outputFolder = AppConstants.defaultOutputDirectory.path
-                                NSWorkspace.shared.activateFileViewerSelecting([AppConstants.defaultOutputDirectory])
-                                return
-                            }
+        TabView(selection: $selectedTab) {
+            generalTab
+                .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(SettingsTab.general)
 
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                        }) {
-                            Image(systemName: "arrow.right.circle.fill")
-                                .foregroundColor(.accentColor)
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .help("Show in Finder")
-                        
-                        // Choose new folder
-                        Button(action: {
-                            selectNewOutputFolder()
-                        }) {
-                            Image(systemName: "folder.badge.gearshape")
-                                .foregroundColor(.accentColor)
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .help("Change default output folder")
-                    }
-                }
-                .padding(8)
-            }
+            presetsTab
+                .tabItem { Label("Presets", systemImage: "slider.horizontal.3") }
+                .tag(SettingsTab.presets)
 
-            waveformSection
-            
-            Section(header: Text("Screenshots")) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Default Screenshot Folder:")
-                        .font(.headline)
-
-                    HStack {
-                        Text(screenshotDirectoryPath)
-                            .truncationMode(.middle)
-                            .lineLimit(1)
-                            .help(screenshotDirectoryPath)
-
-                        Button(action: {
-                            let url = URL(fileURLWithPath: screenshotDirectoryPath)
-                            guard FileManager.default.fileExists(atPath: url.path) else {
-                                screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path
-                                return
-                            }
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                        }) {
-                            Image(systemName: "arrow.right.circle.fill")
-                                .foregroundColor(.accentColor)
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .help("Show in Finder")
-
-                        Button(action: {
-                            selectScreenshotDirectory()
-                        }) {
-                            Image(systemName: "camera.on.rectangle")
-                                .foregroundColor(.accentColor)
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .help("Change screenshot folder")
-
-                        Button(action: {
-                            screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path
-                        }) {
-                            Image(systemName: "arrow.counterclockwise")
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                        .help("Reset to Downloads")
-                    }
-                }
-                .padding(8)
-                Text("Frames captured from the preview will be saved as JPEGs into this folder.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Section(header: Text("Preview Cache")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Picker("Cleanup policy", selection: $previewCacheCleanupPolicyRaw) {
-                        ForEach(PreviewCacheCleanupPolicy.allCases) { policy in
-                            Text(policy.displayName).tag(policy.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    Text(previewCacheCleanupPolicy.description)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 12) {
-                        Button {
-                            isClearingPreviewCache = true
-                            Task {
-                                await PreviewAssetGenerator.shared.cleanupAllCache()
-                                await refreshPreviewCacheSize()
-                                await MainActor.run { isClearingPreviewCache = false }
-                            }
-                        } label: {
-                            Label("Clear cache now", systemImage: "trash")
-                        }
-                        .disabled(isClearingPreviewCache)
-
-                        if isClearingPreviewCache {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                        }
-
-                        Text(previewCacheSizeDescription)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(8)
-            }
-            .onChange(of: previewCacheCleanupPolicyRaw) { _, newValue in
-                let policy = PreviewCacheCleanupPolicy(rawValue: newValue) ?? .purgeOnLaunch
-                Task {
-                    await PreviewAssetGenerator.shared.applyCleanupPolicy(policy)
-                    await refreshPreviewCacheSize()
-                }
-            }
-            .task { await refreshPreviewCacheSize() }
-            .onChange(of: isClearingPreviewCache) { _, isClearing in
-                guard !isClearing else { return }
-                Task { await refreshPreviewCacheSize() }
-            }
-
-            Section(header: Text("Watch Folder")) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Watch Folder:")
-                        .font(.headline)
-                    
-                    if watchFolderPath.isEmpty {
-                        Text("No folder selected")
-                            .foregroundColor(.secondary)
-                            .italic()
-                    } else {
-                        HStack {
-                            Text(watchFolderPath)
-                                .truncationMode(.middle)
-                                .lineLimit(1)
-                                .help(watchFolderPath)
-                            
-                            Button(action: {
-                                let url = URL(fileURLWithPath: watchFolderPath)
-                                guard FileManager.default.fileExists(atPath: url.path) else {
-                                    // If the saved folder doesn't exist, clear it
-                                    watchFolderPath = ""
-                                    return
-                                }
-                                NSWorkspace.shared.activateFileViewerSelecting([url])
-                            }) {
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .foregroundColor(.accentColor)
-                            }
-                            .buttonStyle(BorderlessButtonStyle())
-                            .help("Show in Finder")
-                        }
-                    }
-                    
-                    HStack {
-                        Button(action: {
-                            selectWatchFolder()
-                        }) {
-                            Label(watchFolderPath.isEmpty ? "Select Folder" : "Change Folder", systemImage: "folder.badge.plus")
-                        }
-                        
-                        if !watchFolderPath.isEmpty {
-                            Button(action: {
-                                watchFolderPath = ""
-                            }) {
-                                Label("Clear", systemImage: "xmark.circle")
-                                    .foregroundColor(.red)
-                            }
-                        }
-                    }
-                }
-                .padding(8)
-                
-                Text("When Watch Folder Mode is enabled in the toolbar, the app will automatically scan this folder every 5 seconds for new video files and add them to the conversion queue.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Toggle("Ignore files older than", isOn: $watchFolderIgnoreOlderThan24h)
-                    .toggleStyle(SwitchToggleStyle())
-                    .help("Skip files that have been in the watch folder longer than the selected duration")
-                    .onChange(of: watchFolderIgnoreOlderThan24h) { _, isOn in
-                        if !isOn {
-                            watchFolderIgnoreDurationValue = AppConstants.defaultWatchFolderIgnoreDurationValue
-                            watchFolderIgnoreDurationUnitRaw = AppConstants.defaultWatchFolderIgnoreDurationUnitRaw
-                        }
-                    }
-                if watchFolderIgnoreOlderThan24h {
-                    durationPickerRow(
-                        title: "Ignore threshold",
-                        valueBinding: ignoreDurationValueBinding,
-                        unitBinding: ignoreDurationUnitBinding
-                    )
-                }
-                Toggle("Automatically delete files older than", isOn: $watchFolderAutoDeleteOlderThanWeek)
-                    .toggleStyle(SwitchToggleStyle())
-                    .help("Permanently remove files that have stayed in the watch folder longer than the selected duration")
-                    .onChange(of: watchFolderAutoDeleteOlderThanWeek) { _, isOn in
-                        if !isOn {
-                            watchFolderDeleteDurationValue = AppConstants.defaultWatchFolderDeleteDurationValue
-                            watchFolderDeleteDurationUnitRaw = AppConstants.defaultWatchFolderDeleteDurationUnitRaw
-                        }
-                    }
-                if watchFolderAutoDeleteOlderThanWeek {
-                    durationPickerRow(
-                        title: "Deletion threshold",
-                        valueBinding: deleteDurationValueBinding,
-                        unitBinding: deleteDurationUnitBinding
-                    )
-                }
-            }
-            
-            Section(header: Text("Metadata")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("Preserve all original metadata", isOn: $preserveMetadataByDefault)
-                        .toggleStyle(SwitchToggleStyle())
-                        .help("When enabled, the original file's metadata is kept intact during conversion")
-                    Text("By default, metadata such as title, timecode, and encoder tags are stripped to keep output files clean. Enable this to keep all metadata untouched. However, color related metadata (including HDR) will always be preserved, to assure an accurate viewing experience.")
-                        .font(Font.caption.italic())
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Toggle(isOn: $includeDateTagByDefault) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label("Include date tag on new files", systemImage: "calendar.badge.clock")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Date tag is an autogenerated text added to the beginning of the comment field, e.g. 'Date generated: 20250925'. The tag precedes any custom comment you enter on the video card.")
-                            .font(Font.caption.italic())
-                            .foregroundColor(preserveMetadataByDefault ? .secondary : .primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .toggleStyle(SwitchToggleStyle())
-                .disabled(preserveMetadataByDefault)
-                .help("Controls whether newly added files include the \"Date generated\" metadata tag by default")
-            }
-            
-            // Preset Information Section
-            Section(header: Text("Preset Information")) {
-                VStack(alignment: .leading) {
-                    // Segmented Control for Preset Selection
-                    HStack(alignment: .center, spacing: 12) {
-                        Picker("Preset", selection: $selectedPreset) {
-                            ForEach(ExportPreset.allCases) { preset in
-                                Text(preset.displayName).tag(preset)
-                            }
-                        }
-                        .pickerStyle(.automatic)
-                        .labelsHidden()
-                        
-                        Spacer()
-                        Button(action: setSelectedPresetAsDefault) {
-                            if isSelectedPresetDefault {
-                                Text("Default")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.green)
-                            } else {
-                                Text("Set as Default")
-                                    .font(.subheadline)
-                                    .foregroundColor(.blue)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isSelectedPresetDefault)
-                        .help(isSelectedPresetDefault ? "Current default preset" : "Set this preset as the default for new files")
-                    }
-                    
-                    // Preset Description
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text(selectedPreset.displayName)
-                                .font(.headline)
-                            Spacer()
-                            HStack {
-                                Text(selectedPreset.fileSuffix)
-                                Text(".\(selectedPreset.fileExtension)")
-                            }
-                            .font(.subheadline)
-                            .monospaced()
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Color.accentColor.opacity(0.15))
-                            .foregroundColor(.accentColor)
-                            .clipShape(Capsule())
-                        }
-                        
-                        Text(selectedPreset.description)
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(12)
-                    .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-                    .cornerRadius(10)
-                }
-            }
-            if selectedPreset.isCustom {
-                Section(header: Text("Custom Preset")) {
-                    let slot = selectedPreset.customSlotIndex ?? 0
-                    VStack(alignment: .leading, spacing: 16) {
-                        presetNameField(for: slot)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Specify the arguments passed to ffmpeg (without including the `ffmpeg` command itself).")
-                                .font(.callout)
-                                .foregroundColor(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            TextEditor(text: Binding(
-                                get: { customCommand(for: slot) },
-                                set: { updateCustomCommand($0, slot: slot) }
-                            ))
-                            .font(.system(.body, design: .monospaced))
-                            .frame(minHeight: 80)
-                            .cornerRadius(6)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-                            .focused($focusedCustomCommandSlot, equals: slot)
-                        }
-                        HStack(alignment: .top, spacing: 16) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Output file suffix")
-                                    .font(.footnote)
-                                    .foregroundColor(.secondary)
-                                TextField("_c\(slot + 1)", text: Binding(
-                                    get: { customSuffix(for: slot) },
-                                    set: { updateCustomSuffix($0, slot: slot) }
-                                ))
-                                .textFieldStyle(.roundedBorder)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Output extension")
-                                    .font(.footnote)
-                                    .foregroundColor(.secondary)
-                                TextField("mp4", text: Binding(
-                                    get: { customExtension(for: slot) },
-                                    set: { updateCustomExtension($0, slot: slot) }
-                                ))
-                                .textFieldStyle(.roundedBorder)
-                            }
-                        }
-                        Text("Example: `-c:v libx264 -crf 18 -preset slow -c:a copy` produces `filename\(customSuffix(for: slot)).\(customExtension(for: slot))`.")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-            
-            // Links Section
-            Section {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Source code and author website", systemImage: "questionmark.circle")
-                        .font(.headline)
-                    HStack {
-                        Link("GitHub Repository", destination: URL(string: "https://github.com/aagedal/Aagedal-Media-Converter/tree/main")!)
-                        Spacer()
-                        Link("Developer Website", destination: URL(string: "https://aagedal.me/about")!)
-                    }.padding(8)
-                }
-                .padding(.vertical, 4)
-            }
+            waveformTab
+                .tabItem { Label("Audio Waveform", systemImage: "waveform") }
+                .tag(SettingsTab.waveform)
         }
-        .formStyle(.grouped)
         .frame(width: 600, height: 560)
         .navigationTitle("Settings – Aagedal Media Converter")
         .padding(.horizontal, 20)
@@ -457,6 +87,420 @@ struct SettingsView: View {
             resolutionSanitizationTask?.cancel()
             sanitizeWaveformResolution()
             sanitizeWaveformColors()
+        }
+    }
+
+    private var generalTab: some View {
+        Form {
+            outputFolderSection
+            screenshotSection
+            previewCacheSection
+            watchFolderSection
+            metadataSection
+            linksSection
+        }
+        .formStyle(.grouped)
+        .onChange(of: previewCacheCleanupPolicyRaw) { _, newValue in
+            let policy = PreviewCacheCleanupPolicy(rawValue: newValue) ?? .purgeOnLaunch
+            Task {
+                await PreviewAssetGenerator.shared.applyCleanupPolicy(policy)
+                await refreshPreviewCacheSize()
+            }
+        }
+        .task { await refreshPreviewCacheSize() }
+        .onChange(of: isClearingPreviewCache) { _, isClearing in
+            guard !isClearing else { return }
+            Task { await refreshPreviewCacheSize() }
+        }
+    }
+
+    private var presetsTab: some View {
+        Form {
+            presetInformationSection
+            if selectedPreset.isCustom {
+                customPresetSection
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var waveformTab: some View {
+        Form {
+            waveformSection
+        }
+        .formStyle(.grouped)
+    }
+
+    private var outputFolderSection: some View {
+        Section(header: Text("Output Folder")) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Default Output Folder:")
+                    .font(.headline)
+
+                HStack {
+                    Text(outputFolder)
+                        .truncationMode(.middle)
+                        .lineLimit(1)
+                        .help(outputFolder)
+
+                    Button(action: {
+                        let url = URL(fileURLWithPath: outputFolder)
+                        guard FileManager.default.fileExists(atPath: url.path) else {
+                            outputFolder = AppConstants.defaultOutputDirectory.path
+                            NSWorkspace.shared.activateFileViewerSelecting([AppConstants.defaultOutputDirectory])
+                            return
+                        }
+
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .help("Show in Finder")
+
+                    Button(action: { selectNewOutputFolder() }) {
+                        Image(systemName: "folder.badge.gearshape")
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .help("Change default output folder")
+                }
+            }
+            .padding(8)
+        }
+    }
+
+    private var screenshotSection: some View {
+        Section(header: Text("Screenshots")) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Default Screenshot Folder:")
+                    .font(.headline)
+
+                HStack {
+                    Text(screenshotDirectoryPath)
+                        .truncationMode(.middle)
+                        .lineLimit(1)
+                        .help(screenshotDirectoryPath)
+
+                    Button(action: {
+                        let url = URL(fileURLWithPath: screenshotDirectoryPath)
+                        guard FileManager.default.fileExists(atPath: url.path) else {
+                            screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path
+                            return
+                        }
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .help("Show in Finder")
+
+                    Button(action: { selectScreenshotDirectory() }) {
+                        Image(systemName: "camera.on.rectangle")
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .help("Change screenshot folder")
+
+                    Button(action: { screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path }) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(BorderlessButtonStyle())
+                    .help("Reset to Downloads")
+                }
+            }
+            .padding(8)
+            Text("Frames captured from the preview will be saved as JPEGs into this folder.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var previewCacheSection: some View {
+        Section(header: Text("Preview Cache")) {
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("Cleanup policy", selection: $previewCacheCleanupPolicyRaw) {
+                    ForEach(PreviewCacheCleanupPolicy.allCases) { policy in
+                        Text(policy.displayName).tag(policy.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text(previewCacheCleanupPolicy.description)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 12) {
+                    Button {
+                        isClearingPreviewCache = true
+                        Task {
+                            await PreviewAssetGenerator.shared.cleanupAllCache()
+                            await refreshPreviewCacheSize()
+                            await MainActor.run { isClearingPreviewCache = false }
+                        }
+                    } label: {
+                        Label("Clear cache now", systemImage: "trash")
+                    }
+                    .disabled(isClearingPreviewCache)
+
+                    if isClearingPreviewCache {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                    }
+
+                    Text(previewCacheSizeDescription)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(8)
+        }
+    }
+
+    private var watchFolderSection: some View {
+        Section(header: Text("Watch Folder")) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Watch Folder:")
+                    .font(.headline)
+
+                if watchFolderPath.isEmpty {
+                    Text("No folder selected")
+                        .foregroundColor(.secondary)
+                        .italic()
+                } else {
+                    HStack {
+                        Text(watchFolderPath)
+                            .truncationMode(.middle)
+                            .lineLimit(1)
+                            .help(watchFolderPath)
+
+                        Button(action: {
+                            let url = URL(fileURLWithPath: watchFolderPath)
+                            guard FileManager.default.fileExists(atPath: url.path) else {
+                                watchFolderPath = ""
+                                return
+                            }
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }) {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
+                        .help("Show in Finder")
+                    }
+                }
+
+                HStack {
+                    Button(action: { selectWatchFolder() }) {
+                        Label(watchFolderPath.isEmpty ? "Select Folder" : "Change Folder", systemImage: "folder.badge.plus")
+                    }
+
+                    if !watchFolderPath.isEmpty {
+                        Button(action: { watchFolderPath = "" }) {
+                            Label("Clear", systemImage: "xmark.circle")
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+            }
+            .padding(8)
+
+            Text("When Watch Folder Mode is enabled in the toolbar, the app will automatically scan this folder every 5 seconds for new video files and add them to the conversion queue.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Toggle("Ignore files older than", isOn: $watchFolderIgnoreOlderThan24h)
+                .toggleStyle(SwitchToggleStyle())
+                .help("Skip files that have been in the watch folder longer than the selected duration")
+                .onChange(of: watchFolderIgnoreOlderThan24h) { _, isOn in
+                    if !isOn {
+                        watchFolderIgnoreDurationValue = AppConstants.defaultWatchFolderIgnoreDurationValue
+                        watchFolderIgnoreDurationUnitRaw = AppConstants.defaultWatchFolderIgnoreDurationUnitRaw
+                    }
+                }
+            if watchFolderIgnoreOlderThan24h {
+                durationPickerRow(
+                    title: "Ignore threshold",
+                    valueBinding: ignoreDurationValueBinding,
+                    unitBinding: ignoreDurationUnitBinding
+                )
+            }
+            Toggle("Automatically delete files older than", isOn: $watchFolderAutoDeleteOlderThanWeek)
+                .toggleStyle(SwitchToggleStyle())
+                .help("Permanently remove files that have stayed in the watch folder longer than the selected duration")
+                .onChange(of: watchFolderAutoDeleteOlderThanWeek) { _, isOn in
+                    if !isOn {
+                        watchFolderDeleteDurationValue = AppConstants.defaultWatchFolderDeleteDurationValue
+                        watchFolderDeleteDurationUnitRaw = AppConstants.defaultWatchFolderDeleteDurationUnitRaw
+                    }
+                }
+            if watchFolderAutoDeleteOlderThanWeek {
+                durationPickerRow(
+                    title: "Deletion threshold",
+                    valueBinding: deleteDurationValueBinding,
+                    unitBinding: deleteDurationUnitBinding
+                )
+            }
+        }
+    }
+
+    private var metadataSection: some View {
+        Section(header: Text("Metadata")) {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Preserve all original metadata", isOn: $preserveMetadataByDefault)
+                    .toggleStyle(SwitchToggleStyle())
+                    .help("When enabled, the original file's metadata is kept intact during conversion")
+                Text("By default, metadata such as title, timecode, and encoder tags are stripped to keep output files clean. Enable this to keep all metadata untouched. However, color related metadata (including HDR) will always be preserved, to assure an accurate viewing experience.")
+                    .font(Font.caption.italic())
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Toggle(isOn: $includeDateTagByDefault) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Include date tag on new files", systemImage: "calendar.badge.clock")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Date tag is an autogenerated text added to the beginning of the comment field, e.g. 'Date generated: 20250925'. The tag precedes any custom comment you enter on the video card.")
+                        .font(Font.caption.italic())
+                        .foregroundColor(preserveMetadataByDefault ? .secondary : .primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(SwitchToggleStyle())
+            .disabled(preserveMetadataByDefault)
+            .help("Controls whether newly added files include the \"Date generated\" metadata tag by default")
+        }
+    }
+
+    private var linksSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Source code and author website", systemImage: "questionmark.circle")
+                    .font(.headline)
+                HStack {
+                    Link("GitHub Repository", destination: URL(string: "https://github.com/aagedal/Aagedal-Media-Converter/tree/main")!)
+                    Spacer()
+                    Link("Developer Website", destination: URL(string: "https://aagedal.me/about")!)
+                }
+                .padding(8)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var presetInformationSection: some View {
+        Section(header: Text("Preset Information")) {
+            VStack(alignment: .leading) {
+                HStack(alignment: .center, spacing: 12) {
+                    Picker("Preset", selection: $selectedPreset) {
+                        ForEach(ExportPreset.allCases) { preset in
+                            Text(preset.displayName).tag(preset)
+                        }
+                    }
+                    .pickerStyle(.automatic)
+                    .labelsHidden()
+
+                    Spacer()
+                    Button(action: setSelectedPresetAsDefault) {
+                        if isSelectedPresetDefault {
+                            Text("Default")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                        } else {
+                            Text("Set as Default")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSelectedPresetDefault)
+                    .help(isSelectedPresetDefault ? "Current default preset" : "Set this preset as the default for new files")
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(selectedPreset.displayName)
+                            .font(.headline)
+                        Spacer()
+                        HStack {
+                            Text(selectedPreset.fileSuffix)
+                            Text(".\(selectedPreset.fileExtension)")
+                        }
+                        .font(.subheadline)
+                        .monospaced()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.15))
+                        .foregroundColor(.accentColor)
+                        .clipShape(Capsule())
+                    }
+
+                    Text(selectedPreset.description)
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                .cornerRadius(10)
+            }
+        }
+    }
+
+    private var customPresetSection: some View {
+        Section(header: Text("Custom Preset")) {
+            let slot = selectedPreset.customSlotIndex ?? 0
+            VStack(alignment: .leading, spacing: 16) {
+                presetNameField(for: slot)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Specify the arguments passed to ffmpeg (without including the `ffmpeg` command itself).")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    TextEditor(text: Binding(
+                        get: { customCommand(for: slot) },
+                        set: { updateCustomCommand($0, slot: slot) }
+                    ))
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 80)
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+                    .focused($focusedCustomCommandSlot, equals: slot)
+                }
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Output file suffix")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                        TextField("_c\(slot + 1)", text: Binding(
+                            get: { customSuffix(for: slot) },
+                            set: { updateCustomSuffix($0, slot: slot) }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Output extension")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                        TextField("mp4", text: Binding(
+                            get: { customExtension(for: slot) },
+                            set: { updateCustomExtension($0, slot: slot) }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                    }
+                }
+                Text("Example: `-c:v libx264 -crf 18 -preset slow -c:a copy` produces `filename\(customSuffix(for: slot)).\(customExtension(for: slot))`.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
         }
     }
 
