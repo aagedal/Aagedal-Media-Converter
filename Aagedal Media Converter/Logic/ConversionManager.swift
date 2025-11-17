@@ -10,6 +10,7 @@
 import AVFoundation
 import Foundation
 import SwiftUI
+import AppKit
 
 actor ConversionManager: Sendable {
     @MainActor static let shared = ConversionManager()
@@ -253,6 +254,14 @@ actor ConversionManager: Sendable {
                 outputFolder: plan.outputFolder,
                 preset: plan.preset
             )
+        }
+
+        Task { @MainActor in
+            if success {
+                SoundManager.shared.playSuccess()
+            } else {
+                SoundManager.shared.playError()
+            }
         }
     }
 
@@ -552,6 +561,14 @@ actor ConversionManager: Sendable {
                         outputFolder: outputFolder,
                         preset: preset
                     )
+                }
+                
+                Task { @MainActor in
+                    if !success {
+                        SoundManager.shared.playError()
+                    } else if !(await self.isConverting) {
+                        SoundManager.shared.playSuccess()
+                    }
                 }
             }
         }
