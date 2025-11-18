@@ -143,6 +143,10 @@ struct GeneralSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 12) {
+                    Spacer()
+                    Text(previewCacheSizeDescription)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     Button {
                         isClearingPreviewCache = true
                         Task {
@@ -159,11 +163,7 @@ struct GeneralSettingsView: View {
                         ProgressView()
                             .progressViewStyle(.circular)
                     }
-
-                    Text(previewCacheSizeDescription)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                }.padding(.top, 8)
             }
             .padding(8)
         }
