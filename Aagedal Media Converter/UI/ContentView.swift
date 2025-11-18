@@ -375,7 +375,8 @@ struct ContentView: View {
         }
 
         let sanitizedBaseName = FileNameProcessor.processFileName(item.url.deletingPathExtension().lastPathComponent)
-        let outputFileName = sanitizedBaseName + preset.fileSuffix + "." + preset.fileExtension
+        let resolvedExtension = preset.outputExtension(for: item.url)
+        let outputFileName = sanitizedBaseName + preset.fileSuffix + "." + resolvedExtension
         return currentOutputFolder.appendingPathComponent(outputFileName)
     }
 
@@ -385,7 +386,8 @@ struct ContentView: View {
         }
 
         let sanitizedBaseName = FileNameProcessor.processFileName(referenceItem.url.deletingPathExtension().lastPathComponent)
-        let outputFileName = sanitizedBaseName + preset.fileSuffix + "_merge" + "." + preset.fileExtension
+        let resolvedExtension = preset.outputExtension(for: referenceItem.url)
+        let outputFileName = sanitizedBaseName + preset.fileSuffix + "_merge" + "." + resolvedExtension
         return currentOutputFolder.appendingPathComponent(outputFileName)
     }
 

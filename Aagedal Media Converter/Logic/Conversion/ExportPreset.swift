@@ -22,6 +22,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     case tvQualityHD = "TV — HD"
     case tvQuality4K = "TV — 4K"
     case prores = "ProRes"
+    case streamCopy = "Stream Copy"
     case animatedAVIF = "Animated AVIF"
     case hevcProxy1080p = "HEVC Proxy"
     case audioUncompressedWAV = "Audio only WAV (all channels)"
@@ -36,8 +37,10 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         switch self {
         case .videoLoop, .videoLoopWithAudio:
             return "mp4"
-        case .tvQualityHD, .tvQuality4K, .prores, .hevcProxy1080p:
+        case .prores, .tvQualityHD, .tvQuality4K, .hevcProxy1080p:
             return "mov"
+        case .streamCopy:
+            return "mp4"
         case .animatedAVIF:
             return "avif"
         case .audioUncompressedWAV:
@@ -48,6 +51,18 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             guard let slot = customSlotIndex else { return "mp4" }
             return Self.customFileExtension(for: slot)
         }
+    }
+
+    func outputExtension(for sourceURL: URL?) -> String {
+        guard self == .streamCopy else {
+            return fileExtension
+        }
+
+        if let ext = sourceURL?.pathExtension, !ext.isEmpty {
+            return ext.lowercased()
+        }
+
+        return fileExtension
     }
     
     var displayName: String {
@@ -69,6 +84,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return NSLocalizedString("PRESET_TV_QUALITY_4K_DESCRIPTION", comment: "Description for TV Quality 4K preset")
         case .prores:
             return NSLocalizedString("PRESET_PRORES_DESCRIPTION", comment: "Description for ProRes preset")
+        case .streamCopy:
+            return NSLocalizedString("PRESET_STREAM_COPY_DESCRIPTION", comment: "Description for Stream Copy preset")
         case .animatedAVIF:
             return NSLocalizedString("PRESET_ANIMATED_AVIF_DESCRIPTION", comment: "Description for Animated AVIF preset")
         case .hevcProxy1080p:
@@ -94,6 +111,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "_tv_4k"
         case .prores:
             return "_prores"
+        case .streamCopy:
+            return "_copy"
         case .animatedAVIF:
             return "_avif"
         case .hevcProxy1080p:
@@ -214,6 +233,12 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-c:a", "pcm_s24le",
                 "-map", "0:v",
                 "-map", "0:a"
+            ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
+        case .streamCopy:
+            var args = commonArgs + [
+                "-c", "copy",
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args

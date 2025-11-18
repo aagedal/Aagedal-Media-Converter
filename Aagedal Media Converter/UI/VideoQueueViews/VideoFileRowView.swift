@@ -523,7 +523,8 @@ struct VideoFileRowView: View {
     private func generateOutputFilename(from input: String) -> String {
         let filename = (input as NSString).deletingPathExtension
         let sanitized = FileNameProcessor.processFileName(filename)
-        return "\(sanitized)\(preset.fileSuffix).\(preset.fileExtension)"
+        let resolvedExtension = preset.outputExtension(for: file.url)
+        return "\(sanitized)\(preset.fileSuffix).\(resolvedExtension)"
     }
 
     private func dragIcon(for outputURL: URL, color: Color, helpText: String) -> some View {

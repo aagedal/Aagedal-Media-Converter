@@ -63,7 +63,7 @@ actor FFMPEGConverter {
         }
 
         // Add file extension based on preset
-        let outputFileURL = outputURL.appendingPathExtension(preset.fileExtension)
+        let outputFileURL = outputURL.appendingPathExtension(preset.outputExtension(for: inputURL))
         
         // Remove existing file if it exists
         if fileManager.fileExists(atPath: outputFileURL.path) {

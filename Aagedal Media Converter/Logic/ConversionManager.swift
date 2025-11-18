@@ -48,7 +48,18 @@ actor ConversionManager: Sendable {
         let comment: String
         let includeDateTag: Bool
         let waveformRequest: WaveformVideoRequest?
+        let segments: [MergeSegment]
+        let temporaryClipURLs: [URL]
         var hasExecuted: Bool
+    }
+
+    private struct MergeSegment {
+        let itemID: UUID
+        let originalURL: URL
+        let preparedURL: URL
+        let trimStart: Double?
+        let trimEnd: Double?
+        let isTemporary: Bool
     }
     private var mergePlan: MergePlan?
     private let mergeLogger = Logger(subsystem: "com.aagedal.AagedalMediaConverter", category: "MergeCompatibility")
@@ -109,7 +120,12 @@ actor ConversionManager: Sendable {
         let orderedWaitingItems = waitingItems
         let itemIDs = orderedWaitingItems.map { $0.id }
 
-        guard let listFileURL = createConcatListFile(for: orderedWaitingItems) else {
+        guard let (segments, temporaryFiles) = await prepareMergeSegments(from: orderedWaitingItems) else {
+            return nil
+        }
+
+        guard let listFileURL = createConcatListFile(for: segments) else {
+            cleanupTemporaryFiles(temporaryFiles)
             return nil
         }
 
@@ -144,8 +160,132 @@ actor ConversionManager: Sendable {
             comment: firstItem.comment,
             includeDateTag: firstItem.includeDateTag,
             waveformRequest: waveformRequest,
+            segments: segments,
+            temporaryClipURLs: temporaryFiles,
             hasExecuted: false
         )
+    }
+
+    private func prepareMergeSegments(from items: [VideoItem]) async -> ([MergeSegment], [URL])? {
+        var segments: [MergeSegment] = []
+        var temporaryFiles: [URL] = []
+
+        for item in items {
+            if hasActiveTrim(item) {
+                guard let trimmedURL = await prepareTrimmedClip(for: item) else {
+                    cleanupTemporaryFiles(temporaryFiles)
+                    return nil
+                }
+                let segment = MergeSegment(
+                    itemID: item.id,
+                    originalURL: item.url,
+                    preparedURL: trimmedURL,
+                    trimStart: item.trimStart,
+                    trimEnd: item.trimEnd,
+                    isTemporary: true
+                )
+                segments.append(segment)
+                temporaryFiles.append(trimmedURL)
+            } else {
+                let segment = MergeSegment(
+                    itemID: item.id,
+                    originalURL: item.url,
+                    preparedURL: item.url,
+                    trimStart: item.trimStart,
+                    trimEnd: item.trimEnd,
+                    isTemporary: false
+                )
+                segments.append(segment)
+            }
+        }
+
+        return (segments, temporaryFiles)
+    }
+
+    private func hasActiveTrim(_ item: VideoItem) -> Bool {
+        if let trimStart = item.trimStart, trimStart > 0.0005 {
+            return true
+        }
+        if item.trimEnd != nil {
+            return true
+        }
+        return false
+    }
+
+    private func prepareTrimmedClip(for item: VideoItem) async -> URL? {
+        guard let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) else {
+            mergeLogger.error("FFmpeg binary not found while preparing trimmed clip for \(item.name, privacy: .public)")
+            return nil
+        }
+
+        let fileExtension = item.url.pathExtension.isEmpty ? "mp4" : item.url.pathExtension
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trimmed_\(UUID().uuidString).\(fileExtension)")
+
+        let start = max(item.effectiveTrimStart, 0)
+        let hasStartTrim = start > 0.0005
+        let hasEndTrim = item.trimEnd != nil
+        let duration = max(item.effectiveTrimEnd - start, 0)
+
+        if hasEndTrim && duration <= 0.01 {
+            mergeLogger.error("Invalid trim duration for \(item.name, privacy: .public). Start=\(start, privacy: .public) end=\(item.effectiveTrimEnd, privacy: .public)")
+            return nil
+        }
+
+        var arguments = ["-y"]
+        if hasStartTrim {
+            arguments.append(contentsOf: ["-ss", FFMPEGCommandBuilder.ffmpegTimeString(from: start)])
+        }
+
+        arguments.append(contentsOf: ["-i", item.url.path])
+
+        if hasEndTrim {
+            arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: duration)])
+        }
+
+        arguments.append(contentsOf: ["-c", "copy", tempURL.path])
+
+        let success = await runFFmpeg(at: ffmpegPath, arguments: arguments, context: "trim \(item.name)")
+        if success {
+            return tempURL
+        } else {
+            try? FileManager.default.removeItem(at: tempURL)
+            return nil
+        }
+    }
+
+    private func runFFmpeg(at executablePath: String, arguments: [String], context: String) async -> Bool {
+        let logger = mergeLogger
+        return await withCheckedContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executablePath)
+            process.arguments = arguments
+            process.standardOutput = Pipe()
+            let errorPipe = Pipe()
+            process.standardError = errorPipe
+
+            process.terminationHandler = { process in
+                let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                if process.terminationStatus != 0 {
+                    let stderr = String(data: data, encoding: .utf8) ?? "(unable to decode ffmpeg stderr)"
+                    logger.error("FFmpeg \(context, privacy: .public) failed with code \(process.terminationStatus). \(stderr, privacy: .public)")
+                }
+                continuation.resume(returning: process.terminationStatus == 0)
+            }
+
+            do {
+                try process.run()
+            } catch {
+                logger.error("Failed to launch FFmpeg \(context, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                continuation.resume(returning: false)
+            }
+        }
+    }
+
+    private func cleanupTemporaryFiles(_ urls: [URL]) {
+        for url in urls {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     private func executeMergePlan(droppedFiles: Binding<[VideoItem]>) async {
@@ -210,11 +350,11 @@ actor ConversionManager: Sendable {
         }
     }
 
-    private func createConcatListFile(for items: [VideoItem]) -> URL? {
+    private func createConcatListFile(for segments: [MergeSegment]) -> URL? {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("concat_\(UUID().uuidString).txt")
-        let content = items.map { item -> String in
-            let escapedPath = item.url.path.replacingOccurrences(of: "'", with: "'\\''")
+        let content = segments.map { segment -> String in
+            let escapedPath = segment.preparedURL.path.replacingOccurrences(of: "'", with: "'\\''")
             return "file '\(escapedPath)'"
         }.joined(separator: "\n")
 
@@ -228,6 +368,7 @@ actor ConversionManager: Sendable {
 
     private func cleanupMergeArtifacts(for plan: MergePlan) {
         try? FileManager.default.removeItem(at: plan.listFileURL)
+        cleanupTemporaryFiles(plan.temporaryClipURLs)
     }
 
     private func handleMergeCompletion(
@@ -236,7 +377,8 @@ actor ConversionManager: Sendable {
         success: Bool,
         droppedFiles: Binding<[VideoItem]>
     ) async {
-        let finalURL = plan.outputBaseURL.appendingPathExtension(plan.preset.fileExtension)
+        let referenceURL = plan.segments.first?.originalURL
+        let finalURL = plan.outputBaseURL.appendingPathExtension(plan.preset.outputExtension(for: referenceURL))
 
         await MainActor.run {
             for index in indices {
@@ -290,11 +432,6 @@ actor ConversionManager: Sendable {
         var resolvedMetadata: [UUID: VideoMetadata] = [:]
         for item in waitingItems {
             if Task.isCancelled { return .cancelled }
-
-            if item.trimStart != nil || item.trimEnd != nil {
-                mergeLogger.debug("Merge incompatible: \(item.name, privacy: .public) has active trims")
-                return .trimmedClip(item)
-            }
 
             if let metadata = item.metadata {
                 resolvedMetadata[item.id] = metadata
@@ -401,7 +538,6 @@ actor ConversionManager: Sendable {
         case audioChannelMismatch(VideoItem)
         case audioSampleRateMismatch(VideoItem)
         case audioCodecMismatch(VideoItem)
-        case trimmedClip(VideoItem)
         case cancelled
 
         var tooltip: String {
@@ -431,8 +567,6 @@ actor ConversionManager: Sendable {
                 return "Audio sample rate mismatch between clips."
             case .audioCodecMismatch:
                 return "Audio codec mismatch between clips."
-            case .trimmedClip:
-                return "Trimmed clips cannot be merged. Reset trims to enable merging."
             case .cancelled:
                 return "Compatibility check cancelled."
             }
@@ -585,7 +719,7 @@ actor ConversionManager: Sendable {
                     
                     // Update the output URL in the video item
                     if success {
-                        let outputFileURL = outputURL.appendingPathExtension(preset.fileExtension)
+                        let outputFileURL = outputURL.appendingPathExtension(preset.outputExtension(for: inputURL))
                         droppedFiles.wrappedValue[idx].outputURL = outputFileURL
                     }
                 }

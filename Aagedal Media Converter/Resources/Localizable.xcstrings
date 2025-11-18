@@ -1443,6 +1443,9 @@
         }
       }
     },
+    "PRESET_STREAM_COPY_DESCRIPTION" : {
+      "comment" : "Description for Stream Copy preset"
+    },
     "PRESET_TV_QUALITY_4K_DESCRIPTION" : {
       "comment" : "Description for TV Quality 4K preset",
       "localizations" : {
