@@ -57,7 +57,8 @@ enum FFMPEGCommandBuilder {
         trimStart: Double?,
         trimEnd: Double?,
         waveformRequest: WaveformVideoRequest? = nil,
-        customInputArguments: [String]? = nil
+        customInputArguments: [String]? = nil,
+        additionalOutputArguments: [String]? = nil
     ) async -> FFMPEGCommand {
         var arguments = ["-y"]
 
@@ -81,6 +82,9 @@ enum FFMPEGCommandBuilder {
             }
 
             arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest))
+            if let additionalOutputArguments {
+                arguments.append(contentsOf: additionalOutputArguments)
+            }
             logger.debug("Waveform ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
@@ -109,6 +113,9 @@ enum FFMPEGCommandBuilder {
         }
 
         arguments.append(contentsOf: ffmpegArgs)
+        if let additionalOutputArguments {
+            arguments.append(contentsOf: additionalOutputArguments)
+        }
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)

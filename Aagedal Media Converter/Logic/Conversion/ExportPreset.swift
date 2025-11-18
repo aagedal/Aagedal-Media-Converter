@@ -238,6 +238,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return args
         case .streamCopy:
             var args = commonArgs + [
+                "-map", "0",
                 "-c", "copy",
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")

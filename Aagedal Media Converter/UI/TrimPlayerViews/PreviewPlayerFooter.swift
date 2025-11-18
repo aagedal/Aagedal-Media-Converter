@@ -55,11 +55,7 @@ struct PreviewPlayerFooter: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            if let range = controller.fallbackPreviewRange {
-                Text("| Preview: \(formattedTime(range.lowerBound))–\(formattedTime(range.upperBound))")
-                    .font(.subheadline)
-                    .foregroundColor(.orange)
-
+            if controller.fallbackPreviewRange != nil {
                 if controller.isLoadingChunk {
                     Text("(loading chunk…)")
                         .font(.caption)

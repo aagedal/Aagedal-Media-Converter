@@ -138,7 +138,7 @@ actor ConversionManager: Sendable {
                 + "_merge"
             )
 
-        let waveformRequest: WaveformVideoRequest? = orderedWaitingItems.contains(where: { $0.requiresWaveformVideo }) ? {
+        let waveformRequest: WaveformVideoRequest? = (preset != .streamCopy && orderedWaitingItems.contains(where: { $0.requiresWaveformVideo })) ? {
             let config = AudioWaveformPreferences.loadConfig()
             return WaveformVideoRequest(
                 width: Int(config.resolution.width),
@@ -319,6 +319,8 @@ actor ConversionManager: Sendable {
 
         let customInputs = ["-f", "concat", "-safe", "0", "-i", plan.listFileURL.path]
 
+        let mergeOutputArguments: [String]? = plan.preset == .streamCopy ? ["-map", "0:v?", "-map", "0:a?", "-map", "0:s?"] : nil
+
         await ffmpegConverter.convert(
             inputURL: primaryInput.url,
             outputURL: plan.outputBaseURL,
@@ -329,6 +331,7 @@ actor ConversionManager: Sendable {
             trimEnd: nil,
             waveformRequest: plan.waveformRequest,
             customInputArguments: customInputs,
+            additionalOutputArguments: mergeOutputArguments,
             progressUpdate: { progress, eta in
                 Task { @MainActor in
                     for index in indices {
@@ -678,7 +681,7 @@ actor ConversionManager: Sendable {
         let outputFileName = sanitizedBaseName + preset.fileSuffix
         let outputURL = URL(fileURLWithPath: outputFolder).appendingPathComponent(outputFileName)
 
-        let waveformRequest = currentItem.requiresWaveformVideo ? {
+        let waveformRequest: WaveformVideoRequest? = (preset != .streamCopy && currentItem.requiresWaveformVideo) ? {
             let config = AudioWaveformPreferences.loadConfig()
             return WaveformVideoRequest(
                 width: Int(config.resolution.width),

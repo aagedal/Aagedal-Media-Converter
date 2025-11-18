@@ -42,6 +42,7 @@ actor FFMPEGConverter {
         trimEnd: Double? = nil,
         waveformRequest: WaveformVideoRequest? = nil,
         customInputArguments: [String]? = nil,
+        additionalOutputArguments: [String]? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool) -> Void
     ) async {
@@ -90,7 +91,8 @@ actor FFMPEGConverter {
             trimStart: trimStart,
             trimEnd: trimEnd,
             waveformRequest: waveformRequest,
-            customInputArguments: customInputArguments
+            customInputArguments: customInputArguments,
+            additionalOutputArguments: additionalOutputArguments
         )
 
         process.arguments = command.arguments
