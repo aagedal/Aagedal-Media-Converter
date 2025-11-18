@@ -370,7 +370,11 @@ actor ConversionManager: Sendable {
 
         let customInputs = ["-f", "concat", "-safe", "0", "-i", plan.listFileURL.path]
 
-        let mergeOutputArguments: [String]? = plan.preset == .streamCopy ? ["-map", "0:v?", "-map", "0:a?", "-map", "0:s?"] : nil
+        let mergeOutputArguments: [String]? = plan.preset == .streamCopy ? [
+            "-map", "-0:d?",
+            "-map", "-0:t?",
+            "-ignore_unknown"
+        ] : nil
 
         await ffmpegConverter.convert(
             inputURL: primaryInput.url,

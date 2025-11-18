@@ -65,6 +65,10 @@ struct ContentView: View {
         droppedFiles.contains { $0.status == .waiting }
     }
 
+    private var hasResettableItems: Bool {
+        droppedFiles.contains { $0.status != .waiting }
+    }
+
     var body: some View {
         VStack {
             // File list with drag and drop support
@@ -119,7 +123,6 @@ struct ContentView: View {
                     displayName: { displayName(for: $0) },
                     mergeClipsEnabled: $mergeClipsEnabled,
                     mergeClipsAvailable: mergeClipsAvailable,
-                    mergeTooltip: mergeClipsTooltip,
                     onToggleConversion: handleConversionToggle,
                     onImport: { isFileImporterPresented = true },
                     onSelectOutputFolder: {
@@ -129,6 +132,8 @@ struct ContentView: View {
                             }
                         }
                     },
+                    onResetAll: resetAllFiles,
+                    hasResettableItems: hasResettableItems,
                     onClear: clearAllFiles
                 )
             }
@@ -515,6 +520,25 @@ struct ContentView: View {
         droppedFiles.removeAll()
         overallProgress = 0.0
         dockProgressUpdater.reset()
+    }
+
+    private func resetAllFiles() {
+        guard !isConverting else { return }
+
+        var didReset = false
+        for index in droppedFiles.indices where droppedFiles[index].status != .waiting {
+            droppedFiles[index].status = .waiting
+            droppedFiles[index].progress = 0.0
+            droppedFiles[index].eta = nil
+            droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
+            didReset = true
+        }
+
+        if didReset {
+            overallProgress = 0.0
+            dockProgressUpdater.reset()
+            scheduleMergeCompatibilityEvaluation()
+        }
     }
 
     private func handleWatchFolderToggle(_ enabled: Bool) {

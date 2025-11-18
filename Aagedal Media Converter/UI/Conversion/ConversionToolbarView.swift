@@ -27,10 +27,11 @@ struct ConversionToolbarView: ToolbarContent {
     let displayName: (ExportPreset) -> String
     @Binding var mergeClipsEnabled: Bool
     let mergeClipsAvailable: Bool
-    let mergeTooltip: String
     let onToggleConversion: () -> Void
     let onImport: () -> Void
     let onSelectOutputFolder: () -> Void
+    let onResetAll: () -> Void
+    let hasResettableItems: Bool
     let onClear: () -> Void
 
     var body: some ToolbarContent {
@@ -54,7 +55,7 @@ struct ConversionToolbarView: ToolbarContent {
             }
             .toggleStyle(.button)
             .disabled(!mergeClipsAvailable)
-            .help(mergeTooltip)
+            .help("Merge all files into one file. Only works if input files have the same settings (e.g. resolution, codec). Note that trimming becomes less accurate when merging clips.")
         }
 
         ToolbarItem(placement: .automatic) {
@@ -85,6 +86,15 @@ struct ConversionToolbarView: ToolbarContent {
 
         ToolbarItem(placement: .automatic) {
             Spacer()
+        }
+
+        ToolbarItem(placement: .automatic) {
+            Button(action: onResetAll) {
+                Label("Reset All", systemImage: "arrow.clockwise.circle")
+                    .foregroundStyle((!hasResettableItems || isConverting) ? Color.gray : Color.blue)
+            }
+            .help("Reset all completed or failed items back to waiting")
+            .disabled(!hasResettableItems || isConverting)
         }
 
         ToolbarItem(placement: .automatic) {
