@@ -48,14 +48,14 @@ struct ConversionToolbarView: ToolbarContent {
             .disabled(!hasFiles || (!canStartConversion && !isConverting))
             .help(hasFiles ? (isConverting ? "Cancel all conversions" : (canStartConversion ? "Start converting all files" : "No files ready to convert")) : "Add files to begin conversion")
         }
-//        ToolbarItem(placement: .automatic) {
-//            Toggle(isOn: $mergeClipsEnabled) {
-//                Label("Merge Clips", systemImage: "play.square.stack.fill")
-//            }
-//            .toggleStyle(.button)
-//            .disabled(!mergeClipsAvailable)
-//            .help(mergeTooltip)
-//        }
+        ToolbarItem(placement: .automatic) {
+            Toggle(isOn: $mergeClipsEnabled) {
+                Label("Merge Clips", systemImage: "play.square.stack.fill")
+            }
+            .toggleStyle(.button)
+            .disabled(!mergeClipsAvailable)
+            .help(mergeTooltip)
+        }
 
         ToolbarItem(placement: .automatic) {
             Toggle(isOn: $watchFolderModeEnabled) {

@@ -11,6 +11,7 @@ import AVFoundation
 import Foundation
 import SwiftUI
 import AppKit
+import OSLog
 
 actor ConversionManager: Sendable {
     @MainActor static let shared = ConversionManager()
@@ -50,6 +51,7 @@ actor ConversionManager: Sendable {
         var hasExecuted: Bool
     }
     private var mergePlan: MergePlan?
+    private let mergeLogger = Logger(subsystem: "com.aagedal.AagedalMediaConverter", category: "MergeCompatibility")
     
     func progressUpdates() -> AsyncStream<Double> {
         let stream = AsyncStream(Double.self) { continuation in
@@ -277,7 +279,9 @@ actor ConversionManager: Sendable {
 
     func evaluateMergeCompatibility(for items: [VideoItem], preset: ExportPreset) async -> MergeCompatibilityResult {
         let waitingItems = items.filter { $0.status == .waiting }
+        mergeLogger.debug("Evaluating merge compatibility for \(waitingItems.count) waiting clips")
         guard waitingItems.count >= 2 else {
+            mergeLogger.debug("Merge incompatible: insufficient items (\(waitingItems.count))")
             return .insufficientItems(waitingItems.count)
         }
 
@@ -286,6 +290,7 @@ actor ConversionManager: Sendable {
             if Task.isCancelled { return .cancelled }
 
             if item.trimStart != nil || item.trimEnd != nil {
+                mergeLogger.debug("Merge incompatible: \(item.name, privacy: .public) has active trims")
                 return .trimmedClip(item)
             }
 
@@ -298,6 +303,7 @@ actor ConversionManager: Sendable {
                 let metadata = try await VideoMetadataService.shared.metadata(for: item.url)
                 resolvedMetadata[item.id] = metadata
             } catch {
+                mergeLogger.debug("Merge incompatible: metadata unavailable for \(item.name, privacy: .public) – \(error.localizedDescription, privacy: .public)")
                 return .metadataUnavailable(item)
             }
         }
@@ -305,29 +311,37 @@ actor ConversionManager: Sendable {
         guard let firstItem = waitingItems.first,
               let referenceMetadata = resolvedMetadata[firstItem.id],
               let referenceVideo = referenceMetadata.videoStream else {
+            mergeLogger.debug("Merge incompatible: reference clip missing video track")
             return .missingVideoTrack
         }
 
         let referenceAudio = referenceMetadata.audioStreams.first
 
+        logMetadataSummary(for: waitingItems, metadata: resolvedMetadata)
+
         for item in waitingItems {
             guard let metadata = resolvedMetadata[item.id], let video = metadata.videoStream else {
+                mergeLogger.debug("Merge incompatible: \(item.name, privacy: .public) missing video track")
                 return .missingVideoTrack
             }
 
             if !stringsEqual(video.codec, referenceVideo.codec) {
+                mergeLogger.debug("Merge incompatible: video codec mismatch \(item.name, privacy: .public) \(video.codec ?? "unknown", privacy: .public) vs \(referenceVideo.codec ?? "unknown", privacy: .public)")
                 return .videoCodecMismatch(item)
             }
 
             if video.width != referenceVideo.width || video.height != referenceVideo.height {
+                mergeLogger.debug("Merge incompatible: resolution mismatch for \(item.name, privacy: .public) \(video.width ?? 0)x\(video.height ?? 0) vs \(referenceVideo.width ?? 0)x\(referenceVideo.height ?? 0)")
                 return .resolutionMismatch(item, expected: referenceVideo)
             }
 
             if !ratiosEqual(video.pixelAspectRatio, referenceVideo.pixelAspectRatio) {
+                mergeLogger.debug("Merge incompatible: pixel aspect mismatch for \(item.name, privacy: .public) \(video.pixelAspectRatio?.stringValue ?? "n/a", privacy: .public) vs \(referenceVideo.pixelAspectRatio?.stringValue ?? "n/a", privacy: .public)")
                 return .pixelAspectMismatch(item)
             }
 
             if !frameRatesEqual(video.frameRate, referenceVideo.frameRate) {
+                mergeLogger.debug("Merge incompatible: frame rate mismatch for \(item.name, privacy: .public) \(video.frameRate?.stringValue ?? "n/a", privacy: .public) vs \(referenceVideo.frameRate?.stringValue ?? "n/a", privacy: .public)")
                 return .frameRateMismatch(item)
             }
 
@@ -335,21 +349,41 @@ actor ConversionManager: Sendable {
             case (nil, nil):
                 break
             case (nil, .some), (.some, nil):
+                mergeLogger.debug("Merge incompatible: audio presence mismatch for \(item.name, privacy: .public)")
                 return .audioPresenceMismatch(item)
             case let (.some(refAudio), .some(audio)):
                 if audio.channels != refAudio.channels {
+                    mergeLogger.debug("Merge incompatible: audio channel mismatch for \(item.name, privacy: .public) \(self.describeInt(audio.channels), privacy: .public) vs \(self.describeInt(refAudio.channels), privacy: .public)")
                     return .audioChannelMismatch(item)
                 }
                 if audio.sampleRate != refAudio.sampleRate {
+                    mergeLogger.debug("Merge incompatible: audio sample rate mismatch for \(item.name, privacy: .public) \(self.describeInt(audio.sampleRate), privacy: .public) vs \(self.describeInt(refAudio.sampleRate), privacy: .public)")
                     return .audioSampleRateMismatch(item)
                 }
                 if !stringsEqual(audio.codec, refAudio.codec) {
+                    mergeLogger.debug("Merge incompatible: audio codec mismatch for \(item.name, privacy: .public) \(audio.codec ?? "unknown", privacy: .public) vs \(refAudio.codec ?? "unknown", privacy: .public)")
                     return .audioCodecMismatch(item)
                 }
             }
         }
 
+        mergeLogger.debug("Merge compatibility: PASSED for \(waitingItems.count) clips")
         return .compatible
+    }
+
+    private func logMetadataSummary(for items: [VideoItem], metadata: [UUID: VideoMetadata]) {
+        for item in items {
+            guard let data = metadata[item.id] else { continue }
+            let video = data.videoStream
+            let audio = data.audioStreams.first
+            mergeLogger.debug(
+                "Clip \(item.name, privacy: .public): videoCodec=\(video?.codec ?? "none", privacy: .public) resolution=\(video?.width ?? 0)x\(video?.height ?? 0) par=\(video?.pixelAspectRatio?.stringValue ?? "n/a", privacy: .public) frameRate=\(video?.frameRate?.stringValue ?? "n/a", privacy: .public) audioCodec=\(audio?.codec ?? "none", privacy: .public) channels=\(self.describeInt(audio?.channels), privacy: .public) sampleRate=\(self.describeInt(audio?.sampleRate), privacy: .public)"
+            )
+        }
+    }
+
+    private func describeInt(_ value: Int?) -> String {
+        value.map(String.init) ?? "nil"
     }
 
     enum MergeCompatibilityResult {

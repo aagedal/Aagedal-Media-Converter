@@ -427,7 +427,6 @@ struct ContentView: View {
 
     @MainActor
     private func evaluateMergeClipsState() async {
-        mergeCompatibilityTask?.cancel()
         mergeCompatibilityTask = nil
 
         if isConverting {
