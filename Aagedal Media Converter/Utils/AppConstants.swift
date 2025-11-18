@@ -78,7 +78,7 @@ enum AppConstants {
     static let audioWaveformForegroundColorKey = "audioWaveformForegroundColor"
     static let audioWaveformNormalizeKey = "audioWaveformNormalize"
     static let audioWaveformStyleKey = "audioWaveformStyle"
-    static let defaultAudioWaveformStyleRaw = "linear"
+    static let defaultAudioWaveformStyleRaw = "fisheye"
     static let audioWaveformFrameRateKey = "audioWaveformFrameRate"
     static let defaultAudioWaveformFrameRate: Double = 25
     static let audioWaveformLineThicknessKey = "audioWaveformLineThickness"

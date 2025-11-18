@@ -175,7 +175,7 @@ extension FFMPEGCommandBuilder {
             audioFilters.append("dynaudnorm=f=250:g=30:p=0.9")
         }
 
-        if request.style == .compressed {
+        if request.style == .lines {
             audioFilters.append("compand")
         }
 
@@ -203,7 +203,7 @@ extension FFMPEGCommandBuilder {
         case .linear:
             let waveformFilter = "showwaves=s=\(resolution):mode=cline:draw=scale:scale=sqrt:split_channels=0:colors=\(foreground):rate=\(frameRateValue)"
             segments.append("[\(waveInputLabel)]\(waveformFilter)[wave]")
-        case .compressed:
+        case .lines:
             let waveformFilter = "showwaves=s=\(resolution):mode=p2p:draw=full:scale=sqrt:split_channels=0:colors=\(foreground):rate=\(frameRateValue)"
             segments.append("[\(waveInputLabel)]\(waveformFilter)[wave]")
         case .fisheye:

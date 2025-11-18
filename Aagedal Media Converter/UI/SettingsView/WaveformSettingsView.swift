@@ -48,44 +48,47 @@ struct WaveformSettingsView: View {
                                 scheduleResolutionSanitization(for: newValue)
                             }
                     }
+                }
+                Section(header: Text("Colors")) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Background HEX")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 8) {
+                                ColorPicker("", selection: Binding(
+                                    get: { Color(hex: waveformBackgroundHex) },
+                                    set: { waveformBackgroundHex = $0.toHexString(includeHash: true) }
+                                ))
+                                .labelsHidden()
+                                .frame(width: 36)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Background HEX")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        HStack(spacing: 8) {
-                            ColorPicker("", selection: Binding(
-                                get: { Color(hex: waveformBackgroundHex) },
-                                set: { waveformBackgroundHex = $0.toHexString(includeHash: true) }
-                            ))
-                            .labelsHidden()
-                            .frame(width: 36)
-
-                            TextField("#000000", text: $waveformBackgroundHex)
-                                .textFieldStyle(.roundedBorder)
-                                .onSubmit(sanitizeWaveformColors)
+                                TextField("#000000", text: $waveformBackgroundHex)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onSubmit(sanitizeWaveformColors)
+                            }
                         }
-                    }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Waveform HEX")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        HStack(spacing: 8) {
-                            ColorPicker("", selection: Binding(
-                                get: { Color(hex: waveformForegroundHex) },
-                                set: { waveformForegroundHex = $0.toHexString(includeHash: true) }
-                            ))
-                            .labelsHidden()
-                            .frame(width: 36)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Waveform HEX")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 8) {
+                                ColorPicker("", selection: Binding(
+                                    get: { Color(hex: waveformForegroundHex) },
+                                    set: { waveformForegroundHex = $0.toHexString(includeHash: true) }
+                                ))
+                                .labelsHidden()
+                                .frame(width: 36)
 
-                            TextField("#FFFFFF", text: $waveformForegroundHex)
-                                .textFieldStyle(.roundedBorder)
-                                .onSubmit(sanitizeWaveformColors)
+                                TextField("#FFFFFF", text: $waveformForegroundHex)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onSubmit(sanitizeWaveformColors)
+                            }
                         }
                     }
                 }
-
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Frame Rate")
                         .font(.caption)

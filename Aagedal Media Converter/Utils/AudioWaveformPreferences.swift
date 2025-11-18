@@ -15,7 +15,7 @@ import AppKit
 enum WaveformStyle: String, CaseIterable, Identifiable {
     case linear
     case circle
-    case compressed
+    case lines = "compressed"
     case fisheye
     case spectrogram
 
@@ -27,8 +27,8 @@ enum WaveformStyle: String, CaseIterable, Identifiable {
             return "Linear"
         case .circle:
             return "Circular (slow)"
-        case .compressed:
-            return "Compressed"
+        case .lines:
+            return "Lines"
         case .fisheye:
             return "Fisheye"
         case .spectrogram:
@@ -78,7 +78,7 @@ struct AudioWaveformPreferences {
         let foreground = sanitizeHex(defaults.string(forKey: AppConstants.audioWaveformForegroundColorKey), fallback: "FFFFFF")
         let normalize = defaults.bool(forKey: AppConstants.audioWaveformNormalizeKey)
         let styleRaw = defaults.string(forKey: AppConstants.audioWaveformStyleKey) ?? AppConstants.defaultAudioWaveformStyleRaw
-        let style = WaveformStyle(rawValue: styleRaw) ?? .linear
+        let style = WaveformStyle(rawValue: styleRaw) ?? .fisheye
         let frameRate = sanitizeFrameRate(defaults.double(forKey: AppConstants.audioWaveformFrameRateKey))
 
         return WaveformVideoConfig(

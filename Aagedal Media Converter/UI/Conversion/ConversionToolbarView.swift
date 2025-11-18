@@ -121,7 +121,7 @@ struct ConversionToolbarView: ToolbarContent {
 
         ToolbarItem {
             SettingsLink {
-                Image(systemName: "info.circle")
+                Image(systemName: "gear")
                     .foregroundStyle(.blue)
             }
             .buttonStyle(.plain)
