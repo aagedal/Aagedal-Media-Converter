@@ -50,6 +50,7 @@ actor ConversionManager: Sendable {
         let waveformRequest: WaveformVideoRequest?
         let segments: [MergeSegment]
         let temporaryClipURLs: [URL]
+        let totalDuration: Double?
         var hasExecuted: Bool
     }
 
@@ -60,8 +61,10 @@ actor ConversionManager: Sendable {
         let trimStart: Double?
         let trimEnd: Double?
         let isTemporary: Bool
+        let duration: Double?
     }
     private var mergePlan: MergePlan?
+    private var lastMergeMetadata: [UUID: VideoMetadata] = [:]
     private let mergeLogger = Logger(subsystem: "com.aagedal.AagedalMediaConverter", category: "MergeCompatibility")
     
     func progressUpdates() -> AsyncStream<Double> {
@@ -120,7 +123,12 @@ actor ConversionManager: Sendable {
         let orderedWaitingItems = waitingItems
         let itemIDs = orderedWaitingItems.map { $0.id }
 
-        guard let (segments, temporaryFiles) = await prepareMergeSegments(from: orderedWaitingItems) else {
+        let durationLookup = buildDurationLookup(for: orderedWaitingItems, metadata: lastMergeMetadata)
+
+        guard let (segments, temporaryFiles, totalDuration) = await prepareMergeSegments(
+            from: orderedWaitingItems,
+            durationLookup: durationLookup
+        ) else {
             return nil
         }
 
@@ -162,16 +170,28 @@ actor ConversionManager: Sendable {
             waveformRequest: waveformRequest,
             segments: segments,
             temporaryClipURLs: temporaryFiles,
+            totalDuration: totalDuration,
             hasExecuted: false
         )
     }
 
-    private func prepareMergeSegments(from items: [VideoItem]) async -> ([MergeSegment], [URL])? {
+    private func prepareMergeSegments(
+        from items: [VideoItem],
+        durationLookup: [UUID: Double]
+    ) async -> ([MergeSegment], [URL], Double?)? {
         var segments: [MergeSegment] = []
         var temporaryFiles: [URL] = []
+        var totalDuration: Double = 0
 
         for item in items {
-            if hasActiveTrim(item) {
+            let baseDuration = durationLookup[item.id]
+            let hasTrim = hasActiveTrim(item)
+            let segmentDuration = resolveSegmentDuration(for: item, baseDuration: baseDuration, hasTrim: hasTrim)
+            if let segmentDuration {
+                totalDuration += segmentDuration
+            }
+
+            if hasTrim {
                 guard let trimmedURL = await prepareTrimmedClip(for: item) else {
                     cleanupTemporaryFiles(temporaryFiles)
                     return nil
@@ -182,7 +202,8 @@ actor ConversionManager: Sendable {
                     preparedURL: trimmedURL,
                     trimStart: item.trimStart,
                     trimEnd: item.trimEnd,
-                    isTemporary: true
+                    isTemporary: true,
+                    duration: segmentDuration
                 )
                 segments.append(segment)
                 temporaryFiles.append(trimmedURL)
@@ -193,13 +214,43 @@ actor ConversionManager: Sendable {
                     preparedURL: item.url,
                     trimStart: item.trimStart,
                     trimEnd: item.trimEnd,
-                    isTemporary: false
+                    isTemporary: false,
+                    duration: segmentDuration
                 )
                 segments.append(segment)
             }
         }
 
-        return (segments, temporaryFiles)
+        let resolvedTotal = totalDuration > 0 ? totalDuration : nil
+        return (segments, temporaryFiles, resolvedTotal)
+    }
+
+    private func buildDurationLookup(for items: [VideoItem], metadata: [UUID: VideoMetadata]) -> [UUID: Double] {
+        items.reduce(into: [:]) { result, item in
+            if let duration = resolveBaseDuration(for: item, metadata: metadata[item.id]), duration > 0 {
+                result[item.id] = duration
+            }
+        }
+    }
+
+    private func resolveBaseDuration(for item: VideoItem, metadata: VideoMetadata?) -> Double? {
+        if let metadataDuration = metadata?.duration, metadataDuration > 0 {
+            return metadataDuration
+        }
+        if item.durationSeconds > 0 {
+            return item.durationSeconds
+        }
+        return nil
+    }
+
+    private func resolveSegmentDuration(for item: VideoItem, baseDuration: Double?, hasTrim: Bool) -> Double? {
+        if hasTrim {
+            let trimmed = max(item.trimmedDuration, 0)
+            if trimmed > 0 {
+                return trimmed
+            }
+        }
+        return baseDuration
     }
 
     private func hasActiveTrim(_ item: VideoItem) -> Bool {
@@ -332,6 +383,7 @@ actor ConversionManager: Sendable {
             waveformRequest: plan.waveformRequest,
             customInputArguments: customInputs,
             additionalOutputArguments: mergeOutputArguments,
+            expectedDuration: plan.totalDuration,
             progressUpdate: { progress, eta in
                 Task { @MainActor in
                     for index in indices {
@@ -425,6 +477,7 @@ actor ConversionManager: Sendable {
     }
 
     func evaluateMergeCompatibility(for items: [VideoItem], preset: ExportPreset) async -> MergeCompatibilityResult {
+        lastMergeMetadata = [:]
         let waitingItems = items.filter { $0.status == .waiting }
         mergeLogger.debug("Evaluating merge compatibility for \(waitingItems.count) waiting clips")
         guard waitingItems.count >= 2 else {
@@ -510,6 +563,7 @@ actor ConversionManager: Sendable {
         }
 
         mergeLogger.debug("Merge compatibility: PASSED for \(waitingItems.count) clips")
+        lastMergeMetadata = resolvedMetadata
         return .compatible
     }
 

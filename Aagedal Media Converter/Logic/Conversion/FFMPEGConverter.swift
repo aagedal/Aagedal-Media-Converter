@@ -43,6 +43,7 @@ actor FFMPEGConverter {
         waveformRequest: WaveformVideoRequest? = nil,
         customInputArguments: [String]? = nil,
         additionalOutputArguments: [String]? = nil,
+        expectedDuration: Double? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool) -> Void
     ) async {
@@ -107,6 +108,12 @@ actor FFMPEGConverter {
         let totalDurationBox = DurationBox()
         let effectiveDurationBox = DurationBox()
         effectiveDurationBox.value = command.effectiveDuration
+        if let expectedDuration {
+            totalDurationBox.value = expectedDuration
+            if effectiveDurationBox.value == nil {
+                effectiveDurationBox.value = expectedDuration
+            }
+        }
         let stderrCollector = StderrCollector()
         
         let errorReadabilityHandler: @Sendable (FileHandle) -> Void = { fileHandle in
