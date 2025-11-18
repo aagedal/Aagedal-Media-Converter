@@ -342,15 +342,14 @@ struct VideoFileRowView: View {
 
     private var commentSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack{
-                waveformToggle.padding(.trailing, 40)
-                includeDateTagToggle
-            }.frame(width: 350, alignment: .trailing)
-                .padding(.bottom, 6)
-            commentEditor
+            HStack(alignment: .center, spacing: 12) {
+                commentEditor
+                waveformControlSlot
+                dateTagControl
+            }
+            .padding(.bottom, 6)
         }
         .padding(.top, 12)
-        
     }
 
     private var commentEditor: some View {
@@ -376,13 +375,13 @@ struct VideoFileRowView: View {
                 .frame(maxWidth: .infinity)
             TextField("", text: commentBinding, axis: .horizontal)
                 .textFieldStyle(.plain)
-                .font(.subheadline)
+                .font(.system(size: 12))
                 .lineLimit(1)
                 .focused($isCommentFieldFocused)
                 .disabled(!commentIsEditable)
                 .opacity(commentIsEditable ? 1 : 0.6)
-                .frame(height: 20)
-                .padding(.horizontal, 5)
+                .frame(height: 28)
+                .padding(.horizontal, 8)
                 .padding(.top, 1)
                 .onSubmit {
                     isCommentFieldFocused = false
@@ -428,14 +427,14 @@ struct VideoFileRowView: View {
             }
             if file.comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text("Add a comment (single line)...")
-                    .font(.subheadline)
+                    .font(.system(size: 12))
                     .foregroundColor(.gray)
                     .allowsHitTesting(false)
-                    .padding(.horizontal, 5)
-                    .padding(.top, 4)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
             }
         }
-        .frame(height: 20)
+        .frame(height: 30)
         .onChange(of: isSelected) { _, selected in
             print("📌 Row selection changed to \(selected) for file \(file.id.uuidString.prefix(8))")
             guard commentIsEditable else {
@@ -458,30 +457,108 @@ struct VideoFileRowView: View {
         }
    }
 
-    private var waveformToggle: some View {
-        let waveformBinding = Binding(
-            get: { file.waveformVideoEnabled },
-            set: { file.waveformVideoEnabled = $0 }
-        )
-        return Toggle("Waveform video", isOn: waveformBinding)
-            .controlSize(.mini)
-            .font(.subheadline)
-            .toggleStyle(SwitchToggleStyle())
-            .disabled(file.hasVideoStream)
-            .opacity(file.hasVideoStream ? 0.4 : 1.0)
-            .help(file.hasVideoStream ? "Waveform video is only available for audio-only sources." : "Generate a waveform video when exporting this item.")
+    private var waveformControlSlot: some View {
+        Group {
+            if file.hasVideoStream {
+                Color.clear
+            } else {
+                waveformControl
+            }
+        }
+        .frame(width: 26, alignment: .center)
     }
 
-    private var includeDateTagToggle: some View {
-        let includeDateBinding = Binding(
-            get: { file.includeDateTag },
-            set: { file.includeDateTag = $0 }
-        )
-        return Toggle("Include date tag", isOn: includeDateBinding)
-            .controlSize(.mini)
-            .font(.subheadline)
-            .toggleStyle(SwitchToggleStyle())
-            .help("Include 'Date generated: YYYYMMDD' in the video metadata comment field.")
+    private var waveformControl: some View {
+        let isActive = file.waveformVideoEnabled
+        return Button {
+            file.waveformVideoEnabled.toggle()
+        } label: {
+            iconToggleLabel(
+                systemName: isActive ? "waveform.circle.fill" : "waveform.circle",
+                isActive: isActive,
+                disabled: false,
+                size: 28,
+                cornerRadius: 6
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Waveform video")
+        .accessibilityHint("Toggles waveform video generation.")
+        .help(waveformHelperText)
+    }
+
+    private var dateTagControl: some View {
+        let isActive = file.includeDateTag
+        return Button {
+            file.includeDateTag.toggle()
+        } label: {
+            iconToggleLabel(
+                systemName: isActive ? "calendar.badge.clock.fill" : "calendar.badge.clock",
+                isActive: isActive,
+                disabled: false,
+                size: 28,
+                cornerRadius: 6,
+                tintForegroundWhenActive: false
+            )
+        }
+        .buttonStyle(.plain)
+        .frame(width: 56)
+        .accessibilityLabel("Include date tag")
+        .accessibilityHint("Toggles adding the generation date to metadata.")
+        .help(dateTagHelperText)
+    }
+
+    private var waveformHelperText: String {
+        if file.waveformVideoEnabled {
+            return "Waveform video will be generated for this export."
+        } else {
+            return "Enable to create a waveform visual when no video exists."
+        }
+    }
+
+    private var dateTagHelperText: String {
+        file.includeDateTag ? "Adds 'Date generated' to the metadata comment." : "Toggle to stamp the export date into metadata."
+    }
+
+    private func iconToggleLabel(
+        systemName: String,
+        isActive: Bool,
+        disabled: Bool,
+        activeColor: Color = .accentColor,
+        size: CGFloat = 40,
+        cornerRadius: CGFloat = 10,
+        tintForegroundWhenActive: Bool = true
+    ) -> some View {
+        let foreground: Color
+        if disabled {
+            foreground = Color.gray.opacity(0.5)
+        } else if isActive && tintForegroundWhenActive {
+            foreground = activeColor
+        } else {
+            foreground = .primary
+        }
+
+        let background = disabled
+            ? Color.gray.opacity(0.12)
+            : (isActive ? activeColor.opacity(0.18) : Color(NSColor.controlBackgroundColor))
+
+        let borderColor = disabled
+            ? Color.gray.opacity(0.2)
+            : (isActive ? activeColor.opacity(0.6) : Color.gray.opacity(0.25))
+
+        return Image(systemName: systemName)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(foreground)
+            .frame(width: size, height: size)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(isActive ? 0.15 : 0.05), radius: isActive ? 4 : 1, x: 0, y: 1)
     }
     
     private var progressText: String {
