@@ -12,6 +12,10 @@ struct WaveformSettingsView: View {
     @AppStorage(AppConstants.audioWaveformFrameRateKey) private var waveformFrameRate = AppConstants.defaultAudioWaveformFrameRate
 
     @State private var resolutionSanitizationTask: Task<Void, Never>?
+    
+    var bgColorText: String = "Background Color"
+    var waveformColorText: String = "Foreground Color"
+    
 
     var body: some View {
         Form {
@@ -49,45 +53,7 @@ struct WaveformSettingsView: View {
                             }
                     }
                 }
-                Section(header: Text("Colors")) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Background HEX")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            HStack(spacing: 8) {
-                                ColorPicker("", selection: Binding(
-                                    get: { Color(hex: waveformBackgroundHex) },
-                                    set: { waveformBackgroundHex = $0.toHexString(includeHash: true) }
-                                ))
-                                .labelsHidden()
-                                .frame(width: 36)
-
-                                TextField("#000000", text: $waveformBackgroundHex)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onSubmit(sanitizeWaveformColors)
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Waveform HEX")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            HStack(spacing: 8) {
-                                ColorPicker("", selection: Binding(
-                                    get: { Color(hex: waveformForegroundHex) },
-                                    set: { waveformForegroundHex = $0.toHexString(includeHash: true) }
-                                ))
-                                .labelsHidden()
-                                .frame(width: 36)
-
-                                TextField("#FFFFFF", text: $waveformForegroundHex)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onSubmit(sanitizeWaveformColors)
-                            }
-                        }
-                    }
-                }
+                colorSettingsGroup
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Frame Rate")
@@ -106,19 +72,21 @@ struct WaveformSettingsView: View {
                     .help("Controls waveform animation smoothness. Higher frame rates increase render cost.")
                 }
 
-                Picker(
-                    "Waveform style",
-                    selection: Binding(
-                        get: { WaveformStyle(rawValue: waveformStyleRaw) ?? .linear },
-                        set: { waveformStyleRaw = $0.rawValue }
-                    )
-                ) {
-                    ForEach(WaveformStyle.allCases) { style in
-                        Text(style.displayName).tag(style)
+                HStack {
+                    Picker(
+                        "Waveform style",
+                        selection: Binding(
+                            get: { WaveformStyle(rawValue: waveformStyleRaw) ?? .linear },
+                            set: { waveformStyleRaw = $0.rawValue }
+                        )
+                    ) {
+                        ForEach(WaveformStyle.allCases) { style in
+                            Text(style.displayName).tag(style)
+                        }
                     }
-                }
-                .pickerStyle(MenuPickerStyle())
-                .help("Choose the visual appearance used when rendering waveform videos.")
+                    .pickerStyle(MenuPickerStyle())
+                    .help("Choose the visual appearance used when rendering waveform videos.")
+                }.frame(width: 200)
 
                 HStack {
                     Spacer()
@@ -129,7 +97,7 @@ struct WaveformSettingsView: View {
                     }
                     .buttonStyle(.bordered)
                     .help("Restore waveform color and normalization settings to their default values.")
-                }
+                }.padding(.top, 15)
 
                 Text("These defaults control waveform video generation for audio-only media. Colors should be six-digit HEX values.")
                     .font(.caption)
@@ -138,6 +106,54 @@ struct WaveformSettingsView: View {
             }
             .padding(8)
         }
+    }
+
+    private var colorSettingsGroup: some View {
+        
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                colorPickerRow(
+                    title: waveformColorText,
+                    binding: $waveformForegroundHex,
+                    placeholder: ""
+                )
+
+                Divider()
+
+                colorPickerRow(
+                    title: bgColorText,
+                    binding: $waveformBackgroundHex,
+                    placeholder: ""
+                )
+            }
+            .padding(7)
+        } label: {
+            Label("Colors", systemImage: "paintpalette")
+        }.padding(.bottom, 5)
+    }
+
+    @ViewBuilder
+    private func colorPickerRow(title: String, binding: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 8) {
+                ColorPicker(selection: Binding(
+                    get: { Color(hex: binding.wrappedValue) },
+                    set: { binding.wrappedValue = $0.toHexString(includeHash: true) }
+                ), supportsOpacity: false) {
+                    EmptyView()
+                }
+                .labelsHidden()
+                .frame(width: 36)
+
+                TextField(placeholder, text: binding)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(sanitizeWaveformColors)
+            }.padding(.leading, 15)
+        }.padding(.leading, 5)
     }
 
     // MARK: - Helpers (scoped to Waveform tab)
