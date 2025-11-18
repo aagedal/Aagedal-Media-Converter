@@ -372,7 +372,7 @@ struct VideoFileRowView: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                 )
-                .frame(maxWidth: .infinity)
+                .frame(minWidth: 280, maxWidth: .infinity)
             TextField("", text: commentBinding, axis: .horizontal)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
@@ -465,7 +465,7 @@ struct VideoFileRowView: View {
                 waveformControl
             }
         }
-        .frame(width: 26, alignment: .center)
+        .frame(width: 34, alignment: .center)
     }
 
     private var waveformControl: some View {
