@@ -117,7 +117,9 @@ actor ConversionManager: Sendable {
 
         let baseOutputURL = URL(fileURLWithPath: outputFolder)
             .appendingPathComponent(
-                FileNameProcessor.processFileName(firstItem.url.deletingPathExtension().lastPathComponent) + preset.fileSuffix
+                FileNameProcessor.processFileName(firstItem.url.deletingPathExtension().lastPathComponent)
+                + preset.fileSuffix
+                + "_merge"
             )
 
         let waveformRequest: WaveformVideoRequest? = orderedWaitingItems.contains(where: { $0.requiresWaveformVideo }) ? {

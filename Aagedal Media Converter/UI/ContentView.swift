@@ -173,7 +173,13 @@ struct ContentView: View {
             handleWatchFolderToggle(newValue)
         }
         .onChange(of: droppedFiles) { _, _ in
+            if mergeClipsEnabled {
+                refreshExpectedOutputURLs(for: selectedPreset)
+            }
             scheduleMergeCompatibilityEvaluation()
+        }
+        .onChange(of: mergeClipsEnabled) { _, _ in
+            refreshExpectedOutputURLs(for: selectedPreset)
         }
         .onChange(of: isConverting) { _, _ in
             scheduleMergeCompatibilityEvaluation()
@@ -362,8 +368,22 @@ struct ContentView: View {
     }
 
     private func expectedOutputURL(for item: VideoItem, preset: ExportPreset) -> URL? {
+        if mergeClipsEnabled && mergeClipsAvailable, let mergedURL = mergedOutputURL(for: preset) {
+            return mergedURL
+        }
+
         let sanitizedBaseName = FileNameProcessor.processFileName(item.url.deletingPathExtension().lastPathComponent)
         let outputFileName = sanitizedBaseName + preset.fileSuffix + "." + preset.fileExtension
+        return currentOutputFolder.appendingPathComponent(outputFileName)
+    }
+
+    private func mergedOutputURL(for preset: ExportPreset) -> URL? {
+        guard let referenceItem = droppedFiles.first(where: { $0.status == .waiting }) else {
+            return nil
+        }
+
+        let sanitizedBaseName = FileNameProcessor.processFileName(referenceItem.url.deletingPathExtension().lastPathComponent)
+        let outputFileName = sanitizedBaseName + preset.fileSuffix + "_merge" + "." + preset.fileExtension
         return currentOutputFolder.appendingPathComponent(outputFileName)
     }
 
