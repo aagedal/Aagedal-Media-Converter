@@ -30,6 +30,7 @@ struct WatchFolderSettingsView: View {
                     Text("No folder selected")
                         .foregroundColor(.secondary)
                         .italic()
+                        .padding(.bottom, 8)
                 } else {
                     HStack {
                         Text(watchFolderPath)
@@ -50,7 +51,7 @@ struct WatchFolderSettingsView: View {
                         }
                         .buttonStyle(BorderlessButtonStyle())
                         .help("Show in Finder")
-                    }
+                    }.padding(.bottom, 8)
                 }
 
                 HStack {
