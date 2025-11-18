@@ -20,6 +20,8 @@ struct VideoFileListView: View {
     var onDelete: (IndexSet) -> Void
     var onReset: (Int) -> Void
     var preset: ExportPreset
+    var mergeClipsEnabled: Bool
+    var mergeClipsAvailable: Bool
     
     @State private var isTargeted = false
     /// Selected row indices for built-in multi-selection
@@ -378,7 +380,9 @@ struct VideoFileListView: View {
                 } else if focusedCommentID == id {
                     focusedCommentID = nil
                 }
-            }
+            },
+            mergeClipsEnabled: mergeClipsEnabled,
+            mergeClipsAvailable: mergeClipsAvailable
         )
         .padding([.vertical], 4)
         .listRowSeparator(.hidden)
@@ -416,17 +420,20 @@ struct VideoFileListView_Previews: PreviewProvider {
                     size: 1048576,
                     duration: "00:05:30",
                     thumbnailData: nil,
-                    status: .cancelled,
+                    status: .waiting,
                     progress: 0.0,
-                    eta: nil
+                    eta: nil,
+                    outputURL: nil
                 )
             ]),
-            currentProgress: .constant(0.5),
+            currentProgress: .constant(0.3),
             onFileImport: {},
             onDoubleClick: {},
             onDelete: { _ in },
             onReset: { _ in },
-            preset: .videoLoop
+            preset: .videoLoop,
+            mergeClipsEnabled: true,
+            mergeClipsAvailable: true
         )
     }
 }

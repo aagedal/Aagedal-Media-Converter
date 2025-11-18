@@ -21,10 +21,26 @@ struct VideoFileRowView: View {
     /// Indicates if this row is selected in the list
     var isSelected: Bool = false
     var onCommentFocusChange: (UUID, Bool) -> Void = { _, _ in }
+    var mergeClipsEnabled: Bool = false
+    var mergeClipsAvailable: Bool = false
 
     // Show yellow warning icon when VideoLoop preset is used on clips longer than 15 s
     private var showDurationWarning: Bool {
         (preset == .videoLoop || preset == .videoLoopWithAudio) && file.durationSeconds > 15
+    }
+
+    private var shouldShowMergeIndicator: Bool {
+        mergeClipsAvailable
+    }
+
+    private var mergeIndicatorColor: Color {
+        mergeClipsEnabled ? .green : Color.gray.opacity(0.55)
+    }
+
+    private var mergeIndicatorHelpText: String {
+        mergeClipsEnabled
+            ? "Merge enabled: this clip will be concatenated into a single output file."
+            : "Clips are merge-compatible. Enable merge to export a single concatenated file."
     }
     @FocusState private var isCommentFieldFocused: Bool
     @State private var isThumbnailHovered = false
@@ -157,6 +173,14 @@ struct VideoFileRowView: View {
                                 Text(displayOutputFilename())
                                     .font(.headline)
                                     .foregroundColor((file.status == .waiting && file.outputFileExists) ? .orange : .primary)
+                                if shouldShowMergeIndicator {
+                                    Image(systemName: "link")
+                                        .rotationEffect(.degrees(90))
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(mergeIndicatorColor)
+                                        .help(mergeIndicatorHelpText)
+                                        .accessibilityLabel(mergeClipsEnabled ? "Merge enabled" : "Merge available")
+                                }
                                 
                                 if let outputURL = file.outputURL {
                                     HStack(spacing: 6) {

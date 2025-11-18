@@ -93,7 +93,9 @@ struct ContentView: View {
                         droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
                     }
                 },
-                preset: selectedPreset
+                preset: selectedPreset,
+                mergeClipsEnabled: mergeClipsEnabled,
+                mergeClipsAvailable: mergeClipsAvailable
             )
             .fileImporter(
                 isPresented: $isFileImporterPresented,
