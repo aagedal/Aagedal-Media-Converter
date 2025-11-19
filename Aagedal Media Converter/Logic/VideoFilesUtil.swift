@@ -151,6 +151,11 @@ struct VideoFileUtils: Sendable {
 
             guard durationSeconds > 0 else { return }
 
+            if await isNativelySupported(url) {
+                print(" [prefetchPreviewAssets] File is natively supported, skipping initial chunk generation for \(fileName)")
+                return
+            }
+
             do {
                 let cacheDirectory = try await PreviewAssetGenerator.shared.getAssetDirectory(for: url)
                 
@@ -394,6 +399,36 @@ struct VideoFileUtils: Sendable {
         } catch {
             print("Error generating thumbnail via PreviewAssetGenerator for \(url.lastPathComponent): \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    private static func isNativelySupported(_ url: URL) async -> Bool {
+        let asset = AVURLAsset(url: url)
+        do {
+            let isPlayable = try await asset.load(.isPlayable)
+            guard isPlayable else { return false }
+            
+            let tracks = try await asset.loadTracks(withMediaType: .video)
+            if tracks.isEmpty { return true }
+            
+            for track in tracks {
+                let formats = try await track.load(.formatDescriptions) as [CMFormatDescription]
+                for desc in formats {
+                    let codec = CMFormatDescriptionGetMediaSubType(desc)
+                    let codecBytes: [UInt8] = [
+                        UInt8((codec >> 24) & 0xFF),
+                        UInt8((codec >> 16) & 0xFF),
+                        UInt8((codec >> 8) & 0xFF),
+                        UInt8(codec & 0xFF)
+                    ]
+                    if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters) {
+                        if fourCC == "apv1" || fourCC == "apvx" { return false }
+                    }
+                }
+            }
+            return true
+        } catch {
+            return false
         }
     }
 }
