@@ -368,13 +368,20 @@ extension PreviewPlayerController {
         // Already on this chunk
         if chunkIndex == currentChunkIndex { return }
         
-        // Don't try to load if already loading
-        guard !isLoadingChunk else { return }
+        // Don't try to load if already loading THIS chunk
+        if isLoadingChunk && loadingChunkIndex == chunkIndex { return }
 
         chunkLoadTask?.cancel()
+        loadingChunkIndex = chunkIndex
+        
         chunkLoadTask = Task { @MainActor in
             self.isLoadingChunk = true
-            defer { self.isLoadingChunk = false }
+            defer { 
+                self.isLoadingChunk = false 
+                if self.loadingChunkIndex == chunkIndex {
+                    self.loadingChunkIndex = nil
+                }
+            }
             
             do {
                 guard let session = self.mp4Session else { return }

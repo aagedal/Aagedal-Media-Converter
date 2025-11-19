@@ -40,6 +40,7 @@ final class PreviewPlayerController: ObservableObject {
     @Published var isGeneratingFallbackStill = false
     @Published var isLoadingChunk = false
     @Published var pendingChunkTime: Double?
+    @Published var loadingChunkIndex: Int?
     @Published var audioTrackOptions: [AudioTrackOption] = []
     @Published private(set) var currentWaveformURL: URL?
     
@@ -401,6 +402,7 @@ final class PreviewPlayerController: ObservableObject {
         isPreparing = false
         isGeneratingFallbackPreview = false
         isLoadingChunk = false
+        loadingChunkIndex = nil
         isGeneratingFallbackStill = false
         fallbackPreviewRange = nil
         loadedChunks = []
