@@ -41,6 +41,7 @@ actor FFMPEGConverter {
         trimStart: Double? = nil,
         trimEnd: Double? = nil,
         waveformRequest: WaveformVideoRequest? = nil,
+        synthesizedVideoRequest: SynthesizedVideoRequest? = nil,
         customInputArguments: [String]? = nil,
         additionalOutputArguments: [String]? = nil,
         expectedDuration: Double? = nil,
@@ -92,6 +93,7 @@ actor FFMPEGConverter {
             trimStart: trimStart,
             trimEnd: trimEnd,
             waveformRequest: waveformRequest,
+            synthesizedVideoRequest: synthesizedVideoRequest,
             customInputArguments: customInputArguments,
             additionalOutputArguments: additionalOutputArguments
         )

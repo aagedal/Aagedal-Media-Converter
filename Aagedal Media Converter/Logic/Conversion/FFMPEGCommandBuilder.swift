@@ -46,6 +46,18 @@ struct WaveformVideoRequest {
     }
 }
 
+struct SynthesizedVideoRequest {
+    let width: Int
+    let height: Int
+    let backgroundHex: String
+    let frameRate: Double
+    let includeAudio: Bool
+
+    var backgroundFFmpegColor: String {
+        "0x" + backgroundHex
+    }
+}
+
 enum FFMPEGCommandBuilder {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "WaveformCommand")
     static func buildCommand(
@@ -57,6 +69,7 @@ enum FFMPEGCommandBuilder {
         trimStart: Double?,
         trimEnd: Double?,
         waveformRequest: WaveformVideoRequest? = nil,
+        synthesizedVideoRequest: SynthesizedVideoRequest? = nil,
         customInputArguments: [String]? = nil,
         additionalOutputArguments: [String]? = nil
     ) async -> FFMPEGCommand {
@@ -76,16 +89,68 @@ enum FFMPEGCommandBuilder {
         }
 
         if let waveformRequest {
+            let includeAudioOutput = preset.outputsAudioTrack
             logger.debug("Building waveform command with request: width=\(waveformRequest.width), height=\(waveformRequest.height), background=\(waveformRequest.backgroundHex, privacy: .public), foreground=\(waveformRequest.foregroundHex, privacy: .public), normalize=\(waveformRequest.normalizeAudio), style=\(waveformRequest.style.rawValue, privacy: .public)")
             if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
                 arguments.append(contentsOf: durationArgument)
             }
 
-            arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest))
+            arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest, includeAudioOutput: includeAudioOutput))
+
+            var ffmpegArgs = preset.ffmpegArguments
+            await adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+            await adjustDeinterlaceFilter(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+            sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
+            if !includeAudioOutput {
+                removeArgumentPair("-map", value: "[audout]", from: &arguments)
+            }
+            applyCommentMetadata(
+                to: &ffmpegArgs,
+                comment: comment,
+                includeDateTag: includeDateTag
+            )
+
+            arguments.append(contentsOf: ffmpegArgs)
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
             }
             logger.debug("Waveform ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
+            arguments.append(outputFileURL.path)
+
+            let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+
+            return FFMPEGCommand(
+                arguments: arguments,
+                normalizedTrimStart: normalizedTrimStart,
+                normalizedTrimEnd: normalizedTrimEnd,
+                effectiveDuration: effectiveDuration
+            )
+        } else if let synthesizedVideoRequest {
+            logger.debug("Building synthesized video command with request: width=\(synthesizedVideoRequest.width), height=\(synthesizedVideoRequest.height), background=\(synthesizedVideoRequest.backgroundHex, privacy: .public), frameRate=\(synthesizedVideoRequest.frameRate)")
+            if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
+                arguments.append(contentsOf: durationArgument)
+            }
+
+            arguments.append(contentsOf: synthesizedVideoCommandArguments(for: synthesizedVideoRequest))
+
+            var ffmpegArgs = preset.ffmpegArguments
+            await adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+            await adjustDeinterlaceFilter(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+            sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
+            if synthesizedVideoRequest.includeAudio {
+                removeArgumentPair("-an", value: nil, from: &ffmpegArgs)
+            }
+            applyCommentMetadata(
+                to: &ffmpegArgs,
+                comment: comment,
+                includeDateTag: includeDateTag
+            )
+
+            arguments.append(contentsOf: ffmpegArgs)
+            if let additionalOutputArguments {
+                arguments.append(contentsOf: additionalOutputArguments)
+            }
+            logger.debug("Synthesized video ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
             let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
@@ -223,15 +288,15 @@ extension FFMPEGCommandBuilder {
         return (filterComplex, "[outv]", audioMap)
     }
 
-    static func waveformCommandArguments(for request: WaveformVideoRequest) -> [String] {
-        let components = waveformFilterGraph(for: request, includeAudioSplit: true)
+    static func waveformCommandArguments(for request: WaveformVideoRequest, includeAudioOutput: Bool) -> [String] {
+        let components = waveformFilterGraph(for: request, includeAudioSplit: includeAudioOutput)
 
         var arguments: [String] = [
             "-filter_complex", components.filterComplex,
             "-map", components.videoMap
         ]
 
-        if let audioMap = components.audioMap {
+        if includeAudioOutput, let audioMap = components.audioMap {
             arguments.append(contentsOf: ["-map", audioMap])
         }
 
@@ -413,4 +478,27 @@ extension FFMPEGCommandBuilder {
 
         ffmpegArgs[vfIndex + 1] = filters
     }
+
+    private static func sanitizeArgumentsForCustomVideoPipeline(_ ffmpegArgs: inout [String]) {
+        removeArgumentPair("-vf", value: nil, from: &ffmpegArgs)
+        removeArgumentPair("-map", value: nil, from: &ffmpegArgs)
+    }
+
+    private static func synthesizedVideoCommandArguments(for request: SynthesizedVideoRequest) -> [String] {
+        let finalWidth = evenDimension(max(request.width, 2))
+        let finalHeight = evenDimension(max(request.height, 2))
+        let resolution = "\(finalWidth)x\(finalHeight)"
+        let frameRateValue = formattedFrameRateString(from: request.frameRate)
+        let filterGraph = "color=c=\(request.backgroundFFmpegColor):s=\(resolution):r=\(frameRateValue),format=yuv420p[synth_v]"
+
+        var arguments: [String] = ["-filter_complex", filterGraph, "-map", "[synth_v]"]
+
+        if request.includeAudio {
+            arguments.append(contentsOf: ["-map", "0:a?"])
+        }
+
+        arguments.append("-shortest")
+        return arguments
+    }
+
 }

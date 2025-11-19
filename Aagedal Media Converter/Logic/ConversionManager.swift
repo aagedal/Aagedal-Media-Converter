@@ -48,6 +48,7 @@ actor ConversionManager: Sendable {
         let comment: String
         let includeDateTag: Bool
         let waveformRequest: WaveformVideoRequest?
+        let synthesizedVideoRequest: SynthesizedVideoRequest?
         let segments: [MergeSegment]
         let temporaryClipURLs: [URL]
         let totalDuration: Double?
@@ -146,18 +147,33 @@ actor ConversionManager: Sendable {
                 + "_merge"
             )
 
+        let waveformPreferences = AudioWaveformPreferences.loadConfig()
+        let resolvedWaveformResolution = preset.resolvedWaveformResolution(defaultResolution: waveformPreferences.resolution)
+
         let waveformRequest: WaveformVideoRequest? = (preset != .streamCopy && orderedWaitingItems.contains(where: { $0.requiresWaveformVideo })) ? {
-            let config = AudioWaveformPreferences.loadConfig()
             return WaveformVideoRequest(
-                width: Int(config.resolution.width),
-                height: Int(config.resolution.height),
-                backgroundHex: config.backgroundHex,
-                foregroundHex: config.foregroundHex,
-                normalizeAudio: config.normalizeAudio,
-                style: config.style,
-                frameRate: config.frameRate
+                width: Int(resolvedWaveformResolution.width),
+                height: Int(resolvedWaveformResolution.height),
+                backgroundHex: waveformPreferences.backgroundHex,
+                foregroundHex: waveformPreferences.foregroundHex,
+                normalizeAudio: waveformPreferences.normalizeAudio,
+                style: waveformPreferences.style,
+                frameRate: waveformPreferences.frameRate
             )
         }() : nil
+
+        let synthesizedVideoRequest: SynthesizedVideoRequest? = {
+            guard waveformRequest == nil else { return nil }
+            guard preset.outputsVideoTrack else { return nil }
+            guard orderedWaitingItems.contains(where: { !$0.hasVideoStream }) else { return nil }
+            return SynthesizedVideoRequest(
+                width: Int(resolvedWaveformResolution.width),
+                height: Int(resolvedWaveformResolution.height),
+                backgroundHex: waveformPreferences.backgroundHex,
+                frameRate: waveformPreferences.frameRate,
+                includeAudio: true
+            )
+        }()
 
         return MergePlan(
             itemIDs: itemIDs,
@@ -168,6 +184,7 @@ actor ConversionManager: Sendable {
             comment: firstItem.comment,
             includeDateTag: firstItem.includeDateTag,
             waveformRequest: waveformRequest,
+            synthesizedVideoRequest: synthesizedVideoRequest,
             segments: segments,
             temporaryClipURLs: temporaryFiles,
             totalDuration: totalDuration,
@@ -385,6 +402,7 @@ actor ConversionManager: Sendable {
             trimStart: nil,
             trimEnd: nil,
             waveformRequest: plan.waveformRequest,
+            synthesizedVideoRequest: plan.synthesizedVideoRequest,
             customInputArguments: customInputs,
             additionalOutputArguments: mergeOutputArguments,
             expectedDuration: plan.totalDuration,
@@ -395,18 +413,19 @@ actor ConversionManager: Sendable {
                         droppedFiles.wrappedValue[index].eta = eta
                     }
                 }
+            },
+            completion: { success in
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.handleMergeCompletion(
+                        plan: plan,
+                        indices: indices,
+                        success: success,
+                        droppedFiles: droppedFiles
+                    )
+                }
             }
-        ) { success in
-            Task { [weak self] in
-                guard let self else { return }
-                await self.handleMergeCompletion(
-                    plan: plan,
-                    indices: indices,
-                    success: success,
-                    droppedFiles: droppedFiles
-                )
-            }
-        }
+        )
     }
 
     private func createConcatListFile(for segments: [MergeSegment]) -> URL? {
@@ -739,18 +758,33 @@ actor ConversionManager: Sendable {
         let outputFileName = sanitizedBaseName + preset.fileSuffix
         let outputURL = URL(fileURLWithPath: outputFolder).appendingPathComponent(outputFileName)
 
+        let waveformPreferences = AudioWaveformPreferences.loadConfig()
+        let resolvedWaveformResolution = preset.resolvedWaveformResolution(defaultResolution: waveformPreferences.resolution)
+
         let waveformRequest: WaveformVideoRequest? = (preset != .streamCopy && currentItem.requiresWaveformVideo) ? {
-            let config = AudioWaveformPreferences.loadConfig()
             return WaveformVideoRequest(
-                width: Int(config.resolution.width),
-                height: Int(config.resolution.height),
-                backgroundHex: config.backgroundHex,
-                foregroundHex: config.foregroundHex,
-                normalizeAudio: config.normalizeAudio,
-                style: config.style,
-                frameRate: config.frameRate
+                width: Int(resolvedWaveformResolution.width),
+                height: Int(resolvedWaveformResolution.height),
+                backgroundHex: waveformPreferences.backgroundHex,
+                foregroundHex: waveformPreferences.foregroundHex,
+                normalizeAudio: waveformPreferences.normalizeAudio,
+                style: waveformPreferences.style,
+                frameRate: waveformPreferences.frameRate
             )
         }() : nil
+
+        let synthesizedVideoRequest: SynthesizedVideoRequest? = {
+            guard waveformRequest == nil else { return nil }
+            guard preset.outputsVideoTrack else { return nil }
+            guard !currentItem.hasVideoStream else { return nil }
+            return SynthesizedVideoRequest(
+                width: Int(resolvedWaveformResolution.width),
+                height: Int(resolvedWaveformResolution.height),
+                backgroundHex: waveformPreferences.backgroundHex,
+                frameRate: waveformPreferences.frameRate,
+                includeAudio: true
+            )
+        }()
 
         await ffmpegConverter.convert(
             inputURL: inputURL,
@@ -761,6 +795,7 @@ actor ConversionManager: Sendable {
             trimStart: currentItem.trimStart,
             trimEnd: currentItem.trimEnd,
             waveformRequest: waveformRequest,
+            synthesizedVideoRequest: synthesizedVideoRequest,
             progressUpdate: { progress, eta in
                 Task { @MainActor in
                     if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {

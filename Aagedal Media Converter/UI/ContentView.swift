@@ -143,6 +143,7 @@ struct ContentView: View {
                 OverallProgressView(progress: overallProgress)
             }
         }
+        .frame(minWidth: 760)
         .onAppear {
             if !hasInitializedPreset {
                 selectedPreset = ExportPreset(rawValue: storedDefaultPresetRawValue) ?? .videoLoop

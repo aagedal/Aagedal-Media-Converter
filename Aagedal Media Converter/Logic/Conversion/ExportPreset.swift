@@ -15,6 +15,7 @@
 // (at your option) any later version.
 
 import Foundation
+import CoreGraphics
 
 enum ExportPreset: String, CaseIterable, Identifiable {
     case videoLoop = "VideoLoop"
@@ -280,6 +281,50 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     }
     
     var isCustom: Bool { customSlotIndex != nil }
+}
+
+extension ExportPreset {
+    /// Indicates whether this preset is expected to output a video track even if the source lacks one.
+    var outputsVideoTrack: Bool {
+        switch self {
+        case .audioUncompressedWAV, .audioStereoAAC:
+            return false
+        case .streamCopy:
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// Indicates whether this preset is expected to output an audio track.
+    var outputsAudioTrack: Bool {
+        switch self {
+        case .videoLoop, .animatedAVIF:
+            return false
+        case .audioUncompressedWAV, .audioStereoAAC:
+            return true
+        case .streamCopy:
+            return true
+        default:
+            return true
+        }
+    }
+
+    /// Optional per-preset override for waveform/padded video resolution.
+    var waveformResolutionOverride: CGSize? {
+        switch self {
+        case .tvQuality4K:
+            return CGSize(width: 3840, height: 2160)
+        case .tvQualityHD, .hevcProxy1080p:
+            return CGSize(width: 1920, height: 1080)
+        default:
+            return nil
+        }
+    }
+
+    func resolvedWaveformResolution(defaultResolution: CGSize) -> CGSize {
+        waveformResolutionOverride ?? defaultResolution
+    }
 }
 
 // MARK: - Helpers
