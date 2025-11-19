@@ -207,8 +207,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             var args = commonArgs + [
                 "-pix_fmt", "p010le",
                 "-vcodec", "libsvtav1",
-                "-crf", "33", "-an",
-                "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),720,-2)':h='if(lte(iw,ih),-2,720)'"
+                "-preset", "6",
+                "-crf", "28", "-an",
+                "-vf", "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),900,-2)':h='if(lte(iw,ih),-2,900)'"
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
             return args
