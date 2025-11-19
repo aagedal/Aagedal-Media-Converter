@@ -465,7 +465,7 @@ struct VideoFileRowView: View {
                 waveformControl
             }
         }
-        .frame(width: 34, alignment: .center)
+        .frame(width: 28, alignment: .center)
     }
 
     private var waveformControl: some View {
@@ -493,12 +493,12 @@ struct VideoFileRowView: View {
             file.includeDateTag.toggle()
         } label: {
             iconToggleLabel(
-                systemName: isActive ? "calendar.badge.clock.fill" : "calendar.badge.clock",
+                systemName: isActive ? "calendar.badge.checkmark" : "calendar.badge.minus",
                 isActive: isActive,
                 disabled: false,
                 size: 28,
                 cornerRadius: 6,
-                tintForegroundWhenActive: false
+                tintForegroundWhenActive: true
             )
         }
         .buttonStyle(.plain)
