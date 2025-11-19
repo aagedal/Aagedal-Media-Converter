@@ -33,6 +33,8 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 - Batch conversion with per-file progress and overall dock progress indicator
 - Watch Folder, with optional auto-delete after a set time.
 - Trim and preview files
+- Merge files into one if they are the same codec, frame rate etc.
+- Generate audio waveforms
 - Grab screenshots at source resolution. (Interlaced files are deinterlaced. Non-square pixel sources are exported as square.)
 - **Export Presets**  
   • Video Loop (silent) — x264 very slow 1080p max resolution, keeping original aspect ratio, removing all audio channels, nice for compact web distribution such as GIF-replacements, slow export
@@ -40,6 +42,8 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
   • Video Loop w/ Audio — same as above but keeping a stereo AAC track
 
   • TV Quality HD / 4K — HEVC hardware encoding for fast high quality exports, compatible with most editing software, 10-bit 4:2:0, limit resolution to either 1080p or 2160p
+
+  • Stream copy: copy the input codecs into a new file, most useful when combined with merge or trim
 
   • ProRes — High quality file maintaining original resolution
 
