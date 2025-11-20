@@ -46,6 +46,20 @@ struct PreviewPlayerContent: View {
                 .onReceive(controller.playbackTimePublisher) { time in
                     currentPlaybackTime = time
                 }
+            } else if controller.useMPV, let mpvPlayer = controller.mpvPlayer {
+                ZStack {
+                    CheckerboardBackground()
+                    
+                    MPVVideoView(player: mpvPlayer)
+                        .aspectRatio(playerAspectRatio, contentMode: .fit)
+                    
+                    overlayIndicators
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onReceive(controller.playbackTimePublisher) { time in
+                    currentPlaybackTime = time
+                }
             } else if controller.isPreparing {
                 VStack(spacing: 12) {
                     ProgressView().progressViewStyle(.circular)

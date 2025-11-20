@@ -114,11 +114,23 @@ final class PreviewPlayerController: ObservableObject {
         isLoadingPreviewAssets = true
         previewAssets = nil
         usePreviewFallback = false
+        useMPV = false
 
         let currentItem = videoItem
+        let url = currentItem.url
+        
+        // Check for formats that AVPlayer definitely doesn't support well or at all
+        let ext = url.pathExtension.lowercased()
+        let mpvExtensions = ["mkv", "webm", "flv", "avi", "wmv", "ogg", "ogv", "rm", "rmvb"]
+        
+        if mpvExtensions.contains(ext) {
+            // Use MPV directly
+            setupMPV(url: url, startTime: startTime)
+            loadPreviewAssets(for: currentItem.url)
+            return
+        }
         
         // Try AVPlayer directly first with security-scoped resource access
-        let url = currentItem.url
         
         // First try bookmark-based access (more reliable for sandboxed apps)
         let bookmarkAccess = SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: url)
@@ -132,7 +144,7 @@ final class PreviewPlayerController: ObservableObject {
         
         self.player = player
         
-        // Monitor player item status for failures, fallback to HLS if needed
+        // Monitor player item status for failures, fallback to MPV if needed
         installPlayerItemStatusObserver(for: playerItem, startTime: startTime)
         
         self.isPreparing = false
@@ -147,6 +159,34 @@ final class PreviewPlayerController: ObservableObject {
         installPlaybackTimeObserver(for: player)
         applyLoopSetting()
         loadPreviewAssets(for: currentItem.url)
+    }
+    
+    private func setupMPV(url: URL, startTime: Double) {
+        let mpv = MPVPlayer()
+        self.mpvPlayer = mpv
+        self.useMPV = true
+        self.isPreparing = false
+        
+        mpv.load(url: url)
+        mpv.seek(to: startTime)
+        
+        // Bind MPV state to controller state
+        // We need to observe MPV properties and update published vars
+        // This is a bit tricky as we are inside an ObservableObject
+        // We can use Combine to forward changes
+        
+        // For now, let's just rely on the view observing MPVPlayer directly for playback state,
+        // but we need to sync time for the trimmer.
+        
+        // Actually, we should probably expose the MPVPlayer to the view if we are using it.
+        
+        // Sync time
+        Task { @MainActor [weak self, weak mpv] in
+            guard let self, let mpv else { return }
+            for await time in mpv.$timePos.values {
+                self.currentPlaybackTime = time
+            }
+        }
     }
 
     /// Determines the preferred ordering of audio stream indices based on metadata (default + channel count).
@@ -398,6 +438,12 @@ final class PreviewPlayerController: ObservableObject {
             mp4Session = nil
             Task { await session.cancel(); await session.cleanup() }
         }
+        
+        if let mpv = mpvPlayer {
+            mpv.destroy()
+            mpvPlayer = nil
+        }
+        useMPV = false
 
         isPreparing = false
         isGeneratingFallbackPreview = false
@@ -431,6 +477,11 @@ final class PreviewPlayerController: ObservableObject {
     // MARK: - Playback Control
     
     func refreshPreviewForTrim() {
+        if useMPV, let mpv = mpvPlayer {
+            mpv.seek(to: videoItem.effectiveTrimStart)
+            return
+        }
+        
         guard let player else {
             preparePreview(startTime: videoItem.effectiveTrimStart)
             return
@@ -453,6 +504,11 @@ final class PreviewPlayerController: ObservableObject {
     func seekTo(_ time: Double) {
         // Update playback time immediately for UI responsiveness
         currentPlaybackTime = time
+        
+        if useMPV, let mpv = mpvPlayer {
+            mpv.seek(to: time)
+            return
+        }
         
         guard let player else { return }
         
