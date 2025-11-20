@@ -154,6 +154,8 @@ final class PreviewPlayerController: ObservableObject {
         loadPreviewAssets(for: currentItem.url)
     }
     
+    var debugWindowController: Any? // Holds strong reference to keep window alive
+
     func setupMPV(url: URL, startTime: Double) {
         let mpv = MPVPlayer()
         self.mpvPlayer = mpv
@@ -179,6 +181,13 @@ final class PreviewPlayerController: ObservableObject {
             for await time in mpv.$timePos.values {
                 self.currentPlaybackTime = time
             }
+        }
+        
+        // Launch Debug Window
+        DispatchQueue.main.async {
+            let debugWC = MPVDebugWindowController(url: url)
+            debugWC.showWindow(nil)
+            self.debugWindowController = debugWC
         }
     }
 
@@ -402,6 +411,7 @@ final class PreviewPlayerController: ObservableObject {
     private func updateCurrentWaveform() {
         let streamIndex = selectedAudioStreamIndex()
         currentWaveformURL = previewAssets?.waveform(forAudioStream: streamIndex)
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview").debug("Updated waveform URL: \(self.currentWaveformURL?.lastPathComponent ?? "nil", privacy: .public) for stream index: \(streamIndex ?? -1)")
     }
     
     func teardown(resetAudioSelection: Bool = true) {

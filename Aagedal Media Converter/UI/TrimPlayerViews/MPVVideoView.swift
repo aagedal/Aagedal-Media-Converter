@@ -5,6 +5,7 @@
 import SwiftUI
 import QuartzCore
 import OpenGL.GL3
+import OSLog
 
 struct MPVVideoView: NSViewRepresentable {
     let player: MPVPlayer
@@ -43,10 +44,18 @@ final class MPVOpenGLView: NSView {
         setupLayer()
     }
     
+    override func layout() {
+        super.layout()
+        if let layer = self.layer {
+            layer.frame = self.bounds
+        }
+    }
+    
     private func setupLayer() {
         let layer = MPVLayer()
         layer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
         layer.isAsynchronous = true
+        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
         self.layer = layer
         self.glLayer = layer
     }
@@ -119,8 +128,13 @@ class MPVLayer: CAOpenGLLayer, @unchecked Sendable {
         // Render
         let bounds = self.bounds
         let scale = self.contentsScale
-        let pixelSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
-        player.render(size: pixelSize, fbo: Int32(fbo))
+        let pixelSize = CGSize(width: round(bounds.width * scale), height: round(bounds.height * scale))
+        
+        if pixelSize.width > 0 && pixelSize.height > 0 {
+             player.render(size: pixelSize, fbo: Int32(fbo))
+        } else {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVView").warning("Skipping render with invalid size: \(pixelSize.width)x\(pixelSize.height)")
+        }
         
         glFlush()
         super.draw(inCGLContext: ctx, pixelFormat: pf, forLayerTime: t, displayTime: ts)

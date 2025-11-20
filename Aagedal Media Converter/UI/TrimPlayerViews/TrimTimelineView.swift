@@ -308,23 +308,17 @@ private struct TrimHandlesInteractionLayer: View {
 
     @ViewBuilder
     private func waveformContent(width: CGFloat, height: CGFloat) -> some View {
-        if let waveformURL {
-            Group {
-                if let image = NSImage(contentsOf: waveformURL) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: width, height: height)
-                        .background(Color.black.opacity(0.35))
-                } else {
-                    placeholderSection(
-                        systemName: "waveform",
-                        text: isLoading ? "Generating waveform…" : "Waveform unavailable"
-                    )
-                }
-            }
-            .clipped()
+        if let waveformURL, let image = NSImage(contentsOf: waveformURL) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: width, height: height)
+                .clipped()
+                .id(waveformURL) // Force redraw when URL changes
         } else {
+            if let url = waveformURL {
+                let _ = Logger(subsystem: "com.aagedal.MediaConverter", category: "TrimTimeline").warning("Failed to load waveform image from: \(url.path)")
+            }
             placeholderSection(
                 systemName: "waveform",
                 text: isLoading ? "Generating waveform…" : "Waveform unavailable"

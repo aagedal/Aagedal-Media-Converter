@@ -46,9 +46,9 @@ final class MPVPlayer: ObservableObject {
         self.handle = handle
         
         // Configure basic options
-        check(lib.mpv_set_option_string(handle, "vo", "libmpv"))
-        check(lib.mpv_set_option_string(handle, "hwdec", "auto"))
-        check(lib.mpv_set_option_string(handle, "pause", "yes"))
+        check(lib.mpv_set_option_string(handle, "vo", "libmpv"), context: "set vo=libmpv")
+        check(lib.mpv_set_option_string(handle, "hwdec", "auto"), context: "set hwdec=auto")
+        check(lib.mpv_set_option_string(handle, "pause", "yes"), context: "set pause=yes")
         
         // Initialize
         let initResult = lib.mpv_initialize(handle)
@@ -74,9 +74,16 @@ final class MPVPlayer: ObservableObject {
     
     func load(url: URL) {
         guard let handle else { return }
+        isReady = false
+        pendingSeekTime = nil
+        
         let path = url.path
-        let cmd = ["loadfile", path]
-        check(lib.mpv_command(handle, cmd))
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "MPV").info("Loading path: \(path)")
+        
+        // Use command_string to avoid array marshalling issues
+        // Quote the path to be safe
+        let cmd = "loadfile \"\(path)\""
+        check(lib.mpv_command_string(handle, cmd), context: "loadfile")
     }
     
     func play() {
@@ -95,10 +102,19 @@ final class MPVPlayer: ObservableObject {
         }
     }
     
+    private var isReady = false
+    private var pendingSeekTime: Double?
+    
     func seek(to time: Double) {
         guard let handle else { return }
-        let cmd = ["seek", String(time), "absolute"]
-        check(lib.mpv_command(handle, cmd))
+        
+        if !isReady {
+            pendingSeekTime = time
+            return
+        }
+        
+        let cmd = "seek \(time) absolute"
+        check(lib.mpv_command_string(handle, cmd), context: "seek")
     }
     
     // MARK: - Rendering
@@ -162,7 +178,10 @@ final class MPVPlayer: ObservableObject {
                     mpv_render_param(type: 0, data: nil) // Null terminator
                 ]
                 
-                _ = lib.mpv_render_context_render(ctx, &params)
+                let result = lib.mpv_render_context_render(ctx, &params)
+                if result < 0 {
+                     Logger(subsystem: "com.aagedal.MediaConverter", category: "MPV").error("Render failed: \(result)")
+                }
             }
         }
     }
@@ -176,15 +195,15 @@ final class MPVPlayer: ObservableObject {
         var internal_format: Int32
     }
     
-    private func check(_ result: Int32) {
+    private func check(_ result: Int32, context: String = "") {
         if result < 0 {
-            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPV").error("MPV error: \(result)")
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPV").error("MPV error (\(context)): \(result)")
         }
     }
     
     private func setFlag(_ name: String, _ value: Bool) {
         guard let handle else { return }
-        check(lib.mpv_set_property_flag(handle, name, value))
+        check(lib.mpv_set_property_flag(handle, name, value), context: "setFlag \(name)")
     }
     
     private func startEventLoop() {
@@ -228,7 +247,15 @@ final class MPVPlayer: ObservableObject {
                         if prop.format == .double, let data = prop.data {
                             let value = data.assumingMemoryBound(to: Double.self).pointee
                             await MainActor.run { [weak self] in
-                                self?.duration = value
+                                guard let self else { return }
+                                self.duration = value
+                                if value > 0 && !self.isReady {
+                                    self.isReady = true
+                                    if let seekTime = self.pendingSeekTime {
+                                        self.seek(to: seekTime)
+                                        self.pendingSeekTime = nil
+                                    }
+                                }
                             }
                         }
                     case "pause":
