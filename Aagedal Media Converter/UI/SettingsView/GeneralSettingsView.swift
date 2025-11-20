@@ -79,6 +79,8 @@ struct GeneralSettingsView: View {
         }
     }
 
+
+
     private var screenshotSection: some View {
         Section(header: Text("Screenshots")) {
             VStack(alignment: .leading, spacing: 4) {

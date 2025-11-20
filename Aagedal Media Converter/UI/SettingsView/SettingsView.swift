@@ -12,6 +12,7 @@ struct SettingsView: View {
         case presets
         case waveform
         case watchFolder
+        case updates
     }
 
     var body: some View {
@@ -31,6 +32,10 @@ struct SettingsView: View {
             WatchFolderSettingsView()
                 .tabItem { Label("Watch Folder", systemImage: "eye.fill") }
                 .tag(SettingsTab.watchFolder)
+            
+            UpdateSettingsView()
+                .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
+                .tag(SettingsTab.updates)
         }
         .frame(width: 600, height: 560)
         .navigationTitle("Settings – Aagedal Media Converter")

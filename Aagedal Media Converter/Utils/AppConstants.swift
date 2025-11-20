@@ -143,4 +143,9 @@ enum AppConstants {
 
     static let screenshotDirectoryKey = "screenshotDirectory"
     static let proResProfileKey = "proResProfile"
+    
+    // Update checking
+    static let checkForUpdatesKey = "checkForUpdates"
+    static let updateCheckFrequencyKey = "updateCheckFrequency"
+    static let lastUpdateCheckDateKey = "lastUpdateCheckDate"
 }

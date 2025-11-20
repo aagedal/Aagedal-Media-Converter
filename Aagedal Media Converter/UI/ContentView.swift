@@ -55,6 +55,10 @@ struct ContentView: View {
     @State private var mergeClipsTooltip = "Add at least two compatible clips to enable merging."
     @State private var mergeCompatibilityTask: Task<Void, Never>? = nil
     
+    @StateObject private var updateChecker = UpdateChecker.shared
+    @State private var showUpdateNotification = false
+    @State private var updateNotificationTask: Task<Void, Never>?
+    
     // Using shared AppConstants for supported file types
     private var supportedVideoTypes: [UTType] {
         AppConstants.supportedVideoTypes.compactMap { UTType($0) }
@@ -143,6 +147,26 @@ struct ContentView: View {
                 OverallProgressView(progress: overallProgress)
             }
         }
+        .overlay(alignment: .bottom) {
+            if showUpdateNotification {
+                UpdateNotificationView(
+                    latestVersion: updateChecker.latestVersion,
+                    onDownload: {
+                        updateChecker.openDownloadPage()
+                        withAnimation {
+                            showUpdateNotification = false
+                        }
+                    },
+                    onDismiss: {
+                        withAnimation {
+                            showUpdateNotification = false
+                        }
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.bottom, 20)
+            }
+        }
         .frame(minWidth: 760)
         .onAppear {
             if !hasInitializedPreset {
@@ -160,6 +184,24 @@ struct ContentView: View {
                 isConverting = await ConversionManager.shared.isConvertingStatus()
             }
             scheduleMergeCompatibilityEvaluation()
+            
+            // Check for updates
+            updateChecker.checkForUpdatesIfNeeded()
+        }
+        .onChange(of: updateChecker.updateAvailable) { _, available in
+            if available {
+                withAnimation {
+                    showUpdateNotification = true
+                }
+                // Auto-dismiss after 10 seconds
+                updateNotificationTask?.cancel()
+                updateNotificationTask = Task {
+                    try? await Task.sleep(nanoseconds: 10 * 1_000_000_000)
+                    withAnimation {
+                        showUpdateNotification = false
+                    }
+                }
+            }
         }
         .onChange(of: storedDefaultPresetRawValue) { _, newValue in
             selectedPreset = ExportPreset(rawValue: newValue) ?? .videoLoop
@@ -564,6 +606,8 @@ struct ContentView: View {
             }
         }
     }
+    
+
 }
 
 struct ContentView_Previews: PreviewProvider {
