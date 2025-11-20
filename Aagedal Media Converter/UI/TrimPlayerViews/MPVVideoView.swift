@@ -46,7 +46,7 @@ final class MPVOpenGLView: NSView {
     private func setupLayer() {
         let layer = MPVLayer()
         layer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-        layer.asynchronous = true
+        layer.isAsynchronous = true
         self.layer = layer
         self.glLayer = layer
     }
@@ -98,32 +98,23 @@ class MPVLayer: CAOpenGLLayer {
         return pix!
     }
     
-    override func draw(in ctx: CGLContextObj, pixelFormat: CGLPixelFormatObj, forLayerTime t: CFTimeInterval, displayTime ts: CVTimeStamp) {
+    override func draw(inCGLContext ctx: CGLContextObj, pixelFormat pf: CGLPixelFormatObj, forLayerTime t: CFTimeInterval, displayTime ts: UnsafePointer<CVTimeStamp>?) {
         guard let player = player else { return }
         
         CGLSetCurrentContext(ctx)
         
         if !isInitialized {
             // Initialize MPV render context
-            // We need to pass a function pointer for getProcAddress
-            // Since this is a C callback, we can't capture 'ctx' easily if it changes, 
-            // but CGLContextObj is effectively global for this thread during draw.
-            // However, mpv expects a persistent function.
-            // Standard OpenGL on macOS doesn't really need getProcAddress for core functions,
-            // but mpv might need it.
-            // For macOS CGL, we can usually pass a simple wrapper around dlsym/NSGLGetProcAddress if needed,
-            // or just nil if mpv's default backend handles it (which it often does on macOS).
-            // Let's try passing a simple resolver.
-            
             let getProcAddress: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? = { _, name in
                 guard let name = name else { return nil }
-                // macOS symbols are usually available globally if linked, or we can look them up.
-                // But actually, for CGL, we don't have a standard getProcAddress.
-                // Usually passing NULL works for core profile on macOS as symbols are weak-linked.
+                // macOS symbols are usually available globally if linked
+                // For CGL, passing NULL works for core profile on macOS
                 return nil 
             }
             
-            player.initRenderContext(getProcAddress: getProcAddress)
+            Task { @MainActor in
+                player.initRenderContext(getProcAddress: getProcAddress)
+            }
             isInitialized = true
         }
         
@@ -132,9 +123,11 @@ class MPVLayer: CAOpenGLLayer {
         glGetIntegerv(GLenum(GL_FRAMEBUFFER_BINDING), &fbo)
         
         // Render
-        player.render(size: self.bounds.size, fbo: Int32(fbo))
+        Task { @MainActor in
+            player.render(size: self.bounds.size, fbo: Int32(fbo))
+        }
         
         glFlush()
-        super.draw(in: ctx, pixelFormat: pixelFormat, forLayerTime: t, displayTime: ts)
+        super.draw(inCGLContext: ctx, pixelFormat: pf, forLayerTime: t, displayTime: ts)
     }
 }

@@ -45,9 +45,15 @@ enum mpv_event_id: Int32 {
 }
 
 struct mpv_event {
-    var event_id: mpv_event_id
+    var event_id: Int32 // Changed from mpv_event_id to Int32 for C compatibility
     var error: Int32
     var reply_userdata: UInt64
+    var data: UnsafeMutableRawPointer?
+}
+
+struct mpv_event_property {
+    var name: UnsafePointer<CChar>
+    var format: mpv_format
     var data: UnsafeMutableRawPointer?
 }
 
@@ -66,11 +72,12 @@ struct mpv_opengl_init_params {
 
 // MARK: - LibMPV Wrapper
 
-final class LibMPV {
+final class LibMPV: @unchecked Sendable {
     static let shared = LibMPV()
     private var handle: UnsafeMutableRawPointer?
     
-    // Function pointers
+    // Function pointers - using Int32 instead of enums for C compatibility
+    // Also using UnsafeMutableRawPointer instead of struct pointers for strict C compatibility
     private var _mpv_create: @convention(c) () -> mpv_handle?
     private var _mpv_initialize: @convention(c) (mpv_handle?) -> Int32
     private var _mpv_destroy: @convention(c) (mpv_handle?) -> Void
@@ -78,25 +85,25 @@ final class LibMPV {
     private var _mpv_command: @convention(c) (mpv_handle?, UnsafeMutablePointer<UnsafePointer<CChar>?>?) -> Int32
     private var _mpv_command_string: @convention(c) (mpv_handle?, UnsafePointer<CChar>?) -> Int32
     private var _mpv_free: @convention(c) (UnsafeMutableRawPointer?) -> Void
-    private var _mpv_set_option: @convention(c) (mpv_handle?, UnsafePointer<CChar>?, mpv_format, UnsafeMutableRawPointer?) -> Int32
+    private var _mpv_set_option: @convention(c) (mpv_handle?, UnsafePointer<CChar>?, Int32, UnsafeMutableRawPointer?) -> Int32
     private var _mpv_set_option_string: @convention(c) (mpv_handle?, UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Int32
-    private var _mpv_get_property: @convention(c) (mpv_handle?, UnsafePointer<CChar>?, mpv_format, UnsafeMutableRawPointer?) -> Int32
-    private var _mpv_set_property: @convention(c) (mpv_handle?, UnsafePointer<CChar>?, mpv_format, UnsafeMutableRawPointer?) -> Int32
-    private var _mpv_observe_property: @convention(c) (mpv_handle?, UInt64, UnsafePointer<CChar>?, mpv_format) -> Int32
-    private var _mpv_wait_event: @convention(c) (mpv_handle?, Double) -> UnsafeMutablePointer<mpv_event>?
-    private var _mpv_render_context_create: @convention(c) (UnsafeMutablePointer<mpv_render_context?>?, mpv_handle?, UnsafeMutablePointer<mpv_render_param>?) -> Int32
+    private var _mpv_get_property: @convention(c) (mpv_handle?, UnsafePointer<CChar>?, Int32, UnsafeMutableRawPointer?) -> Int32
+    private var _mpv_set_property: @convention(c) (mpv_handle?, UnsafePointer<CChar>?, Int32, UnsafeMutableRawPointer?) -> Int32
+    private var _mpv_observe_property: @convention(c) (mpv_handle?, UInt64, UnsafePointer<CChar>?, Int32) -> Int32
+    private var _mpv_wait_event: @convention(c) (mpv_handle?, Double) -> UnsafeMutableRawPointer? // Returns mpv_event*
+    private var _mpv_render_context_create: @convention(c) (UnsafeMutablePointer<mpv_render_context?>?, mpv_handle?, UnsafeMutableRawPointer?) -> Int32 // params is mpv_render_param*
     private var _mpv_render_context_free: @convention(c) (mpv_render_context?) -> Void
     private var _mpv_render_context_set_parameter: @convention(c) (mpv_render_context?, Int32, UnsafeMutableRawPointer?) -> Int32
     private var _mpv_render_context_get_info: @convention(c) (mpv_render_context?, Int32, UnsafeMutableRawPointer?) -> Int32
     private var _mpv_render_context_set_update_callback: @convention(c) (mpv_render_context?, mpv_render_update_fn?, UnsafeMutableRawPointer?) -> Void
     private var _mpv_render_context_update: @convention(c) (mpv_render_context?) -> Void
     private var _mpv_render_context_report_swap: @convention(c) (mpv_render_context?) -> Void
-    private var _mpv_render_context_render: @convention(c) (mpv_render_context?, UnsafeMutablePointer<mpv_render_param>?) -> Int32
+    private var _mpv_render_context_render: @convention(c) (mpv_render_context?, UnsafeMutableRawPointer?) -> Int32 // params is mpv_render_param*
     
     // Render param constants (from mpv/render.h)
-    static let MPV_RENDER_PARAM_API_TYPE = 1
-    static let MPV_RENDER_PARAM_OPENGL_INIT_PARAMS = 2
-    static let MPV_RENDER_PARAM_FLIP_Y = 3
+    static let MPV_RENDER_PARAM_API_TYPE: Int32 = 1
+    static let MPV_RENDER_PARAM_OPENGL_INIT_PARAMS: Int32 = 2
+    static let MPV_RENDER_PARAM_FLIP_Y: Int32 = 3
     static let MPV_RENDER_API_TYPE_OPENGL = "opengl"
     
     private init() {
@@ -108,7 +115,9 @@ final class LibMPV {
         // We look in Binaries folder first, then Frameworks, then Resources
         let paths = [
             bundlePath + "/Binaries/libmpv.dylib",
+            bundlePath + "/Binaries/libmpv.2.dylib",
             bundlePath + "/Frameworks/libmpv.dylib",
+            bundlePath + "/Frameworks/libmpv.2.dylib",
             bundlePath + "/libmpv.dylib"
         ]
         
@@ -191,13 +200,13 @@ final class LibMPV {
     
     func mpv_get_property_double(_ ctx: mpv_handle?, _ name: String) -> Double? {
         var value: Double = 0
-        let result = _mpv_get_property(ctx, name, .double, &value)
+        let result = _mpv_get_property(ctx, name, mpv_format.double.rawValue, &value)
         return result >= 0 ? value : nil
     }
     
     func mpv_get_property_string(_ ctx: mpv_handle?, _ name: String) -> String? {
         var value: UnsafeMutablePointer<CChar>?
-        let result = _mpv_get_property(ctx, name, .string, &value)
+        let result = _mpv_get_property(ctx, name, mpv_format.string.rawValue, &value)
         guard result >= 0, let cStr = value else { return nil }
         let str = String(cString: cStr)
         _mpv_free(cStr)
@@ -206,20 +215,21 @@ final class LibMPV {
     
     func mpv_set_property_double(_ ctx: mpv_handle?, _ name: String, _ value: Double) -> Int32 {
         var v = value
-        return _mpv_set_property(ctx, name, .double, &v)
+        return _mpv_set_property(ctx, name, mpv_format.double.rawValue, &v)
     }
     
     func mpv_set_property_flag(_ ctx: mpv_handle?, _ name: String, _ value: Bool) -> Int32 {
         var v: Int32 = value ? 1 : 0
-        return _mpv_set_property(ctx, name, .flag, &v)
+        return _mpv_set_property(ctx, name, mpv_format.flag.rawValue, &v)
     }
     
     func mpv_observe_property(_ ctx: mpv_handle?, _ reply_userdata: UInt64, _ name: String, _ format: mpv_format) -> Int32 {
-        _mpv_observe_property(ctx, reply_userdata, name, format)
+        _mpv_observe_property(ctx, reply_userdata, name, format.rawValue)
     }
     
     func mpv_wait_event(_ ctx: mpv_handle?, _ timeout: Double) -> UnsafeMutablePointer<mpv_event>? {
-        _mpv_wait_event(ctx, timeout)
+        guard let ptr = _mpv_wait_event(ctx, timeout) else { return nil }
+        return ptr.assumingMemoryBound(to: mpv_event.self)
     }
     
     func mpv_render_context_create(_ res: inout mpv_render_context?, _ ctx: mpv_handle?, _ params: inout [mpv_render_param]) -> Int32 {
@@ -228,7 +238,7 @@ final class LibMPV {
         terminatedParams.append(mpv_render_param(type: 0, data: nil))
         
         let ret = terminatedParams.withUnsafeMutableBufferPointer { buffer in
-            _mpv_render_context_create(&ptr, ctx, buffer.baseAddress)
+            _mpv_render_context_create(&ptr, ctx, UnsafeMutableRawPointer(buffer.baseAddress))
         }
         res = ptr
         return ret
@@ -258,7 +268,7 @@ final class LibMPV {
         var terminatedParams = params
         terminatedParams.append(mpv_render_param(type: 0, data: nil))
         return terminatedParams.withUnsafeMutableBufferPointer { buffer in
-            _mpv_render_context_render(ctx, buffer.baseAddress)
+            _mpv_render_context_render(ctx, UnsafeMutableRawPointer(buffer.baseAddress))
         }
     }
 }

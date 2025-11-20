@@ -29,7 +29,13 @@ final class MPVPlayer: ObservableObject {
     }
     
     deinit {
-        destroy()
+        eventLoopTask?.cancel()
+        if let ctx = renderContext {
+            LibMPV.shared.mpv_render_context_free(ctx)
+        }
+        if let h = handle {
+            LibMPV.shared.mpv_terminate_destroy(h)
+        }
     }
     
     private func create() {
@@ -141,9 +147,10 @@ final class MPVPlayer: ObservableObject {
         guard let ctx = renderContext else { return }
         
         var openglFbo = fbo_param(fbo: fbo, w: Int32(size.width), h: Int32(size.height), internal_format: 0)
+        var flipY: Int32 = 1
         var params: [mpv_render_param] = [
             mpv_render_param(type: 4, data: &openglFbo), // MPV_RENDER_PARAM_OPENGL_FBO = 4
-            mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_FLIP_Y, data: UnsafeMutableRawPointer(mutating: [Int32(1)].withUnsafeMutableBufferPointer { $0.baseAddress! }))
+            mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_FLIP_Y, data: &flipY)
         ]
         
         lib.mpv_render_context_render(ctx, &params)
@@ -192,7 +199,9 @@ final class MPVPlayer: ObservableObject {
     }
     
     private func handleEvent(_ event: mpv_event) {
-        switch event.event_id {
+        guard let eventId = mpv_event_id(rawValue: event.event_id) else { return }
+        
+        switch eventId {
         case .propertyChange:
             guard let propPtr = event.data?.assumingMemoryBound(to: mpv_event_property.self) else { return }
             let prop = propPtr.pointee
