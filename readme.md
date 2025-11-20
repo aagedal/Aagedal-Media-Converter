@@ -21,7 +21,7 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 ```
 
 ### Manual download
-[Latest version (2.8)](https://github.com/aagedal/Aagedal-Media-Converter/releases/download/v.2.8/Aagedal-Media-Converter_2-8.zip)
+[Latest version (2.9)](https://github.com/aagedal/Aagedal-Media-Converter/releases/download/v.2.9/Aagedal-Media-Converter_2-9.zip)
 
 
 ---
@@ -33,6 +33,8 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 - Batch conversion with per-file progress and overall dock progress indicator
 - Watch Folder, with optional auto-delete after a set time.
 - Trim and preview files
+- Merge files into one if they are the same codec, frame rate etc.
+- Generate audio waveforms
 - Grab screenshots at source resolution. (Interlaced files are deinterlaced. Non-square pixel sources are exported as square.)
 - **Export Presets**  
   • Video Loop (silent) — x264 very slow 1080p max resolution, keeping original aspect ratio, removing all audio channels, nice for compact web distribution such as GIF-replacements, slow export
@@ -40,6 +42,8 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
   • Video Loop w/ Audio — same as above but keeping a stereo AAC track
 
   • TV Quality HD / 4K — HEVC hardware encoding for fast high quality exports, compatible with most editing software, 10-bit 4:2:0, limit resolution to either 1080p or 2160p
+
+  • Stream copy: copy the input codecs into a new file, most useful when combined with merge or trim
 
   • ProRes — High quality file maintaining original resolution
 
@@ -128,11 +132,9 @@ Not tested with macOS 26 Tahoe, but in macOS 15 you have two available App Short
 5. Optimizing list scrolling performance when many files are queued.
 
 ## Future ideas
-1. Per item settings
-2. Merge/combine queue items into single file
-3. Audio waveform visualization option when no video stream is available. (This would also imply adding support for audio file input).
-4. Add more app intents.
-5. Refactoring... The code is getting messy, making iterations slower and more complex. #procastination
+1. Per item preset adjustment.
+2. Add more / improve app intents.
+3. Replace current fallback player solution with libmpv or similar. Probably a target for version 3.
 
 
 Note that this is a sparetime project. I this is a passion project I don't get paid for.
