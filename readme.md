@@ -132,11 +132,9 @@ Not tested with macOS 26 Tahoe, but in macOS 15 you have two available App Short
 5. Optimizing list scrolling performance when many files are queued.
 
 ## Future ideas
-1. Per item settings
-2. Merge/combine queue items into single file
-3. Audio waveform visualization option when no video stream is available. (This would also imply adding support for audio file input).
-4. Add more app intents.
-5. Refactoring... The code is getting messy, making iterations slower and more complex. #procastination
+1. Per item preset adjustment.
+2. Add more / improve app intents.
+3. Replace current fallback player solution with libmpv or similar. Probably a target for version 3.
 
 
 Note that this is a sparetime project. I this is a passion project I don't get paid for.
