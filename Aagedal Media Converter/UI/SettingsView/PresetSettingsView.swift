@@ -15,6 +15,8 @@ struct PresetsSettingsView: View {
     @AppStorage(AppConstants.customPreset3SuffixKey) private var customPreset3Suffix = AppConstants.defaultCustomPresetSuffixes[2]
     @AppStorage(AppConstants.customPreset3ExtensionKey) private var customPreset3Extension = AppConstants.defaultCustomPresetExtensions[2]
     @AppStorage(AppConstants.customPreset3NameKey) private var customPreset3Name = AppConstants.defaultCustomPresetNameSuffixes[2]
+    
+    @AppStorage(AppConstants.proResProfileKey) private var proResProfileRawValue = ProResProfile.standard.rawValue
 
     @AppStorage(AppConstants.defaultPresetKey) private var storedDefaultPresetRawValue = ExportPreset.videoLoop.rawValue
 
@@ -106,6 +108,25 @@ struct PresetsSettingsView: View {
                 .padding(12)
                 .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
                 .cornerRadius(10)
+                
+                if selectedPreset == .prores {
+                    HStack {
+                        Text("Format")
+                        Spacer()
+                        Picker("", selection: $proResProfileRawValue) {
+                            ForEach(ProResProfile.allCases) { profile in
+                                Text(profile.rawValue).tag(profile.rawValue)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                        .labelsHidden()
+                        .help("Select the ProRes profile for the output file.")
+                    }
+                    .padding(12)
+                    .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                    .cornerRadius(10)
+                }
             }
         }
     }
@@ -369,4 +390,6 @@ struct PresetsSettingsView: View {
         let cleaned = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? fallback : cleaned
     }
+
+
 }

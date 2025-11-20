@@ -142,4 +142,5 @@ enum AppConstants {
     static let defaultCustomPresetExtensions = ["mp4", "mp4", "mp4"]
 
     static let screenshotDirectoryKey = "screenshotDirectory"
+    static let proResProfileKey = "proResProfile"
 }

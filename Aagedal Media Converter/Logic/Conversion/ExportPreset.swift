@@ -17,6 +17,28 @@
 import Foundation
 import CoreGraphics
 
+enum ProResProfile: String, CaseIterable, Identifiable {
+    case proxy = "Proxy"
+    case lt = "LT"
+    case standard = "422"
+    case hq = "HQ"
+    case fourFourFourFour = "4444"
+    case fourFourFourFourXQ = "4444 XQ"
+    
+    var id: String { rawValue }
+    
+    var ffmpegProfileName: String {
+        switch self {
+        case .proxy: return "proxy"
+        case .lt: return "lt"
+        case .standard: return "standard"
+        case .hq: return "hq"
+        case .fourFourFourFour: return "4444"
+        case .fourFourFourFourXQ: return "xq"
+        }
+    }
+}
+
 enum ExportPreset: String, CaseIterable, Identifiable {
     case videoLoop = "VideoLoop"
     case videoLoopWithAudio = "VideoLoop w/Audio"
@@ -228,10 +250,13 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
         case .prores:
+            let profileRaw = UserDefaults.standard.string(forKey: AppConstants.proResProfileKey) ?? ProResProfile.standard.rawValue
+            let profile = ProResProfile(rawValue: profileRaw) ?? .standard
+            
             var args = commonArgs + [
                 "-pix_fmt", "yuv422p10le",
                 "-vcodec", "prores_videotoolbox",
-                "-profile:v", "standard",
+                "-profile:v", profile.ffmpegProfileName,
                 "-c:a", "pcm_s24le",
                 "-map", "0:v",
                 "-map", "0:a"
