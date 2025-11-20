@@ -21,7 +21,7 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 ```
 
 ### Manual download
-[Latest version (2.9)](https://github.com/aagedal/Aagedal-Media-Converter/releases/download/v.2.9/Aagedal-Media-Converter_2-9.zip)
+[Latest version (2.9.1)](https://github.com/aagedal/Aagedal-Media-Converter/releases/download/v.2.9.1/Aagedal-Media-Converter_2-9-1.zip)
 
 
 ---
