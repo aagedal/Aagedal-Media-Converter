@@ -21,7 +21,7 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 ```
 
 ### Manual download
-[Latest version (2.9.1)](https://github.com/aagedal/Aagedal-Media-Converter/releases/download/v.2.9.1/Aagedal-Media-Converter_2-9-1.zip)
+[Latest version (2.9.2)](https://github.com/aagedal/Aagedal-Media-Converter/releases/download/v.2.9.2/Aagedal-Media-Converter_2-9-2.zip)
 
 
 ---
@@ -69,6 +69,7 @@ brew tap aagedal/casks && brew install --cask aagedal-media-converter
 - Sandboxed with Security-Scoped Bookmarks for persistent file access
 - Auto remove spaces and special characters. æ, ø, å is replaced with ae, o and aa.
 - Language support: English and Norwegian
+- Subtle update notifications
 
 ![SCR-20251110-bulz](https://github.com/user-attachments/assets/b1aba332-0058-480a-8f29-5f7ce5da07c0)
 <img width="642" height="594" alt="SCR-20251110-bvdx" src="https://github.com/user-attachments/assets/58504f3c-0e28-41d1-af37-4f109aff96af" />
