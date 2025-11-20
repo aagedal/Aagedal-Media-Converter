@@ -57,7 +57,7 @@ final class MPVOpenGLView: NSView {
     }
 }
 
-class MPVLayer: CAOpenGLLayer {
+class MPVLayer: CAOpenGLLayer, @unchecked Sendable {
     weak var player: MPVPlayer?
     private var isInitialized = false
     
@@ -74,13 +74,11 @@ class MPVLayer: CAOpenGLLayer {
     }
     
     @objc private func needsDraw() {
-        DispatchQueue.main.async {
-            self.setNeedsDisplay()
-        }
+        self.setNeedsDisplay()
     }
     
     override func copyCGLPixelFormat(forDisplayMask mask: UInt32) -> CGLPixelFormatObj {
-        var attributes: [CGLPixelFormatAttribute] = [
+        let attributes: [CGLPixelFormatAttribute] = [
             kCGLPFAOpenGLProfile, CGLPixelFormatAttribute(kCGLOGLPVersion_3_2_Core.rawValue),
             kCGLPFAAccelerated,
             kCGLPFADoubleBuffer,
@@ -107,14 +105,10 @@ class MPVLayer: CAOpenGLLayer {
             // Initialize MPV render context
             let getProcAddress: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? = { _, name in
                 guard let name = name else { return nil }
-                // macOS symbols are usually available globally if linked
-                // For CGL, passing NULL works for core profile on macOS
-                return nil 
+                return dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) // RTLD_DEFAULT = -2
             }
             
-            Task { @MainActor in
-                player.initRenderContext(getProcAddress: getProcAddress)
-            }
+            player.initRenderContext(getProcAddress: getProcAddress)
             isInitialized = true
         }
         
@@ -123,11 +117,26 @@ class MPVLayer: CAOpenGLLayer {
         glGetIntegerv(GLenum(GL_FRAMEBUFFER_BINDING), &fbo)
         
         // Render
-        Task { @MainActor in
-            player.render(size: self.bounds.size, fbo: Int32(fbo))
-        }
+        let bounds = self.bounds
+        let scale = self.contentsScale
+        let pixelSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        player.render(size: pixelSize, fbo: Int32(fbo))
         
         glFlush()
         super.draw(inCGLContext: ctx, pixelFormat: pf, forLayerTime: t, displayTime: ts)
+    }
+}
+
+extension MPVOpenGLView {
+    override var acceptsFirstResponder: Bool {
+        return true
+    }
+    
+    override func keyDown(with event: NSEvent) {
+        if event.charactersIgnoringModifiers == " " {
+            player?.togglePause()
+        } else {
+            super.keyDown(with: event)
+        }
     }
 }

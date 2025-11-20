@@ -106,41 +106,115 @@ final class LibMPV: @unchecked Sendable {
     static let MPV_RENDER_PARAM_FLIP_Y: Int32 = 3
     static let MPV_RENDER_API_TYPE_OPENGL = "opengl"
     
+    
     private init() {
-        // Locate libmpv.dylib in the bundle
-        guard let bundlePath = Bundle.main.resourcePath else {
-            fatalError("Could not find bundle resource path")
-        }
+        // Try to locate libmpv.dylib in the bundle using proper Bundle APIs
+        let bundle = Bundle.main
         
-        // We look in Binaries folder first, then Frameworks, then Resources
-        let paths = [
-            bundlePath + "/Binaries/libmpv.dylib",
-            bundlePath + "/Binaries/libmpv.2.dylib",
-            bundlePath + "/Frameworks/libmpv.dylib",
-            bundlePath + "/Frameworks/libmpv.2.dylib",
-            bundlePath + "/libmpv.dylib"
-        ]
+        // Priority order for searching:
+        // 1. Try Bundle.main.privateFrameworksPath (Contents/Frameworks) - Standard location for "Copy Files" -> "Frameworks"
+        // 2. Try Bundle.main.path(forResource:ofType:inDirectory:) for various locations in Resources
+        // 3. Try relative to resourcePath (Manual fallback)
+        // 4. Try @rpath loading
         
         var loadedHandle: UnsafeMutableRawPointer? = nil
-        for path in paths {
-            if FileManager.default.fileExists(atPath: path) {
+        var successfulPath: String? = nil
+        var attemptedPaths: [String] = []
+        let possibleNames = ["libmpv.2", "libmpv"]
+        
+        // 1. Try Frameworks Directory (Contents/Frameworks/...)
+        // This is the most likely location if the user followed the instructions to use "Copy Files" -> "Frameworks"
+        if let frameworksPath = bundle.privateFrameworksPath {
+            for name in possibleNames {
+                let path = (frameworksPath as NSString).appendingPathComponent(name + ".dylib")
+                attemptedPaths.append(path)
                 loadedHandle = dlopen(path, RTLD_NOW)
                 if loadedHandle != nil {
-                    print("Loaded libmpv from \(path)")
+                    successfulPath = path
+                    break
+                }
+            }
+        }
+        
+        // 2. Try Bundle Resources (Contents/Resources/...)
+        if loadedHandle == nil {
+            let possibleDirs = ["Binaries", "Frameworks", nil] // nil means root of Resources
+            
+            for dir in possibleDirs {
+                for name in possibleNames {
+                    if let path = bundle.path(forResource: name, ofType: "dylib", inDirectory: dir) {
+                        attemptedPaths.append(path)
+                        loadedHandle = dlopen(path, RTLD_NOW)
+                        if loadedHandle != nil {
+                            successfulPath = path
+                            break
+                        }
+                    }
+                }
+                if loadedHandle != nil { break }
+            }
+        }
+        
+        // 3. If Bundle API didn't work, try manual path construction in Resources
+        if loadedHandle == nil, let resourcePath = bundle.resourcePath {
+            let manualPaths = [
+                (resourcePath as NSString).appendingPathComponent("Binaries/libmpv.dylib"),
+                (resourcePath as NSString).appendingPathComponent("Binaries/libmpv.2.dylib"),
+                (resourcePath as NSString).appendingPathComponent("Frameworks/libmpv.dylib"),
+                (resourcePath as NSString).appendingPathComponent("Frameworks/libmpv.2.dylib"),
+                (resourcePath as NSString).appendingPathComponent("libmpv.dylib"),
+                (resourcePath as NSString).appendingPathComponent("libmpv.2.dylib")
+            ]
+            
+            for path in manualPaths {
+                // Only check if we haven't already checked this path via Bundle.path
+                if !attemptedPaths.contains(path) && FileManager.default.fileExists(atPath: path) {
+                    attemptedPaths.append(path)
+                    loadedHandle = dlopen(path, RTLD_NOW)
+                    if loadedHandle != nil {
+                        successfulPath = path
+                        break
+                    }
+                }
+            }
+        }
+        
+        // 4. Last resort: try @rpath or system-wide loading
+        if loadedHandle == nil {
+            for name in ["@rpath/libmpv.2.dylib", "@rpath/libmpv.dylib", "libmpv.2.dylib", "libmpv.dylib"] {
+                attemptedPaths.append(name)
+                loadedHandle = dlopen(name, RTLD_NOW)
+                if loadedHandle != nil {
+                    successfulPath = name
                     break
                 }
             }
         }
         
         if loadedHandle == nil {
-            // Fallback to trying to load from standard locations or if it's already linked
-            loadedHandle = dlopen("libmpv.dylib", RTLD_NOW)
+            if let error = dlerror() {
+                print("❌ dlopen error: \(String(cString: error))")
+            }
         }
         
         guard let handle = loadedHandle else {
-            fatalError("Failed to load libmpv.dylib. Please ensure it is placed in the Binaries folder.")
+            let attemptedList = attemptedPaths.joined(separator: "\n- ")
+            fatalError("""
+                Failed to load libmpv.dylib.
+                
+                Attempted to load from the following paths:
+                - \(attemptedList)
+                
+                Please ensure libmpv.dylib is included in your app bundle:
+                1. Add the library to your Xcode project
+                2. In Build Phases → Copy Files, add libmpv.dylib
+                3. Set destination to "Frameworks"
+                4. Make sure "Code Sign On Copy" is checked
+                5. Make sure it's NOT in "Link Binary With Libraries"
+                """)
         }
         
+        print("✓ Loaded libmpv from: \(successfulPath ?? "unknown")")
         self.handle = handle
         
         // Load symbols

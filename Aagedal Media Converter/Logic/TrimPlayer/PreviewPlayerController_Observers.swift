@@ -309,7 +309,10 @@ extension PreviewPlayerController {
                         }
                     }
                     
-                    self.fallbackToPreview(startTime: startTime)
+                    // Try MPV instead of chunk-based fallback
+                    logger.info("Attempting MPV playback as fallback")
+                    self.teardown(resetAudioSelection: false)
+                    self.setupMPV(url: self.videoItem.url, startTime: startTime)
                     
                 case .readyToPlay:
                     let asset = item.asset
@@ -330,8 +333,9 @@ extension PreviewPlayerController {
                                 }
                                 
                                 if !hasValidVideoFormat {
-                                    logger.warning("AVPlayer ready but video format invalid. Preparing MP4 fallback preview.")
-                                    self.fallbackToPreview(startTime: startTime)
+                                    logger.warning("AVPlayer ready but video format invalid. Attempting MPV playback.")
+                                    self.teardown(resetAudioSelection: false)
+                                    self.setupMPV(url: self.videoItem.url, startTime: startTime)
                                     return
                                 }
                                 
@@ -359,8 +363,9 @@ extension PreviewPlayerController {
                                         // Check for truly unsupported codecs
                                         // Only APV codecs are unsupported - all ProRes variants work with AVPlayer
                                         if codecString == "apv1" || codecString == "apvx" {
-                                            logger.warning("AVPlayer ready but codec '\(codecString)' unsupported. Preparing MP4 fallback preview.")
-                                            self.fallbackToPreview(startTime: startTime)
+                                            logger.warning("AVPlayer ready but codec '\(codecString)' unsupported. Attempting MPV playback.")
+                                            self.teardown(resetAudioSelection: false)
+                                            self.setupMPV(url: self.videoItem.url, startTime: startTime)
                                             return
                                         }
                                     }

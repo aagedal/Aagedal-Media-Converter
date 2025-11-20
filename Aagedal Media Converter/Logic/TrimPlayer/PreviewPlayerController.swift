@@ -78,6 +78,10 @@ final class PreviewPlayerController: ObservableObject {
     var previewAudioStreamIndices: [Int] = []
     var selectedAudioTrackOrderIndex: Int = 0
     
+    // MARK: - MPV State
+    var mpvPlayer: MPVPlayer?
+    var useMPV = false
+    
     // MARK: - Initialization
     
     var playbackTimePublisher: Published<Double>.Publisher { $currentPlaybackTime }
@@ -119,17 +123,6 @@ final class PreviewPlayerController: ObservableObject {
         let currentItem = videoItem
         let url = currentItem.url
         
-        // Check for formats that AVPlayer definitely doesn't support well or at all
-        let ext = url.pathExtension.lowercased()
-        let mpvExtensions = ["mkv", "webm", "flv", "avi", "wmv", "ogg", "ogv", "rm", "rmvb"]
-        
-        if mpvExtensions.contains(ext) {
-            // Use MPV directly
-            setupMPV(url: url, startTime: startTime)
-            loadPreviewAssets(for: currentItem.url)
-            return
-        }
-        
         // Try AVPlayer directly first with security-scoped resource access
         
         // First try bookmark-based access (more reliable for sandboxed apps)
@@ -161,7 +154,7 @@ final class PreviewPlayerController: ObservableObject {
         loadPreviewAssets(for: currentItem.url)
     }
     
-    private func setupMPV(url: URL, startTime: Double) {
+    func setupMPV(url: URL, startTime: Double) {
         let mpv = MPVPlayer()
         self.mpvPlayer = mpv
         self.useMPV = true

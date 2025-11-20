@@ -10,8 +10,8 @@ import OSLog
 @MainActor
 final class MPVPlayer: ObservableObject {
     private let lib = LibMPV.shared
-    private var handle: mpv_handle?
-    private var renderContext: mpv_render_context?
+    nonisolated(unsafe) private var handle: mpv_handle?
+    nonisolated(unsafe) private var renderContext: mpv_render_context?
     
     @Published var isPlaying = false
     @Published var duration: Double = 0
@@ -48,6 +48,7 @@ final class MPVPlayer: ObservableObject {
         // Configure basic options
         check(lib.mpv_set_option_string(handle, "vo", "libmpv"))
         check(lib.mpv_set_option_string(handle, "hwdec", "auto"))
+        check(lib.mpv_set_option_string(handle, "pause", "yes"))
         
         // Initialize
         let initResult = lib.mpv_initialize(handle)
@@ -102,7 +103,9 @@ final class MPVPlayer: ObservableObject {
     
     // MARK: - Rendering
     
-    func initRenderContext(getProcAddress: @escaping @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutableRawPointer?) {
+    // MARK: - Rendering
+    
+    nonisolated func initRenderContext(getProcAddress: @escaping @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutableRawPointer?) {
         guard let handle else { return }
         
         var params = mpv_opengl_init_params(
@@ -111,31 +114,33 @@ final class MPVPlayer: ObservableObject {
             extra_exts: nil
         )
         
-        var renderParams: [mpv_render_param] = [
-            mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_API_TYPE, data: UnsafeMutableRawPointer(mutating: LibMPV.MPV_RENDER_API_TYPE_OPENGL)),
-            mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, data: &params)
-        ]
-        
-        var ctx: mpv_render_context?
-        let res = lib.mpv_render_context_create(&ctx, handle, &renderParams)
-        
-        if res < 0 {
-            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPV").error("Failed to create render context: \(res)")
-            return
+        withUnsafeMutablePointer(to: &params) { paramsPtr in
+            (LibMPV.MPV_RENDER_API_TYPE_OPENGL as NSString).utf8String!.withMemoryRebound(to: CChar.self, capacity: 1) { apiTypePtr in
+                var renderParams: [mpv_render_param] = [
+                    mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_API_TYPE, data: UnsafeMutableRawPointer(mutating: apiTypePtr)),
+                    mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, data: UnsafeMutableRawPointer(paramsPtr)),
+                    mpv_render_param(type: 0, data: nil) // Null terminator
+                ]
+                
+                var ctx: mpv_render_context?
+                let res = lib.mpv_render_context_create(&ctx, handle, &renderParams)
+                
+                if res < 0 {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "MPV").error("Failed to create render context: \(res)")
+                    return
+                }
+                
+                self.renderContext = ctx
+            }
         }
         
-        self.renderContext = ctx
+        guard let ctx = renderContext else { return }
         
         // Set update callback
         let callback: mpv_render_update_fn = { ctx in
             // This is called from a background thread usually
             DispatchQueue.main.async {
                 // We need to notify the view to redraw
-                // Since we can't easily pass self to the C callback without Unmanaged,
-                // we'll use a global notification or similar mechanism, OR
-                // we rely on the fact that we are setting the callback on the context
-                // and we can pass 'self' as context data if we use Unmanaged.
-                // For simplicity in this wrapper, let's use a notification for now
                 NotificationCenter.default.post(name: .mpvRenderUpdate, object: nil)
             }
         }
@@ -143,17 +148,23 @@ final class MPVPlayer: ObservableObject {
         lib.mpv_render_context_set_update_callback(ctx, callback, nil)
     }
     
-    func render(size: CGSize, fbo: Int32) {
+    nonisolated func render(size: CGSize, fbo: Int32) {
         guard let ctx = renderContext else { return }
         
         var openglFbo = fbo_param(fbo: fbo, w: Int32(size.width), h: Int32(size.height), internal_format: 0)
         var flipY: Int32 = 1
-        var params: [mpv_render_param] = [
-            mpv_render_param(type: 4, data: &openglFbo), // MPV_RENDER_PARAM_OPENGL_FBO = 4
-            mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_FLIP_Y, data: &flipY)
-        ]
         
-        lib.mpv_render_context_render(ctx, &params)
+        withUnsafeMutablePointer(to: &openglFbo) { fboPtr in
+            withUnsafeMutablePointer(to: &flipY) { flipYPtr in
+                var params: [mpv_render_param] = [
+                    mpv_render_param(type: 4, data: UnsafeMutableRawPointer(fboPtr)), // MPV_RENDER_PARAM_OPENGL_FBO = 4
+                    mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_FLIP_Y, data: UnsafeMutableRawPointer(flipYPtr)),
+                    mpv_render_param(type: 0, data: nil) // Null terminator
+                ]
+                
+                _ = lib.mpv_render_context_render(ctx, &params)
+            }
+        }
     }
     
     // MARK: - Private
@@ -180,61 +191,76 @@ final class MPVPlayer: ObservableObject {
         guard let handle else { return }
         
         // Observe properties
-        lib.mpv_observe_property(handle, 0, "time-pos", .double)
-        lib.mpv_observe_property(handle, 0, "duration", .double)
-        lib.mpv_observe_property(handle, 0, "pause", .flag)
-        lib.mpv_observe_property(handle, 0, "seekable", .flag)
-        lib.mpv_observe_property(handle, 0, "idle-active", .flag)
+        _ = lib.mpv_observe_property(handle, 0, "time-pos", .double)
+        _ = lib.mpv_observe_property(handle, 0, "duration", .double)
+        _ = lib.mpv_observe_property(handle, 0, "pause", .flag)
+        _ = lib.mpv_observe_property(handle, 0, "seekable", .flag)
+        _ = lib.mpv_observe_property(handle, 0, "idle-active", .flag)
         
-        eventLoopTask = Task.detached(priority: .userInitiated) { [weak self, lib, handle] in
+        let handleAddr = Int(bitPattern: handle)
+        
+        eventLoopTask = Task.detached(priority: .userInitiated) { @Sendable [weak self, lib] in
+            guard let handle = mpv_handle(bitPattern: handleAddr) else { return }
+            
             while !Task.isCancelled {
                 guard let eventPtr = lib.mpv_wait_event(handle, 1.0) else { continue }
                 let event = eventPtr.pointee
                 
-                if event.event_id == .none { continue }
+                guard event.event_id != 0 else { continue } // .none = 0
+                guard let eventId = mpv_event_id(rawValue: event.event_id) else { continue }
                 
-                await self?.handleEvent(event)
+                // Process event data in nonisolated context
+                switch eventId {
+                case .propertyChange:
+                    guard let propPtr = event.data?.assumingMemoryBound(to: mpv_event_property.self) else { continue }
+                    let prop = propPtr.pointee
+                    let name = String(cString: prop.name)
+                    
+                    switch name {
+                    case "time-pos":
+                        if prop.format == .double, let data = prop.data {
+                            let value = data.assumingMemoryBound(to: Double.self).pointee
+                            await MainActor.run { [weak self] in
+                                self?.timePos = value
+                            }
+                        }
+                    case "duration":
+                        if prop.format == .double, let data = prop.data {
+                            let value = data.assumingMemoryBound(to: Double.self).pointee
+                            await MainActor.run { [weak self] in
+                                self?.duration = value
+                            }
+                        }
+                    case "pause":
+                        if prop.format == .flag, let data = prop.data {
+                            let value = data.assumingMemoryBound(to: Int32.self).pointee
+                            await MainActor.run { [weak self] in
+                                self?.isPlaying = value == 0
+                            }
+                        }
+                    case "seekable":
+                        if prop.format == .flag, let data = prop.data {
+                            let value = data.assumingMemoryBound(to: Int32.self).pointee
+                            await MainActor.run { [weak self] in
+                                self?.isSeekable = value == 1
+                            }
+                        }
+                    default:
+                        break
+                    }
+                case .endFile:
+                    if event.error < 0 {
+                        await MainActor.run { [weak self] in
+                            self?.error = "Playback error"
+                        }
+                    }
+                default:
+                    break
+                }
             }
         }
     }
     
-    private func handleEvent(_ event: mpv_event) {
-        guard let eventId = mpv_event_id(rawValue: event.event_id) else { return }
-        
-        switch eventId {
-        case .propertyChange:
-            guard let propPtr = event.data?.assumingMemoryBound(to: mpv_event_property.self) else { return }
-            let prop = propPtr.pointee
-            let name = String(cString: prop.name)
-            
-            switch name {
-            case "time-pos":
-                if prop.format == .double, let value = prop.data?.assumingMemoryBound(to: Double.self).pointee {
-                    self.timePos = value
-                }
-            case "duration":
-                if prop.format == .double, let value = prop.data?.assumingMemoryBound(to: Double.self).pointee {
-                    self.duration = value
-                }
-            case "pause":
-                if prop.format == .flag, let value = prop.data?.assumingMemoryBound(to: Int32.self).pointee {
-                    self.isPlaying = value == 0
-                }
-            case "seekable":
-                if prop.format == .flag, let value = prop.data?.assumingMemoryBound(to: Int32.self).pointee {
-                    self.isSeekable = value == 1
-                }
-            default:
-                break
-            }
-        case .endFile:
-            if event.error < 0 {
-                self.error = "Playback error"
-            }
-        default:
-            break
-        }
-    }
 }
 
 extension Notification.Name {
