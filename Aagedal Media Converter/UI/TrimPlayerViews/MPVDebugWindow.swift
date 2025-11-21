@@ -39,7 +39,13 @@ class MPVDebugWindowController: NSWindowController {
         let container = NSView(frame: window.contentView!.bounds)
         container.autoresizingMask = [.width, .height]
         
-        let mpvView = MPVOpenGLView(frame: container.bounds)
+        guard
+            let format = MPVOpenGLHostView.buildPixelFormat(),
+            let mpvView = MPVOpenGLHostView(frame: container.bounds, pixelFormat: format)
+        else {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVDebug").error("Failed to create MPVOpenGLHostView for debug window")
+            return
+        }
         mpvView.autoresizingMask = [.width, .height]
         mpvView.player = player
         
