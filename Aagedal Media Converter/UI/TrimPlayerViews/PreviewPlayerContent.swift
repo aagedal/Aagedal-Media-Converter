@@ -46,11 +46,14 @@ struct PreviewPlayerContent: View {
                 .onReceive(controller.playbackTimePublisher) { time in
                     currentPlaybackTime = time
                 }
-            } else if controller.useMPV, let mpvPlayer = controller.mpvPlayer {
+                .onReceive(controller.playbackTimePublisher) { time in
+                    currentPlaybackTime = time
+                }
+            } else if controller.useVLC, let vlcPlayer = controller.vlcPlayer {
                 ZStack {
                     CheckerboardBackground()
                     
-                    MPVVideoView(player: mpvPlayer)
+                    VLCVideoView(player: vlcPlayer)
                         .aspectRatio(playerAspectRatio, contentMode: .fit)
                     
                     overlayIndicators

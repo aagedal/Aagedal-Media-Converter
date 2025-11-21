@@ -78,9 +78,9 @@ final class PreviewPlayerController: ObservableObject {
     var previewAudioStreamIndices: [Int] = []
     var selectedAudioTrackOrderIndex: Int = 0
     
-    // MARK: - MPV State
-    var mpvPlayer: MPVPlayer?
-    var useMPV = false
+    // MARK: - VLC State
+    var vlcPlayer: VLCPlayer?
+    var useVLC = false
     
     // MARK: - Initialization
     
@@ -118,7 +118,7 @@ final class PreviewPlayerController: ObservableObject {
         isLoadingPreviewAssets = true
         previewAssets = nil
         usePreviewFallback = false
-        useMPV = false
+        useVLC = false
 
         let currentItem = videoItem
         let url = currentItem.url
@@ -137,7 +137,7 @@ final class PreviewPlayerController: ObservableObject {
         
         self.player = player
         
-        // Monitor player item status for failures, fallback to MPV if needed
+        // Monitor player item status for failures, fallback to VLC if needed
         installPlayerItemStatusObserver(for: playerItem, startTime: startTime)
         
         self.isPreparing = false
@@ -156,46 +156,25 @@ final class PreviewPlayerController: ObservableObject {
     
     var debugWindowController: Any? // Holds strong reference to keep window alive
 
-    func setupMPV(url: URL, startTime: Double) {
-        let mpv = MPVPlayer()
-        self.mpvPlayer = mpv
-        self.useMPV = true
+    func setupVLC(url: URL, startTime: Double) {
+        let vlc = VLCPlayer()
+        self.vlcPlayer = vlc
+        self.useVLC = true
         self.isPreparing = false
         
-        mpv.load(url: url)
-        mpv.seek(to: startTime)
-        
-        // Bind MPV state to controller state
-        // We need to observe MPV properties and update published vars
-        // This is a bit tricky as we are inside an ObservableObject
-        // We can use Combine to forward changes
-        
-        // For now, let's just rely on the view observing MPVPlayer directly for playback state,
-        // but we need to sync time for the trimmer.
-        
-        // Actually, we should probably expose the MPVPlayer to the view if we are using it.
+        vlc.load(url: url)
+        vlc.seek(to: startTime)
         
         // Sync time
-        Task { @MainActor [weak self, weak mpv] in
-            guard let self, let mpv else { return }
-            for await time in mpv.$timePos.values {
+        Task { @MainActor [weak self, weak vlc] in
+            guard let self, let vlc else { return }
+            for await time in vlc.$timePos.values {
                 self.currentPlaybackTime = time
             }
         }
         
-        
         // Restore waveform URL (teardown clears it)
         updateCurrentWaveform()
-        
-        // Launch Debug Window - DISABLED FOR NOW to prevent dual-rendering issues
-        // DispatchQueue.main.async {
-        //     let debugWC = MPVDebugWindowController(url: url)
-        //     debugWC.showWindow(nil)
-        //     self.debugWindowController = debugWC
-        // }
-        
-        // Test OSD
-        mpv.showText("MPV OSD TEST")
     }
 
     /// Determines the preferred ordering of audio stream indices based on metadata (default + channel count).
@@ -449,11 +428,11 @@ final class PreviewPlayerController: ObservableObject {
             Task { await session.cancel(); await session.cleanup() }
         }
         
-        if let mpv = mpvPlayer {
-            mpv.destroy()
-            mpvPlayer = nil
+        if let vlc = vlcPlayer {
+            vlc.stop()
+            vlcPlayer = nil
         }
-        useMPV = false
+        useVLC = false
 
         isPreparing = false
         isGeneratingFallbackPreview = false
@@ -487,8 +466,8 @@ final class PreviewPlayerController: ObservableObject {
     // MARK: - Playback Control
     
     func refreshPreviewForTrim() {
-        if useMPV, let mpv = mpvPlayer {
-            mpv.seek(to: videoItem.effectiveTrimStart)
+        if useVLC, let vlc = vlcPlayer {
+            vlc.seek(to: videoItem.effectiveTrimStart)
             return
         }
         
@@ -515,8 +494,8 @@ final class PreviewPlayerController: ObservableObject {
         // Update playback time immediately for UI responsiveness
         currentPlaybackTime = time
         
-        if useMPV, let mpv = mpvPlayer {
-            mpv.seek(to: time)
+        if useVLC, let vlc = vlcPlayer {
+            vlc.seek(to: time)
             return
         }
         
