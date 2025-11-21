@@ -162,7 +162,8 @@ final class PreviewPlayerController: ObservableObject {
         self.useVLC = true
         self.isPreparing = false
         
-        vlc.load(url: url)
+        // Load without autostarting
+        vlc.load(url: url, autostart: false)
         vlc.seek(to: startTime)
         
         // Sync time
@@ -175,6 +176,61 @@ final class PreviewPlayerController: ObservableObject {
         
         // Restore waveform URL (teardown clears it)
         updateCurrentWaveform()
+    }
+    
+    // MARK: - Unified Playback Control
+    
+    func togglePlayback() {
+        if useVLC, let vlc = vlcPlayer {
+            vlc.togglePause()
+        } else if let player = player {
+            if player.rate != 0 {
+                player.pause()
+            } else {
+                player.play()
+            }
+        }
+    }
+    
+    func pause() {
+        if useVLC, let vlc = vlcPlayer {
+            vlc.pause()
+        } else {
+            player?.pause()
+        }
+    }
+    
+    func stepRate(forward: Bool) {
+        if useVLC, let vlc = vlcPlayer {
+            // VLC rate stepping: 0.5 -> 1.0 -> 1.5 -> 2.0 etc
+            let current = vlc.rate
+            let step: Float = 0.5
+            let newRate = forward ? current + step : current - step
+            vlc.rate = max(0.25, min(newRate, 4.0))
+        } else if let player = player {
+            // AVPlayer rate stepping
+            let current = player.rate
+            let step: Float = 1.0
+            let newRate = forward ? current + step : current - step
+            player.rate = newRate
+        }
+    }
+    
+    func rewind() {
+        // J key behavior: If playing forward, slow down or reverse. If paused, reverse.
+        // For simplicity, let's just step rate backwards
+        stepRate(forward: false)
+    }
+    
+    func fastForward() {
+        // L key behavior: Increase rate
+        stepRate(forward: true)
+    }
+    
+    func seek(by seconds: Double) {
+        let currentTime = getCurrentTime() ?? videoItem.effectiveTrimStart
+        let newTime = max(0, min(currentTime + seconds, videoItem.durationSeconds))
+        seekTo(newTime)
     }
 
     /// Determines the preferred ordering of audio stream indices based on metadata (default + channel count).

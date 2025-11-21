@@ -37,19 +37,30 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
         mediaPlayer.delegate = self
     }
     
-    func load(url: URL) {
+    private var startPaused = false
+    
+    func load(url: URL, autostart: Bool = false) {
         let media = VLCMedia(url: url)
         mediaPlayer.media = media
-        mediaPlayer.play() // Start playing to load metadata, then we might pause if needed
-        // VLC often needs to play a bit to get metadata.
+        
+        if autostart {
+            startPaused = false
+            mediaPlayer.play()
+        } else {
+            // Play to load metadata/first frame, then pause in delegate
+            startPaused = true
+            mediaPlayer.play()
+        }
     }
     
     func play() {
+        startPaused = false
         mediaPlayer.play()
         isPlaying = true
     }
     
     func pause() {
+        startPaused = false
         mediaPlayer.pause()
         isPlaying = false
     }
@@ -73,6 +84,11 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
         mediaPlayer.time = timeObj
     }
     
+    var rate: Float {
+        get { mediaPlayer.rate }
+        set { mediaPlayer.rate = newValue }
+    }
+    
     // MARK: - VLCMediaPlayerDelegate
     
     nonisolated func mediaPlayerStateChanged(_ aNotification: Notification) {
@@ -83,8 +99,14 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
             // We assume player is safe to use here because we are just reading state
             switch player.state {
             case .playing:
-                self.isPlaying = true
-                self.startTimeObserver()
+                if self.startPaused {
+                    self.startPaused = false
+                    player.pause()
+                    self.isPlaying = false
+                } else {
+                    self.isPlaying = true
+                    self.startTimeObserver()
+                }
             case .paused, .stopped, .ended:
                 self.isPlaying = false
                 self.stopTimeObserver()

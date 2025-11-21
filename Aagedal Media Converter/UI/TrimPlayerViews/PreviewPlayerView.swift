@@ -218,9 +218,21 @@ struct PreviewPlayerView: View {
             if controller.jumpToPreviousCachedSegmentEnd() {
                 return true
             }
+        } else if specialKey == .leftArrow {
+            controller.seek(by: -5)
+            return true
+        } else if specialKey == .rightArrow {
+            controller.seek(by: 5)
+            return true
         }
 
         let lowerKey = key.lowercased()
+        
+        // Space to toggle playback
+        if key == " " {
+            controller.togglePlayback()
+            return true
+        }
 
         if modifiers.contains(.command) {
             switch lowerKey {
@@ -278,6 +290,15 @@ struct PreviewPlayerView: View {
             return true
         case "o":
             handleTrimOutPoint(clearToEnd: false)
+            return true
+        case "j":
+            controller.rewind()
+            return true
+        case "k":
+            controller.pause()
+            return true
+        case "l":
+            controller.fastForward()
             return true
         default:
             return false

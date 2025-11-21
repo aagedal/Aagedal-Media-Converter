@@ -53,7 +53,7 @@ struct PreviewPlayerContent: View {
                 ZStack {
                     CheckerboardBackground()
                     
-                    VLCVideoView(player: vlcPlayer)
+                    VLCVideoView(player: vlcPlayer, keyHandler: keyHandler)
                         .aspectRatio(playerAspectRatio, contentMode: .fit)
                     
                     overlayIndicators
