@@ -63,13 +63,6 @@ final class MPVPlayer: ObservableObject {
         check(lib.mpv_set_option_string(handle, "hwdec", "auto"), context: "set hwdec=auto")
         check(lib.mpv_set_option_string(handle, "pause", "no"), context: "set pause=no")
         
-        // Force video to scale to full viewport, disable aspect ratio preservation
-        check(lib.mpv_set_option_string(handle, "keepaspect", "no"), context: "set keepaspect=no")
-        check(lib.mpv_set_option_string(handle, "video-unscaled", "no"), context: "set video-unscaled=no")
-        check(lib.mpv_set_option_string(handle, "video-zoom", "0"), context: "set video-zoom=0")
-        check(lib.mpv_set_option_string(handle, "video-align-x", "0"), context: "set video-align-x=0")
-        check(lib.mpv_set_option_string(handle, "video-align-y", "0"), context: "set video-align-y=0")
-        
         // Enable verbose logging
         check(lib.mpv_set_option_string(handle, "msg-level", "all=warn,vo=debug,gl=debug"), context: "set msg-level")
         check(lib.mpv_request_log_messages(handle, "debug"), context: "request log")
@@ -220,7 +213,7 @@ final class MPVPlayer: ObservableObject {
         withUnsafeMutablePointer(to: &openglFbo) { fboPtr in
             withUnsafeMutablePointer(to: &flipY) { flipYPtr in
                 var params: [mpv_render_param] = [
-                    mpv_render_param(type: 4, data: UnsafeMutableRawPointer(fboPtr)), // MPV_RENDER_PARAM_OPENGL_FBO = 4
+                    mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_OPENGL_FBO, data: UnsafeMutableRawPointer(fboPtr)),
                     mpv_render_param(type: LibMPV.MPV_RENDER_PARAM_FLIP_Y, data: UnsafeMutableRawPointer(flipYPtr)),
                     mpv_render_param(type: 0, data: nil) // Null terminator
                 ]

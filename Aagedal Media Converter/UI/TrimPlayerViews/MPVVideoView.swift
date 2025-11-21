@@ -1,186 +1,225 @@
 // Aagedal Media Converter
-// Copyright © 2025 Truls Aagedal
+// Copyright 2025 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
-import QuartzCore
 import OpenGL.GL3
 import OSLog
 
 struct MPVVideoView: NSViewRepresentable {
     let player: MPVPlayer
     
-    func makeNSView(context: Context) -> MPVOpenGLView {
-        let view = MPVOpenGLView()
+    func makeNSView(context: Context) -> MPVOpenGLHostView {
+        guard
+            let format = MPVOpenGLHostView.buildPixelFormat(),
+            let view = MPVOpenGLHostView(frame: .zero, pixelFormat: format)
+        else {
+            fatalError("Failed to create MPVOpenGLHostView")
+        }
         view.player = player
         return view
     }
     
-    func updateNSView(_ nsView: MPVOpenGLView, context: Context) {
-        // Updates handled by player state
+    func updateNSView(_ nsView: MPVOpenGLHostView, context: Context) {
+        // Updates handled via notifications
     }
 }
 
-final class MPVOpenGLView: NSView {
-    var player: MPVPlayer? {
+@MainActor
+final class MPVOpenGLHostView: NSOpenGLView {
+    weak var player: MPVPlayer? {
         didSet {
-            if let player = player {
-                setupPlayer(player)
+            if oldValue !== player {
+                needsMPVInit = true
             }
         }
     }
     
-    private var glLayer: CAOpenGLLayer?
+    private var needsMPVInit = true
+    private var renderFBO: GLuint = 0
+    private var renderTexture: GLuint = 0
+    private var renderSize: CGSize = .zero
+#if DEBUG
+    private var debugSampleFramesRemaining = 8
+#endif
     
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        self.wantsLayer = true
-        setupLayer()
+    override init?(frame frameRect: NSRect, pixelFormat format: NSOpenGLPixelFormat?) {
+        super.init(frame: frameRect, pixelFormat: format)
+        guard openGLContext != nil else { return nil }
+        sharedInit()
     }
     
     required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        self.wantsLayer = true
-        setupLayer()
-    }
-    
-    override func layout() {
-        super.layout()
-        if let layer = self.layer {
-            layer.frame = self.bounds
+        guard let format = MPVOpenGLHostView.buildPixelFormat() else {
+            return nil
         }
+        super.init(frame: .zero, pixelFormat: format)
+        sharedInit()
     }
     
-    private func setupLayer() {
-        let layer = MPVLayer()
-        layer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-        layer.isAsynchronous = true
-        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
-        self.layer = layer
-        self.glLayer = layer
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        destroyRenderTargets()
     }
     
-    private func setupPlayer(_ player: MPVPlayer) {
-        guard let layer = glLayer as? MPVLayer else { return }
-        layer.player = player
-    }
-}
-
-class MPVLayer: CAOpenGLLayer, @unchecked Sendable {
-    weak var player: MPVPlayer?
-    private var isInitialized = false
-    
-    override init() {
-        super.init()
-        self.needsDisplayOnBoundsChange = true
-        // Register for updates
-        NotificationCenter.default.addObserver(self, selector: #selector(needsDraw), name: .mpvRenderUpdate, object: nil)
+    private func sharedInit() {
+        wantsBestResolutionOpenGLSurface = true
+        NotificationCenter.default.addObserver(self, selector: #selector(handleRenderUpdate), name: .mpvRenderUpdate, object: nil)
     }
     
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        NotificationCenter.default.addObserver(self, selector: #selector(needsDraw), name: .mpvRenderUpdate, object: nil)
+    override func prepareOpenGL() {
+        super.prepareOpenGL()
+        openGLContext?.makeCurrentContext()
+        glDisable(GLenum(GL_DITHER))
+        glClearColor(0, 0, 0, 1)
+        needsMPVInit = true
     }
     
-    @objc private func needsDraw() {
-        self.setNeedsDisplay()
+    override func reshape() {
+        super.reshape()
+        openGLContext?.update()
+        needsDisplay = true
     }
     
-    override func copyCGLPixelFormat(forDisplayMask mask: UInt32) -> CGLPixelFormatObj {
-        let attributes: [CGLPixelFormatAttribute] = [
-            kCGLPFAOpenGLProfile, CGLPixelFormatAttribute(kCGLOGLPVersion_3_2_Core.rawValue),
-            kCGLPFAAccelerated,
-            kCGLPFADoubleBuffer,
-            kCGLPFAColorSize, CGLPixelFormatAttribute(24),
-            kCGLPFAAlphaSize, CGLPixelFormatAttribute(8),
-            kCGLPFADepthSize, CGLPixelFormatAttribute(24),
-            kCGLPFAStencilSize, CGLPixelFormatAttribute(8),
-            kCGLPFANoRecovery,
-            CGLPixelFormatAttribute(0)
-        ]
+    @objc private func handleRenderUpdate() {
+        needsDisplay = true
+    }
+    
+    override func draw(_ dirtyRect: NSRect) {
+        guard let context = openGLContext else { return }
+        context.makeCurrentContext()
+        guard let player else { return }
         
-        var pix: CGLPixelFormatObj?
-        var num: GLint = 0
-        CGLChoosePixelFormat(attributes, &pix, &num)
-        return pix!
-    }
-    
-    override func draw(inCGLContext ctx: CGLContextObj, pixelFormat pf: CGLPixelFormatObj, forLayerTime t: CFTimeInterval, displayTime ts: UnsafePointer<CVTimeStamp>?) {
-        guard let player = player else { return }
-        
-        CGLSetCurrentContext(ctx)
-        
-        if !isInitialized {
-            // Initialize MPV render context
+        if needsMPVInit {
             let getProcAddress: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? = { _, name in
-                guard let name = name else { return nil }
-                return dlsym(UnsafeMutableRawPointer(bitPattern: -2), name) // RTLD_DEFAULT = -2
+                guard let name else { return nil }
+                return dlsym(UnsafeMutableRawPointer(bitPattern: -2), name)
             }
-            
             player.initRenderContext(getProcAddress: getProcAddress)
-            isInitialized = true
+            needsMPVInit = false
         }
         
-        // Get FBO
-        var fbo: GLint = 0
-        glGetIntegerv(GLenum(GL_FRAMEBUFFER_BINDING), &fbo)
-        checkGLError(context: "glGetIntegerv(GL_FRAMEBUFFER_BINDING)")
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        let pixelSize = CGSize(width: max(1, round(bounds.width * scale)), height: max(1, round(bounds.height * scale)))
         
-        // Check framebuffer status
-        let status = glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER))
-        if status != GLenum(GL_FRAMEBUFFER_COMPLETE) {
-            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").error("Framebuffer incomplete (fbo=\(fbo)): \(status)")
-            return
-        }
-
-        // Render
-        let bounds = self.bounds
-        let scale = self.contentsScale
-        let pixelSize = CGSize(width: round(bounds.width * scale), height: round(bounds.height * scale))
-        
-        if pixelSize.width > 0 && pixelSize.height > 0 {
-            // Skip rendering to FBO 0 as it causes GL_INVALID_FRAMEBUFFER_OPERATION (1286) in this context
-            if fbo == 0 {
-                // Just clear to BLACK
-                glClearColor(0, 0, 0, 1)
-                glClear(GLenum(GL_COLOR_BUFFER_BIT))
-                return
-            }
-
-            // Explicitly set viewport
-            glViewport(0, 0, GLsizei(pixelSize.width), GLsizei(pixelSize.height))
-            checkGLError(context: "glViewport")
-            
-            // Clear to BLACK
+        guard ensureRenderTargets(for: pixelSize) else {
             glClearColor(0, 0, 0, 1)
             glClear(GLenum(GL_COLOR_BUFFER_BIT))
-            
-            // Log render details occasionally
-            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").debug("Render: fbo=\(fbo) size=\(pixelSize.width)x\(pixelSize.height)")
-            
-            player.render(size: pixelSize, fbo: Int32(fbo))
-            checkGLError(context: "player.render")
-        } else {
-            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVView").warning("Skipping render with invalid size: \(pixelSize.width)x\(pixelSize.height)")
+            context.flushBuffer()
+            return
         }
         
-        glFlush()
-        // CAOpenGLLayer documentation says: "You should not call super's implementation of this method."
-        // super.draw(inCGLContext: ctx, pixelFormat: pf, forLayerTime: t, displayTime: ts)
+        let pxWidth = GLsizei(pixelSize.width)
+        let pxHeight = GLsizei(pixelSize.height)
+        
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), renderFBO)
+        glViewport(0, 0, pxWidth, pxHeight)
+        checkGLError(context: "glViewport")
+        #if DEBUG
+        glClearColor(1, 0, 1, 1)
+        #else
+        glClearColor(0, 0, 0, 1)
+        #endif
+        glClear(GLenum(GL_COLOR_BUFFER_BIT))
+        checkGLError(context: "glClear")
+        
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").debug("Render: fbo=\(self.renderFBO) size=\(pixelSize.width)x\(pixelSize.height)")
+        player.render(size: pixelSize, fbo: Int32(self.renderFBO))
+        checkGLError(context: "player.render")
+        
+#if DEBUG
+        if debugSampleFramesRemaining > 0 {
+            var pixel: [UInt8] = [0, 0, 0, 0]
+            glReadPixels(0, 0, 1, 1, GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), &pixel)
+            checkGLError(context: "glReadPixels")
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").debug("Sampled pixel RGBA=\(pixel)")
+            debugSampleFramesRemaining -= 1
+        }
+#endif
+        
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
+        glViewport(0, 0, pxWidth, pxHeight)
+        glBindFramebuffer(GLenum(GL_READ_FRAMEBUFFER), renderFBO)
+        glBindFramebuffer(GLenum(GL_DRAW_FRAMEBUFFER), 0)
+        glBlitFramebuffer(0, 0, GLint(pxWidth), GLint(pxHeight), 0, 0, GLint(pxWidth), GLint(pxHeight), GLbitfield(GL_COLOR_BUFFER_BIT), GLenum(GL_LINEAR))
+        checkGLError(context: "glBlitFramebuffer")
+        glBindFramebuffer(GLenum(GL_READ_FRAMEBUFFER), 0)
+        
+        context.flushBuffer()
+    }
+
+    private func ensureRenderTargets(for pixelSize: CGSize) -> Bool {
+        if renderFBO != 0 && renderSize == pixelSize {
+            return true
+        }
+        destroyRenderTargets()
+        renderSize = pixelSize
+        let width = GLsizei(pixelSize.width)
+        let height = GLsizei(pixelSize.height)
+        
+        glGenTextures(1, &renderTexture)
+        glBindTexture(GLenum(GL_TEXTURE_2D), renderTexture)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_LINEAR)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), GL_LINEAR)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_S), GL_CLAMP_TO_EDGE)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_T), GL_CLAMP_TO_EDGE)
+        glTexImage2D(GLenum(GL_TEXTURE_2D), 0, GL_RGBA8, width, height, 0, GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), nil)
+        glBindTexture(GLenum(GL_TEXTURE_2D), 0)
+        
+        glGenFramebuffers(1, &renderFBO)
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), renderFBO)
+        glFramebufferTexture2D(GLenum(GL_FRAMEBUFFER), GLenum(GL_COLOR_ATTACHMENT0), GLenum(GL_TEXTURE_2D), renderTexture, 0)
+        
+        let status = glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER))
+        if status != GLenum(GL_FRAMEBUFFER_COMPLETE) {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").error("Render FBO incomplete: \(status)")
+            glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
+            destroyRenderTargets()
+            return false
+        }
+        
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
+        return true
     }
     
+    private func destroyRenderTargets() {
+        if renderFBO != 0 {
+            var fbo = renderFBO
+            glDeleteFramebuffers(1, &fbo)
+            renderFBO = 0
+        }
+        if renderTexture != 0 {
+            var tex = renderTexture
+            glDeleteTextures(1, &tex)
+            renderTexture = 0
+        }
+        renderSize = .zero
+    }
+
     private func checkGLError(context: String) {
         let error = glGetError()
         if error != GLenum(GL_NO_ERROR) {
             Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").error("OpenGL error (\(context)): \(error)")
         }
     }
+    
+    static func buildPixelFormat() -> NSOpenGLPixelFormat? {
+        let attrs: [NSOpenGLPixelFormatAttribute] = [
+            UInt32(NSOpenGLPFAOpenGLProfile), UInt32(NSOpenGLProfileVersion3_2Core),
+            UInt32(NSOpenGLPFADoubleBuffer),
+            UInt32(NSOpenGLPFAAccelerated),
+            UInt32(NSOpenGLPFAColorSize), 24,
+            UInt32(NSOpenGLPFAAlphaSize), 8,
+            UInt32(NSOpenGLPFADepthSize), 24,
+            UInt32(NSOpenGLPFAStencilSize), 8,
+            0
+        ]
+        return NSOpenGLPixelFormat(attributes: attrs)
+    }
 }
 
-extension MPVOpenGLView {
-    override var acceptsFirstResponder: Bool {
-        return true
-    }
+extension MPVOpenGLHostView {
+    override var acceptsFirstResponder: Bool { true }
     
     override func keyDown(with event: NSEvent) {
         if event.charactersIgnoringModifiers == " " {

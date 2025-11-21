@@ -105,6 +105,7 @@ final class LibMPV: @unchecked Sendable {
     static let MPV_RENDER_PARAM_API_TYPE: Int32 = 1
     static let MPV_RENDER_PARAM_OPENGL_INIT_PARAMS: Int32 = 2
     static let MPV_RENDER_PARAM_FLIP_Y: Int32 = 3
+    static let MPV_RENDER_PARAM_OPENGL_FBO: Int32 = 4
     static let MPV_RENDER_API_TYPE_OPENGL = "opengl"
     
     
