@@ -309,10 +309,20 @@ extension PreviewPlayerController {
                         }
                     }
                     
-                    // Try VLC instead of chunk-based fallback
-                    logger.info("Attempting VLC playback as fallback")
-                    self.teardown(resetAudioSelection: false)
-                    self.setupVLC(url: self.videoItem.url, startTime: startTime)
+                    // Check if we should use chunk fallback (e.g. for APV) or VLC
+                    let codec = self.videoItem.metadata?.videoStream?.codec?.lowercased() ?? ""
+                    let codecLong = self.videoItem.metadata?.videoStream?.codecLongName?.lowercased() ?? ""
+                    
+                    if codec.contains("apv") || codecLong.contains("advanced professional video") {
+                        logger.info("AVPlayer failed and codec is APV. Attempting Chunk Fallback.")
+                        self.teardown(resetAudioSelection: false)
+                        self.fallbackToPreview(startTime: startTime)
+                    } else {
+                        // Try VLC for everything else
+                        logger.info("Attempting VLC playback as fallback")
+                        self.teardown(resetAudioSelection: false)
+                        self.setupVLC(url: self.videoItem.url, startTime: startTime)
+                    }
                     
                 case .readyToPlay:
                     let asset = item.asset
@@ -363,9 +373,9 @@ extension PreviewPlayerController {
                                         // Check for truly unsupported codecs
                                         // Only APV codecs are unsupported - all ProRes variants work with AVPlayer
                                         if codecString == "apv1" || codecString == "apvx" {
-                                            logger.warning("AVPlayer ready but codec '\(codecString)' unsupported. Attempting VLC playback.")
+                                            logger.warning("AVPlayer ready but codec '\(codecString)' unsupported. Attempting Chunk Fallback.")
                                             self.teardown(resetAudioSelection: false)
-                                            self.setupVLC(url: self.videoItem.url, startTime: startTime)
+                                            self.fallbackToPreview(startTime: startTime)
                                             return
                                         }
                                     }
