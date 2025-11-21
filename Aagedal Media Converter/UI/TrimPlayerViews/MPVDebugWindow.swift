@@ -24,6 +24,7 @@ class MPVDebugWindowController: NSWindowController {
         window.center()
         
         super.init(window: window)
+        window.delegate = self
         
         setupContent()
     }
@@ -55,5 +56,10 @@ class MPVDebugWindowController: NSWindowController {
         window?.makeKeyAndOrderFront(sender)
     }
     
-
+    func windowWillClose(_ notification: Notification) {
+        player.pause()
+        player.destroy()
+    }
 }
+
+extension MPVDebugWindowController: NSWindowDelegate {}

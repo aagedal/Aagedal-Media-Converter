@@ -183,12 +183,19 @@ final class PreviewPlayerController: ObservableObject {
             }
         }
         
-        // Launch Debug Window
-        DispatchQueue.main.async {
-            let debugWC = MPVDebugWindowController(url: url)
-            debugWC.showWindow(nil)
-            self.debugWindowController = debugWC
-        }
+        
+        // Restore waveform URL (teardown clears it)
+        updateCurrentWaveform()
+        
+        // Launch Debug Window - DISABLED FOR NOW to prevent dual-rendering issues
+        // DispatchQueue.main.async {
+        //     let debugWC = MPVDebugWindowController(url: url)
+        //     debugWC.showWindow(nil)
+        //     self.debugWindowController = debugWC
+        // }
+        
+        // Test OSD
+        mpv.showText("MPV OSD TEST")
     }
 
     /// Determines the preferred ordering of audio stream indices based on metadata (default + channel count).

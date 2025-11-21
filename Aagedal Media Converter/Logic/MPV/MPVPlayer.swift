@@ -29,12 +29,25 @@ final class MPVPlayer: ObservableObject {
     }
     
     deinit {
+        // Cancel event loop
         eventLoopTask?.cancel()
+        
+        if let h = handle {
+            // Signal MPV to terminate - this wakes up mpv_wait_event
+            _ = LibMPV.shared.mpv_command(h, ["quit"])
+        }
+        
+        // Give a brief moment for the event loop to exit cleanly
+        Thread.sleep(forTimeInterval: 0.05)
+        
+        // Free render context before handle
         if let ctx = renderContext {
             LibMPV.shared.mpv_render_context_free(ctx)
         }
+        
+        // Finally destroy handle (frees memory)
         if let h = handle {
-            LibMPV.shared.mpv_terminate_destroy(h)
+            LibMPV.shared.mpv_destroy(h)
         }
     }
     
@@ -48,7 +61,18 @@ final class MPVPlayer: ObservableObject {
         // Configure basic options
         check(lib.mpv_set_option_string(handle, "vo", "libmpv"), context: "set vo=libmpv")
         check(lib.mpv_set_option_string(handle, "hwdec", "auto"), context: "set hwdec=auto")
-        check(lib.mpv_set_option_string(handle, "pause", "yes"), context: "set pause=yes")
+        check(lib.mpv_set_option_string(handle, "pause", "no"), context: "set pause=no")
+        
+        // Force video to scale to full viewport, disable aspect ratio preservation
+        check(lib.mpv_set_option_string(handle, "keepaspect", "no"), context: "set keepaspect=no")
+        check(lib.mpv_set_option_string(handle, "video-unscaled", "no"), context: "set video-unscaled=no")
+        check(lib.mpv_set_option_string(handle, "video-zoom", "0"), context: "set video-zoom=0")
+        check(lib.mpv_set_option_string(handle, "video-align-x", "0"), context: "set video-align-x=0")
+        check(lib.mpv_set_option_string(handle, "video-align-y", "0"), context: "set video-align-y=0")
+        
+        // Enable verbose logging
+        check(lib.mpv_set_option_string(handle, "msg-level", "all=warn,vo=debug,gl=debug"), context: "set msg-level")
+        check(lib.mpv_request_log_messages(handle, "debug"), context: "request log")
         
         // Initialize
         let initResult = lib.mpv_initialize(handle)
@@ -61,13 +85,27 @@ final class MPVPlayer: ObservableObject {
     }
     
     func destroy() {
+        // Cancel event loop first
         eventLoopTask?.cancel()
+        
+        if let h = handle {
+            // Signal MPV to terminate - this wakes up mpv_wait_event
+            _ = LibMPV.shared.mpv_command(h, ["quit"])
+        }
+        
+        // Give a brief moment for the event loop to exit cleanly
+        Thread.sleep(forTimeInterval: 0.05)
+        eventLoopTask = nil
+        
+        // Free render context before destroying handle
         if let ctx = renderContext {
             lib.mpv_render_context_free(ctx)
             renderContext = nil
         }
+        
+        // Finally, destroy the MPV handle
         if let h = handle {
-            lib.mpv_terminate_destroy(h)
+            lib.mpv_destroy(h)
             handle = nil
         }
     }
@@ -115,6 +153,12 @@ final class MPVPlayer: ObservableObject {
         
         let cmd = "seek \(time) absolute"
         check(lib.mpv_command_string(handle, cmd), context: "seek")
+    }
+    
+    func showText(_ text: String) {
+        guard let handle else { return }
+        let cmd = "show-text \"\(text)\" 5000"
+        check(lib.mpv_command_string(handle, cmd), context: "show-text")
     }
     
     // MARK: - Rendering
@@ -167,8 +211,11 @@ final class MPVPlayer: ObservableObject {
     nonisolated func render(size: CGSize, fbo: Int32) {
         guard let ctx = renderContext else { return }
         
+        // Use 0 for internal_format to let MPV/GL decide (fixes squished rendering?)
         var openglFbo = fbo_param(fbo: fbo, w: Int32(size.width), h: Int32(size.height), internal_format: 0)
         var flipY: Int32 = 1
+        
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "MPV").debug("MPV Render: fbo=\(fbo) w=\(Int32(size.width)) h=\(Int32(size.height))")
         
         withUnsafeMutablePointer(to: &openglFbo) { fboPtr in
             withUnsafeMutablePointer(to: &flipY) { flipYPtr in
@@ -223,7 +270,15 @@ final class MPVPlayer: ObservableObject {
             
             while !Task.isCancelled {
                 guard let eventPtr = lib.mpv_wait_event(handle, 1.0) else { continue }
+                
+                // Check cancellation immediately after wake up
+                if Task.isCancelled { break }
+                
                 let event = eventPtr.pointee
+                
+                if event.event_id == 1 { // MPV_EVENT_SHUTDOWN
+                    break
+                }
                 
                 guard event.event_id != 0 else { continue } // .none = 0
                 guard let eventId = mpv_event_id(rawValue: event.event_id) else { continue }

@@ -124,20 +124,56 @@ class MPVLayer: CAOpenGLLayer, @unchecked Sendable {
         // Get FBO
         var fbo: GLint = 0
         glGetIntegerv(GLenum(GL_FRAMEBUFFER_BINDING), &fbo)
+        checkGLError(context: "glGetIntegerv(GL_FRAMEBUFFER_BINDING)")
         
+        // Check framebuffer status
+        let status = glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER))
+        if status != GLenum(GL_FRAMEBUFFER_COMPLETE) {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").error("Framebuffer incomplete (fbo=\(fbo)): \(status)")
+            return
+        }
+
         // Render
         let bounds = self.bounds
         let scale = self.contentsScale
         let pixelSize = CGSize(width: round(bounds.width * scale), height: round(bounds.height * scale))
         
         if pixelSize.width > 0 && pixelSize.height > 0 {
-             player.render(size: pixelSize, fbo: Int32(fbo))
+            // Skip rendering to FBO 0 as it causes GL_INVALID_FRAMEBUFFER_OPERATION (1286) in this context
+            if fbo == 0 {
+                // Just clear to BLACK
+                glClearColor(0, 0, 0, 1)
+                glClear(GLenum(GL_COLOR_BUFFER_BIT))
+                return
+            }
+
+            // Explicitly set viewport
+            glViewport(0, 0, GLsizei(pixelSize.width), GLsizei(pixelSize.height))
+            checkGLError(context: "glViewport")
+            
+            // Clear to BLACK
+            glClearColor(0, 0, 0, 1)
+            glClear(GLenum(GL_COLOR_BUFFER_BIT))
+            
+            // Log render details occasionally
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").debug("Render: fbo=\(fbo) size=\(pixelSize.width)x\(pixelSize.height)")
+            
+            player.render(size: pixelSize, fbo: Int32(fbo))
+            checkGLError(context: "player.render")
         } else {
             Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVView").warning("Skipping render with invalid size: \(pixelSize.width)x\(pixelSize.height)")
         }
         
         glFlush()
-        super.draw(inCGLContext: ctx, pixelFormat: pf, forLayerTime: t, displayTime: ts)
+        // CAOpenGLLayer documentation says: "You should not call super's implementation of this method."
+        // super.draw(inCGLContext: ctx, pixelFormat: pf, forLayerTime: t, displayTime: ts)
+    }
+    
+    private func checkGLError(context: String) {
+        let error = glGetError()
+        if error != GLenum(GL_NO_ERROR) {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "MPVLayer").error("OpenGL error (\(context)): \(error)")
+        }
     }
 }
 

@@ -99,6 +99,7 @@ final class LibMPV: @unchecked Sendable {
     private var _mpv_render_context_update: @convention(c) (mpv_render_context?) -> Void
     private var _mpv_render_context_report_swap: @convention(c) (mpv_render_context?) -> Void
     private var _mpv_render_context_render: @convention(c) (mpv_render_context?, UnsafeMutableRawPointer?) -> Int32 // params is mpv_render_param*
+    private var _mpv_request_log_messages: @convention(c) (mpv_handle?, UnsafePointer<CChar>?) -> Int32
     
     // Render param constants (from mpv/render.h)
     static let MPV_RENDER_PARAM_API_TYPE: Int32 = 1
@@ -246,6 +247,7 @@ final class LibMPV: @unchecked Sendable {
         _mpv_render_context_update = load("mpv_render_context_update")
         _mpv_render_context_report_swap = load("mpv_render_context_report_swap")
         _mpv_render_context_render = load("mpv_render_context_render")
+        _mpv_request_log_messages = load("mpv_request_log_messages")
     }
     
     // MARK: - API Wrappers
@@ -253,7 +255,9 @@ final class LibMPV: @unchecked Sendable {
     func mpv_create() -> mpv_handle? { _mpv_create() }
     func mpv_initialize(_ ctx: mpv_handle?) -> Int32 { _mpv_initialize(ctx) }
     func mpv_destroy(_ ctx: mpv_handle?) { _mpv_destroy(ctx) }
-    func mpv_terminate_destroy(_ ctx: mpv_handle?) { _mpv_terminate_destroy(ctx) }
+    func mpv_terminate_destroy(_ ctx: mpv_handle) {
+        _mpv_terminate_destroy(ctx)
+    }
     
     func mpv_command(_ ctx: mpv_handle?, _ args: [String]) -> Int32 {
         var cArgs = args.map { $0.withCString { UnsafePointer<CChar>(strdup($0)) } }
@@ -344,5 +348,9 @@ final class LibMPV: @unchecked Sendable {
         return terminatedParams.withUnsafeMutableBufferPointer { buffer in
             _mpv_render_context_render(ctx, UnsafeMutableRawPointer(buffer.baseAddress))
         }
+    }
+    
+    func mpv_request_log_messages(_ ctx: mpv_handle?, _ min_level: String) -> Int32 {
+        _mpv_request_log_messages(ctx, min_level)
     }
 }
