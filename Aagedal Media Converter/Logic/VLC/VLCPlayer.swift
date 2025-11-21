@@ -5,12 +5,13 @@
 import Foundation
 import Combine
 import AppKit
-import VLCKit
+@preconcurrency import VLCKit
 import OSLog
 
 @MainActor
 final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
-    let mediaPlayer = VLCMediaPlayer()
+    // Mark as nonisolated(unsafe) to allow access in deinit and from background threads
+    nonisolated(unsafe) let mediaPlayer = VLCMediaPlayer()
     
     @Published var isPlaying = false
     @Published var duration: Double = 0
@@ -74,10 +75,12 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
     
     // MARK: - VLCMediaPlayerDelegate
     
-    nonisolated func mediaPlayerStateChanged(_ aNotification: Notification!) {
+    nonisolated func mediaPlayerStateChanged(_ aNotification: Notification) {
+        // Extract the player safely before dispatching
+        guard let player = aNotification.object as? VLCMediaPlayer else { return }
+        
         Task { @MainActor in
-            guard let player = aNotification.object as? VLCMediaPlayer else { return }
-            
+            // We assume player is safe to use here because we are just reading state
             switch player.state {
             case .playing:
                 self.isPlaying = true
@@ -100,9 +103,10 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
         }
     }
     
-    nonisolated func mediaPlayerTimeChanged(_ aNotification: Notification!) {
+    nonisolated func mediaPlayerTimeChanged(_ aNotification: Notification) {
+        guard let player = aNotification.object as? VLCMediaPlayer else { return }
+        
         Task { @MainActor in
-            guard let player = aNotification.object as? VLCMediaPlayer else { return }
             self.timePos = Double(player.time.intValue) / 1000.0
         }
     }
