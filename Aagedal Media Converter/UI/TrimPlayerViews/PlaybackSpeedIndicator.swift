@@ -18,7 +18,7 @@ struct PlaybackSpeedIndicator: View {
                         .font(.system(size: 14, weight: .semibold))
                 }
                 
-                Text(isReversing ? "REV" : "\(formattedSpeed)×")
+                Text(isReversing ? "REV \(formattedSpeed)×" : "\(formattedSpeed)×")
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
             }
             .foregroundColor(.white)
@@ -33,10 +33,11 @@ struct PlaybackSpeedIndicator: View {
     }
     
     private var formattedSpeed: String {
-        if speed == floor(speed) {
-            return String(format: "%.0f", speed)
+        let absSpeed = abs(speed)
+        if absSpeed == floor(absSpeed) {
+            return String(format: "%.0f", absSpeed)
         } else {
-            return String(format: "%.1f", speed)
+            return String(format: "%.1f", absSpeed)
         }
     }
 }

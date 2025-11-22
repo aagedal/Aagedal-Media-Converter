@@ -26,10 +26,17 @@ final class PreviewPlayerController: ObservableObject {
     @Published var player: AVPlayer?
     @Published var isPreparing = false
     @Published var errorMessage: String?
+    @Published private(set) var currentWaveformURL: URL?
     @Published var currentPlaybackTime: Double = 0
-    @Published var currentPlaybackSpeed: Float = 1.0
-    @Published var isReverseSimulating: Bool = false
+    @Published private(set) var currentPlaybackSpeed: Float = 1.0
+    @Published private(set) var isReverseSimulating: Bool = false
+    
+    // Reverse simulation
+    private var reverseSpeed: Int = 1 // 1x, 2x, 3x, 4x
     private var reverseTimer: Timer?
+    
+    // VLC trim observer
+    var vlcTrimObserverTimer: Timer?
     @Published var previewAssets: PreviewAssets? {
         didSet { updateCurrentWaveform() }
     }
@@ -45,7 +52,6 @@ final class PreviewPlayerController: ObservableObject {
     @Published var pendingChunkTime: Double?
     @Published var loadingChunkIndex: Int?
     @Published var audioTrackOptions: [AudioTrackOption] = []
-    @Published private(set) var currentWaveformURL: URL?
     
     // MARK: - Configuration
     
@@ -103,7 +109,7 @@ final class PreviewPlayerController: ObservableObject {
             preparePreview(startTime: newValue.effectiveTrimStart)
             loadPreviewAssets(for: newValue.url)
         } else if previous.loopPlayback != newValue.loopPlayback {
-            applyLoopSetting()
+            updatePlayerActionAtEnd()
         } else if previous.trimStart != newValue.trimStart || previous.trimEnd != newValue.trimEnd {
             // Trim values changed, reinstall time observer with new boundaries
             if let player = player {
@@ -153,7 +159,7 @@ final class PreviewPlayerController: ObservableObject {
         installLoopObserver(for: playerItem)
         installTimeObserver(for: player)
         installPlaybackTimeObserver(for: player)
-        applyLoopSetting()
+        updatePlayerActionAtEnd()
         loadPreviewAssets(for: currentItem.url)
     }
     
@@ -170,7 +176,16 @@ final class PreviewPlayerController: ObservableObject {
         
         // Load without autostarting
         vlc.load(url: url, autostart: false)
-        vlc.seek(to: startTime)
+        
+        // Seek to start position
+        // IMPORTANT: Seeking can trigger playback on some VLC versions, so pause immediately after
+        if startTime > 0 {
+            vlc.seek(to: startTime)
+            // Ensure we're paused after seek (in case seek triggered playing)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                vlc.pause()
+            }
+        }
         
         // Sync time
         Task { @MainActor [weak self, weak vlc] in
@@ -180,20 +195,37 @@ final class PreviewPlayerController: ObservableObject {
             }
         }
         
-        // Restore waveform URL (teardown clears it)
-        updateCurrentWaveform()
+        // Install VLC trim boundary observer for looping
+        installVLCTrimObserver()
+        
+        // DON'T call updateCurrentWaveform() here!
+        // It will be called automatically via previewAssets.didSet when assets finish loading
     }
     
     // MARK: - Unified Playback Control
     
     func togglePlayback() {
-        stopReverseSimulation()
-        // Reset speed to normal when toggling
-        currentPlaybackSpeed = 1.0
+        // If reversing, K/Space should just stop reverse (stay paused)
+        if isReverseSimulating {
+            stopReverseSimulation()
+            return
+        }
+        
         if useVLC, let vlc = vlcPlayer {
+            // Check if currently playing
+            let wasPlaying = vlc.isPlaying
+            // Reset rate FIRST, ensure it's applied
             vlc.rate = 1.0
-            vlc.togglePause()
+            currentPlaybackSpeed = 1.0
+            
+            if wasPlaying {
+                vlc.pause()
+            } else {
+                // Make sure rate is 1.0 before playing
+                vlc.play()
+            }
         } else if let player = player {
+            currentPlaybackSpeed = 1.0
             if player.rate != 0 {
                 player.pause()
             } else {
@@ -205,12 +237,14 @@ final class PreviewPlayerController: ObservableObject {
     
     func pause() {
         stopReverseSimulation()
-        // Reset speed when pausing
-        currentPlaybackSpeed = 1.0
+        
         if useVLC, let vlc = vlcPlayer {
+            // Reset rate FIRST, then pause
             vlc.rate = 1.0
+            currentPlaybackSpeed = 1.0
             vlc.pause()
         } else {
+            currentPlaybackSpeed = 1.0
             player?.pause()
         }
     }
@@ -234,22 +268,35 @@ final class PreviewPlayerController: ObservableObject {
     }
     
     func startReverseSimulation() {
-        // Stop any existing simulation
-        stopReverseSimulation()
+        // If already reversing, increase speed (max 4x)
+        if isReverseSimulating {
+            reverseSpeed = min(reverseSpeed + 1, 4)
+            // Restart timer with new speed
+            reverseTimer?.invalidate()
+            let interval = (1.0/24.0) / Double(reverseSpeed)
+            reverseTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+                self?.seekByFrames(-1)
+            }
+            currentPlaybackSpeed = -Float(reverseSpeed)
+            return
+        }
         
-        // Pause playback
+        // Start new reverse simulation
         pause()
-        currentPlaybackSpeed = 0
+        reverseSpeed = 1
+        isReverseSimulating = true
+        currentPlaybackSpeed = -1.0
         
         // Start reverse simulation (step backwards at ~24fps)
-        isReverseSimulating = true
-        reverseTimer = Timer.scheduledTimer(withTimeInterval: 1.0/24.0, repeats: true) { [weak self] _ in
+        let interval = 1.0/24.0
+        reverseTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.seekByFrames(-1)
         }
     }
     
     func stopReverseSimulation() {
         isReverseSimulating = false
+        reverseSpeed = 1
         reverseTimer?.invalidate()
         reverseTimer = nil
         // Reset speed when stopping reverse
@@ -264,13 +311,30 @@ final class PreviewPlayerController: ObservableObject {
     }
     
     func fastForward() {
-        // If reversing, slow down the reverse speed
+        // If reversing, L stops reverse
         if isReverseSimulating {
             stopReverseSimulation()
             return
         }
+        
+        // If paused, start playing at 1×
+        if useVLC, let vlc = vlcPlayer {
+            if !vlc.isPlaying {
+                vlc.rate = 1.0
+                currentPlaybackSpeed = 1.0
+                vlc.play()
+                return
+            }
+        } else if let player = player {
+            if player.rate == 0 {
+                player.rate = 1.0
+                currentPlaybackSpeed = 1.0
+                player.play()
+                return
+            }
+        }
+        
         // Otherwise increase forward speed
-        stopReverseSimulation()
         stepRate(forward: true)
     }
     

@@ -38,6 +38,7 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
     }
     
     private var startPaused = false
+    private var hasInitiallyStarted = false // Track if we've done initial pause
     
     func load(url: URL, autostart: Bool = false) {
         // Reset the startPaused flag FIRST to avoid state from previous video
@@ -46,23 +47,22 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
         let media = VLCMedia(url: url)
         mediaPlayer.media = media
         
-        if autostart {
-            mediaPlayer.play()
-        } else {
-            // Play to load metadata/first frame, then pause in delegate
-            startPaused = true
-            mediaPlayer.play()
-        }
+        // ALWAYS start paused for VLC to ensure consistent behavior
+        // Play to load metadata/first frame, then pause in delegate
+        startPaused = true
+        mediaPlayer.play()
     }
     
     func play() {
-        startPaused = false
+        // DON'T clear startPaused here - only pause() should clear it
+        // This prevents external play() calls from bypassing our autostart=false logic
         mediaPlayer.play()
         isPlaying = true
     }
     
     func pause() {
         startPaused = false
+        hasInitiallyStarted = false
         mediaPlayer.pause()
         isPlaying = false
     }
@@ -81,9 +81,9 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
         timePos = 0
     }
     
-    func seek(to time: Double) {
-        let timeObj = VLCTime(int: Int32(time * 1000))
-        mediaPlayer.time = timeObj
+    func seek(to time: TimeInterval) {
+        let position = Float(time / duration)
+        mediaPlayer.position = position
     }
     
     var rate: Float {
@@ -98,14 +98,26 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
         guard let player = aNotification.object as? VLCMediaPlayer else { return }
         
         Task { @MainActor in
-            // We assume player is safe to use here because we are just reading state
+            // Only log important state changes to avoid spam
+            let shouldLog = [5, 6, 7, 8].contains(player.state.rawValue) // playing, paused, stopped, error
+            if shouldLog {
+                print("🎬 VLC state: \(player.state.rawValue), startPaused: \(self.startPaused)")
+            }
+            
             switch player.state {
             case .playing:
-                if self.startPaused {
+                if self.startPaused && !self.hasInitiallyStarted {
+                    print("🎬 VLC auto-pausing (initial load)")
+                    self.hasInitiallyStarted = true
                     self.startPaused = false
-                    player.pause()
+                    // Small delay to ensure media is fully loaded
+                    // Call mediaPlayer.pause() directly to avoid clearing flags via pause() method
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        self.mediaPlayer.pause()
+                    }
                     self.isPlaying = false
                 } else {
+                    if shouldLog { print("🎬 VLC playing normally") }
                     self.isPlaying = true
                     self.startTimeObserver()
                 }

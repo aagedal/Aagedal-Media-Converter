@@ -198,7 +198,7 @@ extension PreviewPlayerController {
         installLoopObserver(for: playerItem)
         installTimeObserver(for: player)
         installPlaybackTimeObserver(for: player)
-        applyLoopSetting()
+        updatePlayerActionAtEnd()
     }
     
     @MainActor

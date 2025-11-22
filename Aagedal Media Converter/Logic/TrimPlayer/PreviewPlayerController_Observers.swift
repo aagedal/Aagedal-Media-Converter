@@ -40,8 +40,49 @@ extension PreviewPlayerController {
         }
     }
 
-    func applyLoopSetting() {
+    private func updateLoopBehavior() {
+        // VLC loop not yet implemented - will need playback end notification
+        guard videoItem.loopPlayback, let player else { return }
+        player.actionAtItemEnd = .none
+    }
+    
+    func updatePlayerActionAtEnd() {
+        // VLC loop is handled via installVLCTrimObserver
         player?.actionAtItemEnd = videoItem.loopPlayback ? .none : .pause
+    }
+    
+    // MARK: - VLC Trim Observer
+    
+    func installVLCTrimObserver() {
+        removeVLCTrimObserver()
+        
+        guard useVLC, let vlc = vlcPlayer else { return }
+        
+        // Check playback position every 0.1 seconds
+        vlcTrimObserverTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let vlc = self.vlcPlayer else { return }
+                
+                // Only loop if actually playing (not paused)
+                guard vlc.isPlaying else { return }
+                guard self.videoItem.loopPlayback else { return }
+                
+                let currentTime = vlc.timePos
+                let trimStart = self.videoItem.effectiveTrimStart
+                let trimEnd = self.videoItem.effectiveTrimEnd
+                let tolerance = 0.05
+                
+                // If we've reached the end trim, seek back to start
+                if currentTime >= trimEnd - tolerance {
+                    vlc.seek(to: trimStart)
+                }
+            }
+        }
+    }
+    
+    func removeVLCTrimObserver() {
+        vlcTrimObserverTimer?.invalidate()
+        vlcTrimObserverTimer = nil
     }
     
     // MARK: - Time Observer (Trim Boundaries)
