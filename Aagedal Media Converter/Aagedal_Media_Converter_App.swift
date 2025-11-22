@@ -44,6 +44,7 @@ struct Aagedal_Media_Converter_App: App {
                 ContentView()
             }
         }
+        .handlesExternalEvents(matching: []) // Prevent automatic window creation for opened files
         .windowStyle(.automatic)
         .windowToolbarStyle(.automatic)
         .windowResizability(.contentMinSize)
@@ -125,6 +126,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     // IMPORTANT: Pass 'item' as sender so SwiftUI knows which command to trigger
                     NSApp.sendAction(action, to: item.target, from: item)
                 }
+            }
+        }
+    }
+    
+    // MARK: - Handle files dropped on dock icon
+    func application(_ application: NSApplication, open urls: [URL]) {
+        // Filter for supported video files only
+        let videoURLs = urls.filter { VideoFileUtils.isVideoFile(url: $0) }
+        
+        guard !videoURLs.isEmpty else { return }
+        
+        // Check if there are any visible windows
+        let visibleWindows = NSApp.windows.filter { $0.isVisible && $0.canBecomeKey }
+        
+        if visibleWindows.isEmpty {
+            // No windows open - let SwiftUI create a new window and add files there
+            // We need to delay posting notifications until the new window is created
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                for url in videoURLs {
+                    NotificationCenter.default.post(name: .enqueueFileURL, object: url)
+                }
+            }
+        } else {
+            // Windows exist - bring the frontmost one forward and add files there
+            if let frontWindow = visibleWindows.first {
+                frontWindow.makeKeyAndOrderFront(nil)
+            }
+            
+            // Post notifications for the existing window(s)
+            for url in videoURLs {
+                NotificationCenter.default.post(name: .enqueueFileURL, object: url)
             }
         }
     }
