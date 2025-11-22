@@ -198,23 +198,21 @@ final class PreviewPlayerController: ObservableObject {
         // We do this even for startTime == 0 to ensure consistent paused state
         vlc.seek(to: startTime)
         
-        // Mute before force-play to avoid startup sound
+        // Mute before force-render to prevent audio burst
         vlc.isMuted = true
         
-        // Force a brief play to render the first frame (prevents black screen)
+        // Force a brief play to render the first frame (black frame fix)
         vlc.play()
         
-        // Ensure we're paused after a short delay to allow rendering
-        // Increased to 0.25s to ensure the frame is actually drawn
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        // Wait briefly for frame to render, then pause and unmute
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self, weak vlc] in
+            guard let self, let vlc else { return }
             vlc.pause()
-            
-            // Seek back to the exact start time (since play() advanced it slightly)
-            // This ensures we show the FIRST frame, not the second
-            vlc.seek(to: startTime)
-            
-            // Unmute after we're paused and back at start
+            vlc.seek(to: startTime) // Seek back to start to ensure we are on the first frame, not the second
             vlc.isMuted = false
+            
+            // Refresh audio tracks now that VLC has likely parsed the media
+            self.refreshAudioTrackOptions(for: self.videoItem, playerItem: nil)
             
             // Double-check pause state after another small delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -426,26 +424,33 @@ final class PreviewPlayerController: ObservableObject {
         Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let metadata: VideoMetadata?
-            if let cached = item.metadata {
-                metadata = cached
+            if useVLC {
+                guard let vlc = vlcPlayer else { return }
+                let names = vlc.audioTrackNames
+                let indexes = vlc.audioTrackIndexes
+                buildVLCAudioTrackOptions(names: names, indexes: indexes)
             } else {
-                metadata = try? await VideoMetadataService.shared.metadata(for: item.url)
-            }
+                let metadata: VideoMetadata?
+                if let cached = item.metadata {
+                    metadata = cached
+                } else {
+                    metadata = try? await VideoMetadataService.shared.metadata(for: item.url)
+                }
 
-            let orderedIndices = metadata.map { self.orderAudioStreams(from: $0) } ?? []
-            let mediaGroup: AVMediaSelectionGroup?
-            if let playerItem {
-                mediaGroup = try? await playerItem.asset.loadMediaSelectionGroup(for: .audible)
-            } else {
-                mediaGroup = nil
-            }
+                let orderedIndices = metadata.map { self.orderAudioStreams(from: $0) } ?? []
+                let mediaGroup: AVMediaSelectionGroup?
+                if let playerItem {
+                    mediaGroup = try? await playerItem.asset.loadMediaSelectionGroup(for: .audible)
+                } else {
+                    mediaGroup = nil
+                }
 
-            if !orderedIndices.isEmpty {
-                self.previewAudioStreamIndices = orderedIndices
-            }
+                if !orderedIndices.isEmpty {
+                    self.previewAudioStreamIndices = orderedIndices
+                }
 
-            self.buildAudioTrackOptions(metadata: metadata, orderedIndices: orderedIndices, mediaGroup: mediaGroup)
+                self.buildAudioTrackOptions(metadata: metadata, orderedIndices: orderedIndices, mediaGroup: mediaGroup)
+            }
 
             if self.audioTrackOptions.isEmpty {
                 self.selectedAudioTrackOrderIndex = 0
@@ -521,6 +526,52 @@ final class PreviewPlayerController: ObservableObject {
 
         audioTrackOptions = options
     }
+    
+    private func buildVLCAudioTrackOptions(names: [String], indexes: [Int32]) {
+        var options: [AudioTrackOption] = []
+        
+        // VLC returns tracks including "Disable" (id -1).
+        // We want to skip "Disable" for our list, or handle it differently.
+        // Usually "Disable" is index 0.
+        
+        for (index, trackID) in indexes.enumerated() {
+            if trackID == -1 { continue } // Skip "Disable" track
+            
+            let name = index < names.count ? names[index] : "Track \(trackID)"
+            
+            // Try to match with metadata if possible, but VLC names are usually descriptive enough
+            // or just "Track 1", "Track 2"
+            
+            // We use the index in the 'indexes' array as the ID for now, or the trackID itself?
+            // AudioTrackOption expects 'id' to be Int.
+            // We'll use the trackID as the ID.
+            
+            // Position in our UI list (0-based)
+            let position = options.count
+            
+            options.append(
+                AudioTrackOption(
+                    id: Int(trackID),
+                    position: position,
+                    streamIndex: Int(trackID) - 1, // VLC track IDs are 1-based, waveforms are 0-based
+                    mediaOptionIndex: nil,
+                    title: name,
+                    subtitle: nil // Could try to fetch more info if available
+                )
+            )
+        }
+        
+        audioTrackOptions = options
+        
+        // Update selection if needed
+        if !audioTrackOptions.isEmpty {
+             // If we have a stored selection, try to maintain it?
+             // For now, default to 0 if out of bounds
+             if selectedAudioTrackOrderIndex >= audioTrackOptions.count {
+                 selectedAudioTrackOrderIndex = 0
+             }
+        }
+    }
 
     private func formattedAudioTrackTitle(for stream: VideoMetadata.AudioStream, position: Int) -> String {
         var components: [String] = []
@@ -558,44 +609,94 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     private func applySelectedAudioTrack() {
-        if usePreviewFallback {
+        if useVLC {
+            applySelectedAudioTrackToVLC()
+        } else if usePreviewFallback {
             refreshFallbackAudioSelection()
         } else {
             applySelectedAudioTrackToCurrentPlayerItem()
         }
         updateCurrentWaveform()
     }
+    
+    private func applySelectedAudioTrackToVLC() {
+        guard let vlc = vlcPlayer else {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview").error("applySelectedAudioTrackToVLC: vlcPlayer is nil")
+            return
+        }
+        
+        let indexes = vlc.audioTrackIndexes
+        let names = vlc.audioTrackNames
+        
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+            .debug("applySelectedAudioTrackToVLC: indexes=\(indexes), names=\(names), selectedOrderIndex=\(self.selectedAudioTrackOrderIndex)")
+        
+        // VLC usually has [-1, 1, 2, ...] where -1 is "Disable"
+        // Our selectedAudioTrackOrderIndex is 0-based for actual tracks
+        // So we want indexes[selectedAudioTrackOrderIndex + 1]
+        
+        // Check if we have enough indexes (need at least 1 for Disable + 1 for first track)
+        // If selectedAudioTrackOrderIndex is 0, we need index 1.
+        let vlcIndex = selectedAudioTrackOrderIndex + 1
+        
+        if vlcIndex < indexes.count {
+            let trackID = indexes[vlcIndex]
+            vlc.currentAudioTrackIndex = trackID
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                .debug("Selected VLC audio track ID: \(trackID) (name: \(vlcIndex < names.count ? names[vlcIndex] : "?"))")
+        } else {
+             Logger(subsystem: "com.aagedal.MediaConverter", category: "Preview")
+                .warning("Could not map audio track index \(self.selectedAudioTrackOrderIndex) to VLC indexes: \(indexes)")
+        }
+    }
 
     private func applySelectedAudioTrackToCurrentPlayerItem() {
-        guard !usePreviewFallback,
-              !audioTrackOptions.isEmpty,
-              let playerItem = player?.currentItem else { return }
+        if usePreviewFallback {
+            // Fallback preview (chunk based)
+            let orderedIndices = previewAudioStreamIndices
+            buildAudioTrackOptions(metadata: videoItem.metadata, orderedIndices: orderedIndices, mediaGroup: nil)
+        } else {
+            // AVPlayer
+            guard let playerItem = player?.currentItem else { return }
+            
+            Task { @MainActor [weak self, weak playerItem] in
+                guard let self, let playerItem else { return }
+                
+                var mediaGroup: AVMediaSelectionGroup?
+                do {
+                    mediaGroup = try await playerItem.asset.loadMediaSelectionGroup(for: .audible)
+                } catch {
+                    // ignore
+                }
+                
+                // If we have metadata, use it to enrich the options
+                // We assume the metadata audio streams match the player item tracks roughly in order
+                // But AVPlayer tracks might be different if it merged them
+                
+                // For now, we pass the metadata and let the builder try to match
+                // If mediaGroup is nil or empty, we might still want to show something if we have metadata?
+                // But if AVPlayer is active, we should rely on what AVPlayer sees.
+                
+                self.buildAudioTrackOptions(metadata: self.videoItem.metadata, orderedIndices: [], mediaGroup: mediaGroup)
 
-        let desiredPosition = min(max(selectedAudioTrackOrderIndex, 0), audioTrackOptions.count - 1)
+                // Now apply the selection based on the built options
+                guard !self.audioTrackOptions.isEmpty, let mediaGroup, !mediaGroup.options.isEmpty else { return }
 
-        Task { @MainActor [weak playerItem, weak self] in
-            guard let self, let playerItem else { return }
-            let mediaGroup: AVMediaSelectionGroup?
-            do {
-                mediaGroup = try await playerItem.asset.loadMediaSelectionGroup(for: .audible)
-            } catch {
-                return
-            }
-            guard let mediaGroup, !mediaGroup.options.isEmpty else { return }
+                let desiredPosition = min(max(self.selectedAudioTrackOrderIndex, 0), self.audioTrackOptions.count - 1)
+                let option = self.audioTrackOptions[min(desiredPosition, self.audioTrackOptions.count - 1)]
+                let optionIndex: Int
+                if let mappedIndex = option.mediaOptionIndex, mediaGroup.options.indices.contains(mappedIndex) {
+                    optionIndex = mappedIndex
+                } else {
+                    optionIndex = min(desiredPosition, mediaGroup.options.count - 1)
+                }
 
-            let option = self.audioTrackOptions[min(desiredPosition, self.audioTrackOptions.count - 1)]
-            let optionIndex: Int
-            if let mappedIndex = option.mediaOptionIndex, mediaGroup.options.indices.contains(mappedIndex) {
-                optionIndex = mappedIndex
-            } else {
-                optionIndex = min(desiredPosition, mediaGroup.options.count - 1)
-            }
+                guard mediaGroup.options.indices.contains(optionIndex) else { return }
+                let selectedOption = mediaGroup.options[optionIndex]
 
-            guard mediaGroup.options.indices.contains(optionIndex) else { return }
-            let selectedOption = mediaGroup.options[optionIndex]
-
-            if playerItem.currentMediaSelection.selectedMediaOption(in: mediaGroup) != selectedOption {
-                playerItem.select(selectedOption, in: mediaGroup)
+                if playerItem.currentMediaSelection.selectedMediaOption(in: mediaGroup) != selectedOption {
+                    playerItem.select(selectedOption, in: mediaGroup)
+                }
             }
         }
     }

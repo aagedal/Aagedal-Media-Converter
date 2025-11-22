@@ -100,6 +100,21 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
         set { mediaPlayer.rate = newValue }
     }
     
+    // MARK: - Audio Tracks
+    
+    var audioTrackNames: [String] {
+        return mediaPlayer.audioTrackNames as? [String] ?? []
+    }
+    
+    var audioTrackIndexes: [Int32] {
+        return (mediaPlayer.audioTrackIndexes as? [NSNumber])?.map { $0.int32Value } ?? []
+    }
+    
+    var currentAudioTrackIndex: Int32 {
+        get { mediaPlayer.currentAudioTrackIndex }
+        set { mediaPlayer.currentAudioTrackIndex = newValue }
+    }
+    
     // MARK: - VLCMediaPlayerDelegate
     
     nonisolated func mediaPlayerStateChanged(_ aNotification: Notification) {
@@ -126,7 +141,11 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
                     }
                     self.isPlaying = false
                 } else {
-                    if shouldLog { print("🎬 VLC playing normally") }
+                    if shouldLog {
+                        print("🎬 VLC playing normally")
+                        // Log available audio tracks
+                        print("🎬 VLC Audio Tracks: \(self.mediaPlayer.audioTrackIndexes ?? []) names: \(self.mediaPlayer.audioTrackNames ?? [])")
+                    }
                     self.isPlaying = true
                     self.startTimeObserver()
                 }
