@@ -23,6 +23,22 @@ final class PreviewPlayerController: ObservableObject {
 
     // MARK: - Published State
     
+    @Published var volume: Double = 100 {
+        didSet {
+            // Only apply if VLC is active
+            if useVLC, let vlcPlayer {
+                vlcPlayer.volume = volume
+            }
+        }
+    }
+    @Published var isMuted: Bool = false {
+        didSet {
+            // Only apply if VLC is active
+            if useVLC, let vlcPlayer {
+                vlcPlayer.isMuted = isMuted
+            }
+        }
+    }
     @Published var player: AVPlayer?
     @Published var isPreparing = false
     @Published var errorMessage: String?
@@ -179,11 +195,30 @@ final class PreviewPlayerController: ObservableObject {
         
         // Seek to start position
         // IMPORTANT: Seeking can trigger playback on some VLC versions, so pause immediately after
-        if startTime > 0 {
+        // We do this even for startTime == 0 to ensure consistent paused state
+        vlc.seek(to: startTime)
+        
+        // Mute before force-play to avoid startup sound
+        vlc.isMuted = true
+        
+        // Force a brief play to render the first frame (prevents black screen)
+        vlc.play()
+        
+        // Ensure we're paused after a short delay to allow rendering
+        // Increased to 0.25s to ensure the frame is actually drawn
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            vlc.pause()
+            
+            // Seek back to the exact start time (since play() advanced it slightly)
+            // This ensures we show the FIRST frame, not the second
             vlc.seek(to: startTime)
-            // Ensure we're paused after seek (in case seek triggered playing)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                vlc.pause()
+            
+            // Unmute after we're paused and back at start
+            vlc.isMuted = false
+            
+            // Double-check pause state after another small delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                if vlc.isPlaying { vlc.pause() }
             }
         }
         
@@ -197,6 +232,10 @@ final class PreviewPlayerController: ObservableObject {
         
         // Install VLC trim boundary observer for looping
         installVLCTrimObserver()
+        
+        // Reload preview assets (teardown() clears them when switching from AVPlayer)
+        // This uses the cache so it's instant
+        loadPreviewAssets(for: url)
         
         // DON'T call updateCurrentWaveform() here!
         // It will be called automatically via previewAssets.didSet when assets finish loading
@@ -871,17 +910,27 @@ final class PreviewPlayerController: ObservableObject {
         previewAssetTask = Task { [weak self] in
             guard let self else { return }
             do {
-                if let cached = await PreviewAssetGenerator.shared.cachedAssetsIfPresent(for: url),
-                   !cached.thumbnails.isEmpty || cached.waveform != nil || !cached.audioWaveforms.isEmpty {
+                // 1. Try to load cached assets first for immediate display
+                if let cached = await PreviewAssetGenerator.shared.cachedAssetsIfPresent(for: url) {
                     self.previewAssets = cached
-                    self.isLoadingPreviewAssets = false
-                    return
+                    
+                    // 2. If we have a waveform, we're good! Return early.
+                    if cached.waveform != nil {
+                        self.isLoadingPreviewAssets = false
+                        return
+                    }
+                    // If waveform is missing, continue to generateAssets to get the rest
                 }
+                
+                // 3. Generate full assets (waits for existing task if running)
                 let assets = try await PreviewAssetGenerator.shared.generateAssets(for: url)
                 try Task.checkCancellation()
                 self.previewAssets = assets
             } catch {
-                self.previewAssets = nil
+                // Only clear assets if we don't have any (don't wipe partial cache on error)
+                if self.previewAssets == nil {
+                    self.previewAssets = nil
+                }
                 if (error as? CancellationError) == nil {
                     Logger(subsystem: "com.aagedal.MediaConverter", category: "PreviewAssets").error("Failed to load preview assets for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }

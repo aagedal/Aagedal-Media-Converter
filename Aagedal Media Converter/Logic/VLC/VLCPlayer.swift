@@ -16,7 +16,16 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
     @Published var isPlaying = false
     @Published var duration: Double = 0
     @Published var timePos: Double = 0
-    @Published var volume: Double = 100
+    @Published var volume: Double = 100 {
+        didSet {
+            mediaPlayer.audio?.volume = Int32(volume)
+        }
+    }
+    @Published var isMuted: Bool = false {
+        didSet {
+            mediaPlayer.audio?.isMuted = isMuted
+        }
+    }
     @Published var isSeekable = false
     @Published var isBusy = false
     @Published var error: String?

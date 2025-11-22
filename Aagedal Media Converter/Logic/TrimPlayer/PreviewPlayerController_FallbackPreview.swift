@@ -58,6 +58,9 @@ extension PreviewPlayerController {
 
         let currentItem = videoItem
         
+        // Reload preview assets (teardown() clears them when switching from AVPlayer)
+        loadPreviewAssets(for: currentItem.url)
+        
         // Use the same fingerprint-based cache directory as preview assets
         Task { @MainActor in
             do {
