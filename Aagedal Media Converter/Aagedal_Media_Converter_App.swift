@@ -10,9 +10,12 @@
 import SwiftUI
 import SwiftData
 import AppKit
+import OSLog
 
 @main
 struct Aagedal_Media_Converter_App: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     init() {
         UserDefaults.standard.register(defaults: [
             AppConstants.watchFolderIgnoreOlderThan24hKey: false,
@@ -83,6 +86,46 @@ private extension Aagedal_Media_Converter_App {
 
         Task {
             await PreviewAssetGenerator.shared.applyCleanupPolicy(policy)
+        }
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    private var isFirstActivation = true
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Ignore the first activation (app launch) to avoid conflict with default SwiftUI window creation
+        if isFirstActivation {
+            isFirstActivation = false
+            return
+        }
+
+        let visibleWindows = NSApp.windows.filter { $0.isVisible }
+
+        // If there are no visible windows, open a new one
+        if visibleWindows.isEmpty {
+            var foundItem: NSMenuItem?
+            
+            if let mainMenu = NSApp.mainMenu {
+                for item in mainMenu.items {
+                    if let submenu = item.submenu {
+                        for subitem in submenu.items {
+                            if subitem.keyEquivalent == "n" && subitem.keyEquivalentModifierMask.contains(.command) {
+                                foundItem = subitem
+                                break
+                            }
+                        }
+                    }
+                    if foundItem != nil { break }
+                }
+            }
+            
+            if let item = foundItem, let action = item.action {
+                 DispatchQueue.main.async {
+                    // IMPORTANT: Pass 'item' as sender so SwiftUI knows which command to trigger
+                    NSApp.sendAction(action, to: item.target, from: item)
+                }
+            }
         }
     }
 }

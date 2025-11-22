@@ -144,7 +144,7 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
                     if shouldLog {
                         print("🎬 VLC playing normally")
                         // Log available audio tracks
-                        print("🎬 VLC Audio Tracks: \(self.mediaPlayer.audioTrackIndexes ?? []) names: \(self.mediaPlayer.audioTrackNames ?? [])")
+                        print("🎬 VLC Audio Tracks: \(self.mediaPlayer.audioTrackIndexes) names: \(self.mediaPlayer.audioTrackNames)")
                     }
                     self.isPlaying = true
                     self.startTimeObserver()

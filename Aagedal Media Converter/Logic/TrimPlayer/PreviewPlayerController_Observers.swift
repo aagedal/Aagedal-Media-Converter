@@ -56,7 +56,7 @@ extension PreviewPlayerController {
     func installVLCTrimObserver() {
         removeVLCTrimObserver()
         
-        guard useVLC, let vlc = vlcPlayer else { return }
+        guard useVLC, vlcPlayer != nil else { return }
         
         // Check playback position every 0.1 seconds
         vlcTrimObserverTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in

@@ -312,7 +312,9 @@ final class PreviewPlayerController: ObservableObject {
             reverseTimer?.invalidate()
             let interval = (1.0/24.0) / Double(reverseSpeed)
             reverseTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-                self?.seekByFrames(-1)
+                Task { @MainActor in
+                    self?.seekByFrames(-1)
+                }
             }
             currentPlaybackSpeed = -Float(reverseSpeed)
             return
@@ -327,7 +329,9 @@ final class PreviewPlayerController: ObservableObject {
         // Start reverse simulation (step backwards at ~24fps)
         let interval = 1.0/24.0
         reverseTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.seekByFrames(-1)
+            Task { @MainActor in
+                self?.seekByFrames(-1)
+            }
         }
     }
     
