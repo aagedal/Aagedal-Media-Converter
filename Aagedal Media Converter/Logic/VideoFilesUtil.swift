@@ -151,8 +151,12 @@ struct VideoFileUtils: Sendable {
 
             guard durationSeconds > 0 else { return }
 
-            if await isNativelySupported(url) {
-                print(" [prefetchPreviewAssets] File is natively supported, skipping initial chunk generation for \(fileName)")
+            // Only generate chunks for files that aren't supported by AVPlayer OR VLC
+            // This means chunks are only for fallback chunk-based rendering
+            let isNative = await isNativelySupported(url)
+            let isVLC = await isVLCSupported(url)
+            if isNative || isVLC {
+                print(" [prefetchPreviewAssets] File is supported by AVPlayer or VLC, skipping chunk generation for \(fileName)")
                 return
             }
 
@@ -430,6 +434,40 @@ struct VideoFileUtils: Sendable {
         } catch {
             return false
         }
+    }
+    
+    private static func isVLCSupported(_ url: URL) async -> Bool {
+        // VLC supports most formats that AVPlayer doesn't, EXCEPT APV
+        // Check if it's APV first (APV needs chunk fallback)
+        let asset = AVURLAsset(url: url)
+        do {
+            let tracks = try await asset.loadTracks(withMediaType: .video)
+            for track in tracks {
+                let formats = try await track.load(.formatDescriptions) as [CMFormatDescription]
+                for desc in formats {
+                    let codec = CMFormatDescriptionGetMediaSubType(desc)
+                    let codecBytes: [UInt8] = [
+                        UInt8((codec >> 24) & 0xFF),
+                        UInt8((codec >> 16) & 0xFF),
+                        UInt8((codec >> 8) & 0xFF),
+                        UInt8(codec & 0xFF)
+                    ]
+                   if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters) {
+                        // APV is NOT supported by VLC
+                        if fourCC == "apv1" || fourCC == "apvx" {
+                            return false
+                        }
+                    }
+                }
+            }
+        } catch {
+            // If we can't inspect, assume VLC can handle it
+            return true
+        }
+        
+        // If it's not natively supported and not APV, VLC can likely play it
+        let isNative = await isNativelySupported(url)
+        return !isNative
     }
 }
 

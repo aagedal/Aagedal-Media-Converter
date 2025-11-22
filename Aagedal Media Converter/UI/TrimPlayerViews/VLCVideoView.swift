@@ -40,11 +40,8 @@ struct VLCVideoView: NSViewRepresentable {
                 guard let self = self else { return event }
                 guard let characters = event.charactersIgnoringModifiers, !characters.isEmpty else { return event }
                 
-                // Only handle if this window is key
-                let window = event.window
-                let isKey = MainActor.assumeIsolated { window?.isKeyWindow == true }
-                guard isKey else { return event }
-                
+                // VLC view may not have proper window focusing, so process all events
+                // The handler will  decide if it should be handled
                 let handled = self.keyHandler(characters, event.modifierFlags, event.specialKey)
                 return handled ? nil : event
             }

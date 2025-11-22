@@ -40,11 +40,13 @@ final class VLCPlayer: NSObject, ObservableObject, VLCMediaPlayerDelegate {
     private var startPaused = false
     
     func load(url: URL, autostart: Bool = false) {
+        // Reset the startPaused flag FIRST to avoid state from previous video
+        startPaused = false
+        
         let media = VLCMedia(url: url)
         mediaPlayer.media = media
         
         if autostart {
-            startPaused = false
             mediaPlayer.play()
         } else {
             // Play to load metadata/first frame, then pause in delegate

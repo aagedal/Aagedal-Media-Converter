@@ -219,10 +219,10 @@ struct PreviewPlayerView: View {
                 return true
             }
         } else if specialKey == .leftArrow {
-            controller.seek(by: -5)
+            controller.seekByFrames(-1)
             return true
         } else if specialKey == .rightArrow {
-            controller.seek(by: 5)
+            controller.seekByFrames(1)
             return true
         }
 

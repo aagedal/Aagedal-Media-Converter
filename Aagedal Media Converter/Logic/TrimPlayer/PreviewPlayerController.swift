@@ -157,6 +157,9 @@ final class PreviewPlayerController: ObservableObject {
     var debugWindowController: Any? // Holds strong reference to keep window alive
 
     func setupVLC(url: URL, startTime: Double) {
+        // Explicitly nil the player to prevent key consumption
+        player = nil
+        
         let vlc = VLCPlayer()
         self.vlcPlayer = vlc
         self.useVLC = true
@@ -229,8 +232,20 @@ final class PreviewPlayerController: ObservableObject {
     
     func seek(by seconds: Double) {
         let currentTime = getCurrentTime() ?? videoItem.effectiveTrimStart
-        let newTime = max(0, min(currentTime + seconds, videoItem.durationSeconds))
-        seekTo(newTime)
+        let newTime = currentTime + seconds
+        seekTo(max(videoItem.effectiveTrimStart, min(newTime, videoItem.effectiveTrimEnd)))
+    }
+    
+    func seekByFrames(_ frameCount: Int) {
+        // Calculate seconds per frame from video metadata
+        if let frameRate = videoItem.metadata?.videoStream?.frameRate,
+           let frameRateValue = frameRate.value, frameRateValue > 0 {
+            let secondsPerFrame = 1.0 / frameRateValue
+            seek(by: Double(frameCount) * secondsPerFrame)
+        } else {
+            // Fallback to 1/30th second if no frame rate available
+            seek(by: Double(frameCount) / 30.0)
+        }
     }
 
     /// Determines the preferred ordering of audio stream indices based on metadata (default + channel count).
@@ -608,21 +623,12 @@ final class PreviewPlayerController: ObservableObject {
     }
     
     func getCurrentTime() -> TimeInterval? {
-        guard let player else { return nil }
-        let currentTime = player.currentTime()
-        guard currentTime.seconds.isFinite else { return nil }
-        
-        // For composition-based playback, time is already absolute
-        if usePreviewFallback, composition != nil {
-            return currentTime.seconds
-        }
-        
-        // For legacy chunked playback, calculate absolute time
-        if usePreviewFallback, let previewRange = fallbackPreviewRange {
-            return previewRange.lowerBound + currentTime.seconds
-        }
-        
-        return currentTime.seconds
+        // Return the UI's current playhead position
+        // This is the authoritative source - it updates when:
+        // - Player is playing (continuously synced from player)
+        // - User drags the playhead (set by UI)
+        // - User seeks with keyboard (updated before seeking)
+        return currentPlaybackTime
     }
     
     func isChunkAvailable(for time: Double) -> Bool {
