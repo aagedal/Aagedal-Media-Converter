@@ -27,6 +27,9 @@ final class PreviewPlayerController: ObservableObject {
     @Published var isPreparing = false
     @Published var errorMessage: String?
     @Published var currentPlaybackTime: Double = 0
+    @Published var currentPlaybackSpeed: Float = 1.0
+    @Published var isReverseSimulating: Bool = false
+    private var reverseTimer: Timer?
     @Published var previewAssets: PreviewAssets? {
         didSet { updateCurrentWaveform() }
     }
@@ -184,19 +187,28 @@ final class PreviewPlayerController: ObservableObject {
     // MARK: - Unified Playback Control
     
     func togglePlayback() {
+        stopReverseSimulation()
+        // Reset speed to normal when toggling
+        currentPlaybackSpeed = 1.0
         if useVLC, let vlc = vlcPlayer {
+            vlc.rate = 1.0
             vlc.togglePause()
         } else if let player = player {
             if player.rate != 0 {
                 player.pause()
             } else {
+                player.rate = 1.0
                 player.play()
             }
         }
     }
     
     func pause() {
+        stopReverseSimulation()
+        // Reset speed when pausing
+        currentPlaybackSpeed = 1.0
         if useVLC, let vlc = vlcPlayer {
+            vlc.rate = 1.0
             vlc.pause()
         } else {
             player?.pause()
@@ -210,23 +222,55 @@ final class PreviewPlayerController: ObservableObject {
             let step: Float = 0.5
             let newRate = forward ? current + step : current - step
             vlc.rate = max(0.25, min(newRate, 4.0))
+            currentPlaybackSpeed = vlc.rate
         } else if let player = player {
             // AVPlayer rate stepping
             let current = player.rate
             let step: Float = 1.0
             let newRate = forward ? current + step : current - step
             player.rate = newRate
+            currentPlaybackSpeed = player.rate
+        }
+    }
+    
+    func startReverseSimulation() {
+        // Stop any existing simulation
+        stopReverseSimulation()
+        
+        // Pause playback
+        pause()
+        currentPlaybackSpeed = 0
+        
+        // Start reverse simulation (step backwards at ~24fps)
+        isReverseSimulating = true
+        reverseTimer = Timer.scheduledTimer(withTimeInterval: 1.0/24.0, repeats: true) { [weak self] _ in
+            self?.seekByFrames(-1)
+        }
+    }
+    
+    func stopReverseSimulation() {
+        isReverseSimulating = false
+        reverseTimer?.invalidate()
+        reverseTimer = nil
+        // Reset speed when stopping reverse
+        if !isReverseSimulating {
+            currentPlaybackSpeed = 1.0
         }
     }
     
     func rewind() {
-        // J key behavior: If playing forward, slow down or reverse. If paused, reverse.
-        // For simplicity, let's just step rate backwards
+        stopReverseSimulation()
         stepRate(forward: false)
     }
     
     func fastForward() {
-        // L key behavior: Increase rate
+        // If reversing, slow down the reverse speed
+        if isReverseSimulating {
+            stopReverseSimulation()
+            return
+        }
+        // Otherwise increase forward speed
+        stopReverseSimulation()
         stepRate(forward: true)
     }
     

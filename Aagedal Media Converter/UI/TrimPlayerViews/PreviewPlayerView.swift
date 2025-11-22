@@ -211,13 +211,13 @@ struct PreviewPlayerView: View {
 
     private func handleKeyCommand(key: String, modifiers: NSEvent.ModifierFlags, specialKey: NSEvent.SpecialKey? = nil) -> Bool {
         if specialKey == .downArrow {
-            if controller.jumpToNextCachedSegmentStart() {
-                return true
-            }
+            // Down: Jump forward 10 frames
+            controller.seekByFrames(10)
+            return true
         } else if specialKey == .upArrow {
-            if controller.jumpToPreviousCachedSegmentEnd() {
-                return true
-            }
+            // Up: Jump backward 10 frames
+            controller.seekByFrames(-10)
+            return true
         } else if specialKey == .leftArrow {
             controller.seekByFrames(-1)
             return true
@@ -292,10 +292,10 @@ struct PreviewPlayerView: View {
             handleTrimOutPoint(clearToEnd: false)
             return true
         case "j":
-            controller.rewind()
+            controller.startReverseSimulation()
             return true
         case "k":
-            controller.pause()
+            controller.togglePlayback()
             return true
         case "l":
             controller.fastForward()

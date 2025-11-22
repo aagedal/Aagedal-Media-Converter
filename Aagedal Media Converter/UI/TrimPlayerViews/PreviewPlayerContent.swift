@@ -97,34 +97,65 @@ struct PreviewPlayerContent: View {
         }
     }
 
+
     @ViewBuilder
     private var overlayIndicators: some View {
-        if controller.isCapturingScreenshot {
-            dimOverlay(title: "Capturing Still…")
-        }
-
-        if controller.isGeneratingFallbackPreview {
-            dimOverlay(
-                title: "Generating Preview…",
-                subtitle: "This format requires transcoding for playback"
-            )
-        }
-
-        if controller.fallbackPreviewRange != nil && !controller.isGeneratingFallbackPreview {
+        ZStack {
+            // Top-left: Speed indicator (always visible when speed != 1.0)
             VStack {
-                Spacer()
                 HStack {
-                    fallbackBadge
+                    PlaybackSpeedIndicator(
+                        speed: controller.currentPlaybackSpeed,
+                        isReversing: controller.isReverseSimulating
+                    )
                     Spacer()
-                    if controller.showScreenshotOverlay {
-                        screenshotBadge
+                }
+                Spacer()
+            }
+            .padding(16)
+            
+            // Center: Loading/buffering indicator
+            if controller.isLoadingChunk {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .scaleEffect(1.2)
+                        .tint(.white)
+                    
+                    Text("Loading...")
+                        .foregroundColor(.white)
+                }
+            }
+            
+            if controller.isCapturingScreenshot {
+                dimOverlay(title: "Capturing Still…")
+            }
+            
+            if controller.isGeneratingFallbackPreview {
+                dimOverlay(
+                    title: "Generating Preview…",
+                    subtitle: "This format requires transcoding for playback"
+                )
+            }
+            
+            // Bottom: badges and controls
+            if controller.fallbackPreviewRange != nil && !controller.isGeneratingFallbackPreview {
+                VStack {
+                    Spacer()
+                    HStack {
+                        fallbackBadge
+                        Spacer()
+                        if controller.showScreenshotOverlay {
+                            screenshotBadge
+                        }
+                        Spacer()
+                        toggleControlsButton
                     }
-                    Spacer()
-                    toggleControlsButton
                 }
             }
         }
     }
+
 
     private func dimOverlay(title: String, subtitle: String? = nil) -> some View {
         ZStack {
