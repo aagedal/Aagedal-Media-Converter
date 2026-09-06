@@ -1,5 +1,34 @@
 # v.4.3.0
 
+- **Screen-recording shutdown has a deadline.** Retired streams cannot append more samples or revive meters; stopped sessions reject late recording starts and retain folder access until all recordings finish.
+- **IMF checks audio helpers for concat and image-sequence sources before encoding.** Missing wrappers are detected using the same source selection as package audio extraction.
+- **Bundled license notices are available offline in About > Licenses.** Release validation verifies that all existing notices are packaged intact.
+
+- **Exports check required helpers before encoding.** DCP, IMF, and AV2 report missing or non-executable tools with guidance to Tool Diagnostics before creating output files.
+- **Audio metering stops reliably during startup.** Discovery, startup, and stop waits are bounded; delayed callbacks cannot restart a stopped meter or overwrite a newer session.
+- **Upload-profile upgrades preserve saved destinations.** Newer profiles take precedence, and malformed legacy data stays available for repair instead of being deleted during migration.
+
+- **Legacy audio preset upgrades preserve newer settings.** Existing Audio Only format and visibility choices survive migration when the old migration marker is missing.
+
+- **AV2 encoding keeps consistent settings throughout a job.** Geometry, quality, chunking, output bit depth, container, audio codec, and bitrate use one captured set of preferences, including output naming and final Matroska metadata.
+- **Microphone permission waits can time out or be cancelled.** Stopping capture prevents a late permission response from resuming setup; unanswered prompts show recovery guidance.
+- **Tool Diagnostics checks selected transcription models.** It reports missing or empty Whisper files and incomplete Parakeet cache resources, and rejects folders selected as executable tools.
+
+- **The preset picker keeps its active selection visible**, even when that preset is hidden in Settings. Descriptive built-in preset names now translate into Norwegian without changing saved identifiers or custom names.
+
+- **Upload Settings no longer reads passwords just to check whether they are saved.** Credential presence checks avoid secret-data retrieval and authentication prompts.
+
+- **Screen and window discovery no longer waits indefinitely.** Recording and system-audio metering stop waiting after 15 seconds and respond promptly to cancellation.
+- **Standalone subtitle and analytics actions keep consistent settings.** Model, language, OCR engine, analytics frame sampling, and automatic export preferences are captured before work starts.
+- **Tool Diagnostics now includes package and AV2 helpers.** BMX and AS-DCP helpers have bounded version checks; AV2 and Parakeet expose availability and architecture with a clear note when version validation is unavailable.
+
+
+- **Tool Diagnostics in Settings** shows active tool paths, architecture, executable status, and bounded version checks, with distinct guidance for missing tools, launch failures, and timeouts.
+- **Norwegian Settings and Shortcuts** now localize dynamic choices and descriptions, and Shortcuts search matches translated actions. Long empty-queue tips wrap fully.
+- **Trim and crop accessibility** adds spoken timeline positions and boundaries, chapter actions, keyboard-focusable timecode buttons, and clearer crop/track control names.
+- **Post-conversion settings stay consistent during a job.** Transcription, OCR, and analytics capture their preferences at operation start, including subtitle embedding and OCR engine selection.
+- **Release checks now track license notice contents** and stop publishing when bundled dependency attribution is incomplete.
+
 A smaller, focused release built around **Shortcuts & Spotlight**. Instead of a single "convert with whatever's selected" action, there's now **one Convert action per export preset**, a **Convert with Default Preset** action that follows your configured default — so it can drive any of your *custom* presets — and the most common presets are surfaced as zero-setup **Spotlight / Siri shortcuts**. All of them now **launch the app automatically** when it isn't already running. Under the hood, the bundled **FFmpeg moves to 8.1.1**. Rounding it out: the queue's **drag-to-share handle now works on every drag** (not just the first after launch), and **importing from a camera card no longer freezes the window**.
 
 ## Shortcuts & App Intents
@@ -11,11 +40,30 @@ A smaller, focused release built around **Shortcuts & Spotlight**. Instead of a 
 - **Spotlight & Siri shortcuts.** The ten most common presets — led by **Convert (Default Preset)** — are exposed as zero-setup App Shortcuts, so you can run them from Spotlight or by voice (e.g. *"Convert with Aagedal Media Converter"*) without first building a shortcut. Because a Spotlight/Siri phrase can't carry files, running one this way opens the app, switches to that preset, and presents a file picker — convert actions then start as soon as you choose your files. Apple caps this surface at ten per app; the niche presets (AV2, TV, Image Sequence, DCP, IMF) stay available as full actions inside the Shortcuts app.
 - **The app now opens automatically.** Every convert action and "Add to Encode Queue" now launches the app if it isn't already running and reliably hands off its files, instead of silently doing nothing when the app was closed. A small launch-time buffer replays a request that arrives before the window's receivers are ready, so nothing is lost to the cold-launch race — and never runs twice.
 
+## Screen recording
+
+- **Stopping growing recordings preserves the final frames and timecode.** Video and timecode wait together when the writer is busy, failures are reported, and final frames drain with a deadline. Immediate-stop recordings now retain the correct single-frame duration.
+
+- **Broadcast frame rates and drop-frame timecode.** Screen recording now offers 25, 29.97, 50, 59.94, and 60 fps alongside display-native Auto. Growing recordings use exact rational timing, including the MOV duration, and drop-frame timecode at 29.97/59.94 with midnight rollover. Settings and the recording overlay explain constant versus variable frame rate.
+- **Norwegian capture settings are more complete.** Rate choices, preset names/descriptions, dynamic range, and frame-rate explanations are now localized. Capture folder buttons also have explicit accessibility labels.
+
 ## Encoding
 
 - **Bundled FFmpeg updated to 8.1.1.** Replaces the previous build that dynamically linked Homebrew's `libvorbis.dylib` — and crashed on launch — with a self-contained, statically-linked GPL build. Non-free components are dropped: `libfdk_aac` gives way to the native `aac` / `aac_at` encoders.
 
 ## Fixes
+
+- **AV2 chunk exports now explain temporary-storage failures before encoding starts.** Planning no longer leaves scratch folders behind, and existing files or directories are preserved if scratch creation fails.
+
+- **Settings sidebar controls have explicit accessibility names.** Pane names and the show/hide sidebar action are exposed for assistive technology, with bilingual navigation coverage.
+
+- **Cancelling DCP/IMF export now stops frame preparation.** Queue cancellation interrupts JPEG 2000 codestream preparation between frames, cleans scratch files after the worker stops, and prevents package wrapping from starting.
+
+- **Settings controls have clearer accessibility names.** Folder actions, timecode adjustments, and update-command copying now announce their purpose. Screenshot format and transparency pickers have distinct spoken labels.
+
+- **Preview thumbnails and filmstrips no longer wait indefinitely on AVFoundation.** Native rendering has a deadline and cancellation support, and late images cannot overwrite fallback thumbnails.
+- **Player setup now ignores stale framework callbacks.** Track checks, initial seeks, and audio-selection loads are bounded; replacing or closing a player cancels owned work and prevents late results from changing the new player.
+- **DCP and IMF exports stop when a picture frame cannot be prepared.** Failed frame reads, malformed frames, and write errors are reported before video wrapping instead of silently producing an incomplete package.
 
 - **Partial-download duration inspection can no longer wait indefinitely on media parsing.** The shared duration probe now bounds its parser and AVFoundation fallbacks and returns promptly when cancelled.
 

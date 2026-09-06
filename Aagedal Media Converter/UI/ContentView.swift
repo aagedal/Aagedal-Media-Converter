@@ -687,6 +687,12 @@ struct ContentView: View {
                     await importUITestFixtureIfRequested()
 #endif
                 }
+#if DEBUG
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    guard ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1" else { return }
+                    try? FileManager.default.removeItem(at: UITestFixtureConfiguration.directory)
+                }
+#endif
                 .onDisappear {
                     fileImportTaskCoordinator.cancelAll()
                 }
@@ -1614,30 +1620,33 @@ struct ContentView: View {
     }
 
 #if DEBUG
-    /// Generates and imports a tiny media file when the UI test target requests it.
-    /// The namespaced environment flag keeps normal Debug launches unchanged, while
-    /// the caller-provided directory lets the UI test remove every generated artifact.
     @MainActor
     private func importUITestFixtureIfRequested() async {
+        let environment = ProcessInfo.processInfo.environment
         guard !hasHandledUITestFixtureLaunch,
-              ProcessInfo.processInfo.environment["AMC_UI_TEST_GENERATED_FIXTURE"] == "1" else {
+              environment["AMC_UI_TEST_SESSION"] == "1" else {
             return
         }
         hasHandledUITestFixtureLaunch = true
 
-        guard let directoryPath = ProcessInfo.processInfo.environment["AMC_UI_TEST_FIXTURE_DIRECTORY"],
-              !directoryPath.isEmpty else {
-            Self.logger.error("UI test fixture launch is missing AMC_UI_TEST_FIXTURE_DIRECTORY")
-            return
-        }
-
         do {
-            let fixtureURL = try await Self.generateUITestFixture(
-                in: URL(fileURLWithPath: directoryPath, isDirectory: true)
-            )
+            let directory = UITestFixtureConfiguration.directory
+            // Also recover artifacts after force termination, which may bypass
+            // willTerminateNotification. Ordinary app launches never touch this folder.
+            if FileManager.default.fileExists(atPath: directory.path) {
+                try FileManager.default.removeItem(at: directory)
+            }
+            guard environment["AMC_UI_TEST_GENERATED_FIXTURE"] == "1" else { return }
+
+            currentOutputFolder = directory
+
+            let fixtureURL = try await Self.generateUITestFixture(in: directory)
             await handleFileSelection(result: .success([fixtureURL]))
+            if environment["AMC_UI_TEST_REMOVE_FIXTURE_AFTER_IMPORT"] == "1" {
+                try FileManager.default.removeItem(at: fixtureURL)
+            }
         } catch {
-            Self.logger.error("Unable to generate UI test fixture: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("Unable to prepare UI test fixture: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -3007,3 +3016,48 @@ private struct ContentViewNotificationHandlers: ViewModifier {
         }
     }
 }
+
+#if DEBUG
+/// The app owns all fixture filesystem operations; the UI runner's temporary
+/// directory is private to its sandbox and cannot be shared with bundled FFmpeg.
+enum UITestFixtureConfiguration {
+    static var directory: URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("AagedalMediaConverterUITestFixtures", isDirectory: true)
+    }
+
+    static func configureLaunchDefaults() {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["AMC_UI_TEST_SESSION"] == "1" else { return }
+        // Settings audits must not inspect personal upload destinations or
+        // touch their Keychain credentials. A volatile fixture also prevents
+        // the Upload pane's first-run path from persisting a default profile.
+        let profile = UploadProfile(
+            id: UUID(uuidString: "84A6535B-CE10-4DE4-AE11-ED740CA1A420")!,
+            name: "UI Test Upload"
+        )
+        var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        arguments[AppConstants.uploadProfilesKey] = try? JSONEncoder().encode([profile])
+        arguments[AppConstants.uploadSelectedProfileIDKey] = profile.id.uuidString
+        arguments[AppConstants.uploadProfileMigrationV2Key] = true
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        if environment["AMC_UI_TEST_CLEANUP_FIXTURES"] == "1" {
+            // Runs in App.init, before XCUIApplication.launch() returns.
+            if FileManager.default.fileExists(atPath: directory.path) {
+                do {
+                    try FileManager.default.removeItem(at: directory)
+                } catch {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "UITestFixture")
+                        .error("Unable to clean UI test fixtures: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            return
+        }
+        guard environment["AMC_UI_TEST_GENERATED_FIXTURE"] == "1" else { return }
+        // Configure before any @AppStorage is constructed, so syncing the view's
+        // current folder cannot write the fixture path into the saved preferences.
+        arguments["outputFolder"] = directory.path
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+    }
+}
+#endif

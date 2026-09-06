@@ -362,6 +362,8 @@ struct MetadataSettingsView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .help("Subtract 10 frames")
+                            .accessibilityLabel("Subtract 10 frames")
+                            .accessibilityIdentifier("settings.metadata.subtractTenFrames")
 
                             Button(action: { adjustFrames(by: -1) }) {
                                 Image(systemName: "minus.circle.fill")
@@ -371,8 +373,12 @@ struct MetadataSettingsView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .help("Subtract 1 frame")
+                            .accessibilityLabel("Subtract 1 frame")
+                            .accessibilityIdentifier("settings.metadata.subtractFrame")
 
                             TextField("00:00:00:00", text: $defaultTimecodeValue)
+                                .accessibilityLabel("Timecode Value:")
+                                .accessibilityIdentifier("settings.metadata.timecode")
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(.body, design: .monospaced))
                                 .multilineTextAlignment(.center)
@@ -402,6 +408,8 @@ struct MetadataSettingsView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .help("Add 1 frame")
+                            .accessibilityLabel("Add 1 frame")
+                            .accessibilityIdentifier("settings.metadata.addFrame")
 
                             Button(action: { adjustFrames(by: 10) }) {
                                 Image(systemName: "plus.rectangle.fill")
@@ -411,6 +419,8 @@ struct MetadataSettingsView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .help("Add 10 frames")
+                            .accessibilityLabel("Add 10 frames")
+                            .accessibilityIdentifier("settings.metadata.addTenFrames")
                         }
 
                         if !isValidTimecode {

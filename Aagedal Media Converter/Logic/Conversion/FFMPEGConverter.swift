@@ -8,6 +8,7 @@
 // (at your option) any later version.
 
 import Foundation
+import Darwin
 import CoreGraphics
 import os
 import OSLog
@@ -96,12 +97,15 @@ private final class ConversionOutputReservations: @unchecked Sendable {
 
 actor FFMPEGConverter {
     private var currentSubprocessTask: Task<Void, Never>?
+    private var currentDependencyPreflightTask: Task<String?, Error>?
     private var currentWaveformAnalysisTask: Task<FrequencyBandData, Error>?
     private var currentWaveformAnalysisID: UUID?
     private var currentImageSequenceAudioTask: Task<ImageSequenceAudioStagingResult, Never>?
     private var currentImageSequenceAudioTaskID: UUID?
     private var currentPackageAudioTask: Task<AudioExtractionResult, Never>?
     private var currentPackageAudioTaskID: UUID?
+    private var currentPackagePreparationTask: Task<Int64, Error>?
+    private var currentPackagePreparationTaskID: UUID?
     private var currentPackageWrapperTask: Task<PackageWrapperResult, Never>?
     private var currentPackageWrapperTaskID: UUID?
     private var currentAVCIntraPreprocessingTask: Task<AVCIntraAudioPreprocessingResult, Never>?
@@ -116,6 +120,8 @@ actor FFMPEGConverter {
     private let subprocessRunner: any SubprocessRunning
     private let ffmpegPathProvider: @Sendable () -> String?
     private let avmdecPathProvider: @Sendable () -> String?
+    private let dependencyPreflight: ConversionDependencyPreflight
+    private let preflightAudioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "FFMPEGConverter")
     private static let outputReservations = ConversionOutputReservations()
@@ -156,11 +162,17 @@ actor FFMPEGConverter {
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
-        avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath }
+        avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath },
+        dependencyPreflight: ConversionDependencyPreflight = ConversionDependencyPreflight(),
+        preflightAudioStreamProvider: @escaping @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = {
+            await FFMPEGProbeService.fetchAudioStreams(for: $0)
+        }
     ) {
         self.subprocessRunner = subprocessRunner
         self.ffmpegPathProvider = ffmpegPathProvider
         self.avmdecPathProvider = avmdecPathProvider
+        self.dependencyPreflight = dependencyPreflight
+        self.preflightAudioStreamProvider = preflightAudioStreamProvider
     }
 
     // MARK: - Temp File Cleanup
@@ -384,6 +396,48 @@ actor FFMPEGConverter {
         return result
     }
 
+    /// Runs blocking frame I/O off the converter actor so cancellation can reach it.
+    private func prepareTrackedPackageCodestreams(
+        conversionID: UUID,
+        sourceDirectory: URL,
+        frameNames: [String],
+        destinationDirectory: URL,
+        progress: @escaping @Sendable (Int, Int) -> Void = { _, _ in }
+    ) async throws -> Int64 {
+        guard postProcessingConversionID == conversionID else { throw CancellationError() }
+        let taskID = UUID()
+        let task = Task.detached {
+            var lastEmit = Date.distantPast
+            return try Self.preparePackageCodestreams(
+                sourceDirectory: sourceDirectory,
+                frameNames: frameNames,
+                destinationDirectory: destinationDirectory
+            ) { completed, total in
+                let now = Date()
+                if now.timeIntervalSince(lastEmit) >= 0.25 || completed == total {
+                    lastEmit = now
+                    progress(completed, total)
+                }
+            }
+        }
+        currentPackagePreparationTask?.cancel()
+        currentPackagePreparationTask = task
+        currentPackagePreparationTaskID = taskID
+        defer {
+            if currentPackagePreparationTaskID == taskID {
+                currentPackagePreparationTask = nil
+                currentPackagePreparationTaskID = nil
+            }
+        }
+        let bytes = try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        guard postProcessingConversionID == conversionID else { throw CancellationError() }
+        return bytes
+    }
+
     /// Removes an incomplete ordinary-file output and revokes its app-created trust record.
     /// A failed encode must not leave a stale registration that could authorize deleting an
     /// unrelated file created at the same path later.
@@ -408,6 +462,7 @@ actor FFMPEGConverter {
     ///   - completion: Callback for completion (success: Bool, errorReason: String?)
     func convert(
         request: ConversionRequest,
+        av2Settings: AV2Settings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -415,6 +470,8 @@ actor FFMPEGConverter {
         let inputURL = request.inputURL
         let outputURL = request.outputURL
         let preset = request.preset
+        // Capture all AV2 preferences before cancellation or metadata work can suspend.
+        let capturedAV2Settings = preset == .av2 ? (av2Settings ?? AV2Settings()) : nil
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -424,6 +481,30 @@ actor FFMPEGConverter {
             completion(false, "AV2 export does not support additional FFmpeg output arguments")
             return
         }
+        // Generated-video AV2 requests retain their specific unsupported-feature diagnostic.
+        if !(preset == .av2 && (request.waveformRequest != nil || request.synthesizedVideoRequest != nil)),
+           let failure = dependencyPreflight.failure(for: preset) {
+            completion(false, failure)
+            return
+        }
+        // Read the same bounded source headers used by the decoder path before output setup.
+        let usesAV2SourceDecoder = preset != .av2
+            && request.customInputArguments == nil
+            && request.waveformRequest == nil
+            && request.synthesizedVideoRequest == nil
+        let av2SourceExt = inputURL.pathExtension.lowercased()
+        let av2IsIVF = usesAV2SourceDecoder && av2SourceExt == "ivf"
+            && (IVFHeaderParser.parse(url: inputURL)?.isAV2 ?? false)
+        let av2IsMatroska = usesAV2SourceDecoder && (av2SourceExt == "mkv" || av2SourceExt == "webm")
+            && Self.matroskaContainsAV2(url: inputURL)
+        let av2SourceDecoderPath = (av2IsIVF || av2IsMatroska) ? avmdecPathProvider() : nil
+        if (av2IsIVF || av2IsMatroska),
+           let failure = ConversionDependencyPreflight.failure(for: .avmdec, path: av2SourceDecoderPath) {
+            completion(false, failure)
+            return
+        }
+        currentDependencyPreflightTask?.cancel()
+        currentDependencyPreflightTask = nil
         currentProgressGate?.invalidate()
         currentSubprocessTask?.cancel()
         currentWaveformAnalysisTask?.cancel()
@@ -435,6 +516,9 @@ actor FFMPEGConverter {
         currentPackageAudioTask?.cancel()
         currentPackageAudioTask = nil
         currentPackageAudioTaskID = nil
+        currentPackagePreparationTask?.cancel()
+        currentPackagePreparationTask = nil
+        currentPackagePreparationTaskID = nil
         currentPackageWrapperTask?.cancel()
         currentPackageWrapperTask = nil
         currentPackageWrapperTaskID = nil
@@ -456,6 +540,40 @@ actor FFMPEGConverter {
         }
         let conversionID = UUID()
         activeConversionID = conversionID
+
+        if preset == .imfJ2K || preset == .imfProRes {
+            let preflight = dependencyPreflight
+            let audioStreamProvider = preflightAudioStreamProvider
+            let preflightTask = Task {
+                try await preflight.audioFailure(for: request, audioStreamProvider: audioStreamProvider)
+            }
+            currentDependencyPreflightTask = preflightTask
+            let audioDependencyFailure: String?
+            do {
+                audioDependencyFailure = try await withTaskCancellationHandler {
+                    try await preflightTask.value
+                } onCancel: {
+                    preflightTask.cancel()
+                }
+            } catch {
+                if activeConversionID == conversionID {
+                    currentDependencyPreflightTask = nil
+                    activeConversionID = nil
+                }
+                completion(false, "Conversion cancelled")
+                return
+            }
+            guard activeConversionID == conversionID, !Task.isCancelled else {
+                completion(false, "Conversion cancelled")
+                return
+            }
+            currentDependencyPreflightTask = nil
+            if let audioDependencyFailure {
+                activeConversionID = nil
+                completion(false, audioDependencyFailure)
+                return
+            }
+        }
 
         // Ensure output directory exists
         let fileManager = FileManager.default
@@ -569,15 +687,16 @@ actor FFMPEGConverter {
             let patternFileName = "\(baseName)_%0\(effectivePadding)d.\(format.primaryExtension)"
             outputFileURL = finalSubfolderURL.appendingPathComponent(patternFileName)
         } else {
-            // Add file extension based on preset
-            outputFileURL = outputURL.appendingPathExtension(preset.outputExtension(for: inputURL))
+            // Use the same captured container for AV2 naming and muxing.
+            let outputExtension = capturedAV2Settings?.container.fileExtension ?? preset.outputExtension(for: inputURL)
+            outputFileURL = outputURL.appendingPathExtension(outputExtension)
 
             // CRITICAL: Ensure we never overwrite the source file
             if outputFileURL.standardizedFileURL == inputURL.standardizedFileURL {
                 // Add "_encoded" suffix to prevent overwriting source
                 let baseName = outputURL.lastPathComponent
                 let safeOutputURL = outputDir.appendingPathComponent(baseName + "_encoded")
-                    .appendingPathExtension(preset.outputExtension(for: inputURL))
+                    .appendingPathExtension(outputExtension)
                 Self.logger.warning("Safety check: would have overwritten input file. Changed output to: \(safeOutputURL.lastPathComponent, privacy: .public)")
                 outputFileURL = safeOutputURL
             }
@@ -690,11 +809,11 @@ actor FFMPEGConverter {
         }
 
         // MARK: Experimental AV2 branch (ffmpeg decode → avmenc encode, two-process pipe)
-        if preset == .av2 {
+        if let av2Settings = capturedAV2Settings {
             // Choose output container: a raw video-only `.ivf`, or `.mkv` (AV2 + audio) via the
             // in-app Matroska muxer (FFmpeg can't write AV2). For `.mkv` the encode targets a temp
             // intermediate `.ivf` that the muxer then wraps with the source audio.
-            let muxToMKV = (AV2Container.current == .mkv && BinaryPathResolver.avmencPath != nil)
+            let muxToMKV = (av2Settings.container == .mkv && BinaryPathResolver.avmencPath != nil)
             let encodeURL: URL = muxToMKV
                 ? FileManager.default.temporaryDirectory.appendingPathComponent("av2enc_\(UUID().uuidString).ivf")
                 : outputFileURL
@@ -728,7 +847,8 @@ actor FFMPEGConverter {
                 customInputArguments: request.customInputArguments,
                 expectedDuration: request.expectedDuration,
                 videoFrameRate: request.videoFrameRate,
-                metadataSource: .resolved(av2PlanningMetadata)
+                metadataSource: .resolved(av2PlanningMetadata),
+                settings: av2Settings
             ), let avmencPath = BinaryPathResolver.avmencPath {
                 encodeResult = await runAV2ChunkedConversion(
                     plan: plan,
@@ -750,6 +870,7 @@ actor FFMPEGConverter {
                     expectedDuration: request.expectedDuration,
                     videoFrameRate: request.videoFrameRate,
                     sourceMetadata: av2PlanningMetadata,
+                    settings: av2Settings,
                     progressUpdate: progressUpdate
                 )
             }
@@ -775,7 +896,8 @@ actor FFMPEGConverter {
                     trimEnd: request.trimEnd,
                     cropConfig: request.cropConfig,
                     visualSourceURL: request.visualSourceURL,
-                    metadataSource: .resolved(av2PlanningMetadata)
+                    metadataSource: .resolved(av2PlanningMetadata),
+                    settings: av2Settings
                 ) ?? 8
                 let (ok, reason) = await muxAV2ToMatroska(
                     conversionID: conversionID,
@@ -795,6 +917,7 @@ actor FFMPEGConverter {
                     outputURL: outputFileURL,
                     ffmpegPath: ffmpegPath,
                     avmencPath: avmencPath,
+                    settings: av2Settings,
                     progressUpdate: progressUpdate
                 )
                 Self.cleanupTempFile(at: encodeURL, label: "AV2 intermediate .ivf")
@@ -815,15 +938,12 @@ actor FFMPEGConverter {
         // (FFmpeg-readable) audio track can be mapped in. Skipped for merges / AVC-Intra / waveform.
         var av2DecodeRequest: SubprocessRequest? = nil
         var av2MatroskaAudioFromInput1 = false
-        let av2SourceExt = inputURL.pathExtension.lowercased()
-        let av2IsIVF = (av2SourceExt == "ivf") && (IVFHeaderParser.parse(url: inputURL)?.isAV2 ?? false)
-        let av2IsMatroska = (av2SourceExt == "mkv" || av2SourceExt == "webm") && Self.matroskaContainsAV2(url: inputURL)
         if (av2IsIVF || av2IsMatroska),
            tempAudioURL == nil,
            request.customInputArguments == nil,
            request.waveformRequest == nil,
            request.synthesizedVideoRequest == nil,
-           let avmdecPath = avmdecPathProvider() {
+           let avmdecPath = av2SourceDecoderPath {
             // avmdec writes self-describing Y4M to stdout, so FFmpeg auto-detects the exact
             // chroma subsampling and bit depth (4:2:0/4:2:2/4:4:4, 8/10/12-bit) with no
             // assumptions — native depth is preserved (a 10-bit source stays 10-bit).
@@ -1098,59 +1218,58 @@ actor FFMPEGConverter {
                             // Create J2C directory for stripped codestreams
                             let j2cDir = FileManager.default.temporaryDirectory
                                 .appendingPathComponent("dcp_j2c_\(UUID().uuidString)", isDirectory: true)
-                            try? fm.createDirectory(at: j2cDir, withIntermediateDirectories: true)
-
-                            Self.logger.info("Stripping JP2 headers from \(jp2Files.count) frames...")
-                            let socMarker = Data([0xFF, 0x4F])
-                            for jp2File in jp2Files {
-                                let jp2URL = jp2Dir.appendingPathComponent(jp2File)
-                                let j2cFile = jp2File.replacingOccurrences(of: ".jp2", with: ".j2c")
-                                let j2cURL = j2cDir.appendingPathComponent(j2cFile)
-
-                                if let data = try? Data(contentsOf: jp2URL),
-                                   let socRange = data.range(of: socMarker) {
-                                    try? data[socRange.lowerBound...].write(to: j2cURL)
-                                }
-                            }
-
-                            // Verify J2C files were created
-                            let j2cFiles = (try? fm.contentsOfDirectory(atPath: j2cDir.path))?
-                                .filter { $0.hasSuffix(".j2c") } ?? []
-                            Self.logger.info("Created \(j2cFiles.count) J2C codestream files")
-
-                            // Run asdcp-wrap on J2C directory
-                            let videoWrapArgs: [String] = [
-                                "-v",                                // Verbose output
-                                "-p", frameRate.ffmpegValue,
-                                "-L",                                // SMPTE Universal Labels
-                                j2cDir.path + "/",                   // Directory of J2C frames
-                                tmpVideoMXF.path
-                            ]
-
-                            Self.logger.info("Running asdcp-wrap for DCP video")
-                            let wrapResult = await self?.runTrackedPackageWrapper(
-                                conversionID: conversionID,
-                                executablePath: asdcpWrapPath,
-                                arguments: videoWrapArgs,
-                                outputURL: tmpVideoMXF
-                            ) ?? .cancelled
-                            switch wrapResult {
-                            case .success(let diagnostic):
-                                if !diagnostic.isEmpty {
-                                    Self.logger.info("asdcp-wrap video output: \(diagnostic.prefix(500), privacy: .public)")
-                                }
-                                videoMXFURL = tmpVideoMXF
-                                Self.logger.info("Video MXF created with asdcp-wrap")
-                            case .failed(let status, let reason, let diagnostic):
-                                let statusText = status.map(String.init) ?? "launch"
-                                Self.logger.error("asdcp-wrap failed for video MXF (\(statusText, privacy: .public)): \(diagnostic.prefix(300), privacy: .public)")
-                                errorReason = Self.dcpIMFErrorReason(
-                                    base: String(localized: "DCP video wrap failed: \(reason)", comment: "Shown when asdcp-wrap cannot create the DCP video essence."),
-                                    stderr: diagnostic
+                            do {
+                                guard let self else { throw CancellationError() }
+                                _ = try await self.prepareTrackedPackageCodestreams(
+                                    conversionID: conversionID,
+                                    sourceDirectory: jp2Dir,
+                                    frameNames: jp2Files,
+                                    destinationDirectory: j2cDir
                                 )
-                                success = false
-                            case .cancelled:
+
+                                // Run asdcp-wrap on J2C directory
+                                let videoWrapArgs: [String] = [
+                                    "-v",                                // Verbose output
+                                    "-p", frameRate.ffmpegValue,
+                                    "-L",                                // SMPTE Universal Labels
+                                    j2cDir.path + "/",                   // Directory of J2C frames
+                                    tmpVideoMXF.path
+                                ]
+
+                                Self.logger.info("Running asdcp-wrap for DCP video")
+                                let wrapResult = await self.runTrackedPackageWrapper(
+                                    conversionID: conversionID,
+                                    executablePath: asdcpWrapPath,
+                                    arguments: videoWrapArgs,
+                                    outputURL: tmpVideoMXF
+                                )
+                                switch wrapResult {
+                                case .success(let diagnostic):
+                                    if !diagnostic.isEmpty {
+                                        Self.logger.info("asdcp-wrap video output: \(diagnostic.prefix(500), privacy: .public)")
+                                    }
+                                    videoMXFURL = tmpVideoMXF
+                                    Self.logger.info("Video MXF created with asdcp-wrap")
+                                case .failed(let status, let reason, let diagnostic):
+                                    let statusText = status.map(String.init) ?? "launch"
+                                    Self.logger.error("asdcp-wrap failed for video MXF (\(statusText, privacy: .public)): \(diagnostic.prefix(300), privacy: .public)")
+                                    errorReason = Self.dcpIMFErrorReason(
+                                        base: String(localized: "DCP video wrap failed: \(reason)", comment: "Shown when asdcp-wrap cannot create the DCP video essence."),
+                                        stderr: diagnostic
+                                    )
+                                    success = false
+                                case .cancelled:
+                                    errorReason = "Conversion cancelled"
+                                    success = false
+                                }
+
+                            } catch is CancellationError {
                                 errorReason = "Conversion cancelled"
+                                success = false
+                            } catch {
+                                Self.logger.error("DCP frame preparation failed: \(error.localizedDescription, privacy: .public)")
+                                let reason = error.localizedDescription
+                                errorReason = String(localized: "DCP video wrap failed: \(reason)", comment: "Shown when asdcp-wrap cannot create the DCP video essence.")
                                 success = false
                             }
 
@@ -1169,72 +1288,87 @@ actor FFMPEGConverter {
                         Self.cleanupTempFile(at: jp2Dir, label: "DCP JP2 images")
                     }
 
-                    // Step 2: Extract audio as WAV
-                    progressUpdate(0.82, "Extracting audio for DCP...")
-                    let audioExtractionResult = await self?.extractPackageAudioAsPCMWAV(
-                        conversionID: conversionID,
-                        inputURL: capturedInputURL,
-                        customInputArguments: capturedRequest.customInputArguments,
-                        outputFolder: FileManager.default.temporaryDirectory,
-                        ffmpegPath: capturedFfmpegPath,
-                        trimStart: capturedRequest.trimStart,
-                        trimEnd: capturedRequest.trimEnd,
-                        audioRoutingConfig: capturedRequest.audioRoutingConfig
-                    ) ?? .failed(reason: "Conversion cancelled")
-                    let audioWavURL: URL?
-                    switch audioExtractionResult {
-                    case .extracted(let url):
-                        audioWavURL = url
-                    case .noAudioInSource:
-                        audioWavURL = nil
-                    case .failed(let reason):
-                        audioWavURL = nil
-                        errorReason = String(localized: "DCP audio extraction failed: \(reason)", comment: "Shown when ffmpeg cannot extract PCM audio from a source that has audio streams, blocking the DCP audio MXF.")
-                        success = false
-                    }
-
-                    // Step 3: Wrap audio WAV to DCP MXF with asdcp-wrap
                     var finalAudioMXF: URL? = nil
-                    if let wavURL = audioWavURL, let asdcpPath = BinaryPathResolver.asdcpWrapPath {
-                        progressUpdate(0.87, "Creating audio MXF for DCP...")
-                        let audioMXFURL = FileManager.default.temporaryDirectory
-                            .appendingPathComponent("dcp_audio_\(UUID().uuidString).mxf")
-
-                        let audioWrapArgs: [String] = [
-                            "-p", frameRate.ffmpegValue,
-                            "-L",                          // SMPTE Universal Labels
-                            wavURL.path,
-                            audioMXFURL.path
-                        ]
-
-                        Self.logger.info("Running asdcp-wrap for DCP audio")
-                        let wrapResult = await self?.runTrackedPackageWrapper(
+                    defer {
+                        if let videoMXFURL, fm.fileExists(atPath: videoMXFURL.path) {
+                            Self.cleanupTempFile(at: videoMXFURL, label: "DCP video MXF")
+                        }
+                        if let finalAudioMXF, fm.fileExists(atPath: finalAudioMXF.path) {
+                            Self.cleanupTempFile(at: finalAudioMXF, label: "DCP audio MXF")
+                        }
+                    }
+                    if success {
+                        // Step 2: Extract audio as WAV
+                        progressUpdate(0.82, "Extracting audio for DCP...")
+                        let audioExtractionResult = await self?.extractPackageAudioAsPCMWAV(
                             conversionID: conversionID,
-                            executablePath: asdcpPath,
-                            arguments: audioWrapArgs,
-                            outputURL: audioMXFURL
-                        ) ?? .cancelled
-                        switch wrapResult {
-                        case .success(let diagnostic):
-                            if !diagnostic.isEmpty {
-                                Self.logger.info("asdcp-wrap audio output: \(diagnostic.prefix(500), privacy: .public)")
-                            }
-                            finalAudioMXF = audioMXFURL
-                            Self.logger.info("Audio MXF created with asdcp-wrap")
-                        case .failed(_, let reason, let diagnostic):
-                            Self.logger.error("asdcp-wrap failed for DCP audio: \(diagnostic.prefix(300), privacy: .public)")
-                            errorReason = Self.dcpIMFErrorReason(
-                                base: String(localized: "DCP audio wrap failed: \(reason)", comment: "Shown when asdcp-wrap cannot create the DCP audio essence."),
-                                stderr: diagnostic
-                            )
-                            success = false
-                        case .cancelled:
-                            errorReason = "Conversion cancelled"
+                            inputURL: capturedInputURL,
+                            customInputArguments: capturedRequest.customInputArguments,
+                            outputFolder: FileManager.default.temporaryDirectory,
+                            ffmpegPath: capturedFfmpegPath,
+                            trimStart: capturedRequest.trimStart,
+                            trimEnd: capturedRequest.trimEnd,
+                            audioRoutingConfig: capturedRequest.audioRoutingConfig
+                        ) ?? .failed(reason: "Conversion cancelled")
+                        let audioWavURL: URL?
+                        switch audioExtractionResult {
+                        case .extracted(let url):
+                            audioWavURL = url
+                        case .noAudioInSource:
+                            audioWavURL = nil
+                        case .failed(let reason):
+                            audioWavURL = nil
+                            errorReason = String(localized: "DCP audio extraction failed: \(reason)", comment: "Shown when ffmpeg cannot extract PCM audio from a source that has audio streams, blocking the DCP audio MXF.")
                             success = false
                         }
 
-                        // Clean up WAV
-                        Self.cleanupTempFile(at: wavURL, label: "DCP audio WAV")
+                        defer {
+                            if let audioWavURL {
+                                Self.cleanupTempFile(at: audioWavURL, label: "DCP audio WAV")
+                            }
+                        }
+
+                        // Step 3: Wrap audio WAV to DCP MXF with asdcp-wrap
+                        if let wavURL = audioWavURL, let asdcpPath = BinaryPathResolver.asdcpWrapPath {
+                            progressUpdate(0.87, "Creating audio MXF for DCP...")
+                            let audioMXFURL = FileManager.default.temporaryDirectory
+                                .appendingPathComponent("dcp_audio_\(UUID().uuidString).mxf")
+
+                            let audioWrapArgs: [String] = [
+                                "-p", frameRate.ffmpegValue,
+                                "-L",                          // SMPTE Universal Labels
+                                wavURL.path,
+                                audioMXFURL.path
+                            ]
+
+                            Self.logger.info("Running asdcp-wrap for DCP audio")
+                            let wrapResult = await self?.runTrackedPackageWrapper(
+                                conversionID: conversionID,
+                                executablePath: asdcpPath,
+                                arguments: audioWrapArgs,
+                                outputURL: audioMXFURL
+                            ) ?? .cancelled
+                            switch wrapResult {
+                            case .success(let diagnostic):
+                                if !diagnostic.isEmpty {
+                                    Self.logger.info("asdcp-wrap audio output: \(diagnostic.prefix(500), privacy: .public)")
+                                }
+                                finalAudioMXF = audioMXFURL
+                                Self.logger.info("Audio MXF created with asdcp-wrap")
+                            case .failed(_, let reason, let diagnostic):
+                                Self.logger.error("asdcp-wrap failed for DCP audio: \(diagnostic.prefix(300), privacy: .public)")
+                                errorReason = Self.dcpIMFErrorReason(
+                                    base: String(localized: "DCP audio wrap failed: \(reason)", comment: "Shown when asdcp-wrap cannot create the DCP audio essence."),
+                                    stderr: diagnostic
+                                )
+                                success = false
+                            case .cancelled:
+                                errorReason = "Conversion cancelled"
+                                success = false
+                            }
+
+                        }
+
                     }
 
                     // Step 4: Assemble DCP XML metadata (only if video MXF was created)
@@ -1300,10 +1434,6 @@ actor FFMPEGConverter {
                             }
                         }
 
-                        // Clean up temp video MXF if DCPService moved it
-                        if fm.fileExists(atPath: videoMXF.path) {
-                            Self.cleanupTempFile(at: videoMXF, label: "DCP video MXF")
-                        }
                     }
                 }
 
@@ -1351,106 +1481,96 @@ actor FFMPEGConverter {
                             } else {
                                 let j2cDir = FileManager.default.temporaryDirectory
                                     .appendingPathComponent("imf_j2c_\(UUID().uuidString)", isDirectory: true)
-                                try? fm.createDirectory(at: j2cDir, withIntermediateDirectories: true)
+                                do {
+                                    guard let self else { throw CancellationError() }
+                                    let totalFrames = jp2Files.count
+                                    let expectedMXFBytes = try await self.prepareTrackedPackageCodestreams(
+                                        conversionID: conversionID,
+                                        sourceDirectory: jp2Dir,
+                                        frameNames: jp2Files,
+                                        destinationDirectory: j2cDir
+                                    ) { completed, total in
+                                        let fraction = Double(completed) / Double(total)
+                                        progressUpdate(0.78 + fraction * 0.02, "Preparing J2C frames \(completed)/\(total)")
+                                    }
+                                    print("[IMF] J2C extraction complete (\(totalFrames) frames, \(ByteCountFormatter.string(fromByteCount: expectedMXFBytes, countStyle: .file)))")
 
-                                // Strip JP2 box wrapper to raw J2C codestreams. For long sources
-                                // this loop can take many seconds; emit throttled progress so the
-                                // UI shows what's happening between FFmpeg finishing and the wrap.
-                                // Also accumulate total J2C bytes so the wrap-progress poller below
-                                // can estimate real progress against expected MXF essence size.
-                                let socMarker = Data([0xFF, 0x4F])
-                                let totalFrames = jp2Files.count
-                                var totalJ2CBytes: Int64 = 0
-                                var lastEmit = Date.distantPast
-                                let emitInterval: TimeInterval = 0.25
-                                for (index, jp2File) in jp2Files.enumerated() {
-                                    let jp2URL = jp2Dir.appendingPathComponent(jp2File)
-                                    let j2cFile = jp2File.replacingOccurrences(of: ".jp2", with: ".j2c")
-                                    let j2cURL = j2cDir.appendingPathComponent(j2cFile)
-                                    if let data = try? Data(contentsOf: jp2URL),
-                                       let socRange = data.range(of: socMarker) {
-                                        let codestream = data[socRange.lowerBound...]
-                                        try? codestream.write(to: j2cURL)
-                                        totalJ2CBytes += Int64(codestream.count)
+                                    // raw2bmx accepts the same frame-rate syntax as ffmpeg ("24" / "24000/1001").
+                                    // --j2c_cdci tells raw2bmx the codestream is YCbCr (CDCI descriptor); the
+                                    // alternative --j2c_rgba would reproduce the original RGBA-mislabelling bug.
+                                    // The input is a printf-style %d pattern matched against the J2C frames
+                                    // (extracted above from frame_%06d.jp2 → frame_%06d.j2c).
+                                    // Per-input flags (--color-prim/--transfer-ch/--coding-eq) bind to the
+                                    // following --j2c_cdci input, so they must appear before it.
+                                    let bmxFlags = color.bmxFlags
+                                    let j2cPattern = j2cDir.appendingPathComponent("frame_%d.j2c").path
+                                    var videoWrapArgs: [String] = [
+                                        "-t", "imf",
+                                        "-o", tmpVideoMXF.path,
+                                        "-f", frameRate.ffmpegValue,
+                                        "--clip", capturedInputBaseName,
+                                        "--color-prim", bmxFlags.colorPrimaries,
+                                    ]
+                                    if let transfer = bmxFlags.transferCharacteristic {
+                                        videoWrapArgs.append(contentsOf: ["--transfer-ch", transfer])
                                     }
-                                    let now = Date()
-                                    if now.timeIntervalSince(lastEmit) >= emitInterval || index == totalFrames - 1 {
-                                        lastEmit = now
-                                        let frac = Double(index + 1) / Double(totalFrames)
-                                        let overall = 0.78 + frac * 0.02   // 0.78 → 0.80
-                                        progressUpdate(overall, "Preparing J2C frames \(index + 1)/\(totalFrames)")
+                                    videoWrapArgs.append(contentsOf: [
+                                        "--coding-eq", bmxFlags.codingEquations,
+                                        "--j2c_cdci", j2cPattern
+                                    ])
+                                    progressUpdate(0.80, "Wrapping J2C → MXF")
+                                    Self.logger.info("Launching raw2bmx for IMF video")
+                                    // Poll the output MXF size while the runner owns process execution.
+                                    let pollerTask = Task.detached { [tmpVideoMXF, expectedMXFBytes] in
+                                        let pollFM = FileManager.default
+                                        while !Task.isCancelled {
+                                            try? await Task.sleep(for: .seconds(1))
+                                            guard !Task.isCancelled else { break }
+                                            let attrs = try? pollFM.attributesOfItem(atPath: tmpVideoMXF.path)
+                                            let bytes = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
+                                            let formatted = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+                                            let fraction = expectedMXFBytes > 0
+                                                ? min(0.99, Double(bytes) / Double(expectedMXFBytes))
+                                                : 0
+                                            progressUpdate(
+                                                0.80 + fraction * 0.06,
+                                                "Wrapping J2C → MXF (\(formatted), \(Int(fraction * 100))%)"
+                                            )
+                                        }
                                     }
-                                }
-                                let expectedMXFBytes = totalJ2CBytes
-                                print("[IMF] J2C extraction complete (\(totalFrames) frames, \(ByteCountFormatter.string(fromByteCount: expectedMXFBytes, countStyle: .file)))")
-
-                                // raw2bmx accepts the same frame-rate syntax as ffmpeg ("24" / "24000/1001").
-                                // --j2c_cdci tells raw2bmx the codestream is YCbCr (CDCI descriptor); the
-                                // alternative --j2c_rgba would reproduce the original RGBA-mislabelling bug.
-                                // The input is a printf-style %d pattern matched against the J2C frames
-                                // (extracted above from frame_%06d.jp2 → frame_%06d.j2c).
-                                // Per-input flags (--color-prim/--transfer-ch/--coding-eq) bind to the
-                                // following --j2c_cdci input, so they must appear before it.
-                                let bmxFlags = color.bmxFlags
-                                let j2cPattern = j2cDir.appendingPathComponent("frame_%d.j2c").path
-                                var videoWrapArgs: [String] = [
-                                    "-t", "imf",
-                                    "-o", tmpVideoMXF.path,
-                                    "-f", frameRate.ffmpegValue,
-                                    "--clip", capturedInputBaseName,
-                                    "--color-prim", bmxFlags.colorPrimaries,
-                                ]
-                                if let transfer = bmxFlags.transferCharacteristic {
-                                    videoWrapArgs.append(contentsOf: ["--transfer-ch", transfer])
-                                }
-                                videoWrapArgs.append(contentsOf: [
-                                    "--coding-eq", bmxFlags.codingEquations,
-                                    "--j2c_cdci", j2cPattern
-                                ])
-                                progressUpdate(0.80, "Wrapping J2C → MXF")
-                                Self.logger.info("Launching raw2bmx for IMF video")
-                                // Poll the output MXF size while the runner owns process execution.
-                                let pollerTask = Task.detached { [tmpVideoMXF, expectedMXFBytes] in
-                                    let pollFM = FileManager.default
-                                    while !Task.isCancelled {
-                                        try? await Task.sleep(for: .seconds(1))
-                                        guard !Task.isCancelled else { break }
-                                        let attrs = try? pollFM.attributesOfItem(atPath: tmpVideoMXF.path)
-                                        let bytes = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
-                                        let formatted = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-                                        let fraction = expectedMXFBytes > 0
-                                            ? min(0.99, Double(bytes) / Double(expectedMXFBytes))
-                                            : 0
-                                        progressUpdate(
-                                            0.80 + fraction * 0.06,
-                                            "Wrapping J2C → MXF (\(formatted), \(Int(fraction * 100))%)"
-                                        )
-                                    }
-                                }
-                                let wrapResult = await self?.runTrackedPackageWrapper(
-                                    conversionID: conversionID,
-                                    executablePath: raw2bmxPath,
-                                    arguments: videoWrapArgs,
-                                    outputURL: tmpVideoMXF
-                                ) ?? .cancelled
-                                pollerTask.cancel()
-                                await pollerTask.value
-                                switch wrapResult {
-                                case .success(let diagnostic):
-                                    if !diagnostic.isEmpty {
-                                        Self.logger.info("raw2bmx output: \(diagnostic.prefix(500), privacy: .public)")
-                                    }
-                                    imfVideoMXF = tmpVideoMXF
-                                    Self.logger.info("IMF video essence created (App #2e)")
-                                case .failed(_, let reason, let diagnostic):
-                                    Self.logger.error("raw2bmx failed for IMF video: \(diagnostic.prefix(300), privacy: .public)")
-                                    errorReason = Self.dcpIMFErrorReason(
-                                        base: String(localized: "IMF video wrap failed: \(reason)", comment: "Shown when raw2bmx cannot create the IMF App 2e video essence."),
-                                        stderr: diagnostic
+                                    let wrapResult = await self.runTrackedPackageWrapper(
+                                        conversionID: conversionID,
+                                        executablePath: raw2bmxPath,
+                                        arguments: videoWrapArgs,
+                                        outputURL: tmpVideoMXF
                                     )
-                                    success = false
-                                case .cancelled:
+                                    pollerTask.cancel()
+                                    await pollerTask.value
+                                    switch wrapResult {
+                                    case .success(let diagnostic):
+                                        if !diagnostic.isEmpty {
+                                            Self.logger.info("raw2bmx output: \(diagnostic.prefix(500), privacy: .public)")
+                                        }
+                                        imfVideoMXF = tmpVideoMXF
+                                        Self.logger.info("IMF video essence created (App #2e)")
+                                    case .failed(_, let reason, let diagnostic):
+                                        Self.logger.error("raw2bmx failed for IMF video: \(diagnostic.prefix(300), privacy: .public)")
+                                        errorReason = Self.dcpIMFErrorReason(
+                                            base: String(localized: "IMF video wrap failed: \(reason)", comment: "Shown when raw2bmx cannot create the IMF App 2e video essence."),
+                                            stderr: diagnostic
+                                        )
+                                        success = false
+                                    case .cancelled:
+                                        errorReason = "Conversion cancelled"
+                                        success = false
+                                    }
+                                } catch is CancellationError {
                                     errorReason = "Conversion cancelled"
+                                    success = false
+                                } catch {
+                                    Self.logger.error("IMF frame preparation failed: \(error.localizedDescription, privacy: .public)")
+                                    let reason = error.localizedDescription
+                                    errorReason = String(localized: "IMF video wrap failed: \(reason)", comment: "Shown when raw2bmx cannot create the IMF App 2e video essence.")
                                     success = false
                                 }
                                 Self.cleanupTempFile(at: j2cDir, label: "IMF J2C frames")
@@ -2003,6 +2123,7 @@ actor FFMPEGConverter {
         expectedDuration: Double?,
         videoFrameRate: Double?,
         sourceMetadata: VideoMetadata?,
+        settings: AV2Settings,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void
     ) async -> AV2EncodeResult {
         guard let avmencPath = BinaryPathResolver.avmencPath else {
@@ -2020,7 +2141,8 @@ actor FFMPEGConverter {
             customInputArguments: customInputArguments,
             expectedDuration: expectedDuration,
             videoFrameRate: videoFrameRate,
-            metadataSource: .resolved(sourceMetadata)
+            metadataSource: .resolved(sourceMetadata),
+            settings: settings
         ) else {
             return AV2EncodeResult(success: false, errorReason: "Could not determine source video dimensions for AV2 encoding", keyframeIndices: [])
         }
@@ -2235,13 +2357,37 @@ actor FFMPEGConverter {
     /// files are joined (in order) by ``IVFConcatenator`` into the final video-only `.ivf`. A single
     /// failing chunk aborts the rest. Each chunk is an independent AV2 sequence (key frame at its
     /// first frame), which is what makes the bitstream-level concatenation valid.
-    private func runAV2ChunkedConversion(
+    func runAV2ChunkedConversion(
         plan: AV2CommandBuilder.AV2SegmentPlan,
         outputFileURL: URL,
         ffmpegPath: String,
         avmencPath: String,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void
     ) async -> AV2EncodeResult {
+        guard !Task.isCancelled else {
+            return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
+        }
+
+        // mkdir is exclusive: an existing file, directory, or symlink is never adopted as
+        // scratch space. Cleanup is installed only after this execution creates the directory.
+        let preparationError: Int32? = plan.segmentDirectory.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return EINVAL }
+            return Darwin.mkdir(path, mode_t(0o700)) == 0 ? nil : errno
+        }
+        if let preparationError {
+            let reason = NSError(domain: NSPOSIXErrorDomain, code: Int(preparationError)).localizedDescription
+            Self.logger.error("Could not prepare AV2 chunk scratch directory: \(reason, privacy: .public)")
+            return AV2EncodeResult(
+                success: false,
+                errorReason: String(localized: "Could not create temporary storage for AV2 chunks: \(reason). Check available disk space and temporary-folder permissions, then try again."),
+                keyframeIndices: []
+            )
+        }
+        defer { Self.cleanupDirectory(plan.segmentDirectory) }
+
+        guard !Task.isCancelled else {
+            return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
+        }
         let totalFrames = plan.totalFrames
         let chunkCount = plan.segments.count
         Self.logger.info("AV2 chunked encode: \(chunkCount) workers, \(totalFrames) frames → \(outputFileURL.lastPathComponent, privacy: .public)")
@@ -2287,7 +2433,6 @@ actor FFMPEGConverter {
 
         // All workers have exited (the task group is the 2N-of-2N termination barrier).
         if let failed = firstFailure ?? outcomes.first(where: { !$0.success }) {
-            Self.cleanupDirectory(plan.segmentDirectory)
             Self.logger.error("AV2 chunked failed at chunk \(failed.index): \(failed.errorReason ?? "unknown", privacy: .public)")
             return AV2EncodeResult(success: false, errorReason: failed.errorReason ?? "AV2 chunked encode failed", keyframeIndices: [])
         }
@@ -2296,7 +2441,6 @@ actor FFMPEGConverter {
         let ordered = plan.segments.sorted { $0.index < $1.index }.map { $0.outputURL }
         do {
             let result = try IVFConcatenator.concatenate(segmentURLs: ordered, into: outputFileURL)
-            Self.cleanupDirectory(plan.segmentDirectory)
             if let validationError = Self.validateOutputFile(at: outputFileURL) {
                 Self.cleanupTempFile(at: outputFileURL, label: "invalid AV2 .ivf")
                 return AV2EncodeResult(success: false, errorReason: validationError, keyframeIndices: [])
@@ -2305,7 +2449,6 @@ actor FFMPEGConverter {
             Self.logger.info("AV2 chunked encode complete: \(result.totalFrames) frames → \(outputFileURL.lastPathComponent, privacy: .public)")
             return AV2EncodeResult(success: true, errorReason: nil, keyframeIndices: result.keyframeIndices)
         } catch {
-            Self.cleanupDirectory(plan.segmentDirectory)
             if FileManager.default.fileExists(atPath: outputFileURL.path) {
                 Self.cleanupTempFile(at: outputFileURL, label: "partial AV2 .ivf")
             }
@@ -2485,6 +2628,7 @@ actor FFMPEGConverter {
         outputURL: URL,
         ffmpegPath: String,
         avmencPath: String,
+        settings: AV2Settings,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void
     ) async -> (Bool, String?) {
         guard activeConversionID == conversionID else {
@@ -2540,7 +2684,8 @@ actor FFMPEGConverter {
                 audioRoutingConfig: audioRoutingConfig,
                 trimStart: trimStart,
                 trimEnd: trimEnd,
-                ffmpegPath: ffmpegPath
+                ffmpegPath: ffmpegPath,
+                settings: settings
             ) {
             case .noAudio:
                 break
@@ -2693,6 +2838,7 @@ actor FFMPEGConverter {
         trimStart: Double?,
         trimEnd: Double?,
         ffmpegPath: String,
+        settings: AV2Settings = AV2Settings(),
         audioStreamProvider: @escaping @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = {
             await FFMPEGProbeService.fetchAudioStreams(for: $0)
         }
@@ -2704,8 +2850,8 @@ actor FFMPEGConverter {
         }
 
         guard operationIsCurrent() else { return .cancelled }
-        let codec = AV2AudioCodec.current
-        let bitrate = AudioBitrate(rawValue: UserDefaults.standard.string(forKey: AppConstants.av2AudioBitrateKey) ?? AppConstants.defaultAV2AudioBitrate)?.ffmpegValue ?? "192k"
+        let codec = settings.audioCodec
+        let bitrate = settings.audioBitrate.ffmpegValue
         let defaultAudioStreamIndices: [Int]
         if audioRoutingConfig != nil {
             defaultAudioStreamIndices = []
@@ -4041,6 +4187,8 @@ actor FFMPEGConverter {
         activeConversionID = nil
         postProcessingConversionID = nil
         activeBMXOperationID = nil
+        currentDependencyPreflightTask?.cancel()
+        currentDependencyPreflightTask = nil
         currentProgressGate?.invalidate()
         currentProgressGate = nil
         currentSubprocessTask?.cancel()
@@ -4054,6 +4202,9 @@ actor FFMPEGConverter {
         currentPackageAudioTask?.cancel()
         currentPackageAudioTask = nil
         currentPackageAudioTaskID = nil
+        currentPackagePreparationTask?.cancel()
+        currentPackagePreparationTask = nil
+        currentPackagePreparationTaskID = nil
         currentPackageWrapperTask?.cancel()
         currentPackageWrapperTask = nil
         currentPackageWrapperTaskID = nil
@@ -4619,5 +4770,39 @@ actor FFMPEGConverter {
             Self.logger.info("Audio pre-processing succeeded: \(targetChannelCount) mono channels created")
         }
         return result
+    }
+}
+
+
+extension FFMPEGConverter {
+    /// Every selected picture must be prepared successfully before a package wrapper starts.
+    /// The caller owns the private scratch directory and removes it on success or failure.
+    nonisolated static func preparePackageCodestreams(
+        sourceDirectory: URL,
+        frameNames: [String],
+        destinationDirectory: URL,
+        progress: (_ completed: Int, _ total: Int) -> Void = { _, _ in }
+    ) throws -> Int64 {
+        try Task.checkCancellation()
+        try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+        let socMarker = Data([0xFF, 0x4F])
+        var totalBytes: Int64 = 0
+        for (index, frameName) in frameNames.enumerated() {
+            try Task.checkCancellation()
+            let source = sourceDirectory.appendingPathComponent(frameName)
+            let data = try Data(contentsOf: source)
+            guard let marker = data.range(of: socMarker) else {
+                throw CocoaError(.fileReadCorruptFile, userInfo: [NSFilePathErrorKey: source.path])
+            }
+            let destination = destinationDirectory.appendingPathComponent(frameName)
+                .deletingPathExtension().appendingPathExtension("j2c")
+            let codestream = data[marker.lowerBound...]
+            try Task.checkCancellation()
+            try codestream.write(to: destination, options: .atomic)
+            totalBytes += Int64(codestream.count)
+            progress(index + 1, frameNames.count)
+        }
+        try Task.checkCancellation()
+        return totalBytes
     }
 }

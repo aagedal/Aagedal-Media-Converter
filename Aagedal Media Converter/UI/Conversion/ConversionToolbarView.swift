@@ -35,6 +35,12 @@ struct ConversionToolbarView: ToolbarContent {
     let hasResettableItems: Bool
     let onClear: () -> Void
 
+    // A saved default or an App Intent can select a hidden preset. Keep that
+    // selection represented so the menu can display the actual conversion mode.
+    private var pickerPresets: [ExportPreset] {
+        presets.contains(selectedPreset) ? presets : [selectedPreset] + presets
+    }
+
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .automatic) {
             ConversionPlayButton(
@@ -102,12 +108,13 @@ struct ConversionToolbarView: ToolbarContent {
             )
 
             Picker("Preset", selection: $selectedPreset) {
-                ForEach(presets) { preset in
+                ForEach(pickerPresets) { preset in
                     Text(displayName(preset)).tag(preset)
                 }
             }
             .accessibilityIdentifier("toolbar.preset")
             .pickerStyle(.menu)
+            .labelStyle(.titleOnly)
             .frame(width: 200)
             .disabled(isConverting)
             .foregroundColor(.primary)

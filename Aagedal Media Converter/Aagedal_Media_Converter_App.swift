@@ -23,6 +23,9 @@ struct Aagedal_Media_Converter_App: App {
     private let sparkleUpdater = SparkleUpdater.shared
 
     init() {
+#if DEBUG
+        UITestFixtureConfiguration.configureLaunchDefaults()
+#endif
         // Suppress MoltenVK info logs (level 2 = warnings only, no info spam)
         setenv("MVK_CONFIG_LOG_LEVEL", "2", 1)
 
@@ -57,8 +60,9 @@ struct Aagedal_Media_Converter_App: App {
             AppConstants.autoDeleteOldEncodesDaysKey: AppConstants.defaultAutoDeleteOldEncodesDays
         ])
 
-        Self.migrateCaptureDisplaySelection()
-        Self.migrateAudioPresets()
+        let settingsMigration = StartupSettingsMigration()
+        settingsMigration.migrateCaptureDisplaySelection()
+        settingsMigration.migrateAudioPresets()
         UploadProfileStore.migrateLegacyProfilesIfNeeded()
         applyPreviewCacheCleanupPolicy()
         TesseractService.purgeOrphanTempDirs()
@@ -69,53 +73,6 @@ struct Aagedal_Media_Converter_App: App {
         // Bring the settings-sync singleton (and its file/UserDefaults observers)
         // online at launch so a snapshot that arrived while closed is pulled in.
         SettingsSyncService.shared.activate()
-    }
-
-    /// One-time migration: seed the multi-display selection (`captureDisplayIDs`) from the legacy
-    /// single-display choice (`captureDisplayID`) so upgrading users keep their previously selected
-    /// screen. A legacy value of 0 ("Automatic / Main") maps to an empty selection.
-    private static func migrateCaptureDisplaySelection() {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: AppConstants.captureDisplayIDsMigratedKey) else { return }
-        defaults.set(true, forKey: AppConstants.captureDisplayIDsMigratedKey)
-
-        let legacyID = defaults.integer(forKey: AppConstants.captureDisplayIDKey)
-        let existing = defaults.string(forKey: AppConstants.captureDisplayIDsKey) ?? ""
-        if existing.isEmpty, legacyID != 0 {
-            defaults.set(String(legacyID), forKey: AppConstants.captureDisplayIDsKey)
-        }
-    }
-
-    /// One-time migration: consolidate 3 audio presets into unified Audio Only preset
-    private static func migrateAudioPresets() {
-        let defaults = UserDefaults.standard
-        let migrationKey = "audioPresetMigrationV1"
-        guard !defaults.bool(forKey: migrationKey) else { return }
-
-        // Migrate default preset selection
-        if let currentDefault = defaults.string(forKey: AppConstants.defaultPresetKey) {
-            switch currentDefault {
-            case "Audio only WAV (all channels)":
-                defaults.set(ExportPreset.audioOnly.rawValue, forKey: AppConstants.defaultPresetKey)
-                defaults.set(AudioOnlyFormat.wav.rawValue, forKey: AppConstants.audioOnlyFormatKey)
-            case "Audio only AAC (stereo downmix)":
-                defaults.set(ExportPreset.audioOnly.rawValue, forKey: AppConstants.defaultPresetKey)
-                defaults.set(AudioOnlyFormat.aac.rawValue, forKey: AppConstants.audioOnlyFormatKey)
-            case "Audio only MP4 (all tracks)":
-                defaults.set(ExportPreset.audioOnly.rawValue, forKey: AppConstants.defaultPresetKey)
-                defaults.set(AudioOnlyFormat.mp4.rawValue, forKey: AppConstants.audioOnlyFormatKey)
-            default:
-                break
-            }
-        }
-
-        // Migrate visibility: visible if any of the three old presets was visible
-        let wavVisible = defaults.object(forKey: AppConstants.audioWAVVisibleKey) as? Bool ?? true
-        let aacVisible = defaults.object(forKey: AppConstants.audioAACVisibleKey) as? Bool ?? true
-        let mp4Visible = defaults.object(forKey: AppConstants.audioMP4VisibleKey) as? Bool ?? true
-        defaults.set(wavVisible || aacVisible || mp4Visible, forKey: AppConstants.audioOnlyVisibleKey)
-
-        defaults.set(true, forKey: migrationKey)
     }
 
     var body: some Scene {

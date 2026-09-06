@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-05
+Last reviewed: 2026-09-06
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 317 tests pass. The
+- The unit-test baseline is green: 433 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,13 +23,14 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 317 unit tests. The UI test target now has deterministic smoke
+- There are 433 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
 - GitHub Actions now builds Debug and runs unit tests on pushes and pull requests;
-  tagged and scheduled runs also build Release. `main` still needs a branch rule
-  that makes the Debug build-and-test job required.
+  tagged and scheduled runs also build Release. `main` now requires the GitHub
+  Actions Debug build-and-test check, including for administrators, with strict
+  up-to-date branch enforcement.
 - External tools now construct `Process` only inside the shared runner in production.
   The DEBUG-only UI-test fixture generator now uses the same runner as well.
   All production launch paths share the same cancellation, timeout, pipe-draining,
@@ -42,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,230 entries. All 59 previously missing App Intent
+- The string catalog has 1,481 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -76,8 +77,7 @@ tests.
 
 ### 0.2 Add build-and-test CI
 
-Status: implemented and validated on GitHub Actions 2026-08-31; required-check
-enforcement remains to be configured.
+Status: completed 2026-09-05; hosted validation and required-check enforcement configured (Codex).
 
 - On every pull request and push, build the Debug app and run unit tests on macOS.
 - Add a Release build on tags or a scheduled run so packaging-only problems are
@@ -93,9 +93,14 @@ target on every pull request and push. Tagged and weekly scheduled runs also bui
 Release; manually dispatched runs can validate both configurations on demand.
 Failed jobs retain their `.xcresult` bundles for diagnosis. The appcast publisher
 remains an independent workflow. The first hosted Debug build and unit-test run
-passed on commit `a57ed1d`. The `main` branch currently has no protection rule, so
-make `Debug build and unit tests` a required check before marking this item
-complete.
+passed on commit `a57ed1d`. The `main` branch now requires `Debug build and unit tests`,
+bound to the GitHub Actions app identity, with strict up-to-date checks and administrator
+enforcement. The GitHub API confirmed the configured protection on 2026-09-05.
+
+A permanent shared `Aagedal Media Converter Unit Tests` scheme now builds only the app
+and unit target. CI uses it for unit validation, avoiding the unrelated UI-runner
+relink permission failure without removing UI tests from the ordinary app scheme
+(Codex, 2026-09-06).
 
 ### 0.3 Turn the existing TODO into current work
 
@@ -294,7 +299,7 @@ Preset, Start/Cancel, Settings, and each Settings sidebar pane. The generated
 placeholder test has been replaced with empty-queue/toolbar assertions and a Settings
 test that opens the window and moves from General to Presets to Metadata while
 checking the exposed pane state. A DEBUG-only launch hook now generates a tiny media
-fixture in a caller-owned temporary directory and imports it through the production
+fixture in an app-owned temporary directory and imports it through the production
 URL path, allowing the UI suite to verify queue import and preset selection without
 automating the sandboxed system file picker. The generated-fixture import and preset
 selection test passed twice consecutively. The same fixture now exercises a successful
@@ -705,6 +710,7 @@ outside the runner's control, matching ordinary process-group semantics.
 Status: in progress; image-sequence duration probing migrated async end-to-end,
 preview/analytics media preflight bounded, Apple Vision per-frame OCR bounded, and
 Whisper and Parakeet model downloads made cancellation-safe 2026-09-04.
+Native preview rendering and player observer work bounded 2026-09-05 (Codex).
 
 - Make image-sequence duration probing async end-to-end, or give the compatibility
   bridge a bounded timeout while callers are migrated.
@@ -884,9 +890,79 @@ cancellation is checked before fallback reads. The innermost worker retains its 
 sandbox access until parsing actually finishes, and image-sequence imports keep their
 existing folder-owning deadline around an explicitly unbounded resolver. Focused tests
 cover immediate success, a stalled parser deadline, parent cancellation, and late
-security-scope release. AVFoundation thumbnail/filmstrip
-generation and player observer metadata loads remain concrete audit candidates;
-thumbnail deadlines require safeguards against late output-file writes.
+security-scope release. The subsequent native-preview slice below addresses
+AVFoundation thumbnail/filmstrip generation and player observer metadata loads,
+including safeguards against late output-file writes.
+
+Native AVFoundation row-thumbnail and filmstrip rendering now has a fifteen-second
+non-joining deadline, including track/format loading, image generation, and PNG encoding.
+Each worker retains its own security access and produces only in-memory bytes; cache
+files are written atomically only after the caller accepts the result. Late output cannot
+overwrite a fallback thumbnail, and cancellation suppresses fallback work. Injectable tests
+cover accepted publication, timeout with late frames, and prompt cancellation.
+
+Player readiness now owns and bounds track validation and its initial seek. Replacing or
+tearing down a player cancels this work, and operation/observer identities reject stale
+metadata, time, loop, and seek callbacks. Audible-selection group loads are bounded and
+retain their own source access until any late completion. A failed player immediately
+falls back with its existing error instead of launching speculative diagnostic metadata
+reads. Tests cover stalled metadata/seek and late results after player replacement.
+The wider callback audit remains open; these concrete preview candidates are implemented.
+Normal queue cancellation now also stops DCP/IMF codestream preparation. Blocking
+frame I/O runs in an actor-owned detached task, with cooperative checks before each
+frame, before output writes, and after the final progress callback. Cancellation and
+supersession cancel that task; cleanup waits for it to stop before deleting scratch
+frames, and a cancelled preparation cannot launch a wrapper. Two focused tests pass:
+full IMF queue cancellation after frame one prevents frame two and wrapper launch,
+and cancellation during the final frame cannot report success (Codex, 2026-09-05).
+The wider audit of unbounded framework callbacks remains open.
+
+Screen/window discovery for recording and universal audio metering now shares a
+15-second non-joining deadline. Cancellation returns promptly and late framework
+snapshots cannot replace the completed outcome. Three deterministic tests cover
+success, a stalled discovery callback, and cancellation. The timeout has English and
+Norwegian recovery text. Remaining capture audit candidates include stream start,
+stop, configuration updates, and microphone permission lifecycle; these require
+operation ownership and stale-result handling as well as deadlines (Codex, 2026-09-06).
+
+A stalled bilingual UI audit exposed a synchronous Keychain secret read in Upload
+Settings' saved-password presence check. Normal and S3 presence checks now request
+only match status, explicitly disable secret data return, and forbid authentication
+interaction. Actual upload password retrieval keeps its existing explicit path. Four
+injected-query tests cover query policy, errors/authentication requirements, and
+invalid identifiers without accessing real credentials. UI audits now use a volatile
+blank upload profile instead of personal destinations or Keychain entries
+(Codex, 2026-09-06).
+
+Microphone authorization now has a non-joining 60-second deadline. Parent cancellation,
+explicit stop/teardown, and superseding requests reject late authorization callbacks;
+an unanswered prompt aborts setup with localized recovery guidance instead of being
+reported as a denial. Output-folder access begins only after permission resolves.
+Five deterministic tests cover grant/denial, timeout, late callbacks, cancellation,
+supersession, and explicit stop. Stream start/stop/configuration, session ownership
+across other suspension points, and live permission validation remain open
+(Codex, 2026-09-06).
+
+Universal audio metering now owns the complete discovery/start attempt and bounds
+startup and stop with fifteen-second non-joining deadlines. Stop and parent cancellation
+invalidate pending work; late successful starts are stopped, and stale level/frequency
+callbacks cannot overwrite silence or a newer session. Frequency-analyzer replacement
+is serialized on the sample queue. Four deterministic regressions cover late startup
+and retry, stalled stop callbacks, stop during discovery, and parent cancellation.
+Recording stream start/stop/configuration and broader recording-session ownership remain
+open (Codex, 2026-09-06).
+
+Recording stream shutdown now has a fifteen-second non-joining deadline, with the
+retired stream/output retained until a late framework callback finishes. A synchronized
+delivery fence stops writer appends and queued preview/meter updates before finalization.
+Recording starts reserve ownership across discovery, permission, preview teardown, and
+stream startup; stop invalidates those attempts and cleans up late tiles instead of
+installing them. Shared folder access and timers remain owned until all pending starts
+and concurrent finalizers finish. Nine deterministic tests cover deadline/late callback,
+retired delivery, cancellation-independent cleanup, duplicate starts, stop generations,
+and shared-session ownership. Stream startup itself still needs a deadline with late-success
+cleanup; a permanently stalled start retains its reservation and access. Preview selection
+supersession, configuration changes, and live capture validation remain (Codex, 2026-09-06).
 
 ### 2.3 Standardize user-visible errors
 
@@ -905,6 +981,15 @@ continues into a misleading manifest-assembly failure. The conversion now logs t
 underlying filesystem diagnostic, reports a concise package-specific queue error,
 skips manifest publication, and still cleans temporary essences. Both new messages
 are included in the Norwegian catalog.
+
+DCP and IMF App 2e now share checked JPEG 2000 codestream preparation. Scratch-directory
+creation, frame reads, missing codestream markers, and atomic output writes must all
+succeed before the video wrapper starts. A failed frame can no longer be silently dropped
+or counted toward the expected essence bytes; the queue reports the underlying preparation
+error and cleans scratch frames. DCP skips audio work after picture failure, preserving
+the original error, and scoped cleanup removes unused temporary picture/audio essences.
+Tests cover exact output bytes/progress, missing and malformed frames, directory
+conflicts, and output-write failures.
 
 Settings sync no longer treats an unreadable, malformed, or newer-format snapshot as
 if no remote file existed. Automatic reconciliation preserves the existing file instead
@@ -932,21 +1017,40 @@ failures dismiss stale popovers. Three unit tests cover aggregation, missing det
 and redaction. Capturing the exact historical tool versions and redacted commands
 per operation remains open; this initial report does not reconstruct them from current
 settings. The wider filesystem/bookmark error audit also remains open.
-The combined unit suite passes all 317 tests. The failure UI smoke test now asserts
-that Error details opens, contains the full failure, and exposes Copy diagnostics,
-and retains a screenshot when reached. Local execution is blocked before those new
-assertions: FFmpeg cannot write into the sandboxed UI runner's private fixture
-folder (`Operation not permitted`, exit 255). A shared `/tmp` experiment was reverted
-because the runner cannot create that folder either. The DEBUG fixture generator now
-uses the shared bounded runner with captured/redacted errors and explicit bundled
-FFmpeg selection, making that setup failure diagnosable. A sandbox-compatible fixture
-handoff and successful UI/screenshot run remain required; no visual pass is claimed.
+The combined unit suite passes all 325 tests (zero failures or skips); a focused
+three-test package-preparation run also passes after the final cleanup adjustment.
+The DEBUG fixture generator now creates and removes fixtures inside the app's own
+temporary directory, avoiding the UI runner's inaccessible sandbox. Fixture-test
+teardown relaunches the app for synchronous cleanup because XCTest termination can
+bypass normal termination notifications. Missing-input
+failure is requested through a launch flag and performed by the app after import.
+Output preferences are installed in the volatile argument domain before views are
+constructed, so the test folder is not saved into the user's output settings.
+The failure UI smoke test reaches Error details, checks the full failure and Copy
+diagnostics button, and captures a window screenshot. All six functional UI smoke
+tests pass in two consecutive runs, with the
+saved output-folder preference verified unchanged. All six also passed after explicit
+teardown cleanup was added; the final fixture directory was confirmed absent.
+The window-only Error details
+screenshot was visually checked for readable text and an accessible Copy button.
+Full locale/VoiceOver validation remains tracked under Priority 4.
+
+AV2 segment planning no longer creates scratch directories as a side effect.
+Execution exclusively creates its proposed directory before starting any workers,
+reports filesystem failures with localized recovery advice, and installs cleanup
+only after acquiring ownership. Five regressions cover abandoned plans, conflicting
+files/directories, missing parents, zero worker launches on preparation failure, and
+cleanup after worker failure. Test settings use the process's volatile argument
+domain so this new coverage does not persist changes to user preferences (Codex,
+2026-09-05).
 
 ## Priority 3 — Reduce change risk in architecture
 
 Target: continuous work after Priority 1 tests exist.
 
 ### 3.1 Split orchestration from state and views
+
+Status: in progress; queue decisions and bulk state transitions extracted 2026-09-05 (Codex).
 
 - Move import, queue commands, window/overlay presentation, and App Intent hand-off
   out of `ContentView` into small coordinators or observable models.
@@ -957,6 +1061,20 @@ Target: continuous work after Priority 1 tests exist.
 
 Acceptance: view bodies describe presentation, state transitions can be unit
 tested without launching the app, and each extraction is behavior-preserving.
+
+`ConversionQueueState` now owns ordered batch selection, duration-weighted progress,
+and bulk cancellation transitions. `ConversionManager` delegates these decisions
+without changing scheduling or subprocess ownership. Focused tests cover selected
+batch limits, trim-aware weighting, failed/cancelled exclusion, progress bounds,
+cancellation scope, preservation of unrelated item fields, and idempotence.
+Conversion execution, upload follow-up, and the ContentView/list-view coordinator
+extractions remain open.
+
+`ConversionUploadFollowUp` now owns success/opt-in decisions for individual outputs
+and chooses one representative in merge order for a shared output. Five focused tests
+cover failures, selection boundaries, empty merges, and stale indices. Actual upload
+execution remains in UploadManager; conversion execution, broader state transitions,
+and view coordinators remain open (Codex, 2026-09-06).
 
 ### 3.2 Make conversion plans typed
 
@@ -970,6 +1088,8 @@ combinations produce a preflight explanation before encoding starts.
 
 ### 3.3 Centralize settings access
 
+Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
+
 - Wrap `UserDefaults` keys in feature-scoped settings types with defaults and
   migrations.
 - Inject settings into logic under test rather than reading global defaults inside
@@ -978,6 +1098,58 @@ combinations produce a preflight explanation before encoding starts.
 
 Acceptance: tests do not mutate the user's defaults, and a settings schema change
 has an explicit migration test.
+
+Post-conversion Whisper, Parakeet, OCR, and analytics now use injected feature-scoped
+settings providers. Model, language, OCR engine, subtitle embedding, and metric
+preferences are captured before the operation suspends; changing Settings during a
+job affects the next operation. OCR now carries its selected engine through extraction
+instead of reading it again later. Five isolated-suite tests cover default/fallback
+values, language precedence, metric filtering, store isolation, and snapshot stability.
+Standalone Whisper, Parakeet, OCR, and analytics actions now use the same injected
+providers. Analytics captures auto-export enablement, format, and SSIMULACRA2 frame
+limits at operation start; the service and exporter no longer read global preferences.
+Eight isolated settings tests cover defaults, invalid-value fallback, snapshot stability,
+and real JSON export from captured settings. The existing analytics sampling test now
+verifies that a per-operation one-frame limit governs ten-second media.
+
+The existing filename boolean-to-mode compatibility migration now lives in an
+injectable `FileNameSettings` adapter. Four isolated migration tests preserve legacy
+true/false behavior, give explicit newer modes precedence, verify invalid/missing
+fallbacks, and confirm repeated reads do not rewrite saved preferences. Broader
+feature settings migration and coverage of the remaining schema changes remain open
+(Codex, 2026-09-06).
+
+AV2 encoding preferences now use an immutable, injectable `AV2Settings` snapshot.
+One snapshot spans metadata discovery, single/chunked command construction, and final
+Matroska bit-depth setup, so changing Settings during an encode cannot make its mux
+metadata disagree with the encoded picture. Four new regressions cover defaults,
+explicit zero values, invalid enum fallbacks, and actual commands/plans built from a
+captured snapshot after preferences change. The scratch-planning regression now uses
+an isolated defaults suite. Broader feature settings, including AV2 container/audio
+preferences, and schema migration coverage remain open (Codex, 2026-09-06).
+
+AV2 container, audio codec, and bitrate now join the same injectable snapshot before
+the converter's first suspension. Output extensions, source-collision naming, mux
+selection, and staged audio arguments all use that snapshot. Single and merged queue
+completion paths retain its output extension for file size, reveal, and upload handling. Three focused tests cover
+snapshot stability, invalid-value fallbacks, and audio preferences changed while source
+probing suspends. Broader non-AV2 settings remain open (Codex, 2026-09-06).
+
+Capture-display and legacy audio-preset startup migrations now live in an injectable
+`StartupSettingsMigration` adapter. Six isolated tests cover automatic and explicit
+display choices, preservation of cleared selections, all three legacy audio formats,
+all legacy visibility combinations, modern-value precedence, and idempotence. The audio
+migration now preserves an already configured modern format or visibility value instead
+of overwriting it when the migration marker is absent. Upload-profile and other schema
+migration coverage remain open (Codex, 2026-09-06).
+
+Upload-profile storage and migration now accept an isolated defaults store. Six
+regressions cover all four legacy backends, stable UUIDs for credential associations,
+backend-specific fields and selection, modern-list precedence (including an explicitly
+empty list), malformed data recovery, and idempotence. Migration no longer overwrites
+newer destinations or deletes legacy data after a decoding failure; malformed source
+lists remain untouched for repair and retry. Other feature settings and schema
+migration coverage remain open (Codex, 2026-09-06).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1005,9 +1177,33 @@ All new interface strings have Norwegian translations. Debug builds pass; manual
 VoiceOver and keyboard checks, trim-range/crop-overlay accessibility, and the wider
 primary-flow audit remain.
 
+Settings folder actions in General, Screenshots, and Watch Folder, metadata timecode
+adjustments, and update-command copying now expose explicit localized accessibility
+labels and stable identifiers. Screenshot format and alpha pickers now carry distinct
+spoken names despite their hidden visual labels. The Settings navigation UI test
+verifies the General/Screenshots button labels and all four screenshot picker names;
+the focused test passes. Manual VoiceOver and keyboard focus validation remains open.
+
+Sidebar pane names and the show/hide action now have explicit accessibility labels;
+the toggle also has a stable identifier. A new bilingual audit checks native sidebar
+row selection and translated names while capturing the main window and all 18 panes.
+The audit now completes an uninterrupted desktop run in both languages, capturing
+the main window and all 18 Settings panes. Screenshot review exposed runtime String
+values bypassing the catalog in several panes, a fixed-height tip truncation, and a
+selected-sidebar label truncation. Those concrete findings are corrected below; the full bilingual desktop rerun now passes (2026-09-06).
+Scrolled-off content and interaction-level VoiceOver validation remain distinct follow-ups
+(Codex, 2026-09-05).
+
+The custom trim timeline now exposes native accessibility sliders for playback and
+both trim boundaries, plus chapter-seek actions. Playback timecode editing and mode
+selection are real keyboard-focusable buttons. Crop reset/centering, track selection,
+image-sequence frame rate, and preview toggles have explicit names, values, or stable
+identifiers. New strings are translated into Norwegian. The combined Debug build
+passes; manual VoiceOver and keyboard interaction validation remains (Codex, 2026-09-05).
+
 ### 4.2 Close the localization gap
 
-Status: translations completed 2026-09-05; visual locale validation remains.
+Status: corrected-build bilingual Settings audit completed 2026-09-06; scrolled-content and Shortcuts validation remain.
 
 - Classify the 87 Norwegian-missing entries as user-facing text, intentional
   format tokens, or App Intent phrases.
@@ -1031,7 +1227,29 @@ errors are translated as well. The catalog check passes with 1,230 entries and o
 placeholders are rejected. English/Norwegian screenshots and clipping checks in the
 app, Settings, and Shortcuts remain.
 
+The full bilingual screenshot audit now passes for the main window and all 18 Settings
+panes. Inspection exposed additional catalog omissions and dynamic strings rendered
+without localization in General, File Names, Screenshots, Waveform, Downloads, Upload,
+Whisper, Analytics, Updates, and Shortcuts. Those paths now explicitly localize their
+values; Shortcuts search also matches translated action descriptions. The empty-queue
+tip wraps at its natural height, and selected sidebar labels can shrink slightly to
+fit. An additional 185 Settings and Shortcuts catalog entries now have Norwegian translations, alongside
+the 27 diagnostics/accessibility entries added in this pass. The catalog audit passes
+with 1,472 entries and the same 15 intentional omissions. The corrected-build audit
+now passes for the main window and all 18 panes in both
+languages, with all 38 screenshots visually reviewed. The Upload hang was traced to
+a Keychain secret read and fixed; audits use a volatile blank upload profile. A blank
+main-window preset picker exposed missing hidden-selection tags and inherited
+icon-only toolbar styling. The menu now always represents its selected preset and
+explicitly displays its title, with a bilingual regression test and verified final
+screenshots. Five remaining
+descriptive preset names now localize without changing persisted raw values or custom
+names. Scrolled-off content, Shortcuts app integration, and VoiceOver remain.
+The established “Watch Folder” terminology is retained (Codex, 2026-09-06).
+
 ### 4.3 Finish broadcast-grade screen-recording rates
+
+Status: implementation and generated-writer validation completed 2026-09-05 (Codex); live capture/editor validation remains.
 
 - Offer explicit 25, 29.97, 50, and 59.94 choices if professional PAL/NTSC delivery
   is the goal; keep display-native Auto separate.
@@ -1042,7 +1260,50 @@ app, Settings, and Shortcuts remain.
 Acceptance: `avg_frame_rate`, `r_frame_rate`, duration, frame count, and timecode
 match the selected rate in generated validation recordings.
 
+Capture now offers 25, exact 30000/1001, 50, exact 60000/1001, and integer
+60 fps while preserving existing saved choices and display-native Auto. Stream
+configuration, growing-file CFR presentation times, encoder hints, movie/media
+clocks, and timecode share one rational rate. The two NTSC choices use drop-frame
+labels and all timecodes wrap at midnight. Settings and the recording overlay
+explicitly explain CFR versus the non-growing presets' VFR delivery cap.
+
+Six focused tests cover saved choices, long timestamp arithmetic, drop-frame
+minute/ten-minute boundaries, midnight rollover, CoreMedia timecode descriptions,
+and generated AVC growing recordings at all five fixed rates. The generated movies
+verify actual frame spacing, final frame duration, total video duration against frame
+count, and persisted timecode duration/quanta/flags. This caught and fixed total
+track-duration rounding caused by AVAssetWriter's default 600 Hz movie clock.
+The test distinguishes actual video samples from AVAssetReader's zero-sample
+boundary markers rather than weakening frame-cadence assertions.
+
+The bilingual Settings UI test verifies all six menu options and captures English
+and Norwegian screenshots. Visual inspection exposed twelve older preset/detail/
+dynamic-range strings bypassing the catalog; these now use localization, alongside
+the eight new rate/explanation entries. The catalog audit passes with 1,250 entries
+and the same 15 intentional omissions.
+
+Remaining: live static/animated screen recordings across rates, long A/V sync,
+Auto/display behavior, sandbox/permission flows, and midnight/editor interoperability.
+The final combined validation passes all 333 unit tests and seven functional UI
+smoke tests, with no failures. English/Norwegian capture-settings screenshots were
+visually checked for clipping.
+The timecode-input and stop-time reliability follow-up is now implemented. Video
+and timecode wait for both writer inputs to be ready; timecode construction and
+append errors fail the recording instead of silently dropping labels. Stop freezes
+the endpoint and drains final CFR frames in bounded passes with a five-second
+deadline and cancellation checks. Video samples carry explicit rational durations,
+and the session ends at the exact emitted frame boundary, fixing doubled duration
+on immediate-stop single-frame recordings.
+Generated recordings verify persisted video/timecode sample counts and timestamps,
+including frozen-clock single-frame recordings at every fixed rate; deterministic
+tests cover backpressure, append failures,
+large-backlog yielding, and deadline checks within a pass. The new errors are
+translated into Norwegian. Live capture, A/V sync, permission flows, and editor
+interoperability remain validation gaps (Codex, 2026-09-05).
+
 ### 4.4 Improve first-run and dependency diagnostics
+
+Status: in progress; diagnostics and early package/AV2 dependency preflight added 2026-09-06 (Codex).
 
 - Provide one Tools/Diagnostics view for bundled, Homebrew, and custom binaries,
   including version, architecture, executable status, and a test action.
@@ -1052,6 +1313,54 @@ match the selected rate in generated validation recordings.
 
 Acceptance: users can diagnose a missing tool without reading logs or opening
 Terminal unless installation itself requires it.
+
+The new Tool Diagnostics Settings pane checks active FFmpeg, yt-dlp, Deno, rclone,
+Tesseract, and SSIMULACRA2 selections with their existing resolvers. It shows resolved
+paths, Mach-O architecture or script status, executable availability, and bounded
+version probes. Launch failures and timeouts have distinct recovery messages; leaving
+the pane cancels its process and prevents stale publication. Six focused tests cover
+headers, missing/nonexecutable inputs, output bounds, nonzero/truncated results,
+cancellation, and failure classification. The pane explains when bundled FFmpeg is
+sufficient and points to existing installation settings. Norwegian translations and a
+bilingual UI smoke test cover the pane.
+
+Diagnostics now also checks BMX transwrap, mxf2raw, raw2bmx, AS-DCP wrap, the AV2
+encoder/decoder, and Parakeet. Verified BMX/AS-DCP version flags use the same bounded
+runner; AV2 and Parakeet receive availability/architecture checks with an explicit
+localized explanation that their versions were not checked. Two additional tests
+verify that availability-only checks never launch a process and protect the verified
+helper flags. Model availability and feature-level compatibility preflight remain open
+(Codex, 2026-09-06).
+
+Tool Diagnostics now also displays the selected Whisper and Parakeet model paths
+and local availability. Checks reject missing/empty files and stale Parakeet refs
+without readable configuration and model weights, follow cache blob symlinks, and
+retain custom Whisper security-scoped access during inspection. These are local
+availability checks; model compatibility and integrity are not claimed. Four
+filesystem regressions cover missing/empty resources, dangling symlinks, and malformed
+or oversized cache refs, and nonblocking rejection of named pipes. The tool check also rejects a directory masquerading as an
+executable. Norwegian translations and model-row assertions extend the bilingual
+Diagnostics test. Feature-level compatibility preflight remains open (Codex, 2026-09-06).
+
+Conversion preflight now checks executable regular-file availability of the required
+DCP/IMF picture wrappers and AV2 encoder before creating outputs or encoding. Recognized
+AV2 sources also check the decoder at that boundary and retain the resolved path for
+launch. IMF audio checks AS-DCP when existing direct-source metadata confirms audio;
+customized empty routing remains silent. Six focused regressions cover helper mapping,
+ordinary-export independence, invalid executable selections, early converter rejection,
+AV2 source decoding, and conditional IMF audio. Decoder pipeline fixtures now use
+executable tool paths, and their readiness waits fail explicitly after five seconds
+instead of hanging indefinitely. The failure points to Tool Diagnostics
+and is translated into Norwegian. Unknown/custom-source IMF audio dependencies and
+feature-level codec/architecture compatibility remain open (Codex, 2026-09-06).
+
+IMF audio preflight now resolves unknown and virtual inputs with the same source policy
+as package extraction: concat representative clips, image-sequence companion audio,
+audio-only fallback, and intentionally silent routes. It probes only when AS-DCP is
+unavailable, has a bounded cancellable task before output creation, and rejects stale
+results. Five additional regressions cover source selection, early rejection, timeout,
+and cancellation. Unavailable topology retains the existing extraction fallback; codec
+and architecture compatibility remain open (Codex, 2026-09-06).
 
 ## Priority 5 — Release and dependency hygiene
 
@@ -1108,7 +1417,90 @@ Architecture/dependency resolution enforcement is implemented (Codex, 2026-09-05
 Full license attribution, reachability/removal decisions, measured size/memory baselines,
 clean-machine install/update tests, and a credentialed release run remain.
 
+The dependency manifest now also records hashes and sizes for all six local license
+notices. Regression tests reject empty or escaping notice paths and unresolved
+attribution. Release publishing requires complete notice references before building,
+signing, notarizing, or uploading; ordinary CI still checks inventory freshness.
+The strict gate currently fails as intended on 99 unresolved entries: three tools
+(avmenc, avmdec, rclone) and all 96 source-tree dylibs. No license assignments were
+invented and no binaries were removed. See `docs/bundled-dependency-licenses.md` for
+the evidence and packaging follow-up. All 31 release-script tests pass, including
+eight new inventory/license tests (Codex, 2026-09-05).
+
+All six existing local license notices are now copied into app resources and are
+readable offline from About > Licenses. Exported-bundle and final-ZIP checks compare
+every notice byte count and SHA-256 with the manifest; Release CI runs the same check.
+Six regression tests reject missing, changed, escaping, duplicate-name, and empty
+notice inventories. This closes packaging/discovery of existing notices only; the
+99 unresolved tool/dylib attributions and broader provenance work remain unchanged
+(Codex, 2026-09-06).
+
 ## Suggested delivery sequence
+
+Latest validation (2026-09-06, Codex): all 433 unit tests pass with zero failures or
+skips using the permanent shared unit-only scheme. The unsigned Release build passes; its bundle audit verifies all 44 Mach-O images
+and all six packaged license notices. All 37 release-script tests, bundled-manifest freshness, and localization checks pass
+(1,481 entries, 15 intentional omissions). The six packaged notices also match the
+manifest in the Debug app. GUI inspection could not be completed: the computer-use
+service returned stale menu elements and no screenshot. Live capture/permissions,
+VoiceOver, and the new About viewer's visual/bilingual inspection remain unverified.
+The initial Debug distribution audit correctly rejected test-injected XCTest support;
+distribution validation uses the Release app. No publishing or credentialed checks
+were performed.
+
+
+Latest validation (2026-09-06, Codex): Debug compilation and all 414 unit tests pass
+with parallel workers enabled, including sixteen new upload-migration, audio-meter
+lifecycle, and conversion-preflight regressions. All 31 release-script tests, bundled
+manifest freshness, and localization checks pass (1,476 entries, 15 intentional
+omissions). The ordinary scheme still hits the existing UI-runner relink permission
+error; validation used a temporary unit-only scheme, removed afterward. An intermediate
+run built during the decoder fixture update was interrupted; the final completed sources
+were rebuilt and all tests passed with zero skips. No UI interaction or live capture tests
+were run for this batch. The manual and wider roadmap gaps remain open.
+
+Previous validation (2026-09-06, Codex): Debug compilation and all 398 unit tests pass
+with parallel workers enabled, including ten new AV2 audio settings, startup migration,
+and readiness-gated subprocess regressions. All 31 release-script tests, bundled-manifest
+freshness, and localization checks pass (1,475 entries, 15 intentional omissions).
+The existing UI-runner relink permission error prevented the ordinary scheme's test
+build, so the final run used a temporary unit-only scheme, removed afterward. No UI
+or live capture tests were run for this batch. Manual validation and the wider roadmap
+items below remain open.
+
+
+The TERM-ignoring descendant timeout regression now emits its child PID only after
+installing its signal trap and allows a two-second startup window for loaded workers.
+A separate cancellation regression waits for explicit child readiness before cancelling,
+then verifies that escalation removes the descendant. A standalone harness using the
+production runner passed eight concurrent timeout and eight cancellation checks
+(Codex, 2026-09-06).
+
+
+Previous validation (2026-09-06, Codex): Debug compilation and all 388 unit tests
+pass, including thirteen new AV2 settings, microphone permission, and model-resource
+regressions. All 31 release-script tests, bundled-manifest freshness, and the catalog
+audit pass (1,475 entries, 15 intentional omissions). The combined run's unsigned
+UI runner was killed before connecting; the bilingual Diagnostics test then passed
+with a fresh locally signed build, and both results screenshots were visually checked.
+The final rebuilt unit bundle ran with `test-without-building` to bypass the recurring
+UI-runner relink permission error. A parallel run missed the child PID in the existing
+200 ms TERM-ignoring-descendant test; all 388 tests pass with parallel workers disabled.
+That subprocess startup sensitivity was addressed in the subsequent test-hardening slice below.
+Live capture/permission, VoiceOver, broader Settings
+and Shortcuts, and credentialed release checks remain outstanding.
+
+
+Previous validation (2026-09-06, Codex): Debug builds and all 375 unit tests pass,
+including sixteen new settings/migration, capture-discovery, helper-diagnostics, and
+Keychain-presence regressions. All 31 release-script tests, manifest freshness, and
+localization checks pass (1,472 entries, 15 intentional omissions). The corrected-build
+bilingual audit passes and all 38 main/Settings screenshots were reviewed. Functional
+UI checks pass across runs, including the isolated preset-menu retry; the combined
+desktop suite was not uninterrupted green because of intermittent menu focus and
+a lost macOS accessibility connection. Live capture,
+VoiceOver, scrolled Settings content, Shortcuts app integration, and credentialed
+release validation remain unperformed.
 
 1. Green the failing crop test with fixture-backed expected behavior.
 2. Add CI and the first command/file-safety test matrix.

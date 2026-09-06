@@ -58,7 +58,7 @@ jobs:
           set -o pipefail
           xcodebuild test \
             -project "$PROJECT" \
-            -scheme "$SCHEME" \
+            -scheme "Aagedal Media Converter Unit Tests" \
             -configuration Debug \
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
@@ -105,7 +105,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Verify Release architectures and library resolution
-        run: python3 scripts/verify-release-bundle.py "$RUNNER_TEMP/DerivedData/Build/Products/Release/$SCHEME.app" --architecture arm64
+        run: python3 scripts/verify-release-bundle.py "$RUNNER_TEMP/DerivedData/Build/Products/Release/$SCHEME.app" --architecture arm64 --manifest BundledDependencies.json
 
       - name: Upload diagnostics
         if: failure()

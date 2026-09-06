@@ -889,19 +889,26 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         if self == .animatedStill {
             let formatRaw = UserDefaults.standard.string(forKey: AppConstants.animatedStillFormatKey) ?? AppConstants.defaultAnimatedStillFormat
             let format = AnimatedStillFormat(rawValue: formatRaw) ?? .avif
-            return "Animated Still (\(format.rawValue))"
+            return String(localized: "Animated Still (\(format.rawValue))")
         }
         if self == .imageSequence {
             let formatRaw = UserDefaults.standard.string(forKey: AppConstants.imageSequenceExportFormatKey) ?? AppConstants.defaultImageSequenceExportFormat
             let format = ImageSequenceFormat(rawValue: formatRaw) ?? .png
-            return "Image Sequence (\(format.rawValue))"
+            return String(localized: "Image Sequence (\(format.rawValue))")
         }
         if self == .audioOnly {
             let formatRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyFormatKey) ?? AppConstants.defaultAudioOnlyFormat
             let format = AudioOnlyFormat(rawValue: formatRaw) ?? .wav
-            return "Audio Only (\(format.rawValue))"
+            return String(localized: "Audio Only (\(format.rawValue))")
         }
-        return rawValue
+        switch self {
+        case .videoLoopWithSound:
+            return String(localized: "VideoLoop with sound")
+        case .streamCopy:
+            return String(localized: "Stream Copy")
+        default:
+            return rawValue
+        }
     }
     
     var description: String {

@@ -7,6 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8CE9A054BDF34BD5974C74DE /* ConversionDependencyPreflightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A04DD0F426B484387C18EE8 /* ConversionDependencyPreflightTests.swift */; };
+		3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */; };
+		AAD060010000000000000001 /* KeychainCredentialManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */; };
+		30AE39FAAA1D4E5AA89C4C74 /* ToolDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 301B064EB8BC47D39D4BDA44 /* ToolDiagnosticsTests.swift */; };
+		78DF69E8D7A742D4AD118A73 /* ModelDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C039480DE22E4EBEADB0088D /* ModelDiagnosticsTests.swift */; };
+		B15C008BDFBA4E8893B1C380 /* ToolDiagnosticsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */; };
+		D8A2F88E52D7450387CA54AD /* ToolDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B08CBB6738F4E79A5DC9767 /* ToolDiagnostics.swift */; };
+		1F5A4299AB3C44DAB888B02C /* ModelDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F154E2310994DAFA60859B0 /* ModelDiagnostics.swift */; };
+		26F5C2D4170D479CA5B52180 /* PostConversionSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFDA902947BA4C97BAD3B996 /* PostConversionSettingsTests.swift */; };
+		11B12108DB154EA6A2A1F082 /* FileNameSettingsMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94293E832254BE798177757 /* FileNameSettingsMigrationTests.swift */; };
+		53DB501004114DEC9837976B /* AV2AudioSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BCAA3452B974DD38E9213D5 /* AV2AudioSettingsTests.swift */; };
+		5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */; };
+		8D2E74A0058A4C479F145B0F /* UploadProfileMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 967DA4B812AC4F7996A1822B /* UploadProfileMigrationTests.swift */; };
+		557166FCAF354294BA821011 /* PostConversionSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DE49AB8D27E4B9CBE7324A4 /* PostConversionSettings.swift */; };
+		544D2AB7862149BB973E7E64 /* FileNameSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E16F395023624188805714C2 /* FileNameSettings.swift */; };
+		1E3D1613E5D34B0E88D179D6 /* StartupSettingsMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F1FE3FF9C94704A970D379 /* StartupSettingsMigration.swift */; };
+		92FC94C0EE7C4C9889C3678A /* AV2Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF54064B23414EFA90E6AB59 /* AV2Settings.swift */; };
+		35D23935EC554B1B97085056 /* AV2ScratchDirectoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */; };
+		68DB0573FE4F499AA72EF9AF /* ConversionQueueStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CEDDD06B78842E6A7446610 /* ConversionQueueStateTests.swift */; };
+		3559AE0D84F84065A06C6888 /* ConversionUploadFollowUpTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAEE8F6BC37E461AA2DBC4AC /* ConversionUploadFollowUpTests.swift */; };
+		DDADD32918CD4580B1A5ECC6 /* ConversionQueueState.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD5693B21A7341B2A3FA32A7 /* ConversionQueueState.swift */; };
+		EA6ED86B34C44A7C80E5F242 /* ConversionUploadFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A606FA6387C4AE4B6C4B9EE /* ConversionUploadFollowUp.swift */; };
+		CD4320100000000000000001 /* CaptureFrameRateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD4320100000000000000002 /* CaptureFrameRateTests.swift */; };
 		00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */; };
 		11255751B6534433ACCE197E /* TesseractOCREngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4782DE38B404350A2A11FCF /* TesseractOCREngine.swift */; };
 		15A41FC10346A7F73664E9A1 /* ComparisonMetadataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F82CC3B9944D3DAF6B3F9C93 /* ComparisonMetadataView.swift */; };
@@ -215,6 +238,11 @@
 		VDISPMENU0001000BUILD /* VirtualDisplayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMENU0001000FREF1 /* VirtualDisplayMenu.swift */; };
 		VDISPMGR00001000BUILD /* VirtualDisplayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */; };
 		VIDITEMIDX00000001 /* VideoItemIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIDITEMIDX00000002 /* VideoItemIndex.swift */; };
+		A90606000000000000000100 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 8E0C32C72E09E58F00F22B21 /* LICENSE */; };
+		A90606000000000000000101 /* ffmpeg-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8E0C32CE2E09F5E400F22B21 /* ffmpeg-LICENSE.txt */; };
+		A90606000000000000000102 /* bmx-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000202 /* bmx-LICENSE.txt */; };
+		A90606000000000000000103 /* mpv-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000203 /* mpv-LICENSE.txt */; };
+		A90606000000000000000104 /* tesseract-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000204 /* tesseract-LICENSE.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -257,6 +285,29 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		8A04DD0F426B484387C18EE8 /* ConversionDependencyPreflightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionDependencyPreflightTests.swift; sourceTree = "<group>"; };
+		63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionDependencyPreflight.swift; sourceTree = "<group>"; };
+		AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialManagerTests.swift; sourceTree = "<group>"; };
+		301B064EB8BC47D39D4BDA44 /* ToolDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolDiagnosticsTests.swift; sourceTree = "<group>"; };
+		C039480DE22E4EBEADB0088D /* ModelDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDiagnosticsTests.swift; sourceTree = "<group>"; };
+		A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolDiagnosticsSettingsView.swift; sourceTree = "<group>"; };
+		5B08CBB6738F4E79A5DC9767 /* ToolDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolDiagnostics.swift; sourceTree = "<group>"; };
+		3F154E2310994DAFA60859B0 /* ModelDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDiagnostics.swift; sourceTree = "<group>"; };
+		FFDA902947BA4C97BAD3B996 /* PostConversionSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostConversionSettingsTests.swift; sourceTree = "<group>"; };
+		E94293E832254BE798177757 /* FileNameSettingsMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNameSettingsMigrationTests.swift; sourceTree = "<group>"; };
+		4BCAA3452B974DD38E9213D5 /* AV2AudioSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AudioSettingsTests.swift; sourceTree = "<group>"; };
+		575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupSettingsMigrationTests.swift; sourceTree = "<group>"; };
+		967DA4B812AC4F7996A1822B /* UploadProfileMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadProfileMigrationTests.swift; sourceTree = "<group>"; };
+		7DE49AB8D27E4B9CBE7324A4 /* PostConversionSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostConversionSettings.swift; sourceTree = "<group>"; };
+		E16F395023624188805714C2 /* FileNameSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNameSettings.swift; sourceTree = "<group>"; };
+		D9F1FE3FF9C94704A970D379 /* StartupSettingsMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupSettingsMigration.swift; sourceTree = "<group>"; };
+		DF54064B23414EFA90E6AB59 /* AV2Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2Settings.swift; sourceTree = "<group>"; };
+		A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ScratchDirectoryTests.swift; sourceTree = "<group>"; };
+		2CEDDD06B78842E6A7446610 /* ConversionQueueStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionQueueStateTests.swift; sourceTree = "<group>"; };
+		DAEE8F6BC37E461AA2DBC4AC /* ConversionUploadFollowUpTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionUploadFollowUpTests.swift; sourceTree = "<group>"; };
+		CD5693B21A7341B2A3FA32A7 /* ConversionQueueState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionQueueState.swift; sourceTree = "<group>"; };
+		3A606FA6387C4AE4B6C4B9EE /* ConversionUploadFollowUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionUploadFollowUp.swift; sourceTree = "<group>"; };
+		CD4320100000000000000002 /* CaptureFrameRateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureFrameRateTests.swift; sourceTree = "<group>"; };
 		07D71BE05D85B5DEBAEB0A7A /* YTDLPSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = YTDLPSettingsView.swift; sourceTree = "<group>"; };
 		0A661B3187048E83E24FB0AB /* WhisperModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WhisperModels.swift; sourceTree = "<group>"; };
 		0FEA89ED716FE15C8986DB34 /* BinaryPathResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BinaryPathResolver.swift; sourceTree = "<group>"; };
@@ -476,6 +527,9 @@
 		VDISPMENU0001000FREF1 /* VirtualDisplayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayMenu.swift; sourceTree = "<group>"; };
 		VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayManager.swift; sourceTree = "<group>"; };
 		VIDITEMIDX00000002 /* VideoItemIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItemIndex.swift; sourceTree = "<group>"; };
+		A90606000000000000000202 /* bmx-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "bmx-LICENSE.txt"; sourceTree = "<group>"; };
+		A90606000000000000000203 /* mpv-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mpv-LICENSE.txt"; sourceTree = "<group>"; };
+		A90606000000000000000204 /* tesseract-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "tesseract-LICENSE.txt"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -567,6 +621,9 @@
 			isa = PBXGroup;
 			children = (
 				8EA817D52F7184AA00F9F10C /* asdcplib-LICENSE.txt */,
+				A90606000000000000000204 /* tesseract-LICENSE.txt */,
+				A90606000000000000000203 /* mpv-LICENSE.txt */,
+				A90606000000000000000202 /* bmx-LICENSE.txt */,
 				8E0C32CE2E09F5E400F22B21 /* ffmpeg-LICENSE.txt */,
 			);
 			path = Licenses;
@@ -618,6 +675,10 @@
 		8E0CA7A92C34171300EA7C37 /* Logic */ = {
 			isa = PBXGroup;
 			children = (
+				7DE49AB8D27E4B9CBE7324A4 /* PostConversionSettings.swift */,
+				E16F395023624188805714C2 /* FileNameSettings.swift */,
+				D9F1FE3FF9C94704A970D379 /* StartupSettingsMigration.swift */,
+				DF54064B23414EFA90E6AB59 /* AV2Settings.swift */,
 				596BC21F86AEFDA304EF948F /* MetadataWindowState.swift */,
 				8EEE45382EC13B670049F017 /* Previews */,
 				8EEE45322EC13A330049F017 /* WatchFolder */,
@@ -625,6 +686,8 @@
 				VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */,
 				VDISPHDR00001000FREF1 /* CGVirtualDisplay+Private.h */,
 				8E545D932C3412AE0088C274 /* ConversionManager.swift */,
+				CD5693B21A7341B2A3FA32A7 /* ConversionQueueState.swift */,
+				3A606FA6387C4AE4B6C4B9EE /* ConversionUploadFollowUp.swift */,
 				ENCGRP00000000002 /* EncodingGroup.swift */,
 				8E545D862C33FD8C0088C274 /* VideoFilesUtil.swift */,
 				8E0CA7AB2C3458A400EA7C37 /* ParsingUtils.swift */,
@@ -656,6 +719,8 @@
 		8E2C6BAE2E059AFC00A9379F /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				5B08CBB6738F4E79A5DC9767 /* ToolDiagnostics.swift */,
+				3F154E2310994DAFA60859B0 /* ModelDiagnostics.swift */,
 				8E2C6BBE2E084BC200A9379F /* SecurityScopedBookmarkManager.swift */,
 				8E2C6BAD2E059AFC00A9379F /* AppConstants.swift */,
 				8E09F7432EC762C200E129CD /* AudioWaveformPreferences.swift */,
@@ -811,7 +876,20 @@
 		8EE6EEAC2C31FC6F007B629D /* Aagedal Media ConverterTests */ = {
 			isa = PBXGroup;
 			children = (
+				301B064EB8BC47D39D4BDA44 /* ToolDiagnosticsTests.swift */,
+				C039480DE22E4EBEADB0088D /* ModelDiagnosticsTests.swift */,
+				8A04DD0F426B484387C18EE8 /* ConversionDependencyPreflightTests.swift */,
+				FFDA902947BA4C97BAD3B996 /* PostConversionSettingsTests.swift */,
+				E94293E832254BE798177757 /* FileNameSettingsMigrationTests.swift */,
+				4BCAA3452B974DD38E9213D5 /* AV2AudioSettingsTests.swift */,
+				575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */,
+				967DA4B812AC4F7996A1822B /* UploadProfileMigrationTests.swift */,
 				8EBD10232EBE8B7000377649 /* Aagedal_Media_Converter_Tests.swift */,
+				AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */,
+				CD4320100000000000000002 /* CaptureFrameRateTests.swift */,
+				A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */,
+				2CEDDD06B78842E6A7446610 /* ConversionQueueStateTests.swift */,
+				DAEE8F6BC37E461AA2DBC4AC /* ConversionUploadFollowUpTests.swift */,
 			);
 			path = "Aagedal Media ConverterTests";
 			sourceTree = "<group>";
@@ -837,6 +915,7 @@
 				AF2AAF2AAF2AAF2AAF2AAF2A /* MatroskaMuxer.swift */,
 				8EEE452A2EC138FA0049F017 /* ExportPreset.swift */,
 				8E545D8A2C3404040088C274 /* FFMPEGConverter.swift */,
+				63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */,
 				67BAE582711E2F5E020591A9 /* ConversionRequest.swift */,
 				9609862A8EC6964A0A45885F /* WaveformPCMDecoder.swift */,
 				9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */,
@@ -904,6 +983,7 @@
 		8EEE45362EC13AE90049F017 /* SettingsView */ = {
 			isa = PBXGroup;
 			children = (
+				A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */,
 				8EA25FE82F82A7BA0087B1F1 /* TesseractSettingsView.swift */,
 				8E4DF2702ECBAD46007B6277 /* WaveformSettingsView.swift */,
 				8E4DF26E2ECBAD30007B6277 /* PresetSettingsView.swift */,
@@ -1173,6 +1253,11 @@
 				8EA817D42F71840E00F9F10C /* asdcp-wrap in Resources */,
 				8E501CFE2EF1807000717373 /* error.mp3 in Resources */,
 				8EA817D62F7184AA00F9F10C /* asdcplib-LICENSE.txt in Resources */,
+				A90606000000000000000104 /* tesseract-LICENSE.txt in Resources */,
+				A90606000000000000000103 /* mpv-LICENSE.txt in Resources */,
+				A90606000000000000000102 /* bmx-LICENSE.txt in Resources */,
+				A90606000000000000000101 /* ffmpeg-LICENSE.txt in Resources */,
+				A90606000000000000000100 /* LICENSE in Resources */,
 				8EE6EEA02C31FC6F007B629D /* Assets.xcassets in Resources */,
 				8EFBDA922EA56F8E005ADDCF /* ffmpeg in Resources */,
 				8E3D35652F9F91EB00160565 /* rclone in Resources */,
@@ -1206,6 +1291,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B15C008BDFBA4E8893B1C380 /* ToolDiagnosticsSettingsView.swift in Sources */,
+				D8A2F88E52D7450387CA54AD /* ToolDiagnostics.swift in Sources */,
+				1F5A4299AB3C44DAB888B02C /* ModelDiagnostics.swift in Sources */,
+				557166FCAF354294BA821011 /* PostConversionSettings.swift in Sources */,
+				544D2AB7862149BB973E7E64 /* FileNameSettings.swift in Sources */,
+				1E3D1613E5D34B0E88D179D6 /* StartupSettingsMigration.swift in Sources */,
+				92FC94C0EE7C4C9889C3678A /* AV2Settings.swift in Sources */,
 				CC01A1C0PY00010000000002 /* CopyableCommandRow.swift in Sources */,
 				RSEL000000000001000BUILD /* RegionSelectionOverlayView.swift in Sources */,
 				RSEL000000000002000BUILD /* RegionSelectionWindowController.swift in Sources */,
@@ -1286,6 +1378,8 @@
 				8E824AC52EF8AB46001A6B95 /* FullscreenMPVView.swift in Sources */,
 				8EC9A6FE2EC149140082C67F /* PreviewPlayerController.swift in Sources */,
 				8E545D942C3412AE0088C274 /* ConversionManager.swift in Sources */,
+				DDADD32918CD4580B1A5ECC6 /* ConversionQueueState.swift in Sources */,
+				EA6ED86B34C44A7C80E5F242 /* ConversionUploadFollowUp.swift in Sources */,
 				C2D3E4F5061728394A5B6C7D /* ScreenCaptureManager.swift in Sources */,
 				VDISPMGR00001000BUILD /* VirtualDisplayManager.swift in Sources */,
 				VDISPMENU0001000BUILD /* VirtualDisplayMenu.swift in Sources */,
@@ -1317,6 +1411,7 @@
 				8EE6EE9A2C31FC6B007B629D /* Aagedal_Media_Converter_App.swift in Sources */,
 				8E09F7442EC762C200E129CD /* AudioWaveformPreferences.swift in Sources */,
 				8E545D8B2C3404040088C274 /* FFMPEGConverter.swift in Sources */,
+				3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */,
 				67BAE582711E2F5E020591AA /* ConversionRequest.swift in Sources */,
 				978C1F6A9DF43EE4E1E9FDD4 /* WaveformPCMDecoder.swift in Sources */,
 				00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */,
@@ -1400,7 +1495,20 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				30AE39FAAA1D4E5AA89C4C74 /* ToolDiagnosticsTests.swift in Sources */,
+				78DF69E8D7A742D4AD118A73 /* ModelDiagnosticsTests.swift in Sources */,
+				8CE9A054BDF34BD5974C74DE /* ConversionDependencyPreflightTests.swift in Sources */,
+				26F5C2D4170D479CA5B52180 /* PostConversionSettingsTests.swift in Sources */,
+				11B12108DB154EA6A2A1F082 /* FileNameSettingsMigrationTests.swift in Sources */,
+				53DB501004114DEC9837976B /* AV2AudioSettingsTests.swift in Sources */,
+				5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */,
+				8D2E74A0058A4C479F145B0F /* UploadProfileMigrationTests.swift in Sources */,
 				8EBD10242EBE8B7000377649 /* Aagedal_Media_Converter_Tests.swift in Sources */,
+				AAD060010000000000000001 /* KeychainCredentialManagerTests.swift in Sources */,
+				CD4320100000000000000001 /* CaptureFrameRateTests.swift in Sources */,
+				35D23935EC554B1B97085056 /* AV2ScratchDirectoryTests.swift in Sources */,
+				68DB0573FE4F499AA72EF9AF /* ConversionQueueStateTests.swift in Sources */,
+				3559AE0D84F84065A06C6888 /* ConversionUploadFollowUpTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

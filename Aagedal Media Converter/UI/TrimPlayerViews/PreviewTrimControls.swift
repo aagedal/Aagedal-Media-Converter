@@ -118,25 +118,20 @@ struct PreviewTrimControls: View {
                 }
                 .padding(.horizontal, 15)
             } else {
-                
                 HStack(spacing: 4) {
                     timecodeModePrefix
-                    Label("\(formatTimecodeWithMode(seconds: currentPlaybackTime))", systemImage: "arrowtriangle.left.and.line.vertical.and.arrowtriangle.right")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .frame(width: 120, alignment: .leading)
-                        .padding(.trailing, 25)
+                    Button(action: startTimecodeEdit) {
+                        Label("\(formatTimecodeWithMode(seconds: currentPlaybackTime))", systemImage: "arrowtriangle.left.and.line.vertical.and.arrowtriangle.right")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .frame(width: 120, alignment: .leading)
+                            .padding(.trailing, 25)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit playback timecode")
+                    .accessibilityLabel("Playback timecode")
+                    .accessibilityValue(formatTimecodeWithMode(seconds: currentPlaybackTime))
+                    .accessibilityIdentifier("trim.timecode")
                 }
-                .onTapGesture(count: 2) {
-                    startTimecodeEdit()
-                }
-                .help("Double-click to enter timecode. Click mode label or press T to toggle mode.")
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Playback timecode")
-                .accessibilityValue(formatTimecodeWithMode(seconds: currentPlaybackTime))
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { startTimecodeEdit() }
-                .accessibilityAction(named: "Cycle timecode mode") { timecodeDisplayMode.toggle() }
-                .accessibilityIdentifier("trim.timecode")
             }
 
             Button(action: { controller.seekTo(item.effectiveTrimEnd) }) {
@@ -163,6 +158,7 @@ struct PreviewTrimControls: View {
                     Label("Capture frame", systemImage: "camera")
                         .labelStyle(.iconOnly)
                 }
+                .accessibilityIdentifier("trim.captureFrame")
                 .disabled(controller.isCapturingScreenshot || !item.hasVideoStream)
                 .help(item.hasVideoStream ? "Save the current frame as an image" : "Screenshot capture is unavailable for audio-only clips")
 
@@ -225,6 +221,7 @@ struct PreviewTrimControls: View {
                         .labelStyle(.iconOnly)
                 }
                 .toggleStyle(.button)
+                .accessibilityIdentifier("trim.showChapters")
                 .help(showChapters
                       ? "Hide chapter markers (\(controller.currentChapters.count))"
                       : "Show chapter markers (\(controller.currentChapters.count))")
@@ -236,6 +233,7 @@ struct PreviewTrimControls: View {
             }
             .toggleStyle(.button)
             .help("Show/hide audio level meter")
+            .accessibilityIdentifier("trim.audioMeter")
 
             Toggle(isOn: loopBinding) {
                 Label("Loop", systemImage: "repeat")
@@ -244,6 +242,7 @@ struct PreviewTrimControls: View {
             .toggleStyle(.button)
             .disabled(isLoopDisabled)
             .help(loopButtonTooltip)
+            .accessibilityIdentifier("trim.loop")
 
             Button(action: onReset) {
                 Label("Reset", systemImage: "arrow.counterclockwise")
@@ -286,6 +285,9 @@ struct PreviewTrimControls: View {
                     .foregroundColor(.primary)
             }
             .menuStyle(.borderlessButton)
+            .accessibilityLabel("Image sequence frame rate")
+            .accessibilityValue("\(formatFrameRate(item.imageSequenceConfig?.frameRate ?? 24)) fps")
+            .accessibilityIdentifier("trim.imageSequenceFrameRate")
             .fixedSize()
         }
         .padding(.leading, 12)
@@ -339,6 +341,10 @@ struct PreviewTrimControls: View {
                 .labelStyle(.iconOnly)
         }
         .menuStyle(.borderlessButton)
+        .accessibilityValue(controller.audioTrackOptions.first(where: {
+            $0.position == controller.selectedAudioTrackOrderIndex
+        })?.title ?? String(localized: "No alternate audio tracks"))
+        .accessibilityIdentifier("trim.audioTrack")
         .disabled(controller.audioTrackOptions.count <= 1)
         .help(controller.audioTrackOptions.isEmpty ? "No alternate audio tracks" : "Select audio track")
     }
@@ -380,6 +386,10 @@ struct PreviewTrimControls: View {
                 .labelStyle(.iconOnly)
         }
         .menuStyle(.borderlessButton)
+        .accessibilityValue(controller.subtitleTrackOptions.first(where: {
+            $0.position == controller.selectedSubtitleTrackOrderIndex
+        })?.title ?? String(localized: "Off"))
+        .accessibilityIdentifier("trim.subtitleTrack")
         .disabled(controller.subtitleTrackOptions.isEmpty)
         .help(controller.subtitleTrackOptions.isEmpty ? "No subtitle tracks" : "Select subtitle track")
     }
@@ -701,18 +711,24 @@ struct PreviewTrimControls: View {
     }
     
     private var timecodeModePrefix: some View {
-        Text(timecodeDisplayMode.prefix)
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 3)
-            .padding(.vertical, 1)
-            .background(
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.secondary.opacity(0.15))
-            )
-            .contentShape(Rectangle())
-            .onTapGesture { timecodeDisplayMode.toggle() }
-            .help("Click or press T to cycle: REL TC → SRC TC → FRM")
-            .frame(width: 40)
+        Button {
+            timecodeDisplayMode.toggle()
+        } label: {
+            Text(timecodeDisplayMode.prefix)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.secondary.opacity(0.15))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Cycle timecode mode")
+        .accessibilityValue(Text(LocalizedStringKey(timecodeDisplayMode.displayName)))
+        .accessibilityIdentifier("trim.timecodeMode")
+        .help("Click or press T to cycle: REL TC → SRC TC → FRM")
+        .frame(width: 40)
     }
 }

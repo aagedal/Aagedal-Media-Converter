@@ -128,6 +128,8 @@ struct GeneralSettingsView: View {
                             }
                             .buttonStyle(BorderlessButtonStyle())
                             .help("Show in Finder")
+                            .accessibilityLabel("Show in Finder")
+                            .accessibilityIdentifier("settings.general.revealOutput")
 
                             Button(action: { selectNewOutputFolder() }) {
                                 Image(systemName: "folder.badge.gearshape")
@@ -135,6 +137,8 @@ struct GeneralSettingsView: View {
                             }
                             .buttonStyle(BorderlessButtonStyle())
                             .help("Change default output folder")
+                            .accessibilityLabel("Change default output folder")
+                            .accessibilityIdentifier("settings.general.chooseOutput")
                         }
                     }
 
@@ -195,7 +199,7 @@ struct GeneralSettingsView: View {
                     Text("Default timecode mode:")
                     Picker("", selection: $preferredTimecodeDisplayMode) {
                         ForEach(TimecodeDisplayMode.allCases, id: \.rawValue) { mode in
-                            Text(mode.displayName).tag(mode.rawValue)
+                            Text(LocalizedStringKey(mode.displayName)).tag(mode.rawValue)
                         }
                     }
                     .pickerStyle(.menu)

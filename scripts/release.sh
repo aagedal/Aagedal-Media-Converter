@@ -29,7 +29,7 @@ set -euo pipefail
 echo "==> scripts/release.sh starting"
 
 echo "==> Verifying bundled dependency manifest"
-scripts/bundled-dependency-manifest.py --check
+scripts/bundled-dependency-manifest.py --check --require-complete-licenses
 
 # -----------------------------------------------------------------------------
 # Toolchain resolution
@@ -140,7 +140,7 @@ APP_PATH="$EXPORT_DIR/$SCHEME.app"
 [[ -d "$APP_PATH" ]] || { echo "Build produced no .app at $APP_PATH" >&2; exit 1; }
 
 # Verify the exported bundle before submitting it to Apple.
-python3 scripts/verify-release-bundle.py "$APP_PATH" --architecture arm64
+python3 scripts/verify-release-bundle.py "$APP_PATH" --architecture arm64 --manifest BundledDependencies.json
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 # -----------------------------------------------------------------------------
@@ -248,7 +248,7 @@ xcrun swift scripts/verify-update-signature.swift "$RELEASE_ZIP" "$APP_PATH/Cont
 VERIFY_DIR="$BUILD_DIR/verify-distribution"
 mkdir -p "$VERIFY_DIR"
 /usr/bin/ditto -x -k "$RELEASE_ZIP" "$VERIFY_DIR"
-python3 scripts/verify-release-bundle.py "$VERIFY_DIR/$SCHEME.app" --architecture arm64
+python3 scripts/verify-release-bundle.py "$VERIFY_DIR/$SCHEME.app" --architecture arm64 --manifest BundledDependencies.json
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$VERIFY_DIR/$SCHEME.app"
 xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
 /usr/sbin/spctl --assess --type execute --verbose=2 "$VERIFY_DIR/$SCHEME.app"

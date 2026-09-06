@@ -8,6 +8,8 @@ loader/executable paths and inherited LC_RPATHs, without DYLD_* overrides.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +23,33 @@ MACHO_MAGICS = {bytes.fromhex(value) for value in (
     "feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca"
 )}
 LOAD_COMMANDS = {"LC_LOAD_DYLIB", "LC_LOAD_WEAK_DYLIB", "LC_REEXPORT_DYLIB", "LC_LOAD_UPWARD_DYLIB", "LC_LAZY_LOAD_DYLIB"}
+
+
+def verify_notices(bundle: Path, manifest: Path) -> int:
+    """Verify that every inventoried notice is distributed byte-for-byte.
+
+    Xcode copies these text resources to the Resources root. Attribution
+    completeness remains a separate manifest gate; this checks packaging only.
+    """
+    bundle = bundle.resolve(strict=True)
+    entries = json.loads(manifest.read_text())["licenseFiles"]
+    if not entries:
+        raise ValueError("The dependency manifest contains no license notices")
+    names = set()
+    for entry in entries:
+        name = Path(entry["path"]).name
+        if name in names:
+            raise ValueError(f"Duplicate packaged license notice name: {name}")
+        names.add(name)
+        notice = bundle / "Contents/Resources" / name
+        if not notice.resolve().is_relative_to(bundle):
+            raise ValueError(f"{notice}: license notice escapes the app bundle")
+        if not notice.is_file():
+            raise ValueError(f"{notice}: missing packaged license notice")
+        contents = notice.read_bytes()
+        if not contents.strip() or len(contents) != entry["bytes"] or hashlib.sha256(contents).hexdigest() != entry["sha256"]:
+            raise ValueError(f"{notice}: packaged license notice differs from the dependency manifest")
+    return len(entries)
 
 
 @dataclass
@@ -147,13 +176,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", type=Path)
     parser.add_argument("--architecture", default="arm64")
+    parser.add_argument("--manifest", type=Path, help="Also verify packaged license notices against this dependency manifest")
     args = parser.parse_args()
     try:
         count = verify(args.bundle, args.architecture)
+        notice_count = verify_notices(args.bundle, args.manifest) if args.manifest else None
     except (OSError, ValueError, KeyError, plistlib.InvalidFileException, subprocess.SubprocessError) as error:
         print(f"ERROR: release bundle validation failed: {error}", file=sys.stderr)
         return 1
     print(f"Verified {count} Mach-O images: {args.architecture}, executable permissions, and bundled library resolution.")
+    if notice_count is not None:
+        print(f"Verified {notice_count} packaged license notices against the dependency manifest.")
     return 0
 
 

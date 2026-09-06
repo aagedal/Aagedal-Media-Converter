@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "scope": "Mach-O files shipped from Binaries and Frameworks",
   "tools": [
     {
@@ -2143,6 +2143,38 @@
       "installName": "@rpath/libzstd.1.dylib",
       "license": "NOASSERTION",
       "licenseFile": null
+    }
+  ],
+  "licenseFiles": [
+    {
+      "path": "LICENSE",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "Licenses/asdcplib-LICENSE.txt",
+      "bytes": 1577,
+      "sha256": "c535330754dbff1bd2665ff319a2f12a7577629c3cc4db3ef4affebc68e63620"
+    },
+    {
+      "path": "Licenses/bmx-LICENSE.txt",
+      "bytes": 1555,
+      "sha256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b"
+    },
+    {
+      "path": "Licenses/ffmpeg-LICENSE.txt",
+      "bytes": 17985,
+      "sha256": "4a5f3d09ceadfdffa6ac719ef05538c40c1fcf722a451fccc75d62302e4b27b7"
+    },
+    {
+      "path": "Licenses/mpv-LICENSE.txt",
+      "bytes": 17984,
+      "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+    },
+    {
+      "path": "Licenses/tesseract-LICENSE.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
     }
   ],
   "summary": {

@@ -1,6 +1,2516 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Timed out while stopping screen capture. The recording may be incomplete.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidsavbrudd under stopping av skjermopptak. Opptaket kan være ufullstendig."
+          }
+        }
+      }
+    },
+    "Licenses": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisenser"
+          }
+        }
+      }
+    },
+    "Component": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Komponent"
+          }
+        }
+      }
+    },
+    "This license notice could not be loaded. See the source repository for license information.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Denne lisensteksten kunne ikke lastes inn. Se kildekodelageret for lisensinformasjon."
+          }
+        }
+      }
+    },
+    "Bundles FFmpeg, mpv, tesseract, asdcplib, bmx and rclone; optionally downloads yt-dlp, Deno, whisper.cpp and Parakeet at runtime. Each component is distributed under its own license. Bundled license notices are available below; see the source repository for component details.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inkluderer FFmpeg, mpv, tesseract, asdcplib, bmx og rclone; kan laste ned yt-dlp, Deno, whisper.cpp og Parakeet ved behov. Hver komponent distribueres under sin egen lisens. Medfølgende lisenstekster er tilgjengelige nedenfor; se kildekodelageret for detaljer om komponentene."
+          }
+        }
+      }
+    },
+    "Export requires the bundled %@ helper, which is missing or not executable. Open Settings > Tool Diagnostics to inspect the tools, or reinstall the app.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eksport krever det medfølgende hjelpeprogrammet %@, som mangler eller ikke kan kjøres. Åpne Innstillinger > Verktøydiagnostikk for å undersøke verktøyene, eller installer appen på nytt."
+          }
+        }
+      }
+    },
+    "Timed out waiting for microphone permission. Check microphone access in System Settings and try again.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidsavbrudd under venting på mikrofontillatelse. Kontroller mikrofontilgang i Systeminnstillinger og prøv igjen."
+          }
+        }
+      }
+    },
+    "The selected model is missing, empty, or unreadable. Download or select it in Transcription settings.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den valgte modellen mangler, er tom eller kan ikke leses. Last ned eller velg den i transkripsjonsinnstillingene."
+          }
+        }
+      }
+    },
+    "Local model files are available. Model compatibility has not been tested.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale modellfiler er tilgjengelige. Modellkompatibilitet er ikke testet."
+          }
+        }
+      }
+    },
+    "VideoLoop with sound": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VideoLoop med lyd"
+          }
+        }
+      }
+    },
+    "Stream Copy": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strømkopiering"
+          }
+        }
+      }
+    },
+    "Animated Still (%@)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animert stillbilde (%@)"
+          }
+        }
+      }
+    },
+    "Image Sequence (%@)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildesekvens (%@)"
+          }
+        }
+      }
+    },
+    "Audio Only (%@)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kun lyd (%@)"
+          }
+        }
+      }
+    },
+    "Timed out while discovering screens and windows. Try starting capture again.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidsavbrudd under søk etter skjermer og vinduer. Prøv å starte opptaket på nytt."
+          }
+        }
+      }
+    },
+    "Availability and architecture checked. This helper does not have a verified read-only version check.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilgjengelighet og arkitektur er kontrollert. Dette hjelpeverktøyet har ingen verifisert versjonskontroll som bare leser informasjon."
+          }
+        }
+      }
+    },
+    "16:9 aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "16:9-sideforhold"
+          }
+        }
+      }
+    },
+    "1:1 (Square) aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1:1-sideforhold (kvadrat)"
+          }
+        }
+      }
+    },
+    "21:9 aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "21:9-sideforhold"
+          }
+        }
+      }
+    },
+    "2:3 aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2:3-sideforhold"
+          }
+        }
+      }
+    },
+    "3:2 aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3:2-sideforhold"
+          }
+        }
+      }
+    },
+    "3:4 aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3:4-sideforhold"
+          }
+        }
+      }
+    },
+    "4:3 aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4:3-sideforhold"
+          }
+        }
+      }
+    },
+    "9:16 (Vertical) aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "9:16-sideforhold (stående)"
+          }
+        }
+      }
+    },
+    "Activate focus on the comment field": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sett fokus på kommentarfeltet"
+          }
+        }
+      }
+    },
+    "Activate timecode input": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiver inntasting av tidskode"
+          }
+        }
+      }
+    },
+    "Activate timecode input, press Enter to jump": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiver inntasting av tidskode, trykk Retur for å hoppe"
+          }
+        }
+      }
+    },
+    "Any Overlay View": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle overlegg"
+          }
+        }
+      }
+    },
+    "Audio Routing View": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lydruting"
+          }
+        }
+      }
+    },
+    "Base model optimized for Swedish. Fast with reasonable accuracy.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base-modell optimalisert for svensk. Rask med rimelig god nøyaktighet."
+          }
+        }
+      }
+    },
+    "Best accuracy, slowest. Requires significant RAM.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Best nøyaktighet, tregest. Krever mye RAM."
+          }
+        }
+      }
+    },
+    "Capture screenshot": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta skjermbilde"
+          }
+        }
+      }
+    },
+    "Clear trim end (reset to end)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern trimmens sluttpunkt (tilbakestill til slutten)"
+          }
+        }
+      }
+    },
+    "Clear trim start (reset to beginning)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern trimmens startpunkt (tilbakestill til begynnelsen)"
+          }
+        }
+      }
+    },
+    "Close URL input overlay": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk URL-inntastingen"
+          }
+        }
+      }
+    },
+    "Close audio routing": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk lydruting"
+          }
+        }
+      }
+    },
+    "Close editor": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk redigering"
+          }
+        }
+      }
+    },
+    "Close the overlay (settings automatically saved)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk overlegget (innstillingene lagres automatisk)"
+          }
+        }
+      }
+    },
+    "Close without changing": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk uten å endre"
+          }
+        }
+      }
+    },
+    "Close/Cancel capture mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lukk eller avbryt opptaksmodus"
+          }
+        }
+      }
+    },
+    "Confirm selection": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekreft valg"
+          }
+        }
+      }
+    },
+    "Conversion": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konvertering"
+          }
+        }
+      }
+    },
+    "Crop Mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beskjæringsmodus"
+          }
+        }
+      }
+    },
+    "Cycle through sort modes": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bytt mellom sorteringsmoduser"
+          }
+        }
+      }
+    },
+    "Daily": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daglig"
+          }
+        }
+      }
+    },
+    "Deselect all items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern markering av alle elementer"
+          }
+        }
+      }
+    },
+    "Enter crop tool": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne beskjæringsverktøyet"
+          }
+        }
+      }
+    },
+    "Extended PSNR by Fraunhofer HHI. Perceptually weighted PSNR metric measured in dB. Values above 42 dB are considered visually lossless.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utvidet PSNR fra Fraunhofer HHI. Persepsjonsvektet PSNR-metrikk målt i dB. Verdier over 42 dB regnes som visuelt tapsfrie."
+          }
+        }
+      }
+    },
+    "FFmpeg %@ (built-in)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FFmpeg %@ (innebygd)"
+          }
+        }
+      }
+    },
+    "Fast forward": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spol fremover"
+          }
+        }
+      }
+    },
+    "Fast with reasonable accuracy. Recommended for most uses.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rask med rimelig god nøyaktighet. Anbefales til de fleste formål."
+          }
+        }
+      }
+    },
+    "Fastest, lowest accuracy. Good for quick tests.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raskest, lavest nøyaktighet. Egnet til raske tester."
+          }
+        }
+      }
+    },
+    "File Operations": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filhandlinger"
+          }
+        }
+      }
+    },
+    "Free aspect ratio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fritt sideforhold"
+          }
+        }
+      }
+    },
+    "Fullscreen Player – Navigation": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fullskjermspiller – navigering"
+          }
+        }
+      }
+    },
+    "Fullscreen Player – Other": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fullskjermspiller – annet"
+          }
+        }
+      }
+    },
+    "Fullscreen Player – Playback": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fullskjermspiller – avspilling"
+          }
+        }
+      }
+    },
+    "Go to next frame": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til neste bilde"
+          }
+        }
+      }
+    },
+    "Go to next item in queue": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til neste element i køen"
+          }
+        }
+      }
+    },
+    "Go to previous frame": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til forrige bilde"
+          }
+        }
+      }
+    },
+    "Go to previous item in queue": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gå til forrige element i køen"
+          }
+        }
+      }
+    },
+    "Good balance of speed and accuracy.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "God balanse mellom hastighet og nøyaktighet."
+          }
+        }
+      }
+    },
+    "High accuracy, slower processing.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Høy nøyaktighet, tregere behandling."
+          }
+        }
+      }
+    },
+    "Import camera card": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer kamerakort"
+          }
+        }
+      }
+    },
+    "Instantly select preset (0 = 10th)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg forhåndsinnstilling direkte (0 = den tiende)"
+          }
+        }
+      }
+    },
+    "Item Management": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elementhåndtering"
+          }
+        }
+      }
+    },
+    "Jump seconds back/forward when pressing Enter": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp sekunder bakover eller fremover når du trykker Retur"
+          }
+        }
+      }
+    },
+    "Jump to trim in-point": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp til trimmens innpunkt"
+          }
+        }
+      }
+    },
+    "Jump to trim out-point": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp til trimmens utpunkt"
+          }
+        }
+      }
+    },
+    "Large model optimized for Norwegian. Best accuracy, slowest.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large-modell optimalisert for norsk. Best nøyaktighet, tregest."
+          }
+        }
+      }
+    },
+    "Large model optimized for Swedish. Best accuracy, slowest.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Large-modell optimalisert for svensk. Best nøyaktighet, tregest."
+          }
+        }
+      }
+    },
+    "Main Window – Other": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hovedvindu – annet"
+          }
+        }
+      }
+    },
+    "Medium model optimized for Norwegian. High accuracy, slower processing.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medium-modell optimalisert for norsk. Høy nøyaktighet, tregere behandling."
+          }
+        }
+      }
+    },
+    "Medium model optimized for Swedish. High accuracy, slower processing.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medium-modell optimalisert for svensk. Høy nøyaktighet, tregere behandling."
+          }
+        }
+      }
+    },
+    "Monthly": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Månedlig"
+          }
+        }
+      }
+    },
+    "Move selected item(s) down in queue": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt valgte elementer ned i køen"
+          }
+        }
+      }
+    },
+    "Move selected item(s) up in queue": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt valgte elementer opp i køen"
+          }
+        }
+      }
+    },
+    "Move selection down": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt markeringen ned"
+          }
+        }
+      }
+    },
+    "Move selection up": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flytt markeringen opp"
+          }
+        }
+      }
+    },
+    "Navigate back (newer entries or original text)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naviger tilbake (nyere oppføringer eller opprinnelig tekst)"
+          }
+        }
+      }
+    },
+    "Navigate into download history (older entries)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naviger i nedlastingshistorikken (eldre oppføringer)"
+          }
+        }
+      }
+    },
+    "Navigate through presets": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bla gjennom forhåndsinnstillinger"
+          }
+        }
+      }
+    },
+    "New encoding group": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny kodingsgruppe"
+          }
+        }
+      }
+    },
+    "Open Audio Routing view": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne lydruting"
+          }
+        }
+      }
+    },
+    "Open Crop mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne beskjæringsmodus"
+          }
+        }
+      }
+    },
+    "Open Shortcuts help": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne snarveihjelp"
+          }
+        }
+      }
+    },
+    "Open Timecode override view": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne overstyring av tidskode"
+          }
+        }
+      }
+    },
+    "Open fullscreen player": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne fullskjermspilleren"
+          }
+        }
+      }
+    },
+    "Open import dialogue": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne importdialogen"
+          }
+        }
+      }
+    },
+    "Open metadata view": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne metadata"
+          }
+        }
+      }
+    },
+    "Open preset quick-select overlay": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne hurtigvalg av forhåndsinnstillinger"
+          }
+        }
+      }
+    },
+    "Open trim view": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne trimvisningen"
+          }
+        }
+      }
+    },
+    "Optimized for 4K/UHD content. Use for high-resolution videos.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optimalisert for 4K/UHD-innhold. Brukes til videoer med høy oppløsning."
+          }
+        }
+      }
+    },
+    "Peak Signal-to-Noise Ratio. Traditional mathematical metric measured in dB. Higher values indicate better quality. Typical range: 30-50 dB.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peak Signal-to-Noise Ratio. Tradisjonell matematisk metrikk målt i dB. Høyere verdier betyr bedre kvalitet. Typisk område: 30–50 dB."
+          }
+        }
+      }
+    },
+    "Penalizes enhancement artifacts. Use when encoder may sharpen or upscale.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gir trekk for artefakter fra bildeforbedring. Brukes når koderen kan skarpe opp eller oppskalere."
+          }
+        }
+      }
+    },
+    "Perceptual quality metric by Cloudflare. Measures structural similarity on a 0-100 scale. Scores above 70 indicate good quality. Requires the external ssimulacra2_rs binary.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perseptuell kvalitetsmetrikk fra Cloudflare. Måler strukturell likhet på en skala fra 0 til 100. Resultater over 70 tyder på god kvalitet. Krever det eksterne programmet ssimulacra2_rs."
+          }
+        }
+      }
+    },
+    "Play backwards": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spill bakover"
+          }
+        }
+      }
+    },
+    "Play forwards": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spill fremover"
+          }
+        }
+      }
+    },
+    "Play/pause": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spill av eller sett på pause"
+          }
+        }
+      }
+    },
+    "Preset Quick-Select Overlay": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hurtigvalg av forhåndsinnstillinger"
+          }
+        }
+      }
+    },
+    "Queue Navigation": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kønavigering"
+          }
+        }
+      }
+    },
+    "Range selection: click and drag to set in/out points": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Områdevalg: klikk og dra for å angi inn- og utpunkter"
+          }
+        }
+      }
+    },
+    "Range sliding: drag to move entire trim range": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Områdeflytting: dra for å flytte hele trimområdet"
+          }
+        }
+      }
+    },
+    "Remove selected items from queue": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjern valgte elementer fra køen"
+          }
+        }
+      }
+    },
+    "Reset conversion status of all items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilbakestill konverteringsstatus for alle elementer"
+          }
+        }
+      }
+    },
+    "Reset conversion status of selected items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilbakestill konverteringsstatus for valgte elementer"
+          }
+        }
+      }
+    },
+    "Scale crop box larger": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gjør beskjæringsrammen større"
+          }
+        }
+      }
+    },
+    "Scale crop box smaller": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gjør beskjæringsrammen mindre"
+          }
+        }
+      }
+    },
+    "Seek back 1 frame": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp ett bilde bakover"
+          }
+        }
+      }
+    },
+    "Seek back 10 frames": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp ti bilder bakover"
+          }
+        }
+      }
+    },
+    "Seek forward 1 frame": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp ett bilde fremover"
+          }
+        }
+      }
+    },
+    "Seek forward 10 frames": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hopp ti bilder fremover"
+          }
+        }
+      }
+    },
+    "Select comment field of first clip, or cycle to next": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg kommentarfeltet til første klipp, eller gå til neste"
+          }
+        }
+      }
+    },
+    "Select comment field of last clip, or cycle to previous": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg kommentarfeltet til siste klipp, eller gå til forrige"
+          }
+        }
+      }
+    },
+    "Select output folder": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg utdatamappe"
+          }
+        }
+      }
+    },
+    "Set in point": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angi innpunkt"
+          }
+        }
+      }
+    },
+    "Set out point": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angi utpunkt"
+          }
+        }
+      }
+    },
+    "Settings Window": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Innstillingsvindu"
+          }
+        }
+      }
+    },
+    "Shortcuts (also works from main window)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snarveier (virker også fra hovedvinduet)"
+          }
+        }
+      }
+    },
+    "Show URL input overlay (for downloading)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis URL-inntasting (for nedlasting)"
+          }
+        }
+      }
+    },
+    "Show new random tip": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis et nytt tilfeldig tips"
+          }
+        }
+      }
+    },
+    "Single Item Selected in Main Window": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ett element valgt i hovedvinduet"
+          }
+        }
+      }
+    },
+    "Small model optimized for Norwegian. Good balance of speed and accuracy.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Small-modell optimalisert for norsk. God balanse mellom hastighet og nøyaktighet."
+          }
+        }
+      }
+    },
+    "Small model optimized for Swedish. Good balance of speed and accuracy.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Small-modell optimalisert for svensk. God balanse mellom hastighet og nøyaktighet."
+          }
+        }
+      }
+    },
+    "Source Code (GitHub)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kildekode (GitHub)"
+          }
+        }
+      }
+    },
+    "Standard VMAF model. Recommended for most content.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard VMAF-modell. Anbefales for det meste av innhold."
+          }
+        }
+      }
+    },
+    "Start reverse playback": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start avspilling bakover"
+          }
+        }
+      }
+    },
+    "Start typing in manual mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Begynn å skrive i manuell modus"
+          }
+        }
+      }
+    },
+    "Start/Stop encoding": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start eller stopp koding"
+          }
+        }
+      }
+    },
+    "Submit URL and start download": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekreft URL og start nedlasting"
+          }
+        }
+      }
+    },
+    "Switch to Disabled mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bytt til deaktivert modus"
+          }
+        }
+      }
+    },
+    "Switch to Manual mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bytt til manuell modus"
+          }
+        }
+      }
+    },
+    "Switch to Preserve Source mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bytt til modus for å bevare kilden"
+          }
+        }
+      }
+    },
+    "Symmetric scaling: drag handle to move both symmetrically": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symmetrisk skalering: dra et håndtak for å flytte begge symmetrisk"
+          }
+        }
+      }
+    },
+    "Timecode Configuration View": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidskodeinnstillinger"
+          }
+        }
+      }
+    },
+    "Tiny model optimized for Norwegian. Fastest, lowest accuracy.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiny-modell optimalisert for norsk. Raskest, lavest nøyaktighet."
+          }
+        }
+      }
+    },
+    "Toggle Auto Next mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå automatisk neste av eller på"
+          }
+        }
+      }
+    },
+    "Toggle Loop Queue (requires Auto Next)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå køgjentakelse av eller på (krever automatisk neste)"
+          }
+        }
+      }
+    },
+    "Toggle audio meter": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vis eller skjul lydmåleren"
+          }
+        }
+      }
+    },
+    "Toggle auto-encode on selected items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå automatisk koding av eller på for valgte elementer"
+          }
+        }
+      }
+    },
+    "Toggle fullscreen": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå fullskjerm av eller på"
+          }
+        }
+      }
+    },
+    "Toggle individual audio track (1-8)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå individuelle lydspor av eller på (1–8)"
+          }
+        }
+      }
+    },
+    "Toggle loop mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå gjentakelse av eller på"
+          }
+        }
+      }
+    },
+    "Toggle merging of clips": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå sammenslåing av klipp av eller på"
+          }
+        }
+      }
+    },
+    "Toggle metadata date tag on selected items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå datomerking fra metadata av eller på for valgte elementer"
+          }
+        }
+      }
+    },
+    "Toggle mute audio": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyddemping av eller på"
+          }
+        }
+      }
+    },
+    "Toggle mute on selected items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå lyddemping av eller på for valgte elementer"
+          }
+        }
+      }
+    },
+    "Toggle play/pause": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veksle mellom avspilling og pause"
+          }
+        }
+      }
+    },
+    "Toggle playback": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veksle mellom avspilling og pause"
+          }
+        }
+      }
+    },
+    "Toggle source file upload on selected items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå opplasting av kildefiler av eller på for valgte elementer"
+          }
+        }
+      }
+    },
+    "Toggle stereo for all surround tracks": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå stereo av eller på for alle surroundspor"
+          }
+        }
+      }
+    },
+    "Toggle stereo for output track position": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå stereo av eller på for utsporets plassering"
+          }
+        }
+      }
+    },
+    "Toggle timecode display mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bytt visningsmodus for tidskode"
+          }
+        }
+      }
+    },
+    "Toggle timecode mode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bytt tidskodemodus"
+          }
+        }
+      }
+    },
+    "Toggle transcription on selected items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå transkripsjon av eller på for valgte elementer"
+          }
+        }
+      }
+    },
+    "Toggle upload on selected items": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå opplasting av eller på for valgte elementer"
+          }
+        }
+      }
+    },
+    "Toggle watch folder": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slå Watch Folder av eller på"
+          }
+        }
+      }
+    },
+    "Trim View – Navigation": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trimvisning – navigering"
+          }
+        }
+      }
+    },
+    "Trim View – Playback": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trimvisning – avspilling"
+          }
+        }
+      }
+    },
+    "Trim View – Timecode Input": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trimvisning – tidskodeinntasting"
+          }
+        }
+      }
+    },
+    "Trim View – Timeline Modifiers": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trimvisning – modifikatortaster for tidslinjen"
+          }
+        }
+      }
+    },
+    "Trim View – Tools": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trimvisning – verktøy"
+          }
+        }
+      }
+    },
+    "URL Input Overlay": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "URL-inntasting"
+          }
+        }
+      }
+    },
+    "Use a custom GGML model file.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk en egendefinert GGML-modellfil."
+          }
+        }
+      }
+    },
+    "VMAF 4K v0.6.1 (4K content)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VMAF 4K v0.6.1 (4K-innhold)"
+          }
+        }
+      }
+    },
+    "VMAF v0.6.1 (Default)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VMAF v0.6.1 (standard)"
+          }
+        }
+      }
+    },
+    "VMAF v0.6.1neg (No Enhancement Gain)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VMAF v0.6.1neg (uten gevinst fra bildeforbedring)"
+          }
+        }
+      }
+    },
+    "Video Multi-Method Assessment Fusion, developed by Netflix. Predicts perceived quality on a 0-100 scale. Scores above 93 are considered excellent.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video Multi-Method Assessment Fusion, utviklet av Netflix. Anslår opplevd kvalitet på en skala fra 0 til 100. Resultater over 93 regnes som svært gode."
+          }
+        }
+      }
+    },
+    "Waveform": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lydbølge"
+          }
+        }
+      }
+    },
+    "Weekly": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ukentlig"
+          }
+        }
+      }
+    },
+    "hours:minutes:seconds:frames supported": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "timer:minutter:sekunder:bilder støttes"
+          }
+        }
+      }
+    },
+    "Don't remove any characters": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ikke fjern noen tegn"
+          }
+        }
+      }
+    },
+    "Only filesystem-unsafe characters (/ \\ : * ? \" < > |)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare tegn som filsystemet avviser (/ \\ : * ? \" < > |)"
+          }
+        }
+      }
+    },
+    "All non-ASCII (only A–Z, 0–9, _, -)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle tegn utenfor ASCII (bare A–Z, 0–9, _, -)"
+          }
+        }
+      }
+    },
+    "Filenames are kept as-is (after space and Scandinavian conversion above).": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filnavn beholdes som de er (etter konvertering av mellomrom og skandinaviske tegn ovenfor)."
+          }
+        }
+      }
+    },
+    "Strips only the characters Finder/Windows reject. Accented and Nordic letters survive even when conversion above is off.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjerner bare tegn som Finder og Windows avviser. Aksenter og nordiske bokstaver beholdes selv når konverteringen ovenfor er av."
+          }
+        }
+      }
+    },
+    "Strips everything except A–Z, 0–9, underscores, and hyphens. Maximum cross-platform safety.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjerner alt unntatt A–Z, 0–9, understreker og bindestreker. Gir best kompatibilitet på tvers av plattformer."
+          }
+        }
+      }
+    },
+    "Auto (Use PNG or JPEG XL)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisk (bruk PNG eller JPEG XL)"
+          }
+        }
+      }
+    },
+    "Use selected format (discard alpha if unsupported)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk valgt format (forkast alfa hvis det ikke støttes)"
+          }
+        }
+      }
+    },
+    "Capsules": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kapsler"
+          }
+        }
+      }
+    },
+    "Bars": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stolper"
+          }
+        }
+      }
+    },
+    "Wire": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tråd"
+          }
+        }
+      }
+    },
+    "Logarithmic": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logaritmisk"
+          }
+        }
+      }
+    },
+    "Mel Scale": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mel-skala"
+          }
+        }
+      }
+    },
+    "Linear": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lineær"
+          }
+        }
+      }
+    },
+    "Circular (slow)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sirkulær (langsom)"
+          }
+        }
+      }
+    },
+    "Lines": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linjer"
+          }
+        }
+      }
+    },
+    "Fisheye": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fiskeøye"
+          }
+        }
+      }
+    },
+    "Spectrogram": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spektrogram"
+          }
+        }
+      }
+    },
+    "FFmpeg (Classic)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FFmpeg (klassisk)"
+          }
+        }
+      }
+    },
+    "Windows-safe (keeps Unicode letters)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Windows-kompatibelt (beholder Unicode-bokstaver)"
+          }
+        }
+      }
+    },
+    "ASCII only (strips non-Latin scripts)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare ASCII (fjerner ikke-latinske tegn)"
+          }
+        }
+      }
+    },
+    "Bundled": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medfølgende"
+          }
+        }
+      }
+    },
+    "Custom: %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Egendefinert: %@"
+          }
+        }
+      }
+    },
+    "Homebrew: %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew: %@"
+          }
+        }
+      }
+    },
+    "Foreground": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forgrunn"
+          }
+        }
+      }
+    },
+    "Background": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bakgrunn"
+          }
+        }
+      }
+    },
+    "Gradient end": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sluttfarge"
+          }
+        }
+      }
+    },
+    "yt-dlp only strips characters illegal on macOS (just '/' and NUL). Filenames may still break on Windows or NTFS drives.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yt-dlp fjerner bare tegn som er ugyldige i macOS ('/' og NUL). Filnavnene kan fortsatt gi problemer i Windows eller på NTFS-disker."
+          }
+        }
+      }
+    },
+    "Strips characters Windows rejects (< > : \" / \\ | ? *) and trailing space/period. Unicode letters, including æ, ø, å, and CJK scripts, are preserved.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fjerner tegn som Windows avviser (< > : \" / \\ | ? *) samt mellomrom og punktum til slutt. Unicode-bokstaver, inkludert æ, ø, å og kinesiske, japanske og koreanske tegn, beholdes."
+          }
+        }
+      }
+    },
+    "Keeps only ASCII letters, digits, underscore, hyphen, and period. Non-Latin scripts and many accented letters are dropped (e.g. ø → empty, é → e).": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beholder bare ASCII-bokstaver, sifre, understrek, bindestrek og punktum. Ikke-latinske tegn og mange bokstaver med aksent fjernes (f.eks. ø → tomt, é → e)."
+          }
+        }
+      }
+    },
+    "The tool could not be launched. Check its architecture, permissions, interpreter, and dependencies.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verktøyet kunne ikke startes. Kontroller arkitektur, tilgangsrettigheter, tolk og avhengigheter."
+          }
+        }
+      }
+    },
+    "Trim start": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startpunkt"
+          }
+        }
+      }
+    },
+    "Trim end": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sluttpunkt"
+          }
+        }
+      }
+    },
+    "%.1f seconds": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%.1f sekunder"
+          }
+        }
+      }
+    },
+    "Reset crop": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tilbakestill beskjæring"
+          }
+        }
+      }
+    },
+    "Center crop": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sentrer beskjæring"
+          }
+        }
+      }
+    },
+    "Edit playback timecode": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rediger tidskode for avspilling"
+          }
+        }
+      }
+    },
+    "Image sequence frame rate": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildefrekvens for bildesekvens"
+          }
+        }
+      }
+    },
+    "Relative Timecode (REL TC)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relativ tidskode (REL TC)"
+          }
+        }
+      }
+    },
+    "Source Timecode (SRC TC)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kildetidskode (SRC TC)"
+          }
+        }
+      }
+    },
+    "Frame Count (FRM)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildeantall (FRM)"
+          }
+        }
+      }
+    },
+    "Tool Diagnostics": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verktøydiagnostikk"
+          }
+        }
+      }
+    },
+    "Checking Tools…": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontrollerer verktøy…"
+          }
+        }
+      }
+    },
+    "Check Tools": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontroller verktøy"
+          }
+        }
+      }
+    },
+    "Architecture": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arkitektur"
+          }
+        }
+      }
+    },
+    "Executable": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kjørbar"
+          }
+        }
+      }
+    },
+    "Yes": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ja"
+          }
+        }
+      }
+    },
+    "No": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nei"
+          }
+        }
+      }
+    },
+    "Unknown": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ukjent"
+          }
+        }
+      }
+    },
+    "Script (interpreter-dependent)": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skript (avhenger av tolken)"
+          }
+        }
+      }
+    },
+    "No executable is available from the selected source. Check this tool’s settings.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingen kjørbar fil er tilgjengelig fra den valgte kilden. Kontroller innstillingene for verktøyet."
+          }
+        }
+      }
+    },
+    "The selected file is missing or is not executable.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den valgte filen mangler eller er ikke kjørbar."
+          }
+        }
+      }
+    },
+    "The tool exited successfully without version information.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verktøyet avsluttet uten feil, men ga ingen versjonsinformasjon."
+          }
+        }
+      }
+    },
+    "The version check failed. Review the selected binary in this tool’s settings.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versjonskontrollen mislyktes. Kontroller den valgte programfilen i innstillingene for verktøyet."
+          }
+        }
+      }
+    },
+    "The tool could not complete its version check within five seconds. Check its permissions and dependencies.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verktøyet kunne ikke fullføre versjonskontrollen innen fem sekunder. Kontroller tilgangsrettigheter og avhengigheter."
+          }
+        }
+      }
+    },
+    "Check the active bundled, Homebrew, or custom tools selected in Settings. Each version check has a five-second limit.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontroller de aktive medfølgende, Homebrew-installerte eller egendefinerte verktøyene som er valgt i Innstillinger. Hver versjonskontroll har en tidsgrense på fem sekunder."
+          }
+        }
+      }
+    },
+    "The bundled FFmpeg is sufficient for standard conversions. Optional tools are only needed for their related features; select or install them in Downloads, Upload, Transcription, OCR, or Analytics settings.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medfølgende FFmpeg er tilstrekkelig for vanlige konverteringer. Valgfrie verktøy trengs bare for tilhørende funksjoner. Velg eller installer dem i innstillingene for Nedlastinger, Opplasting, Transkripsjon, OCR eller Analyse."
+          }
+        }
+      }
+    },
+    "Could not create temporary storage for AV2 chunks: %@. Check available disk space and temporary-folder permissions, then try again.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke opprette midlertidig lagring for AV2-segmenter: %@. Kontroller ledig diskplass og tilgang til mappen for midlertidige filer, og prøv igjen."
+          }
+        }
+      }
+    },
+    "Failed to append timecode samples to the capture writer.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kunne ikke skrive tidskode til skjermopptaket."
+          }
+        }
+      }
+    },
+    "Timed out while writing the final screen recording frames. The file may be incomplete.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tidsavbrudd under skriving av de siste bildene i skjermopptaket. Filen kan være ufullstendig."
+          }
+        }
+      }
+    },
+    "HDR Display P3 (macOS 26+)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HDR Display P3 (macOS 26+)"
+          }
+        }
+      }
+    },
+    "SDR (Display)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SDR (skjerm)"
+          }
+        }
+      }
+    },
+    "Visually lossless ProRes 4444 for grading. Variable frame rate (VFR) keeps files smaller when the screen is static. Not flagged as a growing clip, so DaVinci Resolve won't poll it for updates while recording — best for importing afterward." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visuelt tapsfri ProRes 4444 for fargekorrigering. Variabel bildefrekvens (VFR) gir mindre filer når skjermen er statisk. Klippet er ikke merket som voksende, så DaVinci Resolve ser ikke etter oppdateringer under opptak – best egnet for import etterpå."
+          }
+        }
+      }
+    },
+    "Hardware HEVC 10-bit 4:2:2; source format determines chroma. Variable frame rate, not flagged as a growing clip — best for importing after recording." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maskinvarekodet HEVC 10-bit 4:2:2; kildeformatet avgjør fargesamplingen. Variabel bildefrekvens, uten merking som voksende klipp – best egnet for import etter opptak."
+          }
+        }
+      }
+    },
+    "Edit while recording in DaVinci Resolve & Premiere. ProRes 4444 at a constant frame rate (CFR) — visually lossless, but because ProRes can't compress duplicate frames, a mostly-static screen makes very large files. Needs a ProRes hardware encoder (M1 Pro/Max or later) for high frame rates." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rediger under opptak i DaVinci Resolve og Premiere. ProRes 4444 med konstant bildefrekvens (CFR) er visuelt tapsfri, men siden ProRes ikke kan komprimere duplikatbilder, gir en stort sett statisk skjerm svært store filer. Høy bildefrekvens krever en ProRes-maskinvarekoder (M1 Pro/Max eller nyere)."
+          }
+        }
+      }
+    },
+    "Edit while recording with maximum compatibility. Hardware H.264, fragmented .mov." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rediger under opptak med maksimal kompatibilitet. Maskinvarekodet H.264, fragmentert .mov."
+          }
+        }
+      }
+    },
+    "Edit while recording in DaVinci Resolve & Premiere. Hardware HEVC 10-bit 4:2:2, fragmented .mov." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rediger under opptak i DaVinci Resolve og Premiere. Maskinvarekodet HEVC 10-bit 4:2:2, fragmentert .mov."
+          }
+        }
+      }
+    },
+    "ProRes 4444 (Visually Lossless)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ProRes 4444 (visuelt tapsfri)"
+          }
+        }
+      }
+    },
+    "HEVC 10-bit 4:2:2 (Hardware)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HEVC 10-bit 4:2:2 (maskinvare)"
+          }
+        }
+      }
+    },
+    "Growing ProRes 4444 (Visually Lossless)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voksende ProRes 4444 (visuelt tapsfri)"
+          }
+        }
+      }
+    },
+    "Growing H.264 (Compatibility)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voksende H.264 (kompatibilitet)"
+          }
+        }
+      }
+    },
+    "Growing HEVC 10-bit 4:2:2 (Resolve/Premiere)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voksende HEVC 10-bit 4:2:2 (Resolve/Premiere)"
+          }
+        }
+      }
+    },
+    "Variable frame rate (VFR): the selected rate is a maximum; static screens may produce fewer frames." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variabel bildefrekvens (VFR): valgt bildefrekvens er en øvre grense; statiske skjermbilder kan gi færre bilder."
+          }
+        }
+      }
+    },
+    "Constant frame rate (CFR): static frames are repeated at the selected rate." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konstant bildefrekvens (CFR): statiske bilder gjentas med valgt bildefrekvens."
+          }
+        }
+      }
+    },
+    "60 fps" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "60 b/s"
+          }
+        }
+      }
+    },
+    "59.94 fps (NTSC)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "59,94 b/s (NTSC)"
+          }
+        }
+      }
+    },
+    "50 fps (PAL)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "50 b/s (PAL)"
+          }
+        }
+      }
+    },
+    "29.97 fps (NTSC)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "29,97 b/s (NTSC)"
+          }
+        }
+      }
+    },
+    "25 fps (PAL)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "25 b/s (PAL)"
+          }
+        }
+      }
+    },
+    "Auto (Display)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisk (skjerm)"
+          }
+        }
+      }
+    },
     "" : {
       "shouldTranslate" : false
     },
@@ -459,13 +2969,13 @@
       }
     },
     "%lld fps" : {
-      "comment" : "A segmented control allowing the user to select the frame rate used for rendering waveform videos. The argument is a frame rate option.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld fps"
+      "comment": "A segmented control allowing the user to select the frame rate used for rendering waveform videos. The argument is a frame rate option.",
+      "isCommentAutoGenerated": true,
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld b/s"
           }
         }
       }
@@ -10083,13 +12593,13 @@
       }
     },
     "Renderer" : {
-      "comment" : "A section of the waveform settings view that lets the user choose the waveform rendering engine.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Renderer"
+      "comment": "A section of the waveform settings view that lets the user choose the waveform rendering engine.",
+      "isCommentAutoGenerated": true,
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gjengivelsesmotor"
           }
         }
       }
@@ -13370,13 +15880,13 @@
       }
     },
     "Use FTPS (TLS encryption)" : {
-      "comment" : "A toggle that lets the user choose whether to use FTPS with TLS encryption.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bruk FTPS (TSL kryptering)"
+      "comment": "A toggle that lets the user choose whether to use FTPS with TLS encryption.",
+      "isCommentAutoGenerated": true,
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruk FTPS (TLS-kryptering)"
           }
         }
       }

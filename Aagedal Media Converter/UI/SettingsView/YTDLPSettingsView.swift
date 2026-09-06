@@ -765,7 +765,7 @@ struct YTDLPSettingsView: View {
                     Text("Filename restrictions:")
                     Picker("", selection: filenameRestrictionMode) {
                         ForEach(YTDLPFilenameRestrictionMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
+                            Text(LocalizedStringKey(mode.displayName)).tag(mode)
                         }
                     }
                     .labelsHidden()
@@ -799,7 +799,7 @@ struct YTDLPSettingsView: View {
         )
     }
 
-    private var filenameRestrictionExplanation: String {
+    private var filenameRestrictionExplanation: LocalizedStringKey {
         switch YTDLPFilenameRestrictionMode(rawValue: filenameRestrictionRaw) ?? .off {
         case .off:
             return "yt-dlp only strips characters illegal on macOS (just '/' and NUL). Filenames may still break on Windows or NTFS drives."

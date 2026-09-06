@@ -6,6 +6,7 @@
 //
 
 import Darwin
+import AVFoundation
 import os
 import XCTest
 @testable import Aagedal_Media_Converter
@@ -602,16 +603,15 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
     func testSubprocessRunnerEscalatesForTermIgnoringDescendantAfterWrapperExits() async throws {
         let script = """
-        (trap '' TERM
-         while :; do sleep 1; done) &
-        child=$!
-        printf '%s\n' "$child"
-        wait "$child"
+        /bin/sh -c 'trap "" TERM; printf "%s\\n" "$$"; while :; do sleep 1; done' &
+        wait "$!"
         """
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", script],
-            timeout: .milliseconds(200),
+            // Deadlines include shell startup. Allow loaded parallel test workers time to
+            // install the trap; cancellation coverage below explicitly waits for readiness.
+            timeout: .seconds(2),
             terminationGracePeriod: .milliseconds(100)
         )
 
@@ -622,6 +622,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             guard case let .timedOut(_, result) = error else {
                 return XCTFail("Expected a timeout error, got \(error)")
             }
+            XCTAssertEqual(result.terminationStatus, SIGTERM, "The wrapper should exit before escalation")
             let childText = result.standardOutputText.trimmingCharacters(in: .whitespacesAndNewlines)
             let childPID = try XCTUnwrap(pid_t(childText))
             let reapDeadline = ContinuousClock.now.advanced(by: .seconds(1))
@@ -631,6 +632,51 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             XCTAssertEqual(Darwin.kill(childPID, 0), -1, "The TERM-ignoring descendant survived escalation")
             XCTAssertEqual(errno, ESRCH)
         }
+    }
+
+    func testSubprocessRunnerCancellationEscalatesForReadyTermIgnoringDescendant() async throws {
+        let ready = expectation(description: "Descendant installed its TERM trap")
+        let recorder = SubprocessChunkRecorder()
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", """
+            /bin/sh -c 'trap "" TERM; printf "%s\\n" "$$"; while :; do sleep 1; done' &
+            wait "$!"
+            """],
+            terminationGracePeriod: .milliseconds(100)
+        )
+        let task = Task {
+            try await SubprocessRunner().run(request) { chunk in
+                recorder.append(chunk)
+                // Only the descendant writes stdout, after installing its trap. A newline
+                // completes its PID even if pipe delivery splits the write across chunks.
+                if chunk.stream == .standardOutput, chunk.data.contains(0x0A) {
+                    ready.fulfill()
+                }
+            }
+        }
+        defer { task.cancel() }
+        await fulfillment(of: [ready], timeout: 10)
+
+        let cancelStart = ContinuousClock.now
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch is CancellationError {
+            // Expected after the wrapper exits on TERM and the descendant requires KILL.
+        }
+        XCTAssertLessThan(cancelStart.duration(to: .now), .seconds(2))
+
+        let childText = String(decoding: recorder.standardOutput, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let childPID = try XCTUnwrap(pid_t(childText))
+        let reapDeadline = ContinuousClock.now.advanced(by: .seconds(1))
+        while Darwin.kill(childPID, 0) == 0, ContinuousClock.now < reapDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(Darwin.kill(childPID, 0), -1, "The ready TERM-ignoring descendant survived cancellation")
+        XCTAssertEqual(errno, ESRCH)
     }
 
     func testSubprocessRunnerCancellationStopsPromptly() async throws {
@@ -2364,6 +2410,82 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         callback?()
     }
 
+    @MainActor
+    func testPreviewReadyStatusBoundsMetadataAndInitialSeek() async throws {
+        let url = URL(fileURLWithPath: "/private/stalled-preview.mov")
+        let video = VideoItem(url: url, name: "Preview", size: 0, duration: "00:00:01",
+                              status: .waiting, progress: 0, eta: nil, outputURL: nil)
+        let controller = PreviewPlayerController(videoItem: video)
+        let item = AVPlayerItem(url: url)
+        controller.player = AVPlayer(playerItem: item)
+        let releaseMetadata = DispatchSemaphore(value: 0)
+        let releaseSeek = DispatchSemaphore(value: 0)
+        defer {
+            releaseMetadata.signal()
+            releaseSeek.signal()
+            controller.teardown()
+        }
+        let started = ContinuousClock.now
+        controller.prepareReadyPlayerItem(item, startTime: 0, timeout: .milliseconds(30), verify: {
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global().async {
+                    releaseMetadata.wait()
+                    continuation.resume(returning: true)
+                }
+            }
+        }, seek: {
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global().async {
+                    releaseSeek.wait()
+                    continuation.resume(returning: true)
+                }
+            }
+        })
+        let task = try XCTUnwrap(controller.playerItemStatusTask)
+        await task.value
+        XCTAssertLessThan(started.duration(to: .now), .seconds(1))
+        XCTAssertTrue(controller.isReady)
+        XCTAssertNil(controller.playerItemStatusTask)
+    }
+
+    @MainActor
+    func testPreviewStatusRemovalCancelsWorkAndRejectsLateUnsupportedResult() async throws {
+        let url = URL(fileURLWithPath: "/private/replaced-preview.mov")
+        let video = VideoItem(url: url, name: "Preview", size: 0, duration: "00:00:01",
+                              status: .waiting, progress: 0, eta: nil, outputURL: nil)
+        let controller = PreviewPlayerController(videoItem: video)
+        let item = AVPlayerItem(url: url)
+        controller.player = AVPlayer(playerItem: item)
+        let probeStarted = expectation(description: "Metadata inspection started")
+        let probeFinished = expectation(description: "Late metadata inspection finished")
+        let release = DispatchSemaphore(value: 0)
+        defer { controller.teardown() }
+        controller.prepareReadyPlayerItem(item, startTime: 0, verify: {
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global().async {
+                    probeStarted.fulfill()
+                    release.wait()
+                    probeFinished.fulfill()
+                    continuation.resume(returning: false)
+                }
+            }
+        }, seek: { true })
+        let task = try XCTUnwrap(controller.playerItemStatusTask)
+        await fulfillment(of: [probeStarted], timeout: 1)
+        controller.removePlayerItemStatusObserver()
+        let replacement = AVPlayer()
+        controller.player = replacement
+        let started = ContinuousClock.now
+        await task.value
+        XCTAssertLessThan(started.duration(to: .now), .seconds(1))
+        release.signal()
+        await fulfillment(of: [probeFinished], timeout: 1)
+        XCTAssertTrue(controller.player === replacement)
+        XCTAssertFalse(controller.useMPV)
+        XCTAssertFalse(controller.isReady)
+        XCTAssertNil(controller.playerItemStatusTask)
+    }
+
     func testBoundedVideoMetadataProbeReturnsSuccessfulResult() async throws {
         let expected = videoMetadata(timecode: "01:02:03:04", frameRate: 25)
 
@@ -4076,17 +4198,17 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             ffmpegPathProvider: { ffmpegPath },
             ssimulacra2PathProvider: { ssimulacra2Path },
             mediaInfoProvider: StubAnalyticsMediaInfoProvider(
-                duration: 1,
+                duration: 10,
                 resolution: (width: 640, height: 360)
-            ),
-            ssimulacra2MaxFramesOverride: 1
+            )
         )
 
         let results = try await service.runAnalytics(
             sourceFile: fixture.source,
             encodedFile: fixture.encoded,
             enabledMetrics: [.ssimulacra2],
-            vmafModel: .vmaf_v0_6_1
+            vmafModel: .vmaf_v0_6_1,
+            ssimulacra2MaxFrames: 1
         ) { _, _ in }
 
         XCTAssertEqual(results.first?.overallScore, 97.53500802)
@@ -4131,8 +4253,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             ffmpegPathProvider: { "/private/tools/ffmpeg" },
             ssimulacra2PathProvider: { "/private/tools/ssimulacra2_rs" },
             mediaInfoProvider: provider,
-            mediaInfoTimeout: .milliseconds(50),
-            ssimulacra2MaxFramesOverride: 1
+            mediaInfoTimeout: .milliseconds(50)
         )
         let start = ContinuousClock.now
 
@@ -4141,7 +4262,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 sourceFile: fixture.source,
                 encodedFile: fixture.encoded,
                 enabledMetrics: [.ssimulacra2],
-                vmafModel: .vmaf_v0_6_1
+                vmafModel: .vmaf_v0_6_1,
+                ssimulacra2MaxFrames: 1
             ) { _, _ in }
             XCTFail("Expected media duration discovery to time out")
         } catch let AnalyticsError.metricFailed(metric, reason) {
@@ -4183,8 +4305,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             ffmpegPathProvider: { "/private/tools/ffmpeg" },
             ssimulacra2PathProvider: { "/private/tools/ssimulacra2_rs" },
             mediaInfoProvider: provider,
-            mediaInfoTimeout: .milliseconds(50),
-            ssimulacra2MaxFramesOverride: 1
+            mediaInfoTimeout: .milliseconds(50)
         )
         let start = ContinuousClock.now
 
@@ -4193,7 +4314,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 sourceFile: fixture.source,
                 encodedFile: fixture.encoded,
                 enabledMetrics: [.ssimulacra2],
-                vmafModel: .vmaf_v0_6_1
+                vmafModel: .vmaf_v0_6_1,
+                ssimulacra2MaxFrames: 1
             ) { _, _ in }
             XCTFail("Expected media resolution discovery to time out")
         } catch let AnalyticsError.metricFailed(metric, reason) {
@@ -7428,7 +7550,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let outputURL = outputBaseURL.appendingPathExtension("mp4")
         defer { FileSafetyUtils.unregisterCreatedFile(outputURL) }
         let ffmpegPath = "/private/tools/ffmpeg"
-        let avmdecPath = "/private/tools/avmdec"
+        let avmdecPath = temporaryDirectory.appendingPathComponent("avmdec").path
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: URL(fileURLWithPath: avmdecPath))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: avmdecPath)
         let decodedY4M = Data("YUV4MPEG2 W2 H2 F24:1 Ip A1:1 C420\nFRAME\nfixture".utf8)
         let progressValues = OSAllocatedUnfairLock<[Double]>(initialState: [])
         let runner = SequencedRecordingSubprocessRunner { _, request, outputHandler in
@@ -7510,7 +7634,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let outputBaseURL = temporaryDirectory.appendingPathComponent("output")
         let outputURL = outputBaseURL.appendingPathExtension("mp4")
         let ffmpegPath = "/private/tools/ffmpeg"
-        let avmdecPath = "/private/tools/avmdec"
+        let avmdecPath = temporaryDirectory.appendingPathComponent("avmdec").path
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: URL(fileURLWithPath: avmdecPath))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: avmdecPath)
         let runner = SequencedRecordingSubprocessRunner { _, request, _ in
             if request.executableURL.path == avmdecPath {
                 return successfulSubprocessResult(
@@ -7562,7 +7688,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let outputBaseURL = temporaryDirectory.appendingPathComponent("output")
         let outputURL = outputBaseURL.appendingPathExtension("mp4")
         let ffmpegPath = "/private/tools/ffmpeg"
-        let avmdecPath = "/private/tools/missing-avmdec"
+        let avmdecPath = temporaryDirectory.appendingPathComponent("avmdec").path
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: URL(fileURLWithPath: avmdecPath))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: avmdecPath)
         let runner = SequencedRecordingSubprocessRunner { _, request, _ in
             if request.executableURL.path == avmdecPath {
                 throw SubprocessRunnerError.failedToStart(
@@ -7614,11 +7742,14 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         try makeTestIVFData().write(to: inputURL)
         let outputBaseURL = temporaryDirectory.appendingPathComponent("output")
         let outputURL = outputBaseURL.appendingPathExtension("mp4")
+        let avmdecPath = temporaryDirectory.appendingPathComponent("avmdec").path
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: URL(fileURLWithPath: avmdecPath))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: avmdecPath)
         let runner = TwoStageBlockingPipelineRunner()
         let converter = FFMPEGConverter(
             subprocessRunner: runner,
             ffmpegPathProvider: { "/private/tools/ffmpeg" },
-            avmdecPathProvider: { "/private/tools/avmdec" }
+            avmdecPathProvider: { avmdecPath }
         )
         let request = ConversionRequest(
             inputURL: inputURL,
@@ -9702,6 +9833,133 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
         XCTAssertEqual(runner.cancelledCount, 1)
         XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
+    }
+
+    func testPackageCodestreamPreparationChecksCancellationAfterFinalFrame() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data([0xFF, 0x4F, 1]).write(to: root.appendingPathComponent("frame.jp2"))
+        let task = Task.detached {
+            try FFMPEGConverter.preparePackageCodestreams(
+                sourceDirectory: root,
+                frameNames: ["frame.jp2"],
+                destinationDirectory: root.appendingPathComponent("output")
+            ) { _, _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+        }
+        do {
+            _ = try await task.value
+            XCTFail("Cancellation during the final frame must not report successful preparation")
+        } catch is CancellationError {
+            // Expected even when there is no next frame to check cancellation.
+        }
+    }
+
+    func testIMFQueueCancellationStopsFramePreparationBeforeWrapper() async throws {
+        guard BinaryPathResolver.raw2bmxPath != nil else {
+            throw XCTSkip("Bundled raw2bmx is required to enter IMF frame preparation")
+        }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let runner = SequencedRecordingSubprocessRunner { index, request, _ in
+            XCTAssertEqual(index, 0, "Cancellation must prevent launching the package wrapper")
+            let pattern = try XCTUnwrap(request.arguments.last)
+            for frame in 1...2 {
+                let path = pattern.replacingOccurrences(of: "%06d", with: String(format: "%06d", frame))
+                try Data([0xFF, 0x4F, 1]).write(to: URL(fileURLWithPath: path))
+            }
+            return successfulSubprocessResult()
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let preparedStatuses = OSAllocatedUnfairLock(initialState: [String]())
+        let result = await runConversion(
+            ConversionRequest(
+                inputURL: root.appendingPathComponent("input.mov"),
+                outputURL: root.appendingPathComponent("output"),
+                preset: .imfJ2K,
+                includeDateTag: false,
+                sourceMetadata: videoMetadata(timecode: nil, frameRate: 24, duration: 1),
+                expectedDuration: 1,
+                videoFrameRate: 24
+            ),
+            using: converter
+        ) { _, status in
+            guard let status, status.hasPrefix("Preparing J2C frames") else { return }
+            preparedStatuses.withLock { $0.append(status) }
+            let cancelled = DispatchSemaphore(value: 0)
+            Task {
+                await converter.cancelConversion()
+                cancelled.signal()
+            }
+            XCTAssertEqual(cancelled.wait(timeout: .now() + 5), .success,
+                           "Frame preparation must leave the converter actor available for cancellation")
+        }
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+        XCTAssertEqual(preparedStatuses.withLock { $0 }, ["Preparing J2C frames 1/2"])
+        XCTAssertEqual(runner.requests.count, 1)
+    }
+
+    func testPackageCodestreamPreparationRequiresEveryFrameAndCountsWrittenBytes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let frames = ["frame_000001.jp2", "frame_000002.jp2"]
+        let codestreams = [Data([0xFF, 0x4F, 1, 2, 0xFF, 0xD9]), Data([0xFF, 0x4F, 3, 0xFF, 0xD9])]
+        for (frame, codestream) in zip(frames, codestreams) {
+            try (Data([0, 0, 0, 12]) + codestream).write(to: root.appendingPathComponent(frame))
+        }
+        let destination = root.appendingPathComponent("codestreams")
+        var completedFrames: [Int] = []
+        let bytes = try FFMPEGConverter.preparePackageCodestreams(
+            sourceDirectory: root, frameNames: frames, destinationDirectory: destination
+        ) { completed, total in
+            XCTAssertEqual(total, 2)
+            completedFrames.append(completed)
+        }
+        XCTAssertEqual(bytes, Int64(codestreams.reduce(0) { $0 + $1.count }))
+        XCTAssertEqual(completedFrames, [1, 2])
+        for (frame, expected) in zip(frames, codestreams) {
+            let output = destination.appendingPathComponent(frame).deletingPathExtension().appendingPathExtension("j2c")
+            XCTAssertEqual(try Data(contentsOf: output), expected)
+        }
+    }
+
+    func testPackageCodestreamPreparationRejectsMissingAndMalformedFrames() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data([0xFF, 0x4F, 1]).write(to: root.appendingPathComponent("valid.jp2"))
+        try Data("invalid frame".utf8).write(to: root.appendingPathComponent("invalid.jp2"))
+        for badFrame in ["missing.jp2", "invalid.jp2"] {
+            let destination = root.appendingPathComponent(UUID().uuidString)
+            var completedFrames: [Int] = []
+            XCTAssertThrowsError(try FFMPEGConverter.preparePackageCodestreams(
+                sourceDirectory: root, frameNames: ["valid.jp2", badFrame], destinationDirectory: destination
+            ) { completed, _ in completedFrames.append(completed) })
+            XCTAssertEqual(completedFrames, [1], "A failed frame must never be counted as prepared")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: destination.appendingPathComponent(badFrame).deletingPathExtension().appendingPathExtension("j2c").path))
+        }
+    }
+
+    func testPackageCodestreamPreparationReportsDirectoryAndWriteFailures() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("frame.jp2")
+        try Data([0xFF, 0x4F, 1]).write(to: source)
+        XCTAssertThrowsError(try FFMPEGConverter.preparePackageCodestreams(
+            sourceDirectory: root, frameNames: ["frame.jp2"], destinationDirectory: source
+        ))
+        let destination = root.appendingPathComponent("output")
+        try FileManager.default.createDirectory(at: destination.appendingPathComponent("frame.j2c"), withIntermediateDirectories: true)
+        XCTAssertThrowsError(try FFMPEGConverter.preparePackageCodestreams(
+            sourceDirectory: root, frameNames: ["frame.jp2"], destinationDirectory: destination
+        ))
+        XCTAssertEqual(try Data(contentsOf: source), Data([0xFF, 0x4F, 1]))
     }
 
     func testDCPManifestAssemblyMovesDummyEssencesAndBuildsConsistentAssets() async throws {
@@ -12726,13 +12984,24 @@ private actor TwoStageBlockingPipelineRunner: SubprocessRunning {
         return successfulSubprocessResult()
     }
 
-    func waitUntilBothStagesStarted() async {
-        await waitUntilStagesStarted(count: 1)
+    func waitUntilBothStagesStarted(file: StaticString = #filePath, line: UInt = #line) async {
+        await waitUntilStagesStarted(count: 1, file: file, line: line)
     }
 
-    func waitUntilStagesStarted(count: Int) async {
+    func waitUntilStagesStarted(count: Int, file: StaticString = #filePath, line: UInt = #line) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         while producerStartedCount < count || consumerStartedCount < count {
-            await Task.yield()
+            guard ContinuousClock.now < deadline, !Task.isCancelled else {
+                XCTFail(
+                    "Pipeline did not start \(count) producer/consumer stages within five seconds "
+                        + "(started \(producerStartedCount)/\(consumerStartedCount))",
+                    file: file, line: line
+                )
+                // Return to the caller so its converter cancellation still cleans up any
+                // partially started stages after reporting the missing-start regression.
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
         }
     }
 }
@@ -13810,5 +14079,117 @@ extension SwiftExifDurationDeadlineTests {
         stalled.release()
         await fulfillment(of: [stopped], timeout: 2)
         XCTAssertEqual(scopes.stoppedURLs, [url])
+    }
+}
+
+extension Aagedal_Media_Converter_Tests {
+    func testNativePreviewDeadlinePublishesOnlyReturnedFrameIndices() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let destinations = (0..<3).map { directory.appendingPathComponent("thumb_\($0).png") }
+        let image = Data("generated image".utf8)
+        let generator = PreviewAssetGenerator(thumbnailRenderer: { _, requests in
+            XCTAssertEqual(requests.map(\.index), [0, 2])
+            return [2: image]
+        })
+        let result = try await generator.generateNativeThumbnails(
+            url: directory.appendingPathComponent("source.mov"),
+            requests: [0, 2].map { PreviewThumbnailRequest(index: $0, position: 0, width: 320, tolerance: 1) },
+            destinations: destinations
+        )
+        XCTAssertEqual(result, [2: image])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinations[0].path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinations[1].path))
+        XCTAssertEqual(try Data(contentsOf: destinations[2]), image)
+    }
+
+    func testNativePreviewDeadlineDoesNotPublishLateFramesOverFallback() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let destinations = (0..<2).map { directory.appendingPathComponent("thumb_\($0).png") }
+        let started = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let finished = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let generator = PreviewAssetGenerator(
+            thumbnailTimeout: .milliseconds(50),
+            thumbnailRenderer: { _, _ in
+                await withCheckedContinuation { continuation in
+                    started.signal()
+                    DispatchQueue.global().async {
+                        release.wait()
+                        continuation.resume(returning: [0: Data("late".utf8), 1: Data("late".utf8)])
+                        finished.signal()
+                    }
+                }
+            }
+        )
+        let start = ContinuousClock.now
+        do {
+            _ = try await generator.generateNativeThumbnails(
+                url: directory.appendingPathComponent("source.mov"),
+                requests: [0, 1].map { PreviewThumbnailRequest(index: $0, position: 0, width: 320, tolerance: 1) },
+                destinations: destinations
+            )
+            XCTFail("Expected timeout")
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            // Expected even though the renderer has not completed.
+        }
+        XCTAssertEqual(started.wait(timeout: .now() + 1), .success)
+        XCTAssertLessThan(start.duration(to: .now), .seconds(1))
+        let fallback = Data("fallback".utf8)
+        try fallback.write(to: destinations[0])
+        release.signal()
+        XCTAssertEqual(finished.wait(timeout: .now() + 1), .success)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(try Data(contentsOf: destinations[0]), fallback)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destinations[1].path))
+    }
+
+    func testNativePreviewCancellationReturnsWithoutPublishingLateRowThumbnail() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let destination = directory.appendingPathComponent("row_thumb.png")
+        let started = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let finished = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let generator = PreviewAssetGenerator(
+            thumbnailTimeout: .seconds(10),
+            thumbnailRenderer: { _, _ in
+                await withCheckedContinuation { continuation in
+                    started.signal()
+                    DispatchQueue.global().async {
+                        release.wait()
+                        continuation.resume(returning: [0: Data("late".utf8)])
+                        finished.signal()
+                    }
+                }
+            }
+        )
+        let task = Task {
+            try await generator.generateNativeThumbnails(
+                url: directory.appendingPathComponent("source.mov"),
+                requests: [PreviewThumbnailRequest(index: 0, position: 1, width: 640, tolerance: 2)],
+                destinations: [destination]
+            )
+        }
+        XCTAssertEqual(started.wait(timeout: .now() + 1), .success)
+        let start = ContinuousClock.now
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertLessThan(start.duration(to: .now), .seconds(1))
+        release.signal()
+        XCTAssertEqual(finished.wait(timeout: .now() + 1), .success)
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
     }
 }

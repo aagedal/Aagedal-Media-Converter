@@ -181,7 +181,7 @@ struct WhisperSettingsView: View {
                     }
                 }
 
-                Text(model.description)
+                Text(LocalizedStringKey(model.description))
                     .font(.caption)
                     .foregroundColor(.secondary)
 

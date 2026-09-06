@@ -183,12 +183,16 @@ struct CropControlsView: View {
                     Button("Reset") {
                         resetCrop()
                     }
+                    .accessibilityLabel("Reset crop")
+                    .accessibilityIdentifier("crop.reset")
                     .buttonStyle(.bordered)
                     .controlSize(.small)
 
                     Button("Center") {
                         centerCrop()
                     }
+                    .accessibilityLabel("Center crop")
+                    .accessibilityIdentifier("crop.center")
                     .buttonStyle(.bordered)
                     .controlSize(.small)
 
@@ -201,6 +205,8 @@ struct CropControlsView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .help("Exit crop mode")
+                    .accessibilityLabel("Exit crop mode")
+                    .accessibilityIdentifier("crop.done")
                 }
 
                 // Warning message for Stream Copy preset (always visible to prevent UI shift)

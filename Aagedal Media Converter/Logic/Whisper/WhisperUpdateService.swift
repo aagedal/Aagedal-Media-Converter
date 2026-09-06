@@ -10,7 +10,7 @@ struct WhisperCapabilitySnapshot: Sendable, Equatable {
 
     var installationStatus: WhisperInstallationStatus {
         guard isAvailable else { return .notInstalled }
-        return .installed(version: "FFmpeg \(ffmpegVersion) (built-in)")
+        return .installed(version: String(localized: "FFmpeg \(ffmpegVersion) (built-in)"))
     }
 }
 

@@ -1,4 +1,6 @@
 """Compile small real Mach-O graphs to exercise release validation with Apple tools."""
+import hashlib
+import json
 import importlib.util
 from pathlib import Path
 import plistlib
@@ -127,6 +129,56 @@ class ReleaseBundleTests(unittest.TestCase):
         self.compile(helper, "int fixture(void); int main(void) { return fixture(); }", str(library))
         with self.assertRaisesRegex(ValueError, "unresolved dependency"):
             validator.verify(self.app)
+
+
+class ReleaseNoticeTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.app = self.root / "Test App.app"
+        self.resources = self.app / "Contents/Resources"
+        self.resources.mkdir(parents=True)
+        self.notice = self.resources / "fixture-LICENSE.txt"
+        self.notice.write_bytes(b"A complete fixture notice.\n")
+        contents = self.notice.read_bytes()
+        self.entry = {"path": "Licenses/fixture-LICENSE.txt", "bytes": len(contents),
+                      "sha256": hashlib.sha256(contents).hexdigest()}
+        self.manifest = self.root / "manifest.json"
+        self.write_manifest([self.entry])
+
+    def write_manifest(self, entries):
+        self.manifest.write_text(json.dumps({"licenseFiles": entries}))
+
+    def test_packaged_notice_matches_manifest(self):
+        self.assertEqual(validator.verify_notices(self.app, self.manifest), 1)
+
+    def test_missing_notice_is_rejected(self):
+        self.notice.unlink()
+        with self.assertRaisesRegex(ValueError, "missing packaged license"):
+            validator.verify_notices(self.app, self.manifest)
+
+    def test_modified_notice_with_same_size_is_rejected(self):
+        self.notice.write_bytes(b"X" * self.entry["bytes"])
+        with self.assertRaisesRegex(ValueError, "differs from"):
+            validator.verify_notices(self.app, self.manifest)
+
+    def test_escaping_notice_symlink_is_rejected(self):
+        outside = self.root / "outside.txt"
+        self.notice.rename(outside)
+        self.notice.symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, "escapes the app bundle"):
+            validator.verify_notices(self.app, self.manifest)
+
+    def test_duplicate_flat_resource_names_are_rejected(self):
+        self.write_manifest([self.entry, {**self.entry, "path": "Other/fixture-LICENSE.txt"}])
+        with self.assertRaisesRegex(ValueError, "Duplicate packaged"):
+            validator.verify_notices(self.app, self.manifest)
+
+    def test_empty_manifest_is_rejected(self):
+        self.write_manifest([])
+        with self.assertRaisesRegex(ValueError, "no license notices"):
+            validator.verify_notices(self.app, self.manifest)
 
 
 if __name__ == "__main__":

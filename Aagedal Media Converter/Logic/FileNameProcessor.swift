@@ -35,15 +35,7 @@ struct FileNameProcessor {
     /// Resolves the user's current special-character removal mode, falling back to the legacy
     /// boolean toggle if the new key has not been set yet.
     static var specialCharRemovalMode: SpecialCharacterRemovalMode {
-        if let raw = UserDefaults.standard.string(forKey: AppConstants.fileNameSpecialCharRemovalModeKey),
-           let mode = SpecialCharacterRemovalMode(rawValue: raw) {
-            return mode
-        }
-        // Migration from old toggle: true → strict (preserve prior behavior), false → off.
-        if let legacy = UserDefaults.standard.object(forKey: AppConstants.fileNameRemoveSpecialCharsKey) as? Bool {
-            return legacy ? .strict : .off
-        }
-        return SpecialCharacterRemovalMode(rawValue: AppConstants.defaultFileNameSpecialCharRemovalMode) ?? .loose
+        FileNameSettings().specialCharacterRemovalMode
     }
 
     /// Processes a file name to ensure it's safe for use in file systems.

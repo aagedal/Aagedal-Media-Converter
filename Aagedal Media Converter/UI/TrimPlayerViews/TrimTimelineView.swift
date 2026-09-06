@@ -104,6 +104,62 @@ struct TrimTimelineView: View {
         self.onSeek = onSeek
     }
 
+    // Native sliders expose the custom-drawn timeline to VoiceOver, including
+    // standard increment/decrement actions. Keep changes on the same editing
+    // callbacks as pointer gestures so playback and trim state stay in sync.
+    private var accessibleTimelineControls: some View {
+        let timelineDuration = duration.isFinite ? max(0, duration) : 0
+        let increment = step.isFinite && step > 0 ? step : 0.1
+        let minimumGap = min(increment, timelineDuration)
+        return VStack {
+            Slider(value: Binding(
+                get: { min(max(0, playbackTime), timelineDuration) },
+                set: { onSeek(min(max(0, $0), timelineDuration)) }
+            ), in: 0...max(timelineDuration, increment), step: increment) {
+                Text("Playback position")
+            }
+            .accessibilityValue("\(playbackTime, specifier: "%.1f") seconds")
+            .accessibilityIdentifier("trim.timeline.playbackPosition")
+
+            Slider(value: Binding(
+                get: { min(max(0, trimStart), timelineDuration) },
+                set: { value in
+                    onEditingChanged(true)
+                    trimStart = max(0, min(value, trimEnd - minimumGap))
+                    onEditingChanged(false)
+                }
+            ), in: 0...max(timelineDuration, increment), step: increment) {
+                Text("Trim start")
+            }
+            .accessibilityValue("\(trimStart, specifier: "%.1f") seconds")
+            .accessibilityIdentifier("trim.timeline.start")
+
+            Slider(value: Binding(
+                get: { min(max(0, trimEnd), timelineDuration) },
+                set: { value in
+                    onEditingChanged(true)
+                    trimEnd = min(timelineDuration, max(value, trimStart + minimumGap))
+                    onEditingChanged(false)
+                }
+            ), in: 0...max(timelineDuration, increment), step: increment) {
+                Text("Trim end")
+            }
+            .accessibilityValue("\(trimEnd, specifier: "%.1f") seconds")
+            .accessibilityIdentifier("trim.timeline.end")
+
+            if showChapters {
+                ForEach(Array(chapters.enumerated()), id: \.element.id) { index, chapter in
+                    Button(chapter.displayTitle(fallbackIndex: index + 1)) {
+                        onSeek(min(max(0, chapter.start), timelineDuration))
+                    }
+                    .accessibilityValue("\(chapter.start, specifier: "%.1f") seconds")
+                    .accessibilityIdentifier("trim.timeline.chapter.\(chapter.id)")
+                }
+            }
+        }
+        .disabled(timelineDuration <= 0)
+    }
+
 // MARK: - Interaction Layer
 
 private struct TrimHandlesInteractionLayer: View {
@@ -557,6 +613,9 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
             }
         }
         .frame(height: effectiveHeight)
+        .accessibilityRepresentation {
+            accessibleTimelineControls
+        }
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .background(TimelineKeyTrackerView(isCommandKeyPressed: $isCommandKeyPressed, isShiftKeyPressed: $isShiftKeyPressed, isOptionKeyPressed: $isOptionKeyPressed))
         .onChange(of: thumbnails) { _, newThumbnails in

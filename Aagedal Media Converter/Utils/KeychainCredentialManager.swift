@@ -4,6 +4,7 @@
 
 import Foundation
 import Security
+import LocalAuthentication
 
 /// Manages secure credential storage in macOS Keychain
 final class KeychainCredentialManager: @unchecked Sendable {
@@ -11,7 +12,13 @@ final class KeychainCredentialManager: @unchecked Sendable {
 
     private let serviceName = "com.aagedal.media-converter.upload"
 
-    private init() {}
+    private let presenceQuery: @Sendable (CFDictionary) -> OSStatus
+
+    init(presenceQuery: @escaping @Sendable (CFDictionary) -> OSStatus = {
+        SecItemCopyMatching($0, nil)
+    }) {
+        self.presenceQuery = presenceQuery
+    }
 
     // MARK: - Public Methods
 
@@ -111,10 +118,8 @@ final class KeychainCredentialManager: @unchecked Sendable {
 
     /// Checks if a credential exists for the given server and username
     func hasCredential(server: String, username: String) -> Bool {
-        guard let _ = try? getCredential(server: server, username: username) else {
-            return false
-        }
-        return true
+        guard !server.isEmpty, !username.isEmpty else { return false }
+        return containsAccount(buildAccountString(server: server, username: username))
     }
 
     /// Deletes all credentials stored by this app
@@ -205,10 +210,8 @@ final class KeychainCredentialManager: @unchecked Sendable {
 
     /// Checks if an S3 secret key exists for the given access key ID
     func hasS3SecretKey(accessKeyID: String) -> Bool {
-        guard let _ = try? getS3SecretKey(accessKeyID: accessKeyID) else {
-            return false
-        }
-        return true
+        guard !accessKeyID.isEmpty else { return false }
+        return containsAccount(buildS3AccountString(accessKeyID: accessKeyID))
     }
 
     /// Deletes a stored S3 secret key
@@ -230,6 +233,23 @@ final class KeychainCredentialManager: @unchecked Sendable {
     }
 
     // MARK: - Private Methods
+
+    /// A status-only match avoids decrypting password data just to populate settings.
+    /// No return type is requested, and authentication must not display UI. Actual
+    /// uploads continue to retrieve secrets through the explicit get methods above.
+    private func containsAccount(_ account: String) -> Bool {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: account,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnData as String: false,
+            kSecUseAuthenticationContext as String: context
+        ]
+        return presenceQuery(query as CFDictionary) == errSecSuccess
+    }
 
     private func buildAccountString(server: String, username: String) -> String {
         return "\(username)@\(server)"

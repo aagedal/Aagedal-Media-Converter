@@ -28,6 +28,50 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testHiddenDefaultPresetStillDisplaysItsSelectionInBothLanguages() throws {
+        for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
+            launchApp(language: language, locale: locale, additionalArguments: ["-videoLoopVisible", "NO"])
+            defer { app.terminate() }
+            XCTAssertTrue(element("queue.empty").waitForExistence(timeout: 10))
+            XCTAssertTrue(waitForValue("VideoLoop", of: element("toolbar.preset"), timeout: 5))
+            app.activate()
+            attachWindowScreenshot(named: "Hidden active preset - \(language)")
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testDescriptivePresetNamesInBothLanguages() throws {
+        for (language, locale, prefixes) in [
+            ("en", "en_US", ["VideoLoop with sound", "Stream Copy", "Animated Still (", "Audio Only (", "Image Sequence ("]),
+            ("nb", "nb_NO", ["VideoLoop med lyd", "Strømkopiering", "Animert stillbilde (", "Kun lyd (", "Bildesekvens ("])
+        ] {
+            launchApp(language: language, locale: locale)
+            defer { app.terminate() }
+            XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+            app.activate()
+            element("toolbar.settings").click()
+            XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+            for pane in ["presets", "encoding"] {
+                let identifier = "settings.tab.\(pane)"
+                element(identifier).click()
+                let row = app.outlineRows.containing(.any, identifier: identifier).firstMatch
+                XCTAssertTrue(waitForSelection(of: row, timeout: 5))
+                if pane == "presets" {
+                    for prefix in prefixes {
+                        let name = app.staticTexts.matching(NSPredicate(
+                            format: "label BEGINSWITH %@ OR value BEGINSWITH %@", prefix, prefix
+                        )).firstMatch
+                        XCTAssertTrue(name.exists, "Missing localized preset name: \(prefix)")
+                    }
+                }
+                attachWindowScreenshot(named: "Localized preset names - \(language) - \(pane)")
+            }
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testOpensSettingsAndMovesBetweenPanes() throws {
         launchApp()
         defer { app.terminate() }
@@ -41,6 +85,17 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         let generalTab = element("settings.tab.general")
         XCTAssertTrue(generalTab.waitForExistence(timeout: 5))
         XCTAssertEqual(settingsRoot.value as? String, "general")
+        XCTAssertEqual(element("settings.general.revealOutput").label, "Show in Finder")
+        XCTAssertEqual(element("settings.general.chooseOutput").label, "Change default output folder")
+
+        element("settings.tab.screenshots").click()
+        XCTAssertEqual(settingsRoot.value as? String, "screenshots")
+        XCTAssertEqual(element("settings.screenshots.reveal").label, "Show in Finder")
+        XCTAssertEqual(element("settings.screenshots.chooseFolder").label, "Change screenshot folder")
+        XCTAssertEqual(element("settings.screenshots.resetFolder").label, "Reset to Downloads")
+        for label in ["8-bit sources", "10-bit sources", ">10-bit sources", "Alpha channel"] {
+            XCTAssertTrue(app.popUpButtons[label].exists, "Missing accessible screenshot picker: \(label)")
+        }
 
         let presetsTab = element("settings.tab.presets")
         XCTAssertTrue(presetsTab.exists)
@@ -53,14 +108,135 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
-    func testImportsGeneratedFixtureAndSelectsPreset() throws {
-        let fixtureDirectory = try makeFixtureDirectory()
+    func testMainWindowAndEverySettingsPaneInBothLanguages() throws {
+        let panes = [
+            ("general", "General", "Generelt"),
+            ("encoding", "Encoding Groups", "Kodingsgrupper"),
+            ("fileNames", "File Names", "Filnavn"),
+            ("metadata", "Metadata", "Metadata"),
+            ("presets", "Presets", "Forhåndsinnstillinger"),
+            ("screenshots", "Screenshots", "Skjermbilder"),
+            ("screenCapture", "Screen Capture", "Skjermopptak"),
+            ("waveform", "Audio Waveform", "Lydbølge"),
+            ("watchFolder", "Watch Folder", "Watch Folder"),
+            ("ytdlp", "Downloads", "Nedlastinger"),
+            ("upload", "Upload", "Opplasting"),
+            ("whisper", "Transcription", "Transkripsjon"),
+            ("ocr", "OCR", "OCR"),
+            ("analytics", "Analytics", "Analyse"),
+            ("sync", "Sync", "Synkronisering"),
+            ("updates", "Updates", "Oppdateringer"),
+            ("shortcuts", "Shortcuts", "Snarveier"),
+            ("tools", "Tool Diagnostics", "Verktøydiagnostikk")
+        ]
+        for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
+            launchApp(language: language, locale: locale)
+            defer { app.terminate() }
+            XCTAssertTrue(element("queue.empty").waitForExistence(timeout: 10))
+            attachWindowScreenshot(named: "Locale audit - \(language) - main")
+            app.activate()
+            element("toolbar.settings").click()
+            let root = element("settings.root")
+            if !root.waitForExistence(timeout: 3) {
+                // Desktop focus can consume the first click. Retry once, then
+                // still require the real Settings window and sidebar selection.
+                app.activate()
+                element("toolbar.settings").click()
+            }
+            XCTAssertTrue(root.waitForExistence(timeout: 10))
 
-        launchApp(generatedFixtureDirectory: fixtureDirectory)
-        defer {
+            for (identifier, english, norwegian) in panes {
+                let tab = element("settings.tab.\(identifier)")
+                XCTAssertTrue(tab.exists)
+                let expectedLabel = language == "en" ? english : norwegian
+                // AppKit static text exposes its spoken content as a value;
+                // other SwiftUI accessibility representations use the label.
+                XCTAssertTrue(
+                    tab.label == expectedLabel || tab.value as? String == expectedLabel,
+                    "Missing localized sidebar name: \(expectedLabel). \(tab.debugDescription)"
+                )
+                let row = app.outlineRows.containing(.any, identifier: "settings.tab.\(identifier)").firstMatch
+                app.activate()
+                tab.click()
+                if !waitForSelection(of: row, timeout: 3) {
+                    app.activate()
+                    tab.click()
+                }
+                XCTAssertTrue(waitForSelection(of: row, timeout: 5))
+                attachWindowScreenshot(named: "Locale audit - \(language) - \(identifier)")
+            }
             app.terminate()
-            try? FileManager.default.removeItem(at: fixtureDirectory)
         }
+    }
+
+    @MainActor
+    private func attachWindowScreenshot(named name: String) {
+        let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    func testScreenCaptureSettingsExposeBroadcastRatesInBothLanguages() throws {
+        for (language, locale, labels) in [
+            ("en", "en_US", ["Auto (Display)", "25 fps (PAL)", "29.97 fps (NTSC)", "50 fps (PAL)", "59.94 fps (NTSC)", "60 fps"]),
+            ("nb", "nb_NO", ["Automatisk (skjerm)", "25 b/s (PAL)", "29,97 b/s (NTSC)", "50 b/s (PAL)", "59,94 b/s (NTSC)", "60 b/s"])
+        ] {
+            launchApp(language: language, locale: locale)
+            defer { app.terminate() }
+            let settingsButton = element("toolbar.settings")
+            XCTAssertTrue(settingsButton.waitForExistence(timeout: 10))
+            settingsButton.click()
+            let captureTab = element("settings.tab.screenCapture")
+            XCTAssertTrue(captureTab.waitForExistence(timeout: 5))
+            captureTab.click()
+            let picker = element("capture.frameRate")
+            XCTAssertTrue(picker.waitForExistence(timeout: 5))
+            let screenshot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+            screenshot.name = "Screen Capture Settings - \(language)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            picker.click()
+            for label in labels {
+                XCTAssertTrue(app.menuItems[label].exists, "Missing frame rate: \(label)")
+            }
+            app.typeKey(.escape, modifierFlags: [])
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testToolDiagnosticsInBothLanguages() throws {
+        for (language, locale, checkLabel) in [
+            ("en", "en_US", "Check Tools"),
+            ("nb", "nb_NO", "Kontroller verktøy")
+        ] {
+            launchApp(language: language, locale: locale)
+            defer { app.terminate() }
+            XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+            element("toolbar.settings").click()
+            let toolsTab = element("settings.tab.tools")
+            XCTAssertTrue(toolsTab.waitForExistence(timeout: 5))
+            toolsTab.click()
+            let check = element("settings.tools.check")
+            XCTAssertTrue(check.waitForExistence(timeout: 5))
+            XCTAssertEqual(check.label, checkLabel)
+            attachWindowScreenshot(named: "Tool Diagnostics - \(language)")
+            check.click()
+            XCTAssertTrue(waitForEnabled(true, of: check, timeout: 90))
+            for id in ["whisper-model", "parakeet-model", "ffmpeg", "bmxtranswrap", "mxf2raw", "raw2bmx", "asdcp-wrap", "avmenc", "avmdec", "parakeet"] {
+                XCTAssertTrue(element("settings.tools.\(id)").exists)
+            }
+            attachWindowScreenshot(named: "Tool Diagnostics results - \(language)")
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testImportsGeneratedFixtureAndSelectsPreset() throws {
+        launchApp(generatedFixture: true)
+        defer { terminateAndCleanFixtures() }
 
         let queueItem = element("queue.item")
         XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
@@ -87,17 +263,12 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
 
     @MainActor
     func testStartsAndCancelsConversion() throws {
-        let fixtureDirectory = try makeFixtureDirectory()
-
         launchApp(
-            generatedFixtureDirectory: fixtureDirectory,
+            generatedFixture: true,
             defaultPreset: "H.264 / AVC",
             realtimeInput: true
         )
-        defer {
-            app.terminate()
-            try? FileManager.default.removeItem(at: fixtureDirectory)
-        }
+        defer { terminateAndCleanFixtures() }
 
         let queueItem = element("queue.item")
         XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
@@ -119,16 +290,11 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
 
     @MainActor
     func testExposesSuccessfulConversionResult() throws {
-        let fixtureDirectory = try makeFixtureDirectory()
-
         launchApp(
-            generatedFixtureDirectory: fixtureDirectory,
+            generatedFixture: true,
             defaultPreset: "H.264 / AVC"
         )
-        defer {
-            app.terminate()
-            try? FileManager.default.removeItem(at: fixtureDirectory)
-        }
+        defer { terminateAndCleanFixtures() }
 
         let queueItem = element("queue.item")
         XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
@@ -143,23 +309,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
 
     @MainActor
     func testExposesFailedConversionAndError() throws {
-        let fixtureDirectory = try makeFixtureDirectory()
-
         launchApp(
-            generatedFixtureDirectory: fixtureDirectory,
-            defaultPreset: "H.264 / AVC"
+            generatedFixture: true,
+            defaultPreset: "H.264 / AVC",
+            removeFixtureAfterImport: true
         )
-        defer {
-            app.terminate()
-            try? FileManager.default.removeItem(at: fixtureDirectory)
-        }
+        defer { terminateAndCleanFixtures() }
 
         let queueItem = element("queue.item")
         XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
         XCTAssertEqual(queueItem.label, "ui-test-fixture.mp4")
-        try FileManager.default.removeItem(
-            at: fixtureDirectory.appendingPathComponent("ui-test-fixture.mp4")
-        )
         let conversionButton = element("toolbar.conversion")
         XCTAssertTrue(conversionButton.waitForExistence(timeout: 5))
         conversionButton.click()
@@ -170,12 +329,15 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(waitForLabel("Cannot access input file", of: errorDetail, timeout: 5))
         let detailsButton = element("queue.item.errorDetails")
         XCTAssertTrue(detailsButton.waitForExistence(timeout: 5))
+        app.activate()
+        let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: detailsButton)
+        XCTAssertEqual(XCTWaiter.wait(for: [hittable], timeout: 5), .completed)
         detailsButton.click()
         let expandedDetails = element("queue.errorDetails.text")
         XCTAssertTrue(expandedDetails.waitForExistence(timeout: 5))
         XCTAssertTrue((expandedDetails.value as? String ?? "").contains("Cannot access input file"))
         XCTAssertTrue(element("queue.errorDetails.copy").isEnabled)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
         screenshot.name = "Queue error details"
         screenshot.lifetime = .keepAlways
         add(screenshot)
@@ -196,20 +358,26 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
 
     @MainActor
     private func launchApp(
-        generatedFixtureDirectory: URL? = nil,
+        generatedFixture: Bool = false,
         defaultPreset: String = "VideoLoop",
-        realtimeInput: Bool = false
+        realtimeInput: Bool = false,
+        removeFixtureAfterImport: Bool = false,
+        language: String = "en",
+        locale: String = "en_US",
+        additionalArguments: [String] = []
     ) {
         app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-ffmpegBinarySource", "app"]
-        if let generatedFixtureDirectory {
+        app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-ffmpegBinarySource", "app", "-defaultExportPreset", defaultPreset]
+        app.launchArguments += additionalArguments
+        app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        if generatedFixture {
             app.launchArguments += [
-                "-outputFolder", generatedFixtureDirectory.path,
-                "-defaultExportPreset", defaultPreset,
                 "-saveNextToOriginal", "NO",
             ]
             app.launchEnvironment["AMC_UI_TEST_GENERATED_FIXTURE"] = "1"
-            app.launchEnvironment["AMC_UI_TEST_FIXTURE_DIRECTORY"] = generatedFixtureDirectory.path
+            if removeFixtureAfterImport {
+                app.launchEnvironment["AMC_UI_TEST_REMOVE_FIXTURE_AFTER_IMPORT"] = "1"
+            }
             if realtimeInput {
                 app.launchEnvironment["AMC_UI_TEST_REALTIME_INPUT"] = "1"
             }
@@ -217,11 +385,22 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         app.launch()
     }
 
-    private func makeFixtureDirectory() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AagedalMediaConverterUITests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
+    @MainActor
+    private func terminateAndCleanFixtures() {
+        app.terminate()
+        // XCTest may force-terminate the app without willTerminateNotification.
+        // Relaunch for synchronous app-owned cleanup; the runner never accesses
+        // the app's private fixture files or output directory.
+        app.launchEnvironment.removeValue(forKey: "AMC_UI_TEST_GENERATED_FIXTURE")
+        app.launchEnvironment["AMC_UI_TEST_CLEANUP_FIXTURES"] = "1"
+        app.launch()
+        app.terminate()
+    }
+
+    @MainActor
+    private func waitForSelection(of element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     @MainActor

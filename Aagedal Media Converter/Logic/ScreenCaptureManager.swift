@@ -15,6 +15,7 @@ import CoreGraphics
 import CoreImage
 @preconcurrency import ScreenCaptureKit
 import OSLog
+import os
 import AppKit
 
 private enum AudioSettingKeys {
@@ -59,30 +60,30 @@ enum CapturePreset: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .hevcGrowing:
-            return "Growing HEVC 10-bit 4:2:2 (Resolve/Premiere)"
+            return String(localized: "Growing HEVC 10-bit 4:2:2 (Resolve/Premiere)")
         case .avcGrowing:
-            return "Growing H.264 (Compatibility)"
+            return String(localized: "Growing H.264 (Compatibility)")
         case .proRes4444Growing:
-            return "Growing ProRes 4444 (Visually Lossless)"
+            return String(localized: "Growing ProRes 4444 (Visually Lossless)")
         case .hevc42210Bit:
-            return "HEVC 10-bit 4:2:2 (Hardware)"
+            return String(localized: "HEVC 10-bit 4:2:2 (Hardware)")
         case .proRes4444:
-            return "ProRes 4444 (Visually Lossless)"
+            return String(localized: "ProRes 4444 (Visually Lossless)")
         }
     }
 
     var detail: String {
         switch self {
         case .hevcGrowing:
-            return "Edit while recording in DaVinci Resolve & Premiere. Hardware HEVC 10-bit 4:2:2, fragmented .mov."
+            return String(localized: "Edit while recording in DaVinci Resolve & Premiere. Hardware HEVC 10-bit 4:2:2, fragmented .mov.")
         case .avcGrowing:
-            return "Edit while recording with maximum compatibility. Hardware H.264, fragmented .mov."
+            return String(localized: "Edit while recording with maximum compatibility. Hardware H.264, fragmented .mov.")
         case .proRes4444Growing:
-            return "Edit while recording in DaVinci Resolve & Premiere. ProRes 4444 at a constant frame rate (CFR) — visually lossless, but because ProRes can't compress duplicate frames, a mostly-static screen makes very large files. Needs a ProRes hardware encoder (M1 Pro/Max or later) for high frame rates."
+            return String(localized: "Edit while recording in DaVinci Resolve & Premiere. ProRes 4444 at a constant frame rate (CFR) — visually lossless, but because ProRes can't compress duplicate frames, a mostly-static screen makes very large files. Needs a ProRes hardware encoder (M1 Pro/Max or later) for high frame rates.")
         case .hevc42210Bit:
-            return "Hardware HEVC 10-bit 4:2:2; source format determines chroma. Variable frame rate, not flagged as a growing clip — best for importing after recording."
+            return String(localized: "Hardware HEVC 10-bit 4:2:2; source format determines chroma. Variable frame rate, not flagged as a growing clip — best for importing after recording.")
         case .proRes4444:
-            return "Visually lossless ProRes 4444 for grading. Variable frame rate (VFR) keeps files smaller when the screen is static. Not flagged as a growing clip, so DaVinci Resolve won't poll it for updates while recording — best for importing afterward."
+            return String(localized: "Visually lossless ProRes 4444 for grading. Variable frame rate (VFR) keeps files smaller when the screen is static. Not flagged as a growing clip, so DaVinci Resolve won't poll it for updates while recording — best for importing afterward.")
         }
     }
 
@@ -92,6 +93,12 @@ enum CapturePreset: String, CaseIterable, Identifiable {
 
     var fileType: AVFileType {
         .mov
+    }
+
+    var frameRateDetail: String {
+        isGrowing
+            ? String(localized: "Constant frame rate (CFR): static frames are repeated at the selected rate.")
+            : String(localized: "Variable frame rate (VFR): the selected rate is a maximum; static screens may produce fewer frames.")
     }
 
     var targetFrameRate: Int {
@@ -117,7 +124,7 @@ enum CapturePreset: String, CaseIterable, Identifiable {
         [.hevcGrowing, .avcGrowing, .proRes4444Growing, .hevc42210Bit, .proRes4444]
     }
 
-    func videoSettings(width: Int, height: Int, frameRate: Int, hevcProfileOverride: String? = nil) -> [String: Any] {
+    func videoSettings(width: Int, height: Int, frameRate: CaptureFrameRate, hevcProfileOverride: String? = nil) -> [String: Any] {
         let compressionProperties: [String: Any]
         let codec: AVVideoCodecType
         let encoderSpec: [String: Any]?
@@ -126,9 +133,9 @@ enum CapturePreset: String, CaseIterable, Identifiable {
         case .hevcGrowing:
             codec = .hevc
             var properties: [String: Any] = [
-                AVVideoAverageBitRateKey: growingBitrate(width: width, height: height, frameRate: frameRate),
-                AVVideoExpectedSourceFrameRateKey: frameRate,
-                AVVideoMaxKeyFrameIntervalKey: frameRate,          // ~1 s GOP
+                AVVideoAverageBitRateKey: growingBitrate(width: width, height: height, frameRate: frameRate.framesPerSecond),
+                AVVideoExpectedSourceFrameRateKey: frameRate.framesPerSecond,
+                AVVideoMaxKeyFrameIntervalKey: frameRate.nominalRate,          // ~1 s GOP
                 AVVideoAllowFrameReorderingKey: false              // low-latency for live edit
             ]
             // 10-bit 4:2:2: prefer Main42210, fall back to Main10, else let the
@@ -141,20 +148,20 @@ enum CapturePreset: String, CaseIterable, Identifiable {
         case .avcGrowing:
             codec = .h264
             compressionProperties = [
-                AVVideoAverageBitRateKey: growingBitrate(width: width, height: height, frameRate: frameRate),
+                AVVideoAverageBitRateKey: growingBitrate(width: width, height: height, frameRate: frameRate.framesPerSecond),
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
-                AVVideoExpectedSourceFrameRateKey: frameRate,
-                AVVideoMaxKeyFrameIntervalKey: frameRate,          // ~1 s GOP
+                AVVideoExpectedSourceFrameRateKey: frameRate.framesPerSecond,
+                AVVideoMaxKeyFrameIntervalKey: frameRate.nominalRate,          // ~1 s GOP
                 AVVideoAllowFrameReorderingKey: false
             ]
             encoderSpec = nil
         case .hevc42210Bit:
             codec = .hevc
-            let bitrate = hevcBitrate(width: width, height: height, frameRate: frameRate)
+            let bitrate = hevcBitrate(width: width, height: height, frameRate: frameRate.framesPerSecond)
             var properties: [String: Any] = [
                 AVVideoAverageBitRateKey: bitrate.average,
-                AVVideoExpectedSourceFrameRateKey: frameRate,
-                AVVideoMaxKeyFrameIntervalKey: frameRate,
+                AVVideoExpectedSourceFrameRateKey: frameRate.framesPerSecond,
+                AVVideoMaxKeyFrameIntervalKey: frameRate.nominalRate,
                 kVTCompressionPropertyKey_DataRateLimits as String: bitrate.dataRateLimits
             ]
             if let hevcProfileOverride {
@@ -199,13 +206,13 @@ enum CapturePreset: String, CaseIterable, Identifiable {
 
     /// Bitrate for the growing presets — lighter than the archival HEVC 4:2:2
     /// preset so edit-while-recording files stay manageable. ~0.1 bits/pixel.
-    private func growingBitrate(width: Int, height: Int, frameRate: Int) -> Int {
+    private func growingBitrate(width: Int, height: Int, frameRate: Double) -> Int {
         let pixelsPerSecond = Double(width) * Double(height) * Double(frameRate)
         let target = Int(pixelsPerSecond * 0.10)
         return min(max(target, 12_000_000), 120_000_000)
     }
 
-    private func hevcBitrate(width: Int, height: Int, frameRate: Int) -> (average: Int, dataRateLimits: [Int]) {
+    private func hevcBitrate(width: Int, height: Int, frameRate: Double) -> (average: Int, dataRateLimits: [Int]) {
         let pixelsPerSecond = Double(width) * Double(height) * Double(frameRate)
         let targetBitsPerSecond = pixelsPerSecond * 0.28
         let minBitrate = 50_000_000
@@ -216,32 +223,79 @@ enum CapturePreset: String, CaseIterable, Identifiable {
     }
 }
 
+/// Exact frame cadence shared by ScreenCaptureKit, the CFR writer and timecode.
+struct CaptureFrameRate: Equatable, Sendable {
+    let numerator: Int32
+    let denominator: Int32
+
+    init(_ numerator: Int32, denominator: Int32 = 1) {
+        precondition(numerator > 0 && denominator > 0)
+        self.numerator = numerator
+        self.denominator = denominator
+    }
+
+    var framesPerSecond: Double { Double(numerator) / Double(denominator) }
+    var frameDuration: CMTime { CMTime(value: Int64(denominator), timescale: numerator) }
+    var nominalRate: Int { Int(framesPerSecond.rounded()) }
+    var droppedFramesPerMinute: Int {
+        denominator == 1001 && (numerator == 30000 || numerator == 60000) ? nominalRate / 15 : 0
+    }
+    var timecodeFlags: UInt32 {
+        kCMTimeCodeFlag_24HourMax | (droppedFramesPerMinute > 0 ? kCMTimeCodeFlag_DropFrame : 0)
+    }
+    var framesPerTimecodeDay: Int {
+        nominalRate * 86400 - droppedFramesPerMinute * (1440 - 144)
+    }
+
+    func presentationOffset(frameIndex: Int) -> CMTime {
+        CMTime(value: Int64(frameIndex) * Int64(denominator), timescale: numerator)
+    }
+
+    func timecodeFrame(hour: Int, minute: Int, second: Int, nanosecond: Int = 0) -> Int {
+        let totalMinutes = hour * 60 + minute
+        // The first 2/4 labels are omitted at every minute except multiples of ten.
+        var subFrame = min(nominalRate - 1, Int(Double(nanosecond) / 1_000_000_000 * Double(nominalRate)))
+        if second == 0 && minute % 10 != 0 {
+            subFrame = max(subFrame, droppedFramesPerMinute)
+        }
+        let labels = (totalMinutes * 60 + second) * nominalRate + subFrame
+        return labels - droppedFramesPerMinute * (totalMinutes - totalMinutes / 10)
+    }
+
+    func wrappedTimecodeFrame(start: Int, frameIndex: Int) -> Int {
+        (start + frameIndex) % framesPerTimecodeDay
+    }
+}
+
 enum CaptureFrameRateOption: String, CaseIterable, Identifiable {
     case auto
+    case fps25
+    case fps2997
     case fps50
+    case fps5994
     case fps60
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .auto:
-            return "Auto (Display)"
-        case .fps50:
-            return "50 fps (PAL)"
-        case .fps60:
-            return "60 fps (NTSC)"
+        case .auto: return String(localized: "Auto (Display)")
+        case .fps25: return String(localized: "25 fps (PAL)")
+        case .fps2997: return String(localized: "29.97 fps (NTSC)")
+        case .fps50: return String(localized: "50 fps (PAL)")
+        case .fps5994: return String(localized: "59.94 fps (NTSC)")
+        case .fps60: return String(localized: "60 fps")
         }
     }
 
-    var fixedValue: Int? {
+    var fixedValue: CaptureFrameRate? {
         switch self {
-        case .auto:
-            return nil
-        case .fps50:
-            return 50
-        case .fps60:
-            return 60
+        case .auto: return nil
+        case .fps25: return CaptureFrameRate(25)
+        case .fps2997: return CaptureFrameRate(30000, denominator: 1001)
+        case .fps50: return CaptureFrameRate(50)
+        case .fps5994: return CaptureFrameRate(60000, denominator: 1001)
+        case .fps60: return CaptureFrameRate(60)
         }
     }
 }
@@ -255,9 +309,9 @@ enum CaptureDynamicRangeOption: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .sdr:
-            return "SDR (Display)"
+            return String(localized: "SDR (Display)")
         case .hdrP3CanonicalDisplay:
-            return "HDR Display P3 (macOS 26+)"
+            return String(localized: "HDR Display P3 (macOS 26+)")
         }
     }
 
@@ -325,12 +379,14 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         case denied
     }
 
+    private let microphonePermissionRequest = CaptureMicrophonePermissionRequest()
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ScreenCapture")
 
     /// One selected display's live stream — either previewing or recording. Mutated only on the
     /// main actor (the whole manager is `@MainActor`).
     private final class DisplayTile {
         let displayID: CGDirectDisplayID
+        let delivery = CaptureSampleDelivery()
         var stream: SCStream?
         var output: CaptureStreamOutput?
         var writer: AnyCaptureOutputWriter?   // non-nil only while recording
@@ -343,6 +399,8 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         }
     }
     private var tiles: [CGDirectDisplayID: DisplayTile] = [:]
+    private var stoppingDisplayIDs: Set<CGDirectDisplayID> = []
+    private let recordingOperations = CaptureRecordingOperations()
     /// Ordered selection; the first entry is the primary display.
     private var selectedDisplayIDs: [CGDirectDisplayID] = []
     /// Which active tile feeds the audio/mic meters (system audio is global, so only one does).
@@ -384,19 +442,25 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         }
         selectedDisplayIDs = targetIDs
         let targetSet = Set(targetIDs)
+        recordingOperations.retireStarts(outside: targetSet)
+        updateRecordingSessionOwnership()
 
         // Tear down tiles no longer selected.
         for (id, tile) in tiles where !targetSet.contains(id) {
-            await teardownTile(tile)
             tiles[id] = nil
             previewImages[id] = nil
             recordingDisplayIDs.remove(id)
+            await teardownTile(tile)
         }
 
-        let microphoneEnabled = await resolveMicrophoneCapture(requested: settings.includeMicrophone)
+        guard let microphoneEnabled = await resolveMicrophoneCapture(requested: settings.includeMicrophone) else {
+            recomputeMeterSource()
+            updatePreviewingFlag()
+            return
+        }
 
         // Start preview tiles for newly added displays.
-        for display in resolvedDisplays(targetIDs, from: content) where tiles[display.displayID] == nil {
+        for display in resolvedDisplays(targetIDs, from: content) where tiles[display.displayID] == nil && !stoppingDisplayIDs.contains(display.displayID) && !recordingOperations.hasStart(displayID: display.displayID) {
             do {
                 tiles[display.displayID] = try await buildTile(
                     for: display, content: content, mode: .preview, settings: settings,
@@ -414,16 +478,28 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     /// Start recording a single display (transitioning it from preview to recording). Other displays
     /// are unaffected. Safe to call repeatedly to add screens to an in-progress recording.
     func startRecording(displayID: CGDirectDisplayID, preset: CapturePreset, outputDirectory: URL, dynamicRange: CaptureDynamicRangeOption) async {
-        guard !recordingDisplayIDs.contains(displayID) else { return }
+        guard !isProcessing, !stoppingDisplayIDs.contains(displayID), !recordingDisplayIDs.contains(displayID),
+              let operation = recordingOperations.beginStart(displayID: displayID) else { return }
+        defer {
+            recordingOperations.finishStart(operation)
+            updateRecordingSessionOwnership()
+        }
         errorMessage = nil
 
         let content: SCShareableContent
         do { content = try await ScreenCaptureManager.shareableContent() }
-        catch { errorMessage = error.localizedDescription; return }
+        catch {
+            if recordingOperations.isCurrent(operation), !Task.isCancelled { errorMessage = error.localizedDescription }
+            return
+        }
+        guard recordingOperations.isCurrent(operation), !Task.isCancelled else { return }
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             errorMessage = CaptureError.unavailableDisplay.errorDescription
             return
         }
+
+        guard let microphoneEnabled = await resolveMicrophoneCapture(requested: currentSettings.includeMicrophone),
+              recordingOperations.isCurrent(operation), !Task.isCancelled else { return }
 
         // Acquire output-folder access once for the whole session.
         if case .none = outputAccess {
@@ -432,21 +508,25 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             outputAccess = access
         }
 
-        let microphoneEnabled = await resolveMicrophoneCapture(requested: currentSettings.includeMicrophone)
-
         // Replace any existing preview tile for this display.
         if let existing = tiles[displayID] {
-            await teardownTile(existing)
             tiles[displayID] = nil
             previewImages[displayID] = nil
+            await teardownTile(existing)
         }
+        guard recordingOperations.isCurrent(operation), !Task.isCancelled else { return }
 
         do {
             let tile = try await buildTile(
                 for: display, content: content, mode: .recording, settings: currentSettings,
                 preset: preset, outputDirectory: outputDirectory, dynamicRange: dynamicRange,
-                microphoneEnabled: microphoneEnabled, maxPreviewWidth: currentMaxPreviewWidth
+                microphoneEnabled: microphoneEnabled, maxPreviewWidth: currentMaxPreviewWidth,
+                recordingOperation: operation
             )
+            guard recordingOperations.isCurrent(operation), !Task.isCancelled else {
+                await teardownTile(tile)
+                return
+            }
             tiles[displayID] = tile
             if !selectedDisplayIDs.contains(displayID) { selectedDisplayIDs.append(displayID) }
             let wasRecording = !recordingDisplayIDs.isEmpty
@@ -459,6 +539,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             recomputeMeterSource()
             updatePreviewingFlag()
         } catch {
+            guard recordingOperations.isCurrent(operation), !Task.isCancelled else { return }
             logger.error("Capture start failed: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
             await restorePreviewTile(displayID: displayID)
@@ -467,26 +548,26 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     /// Start recording every selected display that isn't already recording.
     func startAllRecording(preset: CapturePreset, outputDirectory: URL, dynamicRange: CaptureDynamicRangeOption) async {
+        let generation = recordingOperations.generation
         for id in selectedDisplayIDs where !recordingDisplayIDs.contains(id) {
+            guard generation == recordingOperations.generation, !Task.isCancelled else { return }
             await startRecording(displayID: id, preset: preset, outputDirectory: outputDirectory, dynamicRange: dynamicRange)
         }
     }
 
     /// Remove a display from the session entirely (stops/ finalizes it if recording, drops its tile).
     func removeDisplay(_ displayID: CGDirectDisplayID) async {
+        let operation = recordingOperations.beginStop()
+        defer {
+            recordingOperations.finishStop(operation)
+            updateRecordingSessionOwnership()
+        }
         selectedDisplayIDs.removeAll { $0 == displayID }
-        let wasRecording = recordingDisplayIDs.contains(displayID)
         recordingDisplayIDs.remove(displayID)
-        if let tile = tiles[displayID] {
-            if tile.mode == .recording { isProcessing = true }
-            await teardownTile(tile)
-            tiles[displayID] = nil
-            if tile.mode == .recording { isProcessing = false }
-        }
+        let tile = tiles.removeValue(forKey: displayID)
         previewImages[displayID] = nil
-        if wasRecording, recordingDisplayIDs.isEmpty {
-            stopTimersAndReleaseAccess()
-        }
+        updateRecordingSessionOwnership()
+        if let tile { await teardownTile(tile) }
         recomputeMeterSource()
         updatePreviewingFlag()
     }
@@ -509,6 +590,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         excludedAppBundleIDs: Set<String> = [],
         regionRect: CGRect? = nil
     ) async {
+        let generation = recordingOperations.generation
         var settings = CaptureSettings()
         settings.frameRate = frameRate
         settings.includeSystemAudio = includeSystemAudio
@@ -522,7 +604,11 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
         let content: SCShareableContent
         do { content = try await ScreenCaptureManager.shareableContent() }
-        catch { errorMessage = error.localizedDescription; return }
+        catch {
+            if generation == recordingOperations.generation, !Task.isCancelled { errorMessage = error.localizedDescription }
+            return
+        }
+        guard generation == recordingOperations.generation, !Task.isCancelled else { return }
         guard let display = selectDisplay(from: content, preferredDisplayID: displayID) else {
             errorMessage = CaptureError.unavailableDisplay.errorDescription; return
         }
@@ -557,9 +643,13 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         outputDirectory: URL?,
         dynamicRange: CaptureDynamicRangeOption,
         microphoneEnabled: Bool,
-        maxPreviewWidth: CGFloat
+        maxPreviewWidth: CGFloat,
+        recordingOperation: CaptureRecordingOperations.Start? = nil
     ) async throws -> DisplayTile {
         let displayID = display.displayID
+        let tile = DisplayTile(displayID: displayID, mode: mode)
+        let delivery = tile.delivery
+        if let recordingOperation { recordingOperations.registerDelivery(delivery, for: recordingOperation) }
         let regionRect = settings.regionRect   // only set for single-display selections
 
         let pixelResolution: CGSize
@@ -604,14 +694,18 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
                 includeMicrophone: microphoneEnabled, isGrowing: preset.isGrowing, frameRate: frameRate
             )
             w.setErrorHandler { [weak self] error in
-                Task { @MainActor in self?.errorMessage = error.localizedDescription }
+                Task { @MainActor in
+                    guard delivery.isActive else { return }
+                    self?.errorMessage = error.localizedDescription
+                }
             }
             writer = w
             recordingURL = url
         case .preview:
             let previewResolution = scaledPreviewResolution(from: pixelResolution, maxWidth: max(1, maxPreviewWidth))
             let destinationRect = CGRect(origin: .zero, size: previewResolution)
-            let previewFrameRate = min(resolvedFrameRate(option: settings.frameRate, display: display, fallback: 30), 60)
+            let requestedPreviewRate = resolvedFrameRate(option: settings.frameRate, display: display, fallback: 30)
+            let previewFrameRate = requestedPreviewRate.framesPerSecond > 60 ? CaptureFrameRate(60) : requestedPreviewRate
             config = makeStreamConfiguration(
                 resolution: previewResolution, frameRate: previewFrameRate, pixelFormat: kCVPixelFormatType_32BGRA,
                 sourceRect: sourceRect, destinationRect: destinationRect, dynamicRange: .sdr
@@ -634,15 +728,16 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         let isRecordingMode = (mode == .recording)
         let skipSystemAudio = !settings.includeSystemAudio
         let output = CaptureStreamOutput(queue: outputQueue) { [weak self, weak writer] sampleBuffer, type in
+            guard delivery.isActive else { return }
             // Write to the file only while recording; skip muted system audio.
             if isRecordingMode, !(type == .audio && skipSystemAudio) {
-                writer?.append(sampleBuffer: sampleBuffer, type: type)
+                delivery.ifActive { writer?.append(sampleBuffer: sampleBuffer, type: type) }
             }
 
             if #available(macOS 15, *), type == .microphone {
                 if let levels = ScreenCaptureManager.audioLevels(from: sampleBuffer, lastTimestamp: &lastMicrophoneSeconds) {
                     Task { @MainActor [weak self] in
-                        guard let self, self.meterSourceDisplayID == displayID else { return }
+                        guard delivery.isActive, let self, self.meterSourceDisplayID == displayID else { return }
                         self.microphoneLevels = levels
                     }
                 }
@@ -652,12 +747,15 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             switch type {
             case .screen:
                 if let image = ScreenCaptureManager.previewImage(from: sampleBuffer, context: previewContext, lastTimestamp: &lastPreviewSeconds) {
-                    Task { @MainActor [weak self] in self?.previewImages[displayID] = image }
+                    Task { @MainActor [weak self] in
+                        guard delivery.isActive else { return }
+                        self?.previewImages[displayID] = image
+                    }
                 }
             case .audio:
                 if let levels = ScreenCaptureManager.audioLevels(from: sampleBuffer, lastTimestamp: &lastAudioSeconds) {
                     Task { @MainActor [weak self] in
-                        guard let self, self.meterSourceDisplayID == displayID else { return }
+                        guard delivery.isActive, let self, self.meterSourceDisplayID == displayID else { return }
                         self.audioLevels = levels
                     }
                 }
@@ -673,7 +771,6 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         }
         try await stream.startCapture()
 
-        let tile = DisplayTile(displayID: displayID, mode: mode)
         tile.stream = stream
         tile.output = output
         tile.writer = writer
@@ -681,10 +778,32 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         return tile
     }
 
-    /// Stops a tile's stream and, if it was recording, finalizes its file (clearing the growing-file
-    /// xattr) and records the URL. Best-effort; used during teardown/deselection.
+    /// Retires sample delivery and bounds the framework stop callback.
+    private func stopStream(for tile: DisplayTile) async {
+        // Retire delivery before suspending: callbacks already queued on the main
+        // actor must not overwrite a replacement tile or its meter readings.
+        tile.delivery.invalidate()
+        guard let stream = tile.stream else { return }
+        let operation = CaptureStreamStopOperation(stream: stream, output: tile.output)
+        tile.stream = nil
+        tile.output = nil
+        do {
+            try await CaptureStreamShutdown.stop { try await operation.stop() }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Stops a tile and finalizes its recording, clearing the growing-file marker.
     private func teardownTile(_ tile: DisplayTile) async {
-        if let stream = tile.stream { try? await stream.stopCapture() }
+        let operation = tile.mode == .recording ? recordingOperations.beginStop() : nil
+        defer {
+            if let operation { recordingOperations.finishStop(operation) }
+            updateRecordingSessionOwnership()
+        }
+        updateRecordingSessionOwnership()
+        microphonePermissionRequest.cancel()
+        await stopStream(for: tile)
         if tile.mode == .recording, let writer = tile.writer {
             do { try await writer.finish() } catch { errorMessage = error.localizedDescription }
             if let url = tile.recordingURL { lastOutputURLs.append(url) }
@@ -704,7 +823,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             previewImages[displayID] = nil
             return
         }
-        let microphoneEnabled = await resolveMicrophoneCapture(requested: currentSettings.includeMicrophone)
+        guard let microphoneEnabled = await resolveMicrophoneCapture(requested: currentSettings.includeMicrophone) else { return }
         do {
             tiles[displayID] = try await buildTile(
                 for: display, content: content, mode: .preview, settings: currentSettings,
@@ -738,6 +857,14 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         isPreviewing = tiles.values.contains { $0.mode == .preview }
     }
 
+    private func updateRecordingSessionOwnership() {
+        let processing = recordingDisplayIDs.isEmpty && recordingOperations.hasPendingCleanup
+        // Observers treat a false publication as completed recording cleanup.
+        if isProcessing != processing { isProcessing = processing }
+        guard recordingDisplayIDs.isEmpty, !recordingOperations.hasPendingOperations else { return }
+        stopTimersAndReleaseAccess()
+    }
+
     private func stopTimersAndReleaseAccess() {
         timerTask?.cancel()
         timerTask = nil
@@ -753,18 +880,26 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     /// and this display drops back to a live preview tile. If it was the last one, the session ends
     /// (which the overlay observes via `isProcessing` to show the post-recording summary).
     func stopRecording(displayID: CGDirectDisplayID) async {
+        let operation = recordingOperations.beginStop()
+        defer {
+            recordingOperations.finishStop(operation)
+            updateRecordingSessionOwnership()
+        }
+        microphonePermissionRequest.cancel()
         guard recordingDisplayIDs.contains(displayID), let tile = tiles[displayID] else { return }
+        stoppingDisplayIDs.insert(displayID)
+        defer { stoppingDisplayIDs.remove(displayID) }
         let isLast = recordingDisplayIDs.count == 1
         recordingDisplayIDs.remove(displayID)
-        if isLast { isProcessing = true }
+        updateRecordingSessionOwnership()
 
-        if let stream = tile.stream { try? await stream.stopCapture() }
+        tiles[displayID] = nil
+        await stopStream(for: tile)
         let writer = tile.writer
         let url = tile.recordingURL
         tile.stream = nil
         tile.output = nil
         tile.writer = nil
-        tiles[displayID] = nil
         if let writer {
             do { try await writer.finish() } catch { errorMessage = error.localizedDescription }
         }
@@ -772,8 +907,6 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
         if isLast {
             previewImages[displayID] = nil
-            stopTimersAndReleaseAccess()
-            isProcessing = false   // last writer finalized — overlay shows the summary
         } else if selectedDisplayIDs.contains(displayID) {
             await restorePreviewTile(displayID: displayID)
         } else {
@@ -786,24 +919,31 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     /// Stops every display that is recording (the global Stop / auto-stop path). Finalizes all files,
     /// then ends the session.
     func stopAllRecording() async {
+        let operation = recordingOperations.beginStop()
+        defer {
+            recordingOperations.finishStop(operation)
+            updateRecordingSessionOwnership()
+        }
+        microphonePermissionRequest.cancel()
         let ids = Array(recordingDisplayIDs)
         guard !ids.isEmpty else { return }
         logger.info("Stopping all screen capture (\(ids.count, privacy: .public) display(s))")
-        isProcessing = true
 
-        // Stop all streams first, then finalize all writers, so the session ends once.
-        for id in ids {
-            if let stream = tiles[id]?.stream { try? await stream.stopCapture() }
-        }
-        for id in ids {
-            guard let tile = tiles[id] else { continue }
+        // Detach the exact tiles owned by this stop before any suspension.
+        let stoppedTiles = ids.compactMap { tiles.removeValue(forKey: $0) }
+        recordingDisplayIDs.subtract(ids)
+        updateRecordingSessionOwnership()
+        stoppingDisplayIDs.formUnion(ids)
+        defer { stoppingDisplayIDs.subtract(ids) }
+        for tile in stoppedTiles { tile.delivery.invalidate() }
+        for tile in stoppedTiles { await stopStream(for: tile) }
+        for tile in stoppedTiles {
+            let id = tile.displayID
             let writer = tile.writer
             let url = tile.recordingURL
             tile.stream = nil
             tile.output = nil
             tile.writer = nil
-            tiles[id] = nil
-            recordingDisplayIDs.remove(id)
             if let writer {
                 do { try await writer.finish() } catch { errorMessage = error.localizedDescription }
             }
@@ -811,8 +951,6 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             previewImages[id] = nil
         }
 
-        stopTimersAndReleaseAccess()
-        isProcessing = false
         recomputeMeterSource()
         updatePreviewingFlag()
     }
@@ -883,12 +1021,11 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     /// Tears down all *preview* tiles (recording tiles keep running). Used on view disappear.
     func stopPreview() async {
+        microphonePermissionRequest.cancel()
         for (id, tile) in tiles where tile.mode == .preview {
-            if let stream = tile.stream { try? await stream.stopCapture() }
-            tile.stream = nil
-            tile.output = nil
             tiles[id] = nil
             previewImages[id] = nil
+            await stopStream(for: tile)
         }
         selectedDisplayIDs.removeAll { tiles[$0] == nil }
         recomputeMeterSource()
@@ -937,7 +1074,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     private func makeStreamConfiguration(
         resolution: CGSize,
-        frameRate: Int,
+        frameRate: CaptureFrameRate,
         pixelFormat: OSType?,
         sourceRect: CGRect,
         destinationRect: CGRect,
@@ -956,7 +1093,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         }
         config.width = Int(resolution.width)
         config.height = Int(resolution.height)
-        config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(frameRate))
+        config.minimumFrameInterval = frameRate.frameDuration
         if let pixelFormat {
             config.pixelFormat = pixelFormat
         }
@@ -1007,11 +1144,11 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         option: CaptureFrameRateOption,
         display: SCDisplay,
         fallback: Int
-    ) -> Int {
+    ) -> CaptureFrameRate {
         if let fixed = option.fixedValue {
             return fixed
         }
-        return frameRate(for: display, fallback: fallback)
+        return CaptureFrameRate(Int32(frameRate(for: display, fallback: fallback)))
     }
 
     private func normalizedDynamicRange(_ option: CaptureDynamicRangeOption) -> CaptureDynamicRangeOption {
@@ -1030,6 +1167,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
 
     @MainActor
     func refreshMicrophoneAuthorizationStatus() {
+        microphonePermissionRequest.cancel()
         guard #available(macOS 15, *) else {
             microphoneCaptureStatus = .disabled
             return
@@ -1050,7 +1188,10 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         _ = await resolveMicrophoneCapture(requested: true)
     }
 
-    private func resolveMicrophoneCapture(requested: Bool) async -> Bool {
+    /// Nil aborts setup; false is a resolved decision to capture without a microphone.
+    private func resolveMicrophoneCapture(requested: Bool) async -> Bool? {
+        guard !Task.isCancelled else { return nil }
+        microphonePermissionRequest.cancel()
         guard requested else {
             microphoneCaptureStatus = .disabled
             return false
@@ -1066,23 +1207,26 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             microphoneCaptureStatus = .authorized
             return true
         case .notDetermined:
-            let granted = await requestMicrophoneAccess()
-            microphoneCaptureStatus = granted ? .authorized : .denied
-            return granted
+            microphoneCaptureStatus = .disabled
+            do {
+                let granted = try await microphonePermissionRequest.request { completion in
+                    AVCaptureDevice.requestAccess(for: .audio, completionHandler: completion)
+                }
+                microphoneCaptureStatus = granted ? .authorized : .denied
+                return granted
+            } catch NonJoiningTaskDeadlineError.timedOut {
+                errorMessage = String(localized: "Timed out waiting for microphone permission. Check microphone access in System Settings and try again.")
+                return nil
+            } catch {
+                // A cancelled or superseded prompt must not resume capture setup.
+                return nil
+            }
         case .denied, .restricted:
             microphoneCaptureStatus = .denied
             return false
         @unknown default:
             microphoneCaptureStatus = .denied
             return false
-        }
-    }
-
-    private func requestMicrophoneAccess() async -> Bool {
-        await withCheckedContinuation { continuation in
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                continuation.resume(returning: granted)
-            }
         }
     }
 
@@ -1286,7 +1430,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     }
 
     static func shareableContent() async throws -> SCShareableContent {
-        try await SCShareableContent.current
+        try await ScreenCaptureContentDiscovery.current()
     }
 
     private func contentFilter(
@@ -1517,6 +1661,101 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     }
 }
 
+/// ScreenCaptureKit can leave discovery suspended while the capture service is
+/// unavailable. Return promptly on cancellation or deadline without joining its
+/// framework callback; the late snapshot has no side effects and is discarded.
+enum ScreenCaptureContentDiscovery {
+    static func current() async throws -> SCShareableContent {
+        let snapshot = try await discover {
+            ScreenCaptureContentSnapshot(content: try await SCShareableContent.current)
+        }
+        return snapshot.content
+    }
+
+    static func discover<Snapshot: Sendable>(
+        timeout: Duration = .seconds(15),
+        provider: @escaping @Sendable () async throws -> Snapshot
+    ) async throws -> Snapshot {
+        do {
+            let snapshot = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try Task.checkCancellation()
+                return try await provider()
+            }
+            try Task.checkCancellation()
+            return snapshot
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            throw ScreenCaptureContentDiscoveryError.timedOut
+        }
+    }
+}
+
+/// This immutable framework snapshot is only read after its producer returns.
+/// ScreenCaptureKit does not declare the Objective-C snapshot Sendable.
+private struct ScreenCaptureContentSnapshot: @unchecked Sendable {
+    let content: SCShareableContent
+}
+
+enum ScreenCaptureContentDiscoveryError: LocalizedError {
+    case timedOut
+
+    var errorDescription: String? {
+        String(localized: "Timed out while discovering screens and windows. Try starting capture again.")
+    }
+}
+
+/// Owns a permission wait independently of AVFoundation's system prompt. The prompt
+/// cannot be dismissed programmatically; a late response must not revive a cancelled
+/// or superseded request. A missing callback never holds the capture UI indefinitely.
+@MainActor
+final class CaptureMicrophonePermissionRequest {
+    private var activeID: UUID?
+    private var task: Task<Bool, Error>?
+
+    func cancel() {
+        activeID = nil
+        task?.cancel()
+        task = nil
+    }
+
+    func request(
+        timeout: Duration = .seconds(60),
+        start: @escaping @Sendable (@escaping @Sendable (Bool) -> Void) -> Void
+    ) async throws -> Bool {
+        cancel()
+        let id = UUID()
+        activeID = id
+        let pending = Task {
+            try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try Task.checkCancellation()
+                return await withCheckedContinuation { continuation in
+                    start { continuation.resume(returning: $0) }
+                }
+            }
+        }
+        task = pending
+        defer {
+            if activeID == id {
+                activeID = nil
+                task = nil
+            }
+        }
+        do {
+            let granted = try await withTaskCancellationHandler {
+                try await pending.value
+            } onCancel: {
+                pending.cancel()
+            }
+            try Task.checkCancellation()
+            guard activeID == id else { throw CancellationError() }
+            return granted
+        } catch {
+            try Task.checkCancellation()
+            guard activeID == id else { throw CancellationError() }
+            throw error
+        }
+    }
+}
+
 private protocol CaptureOutputWriter: AnyObject, Sendable {
     func append(sampleBuffer: CMSampleBuffer, type: SCStreamOutputType)
     func finish() async throws
@@ -1578,7 +1817,37 @@ private final class CaptureAssetWriterFinalizationBox: @unchecked Sendable {
     }
 }
 
-private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
+/// Both tracks must accept the same frame before the CFR cursor advances. A
+/// blocked timecode input must never silently create a gap in the timecode track.
+enum CaptureFrameEmission {
+    /// Keep each synchronous pass short so Stop and task cancellation can run
+    /// even when a large backlog meets an encoder that is continuously ready.
+    static func drain(
+        remainingFrameCount: Int,
+        checkDeadline: () throws -> Void,
+        emit: () throws -> Bool
+    ) throws -> Bool {
+        for _ in 0..<min(max(remainingFrameCount, 0), 32) {
+            try checkDeadline()
+            guard try emit() else { return false }
+        }
+        return remainingFrameCount <= 32
+    }
+
+    static func append(
+        videoReady: Bool,
+        timecodeReady: Bool,
+        appendVideo: () throws -> Void,
+        appendTimecode: () throws -> Void
+    ) throws -> Bool {
+        guard videoReady, timecodeReady else { return false }
+        try appendVideo()
+        try appendTimecode()
+        return true
+    }
+}
+
+final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendable {
     private let outputURL: URL
     private let fileType: AVFileType
     private let videoSettings: [String: Any]
@@ -1588,13 +1857,14 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
     /// Growing preset: fragmented `.mov` + CFR pump + timecode track + the
     /// Blackmagic recording xattr (the DaVinci Resolve growing-file trigger).
     private let isGrowing: Bool
-    private let frameRate: Int
+    private let frameRate: CaptureFrameRate
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
     private var audioInput: AVAssetWriterInput?
     private var microphoneInput: AVAssetWriterInput?
     private var timecodeInput: AVAssetWriterInput?
     private var timecodeFormat: CMTimeCodeFormatDescription?
+    private var cfrVideoFormat: CMVideoFormatDescription?
     private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     private var hasVideoInput = false
     private var hasAudioInput = false
@@ -1616,7 +1886,7 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
     private var copyPool: CVPixelBufferPool?
     private var cfrTimer: DispatchSourceTimer?
     private let cfrQueue = DispatchQueue(label: "com.aagedal.capture.cfr")
-    private let hostClock = CMClockGetHostTimeClock()
+    private let currentTime: @Sendable () -> CMTime
     private var sessionStartPTS: CMTime = .zero
     private var emittedFrameIndex = 0
     private var timecodeStartFrame = 0
@@ -1629,7 +1899,8 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
         dynamicRange: CaptureDynamicRangeOption,
         includeMicrophone: Bool,
         isGrowing: Bool = false,
-        frameRate: Int = 60
+        frameRate: CaptureFrameRate = CaptureFrameRate(60),
+        currentTime: @escaping @Sendable () -> CMTime = { CMClockGetTime(CMClockGetHostTimeClock()) }
     ) throws {
         self.outputURL = outputURL
         self.fileType = fileType
@@ -1638,14 +1909,15 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
         self.dynamicRange = dynamicRange
         self.includeMicrophone = includeMicrophone
         self.isGrowing = isGrowing
-        self.frameRate = max(1, frameRate)
+        self.frameRate = frameRate
+        self.currentTime = currentTime
     }
 
     func append(sampleBuffer: CMSampleBuffer, type: SCStreamOutputType) {
-        guard CMSampleBufferDataIsReady(sampleBuffer) else { return }
+        guard !finished, CMSampleBufferDataIsReady(sampleBuffer) else { return }
         guard writeError == nil else { return }
         if let writer, writer.status == .failed {
-            writeError = writer.error
+            recordError(writer.error ?? CaptureWriterError.videoAppendFailed)
             return
         }
 
@@ -1661,7 +1933,10 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
             }
 
             if let writer {
-                let startTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                let sourceTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                let startTime = isGrowing
+                    ? CMTimeConvertScale(sourceTime, timescale: frameRate.numerator, method: .roundTowardZero)
+                    : sourceTime
                 writer.startWriting()
                 writer.startSession(atSourceTime: startTime)
                 started = true
@@ -1739,9 +2014,15 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
     func finish() async throws {
         guard !finished else { return }
 
+        // Freeze the endpoint before waiting for encoder backpressure, so the
+        // recording cannot grow while its final frames are being drained.
+        let stopTime = currentTime()
         finished = true
-        // Stop the CFR pump first so no tick appends after markAsFinished.
         stopCFRPump()
+        if isGrowing, started, writeError == nil {
+            await flushCFRFrames(through: stopTime)
+        }
+        bufferLock.withLock { latestPixelBuffer = nil }
         // The recording xattr only marks a file as *currently growing*; a
         // finished file carries none (matches the reference recorder).
         if isGrowing {
@@ -1763,6 +2044,15 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
             return
         }
 
+        if isGrowing, videoSampleCount > 0 {
+            // With only one video frame, AVAssetWriter cannot infer cadence
+            // from adjacent timestamps and may otherwise extend its duration.
+            writer.endSession(atSourceTime: CMTimeAdd(
+                sessionStartPTS,
+                frameRate.presentationOffset(frameIndex: emittedFrameIndex)
+            ))
+        }
+
         if hasVideoInput {
             videoInput?.markAsFinished()
         }
@@ -1781,11 +2071,11 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
             finalization.start(completion: $0)
         }
 
-        if videoSampleCount == 0 {
-            throw CaptureWriterError.noVideoFrames
-        }
         if let error = writeError ?? writer.error {
             throw error
+        }
+        if videoSampleCount == 0 {
+            throw CaptureWriterError.noVideoFrames
         }
     }
 
@@ -1798,6 +2088,9 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: fileType)
         if isGrowing {
+            // Preserve the exact rational endpoint in the movie edit timeline too;
+            // the default 600 Hz movie timescale rounds NTSC track durations.
+            writer.movieTimeScale = frameRate.numerator
             // ~1 s fragments so the file is a valid growing movie on disk.
             writer.movieFragmentInterval = CMTime(value: 1, timescale: 1)
         }
@@ -1815,6 +2108,7 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
             sourceFormatHint: formatHint
         )
         videoInput.expectsMediaDataInRealTime = true
+        if isGrowing { videoInput.mediaTimeScale = frameRate.numerator }
 
         let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
         audioInput.expectsMediaDataInRealTime = true
@@ -1875,26 +2169,20 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
     /// Adds a per-frame `tmcd` timecode track (growing presets) starting at
     /// wall-clock time-of-day, associated with the video track. Must run before
     /// `startWriting()`.
-    ///
-    /// `resolvedFrameRate` always yields an integer rate (50, 60, or the display's
-    /// `maximumFramesPerSecond`) — never a fractional NTSC rate — so the track is correctly
-    /// non-drop-frame (`flags: 0`) with `frameQuanta == frameRate`. A fractional rate
-    /// (29.97/59.94) would instead need `kCMTimeCodeFlag_DropFrame` and a rounded quanta to
-    /// stay aligned with wall clock. The frame counter also does not wrap at 24h, so a
-    /// recording crossing midnight keeps counting past 24:00:00:00 rather than rolling over.
     private func setupTimecodeTrack(on writer: AVAssetWriter, videoInput: AVAssetWriterInput) {
         var tcFormat: CMTimeCodeFormatDescription?
         let status = CMTimeCodeFormatDescriptionCreate(
             allocator: kCFAllocatorDefault,
             timeCodeFormatType: kCMTimeCodeFormatType_TimeCode32,
-            frameDuration: CMTime(value: 1, timescale: CMTimeScale(frameRate)),
-            frameQuanta: UInt32(frameRate),
-            flags: 0,
+            frameDuration: frameRate.frameDuration,
+            frameQuanta: UInt32(frameRate.nominalRate),
+            flags: frameRate.timecodeFlags,
             extensions: nil,
             formatDescriptionOut: &tcFormat
         )
         guard status == noErr, let tcFormat else { return }
         let input = AVAssetWriterInput(mediaType: .timecode, outputSettings: nil, sourceFormatHint: tcFormat)
+        input.mediaTimeScale = frameRate.numerator
         input.expectsMediaDataInRealTime = true
         guard writer.canAdd(input) else { return }
         writer.add(input)
@@ -1906,9 +2194,10 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
         hasTimecodeInput = true
 
         let comps = Calendar.current.dateComponents([.hour, .minute, .second, .nanosecond], from: Date())
-        let seconds = (comps.hour ?? 0) * 3600 + (comps.minute ?? 0) * 60 + (comps.second ?? 0)
-        let subFrame = Int(Double(comps.nanosecond ?? 0) / 1_000_000_000.0 * Double(frameRate))
-        timecodeStartFrame = seconds * frameRate + subFrame
+        timecodeStartFrame = frameRate.timecodeFrame(
+            hour: comps.hour ?? 0, minute: comps.minute ?? 0,
+            second: comps.second ?? 0, nanosecond: comps.nanosecond ?? 0
+        )
     }
 
     // MARK: - Growing-file CFR pump
@@ -1977,7 +2266,7 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
     }
 
     private func startCFRPump() {
-        let interval = 1.0 / Double(frameRate)
+        let interval = 1.0 / frameRate.framesPerSecond
         let timer = DispatchSource.makeTimerSource(queue: cfrQueue)
         timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(2))
         timer.setEventHandler { [weak self] in self?.pumpTick() }
@@ -1990,65 +2279,152 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
         cfrTimer = nil
         // Drain any in-flight tick so nothing appends after markAsFinished().
         cfrQueue.sync { }
-        bufferLock.lock()
-        latestPixelBuffer = nil
-        bufferLock.unlock()
+    }
+
+    /// Retry transient encoder backpressure without blocking a dispatch queue or
+    /// extending the captured endpoint. A stalled encoder must still allow Stop
+    /// to complete and report an incomplete recording.
+    private func flushCFRFrames(through stopTime: CMTime) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while writeError == nil {
+            if Task.isCancelled {
+                recordError(CancellationError())
+                return
+            }
+            let drained = cfrQueue.sync { emitCFRFrames(through: stopTime, deadline: deadline) }
+            if drained { return }
+            if ContinuousClock.now >= deadline {
+                recordError(CaptureWriterError.finalFrameFlushTimedOut)
+                return
+            }
+            do {
+                try await Task.sleep(for: .milliseconds(10))
+            } catch {
+                recordError(error)
+                return
+            }
+        }
     }
 
     /// Emit duplicate frames up to the current host-clock position so the file
     /// is constant-frame-rate even while the screen is static.
     private func pumpTick() {
         guard !finished, writeError == nil else { return }
-        guard let videoInput, let adaptor = pixelBufferAdaptor else { return }
+        _ = emitCFRFrames(through: currentTime())
+    }
+
+    /// Returns false when captured frames need another bounded emission pass.
+    private func emitCFRFrames(through time: CMTime, deadline: ContinuousClock.Instant? = nil) -> Bool {
+        guard writeError == nil else { return true }
+        guard let videoInput else { return true }
         bufferLock.lock()
         let buffer = latestPixelBuffer
         bufferLock.unlock()
-        guard let buffer else { return }   // no frame captured yet
+        guard let buffer else { return true }   // no frame captured yet
 
-        let elapsed = CMTimeGetSeconds(CMTimeSubtract(CMClockGetTime(hostClock), sessionStartPTS))
-        guard elapsed.isFinite, elapsed >= 0 else { return }
-        let targetIndex = Int(elapsed * Double(frameRate))
+        let elapsed = CMTimeGetSeconds(CMTimeSubtract(time, sessionStartPTS))
+        guard elapsed.isFinite, elapsed >= 0 else { return true }
+        let targetIndex = Int(elapsed * frameRate.framesPerSecond)
 
-        while emittedFrameIndex <= targetIndex {
-            guard writeError == nil else { return }
-            guard videoInput.isReadyForMoreMediaData else { break }  // backpressure: retry next tick
-            let pts = CMTimeAdd(
-                sessionStartPTS,
-                CMTime(value: CMTimeValue(emittedFrameIndex), timescale: CMTimeScale(frameRate))
+        do {
+            return try CaptureFrameEmission.drain(
+                remainingFrameCount: targetIndex - emittedFrameIndex + 1,
+                checkDeadline: {
+                    if let deadline, ContinuousClock.now >= deadline {
+                        throw CaptureWriterError.finalFrameFlushTimedOut
+                    }
+                },
+                emit: {
+                    guard writeError == nil else { return false }
+                    let pts = CMTimeAdd(
+                        sessionStartPTS,
+                        frameRate.presentationOffset(frameIndex: emittedFrameIndex)
+                    )
+                    let appended = try CaptureFrameEmission.append(
+                        videoReady: videoInput.isReadyForMoreMediaData,
+                        timecodeReady: !hasTimecodeInput || timecodeInput?.isReadyForMoreMediaData == true,
+                        appendVideo: {
+                            try appendCFRVideoFrame(buffer, at: pts, to: videoInput)
+                            if videoSampleCount == 0 { logger.info("First video frame emitted (CFR).") }
+                            videoSampleCount += 1
+                        },
+                        appendTimecode: { try appendTimecode(frameIndex: emittedFrameIndex) }
+                    )
+                    if appended { emittedFrameIndex += 1 }
+                    return appended
+                }
             )
-            if adaptor.append(buffer, withPresentationTime: pts) {
-                if videoSampleCount == 0 { logger.info("First video frame emitted (CFR).") }
-                videoSampleCount += 1
-                appendTimecode(frameIndex: emittedFrameIndex)
-                emittedFrameIndex += 1
-            } else {
-                recordError(writer?.error ?? CaptureWriterError.videoAppendFailed)
-                return
-            }
+        } catch {
+            recordError(error)
+            return true
         }
     }
 
-    private func appendTimecode(frameIndex: Int) {
-        guard hasTimecodeInput, let input = timecodeInput, let format = timecodeFormat,
-              input.isReadyForMoreMediaData else { return }
-        var frameNumber = UInt32(truncatingIfNeeded: timecodeStartFrame + frameIndex).bigEndian
+    /// The pixel-buffer adaptor supplies no sample duration. Explicit timing is
+    /// essential for a single-frame recording, where no adjacent PTS exists for
+    /// AVAssetWriter to infer the requested cadence.
+    private func appendCFRVideoFrame(_ buffer: CVPixelBuffer, at pts: CMTime, to input: AVAssetWriterInput) throws {
+        // Color attachments are applied after the original capture sample's
+        // format was created. Build the format from our copied buffer so Core
+        // Media's image/format validation sees the actual emitted attachments.
+        let format: CMVideoFormatDescription
+        if let cached = cfrVideoFormat, CMVideoFormatDescriptionMatchesImageBuffer(cached, imageBuffer: buffer) {
+            format = cached
+        } else {
+            var description: CMVideoFormatDescription?
+            guard CMVideoFormatDescriptionCreateForImageBuffer(
+                allocator: kCFAllocatorDefault,
+                imageBuffer: buffer,
+                formatDescriptionOut: &description
+            ) == noErr, let description else {
+                throw CaptureWriterError.videoBufferUnavailable
+            }
+            cfrVideoFormat = description
+            format = description
+        }
+        var timing = CMSampleTimingInfo(
+            duration: frameRate.frameDuration,
+            presentationTimeStamp: pts,
+            decodeTimeStamp: .invalid
+        )
+        var sample: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(
+            allocator: kCFAllocatorDefault,
+            imageBuffer: buffer,
+            formatDescription: format,
+            sampleTiming: &timing,
+            sampleBufferOut: &sample
+        ) == noErr, let sample else {
+            throw CaptureWriterError.videoBufferUnavailable
+        }
+        guard input.append(sample) else {
+            throw writer?.error ?? CaptureWriterError.videoAppendFailed
+        }
+    }
+
+    private func appendTimecode(frameIndex: Int) throws {
+        guard hasTimecodeInput else { return }
+        guard let input = timecodeInput, let format = timecodeFormat else {
+            throw CaptureWriterError.timecodeAppendFailed
+        }
+        var frameNumber = UInt32(frameRate.wrappedTimecodeFrame(start: timecodeStartFrame, frameIndex: frameIndex)).bigEndian
         var blockBuffer: CMBlockBuffer?
         guard CMBlockBufferCreateWithMemoryBlock(
             allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: 4,
             blockAllocator: nil, customBlockSource: nil, offsetToData: 0, dataLength: 4,
             flags: kCMBlockBufferAssureMemoryNowFlag, blockBufferOut: &blockBuffer) == noErr,
-            let blockBuffer else { return }
+            let blockBuffer else { throw CaptureWriterError.timecodeAppendFailed }
         let copied = withUnsafeBytes(of: &frameNumber) { raw -> Bool in
             guard let base = raw.baseAddress else { return false }
             return CMBlockBufferReplaceDataBytes(with: base, blockBuffer: blockBuffer, offsetIntoDestination: 0, dataLength: 4) == noErr
         }
-        guard copied else { return }
+        guard copied else { throw CaptureWriterError.timecodeAppendFailed }
         var sample: CMSampleBuffer?
         var timing = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: CMTimeScale(frameRate)),
+            duration: frameRate.frameDuration,
             presentationTimeStamp: CMTimeAdd(
                 sessionStartPTS,
-                CMTime(value: CMTimeValue(frameIndex), timescale: CMTimeScale(frameRate))
+                frameRate.presentationOffset(frameIndex: frameIndex)
             ),
             decodeTimeStamp: .invalid
         )
@@ -2058,8 +2434,10 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
             makeDataReadyCallback: nil, refcon: nil, formatDescription: format, sampleCount: 1,
             sampleTimingEntryCount: 1, sampleTimingArray: &timing,
             sampleSizeEntryCount: 1, sampleSizeArray: &sampleSize, sampleBufferOut: &sample) == noErr,
-            let sample else { return }
-        input.append(sample)
+            let sample else { throw CaptureWriterError.timecodeAppendFailed }
+        guard input.append(sample) else {
+            throw writer?.error ?? CaptureWriterError.timecodeAppendFailed
+        }
     }
 
     // MARK: - Growing-file xattr (DaVinci Resolve trigger)
@@ -2206,6 +2584,8 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
         case videoAppendFailed
         case audioAppendFailed
         case microphoneAppendFailed
+        case timecodeAppendFailed
+        case finalFrameFlushTimedOut
         case noVideoFrames
         case videoBufferUnavailable
 
@@ -2225,10 +2605,149 @@ private final class ScreenCaptureWriter: CaptureOutputWriter, @unchecked Sendabl
                 return "Failed to append audio samples to the capture writer."
             case .microphoneAppendFailed:
                 return "Failed to append microphone samples to the capture writer."
+            case .timecodeAppendFailed:
+                return String(localized: "Failed to append timecode samples to the capture writer.")
+            case .finalFrameFlushTimedOut:
+                return String(localized: "Timed out while writing the final screen recording frames. The file may be incomplete.")
             case .noVideoFrames:
                 return "No video frames were captured. Check Screen Recording permission."
             case .videoBufferUnavailable:
                 return "Video pixel buffer was unavailable for capture."
+            }
+        }
+    }
+}
+
+/// Reservations span every suspension in a recording start or finalization. Stop
+/// retires the current generation immediately, while old reservations retain the
+/// shared folder scope until their late work and cleanup have actually returned.
+@MainActor
+final class CaptureRecordingOperations {
+    struct Start: Hashable {
+        let id = UUID()
+        let displayID: CGDirectDisplayID
+        let generation: UInt64
+    }
+
+    private(set) var generation: UInt64 = 0
+    private var starts: Set<Start> = []
+    private var stops: Set<UUID> = []
+    private var deliveries: [UUID: CaptureSampleDelivery] = [:]
+
+    var hasPendingOperations: Bool { !starts.isEmpty || !stops.isEmpty }
+    var hasPendingCleanup: Bool {
+        !stops.isEmpty || starts.contains { $0.generation != generation }
+    }
+
+    func beginStart(displayID: CGDirectDisplayID) -> Start? {
+        guard !hasPendingCleanup, !starts.contains(where: { $0.displayID == displayID }) else { return nil }
+        let operation = Start(displayID: displayID, generation: generation)
+        starts.insert(operation)
+        return operation
+    }
+
+    func isCurrent(_ operation: Start) -> Bool {
+        starts.contains(operation) && operation.generation == generation
+    }
+
+    func hasStart(displayID: CGDirectDisplayID) -> Bool {
+        starts.contains { $0.displayID == displayID }
+    }
+
+    func registerDelivery(_ delivery: CaptureSampleDelivery, for operation: Start) {
+        guard isCurrent(operation) else { delivery.invalidate(); return }
+        deliveries[operation.id] = delivery
+    }
+
+    func finishStart(_ operation: Start) {
+        starts.remove(operation)
+        deliveries[operation.id] = nil
+    }
+
+    func retireStarts(outside displayIDs: Set<CGDirectDisplayID>) {
+        guard starts.contains(where: { !displayIDs.contains($0.displayID) }) else { return }
+        retireStarts()
+    }
+
+    private func retireStarts() {
+        generation &+= 1
+        for delivery in deliveries.values { delivery.invalidate() }
+    }
+
+    func beginStop() -> UUID {
+        retireStarts()
+        let operation = UUID()
+        stops.insert(operation)
+        return operation
+    }
+
+    func finishStop(_ operation: UUID) {
+        stops.remove(operation)
+    }
+}
+
+/// A retired stream can continue delivering samples after its stop deadline. This
+/// fence is shared with queued UI updates so late delivery cannot revive the tile.
+final class CaptureSampleDelivery: Sendable {
+    private let active = OSAllocatedUnfairLock(initialState: true)
+
+    var isActive: Bool { active.withLock { $0 } }
+
+    func invalidate() {
+        active.withLock { $0 = false }
+    }
+
+    /// Serialize the short writer handoff with retirement so finalization cannot
+    /// race a sample that passed an earlier active-state check.
+    func ifActive(_ operation: () -> Void) {
+        // The nonescaping sample handler runs synchronously on its existing
+        // delivery queue; locking does not transfer its captures to another task.
+        active.withLockUnchecked { if $0 { operation() } }
+    }
+}
+
+/// Cleanup is deliberately independent of caller cancellation. The deadline does
+/// not join a non-cooperative framework callback; the operation retains ownership
+/// of the retired stream and output until that callback eventually returns.
+enum CaptureStreamShutdown {
+    static func stop(
+        timeout: Duration = .seconds(15),
+        operation: @escaping @Sendable () async throws -> Void
+    ) async throws {
+        try await Task.detached {
+            do {
+                try await NonJoiningTaskDeadline.run(timeout: timeout, operation: operation)
+            } catch NonJoiningTaskDeadlineError.timedOut {
+                throw CaptureStreamShutdownError.timedOut
+            }
+        }.value
+    }
+}
+
+enum CaptureStreamShutdownError: LocalizedError {
+    case timedOut
+
+    var errorDescription: String? {
+        String(localized: "Timed out while stopping screen capture. The recording may be incomplete.")
+    }
+}
+
+private final class CaptureStreamStopOperation: @unchecked Sendable {
+    let stream: SCStream
+    let output: CaptureStreamOutput?
+
+    init(stream: SCStream, output: CaptureStreamOutput?) {
+        self.stream = stream
+        self.output = output
+    }
+
+    func stop() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            stream.stopCapture { [self] error in
+                withExtendedLifetime(self) {
+                    if let error { continuation.resume(throwing: error) }
+                    else { continuation.resume() }
+                }
             }
         }
     }

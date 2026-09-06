@@ -121,6 +121,37 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def license_inventory() -> list[dict[str, Any]]:
+    """Track notice contents as well as binaries, including unassigned notices."""
+    entries = []
+    for path in [REPOSITORY_ROOT / "LICENSE", *sorted((REPOSITORY_ROOT / "Licenses").glob("*-LICENSE.txt"))]:
+        if not path.resolve().is_relative_to(REPOSITORY_ROOT.resolve()):
+            raise RuntimeError(f"License file escapes the repository: {path}")
+        if not path.read_text(encoding="utf-8").strip():
+            raise RuntimeError(f"License file is empty: {path}")
+        entries.append({
+            "path": path.relative_to(REPOSITORY_ROOT).as_posix(),
+            "bytes": path.stat().st_size,
+            "sha256": sha256(path),
+        })
+    return entries
+
+
+def require_complete_licenses(manifest: dict[str, Any]) -> None:
+    notices = {entry["path"] for entry in manifest["licenseFiles"]}
+    unresolved = sorted(
+        entry["path"] for entry in [*manifest["tools"], *manifest["libraries"]]
+        if not entry.get("license") or entry["license"] == "NOASSERTION"
+        or entry.get("licenseFile") not in notices
+    )
+    if unresolved:
+        raise RuntimeError(
+            f"License attribution is incomplete for {len(unresolved)} dependencies:\n  "
+            + "\n  ".join(unresolved)
+            + "\nSee docs/bundled-dependency-licenses.md before publishing."
+        )
+
+
 def architectures(path: Path) -> list[str]:
     output = command_output(["/usr/bin/lipo", "-archs", str(path)]).strip()
     return output.split() if output else []
@@ -161,6 +192,8 @@ def common_entry(path: Path) -> dict[str, Any]:
 
 
 def build_manifest() -> dict[str, Any]:
+    license_files = license_inventory()
+    known_license_files = {entry["path"] for entry in license_files}
     tools: list[dict[str, Any]] = []
     for path in sorted((APP_ROOT / "Binaries").iterdir()):
         if not path.is_file():
@@ -171,7 +204,7 @@ def build_manifest() -> dict[str, Any]:
         if not os.access(path, os.X_OK):
             raise RuntimeError(f"Bundled tool is not executable: {path.relative_to(REPOSITORY_ROOT)}")
         license_file = metadata["licenseFile"]
-        if license_file is not None and not (REPOSITORY_ROOT / license_file).is_file():
+        if license_file is not None and license_file not in known_license_files:
             raise RuntimeError(
                 f"Missing declared license file for {path.name}: {license_file}"
             )
@@ -204,10 +237,11 @@ def build_manifest() -> dict[str, Any]:
         if entry["licenseFile"] is None
     )
     return {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "scope": "Mach-O files shipped from Binaries and Frameworks",
         "tools": tools,
         "libraries": libraries,
+        "licenseFiles": license_files,
         "summary": {
             "toolCount": len(tools),
             "libraryCount": len(libraries),
@@ -228,10 +262,18 @@ def main() -> int:
         action="store_true",
         help="fail when BundledDependencies.json does not match the bundled files",
     )
+    parser.add_argument(
+        "--require-complete-licenses",
+        action="store_true",
+        help="fail when any dependency has unresolved license attribution (required for publishing)",
+    )
     args = parser.parse_args()
 
     try:
-        expected = serialized(build_manifest())
+        manifest = build_manifest()
+        if args.require_complete_licenses:
+            require_complete_licenses(manifest)
+        expected = serialized(manifest)
     except (OSError, subprocess.SubprocessError, RuntimeError) as error:
         print(f"ERROR: unable to inventory bundled dependencies: {error}", file=sys.stderr)
         return 1

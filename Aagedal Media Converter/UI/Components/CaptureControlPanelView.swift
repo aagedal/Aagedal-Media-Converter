@@ -406,6 +406,12 @@ struct CaptureControlPanelView: View {
                     .help("Microphone audio level")
             }
 
+            Text(frameRateOption.displayName + " · " + (presetBinding.wrappedValue.isGrowing ? "CFR" : "VFR"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .help(presetBinding.wrappedValue.frameRateDetail)
+                .accessibilityLabel(frameRateOption.displayName + ". " + presetBinding.wrappedValue.frameRateDetail)
+
             audioAndDisplayRow
         }
     }

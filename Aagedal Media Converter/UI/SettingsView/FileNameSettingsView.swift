@@ -52,7 +52,7 @@ struct FileNameSettingsView: View {
                             Text("Remove special characters:")
                             Picker("", selection: specialCharRemovalMode) {
                                 ForEach(SpecialCharacterRemovalMode.allCases) { mode in
-                                    Text(mode.displayName).tag(mode)
+                                    Text(LocalizedStringKey(mode.displayName)).tag(mode)
                                 }
                             }
                             .labelsHidden()
@@ -197,7 +197,7 @@ struct FileNameSettingsView: View {
         return formatter.string(from: Date())
     }
 
-    private var specialCharExplanation: String {
+    private var specialCharExplanation: LocalizedStringKey {
         switch SpecialCharacterRemovalMode(rawValue: specialCharRemovalModeRaw) ?? .loose {
         case .off:
             return "Filenames are kept as-is (after space and Scandinavian conversion above)."

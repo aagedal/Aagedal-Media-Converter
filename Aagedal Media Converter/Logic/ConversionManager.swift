@@ -230,14 +230,23 @@ actor ConversionManager: Sendable {
     private let mergePreparationSubprocess: MergePreparationSubprocess
     private let subtitleEmbeddingSubprocess: SubtitleEmbeddingSubprocess
     private let ffmpegPathProvider: @Sendable () -> String?
+    private let transcriptionSettings: any TranscriptionSettingsProviding
+    private let ocrSettings: any OCRSettingsProviding
+    private let analyticsSettings: any AnalyticsSettingsProviding
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
-        ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath }
+        ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
+        transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings(),
+        ocrSettings: any OCRSettingsProviding = PostConversionSettings(),
+        analyticsSettings: any AnalyticsSettingsProviding = PostConversionSettings()
     ) {
         self.mergePreparationSubprocess = MergePreparationSubprocess(subprocessRunner: subprocessRunner)
         self.subtitleEmbeddingSubprocess = SubtitleEmbeddingSubprocess(subprocessRunner: subprocessRunner)
         self.ffmpegPathProvider = ffmpegPathProvider
+        self.transcriptionSettings = transcriptionSettings
+        self.ocrSettings = ocrSettings
+        self.analyticsSettings = analyticsSettings
     }
 
     enum ConversionStatus {
@@ -874,8 +883,12 @@ actor ConversionManager: Sendable {
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let mergeUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
+        let av2Settings = plan.preset == .av2 ? AV2Settings() : nil
+        let outputExtension = av2Settings?.container.fileExtension
+            ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
         await ffmpegConverter.convert(
             request: mergeRequest,
+            av2Settings: av2Settings,
             progressUpdate: { progress, status in
                 let now = Date()
                 let shouldUpdate = mergeUIThrottle.withLock { last -> Bool in
@@ -903,6 +916,7 @@ actor ConversionManager: Sendable {
                     guard let self else { return }
                     await self.handleMergeCompletion(
                         plan: plan,
+                        outputExtension: outputExtension,
                         indices: indices,
                         success: success,
                         errorReason: errorReason,
@@ -1154,6 +1168,7 @@ actor ConversionManager: Sendable {
 
     private func handleMergeCompletion(
         plan: MergePlan,
+        outputExtension: String,
         indices: [Int],
         success: Bool,
         errorReason: String?,
@@ -1162,8 +1177,7 @@ actor ConversionManager: Sendable {
     ) async {
         guard isBatchActive(batchID) else { return }
 
-        let referenceURL = plan.segments.first?.originalURL
-        let finalURL = plan.outputBaseURL.appendingPathExtension(plan.preset.outputExtension(for: referenceURL))
+        let finalURL = plan.outputBaseURL.appendingPathExtension(outputExtension)
 
         // Capture file size - try with security-scoped access
         var outputFileSizeBytes: Int64?
@@ -1210,9 +1224,9 @@ actor ConversionManager: Sendable {
         }
 
         // Trigger upload for merged output (upload once since all items share the same file)
-        if success,
-           let firstUploadIdx = indices.first(where: { droppedFiles.wrappedValue[$0].uploadEnabled }) {
-            let itemID = droppedFiles.wrappedValue[firstUploadIdx].id
+        if let itemID = ConversionUploadFollowUp.itemID(
+            afterSuccess: success, mergedIndices: indices, items: droppedFiles.wrappedValue
+        ) {
             Task {
                 await UploadManager.shared.startUpload(itemID: itemID)
             }
@@ -1977,9 +1991,10 @@ actor ConversionManager: Sendable {
             return
         }
 
-        guard let nextFile = droppedFiles.wrappedValue.first(where: {
-            $0.status == .waiting && (allowedItemIDs?.contains($0.id) ?? true)
-        }) else {
+        guard let nextFile = ConversionQueueState.nextItem(
+            in: droppedFiles.wrappedValue,
+            allowedItemIDs: allowedItemIDs
+        ) else {
             self.isConverting = false
             self.activeBatchID = nil
             self.allowedItemIDs = nil
@@ -2172,8 +2187,11 @@ actor ConversionManager: Sendable {
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let singleUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
+        let av2Settings = preset == .av2 ? AV2Settings() : nil
+        let outputExtension = av2Settings?.container.fileExtension ?? preset.outputExtension(for: inputURL)
         await ffmpegConverter.convert(
             request: conversionRequest,
+            av2Settings: av2Settings,
             progressUpdate: { progress, status in
                 let now = Date()
                 let shouldUpdate = singleUIThrottle.withLock { last -> Bool in
@@ -2224,7 +2242,7 @@ actor ConversionManager: Sendable {
                                 }
                             }
                         } else {
-                            outputFileURL = outputURL.appendingPathExtension(preset.outputExtension(for: inputURL))
+                            outputFileURL = outputURL.appendingPathExtension(outputExtension)
                         }
 
                         // Capture file size - try multiple approaches
@@ -2297,9 +2315,11 @@ actor ConversionManager: Sendable {
                     self.logger.debug("Final state - status: \(String(describing: droppedFiles.wrappedValue[idx].status), privacy: .public)")
 
                     // Trigger upload if enabled for this item
-                    if success && droppedFiles.wrappedValue[idx].uploadEnabled {
+                    if let itemID = ConversionUploadFollowUp.itemID(
+                        afterSuccess: success, item: droppedFiles.wrappedValue[idx]
+                    ) {
                         Task {
-                            UploadManager.shared.startUpload(itemID: fileId)
+                            UploadManager.shared.startUpload(itemID: itemID)
                         }
                     }
 
@@ -2402,13 +2422,7 @@ actor ConversionManager: Sendable {
 
         // Update UI-bound items to cancelled
         if let droppedFiles = currentDroppedFiles {
-            for idx in droppedFiles.wrappedValue.indices
-                where droppedFiles.wrappedValue[idx].status == .converting {
-                droppedFiles.wrappedValue[idx].status = .cancelled
-                droppedFiles.wrappedValue[idx].progress = 0.0
-                droppedFiles.wrappedValue[idx].eta = nil
-                droppedFiles.wrappedValue[idx].statusMessage = nil
-            }
+            ConversionQueueState.cancel(&droppedFiles.wrappedValue, scope: .converting)
         }
 
         // Update internal queue
@@ -2475,14 +2489,7 @@ actor ConversionManager: Sendable {
 
         // Update UI-bound items to cancelled
         if let droppedFiles = currentDroppedFiles {
-            for idx in droppedFiles.wrappedValue.indices
-                where droppedFiles.wrappedValue[idx].status == .converting
-                   || droppedFiles.wrappedValue[idx].status == .waiting {
-                droppedFiles.wrappedValue[idx].status = .cancelled
-                droppedFiles.wrappedValue[idx].progress = 0.0
-                droppedFiles.wrappedValue[idx].eta = nil
-                droppedFiles.wrappedValue[idx].statusMessage = nil
-            }
+            ConversionQueueState.cancel(&droppedFiles.wrappedValue, scope: .waitingAndConverting)
         }
 
         // Clear internal queue
@@ -2526,41 +2533,9 @@ actor ConversionManager: Sendable {
         #endif
         let files = droppedFiles.wrappedValue
         
-        // Filter out cancelled items
+        let progress = ConversionQueueState.overallProgress(for: files)
         #if DEBUG
-        logger.debug("Files: \(files.map { ($0.name, $0.status, $0.durationSeconds, $0.progress) }, privacy: .public)")
-        #endif
-        let activeFiles = files.filter { $0.status != .cancelled && $0.status != .failed }
-        
-        guard !activeFiles.isEmpty else {
-            progressContinuation?.yield(0.0)
-            return
-        }
-
-        // Total duration of active files (seconds)
-        let totalDuration = activeFiles.reduce(0.0) { sum, file in
-            sum + file.trimmedDuration
-        }
-        guard totalDuration > 0 else {
-            progressContinuation?.yield(0.0)
-            return
-        }
-
-        // Completed duration so far (seconds)
-        let completedDuration = activeFiles.reduce(0.0) { sum, file in
-            let durSec = file.trimmedDuration
-            switch file.status {
-            case .done:
-                return sum + durSec
-            case .converting:
-                return sum + durSec * file.progress
-            default:
-                return sum
-            }
-        }
-        let progress = min(max(completedDuration / totalDuration, 0.0), 1.0)
-        #if DEBUG
-        logger.debug("totalDuration: \(totalDuration) s, completedDuration: \(completedDuration) s, overallProgress: \(progress * 100)%")
+        logger.debug("overallProgress: \(progress * 100)%")
         #endif
         progressContinuation?.yield(progress)
     }
@@ -2574,10 +2549,9 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>
     ) async {
         logger.info("[subtitle-trigger] post-encode Whisper for item \(itemID, privacy: .public) inputURL=\(inputURL.lastPathComponent, privacy: .public)")
-        // Get selected model and language from settings
-        let modelRaw = UserDefaults.standard.string(forKey: AppConstants.whisperModelKey) ?? AppConstants.defaultWhisperModel
-        let model = WhisperModel(rawValue: modelRaw) ?? .base
-        let language = UserDefaults.standard.string(forKey: AppConstants.whisperLanguageKey) ?? AppConstants.defaultWhisperLanguage
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = settings.whisperModel
+        let language = settings.whisperLanguage
 
         let operationID = UUID()
         // Publish the attempt token before dispatching work so an immediate cancel is routable.
@@ -2648,8 +2622,7 @@ actor ConversionManager: Sendable {
             logger.info("Subtitles generated: \(srtURL.lastPathComponent, privacy: .public)")
 
             // Embed SRT into the output file if enabled
-            let shouldEmbed = UserDefaults.standard.bool(forKey: AppConstants.embedSubtitlesKey)
-            if shouldEmbed {
+            if settings.embedSubtitles {
                 await embedSubtitles(
                     srtURL: srtURL,
                     into: inputURL,
@@ -2695,10 +2668,9 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>
     ) async {
         logger.info("[subtitle-trigger] post-encode Parakeet for item \(itemID, privacy: .public) inputURL=\(inputURL.lastPathComponent, privacy: .public)")
-        // Get selected model and language from settings
-        let modelId = UserDefaults.standard.string(forKey: AppConstants.parakeetModelKey) ?? AppConstants.defaultParakeetModel
-        let model = ParakeetModel.model(for: modelId) ?? ParakeetModel.allModels[0]
-        let language = UserDefaults.standard.string(forKey: AppConstants.parakeetLanguageKey) ?? AppConstants.defaultParakeetLanguage
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = settings.parakeetModel
+        let language = settings.parakeetLanguage
 
         let operationID = UUID()
         // Publish the attempt token before dispatching work so an immediate cancel is routable.
@@ -2755,8 +2727,7 @@ actor ConversionManager: Sendable {
             logger.info("Parakeet subtitles generated: \(srtURL.lastPathComponent, privacy: .public)")
 
             // Embed SRT into the output file if enabled
-            let shouldEmbed = UserDefaults.standard.bool(forKey: AppConstants.embedSubtitlesKey)
-            if shouldEmbed {
+            if settings.embedSubtitles {
                 await embedSubtitles(
                     srtURL: srtURL,
                     into: inputURL,
@@ -2805,6 +2776,7 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>
     ) async {
         logger.info("[subtitle-trigger] post-encode OCR for item \(itemID, privacy: .public) sourceURL=\(sourceURL.lastPathComponent, privacy: .public)")
+        let settings = ocrSettings.ocrSnapshot()
         // Identify the chosen (or first) bitmap subtitle stream
         let chosenStreamIndex = droppedFiles.wrappedValue.first(where: { $0.id == itemID })?.selectedBitmapSubtitleStreamIndex
         // FFprobe-style + Matroska container IDs (SwiftExif's MKV reader surfaces the latter).
@@ -2826,18 +2798,7 @@ actor ConversionManager: Sendable {
 
         // Language: stream language wins (ISO 639-2; both engines accept it).
         // Otherwise fall back to the engine-specific user preference.
-        let streamLang = stream.languageCode
-        let language: String = {
-            if let streamLang { return streamLang }
-            switch OCREngineKind.userPreferred {
-            case .tesseract:
-                return UserDefaults.standard.string(forKey: AppConstants.tesseractLanguageKey)
-                    ?? AppConstants.defaultTesseractLanguage
-            case .appleVision:
-                return UserDefaults.standard.string(forKey: AppConstants.visionLanguageKey)
-                    ?? AppConstants.defaultVisionLanguage
-            }
-        }()
+        let language = settings.language(forStreamLanguage: stream.languageCode)
 
         let operationID = UUID()
         await MainActor.run {
@@ -2856,7 +2817,8 @@ actor ConversionManager: Sendable {
                 operationID: operationID,
                 subtitleStreamIndex: streamIndex,
                 codec: codec,
-                language: language
+                language: language,
+                engineKind: settings.engine
             ) { [weak self] ocrProgress in
                 Task { @MainActor in
                     guard let _ = self else { return }
@@ -2896,8 +2858,7 @@ actor ConversionManager: Sendable {
             logger.info("OCR subtitles generated: \(srtURL.lastPathComponent, privacy: .public)")
 
             // Embed SRT into the output file if enabled
-            let shouldEmbed = UserDefaults.standard.bool(forKey: AppConstants.embedSubtitlesKey)
-            if shouldEmbed {
+            if settings.embedSubtitles {
                 await embedSubtitles(
                     srtURL: srtURL,
                     into: outputURL,
@@ -3161,13 +3122,9 @@ actor ConversionManager: Sendable {
         encodedURL: URL,
         droppedFiles: Binding<[VideoItem]>
     ) async {
-        // Load analytics config from settings
-        let enabledMetricsRaw = UserDefaults.standard.stringArray(forKey: AppConstants.analyticsEnabledMetricsKey)
-            ?? AppConstants.defaultAnalyticsEnabledMetrics
-        let enabledMetrics = enabledMetricsRaw.compactMap { QualityMetric(rawValue: $0) }
-        let vmafModelRaw = UserDefaults.standard.string(forKey: AppConstants.analyticsVMAFModelKey)
-            ?? AppConstants.defaultAnalyticsVMAFModel
-        let vmafModel = VMAFModel(rawValue: vmafModelRaw) ?? .vmaf_v0_6_1
+        let settings = analyticsSettings.analyticsSnapshot()
+        let enabledMetrics = settings.enabledMetrics
+        let vmafModel = settings.vmafModel
 
         guard !enabledMetrics.isEmpty else { return }
 
@@ -3183,7 +3140,8 @@ actor ConversionManager: Sendable {
                 sourceFile: sourceURL,
                 encodedFile: encodedURL,
                 enabledMetrics: enabledMetrics,
-                vmafModel: vmafModel
+                vmafModel: vmafModel,
+                ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames
             ) { metric, progressValue in
                 Task { @MainActor in
                     if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
@@ -3213,7 +3171,7 @@ actor ConversionManager: Sendable {
                     droppedFiles.wrappedValue[idx].analyticsResults = analyticsResults
                     droppedFiles.wrappedValue[idx].analyticsProgress = 1.0
                 }
-                AnalyticsExporter.autoExportIfEnabled(results: analyticsResults, encodedFileURL: encodedURL)
+                AnalyticsExporter.autoExportIfEnabled(results: analyticsResults, encodedFileURL: encodedURL, settings: settings.autoExport)
             }
 
             logger.info("Quality analytics completed for \(encodedURL.lastPathComponent, privacy: .public)")

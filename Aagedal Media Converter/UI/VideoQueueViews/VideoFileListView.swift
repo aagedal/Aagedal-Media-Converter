@@ -85,6 +85,9 @@ struct VideoFileListView: View {
     /// queue item's Upload/Transcription/Analytics icon (handled in ContentView).
     var onOpenSettingsTab: ((String) -> Void)?
     var disableKeyboardNavigation: Bool = false
+    var transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings()
+    var ocrSettings: any OCRSettingsProviding = PostConversionSettings()
+    var analyticsSettings: any AnalyticsSettingsProviding = PostConversionSettings()
 
     @State private var isTargeted = false
     /// True while an external file drag hovers the queue area (not a group),
@@ -190,14 +193,15 @@ struct VideoFileListView: View {
                             .font(.callout)
                             .foregroundColor(.secondary.opacity(0.8))
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 40)
                             .padding(.top, 12)
                             .padding(.bottom, 30)
                         Text("Control + R to load a new random tip")
                             .font(.footnote)
                             .foregroundColor(.secondary.opacity(0.8))
-                        Spacer()
-                    }.frame(width: 500,height: 86)
+                    }
+                    .frame(maxWidth: 500)
 
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1146,12 +1150,9 @@ struct VideoFileListView: View {
             return
         }
 
-        // Get model from settings
-        let modelRaw = UserDefaults.standard.string(forKey: AppConstants.whisperModelKey) ?? "base"
-        let model = WhisperModel(rawValue: modelRaw) ?? .base
-
-        // Get language from settings
-        let language = UserDefaults.standard.string(forKey: AppConstants.whisperLanguageKey) ?? "auto"
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = settings.whisperModel
+        let language = settings.whisperLanguage
 
         // Check if model is downloaded (nonisolated, no await needed)
         guard WhisperModelManager.shared.isModelDownloaded(model) else {
@@ -1249,12 +1250,9 @@ struct VideoFileListView: View {
             return
         }
 
-        // Get model from settings
-        let modelId = UserDefaults.standard.string(forKey: AppConstants.parakeetModelKey) ?? AppConstants.defaultParakeetModel
-        let model = ParakeetModel.model(for: modelId) ?? ParakeetModel.allModels[0]
-
-        // Get language from settings
-        let language = UserDefaults.standard.string(forKey: AppConstants.parakeetLanguageKey) ?? AppConstants.defaultParakeetLanguage
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = settings.parakeetModel
+        let language = settings.parakeetLanguage
 
         let operationID = UUID()
         // Publish the attempt token before dispatching work so an immediate cancel is routable.
@@ -1358,18 +1356,9 @@ struct VideoFileListView: View {
 
         let streamIndex = stream.index ?? 0
         let codec = stream.codec ?? "pgssub"
-        let engineKind = OCREngineKind.userPreferred
-        let language: String = {
-            if let streamLang = stream.languageCode { return streamLang }
-            switch engineKind {
-            case .tesseract:
-                return UserDefaults.standard.string(forKey: AppConstants.tesseractLanguageKey)
-                    ?? AppConstants.defaultTesseractLanguage
-            case .appleVision:
-                return UserDefaults.standard.string(forKey: AppConstants.visionLanguageKey)
-                    ?? AppConstants.defaultVisionLanguage
-            }
-        }()
+        let settings = ocrSettings.ocrSnapshot()
+        let engineKind = settings.engine
+        let language = settings.language(forStreamLanguage: stream.languageCode)
 
         if engineKind == .tesseract, BinaryPathResolver.tesseractPath == nil {
             await MainActor.run {
@@ -1467,13 +1456,9 @@ struct VideoFileListView: View {
             return
         }
 
-        // Load analytics config from settings
-        let enabledMetricsRaw = UserDefaults.standard.stringArray(forKey: AppConstants.analyticsEnabledMetricsKey)
-            ?? AppConstants.defaultAnalyticsEnabledMetrics
-        let enabledMetrics = enabledMetricsRaw.compactMap { QualityMetric(rawValue: $0) }
-        let vmafModelRaw = UserDefaults.standard.string(forKey: AppConstants.analyticsVMAFModelKey)
-            ?? AppConstants.defaultAnalyticsVMAFModel
-        let vmafModel = VMAFModel(rawValue: vmafModelRaw) ?? .vmaf_v0_6_1
+        let settings = analyticsSettings.analyticsSnapshot()
+        let enabledMetrics = settings.enabledMetrics
+        let vmafModel = settings.vmafModel
 
         guard !enabledMetrics.isEmpty else {
             await MainActor.run {
@@ -1496,7 +1481,8 @@ struct VideoFileListView: View {
                 sourceFile: sourceURL,
                 encodedFile: encodedURL,
                 enabledMetrics: enabledMetrics,
-                vmafModel: vmafModel
+                vmafModel: vmafModel,
+                ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames
             ) { metric, progressValue in
                 Task { @MainActor in
                     if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }) {
@@ -1524,7 +1510,7 @@ struct VideoFileListView: View {
                     droppedFiles[idx].analyticsResults = analyticsResults
                     droppedFiles[idx].analyticsProgress = 1.0
                 }
-                AnalyticsExporter.autoExportIfEnabled(results: analyticsResults, encodedFileURL: encodedURL)
+                AnalyticsExporter.autoExportIfEnabled(results: analyticsResults, encodedFileURL: encodedURL, settings: settings.autoExport)
             }
 
             Self.logger.info("Analyze-only completed for \(encodedURL.lastPathComponent, privacy: .public)")
@@ -1559,9 +1545,8 @@ struct VideoFileListView: View {
             return
         }
 
-        let vmafModelRaw = UserDefaults.standard.string(forKey: AppConstants.analyticsVMAFModelKey)
-            ?? AppConstants.defaultAnalyticsVMAFModel
-        let vmafModel = VMAFModel(rawValue: vmafModelRaw) ?? .vmaf_v0_6_1
+        let settings = analyticsSettings.analyticsSnapshot()
+        let vmafModel = settings.vmafModel
 
         await MainActor.run {
             if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
@@ -1574,7 +1559,8 @@ struct VideoFileListView: View {
                 sourceFile: sourceURL,
                 encodedFile: encodedURL,
                 enabledMetrics: metrics,
-                vmafModel: vmafModel
+                vmafModel: vmafModel,
+                ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames
             ) { metric, progressValue in
                 Task { @MainActor in
                     if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }) {
@@ -1607,7 +1593,7 @@ struct VideoFileListView: View {
                     droppedFiles[idx].analyticsProgress = 1.0
 
                     if let updatedResults = droppedFiles[idx].analyticsResults {
-                        AnalyticsExporter.autoExportIfEnabled(results: updatedResults, encodedFileURL: encodedURL)
+                        AnalyticsExporter.autoExportIfEnabled(results: updatedResults, encodedFileURL: encodedURL, settings: settings.autoExport)
                     }
                 }
             }

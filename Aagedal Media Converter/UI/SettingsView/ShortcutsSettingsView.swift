@@ -60,7 +60,7 @@ struct ShortcutsSettingsView: View {
                     }
                 } else {
                     ForEach(groupsToDisplay, id: \.title) { group in
-                        Section(header: Text(group.title)) {
+                        Section(header: Text(LocalizedStringKey(group.title))) {
                             VStack(spacing: 8) {
                                 ForEach(group.shortcuts) { shortcut in
                                     ShortcutRow(shortcut: shortcut)
@@ -261,12 +261,12 @@ private struct ShortcutGroup {
     let shortcuts: [ShortcutItem]
 
     func filtered(by query: String) -> ShortcutGroup? {
-        if title.localizedCaseInsensitiveContains(query) {
+        if String(localized: String.LocalizationValue(title)).localizedCaseInsensitiveContains(query) {
             return self
         }
         let matched = shortcuts.filter {
             $0.keys.localizedCaseInsensitiveContains(query) ||
-            $0.description.localizedCaseInsensitiveContains(query)
+            String(localized: String.LocalizationValue($0.description)).localizedCaseInsensitiveContains(query)
         }
         return matched.isEmpty ? nil : ShortcutGroup(title: title, shortcuts: matched)
     }
@@ -286,7 +286,7 @@ private struct ShortcutRow: View {
             KeyboardShortcutBadge(keys: shortcut.keys)
                 .frame(width: 180, alignment: .leading)
 
-            Text(shortcut.description)
+            Text(LocalizedStringKey(shortcut.description))
                 .font(.body)
                 .foregroundColor(.secondary)
 

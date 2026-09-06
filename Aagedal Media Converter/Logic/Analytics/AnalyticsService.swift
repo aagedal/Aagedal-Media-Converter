@@ -43,7 +43,6 @@ actor AnalyticsService {
     private let ssimulacra2PathProvider: @Sendable () -> String?
     private let mediaInfoProvider: any AnalyticsMediaInfoProviding
     private let mediaInfoTimeout: Duration
-    private let ssimulacra2MaxFramesOverride: Int?
     private var activeAnalysisID: UUID?
     private var currentMetricTask: Task<MetricResult, Error>?
 
@@ -52,15 +51,13 @@ actor AnalyticsService {
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         ssimulacra2PathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ssimulacra2Path },
         mediaInfoProvider: any AnalyticsMediaInfoProviding = DefaultAnalyticsMediaInfoProvider(),
-        mediaInfoTimeout: Duration = AnalyticsService.mediaInfoTimeout,
-        ssimulacra2MaxFramesOverride: Int? = nil
+        mediaInfoTimeout: Duration = AnalyticsService.mediaInfoTimeout
     ) {
         self.subprocessRunner = subprocessRunner
         self.ffmpegPathProvider = ffmpegPathProvider
         self.ssimulacra2PathProvider = ssimulacra2PathProvider
         self.mediaInfoProvider = mediaInfoProvider
         self.mediaInfoTimeout = mediaInfoTimeout
-        self.ssimulacra2MaxFramesOverride = ssimulacra2MaxFramesOverride
     }
 
     /// Runs all enabled metrics sequentially for a source/encoded pair
@@ -69,6 +66,7 @@ actor AnalyticsService {
     ///   - encodedFile: The encoded output file
     ///   - enabledMetrics: Which metrics to compute
     ///   - vmafModel: VMAF model variant to use
+    ///   - ssimulacra2MaxFrames: Captured frame sampling limit for this operation
     ///   - progress: Callback with (currentMetric, progress 0-1)
     /// - Returns: Array of metric results
     func runAnalytics(
@@ -76,6 +74,7 @@ actor AnalyticsService {
         encodedFile: URL,
         enabledMetrics: [QualityMetric],
         vmafModel: VMAFModel,
+        ssimulacra2MaxFrames: Int = AppConstants.defaultSSIMULACRA2MaxFrames,
         progress: @escaping @Sendable (QualityMetric, Double) -> Void
     ) async throws -> [MetricResult] {
         guard !Task.isCancelled else { throw AnalyticsError.cancelled }
@@ -119,7 +118,8 @@ actor AnalyticsService {
                     ffmpegPath: ffmpegPath,
                     sourceFile: sourceFile,
                     encodedFile: encodedFile,
-                    vmafModel: vmafModel
+                    vmafModel: vmafModel,
+                    ssimulacra2MaxFrames: ssimulacra2MaxFrames
                 ) { metricProgress in
                     progress(metric, metricProgress)
                 }
@@ -169,6 +169,7 @@ actor AnalyticsService {
         sourceFile: URL,
         encodedFile: URL,
         vmafModel: VMAFModel,
+        ssimulacra2MaxFrames: Int,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
         logger.info("Starting \(metric.displayName, privacy: .public) analysis")
@@ -179,6 +180,7 @@ actor AnalyticsService {
                 ffmpegPath: ffmpegPath,
                 sourceFile: sourceFile,
                 encodedFile: encodedFile,
+                maxFrames: ssimulacra2MaxFrames,
                 progress: progress
             )
         }
@@ -353,6 +355,7 @@ actor AnalyticsService {
         ffmpegPath: String,
         sourceFile: URL,
         encodedFile: URL,
+        maxFrames: Int,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
         guard let ssimulacra2Path = ssimulacra2PathProvider() else {
@@ -362,8 +365,6 @@ actor AnalyticsService {
         let duration = try await getVideoDuration(for: encodedFile)
         let resolution = try await getVideoResolution(for: sourceFile)
 
-        let maxFrames = ssimulacra2MaxFramesOverride
-            ?? UserDefaults.standard.integer(forKey: AppConstants.ssimulacra2MaxFramesKey)
         let frameCount = max(1, maxFrames > 0 ? maxFrames : AppConstants.defaultSSIMULACRA2MaxFrames)
         let actualFrameCount = min(frameCount, max(1, Int(duration)))
         let interval = duration / Double(actualFrameCount)

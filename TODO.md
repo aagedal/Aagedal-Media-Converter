@@ -16,10 +16,10 @@
 [x] Preset Settings Vew: Fix missing preset descriptions
 
 ## Screen Recording
-[x] Growing screen-recording presets use constant frame rate at Auto, 50 fps (PAL),
-or 60 fps (NTSC); non-growing presets intentionally remain variable frame rate.
-Explicit 25/29.97/50/59.94 broadcast rates and drop-frame timecode are tracked in
-`IMPROVEMENT_PLAN.md` §4.3.
+[x] Growing screen-recording presets support constant frame rate at Auto, 25,
+29.97, 50, 59.94, or 60 fps, with drop-frame timecode at the two NTSC rates.
+Non-growing presets intentionally retain variable frame rate. Live capture and
+editor validation remain tracked in `IMPROVEMENT_PLAN.md` §4.3.
 
 ## Full Screen Player
 [x] Full Screen Playback: Fix it so that the Auto Next feature automatically plays next video, instead of the next video starting paused.

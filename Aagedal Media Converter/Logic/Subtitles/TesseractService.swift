@@ -122,6 +122,7 @@ actor TesseractService {
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
+        engineKind: OCREngineKind = .userPreferred,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
@@ -138,6 +139,7 @@ actor TesseractService {
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
+            engineKind: engineKind,
             runID: runID,
             progress: progress
         )
@@ -151,6 +153,7 @@ actor TesseractService {
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
+        engineKind: OCREngineKind = .userPreferred,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
@@ -168,6 +171,7 @@ actor TesseractService {
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
+            engineKind: engineKind,
             runID: runID,
             progress: progress
         )
@@ -199,6 +203,7 @@ actor TesseractService {
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
+        engineKind: OCREngineKind,
         runID: UUID,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
@@ -212,7 +217,7 @@ actor TesseractService {
         }
 
         let engine: any BitmapSubtitleOCREngine
-        switch OCREngineKind.userPreferred {
+        switch engineKind {
         case .tesseract:
             guard let tesseractPath = BinaryPathResolver.tesseractPath else {
                 throw TesseractServiceError.tesseractNotFound

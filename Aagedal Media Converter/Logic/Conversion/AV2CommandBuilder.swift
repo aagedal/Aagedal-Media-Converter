@@ -62,7 +62,7 @@ enum AV2CommandBuilder {
     }
 
     /// The full plan for a chunked encode: the per-chunk commands plus shared geometry and the
-    /// temp directory holding the segment files (cleaned up by the caller after concatenation).
+    /// proposed scratch directory. Planning does not create it; execution creates and owns it.
     struct AV2SegmentPlan: Sendable {
         let segments: [AV2SegmentCommand]
         let segmentDirectory: URL
@@ -109,7 +109,8 @@ enum AV2CommandBuilder {
         customInputArguments: [String]? = nil,
         expectedDuration: Double? = nil,
         videoFrameRate: Double? = nil,
-        metadataSource: MetadataSource = .probeIfNeeded
+        metadataSource: MetadataSource = .probeIfNeeded,
+        settings: AV2Settings = AV2Settings()
     ) async -> AV2Command? {
         guard let r = await resolve(
             inputURL: inputURL,
@@ -120,7 +121,8 @@ enum AV2CommandBuilder {
             customInputArguments: customInputArguments,
             expectedDuration: expectedDuration,
             videoFrameRate: videoFrameRate,
-            metadataSource: metadataSource
+            metadataSource: metadataSource,
+            settings: settings
         ) else {
             return nil
         }
@@ -186,7 +188,8 @@ enum AV2CommandBuilder {
         customInputArguments: [String]? = nil,
         expectedDuration: Double? = nil,
         videoFrameRate: Double? = nil,
-        metadataSource: MetadataSource = .probeIfNeeded
+        metadataSource: MetadataSource = .probeIfNeeded,
+        settings: AV2Settings = AV2Settings()
     ) async -> AV2SegmentPlan? {
         // Seeking each worker independently is not yet validated for concat/image2 demuxers.
         // Keep virtual inputs on the correct single-process path until their segment boundaries
@@ -201,7 +204,8 @@ enum AV2CommandBuilder {
             customInputArguments: customInputArguments,
             expectedDuration: expectedDuration,
             videoFrameRate: videoFrameRate,
-            metadataSource: metadataSource
+            metadataSource: metadataSource,
+            settings: settings
         ) else {
             return nil
         }
@@ -211,7 +215,7 @@ enum AV2CommandBuilder {
         }
         let totalFrames = max(1, Int((duration * frameRate).rounded()))
 
-        let hint = intSetting(AppConstants.av2ParallelChunksKey, default: AppConstants.defaultAV2ParallelChunks)
+        let hint = settings.parallelChunks
         let chunkCount = resolvedChunkCount(totalFrames: totalFrames, hint: hint, rateMode: r.rateMode)
         guard chunkCount > 1 else { return nil }
 
@@ -226,7 +230,6 @@ enum AV2CommandBuilder {
 
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("av2chunks_\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         var segments: [AV2SegmentCommand] = []
         var startFrame = 0
@@ -291,7 +294,8 @@ enum AV2CommandBuilder {
         trimEnd: Double?,
         cropConfig: CropConfig?,
         visualSourceURL: URL? = nil,
-        metadataSource: MetadataSource = .probeIfNeeded
+        metadataSource: MetadataSource = .probeIfNeeded,
+        settings: AV2Settings = AV2Settings()
     ) async -> Int? {
         await resolve(
             inputURL: inputURL,
@@ -302,7 +306,8 @@ enum AV2CommandBuilder {
             customInputArguments: nil,
             expectedDuration: nil,
             videoFrameRate: nil,
-            metadataSource: metadataSource
+            metadataSource: metadataSource,
+            settings: settings
         )?.bitDepth
     }
 
@@ -345,7 +350,8 @@ enum AV2CommandBuilder {
         customInputArguments: [String]?,
         expectedDuration: Double?,
         videoFrameRate: Double?,
-        metadataSource: MetadataSource
+        metadataSource: MetadataSource,
+        settings: AV2Settings
     ) async -> Resolved? {
         let metadataURL = visualSourceURL ?? inputURL
         let metadata: VideoMetadata? = switch metadataSource {
@@ -406,8 +412,7 @@ enum AV2CommandBuilder {
         var finalW = evenDimension(Double(basePxW) * effectivePAR)
         var finalH = evenDimension(Double(basePxH))
 
-        let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.av2ResolutionLimitKey) ?? AppConstants.defaultAV2ResolutionLimit
-        if let maxShortEdge = CodecResolutionLimit(rawValue: resolutionRaw)?.maxHeight {
+        if let maxShortEdge = settings.resolutionLimit.maxHeight {
             let shortEdge = min(finalW, finalH)
             if shortEdge > maxShortEdge {
                 let factor = Double(maxShortEdge) / Double(shortEdge)
@@ -417,18 +422,14 @@ enum AV2CommandBuilder {
         }
 
         // Resolve settings.
-        let bitDepthRaw = UserDefaults.standard.string(forKey: AppConstants.av2BitDepthKey) ?? AppConstants.defaultAV2BitDepth
-        let bitDepth = (AV2BitDepthOption(rawValue: bitDepthRaw) ?? .auto).resolved(sourceBitDepth: stream?.bitDepth)
-
-        let rateModeRaw = UserDefaults.standard.string(forKey: AppConstants.av2RateControlModeKey) ?? AppConstants.defaultAV2RateControlMode
-        let rateMode = AV2RateControlMode(rawValue: rateModeRaw) ?? .constantQuality
-
-        let qp = intSetting(AppConstants.av2QualityKey, default: AppConstants.defaultAV2Quality)
-        let targetBitrate = intSetting(AppConstants.av2TargetBitrateKey, default: AppConstants.defaultAV2TargetBitrate)
-        let speed = intSetting(AppConstants.av2SpeedKey, default: AppConstants.defaultAV2Speed)
-        let tileColumns = intSetting(AppConstants.av2TileColumnsKey, default: AppConstants.defaultAV2TileColumns)
-        let tileRows = intSetting(AppConstants.av2TileRowsKey, default: AppConstants.defaultAV2TileRows)
-        let threadsSetting = intSetting(AppConstants.av2ThreadsKey, default: AppConstants.defaultAV2Threads)
+        let bitDepth = settings.bitDepth.resolved(sourceBitDepth: stream?.bitDepth)
+        let rateMode = settings.rateControlMode
+        let qp = settings.quality
+        let targetBitrate = settings.targetBitrate
+        let speed = settings.speed
+        let tileColumns = settings.tileColumns
+        let tileRows = settings.tileRows
+        let threadsSetting = settings.threads
         let threads = threadsSetting > 0 ? threadsSetting : ProcessInfo.processInfo.activeProcessorCount
 
         // Effective duration (trim-aware) for progress + chunk partitioning. Resolve the source
@@ -546,10 +547,4 @@ enum AV2CommandBuilder {
         min(max(qp, 0), 255)
     }
 
-    /// Reads an Int setting, returning `def` when the key has never been written
-    /// (so a legitimate stored value of 0 is preserved, unlike `UserDefaults.integer`).
-    private static func intSetting(_ key: String, default def: Int) -> Int {
-        let defaults = UserDefaults.standard
-        return defaults.object(forKey: key) == nil ? def : defaults.integer(forKey: key)
-    }
 }

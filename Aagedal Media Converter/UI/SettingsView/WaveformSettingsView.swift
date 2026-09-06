@@ -182,7 +182,7 @@ struct WaveformSettingsView: View {
                 LabeledContent("Engine") {
                     Picker("", selection: selectedRenderingEngine) {
                         ForEach(WaveformRenderingEngine.allCases) { engine in
-                            Text(engine.displayName).tag(engine)
+                            Text(LocalizedStringKey(engine.displayName)).tag(engine)
                         }
                     }
                     .labelsHidden()
@@ -195,7 +195,7 @@ struct WaveformSettingsView: View {
                     LabeledContent("Style") {
                         Picker("", selection: selectedSwiftStyle) {
                             ForEach(SwiftWaveformStyle.allCases) { style in
-                                Text(style.displayName).tag(style)
+                                Text(LocalizedStringKey(style.displayName)).tag(style)
                             }
                         }
                         .labelsHidden()
@@ -219,7 +219,7 @@ struct WaveformSettingsView: View {
                     LabeledContent("Distribution") {
                         Picker("", selection: selectedDistribution) {
                             ForEach(FrequencyDistribution.allCases) { dist in
-                                Text(dist.displayName).tag(dist)
+                                Text(LocalizedStringKey(dist.displayName)).tag(dist)
                             }
                         }
                         .labelsHidden()
@@ -243,7 +243,7 @@ struct WaveformSettingsView: View {
                     LabeledContent("Style") {
                         Picker("", selection: selectedFFmpegStyle) {
                             ForEach(WaveformStyle.allCases) { style in
-                                Text(style.displayName).tag(style)
+                                Text(LocalizedStringKey(style.displayName)).tag(style)
                             }
                         }
                         .labelsHidden()
@@ -309,7 +309,7 @@ struct WaveformSettingsView: View {
     }
 
     @ViewBuilder
-    private func colorRow(title: String, binding: Binding<String>) -> some View {
+    private func colorRow(title: LocalizedStringKey, binding: Binding<String>) -> some View {
         LabeledContent(title) {
             HStack(spacing: 8) {
                 ColorPicker(selection: Binding(

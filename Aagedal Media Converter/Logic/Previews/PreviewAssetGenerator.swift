@@ -98,12 +98,41 @@ struct PreviewMediaFacts: Sendable {
     let hasVideoStream: Bool
 }
 
+/// A data-only frame request. Workers never receive cache destinations, so a decoder
+/// completing after its deadline cannot overwrite a fallback or a newer generation.
+struct PreviewThumbnailRequest: Sendable {
+    let index: Int
+    let position: Double
+    let width: CGFloat
+    let tolerance: Double
+}
+
+/// Only AVFoundation's cancellation entry points cross executors. Configuration and
+/// image generation stay on the one rendering worker; the generator itself is never
+/// exposed to other work as a generally Sendable object.
+private final class NativePreviewCancellation: @unchecked Sendable {
+    private let asset: AVURLAsset
+    private let generator: AVAssetImageGenerator
+
+    init(asset: AVURLAsset, generator: AVAssetImageGenerator) {
+        self.asset = asset
+        self.generator = generator
+    }
+
+    func cancel() {
+        generator.cancelAllCGImageGeneration()
+        asset.cancelLoading()
+    }
+}
+
 actor PreviewAssetGenerator {
     static let shared = PreviewAssetGenerator()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "PreviewAssets")
     private let fileManager = FileManager.default
     private let subprocessRunner: any SubprocessRunning
+    private let thumbnailTimeout: Duration
+    private let thumbnailRenderer: @Sendable (URL, [PreviewThumbnailRequest]) async throws -> [Int: Data]
     private let metadataTimeout: Duration
     private let metadataProbe: @Sendable (URL) async throws -> VideoMetadata
     private let essentialInfoProbe: @Sendable (URL) async throws -> EssentialVideoInfo
@@ -143,6 +172,10 @@ actor PreviewAssetGenerator {
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         metadataTimeout: Duration = BoundedVideoMetadataProbe.defaultTimeout,
+        thumbnailTimeout: Duration = .seconds(15),
+        thumbnailRenderer: @escaping @Sendable (URL, [PreviewThumbnailRequest]) async throws -> [Int: Data] = {
+            try await PreviewAssetGenerator.renderNativeThumbnails(url: $0, requests: $1)
+        },
         metadataProbe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
             try await VideoMetadataService.shared.metadata(for: $0)
         },
@@ -152,6 +185,8 @@ actor PreviewAssetGenerator {
     ) {
         self.subprocessRunner = subprocessRunner
         self.metadataTimeout = metadataTimeout
+        self.thumbnailTimeout = thumbnailTimeout
+        self.thumbnailRenderer = thumbnailRenderer
         self.metadataProbe = metadataProbe
         self.essentialInfoProbe = essentialInfoProbe
     }
@@ -918,7 +953,7 @@ actor PreviewAssetGenerator {
 
         if hasVideoStream {
             // Try AVFoundation first (in-process, fast for Apple-native formats)
-            if let data = await generateRowThumbnailWithAVFoundation(url: url, destination: rowThumbnailURL) {
+            if let data = try await generateRowThumbnailWithAVFoundation(url: url, duration: mediaFacts.duration, destination: rowThumbnailURL) {
                 return data
             }
 
@@ -1016,81 +1051,113 @@ actor PreviewAssetGenerator {
         }
     }
 
-    /// Generates a row thumbnail using AVFoundation (fast, in-process, no subprocess spawning).
-    /// Returns the PNG data on success, nil if AVFoundation can't handle the format.
-    private func generateRowThumbnailWithAVFoundation(url: URL, destination: URL) async -> Data? {
-        // Skip AVFoundation entirely for containers it can never handle
-        let ext = url.pathExtension.lowercased()
-        if Self.avFoundationUnsupportedExtensions.contains(ext) {
-            logger.debug("Skipping AVFoundation thumbnail for unsupported container: \(ext, privacy: .public)")
+    /// Publishes only the result accepted by the deadline. The detached worker retains
+    /// its own source access until it exits, even if the caller has already fallen back.
+    /// Module-visible for deadline and publication tests with an injected renderer.
+    func generateNativeThumbnails(
+        url: URL,
+        requests: [PreviewThumbnailRequest],
+        destinations: [URL]
+    ) async throws -> [Int: Data] {
+        try Task.checkCancellation()
+        let renderer = thumbnailRenderer
+        let images = try await NonJoiningTaskDeadline.run(timeout: thumbnailTimeout) {
+            let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+            defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+            return try await renderer(url, requests)
+        }
+        try Task.checkCancellation()
+        var published: [Int: Data] = [:]
+        for request in requests {
+            try Task.checkCancellation()
+            guard destinations.indices.contains(request.index),
+                  let data = images[request.index], !data.isEmpty else { continue }
+            try data.write(to: destinations[request.index], options: .atomic)
+            published[request.index] = data
+        }
+        return published
+    }
+
+    private func generateRowThumbnailWithAVFoundation(
+        url: URL,
+        duration: Double,
+        destination: URL
+    ) async throws -> Data? {
+        guard !Self.avFoundationUnsupportedExtensions.contains(url.pathExtension.lowercased()) else {
             return nil
         }
+        do {
+            let images = try await generateNativeThumbnails(
+                url: url,
+                requests: [PreviewThumbnailRequest(
+                    index: 0, position: min(10, max(duration * 0.1, 0.5)), width: 640, tolerance: 2
+                )],
+                destinations: [destination]
+            )
+            return images[0]
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            logger.debug("AVFoundation thumbnail failed or timed out for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
 
+    /// Runs wholly outside the preview actor, including track loading and PNG encoding.
+    /// Cancellation asks AVFoundation to stop; the non-joining deadline remains the
+    /// guarantee for callers when a system decoder does not promptly cooperate.
+    nonisolated static func renderNativeThumbnails(
+        url: URL,
+        requests: [PreviewThumbnailRequest]
+    ) async throws -> [Int: Data] {
+        try Task.checkCancellation()
         let asset = AVURLAsset(url: url)
-
-        // Check that AVFoundation can actually read this file's video track
-        guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first else {
-            logger.debug("AVFoundation found no video track for \(url.lastPathComponent, privacy: .public)")
-            return nil
-        }
-
-        // Get duration to pick a representative frame (10% in, capped at 10s)
-        let cmDuration = try? await asset.load(.duration)
-        let durationSec = CMTimeGetSeconds(cmDuration ?? CMTime.zero)
-        guard durationSec > 0 else {
-            logger.debug("AVFoundation returned 0 duration for \(url.lastPathComponent, privacy: .public)")
-            return nil
-        }
-
-        let seekPosition = min(10, max(durationSec * 0.1, 0.5))
-        let seekTime = CMTime(seconds: seekPosition, preferredTimescale: 600)
-
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 640, height: 0) // 640px wide, height preserves aspect ratio
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 2, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 2, preferredTimescale: 600)
-
-        do {
-            let (cgImage, _) = try await generator.image(at: seekTime)
-
-            var ciImage = CIImage(cgImage: cgImage)
-
-            // Tonemap ProRes RAW thumbnails to SDR. ProRes RAW is camera sensor
-            // data in linear light with very high dynamic range that looks
-            // over-exposed in standard NSImageView. Other HDR formats (HDR10, HLG)
-            // render acceptably without tonemapping.
-            let formatDescriptions = (try? await videoTrack.load(.formatDescriptions)) ?? []
-            let isProResRAW = formatDescriptions.contains { desc in
-                let code = CMFormatDescriptionGetMediaSubType(desc)
-                // 'aprn' = ProRes RAW, 'aprh' = ProRes RAW HQ
+        let cancellation = NativePreviewCancellation(asset: asset, generator: generator)
+        return try await withTaskCancellationHandler {
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+                return [:]
+            }
+            try Task.checkCancellation()
+            let descriptions = (try? await track.load(.formatDescriptions)) ?? []
+            try Task.checkCancellation()
+            let isProResRAW = descriptions.contains {
+                let code = CMFormatDescriptionGetMediaSubType($0)
                 return code == 0x6170726E || code == 0x61707268
             }
-
-            if isProResRAW {
-                if let tonemap = CIFilter(name: "CIToneMapHeadroom", parameters: [
-                    kCIInputImageKey: ciImage,
-                    "inputSourceHeadroom": 8.0,
-                    "inputTargetHeadroom": 1.0
-                ]), let tonemapped = tonemap.outputImage {
-                    ciImage = tonemapped
-                    logger.debug("Tonemapped ProRes RAW thumbnail for \(url.lastPathComponent, privacy: .public)")
-                }
-            }
-
             let context = CIContext()
             let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
-            guard let pngData = context.pngRepresentation(of: ciImage, format: .RGBA8, colorSpace: srgb) else {
-                logger.debug("AVFoundation thumbnail: failed to encode PNG for \(url.lastPathComponent, privacy: .public)")
-                return nil
+            var images: [Int: Data] = [:]
+            for request in requests {
+                try Task.checkCancellation()
+                generator.maximumSize = CGSize(width: request.width, height: 0)
+                generator.requestedTimeToleranceBefore = CMTime(seconds: request.tolerance, preferredTimescale: 600)
+                generator.requestedTimeToleranceAfter = generator.requestedTimeToleranceBefore
+                do {
+                    let (image, _) = try await generator.image(at: CMTime(seconds: request.position, preferredTimescale: 600))
+                    try Task.checkCancellation()
+                    var ciImage = CIImage(cgImage: image)
+                    if isProResRAW, let filter = CIFilter(name: "CIToneMapHeadroom", parameters: [
+                        kCIInputImageKey: ciImage,
+                        "inputSourceHeadroom": 8.0,
+                        "inputTargetHeadroom": 1.0
+                    ]), let tonemapped = filter.outputImage {
+                        ciImage = tonemapped
+                    }
+                    if let data = context.pngRepresentation(of: ciImage, format: .RGBA8, colorSpace: srgb) {
+                        images[request.index] = data
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // An individual decode failure leaves this index for FFmpeg fallback.
+                }
             }
-
-            try pngData.write(to: destination)
-            logger.info("AVFoundation thumbnail generated for \(url.lastPathComponent, privacy: .public)")
-            return pngData
-        } catch {
-            logger.debug("AVFoundation thumbnail generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return nil
+            try Task.checkCancellation()
+            return images
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 
@@ -1245,63 +1312,26 @@ actor PreviewAssetGenerator {
             return missingIndices
         }
 
-        let asset = AVURLAsset(url: url)
-        guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first else {
+        let requests = missingIndices.map { index in
+            PreviewThumbnailRequest(
+                index: index,
+                position: positionForThumbnail(at: index, total: thumbnailCount, duration: duration),
+                width: 320,
+                tolerance: 1
+            )
+        }
+        do {
+            let images = try await generateNativeThumbnails(
+                url: url, requests: requests, destinations: expectedFiles
+            )
+            return missingIndices.filter { images[$0] == nil }
+        } catch is CancellationError {
+            // The parent is cancelled; returning no remaining work prevents fallback.
+            return []
+        } catch {
+            logger.debug("AVFoundation filmstrip failed or timed out for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return missingIndices
         }
-
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 320, height: 0)
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 1, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
-
-        // Detect ProRes RAW for tonemapping
-        let formatDescriptions = (try? await videoTrack.load(.formatDescriptions)) ?? []
-        let isProResRAW = formatDescriptions.contains { desc in
-            let code = CMFormatDescriptionGetMediaSubType(desc)
-            return code == 0x6170726E || code == 0x61707268
-        }
-
-        let context = CIContext()
-        let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
-        var failedIndices: [Int] = []
-
-        for index in missingIndices {
-            let position = positionForThumbnail(at: index, total: thumbnailCount, duration: duration)
-            let seekTime = CMTime(seconds: position, preferredTimescale: 600)
-            let destination = expectedFiles[index]
-
-            do {
-                let (cgImage, _) = try await generator.image(at: seekTime)
-                var ciImage = CIImage(cgImage: cgImage)
-
-                if isProResRAW {
-                    if let tonemap = CIFilter(name: "CIToneMapHeadroom", parameters: [
-                        kCIInputImageKey: ciImage,
-                        "inputSourceHeadroom": 8.0,
-                        "inputTargetHeadroom": 1.0
-                    ]), let tonemapped = tonemap.outputImage {
-                        ciImage = tonemapped
-                    }
-                }
-
-                guard let pngData = context.pngRepresentation(of: ciImage, format: .RGBA8, colorSpace: srgb) else {
-                    failedIndices.append(index)
-                    continue
-                }
-
-                try pngData.write(to: destination)
-                logger.debug("Generated thumbnail #\(index) for \(url.lastPathComponent, privacy: .public) at position \(position, privacy: .public)s")
-            } catch {
-                failedIndices.append(index)
-            }
-        }
-
-        if !failedIndices.isEmpty {
-            logger.debug("AVFoundation filmstrip: \(failedIndices.count) of \(missingIndices.count) failed for \(url.lastPathComponent, privacy: .public)")
-        }
-        return failedIndices
     }
 
     /// Generates filmstrip thumbnails using ffmpeg (one subprocess per frame).
