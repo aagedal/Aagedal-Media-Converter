@@ -6,6 +6,49 @@ import os
 
 final class CaptureFrameRateTests: XCTestCase {
     @MainActor
+    func testPreviewSelectionRetiresPendingDeliveryAndRejectsLateAdoption() throws {
+        let operations = CapturePreviewOperations()
+        let selection = operations.invalidateAll()
+        let old = try XCTUnwrap(operations.beginStart(displayID: 1))
+        let delivery = CaptureSampleDelivery()
+        operations.registerDelivery(delivery, for: old)
+        XCTAssertNil(operations.beginStart(displayID: 1))
+        XCTAssertNotEqual(operations.invalidateAll(), selection)
+        XCTAssertFalse(delivery.isActive)
+        XCTAssertFalse(operations.isCurrent(old))
+        let replacement = try XCTUnwrap(operations.beginStart(displayID: 1))
+        operations.finish(old)
+        XCTAssertTrue(operations.isCurrent(replacement))
+    }
+
+    @MainActor
+    func testRecordingReplacementRetiresOnlyItsPendingPreview() throws {
+        let operations = CapturePreviewOperations()
+        let first = try XCTUnwrap(operations.beginStart(displayID: 1))
+        let second = try XCTUnwrap(operations.beginStart(displayID: 2))
+        let delivery = CaptureSampleDelivery()
+        operations.registerDelivery(delivery, for: first)
+        operations.invalidate(displayID: 1)
+        XCTAssertFalse(delivery.isActive)
+        XCTAssertFalse(operations.isCurrent(first))
+        XCTAssertTrue(operations.isCurrent(second))
+        let lateDelivery = CaptureSampleDelivery()
+        operations.registerDelivery(lateDelivery, for: first)
+        XCTAssertFalse(lateDelivery.isActive)
+    }
+
+    @MainActor
+    func testAdoptedPreviewDeliverySurvivesPendingSelectionInvalidation() throws {
+        let operations = CapturePreviewOperations()
+        let operation = try XCTUnwrap(operations.beginStart(displayID: 1))
+        let delivery = CaptureSampleDelivery()
+        operations.registerDelivery(delivery, for: operation)
+        operations.finish(operation)
+        operations.invalidateAll()
+        XCTAssertTrue(delivery.isActive)
+    }
+
+    @MainActor
     func testStopRetiresSuspendedRecordingStartAndKeepsItsScopeClaim() throws {
         let operations = CaptureRecordingOperations()
         let start = try XCTUnwrap(operations.beginStart(displayID: 1))
@@ -97,6 +140,117 @@ final class CaptureFrameRateTests: XCTestCase {
         XCTAssertEqual(samples, 2)
         XCTAssertFalse(retired.isActive)
         XCTAssertTrue(replacement.isActive)
+    }
+
+    func testCaptureStreamStartupAdoptsSuccessfulStream() async throws {
+        try await CaptureStreamStartup.start(
+            operation: {},
+            retire: { XCTFail("Successful start must retain delivery") },
+            cleanup: { XCTFail("Adopted stream belongs to its tile") }
+        )
+    }
+
+    func testCaptureStreamStartupRetiresFrameworkFailureWithoutStopping() async {
+        enum StartFailure: Error { case rejected }
+        let delivery = CaptureSampleDelivery()
+        do {
+            try await CaptureStreamStartup.start(
+                operation: { throw StartFailure.rejected },
+                retire: { delivery.invalidate() },
+                cleanup: { XCTFail("Failed stream did not start") }
+            )
+            XCTFail("Expected framework failure")
+        } catch StartFailure.rejected {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        XCTAssertFalse(delivery.isActive)
+    }
+
+    func testCaptureStreamStartupStopsLateSuccessAfterTimeout() async {
+        await assertAbandonedCaptureStartIsCleanedUp(cancel: false)
+    }
+
+    func testCaptureStreamStartupStopsLateSuccessAfterCancellation() async {
+        await assertAbandonedCaptureStartIsCleanedUp(cancel: true)
+    }
+
+    func testCaptureStreamStartupIgnoresLateFrameworkFailure() async {
+        enum StartFailure: Error { case rejected }
+        let registered = expectation(description: "Start registered")
+        let failed = expectation(description: "Late failure delivered")
+        let callback = OSAllocatedUnfairLock<CheckedContinuation<Void, Error>?>(initialState: nil)
+        let task = Task {
+            do {
+                try await CaptureStreamStartup.start(
+                    timeout: .milliseconds(50),
+                    operation: {
+                        defer { failed.fulfill() }
+                        try await withCheckedThrowingContinuation { continuation in
+                            callback.withLock { $0 = continuation }
+                            registered.fulfill()
+                        }
+                    },
+                    retire: {},
+                    cleanup: { XCTFail("A late failure must not stop an unstarted stream") }
+                )
+                XCTFail("Expected timeout")
+            } catch CaptureStreamStartupError.timedOut {
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
+        }
+        await fulfillment(of: [registered], timeout: 2)
+        await task.value
+        callback.withLock { $0?.resume(throwing: StartFailure.rejected); $0 = nil }
+        await fulfillment(of: [failed], timeout: 2)
+    }
+
+    private func assertAbandonedCaptureStartIsCleanedUp(cancel: Bool) async {
+        let registered = expectation(description: "Start callback registered")
+        let returned = expectation(description: "Caller returned before callback")
+        let cleaned = expectation(description: "Late successful stream stopped once")
+        cleaned.assertForOverFulfill = true
+        let callback = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
+        let delivery = CaptureSampleDelivery()
+        let cleanupCount = OSAllocatedUnfairLock(initialState: 0)
+        let task = Task {
+            do {
+                try await CaptureStreamStartup.start(
+                    timeout: cancel ? .seconds(30) : .milliseconds(50),
+                    operation: {
+                        await withCheckedContinuation { continuation in
+                            callback.withLock { $0 = continuation }
+                            registered.fulfill()
+                        }
+                    },
+                    retire: { delivery.invalidate() },
+                    cleanup: {
+                        XCTAssertFalse(delivery.isActive)
+                        XCTAssertFalse(Task.isCancelled)
+                        cleanupCount.withLock { $0 += 1 }
+                        cleaned.fulfill()
+                    }
+                )
+                XCTFail("Expected abandoned startup")
+            } catch is CancellationError {
+                XCTAssertTrue(cancel)
+            } catch CaptureStreamStartupError.timedOut {
+                XCTAssertFalse(cancel)
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertFalse(delivery.isActive)
+            returned.fulfill()
+        }
+        await fulfillment(of: [registered], timeout: 2)
+        if cancel { task.cancel() }
+        await fulfillment(of: [returned], timeout: 2)
+        XCTAssertEqual(cleanupCount.withLock { $0 }, 0)
+        callback.withLock { $0?.resume(); $0 = nil }
+        await fulfillment(of: [cleaned], timeout: 2)
+        await task.value
+        XCTAssertEqual(cleanupCount.withLock { $0 }, 1)
     }
 
     func testCaptureStreamShutdownReturnsBeforeLateCallback() async {

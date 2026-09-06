@@ -2,6 +2,7 @@
 import hashlib
 import json
 import importlib.util
+import os
 from pathlib import Path
 import plistlib
 import subprocess
@@ -59,6 +60,44 @@ class ReleaseBundleTests(unittest.TestCase):
         self.executable()
         self.assertEqual(validator.verify(self.app), 1)
 
+    def test_report_distinguishes_static_reachability_and_counts_symlinks_once(self):
+        linked = self.library()
+        unlinked = self.library("libDynamic.dylib")
+        self.executable(linked, "-Wl,-rpath,@executable_path/../Frameworks")
+        (self.frameworks / "alias.dylib").symlink_to(linked.name)
+        report = {}
+        self.assertEqual(validator.verify(self.app, report=report), 3)
+        images = {entry["path"]: entry for entry in report["images"]}
+        self.assertTrue(images["Contents/Frameworks/libFixture.dylib"]["reachableFromExecutable"])
+        self.assertFalse(images["Contents/Frameworks/libDynamic.dylib"]["reachableFromExecutable"])
+        self.assertEqual(report["machOBytes"], sum(path.stat().st_size for path in [self.main, linked, unlinked]))
+        self.assertEqual(report["regularFileCount"], 4)
+        self.assertEqual(report["bundleFileBytes"], report["machOBytes"] + (self.app / "Contents/Info.plist").stat().st_size)
+        self.assertIn("loaded dynamically", report["reachabilityCaveat"])
+
+    def test_report_counts_helpers_as_independent_roots(self):
+        self.executable()
+        library = self.library()
+        helper = self.macos / "helper"
+        self.compile(helper, "int fixture(void); int main(void) { return fixture(); }", str(library),
+                     "-Wl,-rpath,@executable_path/../Frameworks")
+        report = {}
+        validator.verify(self.app, report=report)
+        self.assertTrue(all(entry["reachableFromExecutable"] for entry in report["images"]))
+
+    def test_named_pipe_is_rejected_without_opening(self):
+        self.executable()
+        os.mkfifo(self.macos / "pipe")
+        with self.assertRaisesRegex(ValueError, "non-regular file"):
+            validator.verify(self.app)
+
+    def test_failed_validation_does_not_publish_a_partial_report(self):
+        self.executable(self.library())
+        report = {}
+        with self.assertRaises(ValueError):
+            validator.verify(self.app, report=report)
+        self.assertEqual(report, {})
+
     def test_rpath_library_and_framework_symlink(self):
         library = self.library()
         self.executable(library, "-Wl,-rpath,@executable_path/../Frameworks")
@@ -85,6 +124,21 @@ class ReleaseBundleTests(unittest.TestCase):
         library.unlink()
         with self.assertRaisesRegex(ValueError, "unresolved dependency"):
             validator.verify(self.app)
+
+    def test_system_rpath_does_not_hide_a_missing_bundled_library(self):
+        library = self.library()
+        self.executable(library, "-Wl,-rpath,/usr/lib/swift", "-Wl,-rpath,@executable_path/../Frameworks")
+        report = {}
+        validator.verify(self.app, report=report)
+        self.assertTrue(all(entry["reachableFromExecutable"] for entry in report["images"]))
+        library.unlink()
+        with self.assertRaisesRegex(ValueError, "unresolved dependency"):
+            validator.verify(self.app)
+
+    def test_system_rpath_can_resolve_a_real_shared_cache_library(self):
+        self.executable()
+        self.assertTrue(validator.system_library_exists(Path("/usr/lib/libSystem.B.dylib")))
+        self.assertFalse(validator.system_library_exists(Path("/usr/lib/swift/AbsentFixture.framework/AbsentFixture")))
 
     def test_dependency_needs_actual_rpath(self):
         self.executable(self.library())

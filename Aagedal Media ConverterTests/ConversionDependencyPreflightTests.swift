@@ -177,6 +177,21 @@ final class ConversionDependencyPreflightTests: XCTestCase {
         }
     }
 
+    func testKnownIncompatibleHelperIsRejectedButScriptsAndUnknownFormatsRemainEligible() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data([0xce, 0xfa, 0xed, 0xfe, 7, 0, 0, 0]).write(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path)
+        let preflight = ConversionDependencyPreflight { _ in file.path }
+        let failure = preflight.failure(for: .dcp)
+        XCTAssertTrue(failure?.contains("asdcp-wrap") == true)
+        XCTAssertTrue(failure?.contains("architecture") == true)
+        for contents in ["#!/bin/sh\nexit 0\n", "unknown executable format"] {
+            try Data(contents.utf8).write(to: file)
+            XCTAssertNil(preflight.failure(for: .dcp))
+        }
+    }
+
     func testConverterRejectsMissingHelpersBeforeCreatingOutputDirectories() async {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

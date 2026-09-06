@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import Darwin
 
 struct ToolDiagnostic: Identifiable, Sendable {
     let id: String
@@ -53,10 +54,16 @@ struct ToolDiagnostics: Sendable {
         let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
         let regularFile = (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
         let executable = regularFile && FileManager.default.isExecutableFile(atPath: path)
-        let architecture = Self.architecture(at: URL(fileURLWithPath: path))
+        let header = Self.header(at: url) ?? Data()
+        let architecture = Self.architecture(header: header)
         guard executable else {
             return ToolDiagnostic(id: id, name: name, path: path, architecture: architecture, executable: false,
                                   version: nil, failure: String(localized: "The selected file is missing or is not executable."))
+        }
+        if Self.isKnownIncompatible(header: header) {
+            return ToolDiagnostic(id: id, name: name, path: path, architecture: architecture,
+                                  executable: true, version: nil,
+                                  failure: String(localized: "The selected tool’s architecture is not supported on this Mac. Choose a compatible binary or reinstall the app."))
         }
         guard let arguments else {
             return ToolDiagnostic(id: id, name: name, path: path, architecture: architecture,
@@ -99,24 +106,65 @@ struct ToolDiagnostics: Sendable {
                               executable: executable, version: version, failure: failure)
     }
 
-    static func architecture(at url: URL) -> String {
-        guard let file = try? FileHandle(forReadingFrom: url) else { return String(localized: "Unknown") }
-        defer { try? file.close() }
-        guard let data = try? file.read(upToCount: 4096) else { return String(localized: "Unknown") }
-        return architecture(header: data)
+    /// O_NONBLOCK prevents a path replaced with a FIFO between stat and open from
+    /// blocking. Check the opened descriptor again before reading any bytes.
+    static func header(at url: URL) -> Data? {
+        var metadata = stat()
+        guard stat(url.path, &metadata) == 0,
+              metadata.st_mode & S_IFMT == S_IFREG else { return nil }
+        let descriptor = open(url.path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+        guard descriptor >= 0 else { return nil }
+        defer { close(descriptor) }
+        guard fstat(descriptor, &metadata) == 0,
+              metadata.st_mode & S_IFMT == S_IFREG else { return nil }
+        var bytes = [UInt8](repeating: 0, count: 4096)
+        let count = read(descriptor, &bytes, bytes.count)
+        guard count >= 0 else { return nil }
+        return Data(bytes.prefix(count))
     }
 
-    /// Recognizes thin/fat Mach-O headers without loading the binary or reading it in full.
-    static func architecture(header: Data) -> String {
-        let bytes = Array(header)
-        if bytes.starts(with: [0x23, 0x21]) { return String(localized: "Script (interpreter-dependent)") }
-        guard bytes.count >= 8 else { return String(localized: "Unknown") }
-        func word(_ offset: Int, littleEndian: Bool) -> UInt32? {
-            guard offset >= 0, offset + 4 <= bytes.count else { return nil }
-            let slice = bytes[offset..<(offset + 4)]
-            return (littleEndian ? Array(slice.reversed()) : Array(slice)).reduce(0) { ($0 << 8) | UInt32($1) }
+    static func architecture(at url: URL) -> String {
+        architecture(header: header(at: url) ?? Data())
+    }
+
+    enum HostArchitecture: Sendable {
+        case arm64, x86_64, unknown
+
+        static var current: Self {
+            // Query hardware rather than only the build architecture: an x86_64
+            // app running through Rosetta can still launch native arm64 helpers.
+            var arm64: Int32 = 0
+            var size = MemoryLayout.size(ofValue: arm64)
+            if sysctlbyname("hw.optional.arm64", &arm64, &size, nil, 0) == 0, arm64 == 1 {
+                return .arm64
+            }
+            #if arch(arm64)
+            return .arm64
+            #elseif arch(x86_64)
+            return .x86_64
+            #else
+            return .unknown
+            #endif
         }
-        func name(_ cpu: UInt32) -> String {
+    }
+
+    /// Reject only understood Mach-O CPU lists that have no usable slice.
+    /// Scripts/unknown formats are left to the launcher. x86_64 on Apple Silicon
+    /// remains eligible for Rosetta; its installation is not inferred here.
+    static func isKnownIncompatible(header: Data, host: HostArchitecture = .current) -> Bool {
+        guard let cpus = machOCPUs(header: header),
+              cpus.allSatisfy({ [UInt32(0x0100000c), 0x01000007, 12, 7].contains($0) }) else { return false }
+        switch host {
+        case .arm64: return !cpus.contains(0x0100000c) && !cpus.contains(0x01000007)
+        case .x86_64: return !cpus.contains(0x01000007)
+        case .unknown: return false
+        }
+    }
+
+    static func architecture(header: Data) -> String {
+        if header.starts(with: [0x23, 0x21]) { return String(localized: "Script (interpreter-dependent)") }
+        guard let cpus = machOCPUs(header: header) else { return String(localized: "Unknown") }
+        return cpus.map { cpu in
             switch cpu {
             case 0x0100000c: return "arm64"
             case 0x01000007: return "x86_64"
@@ -124,18 +172,28 @@ struct ToolDiagnostics: Sendable {
             case 7: return "i386"
             default: return String(localized: "Unknown")
             }
+        }.joined(separator: ", ")
+    }
+
+    /// Recognizes thin/fat Mach-O headers without loading the binary or reading it in full.
+    private static func machOCPUs(header: Data) -> [UInt32]? {
+        let bytes = Array(header)
+        guard bytes.count >= 8 else { return nil }
+        func word(_ offset: Int, littleEndian: Bool) -> UInt32 {
+            let slice = bytes[offset..<(offset + 4)]
+            return (littleEndian ? Array(slice.reversed()) : Array(slice)).reduce(0) { ($0 << 8) | UInt32($1) }
         }
-        let magic = word(0, littleEndian: false)!
+        let magic = word(0, littleEndian: false)
         switch magic {
-        case 0xcefaedfe, 0xcffaedfe: return name(word(4, littleEndian: true)!)
-        case 0xfeedface, 0xfeedfacf: return name(word(4, littleEndian: false)!)
+        case 0xcefaedfe, 0xcffaedfe: return [word(4, littleEndian: true)]
+        case 0xfeedface, 0xfeedfacf: return [word(4, littleEndian: false)]
         case 0xcafebabe, 0xcafebabf, 0xbebafeca, 0xbfbafeca:
             let littleEndian = magic == 0xbebafeca || magic == 0xbfbafeca
-            let count = Int(word(4, littleEndian: littleEndian)!)
+            let count = Int(word(4, littleEndian: littleEndian))
             let stride = magic == 0xcafebabf || magic == 0xbfbafeca ? 32 : 20
-            guard count > 0, count <= (bytes.count - 8) / stride else { return String(localized: "Unknown") }
-            return (0..<count).map { name(word(8 + $0 * stride, littleEndian: littleEndian)!) }.joined(separator: ", ")
-        default: return String(localized: "Unknown")
+            guard count > 0, count <= (bytes.count - 8) / stride else { return nil }
+            return (0..<count).map { word(8 + $0 * stride, littleEndian: littleEndian) }
+        default: return nil
         }
     }
 }

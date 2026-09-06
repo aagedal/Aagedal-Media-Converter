@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -14,6 +15,79 @@ final class ToolDiagnosticsTests: XCTestCase {
         XCTAssertEqual(ToolDiagnostics.architecture(header: Data(universal)), String(localized: "Unknown"))
         XCTAssertEqual(ToolDiagnostics.architecture(header: Data([0x23, 0x21])), String(localized: "Script (interpreter-dependent)"))
         XCTAssertEqual(ToolDiagnostics.architecture(header: Data()), String(localized: "Unknown"))
+    }
+
+    func testInspectionRejectsFIFODeviceAndDirectoryButFollowsRegularFileSymlink() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fifo = directory.appendingPathComponent("fifo")
+        XCTAssertEqual(mkfifo(fifo.path, 0o700), 0)
+        // Keep the old blocking implementation from hanging the test process:
+        // an open peer and queued bytes permit it to read, but must be rejected.
+        let peer = open(fifo.path, O_RDWR | O_NONBLOCK)
+        XCTAssertGreaterThanOrEqual(peer, 0)
+        defer { close(peer) }
+        let bytes: [UInt8] = [0x23, 0x21]
+        XCTAssertEqual(write(peer, bytes, bytes.count), bytes.count)
+        let fifoLink = directory.appendingPathComponent("fifo-link")
+        try FileManager.default.createSymbolicLink(at: fifoLink, withDestinationURL: fifo)
+        for url in [fifo, fifoLink, directory, URL(fileURLWithPath: "/dev/null")] {
+            XCTAssertNil(ToolDiagnostics.header(at: url))
+        }
+        let file = directory.appendingPathComponent("script")
+        try Data([0x23, 0x21] + Array(repeating: UInt8(0x20), count: 8192)).write(to: file)
+        let link = directory.appendingPathComponent("script-link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: file)
+        XCTAssertEqual(ToolDiagnostics.header(at: link)?.count, 4096)
+        XCTAssertEqual(ToolDiagnostics.architecture(at: link), String(localized: "Script (interpreter-dependent)"))
+    }
+
+    func testCompatibilityIsConservativeForScriptsUnknownFormatsAndRosetta() {
+        let arm64 = Data([0xcf, 0xfa, 0xed, 0xfe, 12, 0, 0, 1])
+        let intel = Data([0xcf, 0xfa, 0xed, 0xfe, 7, 0, 0, 1])
+        let legacy = Data([0xce, 0xfa, 0xed, 0xfe, 7, 0, 0, 0])
+        XCTAssertTrue(ToolDiagnostics.isKnownIncompatible(header: arm64, host: .x86_64))
+        XCTAssertFalse(ToolDiagnostics.isKnownIncompatible(header: arm64, host: .arm64))
+        XCTAssertFalse(ToolDiagnostics.isKnownIncompatible(header: intel, host: .arm64))
+        XCTAssertFalse(ToolDiagnostics.isKnownIncompatible(header: intel, host: .x86_64))
+        for host in [ToolDiagnostics.HostArchitecture.arm64, .x86_64] {
+            XCTAssertTrue(ToolDiagnostics.isKnownIncompatible(header: legacy, host: host))
+            for header in [Data(), Data("#!/bin/sh".utf8), Data("unknown executable".utf8),
+                           Data([0xcf, 0xfa, 0xed, 0xfe, 99, 0, 0, 1]),
+                           Data([0xca, 0xfe, 0xba, 0xbe, 0xff, 0xff, 0xff, 0xff])] {
+                XCTAssertFalse(ToolDiagnostics.isKnownIncompatible(header: header, host: host))
+            }
+        }
+        XCTAssertFalse(ToolDiagnostics.isKnownIncompatible(header: legacy, host: .unknown))
+        for (magic, littleEndian, stride) in [
+            ([UInt8(0xca), 0xfe, 0xba, 0xbe], false, 20),
+            ([UInt8(0xca), 0xfe, 0xba, 0xbf], false, 32),
+            ([UInt8(0xbe), 0xba, 0xfe, 0xca], true, 20),
+            ([UInt8(0xbf), 0xba, 0xfe, 0xca], true, 32)
+        ] {
+            var universal = magic + (littleEndian ? [2, 0, 0, 0] : [0, 0, 0, 2])
+            for cpu in [UInt8(12), 7] {
+                universal += (littleEndian ? [cpu, 0, 0, 1] : [1, 0, 0, cpu]) + Array(repeating: 0, count: stride - 4)
+            }
+            XCTAssertEqual(ToolDiagnostics.architecture(header: Data(universal)), "arm64, x86_64")
+            XCTAssertFalse(ToolDiagnostics.isKnownIncompatible(header: Data(universal), host: .x86_64))
+            XCTAssertFalse(ToolDiagnostics.isKnownIncompatible(header: Data(universal), host: .arm64))
+        }
+    }
+
+    func testIncompatibleAvailabilityOnlyHelperFailsWithoutLaunch() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data([0xce, 0xfa, 0xed, 0xfe, 7, 0, 0, 0]).write(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: file.path)
+        let runner = DiagnosticRunner(output: "must not launch")
+        let result = try await ToolDiagnostics(runner: runner).check(id: "avmenc", name: "AV2 encoder", path: file.path, arguments: nil)
+        XCTAssertTrue(result.executable)
+        XCTAssertNotNil(result.failure)
+        XCTAssertNil(result.note)
+        let requests = await runner.requests
+        XCTAssertTrue(requests.isEmpty)
     }
 
     func testMissingAndNonExecutableToolsDoNotLaunch() async throws {

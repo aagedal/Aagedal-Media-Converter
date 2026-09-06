@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 433 tests pass. The
+- The unit-test baseline is green: 448 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 433 unit tests. The UI test target now has deterministic smoke
+- There are 448 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,481 entries. All 59 previously missing App Intent
+- The string catalog has 1,484 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -964,6 +964,18 @@ and shared-session ownership. Stream startup itself still needs a deadline with 
 cleanup; a permanently stalled start retains its reservation and access. Preview selection
 supersession, configuration changes, and live capture validation remain (Codex, 2026-09-06).
 
+Recording and preview stream startup now also has a fifteen-second non-joining
+deadline. Atomic adoption/abandonment owns late-success shutdown exactly once;
+failed starts retire sample delivery and finalize partial writers before releasing
+recording folder ownership. Preview starts now reserve their display and reject
+superseded discovery, permission, and startup results. New selections, recording
+starts, and preview shutdown retire pending preview delivery, preventing an old
+preview from replacing a recording or resurrecting a deselected display. Eight
+deterministic regressions cover startup success/failure, timeout/cancellation,
+late callbacks, preview generations, and reservation cleanup. Live configuration
+updates, live capture/permission flows, and the wider callback audit remain
+(Codex, 2026-09-06).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1150,6 +1162,14 @@ empty list), malformed data recovery, and idempotence. Migration no longer overw
 newer destinations or deletes legacy data after a decoding failure; malformed source
 lists remain untouched for repair and retry. Other feature settings and schema
 migration coverage remain open (Codex, 2026-09-06).
+
+DCP exports now capture resolution, rational frame rate, bitrate, scaling mode,
+and JP2 retention before conversion suspends. The same injected snapshot drives
+JPEG 2000 command generation and final package dimensions, rate, and cleanup,
+preventing a Settings change during encoding from creating inconsistent package
+metadata. Three regressions cover isolated defaults, invalid persisted choices,
+and immutable injected command settings. IMF, image sequences, other codec
+families, and UI/request-generation settings remain (Codex, 2026-09-06).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1362,6 +1382,16 @@ results. Five additional regressions cover source selection, early rejection, ti
 and cancellation. Unavailable topology retains the existing extraction fallback; codec
 and architecture compatibility remain open (Codex, 2026-09-06).
 
+Tool inspection now reads at most 4 KiB from a verified regular-file descriptor,
+using nonblocking open and a second descriptor check to reject FIFOs, devices,
+and replaced paths without waiting on them. Diagnostics and package/AV2 helper
+preflight reject recognized Mach-O CPU sets with no compatible host slice.
+Scripts, unknown formats/CPUs, and x86_64 on Apple Silicon remain eligible for
+launch; Rosetta installation, CPU subtypes, library availability, and feature
+codec compatibility are not inferred. Four additional regressions cover special
+files, universal headers, compatibility policy, and preflight rejection. Both new
+recovery messages are translated into Norwegian (Codex, 2026-09-06).
+
 ## Priority 5 — Release and dependency hygiene
 
 Target: before the next public release, then automate.
@@ -1435,9 +1465,40 @@ notice inventories. This closes packaging/discovery of existing notices only; th
 99 unresolved tool/dylib attributions and broader provenance work remain unchanged
 (Codex, 2026-09-06).
 
+Release validation now emits an optional JSON report of logical bundle bytes,
+Mach-O sizes, largest files, and static dependency reachability from every
+executable/helper. Symlink targets are counted once, and libraries outside the
+static closure are explicitly not treated as safe removal candidates. Release
+CI retains the report for 90 days; publishing records it from the extracted final
+ZIP. Real-bundle inspection exposed and fixed a validator bug: an absent candidate
+under a system rpath could incorrectly satisfy a bundled-library dependency.
+System rpath candidates now require an actual file or dyld shared-cache entry.
+Six added regression tests cover measurement, helper roots, special files,
+failed reports, and system-rpath resolution; all 43 release-script tests pass.
+The unsigned Release baseline is 275,341,835 logical file bytes and a
+118,295,174-byte ZIP using distribution compression options; see
+`docs/release-footprint-2026-09-06.json` and the dependency-license document.
+No binaries were removed and no license assignments changed. Runtime memory,
+dynamic reachability, complete attribution, and credentialed release checks
+remain (Codex, 2026-09-06).
+
 ## Suggested delivery sequence
 
-Latest validation (2026-09-06, Codex): all 433 unit tests pass with zero failures or
+Latest validation (2026-09-06, Codex): all 448 unit tests pass with zero failures
+or skips using the permanent shared unit-only scheme, including fifteen new
+capture, DCP-settings, and helper-inspection regressions. The unsigned Release
+build passes; the strengthened bundle audit verifies all 44 Mach-O images and
+six packaged notices. All 43 release-script tests, manifest freshness, and the
+localization audit pass (1,484 entries, 15 intentional omissions). Manual app
+launch exposed the empty queue, but the computer-use service subsequently returned
+stale menu elements and no screenshot, preventing About/capture inspection.
+The existing bilingual Tool Diagnostics UI test also could not initialize:
+XCTest timed out enabling automation mode before any assertions ran. Live
+recording, VoiceOver, broader bilingual UI, and credentialed release validation
+remain outstanding.
+
+
+Previous validation (2026-09-06, Codex): all 433 unit tests pass with zero failures or
 skips using the permanent shared unit-only scheme. The unsigned Release build passes; its bundle audit verifies all 44 Mach-O images
 and all six packaged license notices. All 37 release-script tests, bundled-manifest freshness, and localization checks pass
 (1,481 entries, 15 intentional omissions). The six packaged notices also match the
@@ -1449,7 +1510,7 @@ distribution validation uses the Release app. No publishing or credentialed chec
 were performed.
 
 
-Latest validation (2026-09-06, Codex): Debug compilation and all 414 unit tests pass
+Previous validation (2026-09-06, Codex): Debug compilation and all 414 unit tests pass
 with parallel workers enabled, including sixteen new upload-migration, audio-meter
 lifecycle, and conversion-preflight regressions. All 31 release-script tests, bundled
 manifest freshness, and localization checks pass (1,476 entries, 15 intentional

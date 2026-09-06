@@ -463,6 +463,7 @@ actor FFMPEGConverter {
     func convert(
         request: ConversionRequest,
         av2Settings: AV2Settings? = nil,
+        dcpSettings: DCPSettings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -470,8 +471,9 @@ actor FFMPEGConverter {
         let inputURL = request.inputURL
         let outputURL = request.outputURL
         let preset = request.preset
-        // Capture all AV2 preferences before cancellation or metadata work can suspend.
+        // Capture encoding and packaging preferences before cancellation or metadata work can suspend.
         let capturedAV2Settings = preset == .av2 ? (av2Settings ?? AV2Settings()) : nil
+        let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -788,6 +790,7 @@ actor FFMPEGConverter {
                 ffmpegOutputURL: ffmpegOutputURL,
                 ffmpegPath: ffmpegPath,
                 preset: preset,
+                dcpSettings: capturedDCPSettings,
                 waveformRequest: waveformRequest,
                 audioRoutingConfig: request.audioRoutingConfig,
                 trimStart: request.trimStart,
@@ -974,6 +977,7 @@ actor FFMPEGConverter {
             inputURL: effectiveInputURL,
             outputFileURL: ffmpegOutputURL,  // Use temp file for AVC-Intra, final file otherwise
             preset: preset,
+            dcpSettings: capturedDCPSettings,
             comment: request.comment,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
@@ -1186,13 +1190,12 @@ actor FFMPEGConverter {
                 }
 
                 // DCP assembly: wrap JP2 frames + audio WAV into DCP-compliant MXF using asdcp-wrap
-                if success && capturedIsDCPExport, let dcpFolder = capturedDCPSubfolderURL {
+                if success && capturedIsDCPExport, let dcpFolder = capturedDCPSubfolderURL,
+                   let dcpSettings = capturedDCPSettings {
                     Self.logger.info("Starting DCP assembly...")
 
-                    let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.dcpResolutionKey) ?? AppConstants.defaultDCPResolution
-                    let resolution = DCPResolution(rawValue: resolutionRaw) ?? .twoKFull
-                    let frameRateRaw = UserDefaults.standard.string(forKey: AppConstants.dcpFrameRateKey) ?? AppConstants.defaultDCPFrameRate
-                    let frameRate = DCPFrameRate(rawValue: frameRateRaw) ?? .fps24
+                    let resolution = dcpSettings.resolution
+                    let frameRate = dcpSettings.frameRate
 
                     let fm = FileManager.default
                     let jp2Dir = capturedFinalOutputURL.deletingLastPathComponent()
@@ -1283,8 +1286,7 @@ actor FFMPEGConverter {
                     }
 
                     // Clean up JP2 images unless user wants to keep them
-                    let keepJP2 = UserDefaults.standard.bool(forKey: AppConstants.dcpKeepJP2ImagesKey)
-                    if !keepJP2 {
+                    if !dcpSettings.keepJP2Images {
                         Self.cleanupTempFile(at: jp2Dir, label: "DCP JP2 images")
                     }
 
@@ -3272,6 +3274,7 @@ actor FFMPEGConverter {
         ffmpegOutputURL: URL,
         ffmpegPath: String,
         preset: ExportPreset,
+        dcpSettings: DCPSettings?,
         waveformRequest: WaveformVideoRequest,
         audioRoutingConfig: AudioRoutingConfig?,
         trimStart: Double?,
@@ -3374,6 +3377,7 @@ actor FFMPEGConverter {
             audioInputURL: inputURL,
             outputFileURL: ffmpegOutputURL,
             preset: preset,
+            dcpSettings: dcpSettings,
             width: waveformRequest.width,
             height: waveformRequest.height,
             frameRate: waveformRequest.frameRate,

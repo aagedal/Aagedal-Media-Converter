@@ -90,6 +90,10 @@ struct ConversionDependencyPreflight: Sendable {
             let url = URL(fileURLWithPath: path).resolvingSymlinksInPath()
             if (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true,
                FileManager.default.isExecutableFile(atPath: url.path) {
+                if ToolDiagnostics.isKnownIncompatible(header: ToolDiagnostics.header(at: url) ?? Data()) {
+                    let name = helper.rawValue
+                    return String(localized: "Export requires the bundled \(name) helper, whose architecture is not supported on this Mac. Open Settings > Tool Diagnostics to inspect the tools, or reinstall the app.", comment: "Early conversion failure when a required helper has a known incompatible Mach-O architecture.")
+                }
                 return nil
             }
         }

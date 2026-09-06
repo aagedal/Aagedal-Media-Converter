@@ -1,5 +1,10 @@
 # v.4.3.0
 
+- **Screen capture starts and previews recover from delayed callbacks.** Startup has a deadline, late successful starts are stopped, and old previews cannot replace a recording or restore a deselected display.
+- **DCP exports keep their encoding and package settings consistent.** Resolution, frame rate, bitrate, scaling, and intermediate-image retention are captured once per conversion.
+- **Tool Diagnostics rejects special files without hanging** and reports known incompatible helper architectures before package or AV2 export starts.
+- **Release validation checks system search paths accurately** and records bundle size and static dependency reports for cleanup planning.
+
 - **Screen-recording shutdown has a deadline.** Retired streams cannot append more samples or revive meters; stopped sessions reject late recording starts and retain folder access until all recordings finish.
 - **IMF checks audio helpers for concat and image-sequence sources before encoding.** Missing wrappers are detected using the same source selection as package audio extraction.
 - **Bundled license notices are available offline in About > Licenses.** Release validation verifies that all existing notices are packaged intact.

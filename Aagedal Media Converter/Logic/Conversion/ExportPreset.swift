@@ -1632,41 +1632,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             }
             return args
         case .dcp:
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.dcpResolutionKey) ?? AppConstants.defaultDCPResolution
-            let resolution = DCPResolution(rawValue: resolutionRaw) ?? .twoKFull
-            let frameRateRaw = UserDefaults.standard.string(forKey: AppConstants.dcpFrameRateKey) ?? AppConstants.defaultDCPFrameRate
-            let frameRate = DCPFrameRate(rawValue: frameRateRaw) ?? .fps24
-            let bitrateRaw = UserDefaults.standard.string(forKey: AppConstants.dcpBitrateKey) ?? AppConstants.defaultDCPBitrate
-            let bitrate = DCPBitrate(rawValue: bitrateRaw) ?? .high
-            let scalingModeRaw = UserDefaults.standard.string(forKey: AppConstants.dcpScalingModeKey) ?? AppConstants.defaultDCPScalingMode
-            let scalingMode = DCPScalingMode(rawValue: scalingModeRaw) ?? .fill
-
-            let scaleFilter: String
-            switch scalingMode {
-            case .fill:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=increase,crop=\(resolution.width):\(resolution.height)"
-            case .fit:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=decrease,pad=\(resolution.width):\(resolution.height):-1:-1:color=black"
-            }
-
-            var args = commonArgs + [
-                "-c:v", "libopenjpeg",
-                "-profile", resolution.openjpegProfile,
-            ]
-            if let cinemaMode = frameRate.cinemaModeFor(resolution: resolution) {
-                args += ["-cinema_mode", cinemaMode]
-            }
-            args += [
-                "-pix_fmt", "xyz12le",
-                "-b:v", bitrate.ffmpegValue,
-                "-r", frameRate.ffmpegValue,
-                "-vf", scaleFilter,
-                "-map", "0:v:0",
-                "-an",
-            ]
-            // DCP outputs JP2 image sequence (not MXF) — asdcp-wrap creates the final MXF
-            // The output path pattern (frame_%06d.jp2) is set by FFMPEGConverter
-            return args
+            return DCPSettings().ffmpegArguments
         case .imfJ2K:
             let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.imfResolutionKey) ?? AppConstants.defaultIMFResolution
             let resolution = IMFResolution(rawValue: resolutionRaw) ?? .hd1080

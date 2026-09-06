@@ -248,7 +248,7 @@ xcrun swift scripts/verify-update-signature.swift "$RELEASE_ZIP" "$APP_PATH/Cont
 VERIFY_DIR="$BUILD_DIR/verify-distribution"
 mkdir -p "$VERIFY_DIR"
 /usr/bin/ditto -x -k "$RELEASE_ZIP" "$VERIFY_DIR"
-python3 scripts/verify-release-bundle.py "$VERIFY_DIR/$SCHEME.app" --architecture arm64 --manifest BundledDependencies.json
+python3 scripts/verify-release-bundle.py "$VERIFY_DIR/$SCHEME.app" --architecture arm64 --manifest BundledDependencies.json --report "$BUILD_DIR/Release-Footprint.json"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$VERIFY_DIR/$SCHEME.app"
 xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
 /usr/sbin/spctl --assess --type execute --verbose=2 "$VERIFY_DIR/$SCHEME.app"

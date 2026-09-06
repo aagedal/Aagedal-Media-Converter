@@ -8,6 +8,7 @@ loader/executable paths and inherited LC_RPATHs, without DYLD_* overrides.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import json
 import os
@@ -15,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import plistlib
 import re
+import stat
 import subprocess
 import sys
 
@@ -69,6 +71,23 @@ def is_system(path: str) -> bool:
     return normalized.startswith(("/usr/lib/", "/System/Library/"))
 
 
+def system_library_exists(path: Path) -> bool:
+    """An rpath search candidate is not resolved merely by being under /usr/lib.
+
+    Modern Apple libraries may exist only in dyld's shared cache. Ask the host's
+    system loader about those paths without loading the candidate library.
+    """
+    if path.is_file():
+        return True
+    try:
+        contains = ctypes.CDLL("/usr/lib/system/libdyld.dylib")._dyld_shared_cache_contains_path
+        contains.argtypes = [ctypes.c_char_p]
+        contains.restype = ctypes.c_bool
+        return contains(os.fsencode(path))
+    except (OSError, AttributeError):
+        return False
+
+
 def read_image(path: Path, architecture: str) -> Image:
     arches = output("/usr/bin/lipo", "-archs", str(path)).split()
     if architecture not in arches:
@@ -93,16 +112,20 @@ def read_image(path: Path, architecture: str) -> Image:
     return Image(executable, dependencies, rpaths)
 
 
-def verify(bundle: Path, architecture: str = "arm64") -> int:
+def verify(bundle: Path, architecture: str = "arm64", report: dict | None = None) -> int:
     bundle = bundle.resolve(strict=True)
     info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
     main = (bundle / "Contents/MacOS" / info["CFBundleExecutable"]).resolve()
     images: dict[Path, Image] = {}
+    file_sizes: dict[Path, int] = {}
     for path in sorted(bundle.rglob("*")):
         if path.is_symlink() and not path.resolve().is_relative_to(bundle):
             raise ValueError(f"{path}: symlink escapes the app bundle")
-        if not path.is_file():
+        if path.is_dir():
             continue
+        if not stat.S_ISREG(path.stat().st_mode):
+            raise ValueError(f"{path}: bundle contains a non-regular file")
+        file_sizes[path.resolve()] = path.stat().st_size
         with path.open("rb") as handle:
             magic = handle.read(4)
         if magic in MACHO_MAGICS:
@@ -147,8 +170,10 @@ def verify(bundle: Path, architecture: str = "arm64") -> int:
             target = None
             for candidate in candidates:
                 if is_system(str(candidate)):
-                    target = candidate
-                    break
+                    if system_library_exists(candidate):
+                        target = candidate
+                        break
+                    continue
                 if not candidate.is_relative_to(bundle):
                     raise ValueError(f"{path}: dependency {dependency} resolves outside the bundle: {candidate}")
                 if candidate.is_file():
@@ -165,10 +190,36 @@ def verify(bundle: Path, architecture: str = "arm64") -> int:
     for path, image in images.items():
         if image.executable:
             walk(path, path, ())
+    executable_reached = reached.copy()
     # Also cover plug-ins/dlopen libraries not referenced by LC_LOAD_DYLIB.
     main_rpaths = tuple(expand(value, main, main) for value in images[main].rpaths)
     for path in images.keys() - reached:
         walk(path, main, main_rpaths)
+    if report is not None:
+        def relative(path: Path) -> str:
+            return path.relative_to(bundle).as_posix()
+
+        report.update({
+            "schemaVersion": 1,
+            "architecture": architecture,
+            "appVersion": info.get("CFBundleShortVersionString"),
+            "appBuild": info.get("CFBundleVersion"),
+            "measurement": "Logical file bytes; symlink targets counted once. Not allocated disk space or runtime memory.",
+            "bundleFileBytes": sum(file_sizes.values()),
+            "regularFileCount": len(file_sizes),
+            "machOBytes": sum(file_sizes[path] for path in images),
+            "machOImageCount": len(images),
+            "reachabilityCaveat": "Executable roots include every bundled helper. Libraries outside their static dependency closure may be loaded dynamically; this report does not authorize removal.",
+            "images": [{
+                "path": relative(path),
+                "bytes": file_sizes[path],
+                "executable": image.executable,
+                "reachableFromExecutable": path in executable_reached,
+                "loadDependencies": image.dependencies,
+            } for path, image in sorted(images.items())],
+            "largestFiles": [{"path": relative(path), "bytes": size}
+                             for path, size in sorted(file_sizes.items(), key=lambda entry: (-entry[1], str(entry[0])))[:20]],
+        })
     return len(images)
 
 
@@ -177,10 +228,14 @@ def main() -> int:
     parser.add_argument("bundle", type=Path)
     parser.add_argument("--architecture", default="arm64")
     parser.add_argument("--manifest", type=Path, help="Also verify packaged license notices against this dependency manifest")
+    parser.add_argument("--report", type=Path, help="Write a JSON size and static dependency reachability report after validation")
     args = parser.parse_args()
     try:
-        count = verify(args.bundle, args.architecture)
+        report = {} if args.report else None
+        count = verify(args.bundle, args.architecture, report)
         notice_count = verify_notices(args.bundle, args.manifest) if args.manifest else None
+        if args.report:
+            args.report.write_text(json.dumps(report, indent=2) + "\n")
     except (OSError, ValueError, KeyError, plistlib.InvalidFileException, subprocess.SubprocessError) as error:
         print(f"ERROR: release bundle validation failed: {error}", file=sys.stderr)
         return 1

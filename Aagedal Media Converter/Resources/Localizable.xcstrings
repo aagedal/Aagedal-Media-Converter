@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Export requires the bundled %@ helper, whose architecture is not supported on this Mac. Open Settings > Tool Diagnostics to inspect the tools, or reinstall the app.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Eksport krever det medfølgende hjelpeverktøyet %@, men arkitekturen støttes ikke på denne Macen. Åpne Innstillinger > Verktøydiagnostikk for å kontrollere verktøyene, eller installer appen på nytt."
+        }
+      }
+    }
+  },
+  "The selected tool’s architecture is not supported on this Mac. Choose a compatible binary or reinstall the app.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Arkitekturen til det valgte verktøyet støttes ikke på denne Macen. Velg en kompatibel binærfil eller installer appen på nytt."
+        }
+      }
+    }
+  },
+  "Timed out while starting screen capture. Please try again.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Tidsavbrudd under oppstart av skjermopptak. Prøv igjen."
+        }
+      }
+    }
+  },
     "Timed out while stopping screen capture. The recording may be incomplete.": {
       "localizations": {
         "nb": {
