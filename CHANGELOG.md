@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **IMF exports keep encoding and package settings consistent**, including resolution, frame rate, color, codec profile, and intermediate-file retention when preferences change during a job.
+- **Capture preview changes use one guarded restart**, including system-audio and microphone-device changes, while active recordings retain their settings.
+- **Watch-folder monitoring stops reliably during rapid restarts**, preventing a cancelled polling task from scanning alongside its replacement.
+
 - **Screen capture starts and previews recover from delayed callbacks.** Startup has a deadline, late successful starts are stopped, and old previews cannot replace a recording or restore a deselected display.
 - **DCP exports keep their encoding and package settings consistent.** Resolution, frame rate, bitrate, scaling, and intermediate-image retention are captured once per conversion.
 - **Tool Diagnostics rejects special files without hanging** and reports known incompatible helper architectures before package or AV2 export starts.

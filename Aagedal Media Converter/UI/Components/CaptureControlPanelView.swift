@@ -314,6 +314,8 @@ struct CaptureControlPanelView: View {
                 captureExcludeCurrentApp: captureExcludeCurrentApp,
                 captureFrameRateRaw: captureFrameRateRaw,
                 captureIncludeMicrophone: captureIncludeMicrophone,
+                captureIncludeSystemAudio: captureIncludeSystemAudio,
+                captureMicrophoneDeviceID: captureMicrophoneDeviceID,
                 captureDynamicRangeRaw: captureDynamicRangeRaw,
                 excludedAppBundleIDs: excludedAppBundleIDs,
                 captureRegionX: captureRegionX,
@@ -1109,18 +1111,17 @@ struct CaptureControlPanelView: View {
 
     // MARK: - Preview reconciliation
 
-    /// Apply the current selection to the manager (adds new tiles, drops/finalizes removed ones)
-    /// without disturbing existing tiles.
+    /// Apply the current selection and settings, preserving unchanged previews
+    /// and active recordings.
     private func reconcileSelection() async {
         guard isViewActive else { return }
         await captureManager.setSelectedDisplays(effectiveDisplayIDs, settings: makeSettings(), maxPreviewWidth: previewPixelWidth)
     }
 
-    /// Rebuild all preview tiles with the latest settings (used when a non-selection setting changes,
+    /// Rebuild changed preview tiles with the latest settings (used when a non-selection setting changes,
     /// e.g. frame rate or cursor visibility). Recording tiles are left running.
     private func refreshPreviews() async {
         guard isViewActive else { return }
-        await captureManager.stopPreview()
         await captureManager.setSelectedDisplays(effectiveDisplayIDs, settings: makeSettings(), maxPreviewWidth: previewPixelWidth)
     }
 
@@ -1342,6 +1343,8 @@ private struct PreviewRefreshModifier: ViewModifier {
     let captureExcludeCurrentApp: Bool
     let captureFrameRateRaw: String
     let captureIncludeMicrophone: Bool
+    let captureIncludeSystemAudio: Bool
+    let captureMicrophoneDeviceID: String
     let captureDynamicRangeRaw: String
     let excludedAppBundleIDs: Set<String>
     let captureRegionX: Double
@@ -1351,16 +1354,22 @@ private struct PreviewRefreshModifier: ViewModifier {
     let refreshPreview: () async -> Void
 
     func body(content: Content) -> some View {
-        content
-            .onChange(of: captureHideCursor) { _, _ in Task { await refreshPreview() } }
-            .onChange(of: captureExcludeCurrentApp) { _, _ in Task { await refreshPreview() } }
-            .onChange(of: captureFrameRateRaw) { _, _ in Task { await refreshPreview() } }
-            .onChange(of: captureIncludeMicrophone) { _, _ in Task { await refreshPreview() } }
-            .onChange(of: captureDynamicRangeRaw) { _, _ in Task { await refreshPreview() } }
+        captureOptions(content: content)
             .onChange(of: excludedAppBundleIDs) { _, _ in Task { await refreshPreview() } }
             .onChange(of: captureRegionX) { _, _ in Task { await refreshPreview() } }
             .onChange(of: captureRegionY) { _, _ in Task { await refreshPreview() } }
             .onChange(of: captureRegionWidth) { _, _ in Task { await refreshPreview() } }
             .onChange(of: captureRegionHeight) { _, _ in Task { await refreshPreview() } }
+    }
+
+    private func captureOptions(content: Content) -> some View {
+        content
+            .onChange(of: captureHideCursor) { _, _ in Task { await refreshPreview() } }
+            .onChange(of: captureExcludeCurrentApp) { _, _ in Task { await refreshPreview() } }
+            .onChange(of: captureFrameRateRaw) { _, _ in Task { await refreshPreview() } }
+            .onChange(of: captureIncludeMicrophone) { _, _ in Task { await refreshPreview() } }
+            .onChange(of: captureIncludeSystemAudio) { _, _ in Task { await refreshPreview() } }
+            .onChange(of: captureMicrophoneDeviceID) { _, _ in Task { await refreshPreview() } }
+            .onChange(of: captureDynamicRangeRaw) { _, _ in Task { await refreshPreview() } }
     }
 }

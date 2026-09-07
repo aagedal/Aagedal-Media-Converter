@@ -1634,74 +1634,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .dcp:
             return DCPSettings().ffmpegArguments
         case .imfJ2K:
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.imfResolutionKey) ?? AppConstants.defaultIMFResolution
-            let resolution = IMFResolution(rawValue: resolutionRaw) ?? .hd1080
-            let frameRateRaw = UserDefaults.standard.string(forKey: AppConstants.imfFrameRateKey) ?? AppConstants.defaultIMFFrameRate
-            let frameRate = IMFFrameRate(rawValue: frameRateRaw) ?? .fps24
-            let bitrateRaw = UserDefaults.standard.string(forKey: AppConstants.imfJ2KBitrateKey) ?? AppConstants.defaultIMFJ2KBitrate
-            let bitrate = DCPBitrate(rawValue: bitrateRaw) ?? .high
-            let scalingModeRaw = UserDefaults.standard.string(forKey: AppConstants.imfScalingModeKey) ?? AppConstants.defaultIMFScalingMode
-            let scalingMode = IMFScalingMode(rawValue: scalingModeRaw) ?? .fit
-            let colorRaw = UserDefaults.standard.string(forKey: AppConstants.imfJ2KColorEncodingKey) ?? AppConstants.defaultIMFJ2KColorEncoding
-            let color = IMFColorEncoding(rawValue: colorRaw) ?? .rec709
-
-            let scaleFilter: String
-            switch scalingMode {
-            case .fill:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=increase,crop=\(resolution.width):\(resolution.height)"
-            case .fit:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=decrease,pad=\(resolution.width):\(resolution.height):-1:-1:color=black"
-            }
-
-            // J2K image sequence: NOT cinema profile (that's DCP); IMF App #2e uses broadcast J2K profiles
-            // No -profile or -cinema_mode; libopenjpeg picks a profile suitable for the YCbCr essence.
-            // Note: deep HDR variants may need additional ffmpeg flags; rely on the JP2 → MXF wrap to flag any non-conformance.
-            let args = commonArgs + [
-                "-c:v", "libopenjpeg",
-                "-pix_fmt", "yuv422p10le",
-                "-color_primaries", color.colorPrimaries,
-                "-color_trc", color.colorTRC,
-                "-colorspace", color.colorSpace,
-                "-b:v", bitrate.ffmpegValue,
-                "-r", frameRate.ffmpegValue,
-                "-vf", scaleFilter,
-                "-map", "0:v:0",
-                "-an",
-            ]
-            _ = args  // The IMF post-process step in FFMPEGConverter takes over from JP2 frames.
-            return args
+            return IMFSettings().ffmpegArguments(application: .app2e)
         case .imfProRes:
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.imfResolutionKey) ?? AppConstants.defaultIMFResolution
-            let resolution = IMFResolution(rawValue: resolutionRaw) ?? .hd1080
-            let frameRateRaw = UserDefaults.standard.string(forKey: AppConstants.imfFrameRateKey) ?? AppConstants.defaultIMFFrameRate
-            let frameRate = IMFFrameRate(rawValue: frameRateRaw) ?? .fps24
-            let scalingModeRaw = UserDefaults.standard.string(forKey: AppConstants.imfScalingModeKey) ?? AppConstants.defaultIMFScalingMode
-            let scalingMode = IMFScalingMode(rawValue: scalingModeRaw) ?? .fit
-            let colorRaw = UserDefaults.standard.string(forKey: AppConstants.imfJ2KColorEncodingKey) ?? AppConstants.defaultIMFJ2KColorEncoding
-            let color = IMFColorEncoding(rawValue: colorRaw) ?? .rec709
-            let proResProfileRaw = UserDefaults.standard.string(forKey: AppConstants.imfProResProfileKey) ?? AppConstants.defaultIMFProResProfile
-            let proResProfile = IMFProResProfile(rawValue: proResProfileRaw) ?? .proRes422HQ
-
-            let scaleFilter: String
-            switch scalingMode {
-            case .fill:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=increase,crop=\(resolution.width):\(resolution.height)"
-            case .fit:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=decrease,pad=\(resolution.width):\(resolution.height):-1:-1:color=black"
-            }
-
-            return commonArgs + [
-                "-c:v", "prores_ks",
-                "-profile:v", proResProfile.ffmpegProfile,
-                "-pix_fmt", proResProfile.pixelFormat,
-                "-color_primaries", color.colorPrimaries,
-                "-color_trc", color.colorTRC,
-                "-colorspace", color.colorSpace,
-                "-r", frameRate.ffmpegValue,
-                "-vf", scaleFilter,
-                "-map", "0:v:0",
-                "-an",
-            ]
+            return IMFSettings().ffmpegArguments(application: .app5)
         case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
             guard let slot = customSlotIndex else { return commonArgs }
             let customArgs = ExportPreset.parseCustomCommand(ExportPreset.customCommandString(for: slot))

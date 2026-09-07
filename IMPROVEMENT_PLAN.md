@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-06
+Last reviewed: 2026-09-07
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 448 tests pass. The
+- The unit-test baseline is green: 459 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 448 unit tests. The UI test target now has deterministic smoke
+- There are 459 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -976,6 +976,21 @@ late callbacks, preview generations, and reservation cleanup. Live configuration
 updates, live capture/permission flows, and the wider callback audit remain
 (Codex, 2026-09-06).
 
+Preview configuration reconciliation now compares each tile's captured settings and
+width, replaces changed previews through the bounded stream lifecycle, and leaves
+active recordings intact. UI refreshes use that owned transition directly; system-audio
+and microphone-device changes now also trigger refresh. Two deterministic tests cover
+configuration equality, individual option changes, width changes, and recording
+preservation. Actual ScreenCaptureKit/permission interaction remains unverified
+(Codex, 2026-09-07).
+
+Watch-folder polling now exits on cancellation even if a replacement monitor has
+already set the shared monitoring flag back to true. The actor checks cancellation
+again before scanning, and the polling task releases its weak manager reference while
+waiting. Three deterministic tests cover delayed old callbacks after replacement,
+cancellation during a scan, and delay failure without touching user folders or
+preferences (Codex, 2026-09-07).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1088,6 +1103,13 @@ cover failures, selection boundaries, empty merges, and stale indices. Actual up
 execution remains in UploadManager; conversion execution, broader state transitions,
 and view coordinators remain open (Codex, 2026-09-06).
 
+`MergeCompatibilityPolicy` now owns eligibility, compatibility, stable grouping,
+and conformance analysis. The manager retains metadata discovery/cache and compatible
+public wrappers, while both UI and async evaluation use the same comparison policy.
+Four direct regressions protect eligibility exclusions, codec/PAR/frame-rate tolerance,
+group ordering and missing metadata, and conformance decisions. Broader execution and
+view coordinator extractions remain open (Codex, 2026-09-07).
+
 ### 3.2 Make conversion plans typed
 
 - Replace repeated mutation of raw `[String]` arguments with a typed conversion
@@ -1170,6 +1192,14 @@ preventing a Settings change during encoding from creating inconsistent package
 metadata. Three regressions cover isolated defaults, invalid persisted choices,
 and immutable injected command settings. IMF, image sequences, other codec
 families, and UI/request-generation settings remain (Codex, 2026-09-06).
+
+IMF App 2e and App 5 now also capture resolution, rational frame rate, JPEG 2000
+bitrate, scaling, color encoding, ProRes profile, and intermediate retention before
+conversion suspends. Encoding, essence wrapping, manifest generation, and cleanup use
+that same injected snapshot. Two regressions cover defaults/invalid values and both
+applications' commands after preferences change. Image-sequence and other codec
+settings, UI/request-generation settings, and remaining schema migrations remain
+open (Codex, 2026-09-07).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1484,7 +1514,18 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-06, Codex): all 448 unit tests pass with zero failures
+Latest validation (2026-09-07, Codex): Debug compilation and all 459 unit tests
+pass with zero failures or skips using the permanent shared unit-only scheme,
+including eleven new IMF-settings, merge-policy, preview-configuration, and
+watch-polling regressions. All 43 release-script tests, manifest freshness, and
+localization checks pass (1,484 entries, 15 intentional omissions). An initial
+compile exposed a SwiftUI expression-complexity error; splitting the refresh
+modifier fixed it before the successful full run. Independent capture lifecycle
+review found no further regressions. No live capture, VoiceOver, UI automation,
+Release build, or credentialed release checks were performed for this batch.
+The outstanding manual validation and roadmap work below remain open.
+
+Previous validation (2026-09-06, Codex): all 448 unit tests pass with zero failures
 or skips using the permanent shared unit-only scheme, including fifteen new
 capture, DCP-settings, and helper-inspection regressions. The unsigned Release
 build passes; the strengthened bundle audit verifies all 44 Mach-O images and
