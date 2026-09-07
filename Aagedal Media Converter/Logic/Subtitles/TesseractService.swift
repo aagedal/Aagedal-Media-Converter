@@ -84,11 +84,19 @@ actor TesseractService {
     /// Used both when creating a run dir and when sweeping orphans on launch.
     private static let tempDirPrefix = "TesseractOCR-"
 
-    private var isCancelled = false
-    private var currentProcess: Process?
-    private var currentOCRTask: Task<String, Error>?
+    private let subtitleStreamExtractor: TesseractSubtitleStreamExtractor
+    private var activeRunIDs: Set<UUID> = []
+    private var cancelledRunIDs: Set<UUID> = []
+    private var cancelledOperationIDs: Set<UUID> = []
+    private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
+    private var currentExtractionTasks: [UUID: Task<Void, Error>] = [:]
+    private var currentOCRTasks: [UUID: Task<String, Error>] = [:]
 
-    private init() {}
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        subtitleStreamExtractor = TesseractSubtitleStreamExtractor(
+            subprocessRunner: subprocessRunner
+        )
+    }
 
     /// Sweep scratch directories left over from a previous run that crashed before its
     /// `defer` cleanup could fire. Safe to call from anywhere; never throws.
@@ -110,12 +118,19 @@ actor TesseractService {
     func generateSubtitles(
         sourceFile: URL,
         outputDirectory: URL,
+        operationID: UUID,
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
+        engineKind: OCREngineKind = .userPreferred,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
-        isCancelled = false
+        let runID = UUID()
+        registerRun(runID, operationID: operationID)
+        defer { finishRun(runID, operationID: operationID) }
+        guard !cancelledRunIDs.contains(runID) else {
+            throw TesseractServiceError.cancelled
+        }
         let baseName = sourceFile.deletingPathExtension().lastPathComponent
         let srtURL = SubtitleSRTNaming.outputURL(directory: outputDirectory, baseName: baseName, method: .ocr)
         return try await runPipeline(
@@ -124,6 +139,8 @@ actor TesseractService {
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
+            engineKind: engineKind,
+            runID: runID,
             progress: progress
         )
     }
@@ -132,12 +149,19 @@ actor TesseractService {
     /// the source file. Used for "transcribe-only" (Option+click) mode.
     func generateSubtitlesOnly(
         sourceFile: URL,
+        operationID: UUID,
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
+        engineKind: OCREngineKind = .userPreferred,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
-        isCancelled = false
+        let runID = UUID()
+        registerRun(runID, operationID: operationID)
+        defer { finishRun(runID, operationID: operationID) }
+        guard !cancelledRunIDs.contains(runID) else {
+            throw TesseractServiceError.cancelled
+        }
         let outputDirectory = sourceFile.deletingLastPathComponent()
         let baseName = sourceFile.deletingPathExtension().lastPathComponent
         let srtURL = SubtitleSRTNaming.outputURL(directory: outputDirectory, baseName: baseName, method: .ocr)
@@ -147,15 +171,28 @@ actor TesseractService {
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
+            engineKind: engineKind,
+            runID: runID,
             progress: progress
         )
     }
 
-    /// Cancels any in-progress OCR run.
-    func cancelGeneration() {
-        isCancelled = true
-        currentProcess?.terminate()
-        currentOCRTask?.cancel()
+    /// Cancels OCR associated with one queue item or user operation.
+    func cancelGeneration(operationID: UUID) {
+        cancelledOperationIDs.insert(operationID)
+        let runIDs = runIDsByOperationID[operationID] ?? []
+        cancelledRunIDs.formUnion(runIDs)
+        for runID in runIDs {
+            currentExtractionTasks[runID]?.cancel()
+            currentOCRTasks[runID]?.cancel()
+        }
+    }
+
+    /// Stops every active OCR run during an explicit batch shutdown.
+    func cancelAllGeneration() {
+        cancelledRunIDs.formUnion(activeRunIDs)
+        for task in currentExtractionTasks.values { task.cancel() }
+        for task in currentOCRTasks.values { task.cancel() }
     }
 
     // MARK: - Pipeline
@@ -166,6 +203,8 @@ actor TesseractService {
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
+        engineKind: OCREngineKind,
+        runID: UUID,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
         // Sandboxed FFmpeg subprocess can't open user-imported files on external volumes
@@ -178,7 +217,7 @@ actor TesseractService {
         }
 
         let engine: any BitmapSubtitleOCREngine
-        switch OCREngineKind.userPreferred {
+        switch engineKind {
         case .tesseract:
             guard let tesseractPath = BinaryPathResolver.tesseractPath else {
                 throw TesseractServiceError.tesseractNotFound
@@ -207,6 +246,7 @@ actor TesseractService {
             isPGS: isPGS,
             ffmpegPath: ffmpegPath,
             tempDir: tempDir,
+            runID: runID,
             progress: progress
         )
 
@@ -214,7 +254,7 @@ actor TesseractService {
             throw TesseractServiceError.parsingFailed("No subtitle frames found in stream")
         }
 
-        guard !isCancelled else { throw TesseractServiceError.cancelled }
+        guard !cancelledRunIDs.contains(runID) else { throw TesseractServiceError.cancelled }
 
         // Step 3 — OCR each frame
         let total = frames.count
@@ -223,7 +263,7 @@ actor TesseractService {
         let maxConsecutiveFailures = 5
 
         for (i, frame) in frames.enumerated() {
-            guard !isCancelled else { throw TesseractServiceError.cancelled }
+            guard !cancelledRunIDs.contains(runID) else { throw TesseractServiceError.cancelled }
 
             // Recognize starts where extract+parse left off (15%) so the bar doesn't
             // visibly jump when the pipeline transitions from extract to OCR.
@@ -236,12 +276,16 @@ actor TesseractService {
             let task = Task<String, Error> {
                 try await engine.recognize(pngURL: pngFile, language: language)
             }
-            currentOCRTask = task
-            defer { currentOCRTask = nil }
+            currentOCRTasks[runID] = task
+            defer { currentOCRTasks[runID] = nil }
 
             let text: String
             do {
-                text = try await task.value
+                text = try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
                 consecutiveFailures = 0
             } catch is CancellationError {
                 throw TesseractServiceError.cancelled
@@ -263,7 +307,7 @@ actor TesseractService {
             }
         }
 
-        guard !isCancelled else { throw TesseractServiceError.cancelled }
+        guard !cancelledRunIDs.contains(runID) else { throw TesseractServiceError.cancelled }
 
         // Step 4 — Write SRT
         progress(TesseractProgress(stage: .writingSRT, percentage: 0.97))
@@ -287,6 +331,7 @@ actor TesseractService {
         isPGS: Bool,
         ffmpegPath: String,
         tempDir: URL,
+        runID: UUID,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> [SubtitleFrame] {
         // Map FFmpeg's 0…1 demux progress into the extractingTrack slice (0…15%) of the
@@ -302,6 +347,7 @@ actor TesseractService {
                 streamIndex: streamIndex,
                 outputPath: supFile.path,
                 ffmpegPath: ffmpegPath,
+                runID: runID,
                 progress: extractProgress
             )
             progress(TesseractProgress(stage: .parsingFrames, percentage: 0.15))
@@ -320,6 +366,7 @@ actor TesseractService {
                 streamIndex: streamIndex,
                 outputPath: subFile.path,
                 ffmpegPath: ffmpegPath,
+                runID: runID,
                 progress: extractProgress
             )
             progress(TesseractProgress(stage: .parsingFrames, percentage: 0.15))
@@ -335,90 +382,39 @@ actor TesseractService {
         }
     }
 
-    /// Hard cap for subtitle extraction. A feature-length PGS dump finishes in ~60s when
-    /// FFmpeg can run at full speed, but slow disks, network shares, or long-form content
-    /// can blow that budget. Keep the bound so a wedged FFmpeg can't pin the queue forever,
-    /// but make it generous enough that a normal run never trips it.
-    private static let extractionTimeoutSeconds: UInt64 = 1800
-
     private func extractStream(
         source: String,
         streamIndex: Int,
         outputPath: String,
         ffmpegPath: String,
+        runID: UUID,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws {
-        let process = Process()
-        let stderrPipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: ffmpegPath)
-        process.arguments = [
-            "-y",
-            "-i", source,
-            "-map", "0:s:\(streamIndex)",
-            "-c", "copy",
-            outputPath
-        ]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
+        guard !cancelledRunIDs.contains(runID) else {
+            throw TesseractServiceError.cancelled
+        }
+        let extractionTask = Task {
+            try await subtitleStreamExtractor.extract(
+                source: source,
+                streamIndex: streamIndex,
+                outputPath: outputPath,
+                ffmpegPath: ffmpegPath,
+                progress: progress
+            )
+        }
+        currentExtractionTasks[runID] = extractionTask
+        defer {
+            currentExtractionTasks[runID] = nil
+        }
 
-        currentProcess = process
-        defer { currentProcess = nil }
-
-        // Stream stderr live so we can drive a real progress bar during long PGS dumps,
-        // and accumulate it for the post-exit error-message tail.
-        let collector = ExtractStderrCollector()
-        let throttler = ProgressThrottler(minInterval: 0.25)
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let chunk = handle.availableData
-            guard !chunk.isEmpty else { return }
-            collector.append(chunk)
-            guard let progress, let text = String(data: chunk, encoding: .utf8) else { return }
-            collector.updateDuration { duration in
-                let (newDuration, _) = FFMPEGProgressParser.handleOutput(
-                    text,
-                    totalDuration: duration,
-                    effectiveDuration: duration,
-                    progressThrottler: throttler
-                ) { fraction, _ in
-                    progress(fraction)
-                }
-                duration = newDuration
+        do {
+            try await withTaskCancellationHandler {
+                try await extractionTask.value
+            } onCancel: {
+                extractionTask.cancel()
             }
-        }
-        defer { stderrPipe.fileHandleForReading.readabilityHandler = nil }
-
-        // Run + wait off-actor so cancelGeneration() can interleave and call terminate().
-        // While this `await` is suspended the actor is free to accept other messages.
-        let exitCode: Int32 = try await withTaskCancellationHandler {
-            try await Task.detached(priority: .userInitiated) {
-                do {
-                    try process.run()
-                } catch {
-                    throw TesseractServiceError.extractionFailed(error.localizedDescription)
-                }
-
-                let timeoutTask = Task.detached(priority: .utility) {
-                    try? await Task.sleep(nanoseconds: Self.extractionTimeoutSeconds * 1_000_000_000)
-                    if process.isRunning { process.terminate() }
-                }
-                process.waitUntilExit()
-                timeoutTask.cancel()
-                return process.terminationStatus
-            }.value
-        } onCancel: {
-            process.terminate()
-        }
-
-        // If the user asked to cancel mid-extract, our cancelGeneration() terminated the
-        // process — surface that as .cancelled rather than a misleading exit-code error.
-        if isCancelled { throw TesseractServiceError.cancelled }
-
-        let errData = collector.snapshot
-
-        guard exitCode == 0 else {
-            let msg = String(data: errData, encoding: .utf8)?.suffix(300) ?? "unknown error"
-            throw TesseractServiceError.extractionFailed("FFmpeg exited \(exitCode): \(msg)")
+        } catch is CancellationError {
+            throw TesseractServiceError.cancelled
         }
     }
 
@@ -451,27 +447,160 @@ actor TesseractService {
         // FFprobe-style + Matroska container ID (SwiftExif's MKV reader emits the latter).
         return lower == "pgssub" || lower == "hdmv_pgs_subtitle" || lower == "s_hdmv/pgs"
     }
+
+    private func registerRun(_ runID: UUID, operationID: UUID) {
+        activeRunIDs.insert(runID)
+        runIDsByOperationID[operationID, default: []].insert(runID)
+        if cancelledOperationIDs.contains(operationID) {
+            cancelledRunIDs.insert(runID)
+        }
+    }
+
+    private func finishRun(_ runID: UUID, operationID: UUID) {
+        currentExtractionTasks.removeValue(forKey: runID)?.cancel()
+        currentOCRTasks.removeValue(forKey: runID)?.cancel()
+        activeRunIDs.remove(runID)
+        cancelledRunIDs.remove(runID)
+        runIDsByOperationID[operationID]?.remove(runID)
+        if runIDsByOperationID[operationID]?.isEmpty == true {
+            runIDsByOperationID.removeValue(forKey: operationID)
+            cancelledOperationIDs.remove(operationID)
+        }
+    }
 }
 
-/// Thread-safe accumulator for FFmpeg stderr, shared between the readabilityHandler
-/// (background thread) and the actor-side error-reporting code that runs after exit.
-private final class ExtractStderrCollector: @unchecked Sendable {
+/// FFmpeg boundary for bitmap-subtitle extraction. Keeping this separate from the actor
+/// makes request construction, deadlines, diagnostics, and cancellation directly testable.
+struct TesseractSubtitleStreamExtractor: Sendable {
+    /// A feature-length PGS dump usually finishes in about a minute at full speed. Slow
+    /// disks and network shares need a generous bound, but a wedged FFmpeg must not pin
+    /// the conversion queue forever.
+    static let timeout: Duration = .seconds(30 * 60)
+    static let diagnosticCaptureLimit = 256 * 1024
+
+    private let subprocessRunner: any SubprocessRunning
+
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        self.subprocessRunner = subprocessRunner
+    }
+
+    func extract(
+        source: String,
+        streamIndex: Int,
+        outputPath: String,
+        ffmpegPath: String,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws {
+        try Task.checkCancellation()
+
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: [
+                "-y",
+                "-i", source,
+                "-map", "0:s:\(streamIndex)",
+                "-c", "copy",
+                outputPath
+            ],
+            timeout: Self.timeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: [source, outputPath]
+        )
+        let progressParser = TesseractExtractionProgressParser(progress: progress)
+
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request) { chunk in
+                switch chunk.stream {
+                case .standardError:
+                    progressParser.consume(chunk.data)
+                case .standardOutput:
+                    break
+                }
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .failedToStart(_, let underlying):
+                throw TesseractServiceError.extractionFailed(
+                    request.redactedDiagnostic(underlying, limit: 300)
+                )
+            case .timedOut:
+                throw TesseractServiceError.extractionFailed(
+                    "FFmpeg exceeded the 30-minute subtitle extraction limit"
+                )
+            }
+        } catch {
+            throw TesseractServiceError.extractionFailed(
+                request.redactedDiagnostic(error.localizedDescription, limit: 300)
+            )
+        }
+        progressParser.finish()
+
+        guard result.succeeded else {
+            let diagnostic = request.redactedDiagnostic(
+                result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),
+                limit: 300
+            )
+            let detail = diagnostic.isEmpty ? "unknown error" : diagnostic
+            throw TesseractServiceError.extractionFailed(
+                "FFmpeg exited \(result.terminationStatus): \(detail)"
+            )
+        }
+    }
+}
+
+/// Serializes FFmpeg's incremental stderr parser state because runner output callbacks
+/// may arrive from either pipe-draining queue.
+private final class TesseractExtractionProgressParser: @unchecked Sendable {
     private let lock = NSLock()
-    private var buffer = Data()
-    private var duration: Double? = nil
+    private let progress: (@Sendable (Double) -> Void)?
+    private let throttler = ProgressThrottler(minInterval: 0.25)
+    private var duration: Double?
+    private var pendingText = ""
 
-    func append(_ chunk: Data) {
-        lock.lock(); defer { lock.unlock() }
-        buffer.append(chunk)
+    init(progress: (@Sendable (Double) -> Void)?) {
+        self.progress = progress
     }
 
-    var snapshot: Data {
-        lock.lock(); defer { lock.unlock() }
-        return buffer
+    func consume(_ data: Data) {
+        guard let progress, !data.isEmpty else { return }
+
+        lock.withLock {
+            pendingText += String(decoding: data, as: UTF8.self)
+            while let separator = pendingText.firstIndex(where: { $0 == "\n" || $0 == "\r" }) {
+                let record = String(pendingText[..<separator])
+                pendingText.removeSubrange(...separator)
+                parse(record, progress: progress)
+            }
+            if pendingText.count > 8 * 1024 {
+                pendingText = String(pendingText.suffix(8 * 1024))
+            }
+        }
     }
 
-    func updateDuration(_ body: (inout Double?) -> Void) {
-        lock.lock(); defer { lock.unlock() }
-        body(&duration)
+    func finish() {
+        guard let progress else { return }
+        lock.withLock {
+            guard !pendingText.isEmpty else { return }
+            let record = pendingText
+            pendingText = ""
+            parse(record, progress: progress)
+        }
+    }
+
+    private func parse(_ text: String, progress: @escaping @Sendable (Double) -> Void) {
+        guard !text.isEmpty else { return }
+        let (newDuration, _) = FFMPEGProgressParser.handleOutput(
+            text,
+            totalDuration: duration,
+            effectiveDuration: duration,
+            progressThrottler: throttler
+        ) { fraction, _ in
+            progress(fraction)
+        }
+        duration = newDuration
     }
 }

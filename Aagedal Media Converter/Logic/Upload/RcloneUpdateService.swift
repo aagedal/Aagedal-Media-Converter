@@ -13,6 +13,11 @@ actor RcloneUpdateService {
     static let shared = RcloneUpdateService()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "RcloneUpdate")
+    private let subprocessRunner: any SubprocessRunning
+
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        self.subprocessRunner = subprocessRunner
+    }
 
     /// Cache key for custom-path validation: (path, mtime, size). If any of those change we re-validate.
     private struct CustomPathFingerprint: Equatable {
@@ -122,7 +127,10 @@ actor RcloneUpdateService {
             return true
         }
 
-        guard await RcloneBinaryVerifier.versionString(of: path) != nil else {
+        guard await RcloneBinaryVerifier.versionString(
+            of: path,
+            subprocessRunner: subprocessRunner
+        ) != nil else {
             lastValidatedCustomPath = nil
             return false
         }
@@ -188,34 +196,19 @@ actor RcloneUpdateService {
     /// Gets the version of the currently active rclone binary
     func getCurrentVersion() async -> String? {
         guard let rclonePath = await resolveRclonePath() else { return nil }
+        guard let firstLine = await RcloneBinaryVerifier.versionString(
+            of: rclonePath,
+            subprocessRunner: subprocessRunner
+        ) else { return nil }
 
-        let process = Process()
-        let pipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: rclonePath)
-        process.arguments = ["--version"]
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                // First line is like: "rclone v1.68.2"
-                let firstLine = output.components(separatedBy: .newlines).first ?? ""
-                // Extract version number
-                if let range = firstLine.range(of: "v[0-9]+\\.[0-9]+\\.[0-9]+", options: .regularExpression) {
-                    return String(firstLine[range])
-                }
-                return firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        } catch {
-            logger.error("Failed to get rclone version: \(error.localizedDescription)")
+        // First line is like: "rclone v1.68.2".
+        if let range = firstLine.range(
+            of: "v[0-9]+\\.[0-9]+\\.[0-9]+",
+            options: .regularExpression
+        ) {
+            return String(firstLine[range])
         }
-
-        return nil
+        return firstLine
     }
 
     // MARK: - Custom Path Management

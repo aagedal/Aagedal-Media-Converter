@@ -83,7 +83,7 @@ struct AnalyticsSettingsView: View {
             }
             .toggleStyle(SwitchToggleStyle())
 
-            Text(aboutText(for: metric))
+            Text(LocalizedStringKey(aboutText(for: metric)))
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .padding(.leading, 20)
@@ -165,12 +165,12 @@ struct AnalyticsSettingsView: View {
         Section(header: Text("VMAF Settings")) {
             Picker("VMAF Model", selection: $vmafModel) {
                 ForEach(VMAFModel.allCases, id: \.self) { model in
-                    Text(model.displayName).tag(model.rawValue)
+                    Text(LocalizedStringKey(model.displayName)).tag(model.rawValue)
                 }
             }
 
             if let model = VMAFModel(rawValue: vmafModel) {
-                Text(model.description)
+                Text(LocalizedStringKey(model.description))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

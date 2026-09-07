@@ -5,21 +5,42 @@
 import Foundation
 import OSLog
 
+protocol WhisperModelDownloadOperation: Sendable {
+    func run(progress: @escaping @Sendable (Double) -> Void) async throws -> URL
+    func cancel()
+}
+
+typealias WhisperModelDownloadOperationFactory = @Sendable (
+    _ sourceURL: URL,
+    _ expectedByteCount: Int64
+) -> any WhisperModelDownloadOperation
+
 /// Manages whisper.cpp model downloads and storage
 actor WhisperModelManager {
     static let shared = WhisperModelManager()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "WhisperModelManager")
-    private var downloadTasks: [WhisperModel: URLSessionDownloadTask] = [:]
-    private var progressHandlers: [WhisperModel: @Sendable (Double) -> Void] = [:]
+    private nonisolated let modelsDirectory: URL
+    private let operationFactory: WhisperModelDownloadOperationFactory
+    private var activeDownloads: [WhisperModel: ActiveDownload] = [:]
 
-    private init() {
-        // Ensure models directory exists
-        try? FileManager.default.createDirectory(
-            at: AppConstants.whisperModelsDirectory,
-            withIntermediateDirectories: true,
-            attributes: nil
-        )
+    private struct ActiveDownload: Sendable {
+        let id: UUID
+        let operation: any WhisperModelDownloadOperation
+        let progress: @Sendable (Double) -> Void
+    }
+
+    init(
+        modelsDirectory: URL = AppConstants.whisperModelsDirectory,
+        operationFactory: @escaping WhisperModelDownloadOperationFactory = { sourceURL, expectedByteCount in
+            URLSessionWhisperModelDownloadOperation(
+                sourceURL: sourceURL,
+                expectedByteCount: expectedByteCount
+            )
+        }
+    ) {
+        self.modelsDirectory = modelsDirectory
+        self.operationFactory = operationFactory
     }
 
     /// Returns the file URL for a given model
@@ -27,7 +48,7 @@ actor WhisperModelManager {
         if model.isCustom, let customURL = customModelURL() {
             return customURL
         }
-        return AppConstants.whisperModelsDirectory.appendingPathComponent(model.fileName)
+        return modelsDirectory.appendingPathComponent(model.fileName)
     }
 
     nonisolated func customModelURL() -> URL? {
@@ -48,7 +69,7 @@ actor WhisperModelManager {
         if isModelDownloaded(model) {
             return .downloaded
         }
-        if downloadTasks[model] != nil {
+        if activeDownloads[model] != nil {
             return .downloading(progress: 0)
         }
         return .notDownloaded
@@ -96,7 +117,7 @@ actor WhisperModelManager {
             throw WhisperModelError.modelNotFound
         }
         // Check if already downloading
-        if downloadTasks[model] != nil {
+        if activeDownloads[model] != nil {
             logger.warning("Model \(model.rawValue) is already being downloaded")
             return
         }
@@ -109,84 +130,82 @@ actor WhisperModelManager {
         }
 
         logger.info("Starting download of model: \(model.displayName) (\(model.fileSize))")
-        progressHandlers[model] = progress
-
-        let delegate = ModelDownloadDelegate(
-            model: model,
-            manager: self
+        try FileManager.default.createDirectory(
+            at: modelsDirectory,
+            withIntermediateDirectories: true
         )
 
-        let session = URLSession(
-            configuration: .default,
-            delegate: delegate,
-            delegateQueue: nil
+        let downloadID = UUID()
+        let operation = operationFactory(downloadURL, model.fileSizeBytes)
+        activeDownloads[model] = ActiveDownload(
+            id: downloadID,
+            operation: operation,
+            progress: progress
         )
 
-        let task = session.downloadTask(with: downloadURL)
-        downloadTasks[model] = task
+        var temporaryURL: URL?
+        defer {
+            if activeDownloads[model]?.id == downloadID {
+                activeDownloads.removeValue(forKey: model)
+            }
+            if let temporaryURL {
+                try? FileManager.default.removeItem(at: temporaryURL)
+            }
+        }
 
-        // Use continuation to wait for completion
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            delegate.completion = { result in
+        temporaryURL = try await withTaskCancellationHandler {
+            try await operation.run { [weak self] value in
                 Task {
-                    // Call actor-isolated cleanup method
-                    await self.performCleanup(for: model)
-                    switch result {
-                    case .success:
-                        continuation.resume()
-                    case .failure(let error):
-                        continuation.resume(throwing: error)
-                    }
+                    await self?.publishProgress(value, for: model, downloadID: downloadID)
                 }
             }
-            task.resume()
-        }
-    }
-
-    /// Called by delegate to report progress
-    func reportProgress(for model: WhisperModel, progress: Double) {
-        progressHandlers[model]?(progress)
-    }
-
-    /// Called by delegate when download completes
-    func handleDownloadComplete(for model: WhisperModel, tempURL: URL) throws {
-        let destinationPath = modelPath(for: model)
-        let fm = FileManager.default
-
-        // Remove existing file if present
-        if fm.fileExists(atPath: destinationPath.path) {
-            try fm.removeItem(at: destinationPath)
+        } onCancel: {
+            operation.cancel()
+            Task { await self.invalidateDownload(for: model, matching: downloadID) }
         }
 
-        // Move downloaded file to final location
-        try fm.moveItem(at: tempURL, to: destinationPath)
+        try Task.checkCancellation()
+        guard activeDownloads[model]?.id == downloadID else {
+            throw CancellationError()
+        }
 
-        // Verify file exists
-        guard fm.fileExists(atPath: destinationPath.path) else {
+        guard let downloadedURL = temporaryURL else {
+            throw WhisperModelError.downloadFailed
+        }
+        let destinationURL = modelPath(for: model)
+        guard !FileManager.default.fileExists(atPath: destinationURL.path) else {
+            logger.info("Model \(model.rawValue) was installed while its download was running")
+            progress(1.0)
+            return
+        }
+        try FileManager.default.moveItem(at: downloadedURL, to: destinationURL)
+        temporaryURL = nil
+
+        guard FileManager.default.fileExists(atPath: destinationURL.path) else {
             throw WhisperModelError.installFailed
         }
 
+        progress(1.0)
         logger.info("Successfully downloaded model: \(model.displayName)")
     }
 
-    /// Cleans up after download (success or failure)
-    private func cleanupDownload(for model: WhisperModel) {
-        downloadTasks.removeValue(forKey: model)
-        progressHandlers.removeValue(forKey: model)
-    }
-
-    /// Async wrapper for cleanup to satisfy actor isolation from external Tasks
-    private func performCleanup(for model: WhisperModel) async {
-        cleanupDownload(for: model)
+    private func publishProgress(_ progress: Double, for model: WhisperModel, downloadID: UUID) {
+        guard let activeDownload = activeDownloads[model], activeDownload.id == downloadID else {
+            return
+        }
+        activeDownload.progress(min(max(progress, 0), 1))
     }
 
     /// Cancels an ongoing model download
     func cancelDownload(for model: WhisperModel) {
-        if let task = downloadTasks[model] {
-            task.cancel()
-            cleanupDownload(for: model)
-            logger.info("Cancelled download of model: \(model.displayName)")
-        }
+        guard let activeDownload = activeDownloads.removeValue(forKey: model) else { return }
+        activeDownload.operation.cancel()
+        logger.info("Cancelled download of model: \(model.displayName)")
+    }
+
+    private func invalidateDownload(for model: WhisperModel, matching downloadID: UUID) {
+        guard activeDownloads[model]?.id == downloadID else { return }
+        activeDownloads.removeValue(forKey: model)
     }
 
     /// Deletes a downloaded model
@@ -248,16 +267,70 @@ actor WhisperModelManager {
     }
 }
 
-// MARK: - Download Delegate
+// MARK: - URLSession Download Operation
 
-private final class ModelDownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    let model: WhisperModel
-    let manager: WhisperModelManager
-    var completion: ((Result<Void, Error>) -> Void)?
+final class URLSessionWhisperModelDownloadOperation: NSObject,
+    WhisperModelDownloadOperation, URLSessionDownloadDelegate, @unchecked Sendable
+{
+    static let resourceTimeout: TimeInterval = 12 * 60 * 60
 
-    init(model: WhisperModel, manager: WhisperModelManager) {
-        self.model = model
-        self.manager = manager
+    private let sourceURL: URL
+    private let expectedByteCount: Int64
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<URL, Error>?
+    private var resolvedResult: Result<URL, Error>?
+    private var session: URLSession?
+    private var task: URLSessionDownloadTask?
+    private var temporaryURL: URL?
+    private var progressHandler: (@Sendable (Double) -> Void)?
+
+    init(sourceURL: URL, expectedByteCount: Int64) {
+        self.sourceURL = sourceURL
+        self.expectedByteCount = expectedByteCount
+    }
+
+    static func makeConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 60
+        configuration.timeoutIntervalForResource = resourceTimeout
+        return configuration
+    }
+
+    func run(progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        let session = URLSession(
+            configuration: Self.makeConfiguration(),
+            delegate: self,
+            delegateQueue: nil
+        )
+        let task = session.downloadTask(with: sourceURL)
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let state = lock.withLock { () -> (Result<URL, Error>?, Bool) in
+                    if let resolvedResult {
+                        return (resolvedResult, false)
+                    }
+                    self.continuation = continuation
+                    self.session = session
+                    self.task = task
+                    progressHandler = progress
+                    return (nil, true)
+                }
+
+                if let result = state.0 {
+                    session.invalidateAndCancel()
+                    continuation.resume(with: result)
+                } else if state.1 {
+                    task.resume()
+                }
+            }
+        } onCancel: {
+            self.cancel()
+        }
+    }
+
+    func cancel() {
+        resolve(.failure(CancellationError()), cancelSession: true)
     }
 
     func urlSession(
@@ -267,12 +340,12 @@ private final class ModelDownloadDelegate: NSObject, URLSessionDownloadDelegate,
         totalBytesWritten: Int64,
         totalBytesExpectedToWrite: Int64
     ) {
-        let expectedBytes = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : model.fileSizeBytes
-        let progress = Double(totalBytesWritten) / Double(expectedBytes)
-
-        Task {
-            await manager.reportProgress(for: model, progress: min(progress, 1.0))
-        }
+        let expectedBytes = totalBytesExpectedToWrite > 0
+            ? totalBytesExpectedToWrite
+            : expectedByteCount
+        guard expectedBytes > 0 else { return }
+        let handler = lock.withLock { resolvedResult == nil ? progressHandler : nil }
+        handler?(min(Double(totalBytesWritten) / Double(expectedBytes), 1.0))
     }
 
     func urlSession(
@@ -281,22 +354,19 @@ private final class ModelDownloadDelegate: NSObject, URLSessionDownloadDelegate,
         didFinishDownloadingTo location: URL
     ) {
         do {
-            // Copy to permanent temp location before this method returns
-            let tempCopy = FileManager.default.temporaryDirectory
+            let persistentURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString + ".bin")
-            try FileManager.default.copyItem(at: location, to: tempCopy)
-
-            Task {
-                do {
-                    try await manager.handleDownloadComplete(for: model, tempURL: tempCopy)
-                    await manager.reportProgress(for: model, progress: 1.0)
-                    completion?(.success(()))
-                } catch {
-                    completion?(.failure(error))
-                }
+            try FileManager.default.moveItem(at: location, to: persistentURL)
+            let accepted = lock.withLock { () -> Bool in
+                guard resolvedResult == nil else { return false }
+                temporaryURL = persistentURL
+                return true
+            }
+            if !accepted {
+                try? FileManager.default.removeItem(at: persistentURL)
             }
         } catch {
-            completion?(.failure(error))
+            resolve(.failure(error), cancelSession: true)
         }
     }
 
@@ -305,9 +375,59 @@ private final class ModelDownloadDelegate: NSObject, URLSessionDownloadDelegate,
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
-        if let error = error {
-            completion?(.failure(error))
+        if let error {
+            if (error as? URLError)?.code == .cancelled {
+                resolve(.failure(CancellationError()), cancelSession: false)
+            } else {
+                resolve(.failure(error), cancelSession: false)
+            }
+            return
         }
+
+        let downloadedURL = lock.withLock { temporaryURL }
+        if let downloadedURL {
+            resolve(.success(downloadedURL), cancelSession: false)
+        } else {
+            resolve(.failure(URLError(.badServerResponse)), cancelSession: false)
+        }
+    }
+
+    private func resolve(_ result: Result<URL, Error>, cancelSession: Bool) {
+        let pending = lock.withLock { () -> (
+            CheckedContinuation<URL, Error>?,
+            URLSession?,
+            URLSessionDownloadTask?,
+            URL?
+        )? in
+            guard resolvedResult == nil else { return nil }
+            resolvedResult = result
+            let shouldDeleteTemporaryURL: URL?
+            switch result {
+            case .success:
+                shouldDeleteTemporaryURL = nil
+            case .failure:
+                shouldDeleteTemporaryURL = temporaryURL
+            }
+            let pending = (continuation, session, task, shouldDeleteTemporaryURL)
+            continuation = nil
+            session = nil
+            task = nil
+            temporaryURL = nil
+            progressHandler = nil
+            return pending
+        }
+
+        guard let pending else { return }
+        if cancelSession {
+            pending.2?.cancel()
+            pending.1?.invalidateAndCancel()
+        } else {
+            pending.1?.finishTasksAndInvalidate()
+        }
+        if let temporaryURL = pending.3 {
+            try? FileManager.default.removeItem(at: temporaryURL)
+        }
+        pending.0?.resume(with: result)
     }
 }
 

@@ -63,6 +63,10 @@ struct ScreenCaptureSettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .accessibilityIdentifier("capture.frameRate")
+                Text(presetBinding.wrappedValue.frameRateDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Picker("Dynamic Range", selection: dynamicRangeBinding) {
                     Text(CaptureDynamicRangeOption.sdr.displayName)
                         .tag(CaptureDynamicRangeOption.sdr)
@@ -104,6 +108,8 @@ struct ScreenCaptureSettingsView: View {
                         }
                         .buttonStyle(BorderlessButtonStyle())
                         .help("Show in Finder")
+                        .accessibilityLabel("Show in Finder")
+                        .accessibilityIdentifier("capture.showOutputFolder")
 
                         Button(action: { selectCaptureDirectory() }) {
                             Image(systemName: "folder.badge.gearshape")
@@ -111,6 +117,8 @@ struct ScreenCaptureSettingsView: View {
                         }
                         .buttonStyle(BorderlessButtonStyle())
                         .help("Change capture folder")
+                        .accessibilityLabel("Change capture folder")
+                        .accessibilityIdentifier("capture.chooseOutputFolder")
 
                         Button(action: { captureDirectoryPath = AppConstants.defaultCaptureDirectory.path }) {
                             Image(systemName: "arrow.counterclockwise")
@@ -118,6 +126,8 @@ struct ScreenCaptureSettingsView: View {
                         }
                         .buttonStyle(BorderlessButtonStyle())
                         .help("Reset to default")
+                        .accessibilityLabel("Reset to default")
+                        .accessibilityIdentifier("capture.resetOutputFolder")
                     }
                 }
                 .padding(8)

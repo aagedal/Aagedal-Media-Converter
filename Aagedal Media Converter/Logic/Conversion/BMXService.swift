@@ -5,19 +5,6 @@
 import Foundation
 import OSLog
 
-/// Thread-safe collector for stderr data
-private actor StderrCollector {
-    private var buffer = Data()
-
-    func append(_ data: Data) {
-        buffer.append(data)
-    }
-
-    func snapshot() -> Data {
-        buffer
-    }
-}
-
 // MARK: - MCA Label Models
 
 /// SMPTE ST 377-4 Multi-Channel Audio labels for one MXF audio essence track,
@@ -44,6 +31,14 @@ struct AudioTrackMCALabels: Sendable {
 struct BMXRewrapResult: Sendable {
     let success: Bool
     let stderr: String
+    let cancelled: Bool
+
+    init(success: Bool, stderr: String, cancelled: Bool = false) {
+        self.success = success
+        self.stderr = stderr
+        self.cancelled = cancelled
+    }
+
     /// Convenience for chained `if` checks where only the success bit matters.
     var isSuccess: Bool { success }
 }
@@ -52,8 +47,27 @@ struct BMXRewrapResult: Sendable {
 actor BMXService {
     static let shared = BMXService()
 
+    private static let transwrapTimeout: Duration = .seconds(12 * 60 * 60)
+    private static let probeTimeout: Duration = .seconds(5 * 60)
+    private static let diagnosticCaptureLimit = 256 * 1024
+    private static let infoCaptureLimit = 4 * 1024 * 1024
+    private static let mcaXMLCaptureLimit = 16 * 1024 * 1024
+
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "BMXService")
-    private var currentProcess: Process?
+    private let subprocessRunner: any SubprocessRunning
+    private let bmxtranswrapPathProvider: @Sendable () -> String?
+    private let mxf2rawPathProvider: @Sendable () -> String?
+    private var activeTranswrapID: UUID?
+    private var currentTranswrapTask: Task<SubprocessResult, Error>?
+    private var pendingTranswrapIDs: Set<UUID> = []
+    private var retainedCancellationTrackingIDs: Set<UUID> = []
+    private var cancelledTranswrapIDs: Set<UUID> = []
+    private var transwrapSlotIsOccupied = false
+    private struct TranswrapSlotWaiter {
+        let operationID: UUID
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+    private var transwrapSlotWaiters: [TranswrapSlotWaiter] = []
 
     /// Cache keyed by URL; entries invalidate when the file's modification date changes.
     private struct MCACacheEntry {
@@ -62,7 +76,15 @@ actor BMXService {
     }
     private var mcaCache: [URL: MCACacheEntry] = [:]
 
-    private init() {}
+    init(
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        bmxtranswrapPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.bmxtranswrapPath },
+        mxf2rawPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.mxf2rawPath }
+    ) {
+        self.subprocessRunner = subprocessRunner
+        self.bmxtranswrapPathProvider = bmxtranswrapPathProvider
+        self.mxf2rawPathProvider = mxf2rawPathProvider
+    }
 
     // MARK: - Public API
 
@@ -82,6 +104,7 @@ actor BMXService {
         outputURL: URL,
         clipName: String? = nil,
         mcaLabelsFile: URL? = nil,
+        operationID: UUID = UUID(),
         progress: @escaping @Sendable (Double) -> Void
     ) async -> BMXRewrapResult {
         var arguments: [String] = [
@@ -102,6 +125,7 @@ actor BMXService {
             inputURL: inputURL,
             outputURL: outputURL,
             extraArguments: arguments,
+            operationID: operationID,
             progress: progress
         )
     }
@@ -125,6 +149,7 @@ actor BMXService {
         codingEquations: String? = nil,
         clipName: String? = nil,
         mcaLabelsFile: URL? = nil,
+        operationID: UUID = UUID(),
         progress: @escaping @Sendable (Double) -> Void
     ) async -> BMXRewrapResult {
         var arguments: [String] = [
@@ -151,6 +176,7 @@ actor BMXService {
             inputURL: inputURL,
             outputURL: outputURL,
             extraArguments: arguments,
+            operationID: operationID,
             progress: progress
         )
     }
@@ -168,6 +194,7 @@ actor BMXService {
         outputURL: URL,
         isVideo: Bool = true,
         clipName: String? = nil,
+        operationID: UUID = UUID(),
         progress: @escaping @Sendable (Double) -> Void
     ) async -> BMXRewrapResult {
         var arguments: [String] = [
@@ -192,17 +219,57 @@ actor BMXService {
             inputURL: inputURL,
             outputURL: outputURL,
             extraArguments: arguments,
+            operationID: operationID,
             progress: progress
         )
     }
 
     /// Cancels the current bmxtranswrap operation
     func cancel() {
-        if let process = currentProcess, process.isRunning {
-            process.terminate()
-            currentProcess = nil
+        if currentTranswrapTask != nil {
+            if let activeTranswrapID {
+                cancelledTranswrapIDs.insert(activeTranswrapID)
+            }
+            currentTranswrapTask?.cancel()
             logger.info("bmxtranswrap cancelled")
         }
+    }
+
+    /// Cancels one conversion's rewrap, retaining cancellation if it arrives before
+    /// that operation reaches the subprocess registration point.
+    func cancel(operationID: UUID) {
+        if activeTranswrapID == operationID {
+            cancelledTranswrapIDs.insert(operationID)
+            currentTranswrapTask?.cancel()
+        } else if let waiterIndex = transwrapSlotWaiters.firstIndex(where: { $0.operationID == operationID }) {
+            let waiter = transwrapSlotWaiters.remove(at: waiterIndex)
+            waiter.continuation.resume(returning: false)
+        } else if pendingTranswrapIDs.contains(operationID)
+            || retainedCancellationTrackingIDs.contains(operationID) {
+            cancelledTranswrapIDs.insert(operationID)
+        }
+        logger.info("bmxtranswrap operation cancelled")
+    }
+
+    /// Retains targeted cancellation while a conversion prepares the inputs for BMX.
+    func prepareCancellationTracking(operationID: UUID) {
+        retainedCancellationTrackingIDs.insert(operationID)
+    }
+
+    /// Ends pre-registration tracking and reports cancellation that arrived after the
+    /// subprocess completed but before its caller resumed.
+    func finishCancellationTracking(operationID: UUID) -> Bool {
+        retainedCancellationTrackingIDs.remove(operationID)
+        let wasCancelled = cancelledTranswrapIDs.contains(operationID)
+        if !pendingTranswrapIDs.contains(operationID) {
+            cancelledTranswrapIDs.remove(operationID)
+        }
+        return wasCancelled
+    }
+
+    /// Internal state probe used by deterministic cancellation tests.
+    func isWaitingForTranswrapSlot(operationID: UUID) -> Bool {
+        transwrapSlotWaiters.contains { $0.operationID == operationID }
     }
 
     // MARK: - Shared Process Execution
@@ -212,9 +279,31 @@ actor BMXService {
         inputURL: URL,
         outputURL: URL,
         extraArguments: [String],
+        operationID: UUID,
         progress: @escaping @Sendable (Double) -> Void
     ) async -> BMXRewrapResult {
-        guard let bmxtranswrapPath = BinaryPathResolver.bmxtranswrapPath else {
+        pendingTranswrapIDs.insert(operationID)
+        defer {
+            pendingTranswrapIDs.remove(operationID)
+            if !retainedCancellationTrackingIDs.contains(operationID) {
+                cancelledTranswrapIDs.remove(operationID)
+            }
+        }
+
+        if consumeCancellation(for: operationID) {
+            return cancelledResult()
+        }
+
+        guard await acquireTranswrapSlot(operationID: operationID) else {
+            return cancelledResult()
+        }
+        defer { releaseTranswrapSlot() }
+
+        if consumeCancellation(for: operationID) {
+            return cancelledResult()
+        }
+
+        guard let bmxtranswrapPath = bmxtranswrapPathProvider() else {
             logger.error("bmxtranswrap binary not found")
             return BMXRewrapResult(success: false, stderr: "bmxtranswrap binary not found")
         }
@@ -228,16 +317,16 @@ actor BMXService {
         do {
             try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
         } catch {
-            logger.error("Failed to create output directory: \(error.localizedDescription)")
-            return BMXRewrapResult(success: false, stderr: "Failed to create output directory: \(error.localizedDescription)")
+            logger.error("Failed to create output directory: \(error.localizedDescription, privacy: .private(mask: .hash))")
+            return BMXRewrapResult(success: false, stderr: "Failed to create output directory")
         }
 
         if FileManager.default.fileExists(atPath: outputURL.path) {
             do {
                 try FileManager.default.removeItem(at: outputURL)
             } catch {
-                logger.error("Failed to remove existing output file: \(error.localizedDescription)")
-                return BMXRewrapResult(success: false, stderr: "Failed to remove existing output file: \(error.localizedDescription)")
+                logger.error("Failed to remove existing output file: \(error.localizedDescription, privacy: .private(mask: .hash))")
+                return BMXRewrapResult(success: false, stderr: "Failed to replace existing output file")
             }
         }
 
@@ -245,77 +334,149 @@ actor BMXService {
         arguments.append(contentsOf: ["-o", outputURL.path, "-p"])
         arguments.append(inputURL.path)
 
-        logger.info("Running bmxtranswrap: \(arguments.joined(separator: " "))")
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: bmxtranswrapPath),
+            arguments: arguments,
+            timeout: Self.transwrapTimeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveArgumentNames: ["--clip"],
+            sensitiveValues: Set(
+                [bmxtranswrapPath, inputURL.path, outputURL.path]
+                    + arguments.filter { $0.hasPrefix("/") }
+            )
+        )
+        logger.info("Running bmxtranswrap: \(request.redactedCommandDescription, privacy: .public)")
 
-        let process = Process()
-        currentProcess = process
-        process.executableURL = URL(fileURLWithPath: bmxtranswrapPath)
-        process.arguments = arguments
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
-
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            if let output = String(data: data, encoding: .utf8) {
-                let lines = output.components(separatedBy: .newlines)
-                for line in lines {
-                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if trimmed.hasSuffix("%") {
-                        let numStr = trimmed.dropLast()
-                        if let percent = Double(numStr) {
-                            Task { @MainActor in
-                                progress(percent / 100.0)
-                            }
-                        }
-                    }
-                }
+        let progressParser = BMXProgressParser(progress: progress)
+        activeTranswrapID = operationID
+        let task = Task {
+            try await subprocessRunner.run(request) { chunk in
+                guard case .standardOutput = chunk.stream else { return }
+                progressParser.consume(chunk.data)
             }
         }
+        currentTranswrapTask = task
 
-        let stderrCollector = StderrCollector()
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if !data.isEmpty {
-                Task { await stderrCollector.append(data) }
-            }
-        }
-
+        let result: SubprocessResult
         do {
-            try process.run()
-            process.waitUntilExit()
+            result = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+        } catch is CancellationError {
+            clearTranswrap(if: operationID)
+            cleanupPartialOutput(at: outputURL)
+            return cancelledResult()
+        } catch let error as SubprocessRunnerError {
+            clearTranswrap(if: operationID)
+            cleanupPartialOutput(at: outputURL)
+            let message: String
+            switch error {
+            case .timedOut:
+                message = "bmxtranswrap exceeded the 12-hour processing limit"
+            case .failedToStart:
+                message = request.redactedDiagnostic(error.localizedDescription)
+            }
+            logger.error("bmxtranswrap failed: \(message, privacy: .private(mask: .hash))")
+            return BMXRewrapResult(success: false, stderr: message)
         } catch {
-            logger.error("Failed to run bmxtranswrap: \(error.localizedDescription)")
-            print("[BMX] launch failed: \(error.localizedDescription)")
-            currentProcess = nil
-            return BMXRewrapResult(success: false, stderr: "Failed to launch bmxtranswrap: \(error.localizedDescription)")
+            clearTranswrap(if: operationID)
+            cleanupPartialOutput(at: outputURL)
+            let message = request.redactedDiagnostic(error.localizedDescription)
+            logger.error("bmxtranswrap failed: \(message, privacy: .private(mask: .hash))")
+            return BMXRewrapResult(success: false, stderr: message)
         }
 
-        stdoutPipe.fileHandleForReading.readabilityHandler = nil
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
-        currentProcess = nil
+        progressParser.finish()
+        clearTranswrap(if: operationID)
 
-        let success = process.terminationStatus == 0
-        let stderrData = await stderrCollector.snapshot()
-        let stderrString = String(data: stderrData, encoding: .utf8) ?? ""
+        if consumeCancellation(for: operationID) {
+            cleanupPartialOutput(at: outputURL)
+            return cancelledResult()
+        }
+
+        let success = result.succeeded
+        let stderrString = request.redactedDiagnostic(result.standardErrorText)
 
         if success {
+            guard isNonemptyFile(outputURL) else {
+                cleanupPartialOutput(at: outputURL)
+                logger.error("bmxtranswrap exited successfully without producing a valid output")
+                return BMXRewrapResult(
+                    success: false,
+                    stderr: "bmxtranswrap did not produce a valid output file"
+                )
+            }
             logger.info("bmxtranswrap completed successfully: \(outputURL.lastPathComponent)")
             progress(1.0)
         } else {
-            logger.error("bmxtranswrap failed with code \(process.terminationStatus): \(stderrString)")
-            // Mirror to stdout so the failure cause is visible in the Xcode console
-            // even when OSLog `error` events are filtered out.
-            print("[BMX] bmxtranswrap exited \(process.terminationStatus) for \(outputURL.lastPathComponent)")
-            print("[BMX] command: \(arguments.joined(separator: " "))")
-            print("[BMX] stderr:\n\(stderrString.isEmpty ? "(empty)" : stderrString)")
+            cleanupPartialOutput(at: outputURL)
+            logger.error("bmxtranswrap exited \(result.terminationStatus): \(stderrString, privacy: .private(mask: .hash))")
         }
 
         return BMXRewrapResult(success: success, stderr: stderrString)
+    }
+
+    private func clearTranswrap(if transwrapID: UUID) {
+        guard activeTranswrapID == transwrapID else { return }
+        activeTranswrapID = nil
+        currentTranswrapTask = nil
+    }
+
+    private func consumeCancellation(for operationID: UUID) -> Bool {
+        cancelledTranswrapIDs.remove(operationID) != nil || Task.isCancelled
+    }
+
+    private func acquireTranswrapSlot(operationID: UUID) async -> Bool {
+        if consumeCancellation(for: operationID) {
+            return false
+        }
+        if !transwrapSlotIsOccupied {
+            transwrapSlotIsOccupied = true
+            return true
+        }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if consumeCancellation(for: operationID) {
+                    continuation.resume(returning: false)
+                } else {
+                    transwrapSlotWaiters.append(
+                        TranswrapSlotWaiter(operationID: operationID, continuation: continuation)
+                    )
+                }
+            }
+        } onCancel: {
+            Task { await self.cancel(operationID: operationID) }
+        }
+    }
+
+    private func releaseTranswrapSlot() {
+        if transwrapSlotWaiters.isEmpty {
+            transwrapSlotIsOccupied = false
+        } else {
+            transwrapSlotWaiters.removeFirst().continuation.resume(returning: true)
+        }
+    }
+
+    private func cancelledResult() -> BMXRewrapResult {
+        BMXRewrapResult(success: false, stderr: "bmxtranswrap cancelled", cancelled: true)
+    }
+
+    private func isNonemptyFile(_ url: URL) -> Bool {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber else { return false }
+        return size.int64Value > 0
+    }
+
+    private func cleanupPartialOutput(at url: URL) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            logger.warning("Failed to remove partial BMX output: \(error.localizedDescription, privacy: .private(mask: .hash))")
+        }
     }
 
     // MARK: - MXF Info
@@ -324,7 +485,7 @@ actor BMXService {
     /// - Parameter url: The MXF file to analyze
     /// - Returns: MXF info string, or nil if failed
     func getMXFInfo(url: URL) async -> String? {
-        guard let mxf2rawPath = BinaryPathResolver.mxf2rawPath else {
+        guard let mxf2rawPath = mxf2rawPathProvider() else {
             logger.error("mxf2raw binary not found")
             return nil
         }
@@ -334,27 +495,28 @@ actor BMXService {
             return nil
         }
 
-        let process = Process()
-        let stdoutPipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: mxf2rawPath)
-        process.arguments = ["--info", url.path]
-        process.standardOutput = stdoutPipe
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-
+        let request = mxf2rawRequest(
+            executablePath: mxf2rawPath,
+            arguments: ["--info", url.path],
+            sourceURL: url,
+            outputCaptureLimit: Self.infoCaptureLimit
+        )
         do {
-            try process.run()
-            process.waitUntilExit()
-
-            let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-            try? stdoutPipe.fileHandleForReading.close()
-            if let output = String(data: data, encoding: .utf8) {
-                return output
+            let result = try await subprocessRunner.run(request)
+            guard result.succeeded else {
+                let diagnostic = request.redactedDiagnostic(result.standardErrorText)
+                logger.warning("mxf2raw exited \(result.terminationStatus): \(diagnostic, privacy: .private(mask: .hash))")
+                return nil
             }
+            guard result.discardedStandardOutputBytes == 0 else {
+                logger.warning("mxf2raw info exceeded the \(Self.infoCaptureLimit)-byte output limit")
+                return nil
+            }
+            return result.standardOutputText
+        } catch is CancellationError {
+            return nil
         } catch {
-            try? stdoutPipe.fileHandleForReading.close()
-            logger.error("Failed to run mxf2raw: \(error.localizedDescription)")
+            logger.error("Failed to run mxf2raw: \(request.redactedDiagnostic(error.localizedDescription), privacy: .private(mask: .hash))")
         }
 
         return nil
@@ -401,7 +563,7 @@ actor BMXService {
             return cached.labels
         }
 
-        guard let mxf2rawPath = BinaryPathResolver.mxf2rawPath else {
+        guard let mxf2rawPath = mxf2rawPathProvider() else {
             logger.error("mxf2raw binary not found")
             return nil
         }
@@ -411,37 +573,39 @@ actor BMXService {
             return nil
         }
 
-        let process = Process()
-        let stdoutPipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: mxf2rawPath)
-        process.arguments = [
+        let arguments = [
             "--info",
             "--info-format", "xml",
             "--mca-detail",
             url.path,
         ]
-        process.standardOutput = stdoutPipe
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-
-        let xmlData: Data
+        let request = mxf2rawRequest(
+            executablePath: mxf2rawPath,
+            arguments: arguments,
+            sourceURL: url,
+            outputCaptureLimit: Self.mcaXMLCaptureLimit
+        )
+        let result: SubprocessResult
         do {
-            try process.run()
-            xmlData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-            try? stdoutPipe.fileHandleForReading.close()
-            process.waitUntilExit()
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            return nil
         } catch {
-            try? stdoutPipe.fileHandleForReading.close()
-            logger.error("Failed to run mxf2raw for MCA labels: \(error.localizedDescription)")
+            logger.error("Failed to run mxf2raw for MCA labels: \(request.redactedDiagnostic(error.localizedDescription), privacy: .private(mask: .hash))")
             return nil
         }
 
-        guard process.terminationStatus == 0 else {
-            logger.warning("mxf2raw exited \(process.terminationStatus) for \(url.lastPathComponent)")
+        guard result.succeeded else {
+            let diagnostic = request.redactedDiagnostic(result.standardErrorText)
+            logger.warning("mxf2raw exited \(result.terminationStatus) for \(url.lastPathComponent): \(diagnostic, privacy: .private(mask: .hash))")
+            return nil
+        }
+        guard result.discardedStandardOutputBytes == 0 else {
+            logger.warning("mxf2raw MCA XML exceeded the \(Self.mcaXMLCaptureLimit)-byte output limit")
             return nil
         }
 
+        let xmlData = result.standardOutput
         let labels = MXFInfoMCAParser.parse(xmlData: xmlData)
         mcaCache[url] = MCACacheEntry(modificationDate: mtime, labels: labels)
         let summary = labels.map { "[ch=\($0.channelCount ?? -1) sg=\($0.soundfieldGroup ?? "-") el=\($0.audioElement ?? "-") chs=\($0.channelLabels.count)]" }.joined(separator: " ")
@@ -452,9 +616,82 @@ actor BMXService {
         return labels
     }
 
+    private func mxf2rawRequest(
+        executablePath: String,
+        arguments: [String],
+        sourceURL: URL,
+        outputCaptureLimit: Int
+    ) -> SubprocessRequest {
+        SubprocessRequest(
+            executableURL: URL(fileURLWithPath: executablePath),
+            arguments: arguments,
+            timeout: Self.probeTimeout,
+            standardOutputCaptureLimit: outputCaptureLimit,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: [executablePath, sourceURL.path]
+        )
+    }
+
     /// Invalidates the cached MCA labels for a URL (e.g. when the file is replaced on disk).
     func invalidateMCACache(for url: URL) {
         mcaCache.removeValue(forKey: url)
+    }
+}
+
+private final class BMXProgressParser: @unchecked Sendable {
+    private static let maximumPendingBytes = 8 * 1024
+    private let lock = NSLock()
+    private var pending = Data()
+    private let progress: @Sendable (Double) -> Void
+
+    init(progress: @escaping @Sendable (Double) -> Void) {
+        self.progress = progress
+    }
+
+    func consume(_ data: Data) {
+        let lines = lock.withLock { () -> [Data] in
+            pending.append(data)
+            let lines = drainCompleteLines()
+            if pending.count > Self.maximumPendingBytes {
+                pending = pending.suffix(Self.maximumPendingBytes)
+            }
+            return lines
+        }
+        publish(lines)
+    }
+
+    func finish() {
+        let remainder = lock.withLock { () -> [Data] in
+            guard !pending.isEmpty else { return [] }
+            defer { pending.removeAll(keepingCapacity: false) }
+            return [pending]
+        }
+        publish(remainder)
+    }
+
+    private func drainCompleteLines() -> [Data] {
+        var lines: [Data] = []
+        while let separator = pending.firstIndex(where: { $0 == 0x0A || $0 == 0x0D }) {
+            lines.append(pending[..<separator])
+            var nextIndex = pending.index(after: separator)
+            if pending[separator] == 0x0D,
+               nextIndex < pending.endIndex,
+               pending[nextIndex] == 0x0A {
+                nextIndex = pending.index(after: nextIndex)
+            }
+            pending.removeSubrange(..<nextIndex)
+        }
+        return lines
+    }
+
+    private func publish(_ lines: [Data]) {
+        for data in lines {
+            let line = String(decoding: data, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line.hasSuffix("%"),
+                  let percent = Double(line.dropLast()) else { continue }
+            progress(min(max(percent / 100, 0), 1))
+        }
     }
 }
 

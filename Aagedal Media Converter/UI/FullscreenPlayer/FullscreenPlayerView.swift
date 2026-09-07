@@ -504,6 +504,8 @@ struct FullscreenPlayerView: View {
             .buttonStyle(.plain)
             .keyboardShortcut(.escape, modifiers: [])
             .help("Close (esc)")
+            .accessibilityLabel("Close fullscreen player")
+            .accessibilityIdentifier("fullscreen.close")
         }
         .padding(.leading, 20)
         .padding(.trailing, rightEdgeWidth + 16)
@@ -560,35 +562,45 @@ struct FullscreenPlayerView: View {
         navButton(systemName: "backward.end.fill",
                   size: 11, width: 26,
                   enabled: canGoToPrevious,
-                  help: "Previous in queue (⌘B)") {
+                  help: "Previous in queue (⌘B)",
+                  accessibilityLabel: "Previous in queue",
+                  identifier: "fullscreen.previous") {
             onPreviousItem?()
         }
 
         navButton(systemName: "gobackward.10",
                   size: 14, width: 28,
                   enabled: true,
-                  help: "Back 10 seconds") {
+                  help: "Back 10 seconds",
+                  accessibilityLabel: "Back 10 seconds",
+                  identifier: "fullscreen.skipBackward") {
             controller.seek(by: -10)
         }
 
         navButton(systemName: isPlaybackActive ? "pause.fill" : "play.fill",
                   size: 18, width: 32,
                   enabled: true,
-                  help: "Play/Pause (Space)") {
+                  help: "Play/Pause (Space)",
+                  accessibilityLabel: isPlaybackActive ? "Pause" : "Play",
+                  identifier: "fullscreen.playPause") {
             controller.togglePlayback()
         }
 
         navButton(systemName: "goforward.10",
                   size: 14, width: 28,
                   enabled: true,
-                  help: "Forward 10 seconds") {
+                  help: "Forward 10 seconds",
+                  accessibilityLabel: "Forward 10 seconds",
+                  identifier: "fullscreen.skipForward") {
             controller.seek(by: 10)
         }
 
         navButton(systemName: "forward.end.fill",
                   size: 11, width: 26,
                   enabled: canGoToNext,
-                  help: "Next in queue (⌘N)") {
+                  help: "Next in queue (⌘N)",
+                  accessibilityLabel: "Next in queue",
+                  identifier: "fullscreen.next") {
             onNextItem?()
         }
 
@@ -605,14 +617,18 @@ struct FullscreenPlayerView: View {
         toggleButton(systemName: queueAutoAdvanceState ? "arrow.right.circle.fill" : "arrow.right.circle",
                      isOn: queueAutoAdvanceState,
                      enabled: true,
-                     help: queueAutoAdvanceState ? "Disable Auto Next (A)" : "Enable Auto Next (A)") {
+                     help: queueAutoAdvanceState ? "Disable Auto Next (A)" : "Enable Auto Next (A)",
+                     accessibilityLabel: "Automatically play next item",
+                     identifier: "fullscreen.autoNext") {
             toggleQueueAutoAdvance()
         }
 
         toggleButton(systemName: "repeat",
                      isOn: queueLoopState,
                      enabled: queueAutoAdvanceState,
-                     help: queueLoopState ? "Disable Loop Queue (⌘L)" : "Enable Loop Queue (⌘L)") {
+                     help: queueLoopState ? "Disable Loop Queue (⌘L)" : "Enable Loop Queue (⌘L)",
+                     accessibilityLabel: "Loop queue",
+                     identifier: "fullscreen.loopQueue") {
             toggleQueueLoop()
         }
     }
@@ -622,6 +638,8 @@ struct FullscreenPlayerView: View {
                            width: CGFloat,
                            enabled: Bool,
                            help: String,
+                           accessibilityLabel: LocalizedStringKey,
+                           identifier: String,
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
@@ -632,12 +650,16 @@ struct FullscreenPlayerView: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.35)
         .help(help)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier(identifier)
     }
 
     private func toggleButton(systemName: String,
                               isOn: Bool,
                               enabled: Bool,
                               help: String,
+                              accessibilityLabel: LocalizedStringKey,
+                              identifier: String,
                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
@@ -649,6 +671,9 @@ struct FullscreenPlayerView: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.35)
         .help(help)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityIdentifier(identifier)
     }
 
     @ViewBuilder
@@ -702,6 +727,17 @@ struct FullscreenPlayerView: View {
         .onTapGesture { toggleTimecodeMode() }
         .onTapGesture(count: 2) { startTimecodeEdit() }
         .help("Click to cycle mode (T), double-click or type numbers to edit")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Playback timecode")
+        .accessibilityValue(TimecodeFormatter.formatTimeForDisplayWithMode(
+            seconds: controller.currentPlaybackTime,
+            item: itemState,
+            mode: timecodeDisplayMode
+        ))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { startTimecodeEdit() }
+        .accessibilityAction(named: "Cycle timecode mode") { toggleTimecodeMode() }
+        .accessibilityIdentifier("fullscreen.timecode")
     }
 
     private var timecodeEditor: some View {
@@ -714,6 +750,8 @@ struct FullscreenPlayerView: View {
             .background(Color.white.opacity(0.1))
             .cornerRadius(4)
             .focused($isTimecodeFocused)
+            .accessibilityLabel("Playback timecode")
+            .accessibilityIdentifier("fullscreen.timecodeInput")
             .onSubmit { seekToTimecode() }
             .onExitCommand { cancelTimecodeEdit() }
     }
@@ -794,6 +832,25 @@ struct FullscreenPlayerView: View {
             )
         }
         .frame(height: 20)
+        .accessibilityRepresentation {
+            Slider(
+                value: Binding(
+                    get: { min(max(0, controller.currentPlaybackTime), max(0, observedDuration)) },
+                    set: { controller.seekTo($0) }
+                ),
+                in: 0...max(observedDuration, 0.001),
+                step: 1
+            ) {
+                Text("Playback position")
+            }
+            .disabled(observedDuration <= 0)
+            .accessibilityValue(TimecodeFormatter.formatTimeForDisplayWithMode(
+                seconds: controller.currentPlaybackTime,
+                item: itemState,
+                mode: timecodeDisplayMode
+            ))
+            .accessibilityIdentifier("fullscreen.timeline")
+        }
     }
 
     private func toggleQueueAutoAdvance() {
@@ -1046,13 +1103,11 @@ struct FullscreenPlayerView: View {
             let directoryURL = URL(fileURLWithPath: directoryPath, isDirectory: true)
 
             do {
-                let savedURL = try await controller.captureScreenshot(to: directoryURL)
-                await MainActor.run {
-                    controller.lastScreenshotURL = savedURL
-                    controller.showScreenshotConfirmationOverlay()
-                }
+                _ = try await controller.captureScreenshot(to: directoryURL)
+            } catch is CancellationError {
+                // Closing or replacing the preview intentionally cancels the capture.
             } catch {
-                Self.logger.error("Screenshot capture failed: \(error.localizedDescription, privacy: .public)")
+                Self.logger.error("Screenshot capture failed: \(error.localizedDescription, privacy: .private)")
             }
         }
     }

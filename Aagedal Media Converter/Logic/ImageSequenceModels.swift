@@ -47,6 +47,33 @@ struct ImageSequenceConfig: Equatable, Sendable {
     /// Whether this sequence has an associated audio file
     var hasAssociatedAudio: Bool { associatedAudioURL != nil }
 
+    /// URL for the first frame, used for thumbnails and source-geometry inspection.
+    var firstFrameURL: URL {
+        frameURL(for: startNumber)
+    }
+
+    /// Resolve a concrete frame URL from the FFmpeg printf-style sequence pattern.
+    func frameURL(for frameNumber: Int) -> URL {
+        let placeholderRange = pattern.range(of: #"%0[0-9]+d"#, options: .regularExpression)
+            ?? pattern.range(of: "%d")
+        guard let placeholderRange else {
+            return directory.appendingPathComponent(pattern)
+        }
+
+        let placeholder = pattern[placeholderRange]
+        let paddingWidth = placeholder == "%d"
+            ? 0
+            : Int(placeholder.dropFirst(2).dropLast()) ?? 0
+        let frameNumberString = paddingWidth > 0
+            ? String(format: "%0\(paddingWidth)d", frameNumber)
+            : String(frameNumber)
+
+        let fileName = String(pattern[..<placeholderRange.lowerBound])
+            + frameNumberString
+            + String(pattern[placeholderRange.upperBound...])
+        return directory.appendingPathComponent(fileName)
+    }
+
     /// FFMPEG input arguments for this sequence, including associated audio if present
     var ffmpegInputArguments: [String] {
         let patternPath = directory.appendingPathComponent(pattern).path

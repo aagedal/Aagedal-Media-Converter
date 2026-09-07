@@ -53,6 +53,8 @@ struct WatchFolderSettingsView: View {
                         }
                         .buttonStyle(BorderlessButtonStyle())
                         .help("Show in Finder")
+                        .accessibilityLabel("Show in Finder")
+                        .accessibilityIdentifier("settings.watchFolder.reveal")
                     }.padding(.bottom, 8)
                 }
 

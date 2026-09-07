@@ -26,7 +26,7 @@ enum AudioRoutingService {
         }
 
         // Try to get richer metadata from VideoMetadataService
-        let metadata = try? await VideoMetadataService.shared.metadata(for: url)
+        let metadata = try? await BoundedVideoMetadataProbe.metadata(for: url)
 
         // For MXF (including IMF essences), pull SMPTE 377-4 MCA labels via mxf2raw.
         let mcaLabels: [AudioTrackMCALabels]
@@ -204,15 +204,17 @@ enum AudioRoutingService {
             logger.debug("Generated merge-to-stereo filter: \(filter)")
             
         case .splitToMono(let trackIndex):
-            // Example: [0:a:0]channelsplit=channel_layout=stereo[L][R]
+            // Normalize FFmpeg's named FL/FR outputs to the generic mono layout so encoders such
+            // as AAC accept both streams.
             guard let trackInfo = config.trackInfo(for: trackIndex),
                   let channels = trackInfo.channels, channels == 2 else {
                 logger.warning("splitToMono requires a stereo track")
                 return buildFallbackArguments(config: config)
             }
-            
+
             let layout = trackInfo.channelLayout ?? "stereo"
-            let filter = "[0:a:\(trackIndex)]channelsplit=channel_layout=\(layout)[L][R]"
+            let filter = "[0:a:\(trackIndex)]channelsplit=channel_layout=\(layout)[splitL][splitR];" +
+                "[splitL]aformat=channel_layouts=mono[L];[splitR]aformat=channel_layouts=mono[R]"
             
             arguments = ["-filter_complex", filter, "-map", "[L]", "-map", "[R]"]
             logger.debug("Generated split-to-mono filter: \(filter)")

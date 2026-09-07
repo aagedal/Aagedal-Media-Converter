@@ -10,8 +10,75 @@
 import Foundation
 import OSLog
 
+private final class AudioDurationProbeResolution: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Double?, Never>?
+    private var resolvedValue: Double?
+    private var isResolved = false
+    private var probeTask: Task<Void, Never>?
+    private var timeoutTask: Task<Void, Never>?
+
+    func install(_ continuation: CheckedContinuation<Double?, Never>) {
+        let value = lock.withLock { () -> (resolved: Bool, value: Double?) in
+            if isResolved {
+                return (true, resolvedValue)
+            }
+            self.continuation = continuation
+            return (false, nil)
+        }
+        if value.resolved {
+            continuation.resume(returning: value.value)
+        }
+    }
+
+    func install(probeTask: Task<Void, Never>, timeoutTask: Task<Void, Never>) {
+        let shouldCancel = lock.withLock { () -> Bool in
+            if isResolved { return true }
+            self.probeTask = probeTask
+            self.timeoutTask = timeoutTask
+            return false
+        }
+        if shouldCancel {
+            probeTask.cancel()
+            timeoutTask.cancel()
+        }
+    }
+
+    func resolve(_ value: Double?) {
+        let state = lock.withLock { () -> (
+            continuation: CheckedContinuation<Double?, Never>?,
+            probeTask: Task<Void, Never>?,
+            timeoutTask: Task<Void, Never>?
+        )? in
+            guard !isResolved else { return nil }
+            isResolved = true
+            resolvedValue = value
+            let state = (continuation, probeTask, timeoutTask)
+            continuation = nil
+            self.probeTask = nil
+            self.timeoutTask = nil
+            return state
+        }
+        guard let state else { return }
+        state.probeTask?.cancel()
+        state.timeoutTask?.cancel()
+        state.continuation?.resume(returning: value)
+    }
+}
+
 enum ImageSequenceDetector {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ImageSequenceDetector")
+    typealias AudioDurationProbe = @Sendable (URL) async -> Double?
+
+    struct SecurityScope: Sendable {
+        let start: @Sendable (URL) -> Bool
+        let stop: @Sendable (URL) -> Void
+
+        static let live = SecurityScope(
+            start: { $0.startAccessingSecurityScopedResource() },
+            stop: { $0.stopAccessingSecurityScopedResource() }
+        )
+    }
 
     /// Regex to match a filename with a numeric suffix before the extension.
     /// Captures: (prefix)(number).(extension)
@@ -26,7 +93,18 @@ enum ImageSequenceDetector {
 
     /// Detect all image sequences in a folder.
     /// Groups files by matching prefix and extension, returns sequences with ≥2 frames.
-    static func detectSequences(inFolder folderURL: URL) -> [ImageSequenceConfig] {
+    static func detectSequences(
+        inFolder folderURL: URL,
+        audioDurationTimeout: Duration = .seconds(5),
+        securityScopedAccessURL: URL? = nil,
+        securityScope: SecurityScope = .live,
+        detectsAssociatedAudio: Bool = true,
+        audioDurationProbe: @escaping AudioDurationProbe = { url in
+            // probeAudioDuration owns the selected folder scope and deadline.
+            await SwiftExifMediaProbe.durationWithoutDeadline(for: url)
+        }
+    ) async -> [ImageSequenceConfig] {
+        guard !Task.isCancelled else { return [] }
         let fileManager = FileManager.default
 
         guard let contents = try? fileManager.contentsOfDirectory(
@@ -38,17 +116,44 @@ enum ImageSequenceDetector {
             return []
         }
 
-        return buildSequences(from: contents, directory: folderURL)
+        return await buildSequences(
+            from: contents,
+            directory: folderURL,
+            audioDurationTimeout: audioDurationTimeout,
+            securityScopedAccessURL: securityScopedAccessURL,
+            securityScope: securityScope,
+            detectsAssociatedAudio: detectsAssociatedAudio,
+            audioDurationProbe: audioDurationProbe
+        )
     }
 
     /// Detect an image sequence from a single file by scanning its parent directory
     /// for other files matching the same prefix and extension.
-    static func detectSequence(fromFile fileURL: URL) -> ImageSequenceConfig? {
+    static func detectSequence(
+        fromFile fileURL: URL,
+        audioDurationTimeout: Duration = .seconds(5),
+        securityScopedAccessURL: URL? = nil,
+        securityScope: SecurityScope = .live,
+        detectsAssociatedAudio: Bool = true,
+        audioDurationProbe: @escaping AudioDurationProbe = { url in
+            // probeAudioDuration owns the selected folder scope and deadline.
+            await SwiftExifMediaProbe.durationWithoutDeadline(for: url)
+        }
+    ) async -> ImageSequenceConfig? {
+        guard !Task.isCancelled else { return nil }
         let ext = fileURL.pathExtension.lowercased()
         guard ImageSequenceFormat.allExtensions.contains(ext) else { return nil }
 
         let directory = fileURL.deletingLastPathComponent()
-        let sequences = detectSequences(inFolder: directory)
+        let sequences = await detectSequences(
+            inFolder: directory,
+            audioDurationTimeout: audioDurationTimeout,
+            securityScopedAccessURL: securityScopedAccessURL,
+            securityScope: securityScope,
+            detectsAssociatedAudio: detectsAssociatedAudio,
+            audioDurationProbe: audioDurationProbe
+        )
+        guard !Task.isCancelled else { return nil }
 
         // Find the sequence that contains this file's pattern
         let baseName = fileURL.deletingPathExtension().lastPathComponent
@@ -99,11 +204,20 @@ enum ImageSequenceDetector {
     }
 
     /// Build sequences from a list of file URLs
-    private static func buildSequences(from urls: [URL], directory: URL) -> [ImageSequenceConfig] {
+    private static func buildSequences(
+        from urls: [URL],
+        directory: URL,
+        audioDurationTimeout: Duration,
+        securityScopedAccessURL: URL?,
+        securityScope: SecurityScope,
+        detectsAssociatedAudio: Bool,
+        audioDurationProbe: @escaping AudioDurationProbe
+    ) async -> [ImageSequenceConfig] {
         let imageExtensions = ImageSequenceFormat.allExtensions
         var groups: [String: [ParsedFile]] = [:]
 
         for url in urls {
+            guard !Task.isCancelled else { return [] }
             let ext = url.pathExtension.lowercased()
             guard imageExtensions.contains(ext) else { continue }
 
@@ -132,6 +246,7 @@ enum ImageSequenceDetector {
         var sequences: [ImageSequenceConfig] = []
 
         for (_, files) in groups {
+            guard !Task.isCancelled else { return [] }
             guard files.count >= 2 else { continue }
 
             let sorted = files.sorted { $0.number < $1.number }
@@ -166,15 +281,25 @@ enum ImageSequenceDetector {
             )
 
             // Detect associated audio file in the same directory
-            config.associatedAudioURL = detectAssociatedAudio(for: config)
+            if detectsAssociatedAudio {
+                config.associatedAudioURL = detectAssociatedAudio(for: config)
+            }
 
             // If audio was found, derive frame rate from audio duration
-            if let audioURL = config.associatedAudioURL,
-               let audioDuration = probeAudioDuration(audioURL),
-               audioDuration > 0 {
-                let derivedRate = Double(config.frameCount) / audioDuration
-                config.frameRate = derivedRate
-                logger.info("Derived frame rate \(String(format: "%.3f", derivedRate)) fps from audio duration \(String(format: "%.3f", audioDuration))s (\(config.frameCount) frames)")
+            if let audioURL = config.associatedAudioURL {
+                let audioDuration = await probeAudioDuration(
+                    audioURL,
+                    timeout: audioDurationTimeout,
+                    securityScopedAccessURL: securityScopedAccessURL,
+                    securityScope: securityScope,
+                    probe: audioDurationProbe
+                )
+                guard !Task.isCancelled else { return [] }
+                if let audioDuration, audioDuration > 0 {
+                    let derivedRate = Double(config.frameCount) / audioDuration
+                    config.frameRate = derivedRate
+                    logger.info("Derived frame rate \(String(format: "%.3f", derivedRate)) fps from audio duration \(String(format: "%.3f", audioDuration))s (\(config.frameCount) frames)")
+                }
             }
 
             sequences.append(config)
@@ -258,8 +383,49 @@ enum ImageSequenceDetector {
         return nil
     }
 
-    /// Probes the duration of an audio file (synchronous — SwiftExif + AVFoundation fallback).
-    private static func probeAudioDuration(_ url: URL) -> Double? {
-        SwiftExifMediaProbe.durationSync(for: url)
+    /// Resolves a potentially non-cooperative metadata load without joining it after the
+    /// deadline. The probe owns a separate security-scope access for as long as a late load
+    /// remains alive, while the caller can release its folder access promptly.
+    private static func probeAudioDuration(
+        _ url: URL,
+        timeout: Duration,
+        securityScopedAccessURL: URL?,
+        securityScope: SecurityScope,
+        probe: @escaping AudioDurationProbe
+    ) async -> Double? {
+        let resolution = AudioDurationProbeResolution()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                resolution.install(continuation)
+                guard !Task.isCancelled else {
+                    resolution.resolve(nil)
+                    return
+                }
+
+                let probeTask = Task {
+                    guard !Task.isCancelled else { return }
+                    let hasAccess = securityScopedAccessURL.map(securityScope.start) ?? false
+                    defer {
+                        if hasAccess, let securityScopedAccessURL {
+                            securityScope.stop(securityScopedAccessURL)
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    resolution.resolve(await probe(url))
+                }
+                let timeoutTask = Task {
+                    do {
+                        try await Task.sleep(for: timeout)
+                    } catch {
+                        return
+                    }
+                    resolution.resolve(nil)
+                }
+                resolution.install(probeTask: probeTask, timeoutTask: timeoutTask)
+            }
+        } onCancel: {
+            resolution.resolve(nil)
+        }
     }
+
 }

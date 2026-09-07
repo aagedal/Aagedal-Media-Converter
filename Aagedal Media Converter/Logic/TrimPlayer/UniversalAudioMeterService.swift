@@ -28,123 +28,188 @@ final class UniversalAudioMeterService: NSObject, ObservableObject {
     /// Real-time frequency band magnitudes (0.0–1.0 per band). Nil when not monitoring.
     @Published private(set) var frequencyBands: [Float]?
 
-    private var stream: SCStream?
-    private let audioOutput = StreamOutput()
+    private var session: (any AudioMeterCaptureSession)?
+    private var attemptID: UUID?
+    private var startTask: Task<Void, Error>?
+    private let timeout: Duration
+    private let makeSession: @MainActor () async throws -> any AudioMeterCaptureSession
 
-    override init() {
+    override convenience init() {
+        self.init(timeout: .seconds(15), makeSession: ScreenAudioMeterCaptureSession.make)
+    }
+
+    init(
+        timeout: Duration,
+        makeSession: @escaping @MainActor () async throws -> any AudioMeterCaptureSession
+    ) {
+        self.timeout = timeout
+        self.makeSession = makeSession
         super.init()
-        // Load band settings and create analyzer
-        let config = AudioWaveformPreferences.loadConfig()
-        let analyzer = AudioFrequencyAnalyzer(
-            bandCount: config.bandCount,
-            frequencyDistribution: config.frequencyDistribution
-        )
-        audioOutput.frequencyAnalyzer = analyzer
-
-        // Connect the output's level updates to our published property
-        audioOutput.levelUpdateHandler = { [weak self] levels in
-            Task { @MainActor [weak self] in
-                self?.currentLevels = levels
-            }
-        }
-        audioOutput.frequencyUpdateHandler = { [weak self] bands in
-            Task { @MainActor [weak self] in
-                self?.frequencyBands = bands
-            }
-        }
     }
 
     /// Reload frequency analyzer settings (call when user changes waveform settings).
     func reloadFrequencySettings() {
-        let config = AudioWaveformPreferences.loadConfig()
-        let analyzer = AudioFrequencyAnalyzer(
-            bandCount: config.bandCount,
-            frequencyDistribution: config.frequencyDistribution
-        )
-        audioOutput.frequencyAnalyzer = analyzer
+        session?.reloadFrequencySettings()
     }
-    
-    /// Start monitoring app audio
+
+    /// Own the complete discovery/start attempt so stop and replacement fence every suspension.
     func startMonitoring() async {
-        guard !isMonitoring else { return }
-        
-        do {
-            // Create filter in a nonisolated context to avoid MainActor isolation issues with SCShareableContent
-            let filter = try await createContentFilter()
-            
-            // Configure stream for audio only
-            let config = SCStreamConfiguration()
-            config.capturesAudio = true
-            // capturesVideo does not exist, use width/height/frameInterval to minimize video overhead
-            config.width = 100
-            config.height = 100
-            config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
-            
-            config.sampleRate = 48000
-            config.channelCount = 2
-            config.excludesCurrentProcessAudio = false // We WANT our own audio
-            
-            // Create and start stream
-            let stream = SCStream(filter: filter, configuration: config, delegate: nil)
-            
-            // Use explicit type for SCStreamOutputType
-            try stream.addStreamOutput(audioOutput, type: SCStreamOutputType.audio, sampleHandlerQueue: audioOutput.queue)
-            
-            try await stream.startCapture()
-            
-            self.stream = stream
-            self.isMonitoring = true
-            self.permissionError = false
-            
-        } catch {
-            Self.logger.error("Failed to start capture: \(error.localizedDescription, privacy: .public)")
-            if error is SCStreamError {
-                // Likely permission denied or cancelled
-                self.permissionError = true
+        guard attemptID == nil else { return }
+        let id = UUID()
+        attemptID = id
+        let timeout = timeout
+        let factory = makeSession
+        let task = Task { @MainActor [weak self] in
+            try await NonJoiningTaskDeadline.run(timeout: timeout) { @MainActor [weak self] in
+                let candidate = try await factory()
+                do {
+                    try Task.checkCancellation()
+                    guard let self, self.attemptID == id else { throw CancellationError() }
+                    candidate.configure(
+                        levels: { [weak self] levels in
+                            guard let self, self.attemptID == id, self.isMonitoring else { return }
+                            self.currentLevels = levels
+                        },
+                        bands: { [weak self] bands in
+                            guard let self, self.attemptID == id, self.isMonitoring else { return }
+                            self.frequencyBands = bands
+                        }
+                    )
+                    self.session = candidate
+                    try await candidate.start()
+                    try Task.checkCancellation()
+                    guard self.attemptID == id else { throw CancellationError() }
+                } catch {
+                    // Also runs when a non-cooperative start finishes after timeout/stop.
+                    // Keep its session alive and stop it without joining a stalled callback.
+                    await Self.stop(candidate, timeout: timeout)
+                    throw error
+                }
             }
         }
-    }
-    
-    /// Helper to create content filter off the main actor
-    nonisolated private func createContentFilter() async throws -> SCContentFilter {
-        let content = try await SCShareableContent.current
-        
-        guard let myApp = content.applications.first(where: { $0.bundleIdentifier == Bundle.main.bundleIdentifier }) else {
-            throw NSError(domain: "UniversalAudioMeter", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not find own application"])
+        startTask = task
+        do {
+            try await withTaskCancellationHandler {
+                try await task.value
+                try Task.checkCancellation()
+            } onCancel: {
+                task.cancel()
+            }
+            guard attemptID == id else { return }
+            startTask = nil
+            isMonitoring = true
+            permissionError = false
+        } catch {
+            guard attemptID == id else { return }
+            attemptID = nil
+            startTask = nil
+            let abandonedSession = session
+            session = nil
+            if !(error is CancellationError) {
+                Self.logger.error("Failed to start capture: \(error.localizedDescription, privacy: .public)")
+                permissionError = error is SCStreamError
+            }
+            if let abandonedSession { await Self.stop(abandonedSession, timeout: timeout) }
         }
-        
-        guard let display = content.displays.first else {
-             throw NSError(domain: "UniversalAudioMeter", code: 2, userInfo: [NSLocalizedDescriptionKey: "No display found"])
-        }
-        
-        // Explicitly type the array to help overload resolution
-        let apps: [SCRunningApplication] = [myApp]
-        return SCContentFilter(display: display, including: apps, exceptingWindows: [])
     }
-    
-    /// Stop monitoring
+
     func stopMonitoring() async {
-        guard isMonitoring else { return }
-        
-        if let stream = stream {
-            try? await stream.stopCapture()
-        }
-        
-        stream = nil
+        attemptID = nil
+        startTask?.cancel()
+        startTask = nil
+        let stoppedSession = session
+        session = nil
         isMonitoring = false
         currentLevels = .silence
         frequencyBands = nil
-        audioOutput.frequencyAnalyzer?.reset()
+        if let stoppedSession { await Self.stop(stoppedSession, timeout: timeout) }
     }
+
+    private static func stop(_ session: any AudioMeterCaptureSession, timeout: Duration) async {
+        // Cleanup must run even when the initiating task was cancelled.
+        await Task.detached {
+            try? await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await session.stop()
+            }
+        }.value
+    }
+
+}
+
+/// Injectable boundary for ScreenCaptureKit's potentially non-cooperative callbacks.
+@MainActor
+protocol AudioMeterCaptureSession: AnyObject, Sendable {
+    func configure(
+        levels: @escaping @MainActor (UniversalAudioMeterService.AudioLevels) -> Void,
+        bands: @escaping @MainActor ([Float]) -> Void
+    )
+    func reloadFrequencySettings()
+    func start() async throws
+    func stop() async throws
+}
+
+@MainActor
+private final class ScreenAudioMeterCaptureSession: AudioMeterCaptureSession {
+    private let stream: SCStream
+    private let output = StreamOutput()
+
+    private init(filter: SCContentFilter) throws {
+        let config = SCStreamConfiguration()
+        config.capturesAudio = true
+        config.width = 100
+        config.height = 100
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 1)
+        config.sampleRate = 48000
+        config.channelCount = 2
+        config.excludesCurrentProcessAudio = false
+        stream = SCStream(filter: filter, configuration: config, delegate: nil)
+        try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: output.queue)
+        reloadFrequencySettings()
+    }
+
+    static func make() async throws -> any AudioMeterCaptureSession {
+        let content = try await ScreenCaptureContentDiscovery.current()
+        try Task.checkCancellation()
+        guard let app = content.applications.first(where: { $0.bundleIdentifier == Bundle.main.bundleIdentifier }),
+              let display = content.displays.first else {
+            throw NSError(domain: "UniversalAudioMeter", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not find the application or display"])
+        }
+        return try ScreenAudioMeterCaptureSession(filter: SCContentFilter(display: display, including: [app], exceptingWindows: []))
+    }
+
+    func configure(
+        levels: @escaping @MainActor (UniversalAudioMeterService.AudioLevels) -> Void,
+        bands: @escaping @MainActor ([Float]) -> Void
+    ) {
+        output.levelUpdateHandler = { value in Task { @MainActor in levels(value) } }
+        output.frequencyUpdateHandler = { value in Task { @MainActor in bands(value) } }
+    }
+
+    func reloadFrequencySettings() {
+        let config = AudioWaveformPreferences.loadConfig()
+        output.replaceAnalyzer(AudioFrequencyAnalyzer(
+            bandCount: config.bandCount,
+            frequencyDistribution: config.frequencyDistribution
+        ))
+    }
+
+    func start() async throws { try await stream.startCapture() }
+    func stop() async throws { try await stream.stopCapture() }
 }
 
 // MARK: - Stream Output Processor
 
-private class StreamOutput: NSObject, SCStreamOutput {
+// Handlers are installed before capture starts; mutable analyzer state is confined
+// to the serial sample queue, including preference replacements.
+private final class StreamOutput: NSObject, SCStreamOutput, @unchecked Sendable {
     let queue = DispatchQueue(label: "com.aagedal.audiometer.processing")
     var levelUpdateHandler: ((UniversalAudioMeterService.AudioLevels) -> Void)?
     var frequencyUpdateHandler: (([Float]) -> Void)?
-    var frequencyAnalyzer: AudioFrequencyAnalyzer?
+    private var frequencyAnalyzer: AudioFrequencyAnalyzer?
+
+    func replaceAnalyzer(_ analyzer: AudioFrequencyAnalyzer) {
+        queue.async { self.frequencyAnalyzer = analyzer }
+    }
 
     private var leftPeak: Float = 0.0
     private var rightPeak: Float = 0.0

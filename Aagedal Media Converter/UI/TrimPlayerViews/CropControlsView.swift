@@ -27,6 +27,15 @@ struct CropControlsView: View {
 
     enum Field: Hashable {
         case x, y, width, height
+
+        var accessibilityLabel: LocalizedStringKey {
+            switch self {
+            case .x: return "Crop horizontal position"
+            case .y: return "Crop vertical position"
+            case .width: return "Crop width"
+            case .height: return "Crop height"
+            }
+        }
     }
 
     private var sourceWidth: Int {
@@ -66,12 +75,14 @@ struct CropControlsView: View {
                 // Main controls row
                 HStack(spacing: 8) {
                     // Aspect ratio picker
-                    Picker("", selection: $selectedAspectRatio) {
+                    Picker("Crop aspect ratio", selection: $selectedAspectRatio) {
                         ForEach(AspectRatio.allCases) { ratio in
                             Text(ratio.displayName).tag(ratio)
                         }
                     }
                     .pickerStyle(.menu)
+                    .labelsHidden()
+                    .accessibilityIdentifier("crop.aspectRatio")
                     .frame(width: 200)
                     .onChange(of: selectedAspectRatio) { _, newRatio in
                         var config = configBinding.wrappedValue
@@ -172,12 +183,16 @@ struct CropControlsView: View {
                     Button("Reset") {
                         resetCrop()
                     }
+                    .accessibilityLabel("Reset crop")
+                    .accessibilityIdentifier("crop.reset")
                     .buttonStyle(.bordered)
                     .controlSize(.small)
 
                     Button("Center") {
                         centerCrop()
                     }
+                    .accessibilityLabel("Center crop")
+                    .accessibilityIdentifier("crop.center")
                     .buttonStyle(.bordered)
                     .controlSize(.small)
 
@@ -190,6 +205,8 @@ struct CropControlsView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                     .help("Exit crop mode")
+                    .accessibilityLabel("Exit crop mode")
+                    .accessibilityIdentifier("crop.done")
                 }
 
                 // Warning message for Stream Copy preset (always visible to prevent UI shift)
@@ -230,6 +247,10 @@ struct CropControlsView: View {
                 .frame(width: 50)
                 .font(.caption)
                 .focused($focusedField, equals: field)
+                .accessibilityLabel(field.accessibilityLabel)
+                .accessibilityValue("\(value.wrappedValue) pixels")
+                .accessibilityHint("Enter a pixel value and press Return to apply.")
+                .accessibilityIdentifier("crop.\(field)")
                 .onSubmit {
                     if autoApply {
                         applyPixelInputs()

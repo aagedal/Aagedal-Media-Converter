@@ -37,7 +37,8 @@ struct NativeWaveformRenderer {
         duration: Double,
         width: Int,
         height: Int,
-        colorHex: String = "FF2D78"
+        colorHex: String = "FF2D78",
+        subprocessRunner: any SubprocessRunning = SubprocessRunner()
     ) async throws -> NSImage {
         let effectiveWidth = max(400, width)
 
@@ -66,7 +67,13 @@ struct NativeWaveformRenderer {
             "-y", pcmFile.path
         ]
 
-        try await runFFmpeg(path: ffmpegPath, arguments: arguments)
+        try await runFFmpeg(
+            path: ffmpegPath,
+            arguments: arguments,
+            inputURL: url,
+            outputURL: pcmFile,
+            subprocessRunner: subprocessRunner
+        )
         try Task.checkCancellation()
 
         let pcmData = try Data(contentsOf: pcmFile)
@@ -200,7 +207,8 @@ struct NativeWaveformRenderer {
         duration: Double,
         width: Int,
         heightPerChannel: Int,
-        colorHex: String = "FF2D78"
+        colorHex: String = "FF2D78",
+        subprocessRunner: any SubprocessRunning = SubprocessRunner()
     ) async throws -> ([NSImage], [String]) {
         let effectiveWidth = max(800, width)
         let effectiveChannelCount = max(1, channelCount)
@@ -226,7 +234,13 @@ struct NativeWaveformRenderer {
             "-y", pcmFile.path
         ]
 
-        try await runFFmpeg(path: ffmpegPath, arguments: arguments)
+        try await runFFmpeg(
+            path: ffmpegPath,
+            arguments: arguments,
+            inputURL: url,
+            outputURL: pcmFile,
+            subprocessRunner: subprocessRunner
+        )
         try Task.checkCancellation()
 
         let pcmData = try Data(contentsOf: pcmFile)
@@ -321,38 +335,44 @@ struct NativeWaveformRenderer {
 
     // MARK: - FFmpeg Process
 
-    /// Lightweight FFmpeg process runner using terminationHandler to avoid
-    /// blocking the Swift cooperative thread pool.
-    private static nonisolated func runFFmpeg(path: String, arguments: [String]) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: path)
-            process.arguments = arguments
-            let stderrPipe = Pipe()
-            process.standardOutput = Pipe()
-            process.standardError = stderrPipe
+    private static nonisolated func runFFmpeg(
+        path: String,
+        arguments: [String],
+        inputURL: URL,
+        outputURL: URL,
+        subprocessRunner: any SubprocessRunning
+    ) async throws {
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: path),
+            arguments: arguments,
+            timeout: .seconds(12 * 60 * 60),
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 64 * 1024,
+            sensitiveValues: [path, inputURL.path, outputURL.path]
+        )
 
-            process.terminationHandler = { terminatedProcess in
-                if terminatedProcess.terminationStatus == 0 {
-                    continuation.resume(returning: ())
-                } else if terminatedProcess.terminationReason == .uncaughtSignal
-                            || terminatedProcess.terminationStatus == 15 {
-                    continuation.resume(throwing: CancellationError())
-                } else {
-                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                    let message = String(data: stderrData, encoding: .utf8) ?? "Unknown ffmpeg error"
-                    continuation.resume(throwing: PreviewAssetError.generationFailed(
-                        message.trimmingCharacters(in: .whitespacesAndNewlines)
-                    ))
-                }
-            }
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch SubprocessRunnerError.timedOut {
+            throw PreviewAssetError.generationFailed("FFmpeg waveform decode timed out")
+        } catch {
+            throw PreviewAssetError.generationFailed(
+                request.redactedDiagnostic(error.localizedDescription, limit: 1_000)
+            )
+        }
 
-            do {
-                try process.run()
-            } catch {
-                process.terminationHandler = nil
-                continuation.resume(throwing: error)
-            }
+        guard result.succeeded else {
+            let diagnostic = request.redactedDiagnostic(
+                result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),
+                limit: 2_000
+            )
+            let message = diagnostic.isEmpty
+                ? "FFmpeg exited with status \(result.terminationStatus)"
+                : diagnostic
+            throw PreviewAssetError.generationFailed(message)
         }
     }
 }

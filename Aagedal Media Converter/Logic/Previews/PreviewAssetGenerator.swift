@@ -92,11 +92,50 @@ enum PreviewAssetError: Error, LocalizedError {
     }
 }
 
+struct PreviewMediaFacts: Sendable {
+    let metadata: VideoMetadata?
+    let duration: Double
+    let hasVideoStream: Bool
+}
+
+/// A data-only frame request. Workers never receive cache destinations, so a decoder
+/// completing after its deadline cannot overwrite a fallback or a newer generation.
+struct PreviewThumbnailRequest: Sendable {
+    let index: Int
+    let position: Double
+    let width: CGFloat
+    let tolerance: Double
+}
+
+/// Only AVFoundation's cancellation entry points cross executors. Configuration and
+/// image generation stay on the one rendering worker; the generator itself is never
+/// exposed to other work as a generally Sendable object.
+private final class NativePreviewCancellation: @unchecked Sendable {
+    private let asset: AVURLAsset
+    private let generator: AVAssetImageGenerator
+
+    init(asset: AVURLAsset, generator: AVAssetImageGenerator) {
+        self.asset = asset
+        self.generator = generator
+    }
+
+    func cancel() {
+        generator.cancelAllCGImageGeneration()
+        asset.cancelLoading()
+    }
+}
+
 actor PreviewAssetGenerator {
     static let shared = PreviewAssetGenerator()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "PreviewAssets")
     private let fileManager = FileManager.default
+    private let subprocessRunner: any SubprocessRunning
+    private let thumbnailTimeout: Duration
+    private let thumbnailRenderer: @Sendable (URL, [PreviewThumbnailRequest]) async throws -> [Int: Data]
+    private let metadataTimeout: Duration
+    private let metadataProbe: @Sendable (URL) async throws -> VideoMetadata
+    private let essentialInfoProbe: @Sendable (URL) async throws -> EssentialVideoInfo
     private let thumbnailCount = 6
     private let waveformSize = "1000x90"
     private let rowThumbnailSize = "640:-1"  // 640px width for row thumbnail
@@ -111,62 +150,120 @@ actor PreviewAssetGenerator {
     private func waveformChunkFilename(chunkIndex: Int) -> String { "waveform_chunk_\(chunkIndex).png" }
     private func waveformChunkFilename(for streamIndex: Int, chunkIndex: Int) -> String { "waveform_a\(streamIndex)_chunk_\(chunkIndex).png" }
 
-    /// Tracks all running FFmpeg/FFprobe processes for cleanup on app termination
-    private var runningProcesses: Set<Process> = []
+    /// Tracks all running preview subprocess tasks for cleanup on app termination.
+    private var runningProcessTasks: [UUID: Task<SubprocessResult, Error>] = [:]
 
-    /// Tracks running processes by URL for targeted cancellation
-    private var processesPerURL: [URL: Set<Process>] = [:]
+    /// Tracks running subprocess tasks by source URL for targeted cancellation.
+    private var processTasksPerURL: [URL: Set<UUID>] = [:]
 
-    /// Tracks in-progress asset generation tasks to prevent duplicate work
-    /// When multiple callers request assets for the same URL, they all await the same task
-    private var inProgressGenerations: [URL: Task<PreviewAssets, Error>] = [:]
+    private struct InProgressGeneration {
+        let id: UUID
+        let task: Task<PreviewAssets, Error>
+    }
+
+    /// Tracks in-progress asset generation tasks to prevent duplicate work.
+    /// The identity prevents cleanup from an older cancelled attempt removing its replacement.
+    private var inProgressGenerations: [URL: InProgressGeneration] = [:]
 
     /// In-memory cache for per-channel waveforms (keyed by URL, then stream index)
     /// Survives across trim view open/close cycles since PreviewAssetGenerator is a singleton actor
     private var channelWaveformCache: [URL: [Int: SendableChannelWaveform]] = [:]
 
+    init(
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        metadataTimeout: Duration = BoundedVideoMetadataProbe.defaultTimeout,
+        thumbnailTimeout: Duration = .seconds(15),
+        thumbnailRenderer: @escaping @Sendable (URL, [PreviewThumbnailRequest]) async throws -> [Int: Data] = {
+            try await PreviewAssetGenerator.renderNativeThumbnails(url: $0, requests: $1)
+        },
+        metadataProbe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        },
+        essentialInfoProbe: @escaping @Sendable (URL) async throws -> EssentialVideoInfo = {
+            try await VideoMetadataService.shared.fetchEssentialInfo(for: $0)
+        }
+    ) {
+        self.subprocessRunner = subprocessRunner
+        self.metadataTimeout = metadataTimeout
+        self.thumbnailTimeout = thumbnailTimeout
+        self.thumbnailRenderer = thumbnailRenderer
+        self.metadataProbe = metadataProbe
+        self.essentialInfoProbe = essentialInfoProbe
+    }
+
+    /// Resolves the media facts needed by both preview entry points without allowing a
+    /// non-cooperative parser to pin the preview actor. Video containers normally resolve
+    /// everything in one rich metadata read; unsupported/audio-only inputs use the bounded
+    /// essential-info fallback instead.
+    func resolveMediaFacts(for url: URL) async throws -> PreviewMediaFacts {
+        var resolvedMetadata: VideoMetadata?
+        do {
+            let metadata = try await BoundedVideoMetadataProbe.metadata(
+                for: url,
+                timeout: metadataTimeout,
+                probe: metadataProbe
+            )
+            resolvedMetadata = metadata
+            if let duration = metadata.duration, duration > 0 {
+                return PreviewMediaFacts(
+                    metadata: metadata,
+                    duration: duration,
+                    hasVideoStream: !metadata.videoStreams.isEmpty
+                )
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            // Do not immediately re-enter the same potentially stalled parser through the
+            // fallback. The caller can fail or fall back after this one deadline window.
+            throw NonJoiningTaskDeadlineError.timedOut
+        } catch {
+            // Unsupported containers and ordinary read failures may still have useful
+            // duration/topology information through the essential-info path.
+        }
+
+        let info = try await BoundedVideoMetadataProbe.essentialInfo(
+            for: url,
+            timeout: metadataTimeout,
+            probe: essentialInfoProbe
+        )
+        guard info.duration > 0 else {
+            throw PreviewAssetError.durationUnavailable
+        }
+        return PreviewMediaFacts(
+            metadata: resolvedMetadata,
+            duration: info.duration,
+            hasVideoStream: resolvedMetadata.map { !$0.videoStreams.isEmpty }
+                ?? info.hasVideoStream
+        )
+    }
+
     /// Terminates all running FFmpeg/FFprobe processes
     /// Call this when the app is about to quit to prevent orphaned processes
     func terminateAllProcesses() {
-        logger.info("Terminating \(self.runningProcesses.count) running preview processes")
-        for process in runningProcesses {
-            if process.isRunning {
-                process.terminate()
-            }
+        logger.info("Terminating \(self.runningProcessTasks.count) running preview processes")
+        for generation in inProgressGenerations.values {
+            generation.task.cancel()
         }
-        runningProcesses.removeAll()
-    }
-
-    /// Synchronous version for use in applicationWillTerminate
-    /// Uses a semaphore to wait for the actor-isolated method to complete
-    nonisolated func terminateAllProcessesSync() {
-        let semaphore = DispatchSemaphore(value: 0)
-        Task {
-            await self.terminateAllProcesses()
-            semaphore.signal()
+        for task in runningProcessTasks.values {
+            task.cancel()
         }
-        // Wait up to 2 seconds for processes to be terminated
-        _ = semaphore.wait(timeout: .now() + 2.0)
     }
 
     /// Cancels asset generation for a specific URL
-    /// The current FFmpeg process is allowed to finish to avoid corrupted chunks.
-    /// Future chunks are cancelled via Task cancellation.
+    /// Active subprocesses for the URL are cancelled through the shared runner so their
+    /// descendants cannot outlive the preview request.
     func cancelGeneration(for url: URL) {
         logger.info("Cancelling asset generation for \(url.lastPathComponent, privacy: .public)")
 
-        // Cancel the in-progress generation task
-        // The current FFmpeg process will finish naturally, then the task will see
-        // the cancellation via Task.checkCancellation() and stop the loop.
-        if let task = inProgressGenerations[url] {
-            task.cancel()
+        if let generation = inProgressGenerations[url] {
+            generation.task.cancel()
             inProgressGenerations.removeValue(forKey: url)
         }
 
-        // NOTE: We do NOT terminate running processes here.
-        // This prevents corrupted chunk files from incomplete FFmpeg output.
-        // The process will finish, write its complete file, and the task will
-        // check for cancellation before starting the next chunk.
+        for taskID in processTasksPerURL[url] ?? [] {
+            runningProcessTasks[taskID]?.cancel()
+        }
     }
 
     /// Clears the entire preview cache directory.
@@ -442,25 +539,30 @@ actor PreviewAssetGenerator {
     func generateAssets(for url: URL) async throws -> PreviewAssets {
         // Check if there's already an in-progress generation for this URL
         // If so, await the existing task instead of starting a duplicate
-        if let existingTask = inProgressGenerations[url] {
+        if let existingGeneration = inProgressGenerations[url] {
             logger.info("Reusing in-progress asset generation for \(url.lastPathComponent, privacy: .public)")
-            return try await existingTask.value
+            return try await existingGeneration.task.value
         }
 
         logger.info("Starting asset generation for \(url.lastPathComponent, privacy: .public)")
 
         // Create a task for this generation and store it in the dictionary
+        let generationID = UUID()
         let generationTask = Task<PreviewAssets, Error> {
             try await self.performAssetGeneration(for: url)
         }
-        inProgressGenerations[url] = generationTask
+        inProgressGenerations[url] = InProgressGeneration(id: generationID, task: generationTask)
 
         do {
             let result = try await generationTask.value
-            inProgressGenerations.removeValue(forKey: url)
+            if inProgressGenerations[url]?.id == generationID {
+                inProgressGenerations.removeValue(forKey: url)
+            }
             return result
         } catch {
-            inProgressGenerations.removeValue(forKey: url)
+            if inProgressGenerations[url]?.id == generationID {
+                inProgressGenerations.removeValue(forKey: url)
+            }
             throw error
         }
     }
@@ -535,7 +637,18 @@ actor PreviewAssetGenerator {
         let waveformURL = assetDirectory.appendingPathComponent(waveformFilename, isDirectory: false)
         let legacyWaveformURL = assetDirectory.appendingPathComponent(legacyWaveformFilename, isDirectory: false)
 
-        let hasVideoStream = await hasVideoStream(for: url)
+        let mediaFacts: PreviewMediaFacts
+        do {
+            mediaFacts = try await resolveMediaFacts(for: url)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            logger.warning("Media information unavailable while preparing preview assets for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw PreviewAssetError.durationUnavailable
+        }
+        let metadata = mediaFacts.metadata
+        let hasVideoStream = mediaFacts.hasVideoStream
+        let duration = mediaFacts.duration
 
         let rowThumbnailMissing = !fileManager.fileExists(atPath: rowThumbnailURL.path)
         let missingThumbnailIndices: [Int] = hasVideoStream ? expectedThumbnailURLs.enumerated().compactMap { index, url in
@@ -543,7 +656,7 @@ actor PreviewAssetGenerator {
         } : []
         let existingWaveformURL = [waveformURL, legacyWaveformURL].first { fileManager.fileExists(atPath: $0.path) }
         var existingPerStreamWaveforms: [Int: URL] = [:]
-        if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
+        if let metadata {
             metadata.audioStreams.enumerated().forEach { index, _ in
                 let customURL = assetDirectory.appendingPathComponent(waveformFilename(for: index), isDirectory: false)
                 if fileManager.fileExists(atPath: customURL.path) {
@@ -598,12 +711,9 @@ actor PreviewAssetGenerator {
 
         logger.info("Row thumbnail missing: \(rowThumbnailMissing), filmstrip thumbnails missing: \(missingThumbnailIndices.count), waveform missing: \(waveformMissing)")
 
-        let duration = await determineDuration(for: url) ?? 0
-        if duration <= 0 {
-            throw PreviewAssetError.durationUnavailable
-        }
-
-        let hdrType: HDRType = hasVideoStream ? (await detectHDRRequirement(for: url)) : .none
+        let hdrType = hasVideoStream
+            ? detectHDRRequirement(from: metadata?.primaryVideoStream)
+            : .none
 
         if rowThumbnailMissing {
             if hasVideoStream {
@@ -618,6 +728,7 @@ actor PreviewAssetGenerator {
                 try await generateAudioRowThumbnail(
                     url: url,
                     ffmpegPath: ffmpegPath,
+                    duration: duration,
                     destination: rowThumbnailURL
                 )
             }
@@ -663,9 +774,6 @@ actor PreviewAssetGenerator {
             logger.info("Skipping filmstrip thumbnails for \(url.lastPathComponent, privacy: .public) because no video stream was detected")
         }
 
-        // Load metadata for waveform generation
-        let metadata = try? await VideoMetadataService.shared.metadata(for: url)
-
         // Generate native waveform images (fast: single FFmpeg PCM decode + Swift render)
         var nativeWaveformImage: SendableImage?
         var nativePerStreamImages: [Int: SendableImage] = [:]
@@ -698,6 +806,8 @@ actor PreviewAssetGenerator {
                             height: chunkHeight
                         )
                         nativePerStreamImages[index] = SendableImage(image: streamImage)
+                    } catch is CancellationError {
+                        throw CancellationError()
                     } catch {
                         logger.warning("Native waveform failed for stream \(index) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
@@ -722,6 +832,8 @@ actor PreviewAssetGenerator {
                         audioStreamIndex: 0,
                         existingChunks: &existingWaveformChunks
                     )
+                } catch is CancellationError {
+                    throw CancellationError()
                 } catch {
                     logger.warning("Chunked waveform fallback also failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
@@ -825,14 +937,23 @@ actor PreviewAssetGenerator {
 
         // AV2 .ivf: no decoder (AVFoundation/FFmpeg) can read it — decode a frame with avmdec.
         if url.pathExtension.lowercased() == "ivf" {
-            return await generateAV2RowThumbnail(url: url, destination: rowThumbnailURL)
+            return try await generateAV2RowThumbnail(url: url, destination: rowThumbnailURL)
         }
 
-        let hasVideoStream = await hasVideoStream(for: url)
+        let mediaFacts: PreviewMediaFacts
+        do {
+            mediaFacts = try await resolveMediaFacts(for: url)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            logger.warning("Media information unavailable while generating a row thumbnail for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw PreviewAssetError.durationUnavailable
+        }
+        let hasVideoStream = mediaFacts.hasVideoStream
 
         if hasVideoStream {
             // Try AVFoundation first (in-process, fast for Apple-native formats)
-            if let data = await generateRowThumbnailWithAVFoundation(url: url, destination: rowThumbnailURL) {
+            if let data = try await generateRowThumbnailWithAVFoundation(url: url, duration: mediaFacts.duration, destination: rowThumbnailURL) {
                 return data
             }
 
@@ -844,11 +965,8 @@ actor PreviewAssetGenerator {
                 throw PreviewAssetError.ffmpegBinaryMissing
             }
 
-            guard let duration = await determineDuration(for: url) else {
-                throw PreviewAssetError.durationUnavailable
-            }
-
-            let hdrType = await detectHDRRequirement(for: url)
+            let duration = mediaFacts.duration
+            let hdrType = detectHDRRequirement(from: mediaFacts.metadata?.primaryVideoStream)
 
             try await generateRowThumbnail(
                 url: url,
@@ -866,6 +984,7 @@ actor PreviewAssetGenerator {
             try await generateAudioRowThumbnail(
                 url: url,
                 ffmpegPath: ffmpegPath,
+                duration: mediaFacts.duration,
                 destination: rowThumbnailURL
             )
         }
@@ -888,7 +1007,7 @@ actor PreviewAssetGenerator {
     /// Generates a row thumbnail for an AV2 `.ivf` source by decoding a single frame with
     /// avmdec to a temporary Y4M file, then converting it to PNG with FFmpeg. Returns nil on
     /// any failure (the caller then falls back to the generic placeholder).
-    private func generateAV2RowThumbnail(url: URL, destination: URL) async -> Data? {
+    private func generateAV2RowThumbnail(url: URL, destination: URL) async throws -> Data? {
         guard IVFHeaderParser.parse(url: url)?.isAV2 == true,
               let avmdecPath = BinaryPathResolver.avmdecPath,
               let ffmpegPath = BinaryPathResolver.ffmpegPath else {
@@ -898,18 +1017,19 @@ actor PreviewAssetGenerator {
         defer { try? fileManager.removeItem(at: tempY4M) }
         do {
             // Decode one frame to self-describing Y4M (native chroma / bit depth).
-            _ = try await runProcess(
+            try await runProcess(
                 executable: URL(fileURLWithPath: avmdecPath),
                 arguments: [url.path, "--limit=1", "-o", tempY4M.path],
-                forURL: url
-            ) { _, _ in true }
+                forURL: url,
+                outputURL: tempY4M
+            )
 
             let rawSize = ((try? fileManager.attributesOfItem(atPath: tempY4M.path))?[.size] as? Int) ?? 0
             guard rawSize > 0 else { return nil }
 
             let maxDim = max(2, Int(AppConstants.maxThumbnailSize.width))
             // Convert the decoded frame to a PNG thumbnail (FFmpeg reads Y4M format/depth itself).
-            _ = try await runProcess(
+            try await runProcess(
                 executable: URL(fileURLWithPath: ffmpegPath),
                 arguments: [
                     "-y", "-nostdin",
@@ -918,97 +1038,133 @@ actor PreviewAssetGenerator {
                     "-vf", "scale=\(maxDim):-2",
                     destination.path
                 ],
-                forURL: url
-            ) { _, _ in true }
+                forURL: url,
+                outputURL: destination
+            )
 
             return try? Data(contentsOf: destination)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             logger.error("AV2 thumbnail generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
 
-    /// Generates a row thumbnail using AVFoundation (fast, in-process, no subprocess spawning).
-    /// Returns the PNG data on success, nil if AVFoundation can't handle the format.
-    private func generateRowThumbnailWithAVFoundation(url: URL, destination: URL) async -> Data? {
-        // Skip AVFoundation entirely for containers it can never handle
-        let ext = url.pathExtension.lowercased()
-        if Self.avFoundationUnsupportedExtensions.contains(ext) {
-            logger.debug("Skipping AVFoundation thumbnail for unsupported container: \(ext, privacy: .public)")
+    /// Publishes only the result accepted by the deadline. The detached worker retains
+    /// its own source access until it exits, even if the caller has already fallen back.
+    /// Module-visible for deadline and publication tests with an injected renderer.
+    func generateNativeThumbnails(
+        url: URL,
+        requests: [PreviewThumbnailRequest],
+        destinations: [URL]
+    ) async throws -> [Int: Data] {
+        try Task.checkCancellation()
+        let renderer = thumbnailRenderer
+        let images = try await NonJoiningTaskDeadline.run(timeout: thumbnailTimeout) {
+            let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+            defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+            return try await renderer(url, requests)
+        }
+        try Task.checkCancellation()
+        var published: [Int: Data] = [:]
+        for request in requests {
+            try Task.checkCancellation()
+            guard destinations.indices.contains(request.index),
+                  let data = images[request.index], !data.isEmpty else { continue }
+            try data.write(to: destinations[request.index], options: .atomic)
+            published[request.index] = data
+        }
+        return published
+    }
+
+    private func generateRowThumbnailWithAVFoundation(
+        url: URL,
+        duration: Double,
+        destination: URL
+    ) async throws -> Data? {
+        guard !Self.avFoundationUnsupportedExtensions.contains(url.pathExtension.lowercased()) else {
             return nil
         }
+        do {
+            let images = try await generateNativeThumbnails(
+                url: url,
+                requests: [PreviewThumbnailRequest(
+                    index: 0, position: min(10, max(duration * 0.1, 0.5)), width: 640, tolerance: 2
+                )],
+                destinations: [destination]
+            )
+            return images[0]
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            logger.debug("AVFoundation thumbnail failed or timed out for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
 
+    /// Runs wholly outside the preview actor, including track loading and PNG encoding.
+    /// Cancellation asks AVFoundation to stop; the non-joining deadline remains the
+    /// guarantee for callers when a system decoder does not promptly cooperate.
+    nonisolated static func renderNativeThumbnails(
+        url: URL,
+        requests: [PreviewThumbnailRequest]
+    ) async throws -> [Int: Data] {
+        try Task.checkCancellation()
         let asset = AVURLAsset(url: url)
-
-        // Check that AVFoundation can actually read this file's video track
-        guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first else {
-            logger.debug("AVFoundation found no video track for \(url.lastPathComponent, privacy: .public)")
-            return nil
-        }
-
-        // Get duration to pick a representative frame (10% in, capped at 10s)
-        let cmDuration = try? await asset.load(.duration)
-        let durationSec = CMTimeGetSeconds(cmDuration ?? CMTime.zero)
-        guard durationSec > 0 else {
-            logger.debug("AVFoundation returned 0 duration for \(url.lastPathComponent, privacy: .public)")
-            return nil
-        }
-
-        let seekPosition = min(10, max(durationSec * 0.1, 0.5))
-        let seekTime = CMTime(seconds: seekPosition, preferredTimescale: 600)
-
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 640, height: 0) // 640px wide, height preserves aspect ratio
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 2, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 2, preferredTimescale: 600)
-
-        do {
-            let (cgImage, _) = try await generator.image(at: seekTime)
-
-            var ciImage = CIImage(cgImage: cgImage)
-
-            // Tonemap ProRes RAW thumbnails to SDR. ProRes RAW is camera sensor
-            // data in linear light with very high dynamic range that looks
-            // over-exposed in standard NSImageView. Other HDR formats (HDR10, HLG)
-            // render acceptably without tonemapping.
-            let formatDescriptions = (try? await videoTrack.load(.formatDescriptions)) ?? []
-            let isProResRAW = formatDescriptions.contains { desc in
-                let code = CMFormatDescriptionGetMediaSubType(desc)
-                // 'aprn' = ProRes RAW, 'aprh' = ProRes RAW HQ
+        let cancellation = NativePreviewCancellation(asset: asset, generator: generator)
+        return try await withTaskCancellationHandler {
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+                return [:]
+            }
+            try Task.checkCancellation()
+            let descriptions = (try? await track.load(.formatDescriptions)) ?? []
+            try Task.checkCancellation()
+            let isProResRAW = descriptions.contains {
+                let code = CMFormatDescriptionGetMediaSubType($0)
                 return code == 0x6170726E || code == 0x61707268
             }
-
-            if isProResRAW {
-                if let tonemap = CIFilter(name: "CIToneMapHeadroom", parameters: [
-                    kCIInputImageKey: ciImage,
-                    "inputSourceHeadroom": 8.0,
-                    "inputTargetHeadroom": 1.0
-                ]), let tonemapped = tonemap.outputImage {
-                    ciImage = tonemapped
-                    logger.debug("Tonemapped ProRes RAW thumbnail for \(url.lastPathComponent, privacy: .public)")
-                }
-            }
-
             let context = CIContext()
             let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
-            guard let pngData = context.pngRepresentation(of: ciImage, format: .RGBA8, colorSpace: srgb) else {
-                logger.debug("AVFoundation thumbnail: failed to encode PNG for \(url.lastPathComponent, privacy: .public)")
-                return nil
+            var images: [Int: Data] = [:]
+            for request in requests {
+                try Task.checkCancellation()
+                generator.maximumSize = CGSize(width: request.width, height: 0)
+                generator.requestedTimeToleranceBefore = CMTime(seconds: request.tolerance, preferredTimescale: 600)
+                generator.requestedTimeToleranceAfter = generator.requestedTimeToleranceBefore
+                do {
+                    let (image, _) = try await generator.image(at: CMTime(seconds: request.position, preferredTimescale: 600))
+                    try Task.checkCancellation()
+                    var ciImage = CIImage(cgImage: image)
+                    if isProResRAW, let filter = CIFilter(name: "CIToneMapHeadroom", parameters: [
+                        kCIInputImageKey: ciImage,
+                        "inputSourceHeadroom": 8.0,
+                        "inputTargetHeadroom": 1.0
+                    ]), let tonemapped = filter.outputImage {
+                        ciImage = tonemapped
+                    }
+                    if let data = context.pngRepresentation(of: ciImage, format: .RGBA8, colorSpace: srgb) {
+                        images[request.index] = data
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // An individual decode failure leaves this index for FFmpeg fallback.
+                }
             }
-
-            try pngData.write(to: destination)
-            logger.info("AVFoundation thumbnail generated for \(url.lastPathComponent, privacy: .public)")
-            return pngData
-        } catch {
-            logger.debug("AVFoundation thumbnail generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return nil
+            try Task.checkCancellation()
+            return images
+        } onCancel: {
+            cancellation.cancel()
         }
     }
 
     private func generateAudioRowThumbnail(
         url: URL,
         ffmpegPath: String,
+        duration: Double,
         destination: URL
     ) async throws {
         let prefs = AudioWaveformPreferences.loadConfig()
@@ -1018,10 +1174,6 @@ actor PreviewAssetGenerator {
 
         // Try native rendering first (fast)
         do {
-            guard let duration = await determineDuration(for: url), duration > 0 else {
-                throw PreviewAssetError.durationUnavailable
-            }
-
             let image = try await NativeWaveformRenderer.generateWaveform(
                 url: url,
                 ffmpegPath: ffmpegPath,
@@ -1073,7 +1225,8 @@ actor PreviewAssetGenerator {
         try await runProcess(
             executable: URL(fileURLWithPath: ffmpegPath),
             arguments: arguments,
-            forURL: url
+            forURL: url,
+            outputURL: destination
         )
     }
 
@@ -1101,13 +1254,6 @@ actor PreviewAssetGenerator {
         let fingerprintSource = "\(url.path)::\(size)::\(modification)"
         let digest = SHA256.hash(data: Data(fingerprintSource.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
-    }
-
-    private func determineDuration(for url: URL) async -> Double? {
-        if let cachedDuration = await VideoMetadataService.shared.cachedDuration(for: url), cachedDuration > 0 {
-            return cachedDuration
-        }
-        return await SwiftExifMediaProbe.duration(for: url)
     }
 
     private func generateThumbnails(
@@ -1166,63 +1312,26 @@ actor PreviewAssetGenerator {
             return missingIndices
         }
 
-        let asset = AVURLAsset(url: url)
-        guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first else {
+        let requests = missingIndices.map { index in
+            PreviewThumbnailRequest(
+                index: index,
+                position: positionForThumbnail(at: index, total: thumbnailCount, duration: duration),
+                width: 320,
+                tolerance: 1
+            )
+        }
+        do {
+            let images = try await generateNativeThumbnails(
+                url: url, requests: requests, destinations: expectedFiles
+            )
+            return missingIndices.filter { images[$0] == nil }
+        } catch is CancellationError {
+            // The parent is cancelled; returning no remaining work prevents fallback.
+            return []
+        } catch {
+            logger.debug("AVFoundation filmstrip failed or timed out for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return missingIndices
         }
-
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 320, height: 0)
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 1, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
-
-        // Detect ProRes RAW for tonemapping
-        let formatDescriptions = (try? await videoTrack.load(.formatDescriptions)) ?? []
-        let isProResRAW = formatDescriptions.contains { desc in
-            let code = CMFormatDescriptionGetMediaSubType(desc)
-            return code == 0x6170726E || code == 0x61707268
-        }
-
-        let context = CIContext()
-        let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
-        var failedIndices: [Int] = []
-
-        for index in missingIndices {
-            let position = positionForThumbnail(at: index, total: thumbnailCount, duration: duration)
-            let seekTime = CMTime(seconds: position, preferredTimescale: 600)
-            let destination = expectedFiles[index]
-
-            do {
-                let (cgImage, _) = try await generator.image(at: seekTime)
-                var ciImage = CIImage(cgImage: cgImage)
-
-                if isProResRAW {
-                    if let tonemap = CIFilter(name: "CIToneMapHeadroom", parameters: [
-                        kCIInputImageKey: ciImage,
-                        "inputSourceHeadroom": 8.0,
-                        "inputTargetHeadroom": 1.0
-                    ]), let tonemapped = tonemap.outputImage {
-                        ciImage = tonemapped
-                    }
-                }
-
-                guard let pngData = context.pngRepresentation(of: ciImage, format: .RGBA8, colorSpace: srgb) else {
-                    failedIndices.append(index)
-                    continue
-                }
-
-                try pngData.write(to: destination)
-                logger.debug("Generated thumbnail #\(index) for \(url.lastPathComponent, privacy: .public) at position \(position, privacy: .public)s")
-            } catch {
-                failedIndices.append(index)
-            }
-        }
-
-        if !failedIndices.isEmpty {
-            logger.debug("AVFoundation filmstrip: \(failedIndices.count) of \(missingIndices.count) failed for \(url.lastPathComponent, privacy: .public)")
-        }
-        return failedIndices
     }
 
     /// Generates filmstrip thumbnails using ffmpeg (one subprocess per frame).
@@ -1235,6 +1344,7 @@ actor PreviewAssetGenerator {
         hdrType: HDRType
     ) async {
         for index in missingIndices {
+            if Task.isCancelled { return }
             let destination = expectedFiles[index]
             let position = positionForThumbnail(at: index, total: thumbnailCount, duration: duration)
 
@@ -1265,9 +1375,13 @@ actor PreviewAssetGenerator {
                 try await runProcess(
                     executable: URL(fileURLWithPath: ffmpegPath),
                     arguments: arguments,
-                    forURL: url
+                    forURL: url,
+                    outputURL: destination
                 )
                 logger.debug("Generated thumbnail #\(index) for \(url.lastPathComponent, privacy: .public) at position \(position, privacy: .public)s")
+            } catch is CancellationError {
+                try? fileManager.removeItem(at: destination)
+                return
             } catch {
                 logger.error("Thumbnail generation failed for index \(index) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 try? fileManager.removeItem(at: destination)
@@ -1296,15 +1410,17 @@ actor PreviewAssetGenerator {
             "-y",
             destination.path
         ]
-        logger.debug("Waveform primary command for \(url.lastPathComponent, privacy: .public): \(primaryArguments.joined(separator: " "), privacy: .public)")
         do {
             try await runProcess(
                 executable: URL(fileURLWithPath: ffmpegPath),
                 arguments: primaryArguments,
-                forURL: url
+                forURL: url,
+                outputURL: destination
             )
             logger.debug("Waveform primary pipeline succeeded for \(url.lastPathComponent, privacy: .public)")
             return
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             logger.warning("Primary waveform generation failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public). Retrying with fallback pipeline.")
         }
@@ -1324,12 +1440,11 @@ actor PreviewAssetGenerator {
             "-y",
             destination.path
         ]
-        logger.debug("Waveform fallback command for \(url.lastPathComponent, privacy: .public): \(fallbackArguments.joined(separator: " "), privacy: .public)")
-
         try await runProcess(
             executable: URL(fileURLWithPath: ffmpegPath),
             arguments: fallbackArguments,
-            forURL: url
+            forURL: url,
+            outputURL: destination
         )
         logger.debug("Waveform fallback pipeline succeeded for \(url.lastPathComponent, privacy: .public)")
     }
@@ -1349,6 +1464,7 @@ actor PreviewAssetGenerator {
         logger.info("Generating per-stream waveforms for \(metadata.audioStreams.count) audio tracks (sequential)")
 
         for (index, stream) in metadata.audioStreams.enumerated() {
+            if Task.isCancelled { return }
             let destination = assetDirectory.appendingPathComponent(waveformFilename(for: index), isDirectory: false)
             if fileManager.fileExists(atPath: destination.path) {
                 continue
@@ -1380,6 +1496,8 @@ actor PreviewAssetGenerator {
                 destination: destination,
                 audioStreamIndex: streamIndex
             )
+            return
+        } catch is CancellationError {
             return
         } catch {
             logger.warning("Waveform generation failed for audio stream #\(streamIndex) (\(stream.channelLayout ?? "unknown")) of \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -1454,7 +1572,8 @@ actor PreviewAssetGenerator {
         try await runProcess(
             executable: URL(fileURLWithPath: ffmpegPath),
             arguments: arguments,
-            forURL: url
+            forURL: url,
+            outputURL: destination
         )
     }
 
@@ -1492,8 +1611,12 @@ actor PreviewAssetGenerator {
                         width: param.width
                     )
                     logger.debug("Generated waveform chunk \(param.index)/\(chunkParams.count) for \(url.lastPathComponent, privacy: .public)")
+                } catch is CancellationError {
+                    try? fileManager.removeItem(at: destination)
+                    throw CancellationError()
                 } catch {
                     logger.warning("Failed to generate waveform chunk \(param.index) for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    try? fileManager.removeItem(at: destination)
                     // Continue with next chunk instead of failing entirely
                     continue
                 }
@@ -1530,6 +1653,7 @@ actor PreviewAssetGenerator {
         logger.info("Generating chunked waveforms for \(metadata.audioStreams.count) audio streams")
 
         for (index, _) in metadata.audioStreams.enumerated() {
+            if Task.isCancelled { return }
             var streamChunks = existingChunks[index] ?? []
 
             do {
@@ -1542,6 +1666,8 @@ actor PreviewAssetGenerator {
                     existingChunks: &streamChunks
                 )
                 existingChunks[index] = streamChunks
+            } catch is CancellationError {
+                return
             } catch {
                 logger.warning("Failed to generate chunked waveform for stream \(index): \(error.localizedDescription, privacy: .public)")
             }
@@ -1555,20 +1681,18 @@ actor PreviewAssetGenerator {
         case hdr10Bit       // 10-bit+ HDR content (previously tonemapped; now handled without zscale)
     }
     
-    /// Detects HDR processing requirement (ProRes RAW, 10-bit+ without color metadata).
-    /// Reads the first video stream via SwiftExif and inspects codec + pixel format + colour info.
-    private func detectHDRRequirement(for url: URL) async -> HDRType {
-        guard SwiftExifMediaProbe.canReadVideo(url),
-              let meta = try? await SwiftExifMediaProbe.readVideo(url),
-              let stream = meta.videoStreams.first(where: { $0.isAttachedPic != true }) else {
+    /// Detects HDR processing requirement (ProRes RAW or content with explicit HDR colour metadata)
+    /// from the already-bounded preview metadata result.
+    private func detectHDRRequirement(from stream: VideoMetadata.VideoStream?) -> HDRType {
+        guard let stream else {
             return .none
         }
 
-        let codec = (stream.codec ?? stream.codecName ?? "").lowercased()
+        let codec = (stream.codec ?? stream.codecLongName ?? "").lowercased()
         let pixFmt = (stream.pixelFormat ?? "").lowercased()
-        let primaries = SwiftExifMediaProbe.primariesString(from: stream.colorInfo?.primaries) ?? ""
-        let matrix = SwiftExifMediaProbe.matrixString(from: stream.colorInfo?.matrix) ?? ""
-        let transfer = SwiftExifMediaProbe.transferString(from: stream.colorInfo?.transfer) ?? ""
+        let primaries = stream.colorPrimaries?.lowercased() ?? ""
+        let matrix = stream.colorSpace?.lowercased() ?? ""
+        let transfer = stream.colorTransfer?.lowercased() ?? ""
 
         if codec.contains("prores") {
             if pixFmt.contains("rgb") || pixFmt.contains("bayer") {
@@ -1628,7 +1752,8 @@ actor PreviewAssetGenerator {
         try await runProcess(
             executable: URL(fileURLWithPath: ffmpegPath),
             arguments: arguments,
-            forURL: url
+            forURL: url,
+            outputURL: destination
         )
     }
 
@@ -1640,108 +1765,87 @@ actor PreviewAssetGenerator {
         return max(0, min(safeDuration, safeDuration * fraction))
     }
 
-    private func runProcess(
-        executable: URL,
-        arguments: [String],
-        forURL url: URL? = nil
-    ) async throws {
-        try await runProcess(executable: executable, arguments: arguments, forURL: url) { (_: Data, _: Data) in () }
-    }
-
-    private func trackProcess(_ process: Process, forURL url: URL? = nil) {
-        runningProcesses.insert(process)
-        if let url = url {
-            processesPerURL[url, default: []].insert(process)
-        }
-    }
-
-    private func untrackProcess(_ process: Process, forURL url: URL? = nil) {
-        runningProcesses.remove(process)
-        if let url = url {
-            processesPerURL[url]?.remove(process)
-            if processesPerURL[url]?.isEmpty == true {
-                processesPerURL.removeValue(forKey: url)
-            }
-        }
-    }
-
-    private func runProcess<T>(
+    /// Module-visible so the subprocess policy can be verified without invoking media probes.
+    func runProcess(
         executable: URL,
         arguments: [String],
         forURL url: URL? = nil,
-        transform: @Sendable @escaping (Data, Data) -> T
-    ) async throws -> T {
-        // Check for cancellation before spawning a new process
+        outputURL: URL
+    ) async throws {
         try Task.checkCancellation()
 
-        // Debug: Log when FFmpeg/FFprobe processes are spawned
-        let execName = executable.lastPathComponent
-        let argsPreview = String(arguments.joined(separator: " ").prefix(500))
-        logger.info("🔧 Spawning \(execName, privacy: .public) process: \(argsPreview, privacy: .public)")
+        let privatePaths = arguments.filter { $0.hasPrefix("/") }
+        let request = SubprocessRequest(
+            executableURL: executable,
+            arguments: arguments,
+            timeout: .seconds(30 * 60),
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 256 * 1024,
+            sensitiveValues: Set(
+                [executable.path, outputURL.path] + privatePaths + [url?.path].compactMap { $0 }
+            )
+        )
+        logger.info("Spawning preview subprocess: \(request.redactedCommandDescription, privacy: .public)")
 
-        // Create process on actor, track it, then run in detached task
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        trackProcess(process, forURL: url)
-
-        // Use withTaskCancellationHandler to terminate the process if the task is cancelled
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                Task.detached(priority: .userInitiated) { [weak self] in
-                    do {
-                        try process.run()
-                    } catch {
-                        await self?.untrackProcess(process, forURL: url)
-                        continuation.resume(throwing: error)
-                        return
-                    }
-
-                    process.waitUntilExit()
-                    await self?.untrackProcess(process, forURL: url)
-
-                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-
-                    // Check if process was terminated due to cancellation (signal 15 = SIGTERM)
-                    if process.terminationStatus == 15 || process.terminationReason == .uncaughtSignal {
-                        continuation.resume(throwing: CancellationError())
-                        return
-                    }
-
-                    if process.terminationStatus == 0 {
-                        let result = transform(stdoutData, stderrData)
-                        continuation.resume(returning: result)
-                    } else {
-                        let message = String(data: stderrData, encoding: .utf8) ?? "Unknown error"
-                        continuation.resume(throwing: PreviewAssetError.generationFailed(message))
-                    }
+        let taskID = UUID()
+        let executionTask = Task<SubprocessResult, Error> { [subprocessRunner] in
+            try await subprocessRunner.run(request)
+        }
+        runningProcessTasks[taskID] = executionTask
+        if let url {
+            processTasksPerURL[url, default: []].insert(taskID)
+        }
+        defer {
+            runningProcessTasks.removeValue(forKey: taskID)
+            if let url {
+                processTasksPerURL[url]?.remove(taskID)
+                if processTasksPerURL[url]?.isEmpty == true {
+                    processTasksPerURL.removeValue(forKey: url)
                 }
             }
-        } onCancel: {
-            // Terminate the process when the task is cancelled
-            if process.isRunning {
-                process.terminate()
+        }
+
+        let result: SubprocessResult
+        do {
+            result = try await withTaskCancellationHandler {
+                try await executionTask.value
+            } onCancel: {
+                executionTask.cancel()
             }
+        } catch is CancellationError {
+            try? fileManager.removeItem(at: outputURL)
+            throw CancellationError()
+        } catch SubprocessRunnerError.timedOut {
+            try? fileManager.removeItem(at: outputURL)
+            throw PreviewAssetError.generationFailed("Preview subprocess timed out after 30 minutes.")
+        } catch {
+            try? fileManager.removeItem(at: outputURL)
+            throw PreviewAssetError.generationFailed(
+                request.redactedDiagnostic(error.localizedDescription)
+            )
+        }
+
+        guard result.succeeded else {
+            try? fileManager.removeItem(at: outputURL)
+            let diagnostic = request.redactedDiagnostic(result.standardErrorText)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = diagnostic.isEmpty
+                ? "\(executable.lastPathComponent) exited with status \(result.terminationStatus)."
+                : diagnostic
+            throw PreviewAssetError.generationFailed(message)
+        }
+
+        let outputSize = (try? outputURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard outputSize > 0 else {
+            try? fileManager.removeItem(at: outputURL)
+            throw PreviewAssetError.generationFailed(
+                "\(executable.lastPathComponent) did not produce a valid preview file."
+            )
         }
     }
 
     private func startAccessingSecurityScope(for url: URL) -> SecurityScopedAccess {
         return SecurityScopedBookmarkManager.shared.startAccessing(url: url)
-    }
-
-    private func hasVideoStream(for url: URL) async -> Bool {
-        // Use VideoMetadataService's fast hasVideoStream check which uses -read_intervals
-        // This is fast even for very large files (50+ GB) and results are cached
-        let hasVideo = await VideoMetadataService.shared.hasVideoStream(for: url)
-        logger.debug("hasVideoStream for \(url.lastPathComponent, privacy: .public): \(hasVideo)")
-        return hasVideo
     }
 
     private func makeAudioWaveformRequest(for url: URL) -> WaveformVideoRequest {

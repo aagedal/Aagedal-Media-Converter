@@ -5,15 +5,60 @@
 import Foundation
 import OSLog
 
+protocol AnalyticsMediaInfoProviding: Sendable {
+    func duration(for file: URL) async -> Double?
+    func resolution(for file: URL) async -> (width: Int, height: Int)?
+}
+
+private struct DefaultAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
+    func duration(for file: URL) async -> Double? {
+        await SwiftExifMediaProbe.duration(for: file)
+    }
+
+    func resolution(for file: URL) async -> (width: Int, height: Int)? {
+        guard SwiftExifMediaProbe.canReadVideo(file),
+              let meta = try? await SwiftExifMediaProbe.readVideo(file),
+              let primary = meta.videoStreams.first(where: { $0.isAttachedPic != true }),
+              let width = primary.width,
+              let height = primary.height else {
+            return nil
+        }
+        return (width, height)
+    }
+}
+
 /// Service for running video quality analytics using FFmpeg (VMAF, PSNR, SSIMULACRA2)
 actor AnalyticsService {
     static let shared = AnalyticsService()
 
-    private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "AnalyticsService")
-    private var isCancelled = false
-    private var currentProcess: Process?
+    private static let metricTimeout: Duration = .seconds(12 * 60 * 60)
+    private static let frameExtractionTimeout: Duration = .seconds(10 * 60)
+    private static let frameComparisonTimeout: Duration = .seconds(2 * 60)
+    private static let mediaInfoTimeout: Duration = .seconds(15)
+    private static let diagnosticCaptureLimit = 256 * 1024
 
-    private init() {}
+    private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "AnalyticsService")
+    private let subprocessRunner: any SubprocessRunning
+    private let ffmpegPathProvider: @Sendable () -> String?
+    private let ssimulacra2PathProvider: @Sendable () -> String?
+    private let mediaInfoProvider: any AnalyticsMediaInfoProviding
+    private let mediaInfoTimeout: Duration
+    private var activeAnalysisID: UUID?
+    private var currentMetricTask: Task<MetricResult, Error>?
+
+    init(
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
+        ssimulacra2PathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ssimulacra2Path },
+        mediaInfoProvider: any AnalyticsMediaInfoProviding = DefaultAnalyticsMediaInfoProvider(),
+        mediaInfoTimeout: Duration = AnalyticsService.mediaInfoTimeout
+    ) {
+        self.subprocessRunner = subprocessRunner
+        self.ffmpegPathProvider = ffmpegPathProvider
+        self.ssimulacra2PathProvider = ssimulacra2PathProvider
+        self.mediaInfoProvider = mediaInfoProvider
+        self.mediaInfoTimeout = mediaInfoTimeout
+    }
 
     /// Runs all enabled metrics sequentially for a source/encoded pair
     /// - Parameters:
@@ -21,6 +66,7 @@ actor AnalyticsService {
     ///   - encodedFile: The encoded output file
     ///   - enabledMetrics: Which metrics to compute
     ///   - vmafModel: VMAF model variant to use
+    ///   - ssimulacra2MaxFrames: Captured frame sampling limit for this operation
     ///   - progress: Callback with (currentMetric, progress 0-1)
     /// - Returns: Array of metric results
     func runAnalytics(
@@ -28,11 +74,22 @@ actor AnalyticsService {
         encodedFile: URL,
         enabledMetrics: [QualityMetric],
         vmafModel: VMAFModel,
+        ssimulacra2MaxFrames: Int = AppConstants.defaultSSIMULACRA2MaxFrames,
         progress: @escaping @Sendable (QualityMetric, Double) -> Void
     ) async throws -> [MetricResult] {
-        isCancelled = false
+        guard !Task.isCancelled else { throw AnalyticsError.cancelled }
 
-        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
+        currentMetricTask?.cancel()
+        let analysisID = UUID()
+        activeAnalysisID = analysisID
+        defer {
+            if activeAnalysisID == analysisID {
+                activeAnalysisID = nil
+                currentMetricTask = nil
+            }
+        }
+
+        guard let ffmpegPath = ffmpegPathProvider() else {
             throw AnalyticsError.ffmpegNotFound
         }
 
@@ -51,25 +108,45 @@ actor AnalyticsService {
         var results: [MetricResult] = []
 
         for metric in enabledMetrics {
-            guard !isCancelled else {
+            guard activeAnalysisID == analysisID, !Task.isCancelled else {
                 throw AnalyticsError.cancelled
             }
 
-            do {
-                let result = try await runMetric(
+            let metricTask = Task {
+                try await self.runMetric(
                     metric,
                     ffmpegPath: ffmpegPath,
                     sourceFile: sourceFile,
                     encodedFile: encodedFile,
-                    vmafModel: vmafModel
+                    vmafModel: vmafModel,
+                    ssimulacra2MaxFrames: ssimulacra2MaxFrames
                 ) { metricProgress in
                     progress(metric, metricProgress)
                 }
+            }
+            currentMetricTask = metricTask
+
+            do {
+                let result = try await withTaskCancellationHandler {
+                    try await metricTask.value
+                } onCancel: {
+                    metricTask.cancel()
+                }
+                guard activeAnalysisID == analysisID, !Task.isCancelled else {
+                    throw AnalyticsError.cancelled
+                }
+                currentMetricTask = nil
                 results.append(result)
-            } catch AnalyticsError.cancelled {
+            } catch is CancellationError {
                 throw AnalyticsError.cancelled
+            } catch let error as AnalyticsError {
+                if case .cancelled = error {
+                    throw AnalyticsError.cancelled
+                }
+                logger.error("\(metric.displayName, privacy: .public) failed: \(error.localizedDescription, privacy: .private(mask: .hash))")
+                throw error
             } catch {
-                logger.error("\(metric.displayName) failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("\(metric.displayName, privacy: .public) failed: \(error.localizedDescription, privacy: .private(mask: .hash))")
                 throw AnalyticsError.metricFailed(metric, error.localizedDescription)
             }
         }
@@ -79,10 +156,9 @@ actor AnalyticsService {
 
     /// Cancels the current analysis
     func cancelAnalysis() {
-        isCancelled = true
-        if let process = currentProcess, process.isRunning {
-            process.terminate()
-        }
+        activeAnalysisID = nil
+        currentMetricTask?.cancel()
+        currentMetricTask = nil
     }
 
     // MARK: - Single Metric Execution
@@ -93,6 +169,7 @@ actor AnalyticsService {
         sourceFile: URL,
         encodedFile: URL,
         vmafModel: VMAFModel,
+        ssimulacra2MaxFrames: Int,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
         logger.info("Starting \(metric.displayName, privacy: .public) analysis")
@@ -103,138 +180,99 @@ actor AnalyticsService {
                 ffmpegPath: ffmpegPath,
                 sourceFile: sourceFile,
                 encodedFile: encodedFile,
+                maxFrames: ssimulacra2MaxFrames,
                 progress: progress
             )
         }
 
-        let process = Process()
-        let stderrPipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: ffmpegPath)
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
-
         // Build arguments based on metric type
         var vmafLogURL: URL? = nil
+        var arguments: [String]
 
         switch metric {
         case .vmaf:
             let tempDir = FileManager.default.temporaryDirectory
             let logFile = tempDir.appendingPathComponent("vmaf_\(UUID().uuidString).json")
             vmafLogURL = logFile
-            process.arguments = buildVMAFArguments(
+            arguments = buildVMAFArguments(
                 encodedFile: encodedFile,
                 sourceFile: sourceFile,
                 model: vmafModel,
                 logPath: logFile
             )
         case .psnr:
-            process.arguments = buildPSNRArguments(
+            arguments = buildPSNRArguments(
                 encodedFile: encodedFile,
                 sourceFile: sourceFile
             )
         case .xpsnr:
-            process.arguments = buildXPSNRArguments(
+            arguments = buildXPSNRArguments(
                 encodedFile: encodedFile,
                 sourceFile: sourceFile
             )
         case .ssimulacra2:
             throw AnalyticsError.metricFailed(.ssimulacra2, "SSIMULACRA2 uses a dedicated binary and should not reach the FFmpeg path")
         }
-
-        currentProcess = process
-
-        // Thread-safe state for progress and stderr collection
-        final class ProcessState: @unchecked Sendable {
-            var durationSeconds: Double = 0
-            var lastReportedProgress: Double = 0
-            var stderrBuffer: String = ""
-            let lock = NSLock()
-
-            func appendStderr(_ text: String) {
-                lock.lock()
-                stderrBuffer += text
-                lock.unlock()
-            }
-
-            func getStderr() -> String {
-                lock.lock()
-                defer { lock.unlock() }
-                return stderrBuffer
+        arguments.insert("-nostdin", at: 0)
+        defer {
+            if let vmafLogURL {
+                try? FileManager.default.removeItem(at: vmafLogURL)
             }
         }
-        let state = ProcessState()
 
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-
-            if let line = String(data: data, encoding: .utf8) {
-                state.appendStderr(line)
-
-                // Parse duration from ffmpeg output
-                if let durationMatch = line.range(of: #"Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)"#, options: .regularExpression) {
-                    let durationStr = String(line[durationMatch])
-                    if let timeMatch = durationStr.range(of: #"(\d{2}):(\d{2}):(\d{2}\.\d+)"#, options: .regularExpression) {
-                        let components = String(durationStr[timeMatch]).components(separatedBy: ":")
-                        if components.count == 3,
-                           let hours = Double(components[0]),
-                           let mins = Double(components[1]),
-                           let secs = Double(components[2]) {
-                            state.durationSeconds = hours * 3600 + mins * 60 + secs
-                        }
-                    }
-                }
-
-                // Parse current time for progress
-                if state.durationSeconds > 0,
-                   let timeMatch = line.range(of: #"time=(\d{2}):(\d{2}):(\d{2}\.\d+)"#, options: .regularExpression) {
-                    let timeStr = String(line[timeMatch])
-                    if let match = timeStr.range(of: #"(\d{2}):(\d{2}):(\d{2}\.\d+)"#, options: .regularExpression) {
-                        let components = String(timeStr[match]).components(separatedBy: ":")
-                        if components.count == 3,
-                           let hours = Double(components[0]),
-                           let mins = Double(components[1]),
-                           let secs = Double(components[2]) {
-                            let currentSeconds = hours * 3600 + mins * 60 + secs
-                            let currentProgress = min(currentSeconds / state.durationSeconds, 0.99)
-
-                            if currentProgress - state.lastReportedProgress >= 0.01 {
-                                state.lastReportedProgress = currentProgress
-                                Task { @MainActor in
-                                    progress(currentProgress)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let sensitiveValues = Set(
+            [ffmpegPath, sourceFile.path, encodedFile.path, vmafLogURL?.path]
+                .compactMap { $0 }
+        )
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: arguments,
+            timeout: Self.metricTimeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: sensitiveValues
+        )
+        let progressParser = AnalyticsFFmpegProgressParser(progress: progress)
+        let processResult: SubprocessResult
 
         do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            throw AnalyticsError.metricFailed(metric, error.localizedDescription)
-        }
-
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
-        currentProcess = nil
-
-        guard !isCancelled else {
-            // Clean up temp files
-            if let logURL = vmafLogURL {
-                try? FileManager.default.removeItem(at: logURL)
+            processResult = try await subprocessRunner.run(request) { chunk in
+                if case .standardError = chunk.stream {
+                    progressParser.consume(chunk.data)
+                }
             }
+        } catch is CancellationError {
             throw AnalyticsError.cancelled
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .failedToStart(_, let underlying):
+                throw AnalyticsError.metricFailed(
+                    metric,
+                    request.redactedDiagnostic(underlying, limit: 500)
+                )
+            case .timedOut:
+                throw AnalyticsError.metricFailed(metric, "FFmpeg exceeded the 12-hour analytics limit")
+            }
+        } catch {
+            throw AnalyticsError.metricFailed(
+                metric,
+                request.redactedDiagnostic(error.localizedDescription, limit: 500)
+            )
         }
+        guard !Task.isCancelled else { throw AnalyticsError.cancelled }
+        progressParser.finish()
 
-        let stderrOutput = state.getStderr()
-
-        guard process.terminationStatus == 0 else {
-            logger.error("FFmpeg stderr: \(stderrOutput, privacy: .public)")
-            throw AnalyticsError.metricFailed(metric, "FFmpeg exited with code \(process.terminationStatus)")
+        let stderrOutput = processResult.standardErrorText
+        guard processResult.succeeded else {
+            let diagnostic = request.redactedDiagnostic(
+                stderrOutput.trimmingCharacters(in: .whitespacesAndNewlines),
+                limit: 500
+            )
+            let detail = diagnostic.isEmpty ? "unknown error" : diagnostic
+            throw AnalyticsError.metricFailed(
+                metric,
+                "FFmpeg exited \(processResult.terminationStatus): \(detail)"
+            )
         }
 
         // Parse results
@@ -245,8 +283,6 @@ actor AnalyticsService {
                 throw AnalyticsError.parsingFailed("VMAF log file not created")
             }
             result = try parseVMAFResults(from: logURL)
-            // Clean up temp file
-            try? FileManager.default.removeItem(at: logURL)
         case .psnr:
             result = try parsePSNRResults(from: stderrOutput)
         case .xpsnr:
@@ -319,16 +355,16 @@ actor AnalyticsService {
         ffmpegPath: String,
         sourceFile: URL,
         encodedFile: URL,
+        maxFrames: Int,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
-        guard let ssimulacra2Path = BinaryPathResolver.ssimulacra2Path else {
+        guard let ssimulacra2Path = ssimulacra2PathProvider() else {
             throw AnalyticsError.ssimulacra2NotFound
         }
 
         let duration = try await getVideoDuration(for: encodedFile)
         let resolution = try await getVideoResolution(for: sourceFile)
 
-        let maxFrames = UserDefaults.standard.integer(forKey: AppConstants.ssimulacra2MaxFramesKey)
         let frameCount = max(1, maxFrames > 0 ? maxFrames : AppConstants.defaultSSIMULACRA2MaxFrames)
         let actualFrameCount = min(frameCount, max(1, Int(duration)))
         let interval = duration / Double(actualFrameCount)
@@ -343,18 +379,19 @@ actor AnalyticsService {
         var scores: [Double] = []
 
         for i in 0..<actualFrameCount {
-            guard !isCancelled else { throw AnalyticsError.cancelled }
+            guard !Task.isCancelled else { throw AnalyticsError.cancelled }
 
             let timestamp = Double(i) * interval
             let sourceFrame = tempDir.appendingPathComponent("source_\(String(format: "%04d", i)).png")
             let encodedFrame = tempDir.appendingPathComponent("encoded_\(String(format: "%04d", i)).png")
 
             // Extract frames from both videos
-            try extractFrame(ffmpegPath: ffmpegPath, input: sourceFile, timestamp: timestamp, output: sourceFrame, scaleFilter: nil)
-            try extractFrame(ffmpegPath: ffmpegPath, input: encodedFile, timestamp: timestamp, output: encodedFrame, scaleFilter: "scale=\(resolution.width):\(resolution.height)")
+            try await extractFrame(ffmpegPath: ffmpegPath, input: sourceFile, timestamp: timestamp, output: sourceFrame, scaleFilter: nil)
+            try await extractFrame(ffmpegPath: ffmpegPath, input: encodedFile, timestamp: timestamp, output: encodedFrame, scaleFilter: "scale=\(resolution.width):\(resolution.height)")
 
             // Compare with ssimulacra2_rs
-            let score = try compareFrames(ssimulacra2Path: ssimulacra2Path, source: sourceFrame, encoded: encodedFrame)
+            let score = try await compareFrames(ssimulacra2Path: ssimulacra2Path, source: sourceFrame, encoded: encodedFrame)
+            guard !Task.isCancelled else { throw AnalyticsError.cancelled }
             scores.append(score)
 
             // Clean up frames immediately to save disk space
@@ -362,9 +399,7 @@ actor AnalyticsService {
             try? FileManager.default.removeItem(at: encodedFrame)
 
             let currentProgress = Double(i + 1) / Double(actualFrameCount)
-            Task { @MainActor in
-                progress(min(currentProgress, 0.99))
-            }
+            progress(min(currentProgress, 0.99))
         }
 
         guard !scores.isEmpty else {
@@ -387,11 +422,9 @@ actor AnalyticsService {
     }
 
     /// Extracts a single frame from a video at the given timestamp
-    private func extractFrame(ffmpegPath: String, input: URL, timestamp: Double, output: URL, scaleFilter: String?) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: ffmpegPath)
-
+    private func extractFrame(ffmpegPath: String, input: URL, timestamp: Double, output: URL, scaleFilter: String?) async throws {
         var args = [
+            "-nostdin",
             "-ss", String(format: "%.3f", timestamp),
             "-i", input.path
         ]
@@ -404,44 +437,77 @@ actor AnalyticsService {
             "-y",
             output.path
         ]
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: args,
+            timeout: Self.frameExtractionTimeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 32 * 1024,
+            sensitiveValues: [ffmpegPath, input.path, output.path]
+        )
 
-        process.arguments = args
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        currentProcess = process
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            throw AnalyticsError.metricFailed(.ssimulacra2, "Failed to extract frame at \(String(format: "%.1f", timestamp))s")
+        do {
+            let result = try await subprocessRunner.run(request)
+            guard result.succeeded else {
+                let diagnostic = request.redactedDiagnostic(
+                    result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),
+                    limit: 300
+                )
+                let suffix = diagnostic.isEmpty ? "" : ": \(diagnostic)"
+                throw AnalyticsError.metricFailed(
+                    .ssimulacra2,
+                    "Failed to extract frame at \(String(format: "%.1f", timestamp))s (exit \(result.terminationStatus))\(suffix)"
+                )
+            }
+        } catch is CancellationError {
+            throw AnalyticsError.cancelled
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .failedToStart(_, let underlying):
+                throw AnalyticsError.metricFailed(.ssimulacra2, request.redactedDiagnostic(underlying, limit: 300))
+            case .timedOut:
+                throw AnalyticsError.metricFailed(.ssimulacra2, "Frame extraction exceeded the 10-minute limit")
+            }
         }
     }
 
     /// Compares two image files using ssimulacra2_rs and returns the score
-    private func compareFrames(ssimulacra2Path: String, source: URL, encoded: URL) throws -> Double {
-        let process = Process()
-        let stdoutPipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: ssimulacra2Path)
-        process.arguments = ["image", source.path, encoded.path]
-        process.standardOutput = stdoutPipe
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        currentProcess = process
-
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            throw AnalyticsError.metricFailed(.ssimulacra2, "ssimulacra2_rs exited with code \(process.terminationStatus)")
+    private func compareFrames(ssimulacra2Path: String, source: URL, encoded: URL) async throws -> Double {
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ssimulacra2Path),
+            arguments: ["image", source.path, encoded.path],
+            timeout: Self.frameComparisonTimeout,
+            standardOutputCaptureLimit: 4 * 1024,
+            standardErrorCaptureLimit: 32 * 1024,
+            sensitiveValues: [ssimulacra2Path, source.path, encoded.path]
+        )
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw AnalyticsError.cancelled
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .failedToStart(_, let underlying):
+                throw AnalyticsError.metricFailed(.ssimulacra2, request.redactedDiagnostic(underlying, limit: 300))
+            case .timedOut:
+                throw AnalyticsError.metricFailed(.ssimulacra2, "Frame comparison exceeded the 2-minute limit")
+            }
         }
 
-        let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) else {
-            throw AnalyticsError.parsingFailed("Could not parse ssimulacra2_rs output")
+        guard result.succeeded else {
+            let diagnostic = request.redactedDiagnostic(
+                result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),
+                limit: 300
+            )
+            let detail = diagnostic.isEmpty ? "unknown error" : diagnostic
+            throw AnalyticsError.metricFailed(
+                .ssimulacra2,
+                "ssimulacra2_rs exited \(result.terminationStatus): \(detail)"
+            )
         }
+
+        let output = result.standardOutputText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Output format: "Score: 97.53500802"
         let scoreString = output.hasPrefix("Score:") ? output.dropFirst(6).trimmingCharacters(in: .whitespaces) : output
@@ -452,24 +518,54 @@ actor AnalyticsService {
         return score
     }
 
-    /// Gets video duration in seconds via SwiftExif (AVFoundation fallback).
+    /// Gets video duration in seconds via SwiftMediaMetadata (AVFoundation fallback).
     private func getVideoDuration(for file: URL) async throws -> Double {
-        guard let duration = await SwiftExifMediaProbe.duration(for: file), duration > 0 else {
+        let provider = mediaInfoProvider
+        let duration: Double?
+        do {
+            duration = try await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {
+                await provider.duration(for: file)
+            }
+        } catch is CancellationError {
+            throw AnalyticsError.cancelled
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            throw AnalyticsError.metricFailed(
+                .ssimulacra2,
+                "Media duration discovery exceeded the 15-second limit"
+            )
+        } catch {
+            throw AnalyticsError.metricFailed(.ssimulacra2, "Could not determine video duration")
+        }
+
+        guard let duration, duration > 0 else {
             throw AnalyticsError.metricFailed(.ssimulacra2, "Could not determine video duration")
         }
         return duration
     }
 
-    /// Gets video resolution (width x height) via SwiftExif.
+    /// Gets video resolution (width x height) via SwiftMediaMetadata.
     private func getVideoResolution(for file: URL) async throws -> (width: Int, height: Int) {
-        guard SwiftExifMediaProbe.canReadVideo(file),
-              let meta = try? await SwiftExifMediaProbe.readVideo(file),
-              let primary = meta.videoStreams.first(where: { $0.isAttachedPic != true }),
-              let width = primary.width,
-              let height = primary.height else {
+        let provider = mediaInfoProvider
+        let resolution: (width: Int, height: Int)?
+        do {
+            resolution = try await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {
+                await provider.resolution(for: file)
+            }
+        } catch is CancellationError {
+            throw AnalyticsError.cancelled
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            throw AnalyticsError.metricFailed(
+                .ssimulacra2,
+                "Media resolution discovery exceeded the 15-second limit"
+            )
+        } catch {
             throw AnalyticsError.metricFailed(.ssimulacra2, "Could not determine video resolution")
         }
-        return (width, height)
+
+        guard let resolution else {
+            throw AnalyticsError.metricFailed(.ssimulacra2, "Could not determine video resolution")
+        }
+        return resolution
     }
 
     // MARK: - Result Parsing
@@ -571,4 +667,57 @@ actor AnalyticsService {
         )
     }
 
+}
+
+/// Serializes FFmpeg's arbitrary stderr chunks into complete CR/LF records before
+/// interpreting duration and timestamp progress.
+private final class AnalyticsFFmpegProgressParser: @unchecked Sendable {
+    private let lock = NSLock()
+    private let progress: @Sendable (Double) -> Void
+    private var duration: Double?
+    private var lastReportedProgress = 0.0
+    private var pendingText = ""
+
+    init(progress: @escaping @Sendable (Double) -> Void) {
+        self.progress = progress
+    }
+
+    func consume(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.withLock {
+            pendingText += String(decoding: data, as: UTF8.self)
+            while let separator = pendingText.firstIndex(where: { $0 == "\n" || $0 == "\r" }) {
+                let record = String(pendingText[..<separator])
+                pendingText.removeSubrange(...separator)
+                parse(record)
+            }
+            if pendingText.count > 8 * 1024 {
+                pendingText = String(pendingText.suffix(8 * 1024))
+            }
+        }
+    }
+
+    func finish() {
+        lock.withLock {
+            guard !pendingText.isEmpty else { return }
+            let record = pendingText
+            pendingText = ""
+            parse(record)
+        }
+    }
+
+    private func parse(_ text: String) {
+        if duration == nil {
+            duration = ParsingUtils.parseDuration(from: text)
+        }
+        guard let (fraction, _) = ParsingUtils.parseTimeProgress(
+            from: text,
+            totalDuration: duration
+        ) else { return }
+
+        let cappedFraction = min(fraction, 0.99)
+        guard cappedFraction - lastReportedProgress >= 0.01 else { return }
+        lastReportedProgress = cappedFraction
+        progress(cappedFraction)
+    }
 }

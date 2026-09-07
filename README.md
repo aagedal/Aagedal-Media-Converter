@@ -4,7 +4,7 @@
 
 
 
-A lightweight minimalist macOS application that is simple on the surface, but with powerful features baked in. Powered by FFMPEG, FFPROBE, MPV, SwiftExif, yt-dlp, rclone, whisper.cpp under the hood and written entirely in Swift / SwiftUI.
+A lightweight minimalist macOS application that is simple on the surface, but with powerful features baked in. Powered by FFMPEG, FFPROBE, MPV, SwiftMediaMetadata, yt-dlp, rclone, whisper.cpp under the hood and written entirely in Swift / SwiftUI.
 
 Completely free and open source. Private and local. (An optional update checker is activated by default, but it can be turned off.)
 
@@ -53,7 +53,7 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - Download from YouTube, TikTok etc. (yt-dlp)
 - Transcribe to SRT (whisper.cpp)
 - Upload to FTP (rclone)
-- Check for C2PA signature (SwiftExif)
+- Check for C2PA signature (SwiftMediaMetadata)
 - Screen recording in HDR with system sound, and optional microphone recording to separate audio track
 
 
@@ -254,7 +254,7 @@ The bundled asdcp-wrap binary is from [asdcplib](https://github.com/cinecert/asd
 
 The DCP (Digital Cinema Package) export feature's color processing was informed by the [DCP-o-matic](https://dcpomatic.com/) project's excellent documentation on DCI XYZ color space conversion. DCP-o-matic is a free, open-source DCP creator — check it out at https://github.com/cth103/dcpomatic.
 
-Metadata inspection and C2PA content authenticity features are powered by [SwiftExif](https://github.com/kradalby/SwiftExif).
+Metadata inspection and C2PA content authenticity features are powered by [SwiftMediaMetadata](https://github.com/aagedal/SwiftMediaMetadata).
 
 ---
 

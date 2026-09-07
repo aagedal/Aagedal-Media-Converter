@@ -5,16 +5,16 @@
 import AVFoundation
 import Foundation
 import OSLog
-import SwiftExif
+import SwiftMediaMetadata
 
-/// In-process probe backed by SwiftExif — replaces ffprobe for duration,
+/// In-process probe backed by SwiftMediaMetadata — replaces ffprobe for duration,
 /// stream topology, and full metadata. Falls back to AVFoundation for container
-/// formats SwiftExif does not parse (FLV, WAV, raw AAC).
+/// formats SwiftMediaMetadata does not parse (FLV, WAV, raw AAC).
 enum SwiftExifMediaProbe {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "SwiftExifMediaProbe")
 
-    /// Extensions SwiftExif can read (video containers + standalone audio).
-    /// Kept in sync with `SwiftExif.FormatDetector.detectVideoFromExtension` /
+    /// Extensions SwiftMediaMetadata can read (video containers + standalone audio).
+    /// Kept in sync with `SwiftMediaMetadata.FormatDetector.detectVideoFromExtension` /
     /// `detectAudioFromExtension`.
     static let swiftExifVideoExtensions: Set<String> = [
         "mp4", "mov", "m4v",
@@ -38,12 +38,12 @@ enum SwiftExifMediaProbe {
 
     // MARK: - Reading
 
-    /// Reads a SwiftExif `VideoMetadata` off the main actor.
-    static func readVideo(_ url: URL) async throws -> SwiftExif.VideoMetadata {
+    /// Reads a SwiftMediaMetadata `VideoMetadata` off the main actor.
+    static func readVideo(_ url: URL) async throws -> SwiftMediaMetadata.VideoMetadata {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let meta = try SwiftExif.VideoMetadata.read(from: url)
+                    let meta = try SwiftMediaMetadata.VideoMetadata.read(from: url)
                     continuation.resume(returning: meta)
                 } catch {
                     continuation.resume(throwing: error)
@@ -52,12 +52,12 @@ enum SwiftExifMediaProbe {
         }
     }
 
-    /// Reads a SwiftExif `AudioMetadata` off the main actor.
-    static func readAudio(_ url: URL) async throws -> SwiftExif.AudioMetadata {
+    /// Reads a SwiftMediaMetadata `AudioMetadata` off the main actor.
+    static func readAudio(_ url: URL) async throws -> SwiftMediaMetadata.AudioMetadata {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let meta = try SwiftExif.AudioMetadata.read(from: url)
+                    let meta = try SwiftMediaMetadata.AudioMetadata.read(from: url)
                     continuation.resume(returning: meta)
                 } catch {
                     continuation.resume(throwing: error)
@@ -69,50 +69,61 @@ enum SwiftExifMediaProbe {
     // MARK: - Duration
 
     /// Returns the container duration in seconds, or nil when no parser can read it.
-    /// Tries SwiftExif first (for supported containers), then falls back to AVFoundation.
-    static func duration(for url: URL) async -> Double? {
+    /// Tries SwiftMediaMetadata first (for supported containers), then falls back to AVFoundation.
+    static func duration(
+        for url: URL,
+        timeout: Duration = BoundedVideoMetadataProbe.defaultTimeout
+    ) async -> Double? {
+        await duration(for: url, timeout: timeout, probe: durationWithoutDeadline)
+    }
+
+    /// Bounds the entire parser/fallback chain, including callers outside the metadata
+    /// service such as partial-download inspection. Late results cannot update the caller.
+    static func duration(
+        for url: URL,
+        timeout: Duration,
+        startAccess: @escaping @Sendable (URL) -> SecurityScopedAccess = {
+            SecurityScopedBookmarkManager.shared.startAccessing(url: $0)
+        },
+        stopAccess: @escaping @Sendable (SecurityScopedAccess) -> Void = {
+            SecurityScopedBookmarkManager.shared.stopAccessing($0)
+        },
+        probe: @escaping @Sendable (URL) async -> Double?
+    ) async -> Double? {
+        do {
+            return try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try Task.checkCancellation()
+                // Own access inside the non-joining worker: the caller can return and
+                // release its access while an uncooperative parser is still reading.
+                let access = startAccess(url)
+                defer { stopAccess(access) }
+                try Task.checkCancellation()
+                let result = await probe(url)
+                try Task.checkCancellation()
+                return result
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    /// Only for callers that already own a non-joining deadline and retain the
+    /// applicable security scope until this entire operation returns.
+    static func durationWithoutDeadline(for url: URL) async -> Double? {
+        guard !Task.isCancelled else { return nil }
         if canReadVideo(url) {
             if let meta = try? await readVideo(url), let d = meta.duration, d > 0 {
                 return d
             }
         }
+        guard !Task.isCancelled else { return nil }
         if canReadAudio(url) {
             if let meta = try? await readAudio(url), let d = meta.duration, d > 0 {
                 return d
             }
         }
+        guard !Task.isCancelled else { return nil }
         return await avFoundationDuration(for: url)
-    }
-
-    /// Synchronous duration probe (SwiftExif + AVFoundation async fallback bridged via semaphore).
-    /// Used by ImageSequenceDetector, which is called from a non-async context.
-    /// The AVFoundation branch runs `load(.duration)` on a detached task and waits —
-    /// safe because the detached task never touches the caller's actor.
-    static func durationSync(for url: URL) -> Double? {
-        if canReadVideo(url), let meta = try? SwiftExif.VideoMetadata.read(from: url),
-           let d = meta.duration, d > 0 {
-            return d
-        }
-        if canReadAudio(url), let meta = try? SwiftExif.AudioMetadata.read(from: url),
-           let d = meta.duration, d > 0 {
-            return d
-        }
-
-        final class Box: @unchecked Sendable { var value: Double? }
-        let box = Box()
-        let semaphore = DispatchSemaphore(value: 0)
-        Task.detached {
-            let asset = AVURLAsset(url: url)
-            if let duration = try? await asset.load(.duration) {
-                let seconds = CMTimeGetSeconds(duration)
-                if seconds.isFinite, seconds > 0 {
-                    box.value = seconds
-                }
-            }
-            semaphore.signal()
-        }
-        semaphore.wait()
-        return box.value
     }
 
     private static func avFoundationDuration(for url: URL) async -> Double? {
@@ -206,7 +217,7 @@ enum SwiftExifMediaProbe {
     }
 
     /// Maps a `VideoFieldOrder` to ffprobe's `field_order` string.
-    static func fieldOrderString(from order: SwiftExif.VideoFieldOrder?) -> String? {
+    static func fieldOrderString(from order: SwiftMediaMetadata.VideoFieldOrder?) -> String? {
         guard let order else { return nil }
         switch order {
         case .progressive: return "progressive"

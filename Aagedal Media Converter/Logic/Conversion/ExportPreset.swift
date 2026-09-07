@@ -889,19 +889,26 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         if self == .animatedStill {
             let formatRaw = UserDefaults.standard.string(forKey: AppConstants.animatedStillFormatKey) ?? AppConstants.defaultAnimatedStillFormat
             let format = AnimatedStillFormat(rawValue: formatRaw) ?? .avif
-            return "Animated Still (\(format.rawValue))"
+            return String(localized: "Animated Still (\(format.rawValue))")
         }
         if self == .imageSequence {
             let formatRaw = UserDefaults.standard.string(forKey: AppConstants.imageSequenceExportFormatKey) ?? AppConstants.defaultImageSequenceExportFormat
             let format = ImageSequenceFormat(rawValue: formatRaw) ?? .png
-            return "Image Sequence (\(format.rawValue))"
+            return String(localized: "Image Sequence (\(format.rawValue))")
         }
         if self == .audioOnly {
             let formatRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyFormatKey) ?? AppConstants.defaultAudioOnlyFormat
             let format = AudioOnlyFormat(rawValue: formatRaw) ?? .wav
-            return "Audio Only (\(format.rawValue))"
+            return String(localized: "Audio Only (\(format.rawValue))")
         }
-        return rawValue
+        switch self {
+        case .videoLoopWithSound:
+            return String(localized: "VideoLoop with sound")
+        case .streamCopy:
+            return String(localized: "Stream Copy")
+        default:
+            return rawValue
+        }
     }
     
     var description: String {
@@ -1571,7 +1578,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             var args = commonArgs + [
                 "-map", "0",
                 "-c", "copy",
-                "-map", "-0:t?",  // Exclude subtitle streams only
+                "-map", "-0:s?",  // Exclude subtitle streams; Stream Copy has no subtitle option
                 "-copy_unknown"  // Copy unknown stream types (for MXF acquisition metadata)
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
@@ -1625,41 +1632,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             }
             return args
         case .dcp:
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.dcpResolutionKey) ?? AppConstants.defaultDCPResolution
-            let resolution = DCPResolution(rawValue: resolutionRaw) ?? .twoKFull
-            let frameRateRaw = UserDefaults.standard.string(forKey: AppConstants.dcpFrameRateKey) ?? AppConstants.defaultDCPFrameRate
-            let frameRate = DCPFrameRate(rawValue: frameRateRaw) ?? .fps24
-            let bitrateRaw = UserDefaults.standard.string(forKey: AppConstants.dcpBitrateKey) ?? AppConstants.defaultDCPBitrate
-            let bitrate = DCPBitrate(rawValue: bitrateRaw) ?? .high
-            let scalingModeRaw = UserDefaults.standard.string(forKey: AppConstants.dcpScalingModeKey) ?? AppConstants.defaultDCPScalingMode
-            let scalingMode = DCPScalingMode(rawValue: scalingModeRaw) ?? .fill
-
-            let scaleFilter: String
-            switch scalingMode {
-            case .fill:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=increase,crop=\(resolution.width):\(resolution.height)"
-            case .fit:
-                scaleFilter = "scale=iw*sar:ih,setsar=1,scale=\(resolution.width):\(resolution.height):force_original_aspect_ratio=decrease,pad=\(resolution.width):\(resolution.height):-1:-1:color=black"
-            }
-
-            var args = commonArgs + [
-                "-c:v", "libopenjpeg",
-                "-profile", resolution.openjpegProfile,
-            ]
-            if let cinemaMode = frameRate.cinemaModeFor(resolution: resolution) {
-                args += ["-cinema_mode", cinemaMode]
-            }
-            args += [
-                "-pix_fmt", "xyz12le",
-                "-b:v", bitrate.ffmpegValue,
-                "-r", frameRate.ffmpegValue,
-                "-vf", scaleFilter,
-                "-map", "0:v:0",
-                "-an",
-            ]
-            // DCP outputs JP2 image sequence (not MXF) — asdcp-wrap creates the final MXF
-            // The output path pattern (frame_%06d.jp2) is set by FFMPEGConverter
-            return args
+            return DCPSettings().ffmpegArguments
         case .imfJ2K:
             let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.imfResolutionKey) ?? AppConstants.defaultIMFResolution
             let resolution = IMFResolution(rawValue: resolutionRaw) ?? .hd1080
@@ -1783,7 +1756,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .imfJ2K, .imfProRes:
             return false // IMF audio is extracted separately into a per-package PCM MXF essence
         case .av2:
-            return false // AV2 IVF output has no audio track to route
+            return AV2Container.current == .mkv
         case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
             guard let slot = customSlotIndex else { return false }
             return Self.customAppliesAudioRouting(for: slot)
@@ -1847,6 +1820,13 @@ enum ExportPreset: String, CaseIterable, Identifiable {
 }
 
 extension ExportPreset {
+    /// Indicates whether the preset produces visual frames that can be filtered and encoded.
+    /// Image-sequence exports do not contain a video *track*, but they still pass video frames
+    /// through FFmpeg and therefore must retain video codec/filter arguments.
+    var outputsVisualFrames: Bool {
+        self != .audioOnly
+    }
+
     /// Indicates whether this preset is expected to output a video track even if the source lacks one.
     var outputsVideoTrack: Bool {
         switch self {
@@ -1873,7 +1853,7 @@ extension ExportPreset {
         case .imfJ2K, .imfProRes:
             return false // IMF audio essence is a separate MXF file alongside the video essence
         case .av2:
-            return false // AV2 IVF output is video-only — avmenc does not encode audio
+            return AV2Container.current == .mkv
         case .videoLoopWithSound:
             return true
         case .audioOnly:
@@ -2174,7 +2154,7 @@ extension ExportPreset {
         return trimmed.isEmpty ? fallback : trimmed
     }
     
-    private static func parseCustomCommand(_ command: String) -> [String] {
+    static func parseCustomCommand(_ command: String) -> [String] {
         var args: [String] = []
         var current = ""
         var quote: Character?
@@ -2232,4 +2212,3 @@ extension ExportPreset {
     }
 
 }
-

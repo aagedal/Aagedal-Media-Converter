@@ -19,6 +19,10 @@ class DownloadManager {
     /// Active download tasks keyed by VideoItem ID
     private var downloadTasks: [UUID: Task<Void, Never>] = [:]
 
+    /// Per-item subprocess cancellation, kept separate so concurrent downloads cannot
+    /// stop whichever yt-dlp process happened to register most recently.
+    private var downloadControls: [UUID: YTDLPDownloadControl] = [:]
+
     /// Live recording stat update tasks keyed by VideoItem ID
     private var liveRecordingStatTasks: [UUID: Task<Void, Never>] = [:]
 
@@ -329,13 +333,16 @@ class DownloadManager {
         logger.info("[TIMING] Item setup completed in \(String(format: "%.3f", setupElapsed))s, starting download task...")
 
         // Start download task
+        let control = YTDLPDownloadControl()
+        downloadControls[itemID] = control
         let task = Task {
             await self.performDownload(
                 itemID: itemID,
                 urlString: sourceURL,
                 outputFolder: folder,
                 liveFromStart: item.downloadLiveFromStart,
-                audioOnly: item.downloadAudioOnly
+                audioOnly: item.downloadAudioOnly,
+                control: control
             )
         }
         downloadTasks[itemID] = task
@@ -401,8 +408,17 @@ class DownloadManager {
         items.wrappedValue.append(item)
 
         // Start download task (using unowned self since DownloadManager is a singleton)
+        let control = YTDLPDownloadControl()
+        downloadControls[itemID] = control
         let task = Task {
-            await self.performDownload(itemID: itemID, urlString: urlString, outputFolder: outputFolder, liveFromStart: liveFromStart, audioOnly: audioOnly)
+            await self.performDownload(
+                itemID: itemID,
+                urlString: urlString,
+                outputFolder: outputFolder,
+                liveFromStart: liveFromStart,
+                audioOnly: audioOnly,
+                control: control
+            )
         }
         downloadTasks[itemID] = task
 
@@ -477,23 +493,24 @@ class DownloadManager {
             itemIDs.append(item.id)
         }
 
-        // Run downloads sequentially. yt-dlp uses a single shared process slot
-        // (see ProcessHolder), so concurrent downloads aren't supported anyway.
-        // Cancelling a single item terminates only that yt-dlp run; the loop
-        // moves on to the next item. To stop a playlist mid-run, remove the
-        // remaining items from the queue.
+        // Run playlist downloads sequentially to avoid competing for bandwidth. Each item
+        // still gets its own cancellation control so cancelling it cannot affect a separate
+        // download that may already be running outside this playlist.
         for itemID in itemIDs {
             guard let item = self.findItem(itemID), let sourceURL = item.sourceURL else { continue }
 
             self.updateItem(itemID) { $0.isDownloading = true }
 
             // performDownload kicks off its own thumbnail fetch — don't double-probe.
+            let control = YTDLPDownloadControl()
+            downloadControls[itemID] = control
             await self.performDownload(
                 itemID: itemID,
                 urlString: sourceURL,
                 outputFolder: outputFolder,
                 liveFromStart: false,
-                audioOnly: item.downloadAudioOnly
+                audioOnly: item.downloadAudioOnly,
+                control: control
             )
         }
 
@@ -514,9 +531,22 @@ class DownloadManager {
     }
 
     /// Performs the actual download
-    private func performDownload(itemID: UUID, urlString: String, outputFolder: URL, liveFromStart: Bool, audioOnly: Bool) async {
+    private func performDownload(
+        itemID: UUID,
+        urlString: String,
+        outputFolder: URL,
+        liveFromStart: Bool,
+        audioOnly: Bool,
+        control: YTDLPDownloadControl
+    ) async {
         let downloadStartTime = Date()
         logger.info("[TIMING] performDownload started at \(downloadStartTime)")
+        defer {
+            if downloadControls[itemID] === control {
+                downloadTasks.removeValue(forKey: itemID)
+                downloadControls.removeValue(forKey: itemID)
+            }
+        }
 
         // Hold a security-scoped resource on the output folder for the duration of
         // the subprocess. Required when the folder was restored from a bookmark
@@ -548,9 +578,11 @@ class DownloadManager {
                 forceOverwrite: false,
                 liveFromStart: liveFromStart,
                 audioOnly: audioOnly,
+                control: control,
                 progress: { [weak self] progress, speed, isLiveStream in
                     Task { @MainActor in
-                        guard let self = self else { return }
+                        guard let self = self,
+                              self.downloadControls[itemID] === control else { return }
                         let wasLiveStreamRecording = self.findItem(itemID)?.isLiveStreamRecording ?? false
                         self.updateItem(itemID) { item in
                             item.downloadProgress = progress
@@ -572,14 +604,29 @@ class DownloadManager {
                 },
                 titleUpdate: { [weak self] title in
                     Task { @MainActor in
-                        self?.updateItem(itemID) { item in
+                        guard let self,
+                              self.downloadControls[itemID] === control else { return }
+                        self.updateItem(itemID) { item in
                             // Update name with discovered title
                             item.name = title
                         }
-                        self?.logger.info("Updated item name to: \(title)")
+                        self.logger.info("Updated item name to: \(title)")
                     }
                 }
             )
+
+            guard downloadControls[itemID] === control else {
+                logger.info("Ignoring completion from a cancelled or superseded download: \(itemID)")
+                return
+            }
+            guard !Task.isCancelled else {
+                updateItem(itemID) { item in
+                    item.isDownloading = false
+                    item.downloadError = "Cancelled"
+                    item.status = .cancelled
+                }
+                return
+            }
 
             // Download complete - update item
             let downloadElapsed = Date().timeIntervalSince(actualDownloadStartTime)
@@ -627,6 +674,7 @@ class DownloadManager {
                 Task.detached {
                     let details = await VideoFileUtils.loadDetails(for: item.url)
                     await MainActor.run {
+                        guard self.findItem(itemID)?.url == result.outputURL else { return }
                         self.updateItem(itemID) { item in
                             item.apply(details: details)
                             item.detailsLoaded = true
@@ -642,6 +690,7 @@ class DownloadManager {
             }
 
         } catch let error as YTDLPError {
+            guard downloadControls[itemID] === control else { return }
             // Stop live recording stat updates for any error
             stopLiveRecordingStatUpdates(itemID: itemID)
 
@@ -717,6 +766,7 @@ class DownloadManager {
                     Task.detached { [finalFile] in
                         let details = await VideoFileUtils.loadDetails(for: finalFile)
                         await MainActor.run {
+                            guard self.findItem(itemID)?.url == finalFile else { return }
                             self.updateItem(itemID) { item in
                                 item.apply(details: details)
                                 item.detailsLoaded = true
@@ -760,6 +810,7 @@ class DownloadManager {
                 }
             }
         } catch {
+            guard downloadControls[itemID] === control else { return }
             // Stop live recording stat updates for any error
             stopLiveRecordingStatUpdates(itemID: itemID)
 
@@ -776,8 +827,6 @@ class DownloadManager {
             }
         }
 
-        // Clean up task reference
-        downloadTasks.removeValue(forKey: itemID)
     }
 
     /// Cancels a download
@@ -787,13 +836,13 @@ class DownloadManager {
         // Stop live recording stat updates immediately
         stopLiveRecordingStatUpdates(itemID: itemID)
 
+        _ = downloadControls[itemID]?.cancel()
+
         if let task = downloadTasks[itemID] {
             task.cancel()
             downloadTasks.removeValue(forKey: itemID)
         }
-
-        // Cancel the yt-dlp process (nonisolated, immediate)
-        ytdlpService.cancelDownload()
+        downloadControls.removeValue(forKey: itemID)
 
         // Update item state
         updateItem(itemID) { item in
@@ -819,8 +868,9 @@ class DownloadManager {
         // Stop live recording stat updates immediately to prevent further polling
         stopLiveRecordingStatUpdates(itemID: itemID)
 
-        // Stop the yt-dlp process (nonisolated, immediate) - keeps the partial file
-        ytdlpService.stopLiveDownload()
+        // Stop this item's process immediately while leaving its orchestration task alive
+        // so it can recover and finalize the partial recording.
+        _ = downloadControls[itemID]?.stopLiveRecording()
 
         // Note: The item state will be updated by performDownload when it catches liveRecordingStopped
     }
@@ -845,13 +895,16 @@ class DownloadManager {
         }
 
         // Start new download
+        let control = YTDLPDownloadControl()
+        downloadControls[itemID] = control
         let task = Task {
             await self.performDownload(
                 itemID: itemID,
                 urlString: sourceURL,
                 outputFolder: outputFolder,
                 liveFromStart: item.downloadLiveFromStart,
-                audioOnly: item.downloadAudioOnly
+                audioOnly: item.downloadAudioOnly,
+                control: control
             )
         }
         downloadTasks[itemID] = task
@@ -877,20 +930,36 @@ class DownloadManager {
         }
 
         // Start download with force overwrite
+        let control = YTDLPDownloadControl()
+        downloadControls[itemID] = control
         let task = Task {
             await self.performForceDownload(
                 itemID: itemID,
                 urlString: sourceURL,
                 outputFolder: outputFolder,
                 liveFromStart: item.downloadLiveFromStart,
-                audioOnly: item.downloadAudioOnly
+                audioOnly: item.downloadAudioOnly,
+                control: control
             )
         }
         downloadTasks[itemID] = task
     }
 
     /// Performs a forced download (overwrites existing files)
-    private func performForceDownload(itemID: UUID, urlString: String, outputFolder: URL, liveFromStart: Bool, audioOnly: Bool) async {
+    private func performForceDownload(
+        itemID: UUID,
+        urlString: String,
+        outputFolder: URL,
+        liveFromStart: Bool,
+        audioOnly: Bool,
+        control: YTDLPDownloadControl
+    ) async {
+        defer {
+            if downloadControls[itemID] === control {
+                downloadTasks.removeValue(forKey: itemID)
+                downloadControls.removeValue(forKey: itemID)
+            }
+        }
         let folderAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: outputFolder)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(folderAccess) }
 
@@ -909,9 +978,12 @@ class DownloadManager {
                 forceOverwrite: true,
                 liveFromStart: liveFromStart,
                 audioOnly: audioOnly,
+                control: control,
                 progress: { [weak self] progress, speed, isLiveStream in
                     Task { @MainActor in
-                        self?.updateItem(itemID) { item in
+                        guard let self,
+                              self.downloadControls[itemID] === control else { return }
+                        self.updateItem(itemID) { item in
                             item.downloadProgress = progress
                             item.downloadHasProgress = true
                             item.downloadSpeed = speed
@@ -924,12 +996,27 @@ class DownloadManager {
                 },
                 titleUpdate: { [weak self] title in
                     Task { @MainActor in
-                        self?.updateItem(itemID) { item in
+                        guard let self,
+                              self.downloadControls[itemID] === control else { return }
+                        self.updateItem(itemID) { item in
                             item.name = title
                         }
                     }
                 }
             )
+
+            guard downloadControls[itemID] === control else {
+                logger.info("Ignoring completion from a cancelled or superseded forced download: \(itemID)")
+                return
+            }
+            guard !Task.isCancelled else {
+                updateItem(itemID) { item in
+                    item.isDownloading = false
+                    item.downloadError = "Cancelled"
+                    item.status = .cancelled
+                }
+                return
+            }
 
             // Download complete - update item
             logger.info("Force download complete: \(result.outputURL.path)")
@@ -966,6 +1053,7 @@ class DownloadManager {
                 Task.detached {
                     let details = await VideoFileUtils.loadDetails(for: item.url)
                     await MainActor.run {
+                        guard self.findItem(itemID)?.url == result.outputURL else { return }
                         self.updateItem(itemID) { item in
                             item.apply(details: details)
                             item.detailsLoaded = true
@@ -981,6 +1069,7 @@ class DownloadManager {
             }
 
         } catch YTDLPError.cancelled {
+            guard downloadControls[itemID] === control else { return }
             logger.info("Force download cancelled for item: \(itemID)")
             updateItem(itemID) { item in
                 item.isDownloading = false
@@ -993,6 +1082,7 @@ class DownloadManager {
                 item.status = .cancelled
             }
         } catch {
+            guard downloadControls[itemID] === control else { return }
             logger.error("Force download failed: \(error.localizedDescription)")
 
             updateItem(itemID) { item in
@@ -1003,8 +1093,6 @@ class DownloadManager {
             }
         }
 
-        // Clean up task reference
-        downloadTasks.removeValue(forKey: itemID)
     }
 
     /// Removes a download from the queue

@@ -115,7 +115,14 @@ struct SyncSettingsView: View {
                 Button("Export Settings…") { exportSettings() }
                 Button("Import Settings…") { importSettings() }
             }
-            Button("Reveal Backups in Finder") { sync.revealBackupsInFinder() }
+            Button("Reveal Backups in Finder") {
+                do {
+                    try sync.revealBackupsInFinder()
+                } catch {
+                    alertMessage = error.localizedDescription
+                    showingAlert = true
+                }
+            }
         } header: {
             Text("Manual Backup")
         } footer: {

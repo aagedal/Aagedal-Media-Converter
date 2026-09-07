@@ -11,6 +11,114 @@ import AVFoundation
 import Cocoa
 import OSLog
 
+enum NonJoiningTaskDeadlineError: Error {
+    case timedOut
+}
+
+/// Races an asynchronous operation against a deadline without implicitly joining the
+/// losing operation. This is intentionally not implemented with a task group: a task
+/// group cannot return until every child exits, even when a cancelled child is blocked
+/// in synchronous library code that does not observe cancellation.
+enum NonJoiningTaskDeadline {
+    static func run<Output: Sendable>(
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> Output
+    ) async throws -> Output {
+        let resolution = NonJoiningTaskResolution<Output>()
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                resolution.install(continuation)
+
+                guard !Task.isCancelled else {
+                    resolution.resolve(.failure(CancellationError()))
+                    return
+                }
+
+                let operationTask = Task.detached(priority: .userInitiated) {
+                    do {
+                        resolution.resolve(.success(try await operation()))
+                    } catch {
+                        resolution.resolve(.failure(error))
+                    }
+                }
+                let timeoutTask = Task.detached {
+                    do {
+                        try await Task.sleep(for: timeout)
+                    } catch {
+                        return
+                    }
+                    resolution.resolve(.failure(NonJoiningTaskDeadlineError.timedOut))
+                }
+                resolution.install(operationTask: operationTask, timeoutTask: timeoutTask)
+            }
+        } onCancel: {
+            resolution.resolve(.failure(CancellationError()))
+        }
+    }
+}
+
+private final class NonJoiningTaskResolution<Output: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Output, Error>?
+    private var outcome: Result<Output, Error>?
+    private var isResolved = false
+    private var operationTask: Task<Void, Never>?
+    private var timeoutTask: Task<Void, Never>?
+
+    func install(_ continuation: CheckedContinuation<Output, Error>) {
+        let resolvedOutcome = lock.withLock { () -> Result<Output, Error>? in
+            if isResolved {
+                return outcome
+            }
+            self.continuation = continuation
+            return nil
+        }
+
+        if let resolvedOutcome {
+            continuation.resume(with: resolvedOutcome)
+        }
+    }
+
+    func install(operationTask: Task<Void, Never>, timeoutTask: Task<Void, Never>) {
+        let shouldCancel = lock.withLock { () -> Bool in
+            if isResolved {
+                return true
+            }
+            self.operationTask = operationTask
+            self.timeoutTask = timeoutTask
+            return false
+        }
+
+        if shouldCancel {
+            operationTask.cancel()
+            timeoutTask.cancel()
+        }
+    }
+
+    func resolve(_ outcome: Result<Output, Error>) {
+        let pending = lock.withLock { () -> (
+            CheckedContinuation<Output, Error>?,
+            Task<Void, Never>?,
+            Task<Void, Never>?
+        )? in
+            guard !isResolved else { return nil }
+            isResolved = true
+            self.outcome = outcome
+            let pending = (continuation, operationTask, timeoutTask)
+            continuation = nil
+            operationTask = nil
+            timeoutTask = nil
+            return pending
+        }
+
+        guard let pending else { return }
+        pending.1?.cancel()
+        pending.2?.cancel()
+        pending.0?.resume(with: outcome)
+    }
+}
+
 struct VideoFileUtils: Sendable {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "VideoFileUtils")
 
@@ -97,8 +205,7 @@ struct VideoFileUtils: Sendable {
         let defaultTimecodeConfig = getDefaultTimecodeConfig()
 
         // Generate thumbnail from the first frame
-        let firstFrameURL = firstFrameURL(for: config)
-        let thumbnailData = generateImageSequenceThumbnail(from: firstFrameURL)
+        let thumbnailData = generateImageSequenceThumbnail(from: config.firstFrameURL)
 
         let counter = FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
         let outputURL = makeOutputURL(for: config.directory, outputFolder: outputFolder, preset: preset, counter: counter)
@@ -123,22 +230,6 @@ struct VideoFileUtils: Sendable {
         item.customCounterValue = counter
         item.refreshOutputFileCache()
         return item
-    }
-
-    /// Build the URL for the first frame in an image sequence
-    private static func firstFrameURL(for config: ImageSequenceConfig) -> URL {
-        // Extract padding width from pattern like "frame_%04d.png"
-        let pattern = config.pattern
-        var paddingWidth = 4
-        if let range = pattern.range(of: "%0") {
-            let afterPercent = pattern[range.upperBound...]
-            if let width = Int(String(afterPercent.prefix(while: { $0.isNumber }))) {
-                paddingWidth = width
-            }
-        }
-        let numberStr = String(format: "%0\(paddingWidth)d", config.startNumber)
-        let fileName = pattern.replacingOccurrences(of: "%0\(paddingWidth)d", with: numberStr)
-        return config.directory.appendingPathComponent(fileName)
     }
 
     /// Generate a thumbnail from an image file
@@ -211,7 +302,10 @@ struct VideoFileUtils: Sendable {
         // service's `inFlightRawVideo` map dedups concurrent SwiftExif reads internally, so
         // even when several files import together we don't pay for redundant parses.
         async let metadataResult = fetchVideoMetadataWithFallback(for: url)
-        async let thumbResult = getCachedThumbnail(url: url, generateRowThumbnailIfMissing: generateRowThumbnailIfMissing)
+        async let thumbResult = fetchRowThumbnail(
+            for: url,
+            generateIfMissing: generateRowThumbnailIfMissing
+        )
 
         let (outcome, thumb) = await (metadataResult, thumbResult)
 
@@ -227,11 +321,12 @@ struct VideoFileUtils: Sendable {
             metadata = nil
             durationSec = info.duration
             hasVideoStream = info.hasVideoStream
-        case .failed:
-            // Both probes failed — preserve the legacy defensive fallback so the row still appears.
+        case .failed, .cancelled:
+            // The essential probe already covers the lightweight duration/stream fallback.
+            // Do not re-enter the same potentially stalled single-flight metadata read.
             metadata = nil
-            durationSec = (await SwiftExifMediaProbe.duration(for: url)) ?? 0
-            hasVideoStream = await VideoMetadataService.shared.hasVideoStream(for: url)
+            durationSec = 0
+            hasVideoStream = false
         }
 
         return VideoItemDetails(
@@ -245,35 +340,44 @@ struct VideoFileUtils: Sendable {
         )
     }
 
-    private enum MetadataProbeOutcome {
+    enum MetadataProbeOutcome {
         case full(VideoMetadata)
         case essentialOnly(EssentialVideoInfo)
         case failed
+        case cancelled
     }
 
     /// Tries the full metadata read first (gives the row resolution + FPS in the same hop as
     /// duration). Falls back to `fetchEssentialInfo` for audio containers, read failures, and
     /// timeouts so the row still gets a duration.
-    private static func fetchVideoMetadataWithFallback(for url: URL) async -> MetadataProbeOutcome {
-        struct MetadataTimeout: Error {}
+    static func fetchVideoMetadataWithFallback(
+        for url: URL,
+        timeout: Duration = .seconds(15),
+        metadataProbe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        },
+        essentialInfoProbe: @escaping @Sendable (URL) async throws -> EssentialVideoInfo = {
+            try await VideoMetadataService.shared.fetchEssentialInfo(for: $0)
+        }
+    ) async -> MetadataProbeOutcome {
         do {
-            let metadata = try await withThrowingTaskGroup(of: VideoMetadata.self) { group in
-                group.addTask { try await VideoMetadataService.shared.metadata(for: url) }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: 15_000_000_000)
-                    throw MetadataTimeout()
-                }
-                let result = try await group.next()
-                group.cancelAll()
-                guard let result else { throw MetadataTimeout() }
-                return result
+            let metadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await metadataProbe(url)
             }
             return .full(metadata)
+        } catch is CancellationError {
+            return .cancelled
         } catch {
-            if let info = try? await VideoMetadataService.shared.fetchEssentialInfo(for: url) {
+            do {
+                let info = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                    try await essentialInfoProbe(url)
+                }
                 return .essentialOnly(info)
+            } catch is CancellationError {
+                return .cancelled
+            } catch {
+                return .failed
             }
-            return .failed
         }
     }
 
@@ -345,7 +449,13 @@ struct VideoFileUtils: Sendable {
     
     /// Fetches metadata for a video item in the background
     /// This allows the UI to be responsive while heavy operations complete
-    static func fetchMetadata(for url: URL) async -> VideoMetadata? {
+    static func fetchMetadata(
+        for url: URL,
+        timeout: Duration = .seconds(15),
+        metadataProbe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        }
+    ) async -> VideoMetadata? {
         let fileName = url.lastPathComponent
 
         // Skip if file doesn't exist (e.g., scheduled downloads)
@@ -353,28 +463,16 @@ struct VideoFileUtils: Sendable {
             return nil
         }
 
-        struct MetadataTimeout: Error {}
-
         // Fetch metadata with timeout (VideoMetadataService also enforces an internal timeout)
         let metadata: VideoMetadata?
         do {
-            metadata = try await withThrowingTaskGroup(of: VideoMetadata?.self) { group in
-                group.addTask {
-                    let result = try await VideoMetadataService.shared.metadata(for: url)
-                    return result
-                }
-                
-                group.addTask {
-                    try await Task.sleep(nanoseconds: 15_000_000_000)
-                    throw MetadataTimeout()
-                }
-                
-                let result = try await group.next()
-                group.cancelAll()
-                return result ?? nil
+            metadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await metadataProbe(url)
             }
-        } catch is MetadataTimeout {
+        } catch NonJoiningTaskDeadlineError.timedOut {
             logger.warning("Metadata fetch timed out for \(fileName, privacy: .public)")
+            metadata = nil
+        } catch is CancellationError {
             metadata = nil
         } catch {
             logger.warning("Failed to fetch metadata for \(fileName, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -385,7 +483,13 @@ struct VideoFileUtils: Sendable {
     }
     /// Fetches C2PA (Content Authenticity) metadata for a video item
     /// This is done lazily when the user opens the metadata view
-    static func fetchC2PAMetadata(for url: URL) async -> C2PAMetadata? {
+    static func fetchC2PAMetadata(
+        for url: URL,
+        timeout: Duration = .seconds(15),
+        metadataProbe: @escaping @Sendable (URL) async throws -> C2PAMetadata? = {
+            try await SwiftExifMetadataService.shared.getC2PAMetadata(for: $0)
+        }
+    ) async -> C2PAMetadata? {
         let fileName = url.lastPathComponent
 
         // Skip if file doesn't exist
@@ -397,13 +501,20 @@ struct VideoFileUtils: Sendable {
         logger.debug("[fetchC2PAMetadata] Checking C2PA for: \(fileName, privacy: .public)")
 
         do {
-            let c2paMetadata = try await SwiftExifMetadataService.shared.getC2PAMetadata(for: url)
+            let c2paMetadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await metadataProbe(url)
+            }
             if c2paMetadata != nil {
                 logger.debug("[fetchC2PAMetadata] Found C2PA metadata for: \(fileName, privacy: .public)")
             } else {
                 logger.debug("[fetchC2PAMetadata] No C2PA metadata found for: \(fileName, privacy: .public)")
             }
             return c2paMetadata
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            logger.warning("[fetchC2PAMetadata] Timed out for: \(fileName, privacy: .public)")
+            return nil
+        } catch is CancellationError {
+            return nil
         } catch {
             logger.error("[fetchC2PAMetadata] Error fetching C2PA: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -412,7 +523,13 @@ struct VideoFileUtils: Sendable {
 
     /// Fetches camera metadata from XML for a video item
     /// This is done lazily when the user opens the metadata view
-    static func fetchCameraMetadata(for url: URL) async -> CameraMetadata? {
+    static func fetchCameraMetadata(
+        for url: URL,
+        timeout: Duration = .seconds(15),
+        metadataProbe: @escaping @Sendable (URL) async throws -> CameraMetadata? = {
+            try await SwiftExifMetadataService.shared.getCameraMetadata(for: $0)
+        }
+    ) async -> CameraMetadata? {
         let fileName = url.lastPathComponent
 
         // Skip if file doesn't exist
@@ -424,13 +541,20 @@ struct VideoFileUtils: Sendable {
         logger.debug("[fetchCameraMetadata] Checking camera metadata for: \(fileName, privacy: .public)")
 
         do {
-            let cameraMetadata = try await SwiftExifMetadataService.shared.getCameraMetadata(for: url)
+            let cameraMetadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await metadataProbe(url)
+            }
             if cameraMetadata != nil {
                 logger.debug("[fetchCameraMetadata] Found camera metadata for: \(fileName, privacy: .public)")
             } else {
                 logger.debug("[fetchCameraMetadata] No camera metadata found for: \(fileName, privacy: .public)")
             }
             return cameraMetadata
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            logger.warning("[fetchCameraMetadata] Timed out for: \(fileName, privacy: .public)")
+            return nil
+        } catch is CancellationError {
+            return nil
         } catch {
             logger.error("[fetchCameraMetadata] Error fetching camera metadata: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -546,6 +670,29 @@ struct VideoFileUtils: Sendable {
             return nil
         } catch {
             logger.debug("Error loading thumbnail for \(fileName, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// Keeps a stalled metadata or AVFoundation thumbnail read from holding the entire import.
+    /// The underlying generator retains its security scope until a late operation actually exits;
+    /// this caller only stops waiting for a result that is no longer useful to the queue row.
+    static func fetchRowThumbnail(
+        for url: URL,
+        generateIfMissing: Bool = true,
+        timeout: Duration = .seconds(15),
+        thumbnailProbe: @escaping @Sendable (URL, Bool) async -> Data? = { url, generate in
+            await getCachedThumbnail(url: url, generateRowThumbnailIfMissing: generate)
+        }
+    ) async -> Data? {
+        do {
+            return try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try Task.checkCancellation()
+                let data = await thumbnailProbe(url, generateIfMissing)
+                try Task.checkCancellation()
+                return data
+            }
+        } catch {
             return nil
         }
     }
@@ -771,6 +918,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var subtitleStatus: SubtitleStatus = .notQueued
     /// Subtitle generation progress (0.0 to 1.0)
     var subtitleProgress: Double = 0.0
+    /// Per-attempt token used to route cancellation without affecting a later retry.
+    var subtitleOperationID: UUID? = nil
     /// Path to generated SRT file
     var subtitleFilePath: URL? = nil
     /// Which method (Whisper or OCR) was chosen by the user for this item

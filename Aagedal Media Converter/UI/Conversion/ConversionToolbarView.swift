@@ -35,6 +35,12 @@ struct ConversionToolbarView: ToolbarContent {
     let hasResettableItems: Bool
     let onClear: () -> Void
 
+    // A saved default or an App Intent can select a hidden preset. Keep that
+    // selection represented so the menu can display the actual conversion mode.
+    private var pickerPresets: [ExportPreset] {
+        presets.contains(selectedPreset) ? presets : [selectedPreset] + presets
+    }
+
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .automatic) {
             ConversionPlayButton(
@@ -73,6 +79,7 @@ struct ConversionToolbarView: ToolbarContent {
                 Label("Import", systemImage: "plus.circle")
                     .foregroundColor(.accentColor)
             }
+            .accessibilityIdentifier("toolbar.import")
             .help("Import video files")
             .keyboardShortcut("i", modifiers: .command)
 
@@ -101,11 +108,13 @@ struct ConversionToolbarView: ToolbarContent {
             )
 
             Picker("Preset", selection: $selectedPreset) {
-                ForEach(presets) { preset in
+                ForEach(pickerPresets) { preset in
                     Text(displayName(preset)).tag(preset)
                 }
             }
+            .accessibilityIdentifier("toolbar.preset")
             .pickerStyle(.menu)
+            .labelStyle(.titleOnly)
             .frame(width: 200)
             .disabled(isConverting)
             .foregroundColor(.primary)
@@ -115,6 +124,8 @@ struct ConversionToolbarView: ToolbarContent {
                 Image(systemName: "gear")
                     .foregroundStyle(.blue)
             }
+            .accessibilityIdentifier("toolbar.settings")
+            .accessibilityLabel("Application Settings")
             .buttonStyle(.plain)
             .help("Application Settings")
             .padding(.horizontal, 8)
@@ -201,6 +212,8 @@ private struct ConversionPlayButtonNSViewWrapper: NSViewRepresentable {
     }
 
     private func configureButton(_ button: NSButton) {
+        button.setAccessibilityIdentifier("toolbar.conversion")
+
         // Symbol configuration for toolbar-sized icons
         let config = NSImage.SymbolConfiguration(pointSize: 18, weight: .regular)
 
@@ -209,10 +222,12 @@ private struct ConversionPlayButtonNSViewWrapper: NSViewRepresentable {
             let image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: "Cancel Conversion")
             button.image = image?.withSymbolConfiguration(config)
             button.contentTintColor = .systemRed
+            button.setAccessibilityLabel("Cancel Conversion")
         } else {
             let image = NSImage(systemSymbolName: "play.circle", accessibilityDescription: "Start Conversion")
             button.image = image?.withSymbolConfiguration(config)
             button.contentTintColor = (!hasFiles || !canStartConversion) ? .systemGray : .systemGreen
+            button.setAccessibilityLabel("Start Conversion")
         }
 
         // Update enabled state

@@ -7,7 +7,8 @@
 
 import SwiftUI
 import AppKit
-import AVKit
+@preconcurrency import AVKit
+@preconcurrency import AVFoundation
 import Combine
 import OSLog
 
@@ -103,18 +104,31 @@ final class PreviewPlayerController: ObservableObject {
     // MARK: - State
 
     var videoItem: VideoItem
+    let screenshotCaptureSubprocess: ScreenshotCaptureSubprocess
+    var screenshotCaptureTask: Task<Void, Error>?
+    var screenshotCaptureOperationID: UUID?
     var preparationTask: Task<Void, Never>?
     var previewAssetTask: Task<Void, Never>?
     private var previewAssetURL: URL?  // Track URL being processed to avoid redundant cancellation
     private var chapterProbeTask: Task<Void, Never>?
     private var chapterProbeURL: URL?
+    private var audioTrackRefreshTask: Task<Void, Never>?
+    private var audioTrackRefreshID: UUID?
     var loopObserver: Any?
+    var loopObserverID: UUID?
     var playbackDidFinish: (() -> Void)?
     var timeObserver: Any?
+    var timeObserverID: UUID?
     var playbackTimeObserver: Any?
+    var playbackTimeObserverID: UUID?
     weak var timeObserverOwner: AVPlayer?
     weak var playbackTimeObserverOwner: AVPlayer?
     var playerItemStatusObserver: Any?
+    var playerItemStatusObserverID: UUID?
+    var playerItemStatusOperationID: UUID?
+    var playerItemStatusTask: Task<Void, Never>?
+    private var audioSelectionTask: Task<Void, Never>?
+    private var audioSelectionOperationID: UUID?
     var mpvEndObserver: AnyCancellable?
     var primaryAccess: SecurityScopedAccess = .none
     var imageSequenceAudioAccess: SecurityScopedAccess = .none
@@ -160,8 +174,12 @@ final class PreviewPlayerController: ObservableObject {
         return 0
     }
 
-    init(videoItem: VideoItem) {
+    init(
+        videoItem: VideoItem,
+        screenshotCaptureSubprocess: ScreenshotCaptureSubprocess = ScreenshotCaptureSubprocess()
+    ) {
         self.videoItem = videoItem
+        self.screenshotCaptureSubprocess = screenshotCaptureSubprocess
         setupAudioMonitoring()
     }
     
@@ -840,14 +858,22 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     /// Determines the preferred ordering of audio stream indices based on metadata (default + channel count).
-    nonisolated func determineAudioStreamOrder(for item: VideoItem) async -> [Int] {
+    nonisolated func determineAudioStreamOrder(
+        for item: VideoItem,
+        metadataTimeout: Duration = BoundedVideoMetadataProbe.defaultTimeout,
+        metadataProbe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        }
+    ) async throws -> [Int] {
         if let metadata = item.metadata {
             return orderAudioStreams(from: metadata)
         }
-        if let metadata = try? await VideoMetadataService.shared.metadata(for: item.url) {
-            return orderAudioStreams(from: metadata)
-        }
-        return []
+        let metadata = try await BoundedVideoMetadataProbe.metadata(
+            for: item.url,
+            timeout: metadataTimeout,
+            probe: metadataProbe
+        )
+        return orderAudioStreams(from: metadata)
     }
     
     nonisolated private func orderAudioStreams(from metadata: VideoMetadata) -> [Int] {
@@ -866,9 +892,19 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func refreshAudioTrackOptions(for item: VideoItem, playerItem: AVPlayerItem?) {
+        audioTrackRefreshTask?.cancel()
+        let refreshID = UUID()
+        audioTrackRefreshID = refreshID
         let existingSelection = selectedAudioTrackOrderIndex
-        Task { @MainActor [weak self] in
+        audioTrackRefreshTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer {
+                if self.audioTrackRefreshID == refreshID {
+                    self.audioTrackRefreshTask = nil
+                    self.audioTrackRefreshID = nil
+                }
+            }
+            guard self.audioTrackRefreshID == refreshID, !Task.isCancelled else { return }
 
             if useMPV {
                 guard let mpv = mpvPlayer else { return }
@@ -881,17 +917,34 @@ final class PreviewPlayerController: ObservableObject {
                 if let cached = item.metadata {
                     metadata = cached
                 } else {
-                    metadata = try? await VideoMetadataService.shared.metadata(for: item.url)
+                    do {
+                        metadata = try await BoundedVideoMetadataProbe.metadata(for: item.url)
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        metadata = nil
+                    }
                 }
 
                 let orderedIndices = metadata.map { self.orderAudioStreams(from: $0) } ?? []
                 let mediaGroup: AVMediaSelectionGroup?
                 if let playerItem {
-                    mediaGroup = try? await playerItem.asset.loadMediaSelectionGroup(for: .audible)
+                    let asset = playerItem.asset
+                    mediaGroup = try? await NonJoiningTaskDeadline.run(timeout: .seconds(10)) {
+                        try Task.checkCancellation()
+                        let access = (asset as? AVURLAsset).map {
+                            SecurityScopedBookmarkManager.shared.startAccessing(url: $0.url)
+                        }
+                        defer {
+                            if let access { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+                        }
+                        return try await asset.loadMediaSelectionGroup(for: .audible)
+                    }
                 } else {
                     mediaGroup = nil
                 }
 
+                guard self.audioTrackRefreshID == refreshID, !Task.isCancelled else { return }
                 self.buildAudioTrackOptions(metadata: metadata, orderedIndices: orderedIndices, mediaGroup: mediaGroup)
             }
 
@@ -1090,16 +1143,38 @@ final class PreviewPlayerController: ObservableObject {
     func applySelectedAudioTrackToCurrentPlayerItem() {
         guard let playerItem = player?.currentItem else { return }
 
-        Task { @MainActor [weak self, weak playerItem] in
+        audioSelectionTask?.cancel()
+        let operationID = UUID()
+        audioSelectionOperationID = operationID
+        audioSelectionTask = Task { @MainActor [weak self, weak playerItem] in
             guard let self, let playerItem else { return }
+            defer {
+                if self.audioSelectionOperationID == operationID {
+                    self.audioSelectionTask = nil
+                    self.audioSelectionOperationID = nil
+                }
+            }
 
             // 1. Try to load media selection group first (for alternate tracks)
             var mediaGroup: AVMediaSelectionGroup?
             do {
-                mediaGroup = try await playerItem.asset.loadMediaSelectionGroup(for: .audible)
+                let asset = playerItem.asset
+                mediaGroup = try await NonJoiningTaskDeadline.run(timeout: .seconds(10)) {
+                    try Task.checkCancellation()
+                    let access = (asset as? AVURLAsset).map {
+                        SecurityScopedBookmarkManager.shared.startAccessing(url: $0.url)
+                    }
+                    defer {
+                        if let access { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+                    }
+                    return try await asset.loadMediaSelectionGroup(for: .audible)
+                }
             } catch {
                 logger.error("Failed to load audible group: \(error, privacy: .public)")
             }
+
+            guard !Task.isCancelled, self.audioSelectionOperationID == operationID,
+                  self.player?.currentItem === playerItem else { return }
 
             // 2. Build options (this populates self.audioTrackOptions)
             self.buildAudioTrackOptions(metadata: self.videoItem.metadata, orderedIndices: [], mediaGroup: mediaGroup)
@@ -1187,8 +1262,15 @@ final class PreviewPlayerController: ObservableObject {
             guard let self else { return }
 
             // Get metadata to know channel count and layout
-            guard let metadata = try? await VideoMetadataService.shared.metadata(for: url),
-                  streamIndex < metadata.audioStreams.count else { return }
+            let metadata: VideoMetadata
+            do {
+                metadata = try await BoundedVideoMetadataProbe.metadata(for: url)
+            } catch is CancellationError {
+                return
+            } catch {
+                return
+            }
+            guard streamIndex < metadata.audioStreams.count else { return }
 
             let stream = metadata.audioStreams[streamIndex]
             let channels = stream.channels ?? 2
@@ -1256,6 +1338,12 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func teardown(resetAudioSelection: Bool = true) {
+        audioSelectionOperationID = nil
+        audioSelectionTask?.cancel()
+        audioSelectionTask = nil
+        screenshotCaptureOperationID = nil
+        screenshotCaptureTask?.cancel()
+        screenshotCaptureTask = nil
         preparationTask?.cancel()
         preparationTask = nil
         previewAssetTask?.cancel()
@@ -1316,6 +1404,9 @@ final class PreviewPlayerController: ObservableObject {
         currentChannelWaveformLabels = []
         channelWaveformGenerationTask?.cancel()
         channelWaveformGenerationTask = nil
+        audioTrackRefreshID = nil
+        audioTrackRefreshTask?.cancel()
+        audioTrackRefreshTask = nil
         chapterProbeTask?.cancel()
         chapterProbeTask = nil
         chapterProbeURL = nil
@@ -1358,7 +1449,7 @@ final class PreviewPlayerController: ObservableObject {
         let seekTime = CMTime(seconds: videoItem.effectiveTrimStart, preferredTimescale: 600)
         player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
-                guard finished, let self = self, isPlaying else { return }
+                guard finished, let self = self, self.player === player, isPlaying else { return }
                 // Only resume playback if it was playing before
                 self.player?.play()
             }

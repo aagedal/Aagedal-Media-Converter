@@ -145,6 +145,19 @@ struct UploadSettingsView: View {
         BinarySourceSelection(rawValue: rcloneBinarySource) ?? .app
     }
 
+    private var rcloneStatusText: Text {
+        switch rcloneStatus {
+        case .notInstalled:
+            return Text("Not installed")
+        case .bundled:
+            return Text("Bundled")
+        case .customPath(let path):
+            return Text("Custom: \(path)")
+        case .systemAvailable(let path):
+            return Text("Homebrew: \(path)")
+        }
+    }
+
     private var rcloneStatusSection: some View {
         Section(header: Text("rclone")) {
             VStack(alignment: .leading, spacing: 12) {
@@ -153,7 +166,7 @@ struct UploadSettingsView: View {
                         .foregroundColor(rcloneStatus.isAvailable ? .green : .orange)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(rcloneStatus.displayText)
+                        rcloneStatusText
                             .font(.headline)
                     }
 

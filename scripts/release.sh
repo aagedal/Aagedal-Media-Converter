@@ -28,6 +28,9 @@ set -euo pipefail
 
 echo "==> scripts/release.sh starting"
 
+echo "==> Verifying bundled dependency manifest"
+scripts/bundled-dependency-manifest.py --check --require-complete-licenses
+
 # -----------------------------------------------------------------------------
 # Toolchain resolution
 # -----------------------------------------------------------------------------
@@ -124,7 +127,9 @@ xcodebuild archive \
     -configuration Release \
     -archivePath "$ARCHIVE_PATH" \
     ARCHS=arm64 \
-    ONLY_ACTIVE_ARCH=NO
+    ONLY_ACTIVE_ARCH=NO \
+    MARKETING_VERSION="$MARKETING_VERSION" \
+    CURRENT_PROJECT_VERSION="$CURRENT_PROJECT_VERSION"
 
 xcodebuild -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
@@ -133,6 +138,10 @@ xcodebuild -exportArchive \
 
 APP_PATH="$EXPORT_DIR/$SCHEME.app"
 [[ -d "$APP_PATH" ]] || { echo "Build produced no .app at $APP_PATH" >&2; exit 1; }
+
+# Verify the exported bundle before submitting it to Apple.
+python3 scripts/verify-release-bundle.py "$APP_PATH" --architecture arm64 --manifest BundledDependencies.json
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
 # -----------------------------------------------------------------------------
 # Notarize & staple
@@ -182,30 +191,7 @@ echo "==> Sparkle signature: $ED_SIGNATURE_LINE"
 # We already have length from stat, so just extract the signature value.
 ED_SIGNATURE=$(echo "$ED_SIGNATURE_LINE" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
 
-# -----------------------------------------------------------------------------
-# GitHub release
-# -----------------------------------------------------------------------------
 DOWNLOAD_URL="https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/download/$MARKETING_VERSION/$RELEASE_ZIP_NAME"
-
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    if gh release view "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
-        echo "==> Uploading $RELEASE_ZIP_NAME to existing GitHub release $MARKETING_VERSION"
-        gh release upload "$MARKETING_VERSION" "$RELEASE_ZIP" \
-            --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-            --clobber
-    else
-        echo "==> Creating GitHub release $MARKETING_VERSION"
-        gh release create "$MARKETING_VERSION" "$RELEASE_ZIP" \
-            --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-            --target main \
-            --title "$MARKETING_VERSION" \
-            --generate-notes
-    fi
-else
-    echo "==> GitHub CLI is unavailable or unauthenticated — skipping upload."
-    echo "    1. Create release $MARKETING_VERSION at https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/new"
-    echo "    2. Attach $RELEASE_ZIP"
-fi
 
 # -----------------------------------------------------------------------------
 # Append appcast.xml entry
@@ -227,13 +213,15 @@ else
     echo "==> WARNING: $MARKETING_VERSION not found in CHANGELOG.md — using bare link in appcast"
 fi
 
+MINIMUM_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$APP_PATH/Contents/Info.plist")
+
 NEW_ITEM=$(cat <<EOF
-        <item>
+        <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
             <title>Version $MARKETING_VERSION</title>
             <pubDate>$PUB_DATE</pubDate>
             <sparkle:version>$CURRENT_PROJECT_VERSION</sparkle:version>
             <sparkle:shortVersionString>$MARKETING_VERSION</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:minimumSystemVersion>$MINIMUM_SYSTEM_VERSION</sparkle:minimumSystemVersion>
             <enclosure
                 url="$DOWNLOAD_URL"
                 length="$ZIP_SIZE"
@@ -246,17 +234,50 @@ $RELEASE_NOTES_HTML
 EOF
 )
 
-python3 - "$APPCAST" "$NEW_ITEM" <<'PYEOF'
-import sys, pathlib
-path = pathlib.Path(sys.argv[1])
-new_item = sys.argv[2]
-text = path.read_text()
-needle = "    </channel>"
-if needle not in text:
-    raise SystemExit(f"Could not find '{needle.strip()}' in {path}")
-text = text.replace(needle, new_item + "\n" + needle, 1)
-path.write_text(text)
-PYEOF
+# Prepare and validate the complete feed before any upload or live-feed mutation.
+APPCAST_CANDIDATE="$BUILD_DIR/appcast-candidate.xml"
+APPCAST_ITEM="$BUILD_DIR/appcast-item.xml"
+printf '%s\n' "$NEW_ITEM" > "$APPCAST_ITEM"
+python3 scripts/prepare-release-appcast.py \
+    --source "$APPCAST" --destination "$APPCAST_CANDIDATE" \
+    --item "$APPCAST_ITEM" --archive "$RELEASE_ZIP" \
+    --info-plist "$APP_PATH/Contents/Info.plist"
+xcrun swift scripts/verify-update-signature.swift "$RELEASE_ZIP" "$APP_PATH/Contents/Info.plist" "$ED_SIGNATURE"
+
+# Verify the actual distribution archive survives extraction with its seal intact.
+VERIFY_DIR="$BUILD_DIR/verify-distribution"
+mkdir -p "$VERIFY_DIR"
+/usr/bin/ditto -x -k "$RELEASE_ZIP" "$VERIFY_DIR"
+python3 scripts/verify-release-bundle.py "$VERIFY_DIR/$SCHEME.app" --architecture arm64 --manifest BundledDependencies.json --report "$BUILD_DIR/Release-Footprint.json"
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$VERIFY_DIR/$SCHEME.app"
+xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
+/usr/sbin/spctl --assess --type execute --verbose=2 "$VERIFY_DIR/$SCHEME.app"
+
+# -----------------------------------------------------------------------------
+# GitHub release
+# -----------------------------------------------------------------------------
+
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    if gh release view "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
+        echo "==> Uploading $RELEASE_ZIP_NAME to existing GitHub release $MARKETING_VERSION"
+        gh release upload "$MARKETING_VERSION" "$RELEASE_ZIP" \
+            --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+            --clobber
+    else
+        echo "==> Creating GitHub release $MARKETING_VERSION"
+        gh release create "$MARKETING_VERSION" "$RELEASE_ZIP" \
+            --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+            --target main \
+            --title "$MARKETING_VERSION" \
+            --generate-notes
+    fi
+else
+    echo "==> GitHub CLI is unavailable or unauthenticated — skipping upload."
+    echo "    1. Create release $MARKETING_VERSION at https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/new"
+    echo "    2. Attach $RELEASE_ZIP"
+fi
+
+cp "$APPCAST_CANDIDATE" "$APPCAST"
 
 echo "==> Appended appcast entry. Review and commit:"
 echo "    git diff $APPCAST"

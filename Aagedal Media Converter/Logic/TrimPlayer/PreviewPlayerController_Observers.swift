@@ -5,7 +5,8 @@
 // Observer management for PreviewPlayerController (loop, time, playback monitoring).
 
 import Foundation
-import AVKit
+@preconcurrency import AVKit
+@preconcurrency import AVFoundation
 import OSLog
 
 extension PreviewPlayerController {
@@ -14,18 +15,22 @@ extension PreviewPlayerController {
     
     func installLoopObserver(for item: AVPlayerItem) {
         removeLoopObserver()
+        let observerID = UUID()
+        loopObserverID = observerID
         loopObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.handlePlaybackEnded()
+            Task { @MainActor [weak self, weak item] in
+                guard let self, let item, self.player?.currentItem === item, self.loopObserverID == observerID else { return }
+                self.handlePlaybackEnded()
             }
         }
     }
 
     func removeLoopObserver() {
+        loopObserverID = nil
         if let loopObserver {
             NotificationCenter.default.removeObserver(loopObserver)
             self.loopObserver = nil
@@ -36,8 +41,11 @@ extension PreviewPlayerController {
         playbackDidFinish?()
         guard videoItem.loopPlayback, let player else { return }
         let target = CMTime(seconds: videoItem.effectiveTrimStart, preferredTimescale: 600)
-        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
-            player.play()
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self, weak player] finished in
+            Task { @MainActor in
+                guard finished, let self, let player, self.player === player else { return }
+                player.play()
+            }
         }
     }
 
@@ -96,10 +104,12 @@ extension PreviewPlayerController {
 
         // Check playback position every 0.1 seconds
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        let observerID = UUID()
+        timeObserverID = observerID
         timeObserverOwner = player
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak player] time in
             Task { @MainActor [weak self] in
-                guard let self = self else { return }
+                guard let self, let player, self.player === player, self.timeObserverOwner === player, self.timeObserverID == observerID else { return }
 
                 let currentTime = time.seconds
 
@@ -127,6 +137,7 @@ extension PreviewPlayerController {
     }
 
     func removeTimeObserver() {
+        timeObserverID = nil
         if let timeObserver {
             let owner = timeObserverOwner ?? player
             owner?.removeTimeObserver(timeObserver)
@@ -142,10 +153,12 @@ extension PreviewPlayerController {
 
         // Update playback time more frequently for smooth UI updates (every 0.05 seconds)
         let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let observerID = UUID()
+        playbackTimeObserverID = observerID
         playbackTimeObserverOwner = player
-        playbackTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        playbackTimeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak player] time in
             Task { @MainActor [weak self] in
-                guard let self = self else { return }
+                guard let self, let player, self.player === player, self.playbackTimeObserverOwner === player, self.playbackTimeObserverID == observerID else { return }
                 let currentTime = time.seconds
                 if currentTime.isFinite {
                     self.currentPlaybackTime = currentTime
@@ -155,6 +168,7 @@ extension PreviewPlayerController {
     }
     
     func removePlaybackTimeObserver() {
+        playbackTimeObserverID = nil
         if let playbackTimeObserver {
             let owner = playbackTimeObserverOwner ?? player
             owner?.removeTimeObserver(playbackTimeObserver)
@@ -167,210 +181,115 @@ extension PreviewPlayerController {
     
     func installPlayerItemStatusObserver(for playerItem: AVPlayerItem, startTime: TimeInterval) {
         removePlayerItemStatusObserver()
-        
-        playerItemStatusObserver = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+        let observerID = UUID()
+        playerItemStatusObserverID = observerID
+        playerItemStatusObserver = playerItem.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
-
+                guard let self, self.playerItemStatusObserverID == observerID,
+                      self.player?.currentItem === item else { return }
                 switch item.status {
                 case .failed:
-                    let failureDescription = item.error?.localizedDescription ?? "unknown error"
-                    logger.warning("Direct AVPlayer playback failed (description: \(failureDescription, privacy: .public)). Preparing MP4 fallback preview.")
-                    
-                    if let error = item.error as NSError? {
-                        let userInfoKeys = error.userInfo.keys.map { String(describing: $0) }
-                        logger.warning("AVPlayer error details – domain: \(error.domain, privacy: .public), code: \(error.code, privacy: .public), userInfoKeys: \(userInfoKeys, privacy: .public)")
-                        
-                        if let failureReason = error.localizedFailureReason, !failureReason.isEmpty {
-                            logger.debug("AVPlayer failure reason: \(failureReason, privacy: .public)")
-                        }
-                        
-                        if let recoverySuggestion = error.localizedRecoverySuggestion, !recoverySuggestion.isEmpty {
-                            logger.debug("AVPlayer recovery suggestion: \(recoverySuggestion, privacy: .public)")
-                        }
-                        
-                        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
-                            logger.warning("Underlying error – domain: \(underlying.domain, privacy: .public), code: \(underlying.code, privacy: .public), description: \(underlying.localizedDescription, privacy: .public)")
-                        }
-                    } else {
-                        logger.warning("AVPlayer item failed without NSError payload.")
-                    }
-                    
-                    if let urlAsset = item.asset as? AVURLAsset {
-                        let pathExtension = urlAsset.url.pathExtension
-                        logger.debug("Failing asset metadata – extension: \(pathExtension, privacy: .public)")
-                    } else {
-                        logger.debug("Failing asset type: \(String(describing: type(of: item.asset)), privacy: .public)")
-                    }
-                    
-                    let asset = item.asset
-                    Task {
-                        if let urlAsset = asset as? AVURLAsset {
-                            do {
-                                let resourceValues = try urlAsset.url.resourceValues(forKeys: [.typeIdentifierKey])
-                                if let uti = resourceValues.typeIdentifier {
-                                    logger.debug("Failing asset UTI: \(uti, privacy: .public)")
-                                } else {
-                                    logger.debug("Failing asset UTI unavailable")
-                                }
-                            } catch {
-                                logger.debug("Failed to read asset resource values: \(error.localizedDescription, privacy: .public)")
-                            }
-                        }
-
-                        do {
-                            let duration = try await asset.load(.duration)
-                            logger.debug("Failing asset duration: \(duration.seconds, privacy: .public)s")
-                        } catch {
-                            logger.debug("Failed to load asset duration: \(error.localizedDescription, privacy: .public)")
-                        }
-
-                        do {
-                            let videoTracks = try await asset.loadTracks(withMediaType: .video)
-                            if videoTracks.isEmpty {
-                                logger.warning("No video tracks available when inspecting failed asset.")
-                            }
-                            
-                            for track in videoTracks {
-                                let frameRate = try await track.load(.nominalFrameRate)
-                                let isPlayable = try await track.load(.isPlayable)
-                                let naturalSize = try await track.load(.naturalSize)
-                                let sizeDescription = "\(Int(naturalSize.width))x\(Int(naturalSize.height))"
-                                let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
-                                
-                                let codecNames: [String] = formatDescriptions.map { desc in
-                                    let codec = CMFormatDescriptionGetMediaSubType(desc)
-                                    let codecBytes: [UInt8] = [
-                                        UInt8((codec >> 24) & 0xFF),
-                                        UInt8((codec >> 16) & 0xFF),
-                                        UInt8((codec >> 8) & 0xFF),
-                                        UInt8(codec & 0xFF)
-                                    ]
-                                    
-                                    if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters),
-                                       fourCC.count == 4 {
-                                        return fourCC
-                                    }
-                                    
-                                    return String(format: "%08X", codec)
-                                }
-                                
-                                let codecSummary = codecNames.isEmpty ? "<none>" : codecNames.joined(separator: ",")
-                                logger.debug("Video track \(Int(track.trackID), privacy: .public) details – nominalFrameRate: \(frameRate, privacy: .public), naturalSize: \(sizeDescription, privacy: .public), isPlayable: \(isPlayable, privacy: .public), codecs: \(codecSummary, privacy: .public)")
-                            }
-                        } catch {
-                            logger.error("Failed to inspect asset tracks after AVPlayer failure: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                    
-                    // AVPlayer failed - use MPV for all unsupported codecs including APV and VVC
-                    // MPV with our custom-built FFmpeg has decoders for APV and VVC
-                    logger.info("Attempting MPV playback as fallback")
+                    self.logger.warning("Direct AVPlayer playback failed: \(item.error?.localizedDescription ?? "unknown error", privacy: .public). Attempting MPV playback.")
                     self.teardown(resetAudioSelection: false)
                     self.setupMPV(url: self.videoItem.url, startTime: startTime)
-                    
                 case .readyToPlay:
-                    let asset = item.asset
-
-                    Task {
-                        do {
-                            let videoTracks = try await asset.loadTracks(withMediaType: .video)
-
-                            if !videoTracks.isEmpty {
-                                // Check if video tracks have valid format descriptions
-                                var hasValidVideoFormat = false
-                                for track in videoTracks {
-                                    let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
-                                    if !formatDescriptions.isEmpty {
-                                        hasValidVideoFormat = true
-                                        break
-                                    }
-                                }
-
-                                if !hasValidVideoFormat {
-                                    logger.warning("AVPlayer ready but video format invalid. Attempting MPV playback.")
-                                    self.teardown(resetAudioSelection: false)
-                                    self.setupMPV(url: self.videoItem.url, startTime: startTime)
-                                    return
-                                }
-
-                                // Check if video tracks are actually decodable by AVPlayer
-                                // This dynamically detects unsupported codecs (AV1, VVC, APV, etc.)
-                                for track in videoTracks {
-                                    let isDecodable = try await track.load(.isDecodable)
-
-                                    // Log codec info for debugging
-                                    let formatDescriptions = try await track.load(.formatDescriptions) as [CMFormatDescription]
-                                    for desc in formatDescriptions {
-                                        let codec = CMFormatDescriptionGetMediaSubType(desc)
-                                        let codecBytes: [UInt8] = [
-                                            UInt8((codec >> 24) & 0xFF),
-                                            UInt8((codec >> 16) & 0xFF),
-                                            UInt8((codec >> 8) & 0xFF),
-                                            UInt8(codec & 0xFF)
-                                        ]
-                                        let codecString: String
-                                        if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters),
-                                           fourCC.count == 4 {
-                                            codecString = fourCC
-                                        } else {
-                                            codecString = String(format: "%08X", codec)
-                                        }
-
-                                        logger.debug("Video codec detected: '\(codecString, privacy: .public)' (raw: \(codec, privacy: .public)), isDecodable: \(isDecodable, privacy: .public)")
-                                    }
-
-                                    if !isDecodable {
-                                        logger.warning("AVPlayer ready but video track not decodable. Attempting MPV playback.")
-                                        self.teardown(resetAudioSelection: false)
-                                        self.setupMPV(url: self.videoItem.url, startTime: startTime)
-                                        return
-                                    }
-                                }
-                            }
-
-                            // Direct playback successful
-                            logger.debug("Direct AVPlayer playback ready, seeking to startTime=\(startTime, privacy: .public)")
-                            self.isReady = true
-
-                            // Seek to start time now that player is ready
-                            // The seek in preparePreview() happens before the player is ready, so we need to seek again here
-                            if let player = self.player {
-                                let seekTime = CMTime(seconds: startTime, preferredTimescale: 600)
-                                logger.debug("Seeking to \(seekTime.seconds, privacy: .public) seconds")
-                                await player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-                                logger.debug("Seek completed, currentTime=\(player.currentTime().seconds, privacy: .public)")
-                            }
-
-                            // Apply audio track selection now that tracks are loaded
-                            self.applySelectedAudioTrack()
-
-                        } catch {
-                            // If we can't load tracks, assume it's okay and let AVPlayer try
-                            logger.debug("Could not verify video tracks, proceeding with playback")
-                            self.isReady = true
-
-                            // Still seek to start time
-                            if let player = self.player {
-                                let seekTime = CMTime(seconds: startTime, preferredTimescale: 600)
-                                await player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-                            }
-
-                            self.applySelectedAudioTrack()
-                        }
-                    }
-                    
+                    self.prepareReadyPlayerItem(item, startTime: startTime)
                 case .unknown:
                     break
-                    
                 @unknown default:
                     break
                 }
             }
         }
     }
-    
+
+    /// Both metadata inspection and the initial seek have deadlines. The detached
+    /// metadata operation never mutates controller state, even if AVFoundation
+    /// finishes after cancellation or after a different item has been installed.
+    func prepareReadyPlayerItem(
+        _ item: AVPlayerItem,
+        startTime: TimeInterval,
+        timeout: Duration = .seconds(10),
+        verify: (@Sendable () async throws -> Bool)? = nil,
+        seek: (@Sendable () async throws -> Bool)? = nil
+    ) {
+        playerItemStatusTask?.cancel()
+        let operationID = UUID()
+        playerItemStatusOperationID = operationID
+        guard let player, player.currentItem === item else { return }
+        let asset = item.asset
+        let sourceURL = (asset as? AVURLAsset)?.url
+        playerItemStatusTask = Task { @MainActor [weak self] in
+            defer {
+                if self?.playerItemStatusOperationID == operationID {
+                    self?.playerItemStatusTask = nil
+                    self?.playerItemStatusOperationID = nil
+                }
+            }
+            let supportsPlayback: Bool
+            do {
+                supportsPlayback = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                    try Task.checkCancellation()
+                    if let verify { return try await verify() }
+                    let access = sourceURL.map { SecurityScopedBookmarkManager.shared.startAccessing(url: $0) }
+                    defer {
+                        if let access { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+                    }
+                    let tracks = try await asset.loadTracks(withMediaType: .video)
+                    for track in tracks {
+                        try Task.checkCancellation()
+                        let formats = try await track.load(.formatDescriptions)
+                        let decodable = try await track.load(.isDecodable)
+                        if formats.isEmpty || !decodable { return false }
+                    }
+                    return true
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                // Metadata is advisory; retain AVPlayer's ready status when the
+                // inspection fails or times out, and still bound its initial seek.
+                supportsPlayback = true
+            }
+            guard let self, !Task.isCancelled,
+                  self.playerItemStatusOperationID == operationID,
+                  self.player === player, player.currentItem === item else { return }
+            guard supportsPlayback else {
+                self.logger.warning("AVPlayer video track unsupported; attempting MPV playback.")
+                self.teardown(resetAudioSelection: false)
+                self.setupMPV(url: self.videoItem.url, startTime: startTime)
+                return
+            }
+            do {
+                _ = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                    try Task.checkCancellation()
+                    if let seek { return try await seek() }
+                    return await player.seek(
+                        to: CMTime(seconds: startTime, preferredTimescale: 600),
+                        toleranceBefore: .zero, toleranceAfter: .zero
+                    )
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, self.playerItemStatusOperationID == operationID,
+                      self.player === player, player.currentItem === item else { return }
+                item.cancelPendingSeeks()
+                self.logger.debug("Initial preview seek did not finish before its deadline.")
+            }
+            guard !Task.isCancelled, self.playerItemStatusOperationID == operationID,
+                  self.player === player, player.currentItem === item else { return }
+            self.isReady = true
+            self.applySelectedAudioTrack()
+        }
+    }
+
     func removePlayerItemStatusObserver() {
+        playerItemStatusObserverID = nil
+        playerItemStatusOperationID = nil
+        playerItemStatusTask?.cancel()
+        playerItemStatusTask = nil
+        player?.currentItem?.cancelPendingSeeks()
         if let playerItemStatusObserver {
             (playerItemStatusObserver as? NSKeyValueObservation)?.invalidate()
             self.playerItemStatusObserver = nil

@@ -15,6 +15,7 @@ class UploadManager {
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "UploadManager")
     private let rcloneService = RcloneService()
     private var uploadTasks: [UUID: Task<Void, Never>] = [:]
+    private var uploadExecutionIDs: [UUID: UUID] = [:]
 
     /// Reference to video items for updating status
     var videoItems: Binding<[VideoItem]>?
@@ -51,14 +52,13 @@ class UploadManager {
         videoItems?.wrappedValue[index].uploadStatus = .pending
         logger.info("Queued upload for item: \(itemID)")
 
-        // Start upload immediately (non-blocking)
-        Task {
-            await startUpload(itemID: itemID)
-        }
+        // Installs the tracked task synchronously so an immediate cancel cannot race
+        // an untracked wrapper task that has not started yet.
+        startUpload(itemID: itemID)
     }
 
     /// Starts upload for an item
-    func startUpload(itemID: UUID) async {
+    func startUpload(itemID: UUID) {
         logger.info("Starting upload for item: \(itemID)")
         let hasBinding = self.videoItems != nil
         logger.info("videoItems binding set: \(hasBinding)")
@@ -94,13 +94,15 @@ class UploadManager {
 
         // Cancel any existing upload task for this item
         uploadTasks[itemID]?.cancel()
+        let executionID = UUID()
 
         // Create new upload task
         let task = Task { [weak self] in
             guard let self = self else { return }
 
             await MainActor.run {
-                if let idx = self.findItemIndex(itemID) {
+                if self.uploadExecutionIDs[itemID] == executionID,
+                   let idx = self.findItemIndex(itemID) {
                     self.videoItems?.wrappedValue[idx].uploadStatus = .uploading
                     self.videoItems?.wrappedValue[idx].uploadProgress = 0.0
                 }
@@ -114,6 +116,7 @@ class UploadManager {
                     self?.logger.debug("[UploadManager] Progress callback: \(Int(progress * 100), privacy: .public)%, speed: \(speed ?? "nil", privacy: .public)")
                     Task { @MainActor in
                         guard let self = self,
+                              self.uploadExecutionIDs[itemID] == executionID,
                               let binding = self.videoItems,
                               let idx = binding.wrappedValue.firstIndex(where: { $0.id == itemID }),
                               idx < binding.wrappedValue.count
@@ -129,7 +132,8 @@ class UploadManager {
                 }
 
                 await MainActor.run {
-                    if let idx = self.findItemIndex(itemID) {
+                    if self.uploadExecutionIDs[itemID] == executionID,
+                       let idx = self.findItemIndex(itemID) {
                         if result.success {
                             self.videoItems?.wrappedValue[idx].uploadStatus = .uploaded
                             self.videoItems?.wrappedValue[idx].uploadedRemotePath = result.remotePath
@@ -141,9 +145,12 @@ class UploadManager {
                         }
                     }
                 }
+            } catch is CancellationError {
+                self.logger.info("Upload task cancelled for \(itemID)")
             } catch {
                 await MainActor.run {
-                    if let idx = self.findItemIndex(itemID) {
+                    if self.uploadExecutionIDs[itemID] == executionID,
+                       let idx = self.findItemIndex(itemID) {
                         self.videoItems?.wrappedValue[idx].uploadStatus = .failed(error.localizedDescription)
                         self.logger.error("Upload error for \(itemID): \(error.localizedDescription)")
                     }
@@ -151,10 +158,14 @@ class UploadManager {
             }
 
             _ = await MainActor.run {
-                self.uploadTasks.removeValue(forKey: itemID)
+                if self.uploadExecutionIDs[itemID] == executionID {
+                    self.uploadTasks.removeValue(forKey: itemID)
+                    self.uploadExecutionIDs.removeValue(forKey: itemID)
+                }
             }
         }
 
+        uploadExecutionIDs[itemID] = executionID
         uploadTasks[itemID] = task
     }
 
@@ -162,8 +173,7 @@ class UploadManager {
     func cancelUpload(itemID: UUID) async {
         uploadTasks[itemID]?.cancel()
         uploadTasks.removeValue(forKey: itemID)
-
-        await rcloneService.cancelUpload()
+        uploadExecutionIDs.removeValue(forKey: itemID)
 
         if let index = findItemIndex(itemID) {
             videoItems?.wrappedValue[index].uploadStatus = .cancelled
@@ -183,7 +193,7 @@ class UploadManager {
         videoItems?.wrappedValue[index].uploadProgress = 0.0
         videoItems?.wrappedValue[index].uploadSpeed = nil
 
-        await startUpload(itemID: itemID)
+        startUpload(itemID: itemID)
     }
 
     /// Cancels all uploads
@@ -195,7 +205,7 @@ class UploadManager {
             }
         }
         uploadTasks.removeAll()
-        await rcloneService.cancelUpload()
+        uploadExecutionIDs.removeAll()
     }
 
     // MARK: - Configuration

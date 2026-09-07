@@ -127,6 +127,9 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     let overwriteWarningLabel = NSTextField(labelWithString: "")
     let outputSizeLabel = NSTextField(labelWithString: "")
     let statusLabel = NSTextField(labelWithString: "")
+    private let errorDetailsButton = NSButton()
+    private var errorDetailsPopover: NSPopover?
+    private var displayedDiagnosticReport: String?
 
     // Status capsule (colored pill label, e.g. "WAITING", "ENCODING", "DONE", "FAILED")
     let statusCapsule = NSView()
@@ -718,7 +721,14 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // Status capsule and message stay left-aligned. Downloaded-source reveal /
         // copy-path / drag buttons sit on the trailing edge of the same row, out of
         // the way of long YouTube titles on the filename row above.
-        statusRow.setViews([statusCapsule, statusLabel, overwriteWarningLabel], in: .leading)
+        errorDetailsButton.title = String(localized: "Error details")
+        errorDetailsButton.bezelStyle = .inline
+        errorDetailsButton.target = self
+        errorDetailsButton.action = #selector(showErrorDetails)
+        errorDetailsButton.setAccessibilityIdentifier("queue.item.errorDetails")
+        errorDetailsButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        errorDetailsButton.isHidden = true
+        statusRow.setViews([statusCapsule, statusLabel, errorDetailsButton, overwriteWarningLabel], in: .leading)
         statusRow.setViews([downloadedFinderButton, downloadedCopyPathButton, downloadedDragButton], in: .trailing)
 
         contentStack.addArrangedSubview(statusRow)
@@ -918,6 +928,14 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     func configure(with config: VideoFileCellConfiguration, actionHandler: @escaping (CellAction) -> Void) {
         let prev = self.currentConfig
         self.actionHandler = actionHandler
+        updateAccessibilityContract(with: config)
+
+        errorDetailsButton.isHidden = config.failureDetails == nil
+        if prev?.itemID != config.itemID || prev?.failureDetails != config.failureDetails {
+            errorDetailsPopover?.performClose(nil)
+            errorDetailsPopover = nil
+            displayedDiagnosticReport = nil
+        }
 
         // Skip entirely if config unchanged
         if let prev, prev == config {
@@ -1163,6 +1181,39 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         self.currentConfig = config
     }
 
+    /// Exposes a stable, localization-independent status contract to VoiceOver
+    /// and UI automation. This runs before the unchanged-config fast path so a
+    /// reused AppKit cell can never retain another queue item's accessibility data.
+    private func updateAccessibilityContract(with config: VideoFileCellConfiguration) {
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityIdentifier("queue.item")
+        setAccessibilityLabel(config.name)
+        setAccessibilityValue(accessibilityStatusValue(for: config))
+        setAccessibilityHelp(config.status == .failed ? config.conversionError : nil)
+
+        // Accessibility help is useful to VoiceOver but is not queryable through
+        // XCUIElement. Expose the visible status/error text as its own static-text
+        // element so automation and assistive clients can inspect the detail.
+        statusLabel.setAccessibilityElement(true)
+        statusLabel.setAccessibilityRole(.staticText)
+        statusLabel.setAccessibilityIdentifier("queue.item.detail")
+        let statusDetail = progressText(config: config)
+        statusLabel.setAccessibilityLabel(statusDetail)
+        statusLabel.setAccessibilityValue(statusDetail)
+    }
+
+    private func accessibilityStatusValue(for config: VideoFileCellConfiguration) -> String {
+        switch config.status {
+        case .waiting: return "waiting"
+        case .converting: return "converting"
+        case .done: return "done"
+        case .failed: return "failed"
+        case .cancelled: return "cancelled"
+        @unknown default: return "unknown"
+        }
+    }
+
     // MARK: - Layout Updates
 
     override func layout() {
@@ -1201,6 +1252,9 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        errorDetailsPopover?.performClose(nil)
+        errorDetailsPopover = nil
+        displayedDiagnosticReport = nil
         // Invalidate path caches so a reused cell recomputes paths for its new bounds
         lastCardBoundsSize = .zero
         lastThumbBoundsSize = .zero
@@ -1631,25 +1685,9 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             return
         }
 
-        // Click on the status label when it's showing an error → copy the full
-        // text to the clipboard. Failure messages (especially bmxtranswrap /
-        // asdcp-wrap stderr) are often longer than the row width, so the cell
-        // truncates them; copy-on-click lets the user paste the full message
-        // into a search or bug report.
-        if labelContains(statusLabel, point: location),
-           let errorText = errorTextForCopy(from: currentConfig), !errorText.isEmpty {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(errorText, forType: .string)
-            let confirm = "Copied to clipboard"
-            statusLabel.stringValue = confirm
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                guard let self else { return }
-                // Only restore if a re-configure hasn't already replaced the text.
-                if self.statusLabel.stringValue == confirm,
-                   let cfg = self.currentConfig {
-                    self.statusLabel.stringValue = self.progressText(config: cfg)
-                }
-            }
+        // The same detail action is available through an explicit keyboard-accessible button.
+        if labelContains(statusLabel, point: location), currentConfig?.failureDetails != nil {
+            showErrorDetails()
             return
         }
 
@@ -1672,16 +1710,59 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         super.mouseDown(with: event)
     }
 
-    /// Returns the error text to copy when the user clicks the status label,
-    /// or nil if the row isn't currently showing an error worth copying.
-    /// Mirrors the failure cases handled in `progressLabelText`.
-    private func errorTextForCopy(from config: VideoFileCellConfiguration?) -> String? {
-        guard let config else { return nil }
-        if let err = config.downloadError, !err.isEmpty { return err }
-        if case .failed(let err) = config.subtitleStatus, !err.isEmpty { return err }
-        if config.status == .failed, let err = config.conversionError, !err.isEmpty { return err }
-        return nil
+    @objc private func showErrorDetails() {
+        guard let config = currentConfig, let details = config.failureDetails else { return }
+        errorDetailsPopover?.performClose(nil)
+        displayedDiagnosticReport = config.diagnosticReport
+
+        let title = NSTextField(labelWithString: String(localized: "Error details"))
+        title.font = .boldSystemFont(ofSize: 14)
+        let text = NSTextView()
+        text.isEditable = false
+        text.isSelectable = true
+        text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        text.string = details
+        text.textContainerInset = NSSize(width: 8, height: 8)
+        text.isHorizontallyResizable = false
+        text.autoresizingMask = [.width]
+        text.textContainer?.widthTracksTextView = true
+        text.setAccessibilityIdentifier("queue.errorDetails.text")
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        scroll.documentView = text
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        text.frame = NSRect(x: 0, y: 0, width: 480, height: 260)
+
+        let copy = NSButton(title: String(localized: "Copy diagnostics"), target: self, action: #selector(copyFailureDiagnostics))
+        copy.bezelStyle = .rounded
+        copy.setAccessibilityIdentifier("queue.errorDetails.copy")
+        let stack = NSStackView(views: [title, scroll, copy])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        NSLayoutConstraint.activate([
+            scroll.widthAnchor.constraint(equalToConstant: 480),
+            scroll.heightAnchor.constraint(equalToConstant: 260)
+        ])
+        let controller = NSViewController()
+        controller.view = stack
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = controller
+        popover.contentSize = NSSize(width: 512, height: 360)
+        errorDetailsPopover = popover
+        popover.show(relativeTo: errorDetailsButton.bounds, of: errorDetailsButton, preferredEdge: .maxY)
+        popover.contentViewController?.view.window?.makeFirstResponder(copy)
     }
+
+    @objc private func copyFailureDiagnostics() {
+        guard let displayedDiagnosticReport else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(displayedDiagnosticReport, forType: .string)
+    }
+
 }
 
 // MARK: - Badge View

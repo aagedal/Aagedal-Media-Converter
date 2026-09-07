@@ -4,9 +4,9 @@
 
 import Foundation
 import OSLog
-import SwiftExif
+import SwiftMediaMetadata
 
-/// In-process replacement for `ExifToolService` backed by the SwiftExif package.
+/// In-process replacement for `ExifToolService` backed by the SwiftMediaMetadata package.
 /// Returns the same `C2PAMetadata` / `CameraMetadata` structs so existing callers
 /// (and the UI) need no changes.
 actor SwiftExifMetadataService {
@@ -16,10 +16,10 @@ actor SwiftExifMetadataService {
 
     private init() {}
 
-    /// Always true — SwiftExif is bundled with the app, there is no external binary to detect.
+    /// Always true — SwiftMediaMetadata is bundled with the app, there is no external binary to detect.
     nonisolated var isAvailable: Bool { true }
 
-    /// File extensions whose container layout SwiftExif can parse. Anything else
+    /// File extensions whose container layout SwiftMediaMetadata can parse. Anything else
     /// (mkv, webm, avi, mp3, m4a, …) is resolved as "no metadata" without a read attempt.
     private static let supportedExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf"]
 
@@ -35,14 +35,14 @@ actor SwiftExifMetadataService {
         }
         guard Self.isParsableContainer(url) else { return nil }
 
-        let videoMetadata: SwiftExif.VideoMetadata
+        let videoMetadata: SwiftMediaMetadata.VideoMetadata
         do {
             videoMetadata = try await readVideoMetadata(from: url)
         } catch {
-            // The file's extension said it should be parsable but SwiftExif couldn't
+            // The file's extension said it should be parsable but SwiftMediaMetadata couldn't
             // read it — log once at debug level and treat as "no metadata", matching
             // ExifTool's old behavior on malformed/partial files.
-            logger.debug("SwiftExif read failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.debug("SwiftMediaMetadata read failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
 
@@ -57,11 +57,11 @@ actor SwiftExifMetadataService {
         }
         guard Self.isParsableContainer(url) else { return nil }
 
-        let cam: SwiftExif.CameraMetadata?
+        let cam: SwiftMediaMetadata.CameraMetadata?
         do {
-            cam = try await SwiftExif.readVideoCameraMetadata(from: url)
+            cam = try await SwiftMediaMetadata.readVideoCameraMetadata(from: url)
         } catch {
-            logger.debug("SwiftExif camera read failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.debug("SwiftMediaMetadata camera read failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
 
@@ -88,7 +88,7 @@ actor SwiftExifMetadataService {
 
     // MARK: - Mapping
 
-    static func makeC2PAMetadata(from video: SwiftExif.VideoMetadata) -> C2PAMetadata? {
+    static func makeC2PAMetadata(from video: SwiftMediaMetadata.VideoMetadata) -> C2PAMetadata? {
         // Only surface C2PA when the container actually carries a C2PA manifest.
         // Sony NRT camera XML (video.camera.userMeta*, video.camera.creationDate) is
         // *not* C2PA — previously it was routed here and produced false positives.
@@ -118,8 +118,8 @@ actor SwiftExifMetadataService {
         )
     }
 
-    static func makeCameraMetadata(from cam: SwiftExif.CameraMetadata) -> CameraMetadata {
-        // SwiftExif surfaces the `<Meta>` entries as two parallel arrays; zip them
+    static func makeCameraMetadata(from cam: SwiftMediaMetadata.CameraMetadata) -> CameraMetadata {
+        // SwiftMediaMetadata surfaces the `<Meta>` entries as two parallel arrays; zip them
         // back into name/content pairs and drop any empty ones.
         let userMetadata: [UserMetadataEntry]? = {
             let pairs = zip(cam.userMetaNames, cam.userMetaContents).compactMap { name, content -> UserMetadataEntry? in
@@ -149,8 +149,8 @@ actor SwiftExifMetadataService {
         )
     }
 
-    private func readVideoMetadata(from url: URL) async throws -> SwiftExif.VideoMetadata {
-        try await SwiftExif.readVideoMetadata(from: url)
+    private func readVideoMetadata(from url: URL) async throws -> SwiftMediaMetadata.VideoMetadata {
+        try await SwiftMediaMetadata.readVideoMetadata(from: url)
     }
 }
 
@@ -161,7 +161,7 @@ enum SwiftExifMetadataError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .fileNotFound: return "File not found"
-        case .readFailed(let msg): return "SwiftExif read failed: \(msg)"
+        case .readFailed(let msg): return "SwiftMediaMetadata read failed: \(msg)"
         }
     }
 }

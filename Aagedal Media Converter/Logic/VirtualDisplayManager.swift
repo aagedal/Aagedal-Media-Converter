@@ -18,15 +18,113 @@ import OSLog
 
 /// Sendable hand-off box so the (non-Sendable) display + settings can be passed
 /// to the background queue that runs the blocking `applySettings:` call. The
-/// objects are built on the main actor and only touched on one thread at a time
-/// (we `await` the apply before reading anything back), so the unchecked
-/// conformance is sound.
+/// objects are built on the main actor and only touched by that operation until
+/// it returns. The background closure retains this box even when its caller has
+/// already timed out, so the unchecked conformance is sound.
 private final class VirtualDisplayApplyBox: @unchecked Sendable {
     let display: CGVirtualDisplay
     let settings: CGVirtualDisplaySettings
     init(display: CGVirtualDisplay, settings: CGVirtualDisplaySettings) {
         self.display = display
         self.settings = settings
+    }
+}
+
+/// Resolves an asynchronous caller from either a blocking operation or a deadline
+/// without waiting for the losing operation. This differs from a task group: task
+/// groups implicitly join every child before returning, which cannot bound a call
+/// that is blocked in synchronous system IPC and does not observe cancellation.
+enum BlockingOperationDeadline {
+    static func run<Result: Sendable>(
+        timeout: Duration,
+        timeoutResult: Result,
+        operation: @escaping @Sendable () -> Result
+    ) async -> Result {
+        let resolution = BlockingOperationResolution<Result>()
+
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                resolution.install(continuation)
+
+                guard !Task.isCancelled else {
+                    resolution.resolve(timeoutResult)
+                    return
+                }
+
+                DispatchQueue.global(qos: .userInitiated).async {
+                    resolution.resolve(operation())
+                }
+
+                let timeoutTask = Task {
+                    do {
+                        try await Task.sleep(for: timeout)
+                    } catch {
+                        return
+                    }
+                    resolution.resolve(timeoutResult)
+                }
+                resolution.installTimeoutTask(timeoutTask)
+            }
+        } onCancel: {
+            resolution.resolve(timeoutResult)
+        }
+    }
+}
+
+private final class BlockingOperationResolution<Result: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Result, Never>?
+    private var resolvedResult: Result?
+    private var isResolved = false
+    private var timeoutTask: Task<Void, Never>?
+
+    func install(_ continuation: CheckedContinuation<Result, Never>) {
+        let result = lock.withLock { () -> Result? in
+            if isResolved {
+                return resolvedResult
+            }
+            self.continuation = continuation
+            return nil
+        }
+
+        if let result {
+            continuation.resume(returning: result)
+        }
+    }
+
+    func installTimeoutTask(_ task: Task<Void, Never>) {
+        let shouldCancel = lock.withLock { () -> Bool in
+            if isResolved {
+                return true
+            }
+            timeoutTask = task
+            return false
+        }
+
+        if shouldCancel {
+            task.cancel()
+        }
+    }
+
+    func resolve(_ result: Result) {
+        let pending = lock.withLock {
+            guard !isResolved else {
+                return (
+                    continuation: Optional<CheckedContinuation<Result, Never>>.none,
+                    timeoutTask: Optional<Task<Void, Never>>.none
+                )
+            }
+
+            isResolved = true
+            resolvedResult = result
+            let pending = (continuation, timeoutTask)
+            continuation = nil
+            timeoutTask = nil
+            return pending
+        }
+
+        pending.timeoutTask?.cancel()
+        pending.continuation?.resume(returning: result)
     }
 }
 
@@ -208,21 +306,11 @@ final class VirtualDisplayManager: ObservableObject {
     /// Runs the blocking `applySettings:` on a background queue, racing it
     /// against a timeout. Returns the apply result, or false if it timed out.
     private nonisolated static func applySettings(_ box: VirtualDisplayApplyBox, timeoutSeconds: Double) async -> Bool {
-        await withTaskGroup(of: Bool.self) { group in
-            group.addTask {
-                await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-                    DispatchQueue.global(qos: .userInitiated).async {
-                        continuation.resume(returning: box.display.apply(box.settings))
-                    }
-                }
-            }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
-                return false
-            }
-            let result = await group.next() ?? false
-            group.cancelAll()
-            return result
+        await BlockingOperationDeadline.run(
+            timeout: .seconds(timeoutSeconds),
+            timeoutResult: false
+        ) {
+            box.display.apply(box.settings)
         }
     }
 }

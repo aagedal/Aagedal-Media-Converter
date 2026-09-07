@@ -5,7 +5,76 @@
 import AVFoundation
 import Foundation
 import OSLog
-import SwiftExif
+import SwiftMediaMetadata
+
+/// Applies a non-joining deadline to the shared in-process media probe while preserving
+/// timeout and parent-cancellation errors for callers that need different fallback policy.
+enum BoundedVideoMetadataProbe {
+    static let defaultTimeout: Duration = .seconds(15)
+
+    static func metadata(
+        for url: URL,
+        timeout: Duration = defaultTimeout,
+        probe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        }
+    ) async throws -> VideoMetadata {
+        try Task.checkCancellation()
+        let metadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+            try await probe(url)
+        }
+        try Task.checkCancellation()
+        return metadata
+    }
+
+    static func essentialInfo(
+        for url: URL,
+        timeout: Duration = defaultTimeout,
+        probe: @escaping @Sendable (URL) async throws -> EssentialVideoInfo = {
+            try await VideoMetadataService.shared.fetchEssentialInfo(for: $0)
+        }
+    ) async throws -> EssentialVideoInfo {
+        try Task.checkCancellation()
+        let info = try await NonJoiningTaskDeadline.run(timeout: timeout) {
+            try await probe(url)
+        }
+        try Task.checkCancellation()
+        return info
+    }
+
+    /// Probes independent files concurrently so a large batch is bounded by one probe
+    /// deadline instead of accumulating that deadline once per file. Individual failures
+    /// remain absent from the result, while parent cancellation is preserved.
+    static func availableMetadata(
+        for urls: [URL],
+        timeout: Duration = defaultTimeout,
+        probe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        }
+    ) async throws -> [URL: VideoMetadata] {
+        try await withThrowingTaskGroup(of: (URL, VideoMetadata?).self) { group in
+            for url in urls {
+                group.addTask {
+                    do {
+                        return (url, try await metadata(for: url, timeout: timeout, probe: probe))
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        return (url, nil)
+                    }
+                }
+            }
+
+            var result: [URL: VideoMetadata] = [:]
+            for try await (url, metadata) in group {
+                if let metadata {
+                    result[url] = metadata
+                }
+            }
+            return result
+        }
+    }
+}
 
 struct VideoMetadata: Equatable, Sendable {
     struct Ratio: Equatable, Sendable {
@@ -250,13 +319,13 @@ actor VideoMetadataService {
     }()
 
     // Single-flight tables: concurrent callers for the same URL await the same Task
-    // instead of each spawning a fresh SwiftExif parse (heavy for large MKV/MXF files).
+    // instead of each spawning a fresh SwiftMediaMetadata parse (heavy for large MKV/MXF files).
     private var inFlightMetadata: [URL: Task<VideoMetadata, Error>] = [:]
     private var inFlightEssential: [URL: Task<EssentialVideoInfo, Error>] = [:]
-    // Shared single-flight at the SwiftExif layer: when both fetchEssentialInfo and
+    // Shared single-flight at the SwiftMediaMetadata layer: when both fetchEssentialInfo and
     // metadata(for:) race for the same URL (typical `async let` import flow), they
     // coalesce onto one readVideo parse instead of two.
-    private var inFlightRawVideo: [URL: Task<SwiftExif.VideoMetadata, Error>] = [:]
+    private var inFlightRawVideo: [URL: Task<SwiftMediaMetadata.VideoMetadata, Error>] = [:]
 
     private final class CachedMetadata: NSObject {
         let metadata: VideoMetadata
@@ -311,8 +380,8 @@ actor VideoMetadataService {
     // MARK: - Fast Video Stream Detection
 
     /// Checks whether the file has at least one timed video track (excluding cover art).
-    /// SwiftExif memory-maps the file so this stays fast even for multi-gigabyte inputs.
-    /// AV2 `.ivf` sources can't be read by SwiftExif or AVFoundation, so derive their essential
+    /// SwiftMediaMetadata memory-maps the file so this stays fast even for multi-gigabyte inputs.
+    /// AV2 `.ivf` sources can't be read by SwiftMediaMetadata or AVFoundation, so derive their essential
     /// video info (dimensions, frame-rate-derived duration) directly from the IVF container
     /// header. Without this they're misclassified as non-video and routed through the audio /
     /// waveform-synthesis path. Returns nil for anything that isn't a recognizable AV2 `.ivf`.
@@ -363,7 +432,7 @@ actor VideoMetadataService {
             hasVideoStreamCache.setObject(CachedBool(value: hasVideo), forKey: url as NSURL)
             return hasVideo
         } catch {
-            logger.warning("SwiftExif hasVideoStream probe failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public). Assuming video exists.")
+            logger.warning("SwiftMediaMetadata hasVideoStream probe failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public). Assuming video exists.")
             return true
         }
     }
@@ -390,7 +459,7 @@ actor VideoMetadataService {
     /// Single-flight wrapper around `SwiftExifMediaProbe.readVideo`. Concurrent callers
     /// (typically `fetchEssentialInfo` and `metadata(for:)` racing via `async let`)
     /// share one parse instead of each spawning their own.
-    private func readRawVideo(for url: URL) async throws -> SwiftExif.VideoMetadata {
+    private func readRawVideo(for url: URL) async throws -> SwiftMediaMetadata.VideoMetadata {
         if let inFlight = inFlightRawVideo[url] {
             return try await inFlight.value
         }
@@ -406,7 +475,7 @@ actor VideoMetadataService {
         let scope = startAccess(for: url)
         defer { stopAccess(scope, for: url) }
 
-        // AV2 .ivf: derive video info from the IVF header (SwiftExif/AVFoundation can't read it).
+        // AV2 .ivf: derive video info from the IVF header (SwiftMediaMetadata/AVFoundation can't read it).
         if let av2Info = av2EssentialInfo(for: url) {
             essentialInfoCache.setObject(CachedEssentialInfo(info: av2Info), forKey: url as NSURL)
             hasVideoStreamCache.setObject(CachedBool(value: true), forKey: url as NSURL)
@@ -449,7 +518,7 @@ actor VideoMetadataService {
                 height: nil
             )
         } else {
-            // Formats SwiftExif doesn't parse (e.g. FLV, WAV, raw AAC): AVFoundation covers duration.
+            // Formats SwiftMediaMetadata doesn't parse (e.g. FLV, WAV, raw AAC): AVFoundation covers duration.
             let duration = await SwiftExifMediaProbe.duration(for: url) ?? 0
             info = EssentialVideoInfo(
                 duration: duration,
@@ -492,7 +561,7 @@ actor VideoMetadataService {
             throw VideoMetadataError.unsupportedContainer
         }
 
-        let rawMeta: SwiftExif.VideoMetadata
+        let rawMeta: SwiftMediaMetadata.VideoMetadata
         do {
             rawMeta = try await readRawVideo(for: url)
         } catch {
@@ -546,7 +615,7 @@ actor VideoMetadataService {
 
     // MARK: - Mapping
 
-    private nonisolated func buildMetadata(from meta: SwiftExif.VideoMetadata, url: URL) -> VideoMetadata {
+    private nonisolated func buildMetadata(from meta: SwiftMediaMetadata.VideoMetadata, url: URL) -> VideoMetadata {
         let timedVideo = meta.videoStreams.filter { $0.isAttachedPic != true }
         let primary = timedVideo.first
 
@@ -598,7 +667,7 @@ actor VideoMetadataService {
         )
     }
 
-    private static func mapTimecodeSource(_ source: SwiftExif.TimecodeSource) -> TimecodeSource {
+    private static func mapTimecodeSource(_ source: SwiftMediaMetadata.TimecodeSource) -> TimecodeSource {
         switch source {
         case .tmcdTrack: return .tmcdTrack
         case .quicktimeUdta: return .quicktimeUdta
@@ -611,7 +680,7 @@ actor VideoMetadataService {
         }
     }
 
-    static func mapVideoStream(_ stream: SwiftExif.VideoStream) -> VideoMetadata.VideoStream {
+    static func mapVideoStream(_ stream: SwiftMediaMetadata.VideoStream) -> VideoMetadata.VideoStream {
         let pixelFormat = stream.pixelFormat
         let hasAlpha = pixelFormat.map { hasAlphaChannel(pixelFormat: $0) } ?? false
         let bitDepth = stream.bitDepth ?? pixelFormat.flatMap { bitDepthFromPixelFormat($0) }
@@ -694,7 +763,7 @@ actor VideoMetadataService {
         )
     }
 
-    static func mapAudioStream(_ stream: SwiftExif.AudioStream) -> VideoMetadata.AudioStream {
+    static func mapAudioStream(_ stream: SwiftMediaMetadata.AudioStream) -> VideoMetadata.AudioStream {
         VideoMetadata.AudioStream(
             index: stream.index,
             languageCode: stream.language?.lowercased(),
@@ -711,7 +780,7 @@ actor VideoMetadataService {
         )
     }
 
-    static func mapSubtitleStream(_ stream: SwiftExif.SubtitleStream) -> VideoMetadata.SubtitleStream {
+    static func mapSubtitleStream(_ stream: SwiftMediaMetadata.SubtitleStream) -> VideoMetadata.SubtitleStream {
         VideoMetadata.SubtitleStream(
             index: stream.index,
             languageCode: stream.language?.lowercased(),
@@ -726,7 +795,7 @@ actor VideoMetadataService {
     }
 }
 
-// MARK: - Pixel-format helpers (kept for fallback when SwiftExif already surfaces most fields)
+// MARK: - Pixel-format helpers (kept for fallback when SwiftMediaMetadata already surfaces most fields)
 
 /// Extracts bit depth from pixel format string
 /// Examples: yuv420p10le -> 10, yuv422p12be -> 12, yuv420p -> 8

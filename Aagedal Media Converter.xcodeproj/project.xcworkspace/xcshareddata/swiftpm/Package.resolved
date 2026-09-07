@@ -1,13 +1,13 @@
 {
-  "originHash" : "b4de07ccbc5cee26292b053a8283029d79c5357e4b47a7d42f0d900047ec03f3",
+  "originHash" : "891b7b773f66b5d4dfc6cf68737353bb62f2656c33fbccb1aaf8ce67b252f209",
   "pins" : [
     {
       "identity" : "mpvkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/aagedal/MPVKit.git",
       "state" : {
-        "branch" : "aagedal/custom-builds",
-        "revision" : "b7d3beac76f68ccfa69a2993e5713be64f738723"
+        "branch" : "main",
+        "revision" : "230c3174f1515898f24599147ad61c2a277d0dc2"
       }
     },
     {
@@ -20,12 +20,12 @@
       }
     },
     {
-      "identity" : "swiftexif",
+      "identity" : "swiftmediametadata",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/aagedal/SwiftExif.git",
+      "location" : "https://github.com/aagedal/SwiftMediaMetadata.git",
       "state" : {
-        "revision" : "47249c72b613ebab8e4514f4adf05bb8000a1908",
-        "version" : "1.9.10"
+        "revision" : "c2d77c2dcefcb997623e52beca57bc61ce302cb9",
+        "version" : "3.0.0"
       }
     }
   ],

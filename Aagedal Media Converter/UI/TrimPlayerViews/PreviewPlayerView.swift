@@ -174,13 +174,11 @@ struct PreviewPlayerView: View {
             let directoryURL = URL(fileURLWithPath: directoryPath, isDirectory: true)
 
             do {
-                let savedURL = try await controller.captureScreenshot(to: directoryURL)
-                await MainActor.run {
-                    controller.lastScreenshotURL = savedURL
-                    controller.showScreenshotConfirmationOverlay()
-                }
+                _ = try await controller.captureScreenshot(to: directoryURL)
+            } catch is CancellationError {
+                // Closing or replacing the preview intentionally cancels the capture.
             } catch {
-                Self.logger.error("Screenshot capture failed: \(error.localizedDescription, privacy: .public)")
+                Self.logger.error("Screenshot capture failed: \(error.localizedDescription, privacy: .private)")
             }
         }
     }

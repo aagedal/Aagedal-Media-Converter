@@ -318,6 +318,8 @@ struct PreviewPlayerContent: View {
         }
         .buttonStyle(.plain)
         .help(showsPlaybackControls ? "Hide native AVPlayer controls" : "Show native AVPlayer controls")
+        .accessibilityLabel(showsPlaybackControls ? "Hide playback controls" : "Show playback controls")
+        .accessibilityIdentifier("preview.togglePlaybackControls")
         .padding(12)
     }
 }

@@ -161,6 +161,7 @@ actor DCPService {
         let pklContent = generatePKL(
             pklUUID: pklUUID,
             dcpFolderName: dcpFolderName,
+            annotationText: annotationText,
             cplUUID: cplUUID,
             cplHash: cplHash,
             cplSize: cplSize,
@@ -323,7 +324,9 @@ actor DCPService {
         videoHash: String? = nil,
         audioHash: String? = nil
     ) -> String {
-        let escapedFolderName = xmlEscape(dcpFolderName)
+        let escapedTitle = xmlEscape(title.isEmpty ? dcpFolderName : title)
+        let escapedAnnotation = xmlEscape(annotationText.isEmpty ? dcpFolderName : annotationText)
+        let escapedAudioLanguage = xmlEscape(audioLanguage.isEmpty ? "en" : audioLanguage)
         let now = iso8601Now()
         let contentVersionUUID = dcpUUID()
 
@@ -367,6 +370,7 @@ actor DCPService {
                     <EntryPoint>0</EntryPoint>
                     <Duration>\(frameCount)</Duration>
                     <Hash>\(audioHash ?? "")</Hash>
+                    <Language>\(escapedAudioLanguage)</Language>
                   </MainSound>
             """
         }
@@ -391,15 +395,15 @@ actor DCPService {
         <?xml version="1.0" encoding="UTF-8"?>
         <CompositionPlaylist xmlns="http://www.smpte-ra.org/schemas/429-7/2006/CPL">
           <Id>\(cplUUID)</Id>
-          <AnnotationText>\(escapedFolderName)</AnnotationText>
+          <AnnotationText>\(escapedAnnotation)</AnnotationText>
           <IssueDate>\(now)</IssueDate>
           <Issuer>Aagedal Media Converter</Issuer>
           <Creator>Aagedal Media Converter</Creator>
-          <ContentTitleText>\(escapedFolderName)</ContentTitleText>
+          <ContentTitleText>\(escapedTitle)</ContentTitleText>
           <ContentKind>\(contentKind.rawValue)</ContentKind>
           <ContentVersion>
             <Id>\(contentVersionUUID)</Id>
-            <LabelText>\(escapedFolderName)_v1</LabelText>
+            <LabelText>\(escapedTitle)_v1</LabelText>
           </ContentVersion>
         \(ratingElement)
           <ReelList>
@@ -417,6 +421,7 @@ actor DCPService {
     private func generatePKL(
         pklUUID: String,
         dcpFolderName: String,
+        annotationText: String,
         cplUUID: String,
         cplHash: String,
         cplSize: Int64,
@@ -430,7 +435,7 @@ actor DCPService {
         audioSize: Int64?,
         audioFileName: String?
     ) -> String {
-        let escapedFolderName = xmlEscape(dcpFolderName)
+        let escapedAnnotation = xmlEscape(annotationText.isEmpty ? dcpFolderName : annotationText)
         let now = iso8601Now()
 
         var assetList = """
@@ -470,7 +475,7 @@ actor DCPService {
         <?xml version="1.0" encoding="UTF-8"?>
         <PackingList xmlns="http://www.smpte-ra.org/schemas/429-8/2007/PKL">
           <Id>\(pklUUID)</Id>
-          <AnnotationText>\(escapedFolderName)</AnnotationText>
+          <AnnotationText>\(escapedAnnotation)</AnnotationText>
           <IssueDate>\(now)</IssueDate>
           <Issuer>Aagedal Media Converter</Issuer>
           <Creator>Aagedal Media Converter</Creator>

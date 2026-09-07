@@ -71,6 +71,43 @@ func draggingSourceIsInternal(_ info: any NSDraggingInfo, tableView: NSTableView
     return false
 }
 
+struct QueueSubtitleCancellationTarget: Equatable {
+    let method: SubtitleConversionMethod
+    let operationID: UUID?
+}
+
+/// Resolves and invalidates a subtitle attempt in either queue storage location.
+/// Returning the target before clearing its token lets the caller route cancellation
+/// to the correct service while stale callbacks are fenced immediately.
+enum QueueSubtitleCancellationState {
+    static func takeTarget(
+        itemID: UUID,
+        droppedFiles: inout [VideoItem],
+        encodingGroups: inout [EncodingGroup]
+    ) -> QueueSubtitleCancellationTarget? {
+        if let index = droppedFiles.firstIndex(where: { $0.id == itemID }) {
+            return takeTarget(from: &droppedFiles[index])
+        }
+
+        for groupIndex in encodingGroups.indices {
+            if let itemIndex = encodingGroups[groupIndex].items.firstIndex(where: { $0.id == itemID }) {
+                return takeTarget(from: &encodingGroups[groupIndex].items[itemIndex])
+            }
+        }
+        return nil
+    }
+
+    private static func takeTarget(from item: inout VideoItem) -> QueueSubtitleCancellationTarget {
+        let target = QueueSubtitleCancellationTarget(
+            method: item.subtitleMethod,
+            operationID: item.subtitleOperationID
+        )
+        item.subtitleStatus = .notQueued
+        item.subtitleOperationID = nil
+        return target
+    }
+}
+
 // MARK: - Queue Table Handle
 //
 // Lightweight bridge letting a SwiftUI parent ask the NSTableView questions
@@ -97,6 +134,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     let mergeClipsAvailable: Bool
     let showCommentField: Bool
     let showDateTagButton: Bool
+    let isTranscriptionAvailable: Bool
 
     /// Invoked when a cell raises `.tabCommentField` from its comment popover.
     /// VideoFileListView owns the focus-navigation logic (`handleTabPress`), so
@@ -383,6 +421,7 @@ struct VideoQueueTableView: NSViewRepresentable {
         var previousMergeAvailable = false
         var previousShowComment = true
         var previousShowDateTag = true
+        var previousTranscriptionAvailable = false
 
         private static let cellID = NSUserInterfaceItemIdentifier("VideoQueueCell")
         private static let appkitCellID = NSUserInterfaceItemIdentifier("VideoFileCellView")
@@ -807,6 +846,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 || parent.mergeClipsAvailable != previousMergeAvailable
                 || parent.showCommentField != previousShowComment
                 || parent.showDateTagButton != previousShowDateTag
+                || parent.isTranscriptionAvailable != previousTranscriptionAvailable
                 || parent.isCompactMode != previousCompactMode
 
             for row in start..<end {
@@ -849,6 +889,7 @@ struct VideoQueueTableView: NSViewRepresentable {
             previousMergeAvailable = parent.mergeClipsAvailable
             previousShowComment = parent.showCommentField
             previousShowDateTag = parent.showDateTagButton
+            previousTranscriptionAvailable = parent.isTranscriptionAvailable
             previousCompactMode = parent.isCompactMode
         }
 
@@ -1043,7 +1084,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 isIMFPreset: parent.preset == .imfJ2K || parent.preset == .imfProRes,
                 imfMetadataTitle: item.imfMetadata?.contentTitleText,
                 formattedOutputSize: item.formattedOutputSize,
-                isTranscriptionAvailable: WhisperUpdateService.shared.getInstallationStatus().isAvailable || ParakeetService.shared.getInstallationStatus().isAvailable,
+                isTranscriptionAvailable: parent.isTranscriptionAvailable,
                 isUploadConfigured: UploadManager.shared.isConfigured
             )
         }
@@ -1266,16 +1307,28 @@ struct VideoQueueTableView: NSViewRepresentable {
         func handleCellAction(_ action: CellAction, itemID: UUID, displayRows: [FlatQueueRow], row: Int) {
             switch action {
             case .delete:
-                if let idx = droppedFilesIndex[itemID] {
-                    parent.onDelete(IndexSet(integer: idx))
-                } else if let gID = groupID(for: itemID),
-                          let gIdx = encodingGroupsIndex[gID],
-                          let iIdx = parent.encodingGroups[gIdx].items.firstIndex(where: { $0.id == itemID }) {
-                    parent.encodingGroups[gIdx].items.remove(at: iIdx)
+                Task { @MainActor in
+                    await ConversionManager.shared.cancelSubtitleEmbedding(
+                        itemID: itemID,
+                        operationID: nil
+                    )
+                    if let idx = parent.droppedFiles.firstIndex(where: { $0.id == itemID }) {
+                        parent.onDelete(IndexSet(integer: idx))
+                    } else if let gIdx = parent.encodingGroups.firstIndex(where: {
+                        $0.items.contains(where: { $0.id == itemID })
+                    }), let iIdx = parent.encodingGroups[gIdx].items.firstIndex(where: { $0.id == itemID }) {
+                        parent.encodingGroups[gIdx].items.remove(at: iIdx)
+                    }
                 }
             case .reset(let optionKeyPressed):
-                if let idx = droppedFilesIndex[itemID] {
-                    parent.onReset(idx, optionKeyPressed)
+                Task { @MainActor in
+                    await ConversionManager.shared.cancelSubtitleEmbedding(
+                        itemID: itemID,
+                        operationID: nil
+                    )
+                    if let idx = parent.droppedFiles.firstIndex(where: { $0.id == itemID }) {
+                        parent.onReset(idx, optionKeyPressed)
+                    }
                 }
             case .cancel:
                 Task { await ConversionManager.shared.cancelItem(with: itemID) }
@@ -1293,11 +1346,43 @@ struct VideoQueueTableView: NSViewRepresentable {
                     parent.onDelete(IndexSet(integer: idx))
                 }
             case .cancelSubtitleGeneration:
-                Task { await TesseractService.shared.cancelGeneration() }
-                Task { await WhisperService.shared.cancelGeneration() }
-                Task { await ParakeetService.shared.cancelGeneration() }
-                if let idx = droppedFilesIndex[itemID] {
-                    parent.droppedFiles[idx].subtitleStatus = .notQueued
+                if let target = QueueSubtitleCancellationState.takeTarget(
+                    itemID: itemID,
+                    droppedFiles: &parent.droppedFiles,
+                    encodingGroups: &parent.encodingGroups
+                ) {
+                    Task {
+                        await ConversionManager.shared.cancelSubtitleEmbedding(
+                            itemID: itemID,
+                            operationID: target.operationID
+                        )
+                    }
+                    switch target.method {
+                    case .ocr:
+                        if let operationID = target.operationID {
+                            Task {
+                                await TesseractService.shared.cancelGeneration(
+                                    operationID: operationID
+                                )
+                            }
+                        }
+                    case .whisper:
+                        if let operationID = target.operationID {
+                            Task {
+                                await WhisperService.shared.cancelGeneration(
+                                    operationID: operationID
+                                )
+                            }
+                        }
+                    case .parakeet:
+                        if let operationID = target.operationID {
+                            Task {
+                                await ParakeetService.shared.cancelGeneration(
+                                    operationID: operationID
+                                )
+                            }
+                        }
+                    }
                 }
             case .cancelAnalytics:
                 Task { await AnalyticsService.shared.cancelAnalysis() }
@@ -1319,7 +1404,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                         parent.droppedFiles[idx].uploadSourceFile.toggle()
                         if parent.droppedFiles[idx].uploadSourceFile {
                             parent.droppedFiles[idx].uploadEnabled = true
-                            Task { await UploadManager.shared.startUpload(itemID: itemID) }
+                            Task { UploadManager.shared.startUpload(itemID: itemID) }
                         }
                     } else {
                         parent.droppedFiles[idx].uploadEnabled.toggle()

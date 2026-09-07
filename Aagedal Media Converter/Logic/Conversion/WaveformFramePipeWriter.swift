@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Orchestrates the native waveform render loop: smooths frequency band data,
-// renders BGRA frames via NativeWaveformVideoRenderer, and writes them to
-// a pipe consumed by FFmpeg as rawvideo input.
+// renders BGRA frames via NativeWaveformVideoRenderer, and streams them to
+// FFmpeg as rawvideo input.
 
 import Foundation
 import CoreGraphics
@@ -20,13 +20,13 @@ enum WaveformFramePipeWriter {
 
     // MARK: - Public API
 
-    /// Renders all waveform video frames and writes them to the pipe.
+    /// Renders all waveform video frames and writes them to a subprocess's standard input.
     ///
     /// This method blocks the calling context until all frames are written (or cancelled).
     /// It should be called from a background Task so FFmpeg can encode concurrently.
     ///
     /// - Parameters:
-    ///   - pipe: The Pipe whose fileHandleForWriting receives raw BGRA frames.
+    ///   - standardInput: The live subprocess input receiving raw BGRA frames.
     ///   - frequencyData: Pre-computed frequency band magnitudes per frame.
     ///   - width: Frame width in pixels.
     ///   - height: Frame height in pixels.
@@ -40,7 +40,7 @@ enum WaveformFramePipeWriter {
     ///   - waveformOpacity: Opacity for waveform shapes (0.5–1.0), allows background to show through.
     ///   - progressUpdate: Called with 0.0–1.0 progress fraction.
     static func writeFrames(
-        to pipe: Pipe,
+        to standardInput: SubprocessStandardInputWriter,
         frequencyData: FrequencyBandData,
         style: SwiftWaveformStyle,
         width: Int,
@@ -55,7 +55,6 @@ enum WaveformFramePipeWriter {
         waveformOpacity: Double = 1.0,
         progressUpdate: @escaping @Sendable (Double) -> Void
     ) async {
-        let writeHandle = pipe.fileHandleForWriting
         let frameCount = frequencyData.frameCount
         let bandCount = frequencyData.bandCount
 
@@ -69,9 +68,6 @@ enum WaveformFramePipeWriter {
         // Smoothed magnitudes for animation (fast attack, slow release)
         var smoothed = [Float](repeating: 0, count: bandCount)
         var previousSmoothed: [Float]? = nil
-
-        // Ignore SIGPIPE so broken pipe returns an error instead of crashing
-        signal(SIGPIPE, SIG_IGN)
 
         logger.info("Starting native waveform render: \(frameCount) frames, \(width)x\(height), \(bandCount) bands")
 
@@ -110,7 +106,7 @@ enum WaveformFramePipeWriter {
 
             // Write to pipe (blocks if FFmpeg's encoding is slower — natural backpressure)
             do {
-                try writeHandle.write(contentsOf: frameData)
+                try standardInput.write(frameData)
             } catch {
                 // Pipe broken (FFmpeg exited or crashed)
                 logger.error("Pipe write failed at frame \(frame): \(error.localizedDescription)")
@@ -125,7 +121,7 @@ enum WaveformFramePipeWriter {
         }
 
         // Close write end so FFmpeg sees EOF and finishes encoding
-        try? writeHandle.close()
+        standardInput.finish()
         logger.info("Waveform frame writing complete")
     }
 }

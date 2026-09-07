@@ -1,0 +1,649 @@
+{
+  "schemaVersion": 1,
+  "architecture": "arm64",
+  "appVersion": "4.3.0",
+  "appBuild": "575",
+  "measurement": "Logical file bytes; symlink targets counted once. Not allocated disk space or runtime memory.",
+  "bundleFileBytes": 275341835,
+  "regularFileCount": 144,
+  "machOBytes": 236977784,
+  "machOImageCount": 44,
+  "reachabilityCaveat": "Executable roots include every bundled helper. Libraries outside their static dependency closure may be loaded dynamically; this report does not authorize removal.",
+  "images": [
+    {
+      "path": "Contents/Frameworks/Libass.framework/Versions/A/Libass",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libavcodec.framework/Versions/A/Libavcodec",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libavdevice.framework/Versions/A/Libavdevice",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libavfilter.framework/Versions/A/Libavfilter",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libavformat.framework/Versions/A/Libavformat",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libavutil.framework/Versions/A/Libavutil",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libbluray.framework/Versions/A/Libbluray",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libcrypto.framework/Versions/A/Libcrypto",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libdav1d.framework/Versions/A/Libdav1d",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libdovi.framework/Versions/A/Libdovi",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libfreetype.framework/Versions/A/Libfreetype",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libfribidi.framework/Versions/A/Libfribidi",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libharfbuzz.framework/Versions/A/Libharfbuzz",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libmpv.framework/Versions/A/Libmpv",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libplacebo.framework/Versions/A/Libplacebo",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libshaderc_combined.framework/Versions/A/Libshaderc_combined",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libsmbclient.framework/Versions/A/Libsmbclient",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libssl.framework/Versions/A/Libssl",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libswresample.framework/Versions/A/Libswresample",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libswscale.framework/Versions/A/Libswscale",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libuavs3d.framework/Versions/A/Libuavs3d",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libuchardet.framework/Versions/A/Libuchardet",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Libunibreak.framework/Versions/A/Libunibreak",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate",
+      "bytes": 726000,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libz.1.dylib",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/usr/lib/libcompression.dylib",
+        "/usr/lib/libbz2.1.0.dylib",
+        "/usr/lib/libxar.1.dylib",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/usr/lib/libobjc.A.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle",
+      "bytes": 977616,
+      "executable": false,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libcompression.dylib",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/usr/lib/libobjc.A.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+        "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/System/Library/Frameworks/ServiceManagement.framework/Versions/A/ServiceManagement",
+        "/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration",
+        "/System/Library/Frameworks/WebKit.framework/Versions/A/WebKit"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater",
+      "bytes": 290560,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/System/Library/Frameworks/Cocoa.framework/Versions/A/Cocoa",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/usr/lib/libobjc.A.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader",
+      "bytes": 188672,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/usr/lib/libobjc.A.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer",
+      "bytes": 223472,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "/System/Library/Frameworks/ServiceManagement.framework/Versions/A/ServiceManagement",
+        "/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/usr/lib/libobjc.A.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/gmp.framework/Versions/A/gmp",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/gnutls.framework/Versions/A/gnutls",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/hogweed.framework/Versions/A/hogweed",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/lcms2.framework/Versions/A/lcms2",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Frameworks/nettle.framework/Versions/A/nettle",
+      "bytes": 33128,
+      "executable": false,
+      "reachableFromExecutable": false,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/MacOS/Aagedal Media Converter",
+      "bytes": 96179928,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation",
+        "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+        "/usr/lib/libbz2.1.0.dylib",
+        "/usr/lib/libiconv.2.dylib",
+        "/usr/lib/libexpat.1.dylib",
+        "/usr/lib/libresolv.9.dylib",
+        "/usr/lib/libxml2.2.dylib",
+        "/usr/lib/libz.1.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
+        "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
+        "@rpath/Sparkle.framework/Versions/B/Sparkle",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/usr/lib/libobjc.A.dylib",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/AVFAudio.framework/Versions/A/AVFAudio",
+        "/System/Library/Frameworks/AVKit.framework/Versions/A/AVKit",
+        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+        "/System/Library/Frameworks/AppIntents.framework/Versions/A/AppIntents",
+        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "/System/Library/Frameworks/Carbon.framework/Versions/A/Carbon",
+        "/System/Library/Frameworks/Combine.framework/Versions/A/Combine",
+        "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+        "/System/Library/Frameworks/CoreImage.framework/Versions/A/CoreImage",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText",
+        "/System/Library/Frameworks/CryptoKit.framework/Versions/A/CryptoKit",
+        "/System/Library/Frameworks/DiskArbitration.framework/Versions/A/DiskArbitration",
+        "/System/Library/Frameworks/IOKit.framework/Versions/A/IOKit",
+        "/System/Library/Frameworks/IOSurface.framework/Versions/A/IOSurface",
+        "/System/Library/Frameworks/ImageIO.framework/Versions/A/ImageIO",
+        "/System/Library/Frameworks/LocalAuthentication.framework/Versions/A/LocalAuthentication",
+        "/System/Library/Frameworks/MediaPlayer.framework/Versions/A/MediaPlayer",
+        "/System/Library/Frameworks/Network.framework/Versions/A/Network",
+        "/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL",
+        "/System/Library/Frameworks/QuartzCore.framework/Versions/A/QuartzCore",
+        "/System/Library/Frameworks/QuickLookThumbnailing.framework/Versions/A/QuickLookThumbnailing",
+        "/System/Library/Frameworks/ScreenCaptureKit.framework/Versions/A/ScreenCaptureKit",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/System/Library/Frameworks/SwiftUI.framework/Versions/A/SwiftUI",
+        "/System/Library/Frameworks/Symbols.framework/Versions/A/Symbols",
+        "/System/Library/Frameworks/Vision.framework/Versions/A/Vision",
+        "/usr/lib/swift/libswiftAVFoundation.dylib",
+        "/usr/lib/swift/libswiftAccelerate.dylib",
+        "/usr/lib/swift/libswiftCore.dylib",
+        "/usr/lib/swift/libswiftCoreAudio.dylib",
+        "/usr/lib/swift/libswiftCoreFoundation.dylib",
+        "/usr/lib/swift/libswiftCoreImage.dylib",
+        "/usr/lib/swift/libswiftCoreLocation.dylib",
+        "/usr/lib/swift/libswiftCoreMIDI.dylib",
+        "/usr/lib/swift/libswiftCoreMedia.dylib",
+        "/usr/lib/swift/libswiftDarwin.dylib",
+        "/usr/lib/swift/libswiftDispatch.dylib",
+        "/usr/lib/swift/libswiftIOKit.dylib",
+        "/usr/lib/swift/libswiftMetal.dylib",
+        "/usr/lib/swift/libswiftOSLog.dylib",
+        "/usr/lib/swift/libswiftObjectiveC.dylib",
+        "/usr/lib/swift/libswiftObservation.dylib",
+        "/usr/lib/swift/libswiftQuartzCore.dylib",
+        "/usr/lib/swift/libswiftSpatial.dylib",
+        "/usr/lib/swift/libswiftUniformTypeIdentifiers.dylib",
+        "/usr/lib/swift/libswiftVideoToolbox.dylib",
+        "/usr/lib/swift/libswiftXPC.dylib",
+        "/usr/lib/swift/libswift_Builtin_float.dylib",
+        "/usr/lib/swift/libswift_Concurrency.dylib",
+        "/usr/lib/swift/libswiftos.dylib",
+        "/usr/lib/swift/libswiftsimd.dylib",
+        "/usr/lib/swift/libswift_errno.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/asdcp-wrap",
+      "bytes": 1338064,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/avmdec",
+      "bytes": 12553200,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/avmenc",
+      "bytes": 12587456,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/bmxparse",
+      "bytes": 1923872,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libexpat.1.dylib",
+        "/usr/lib/libcurl.4.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/bmxtranswrap",
+      "bytes": 3646224,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libexpat.1.dylib",
+        "/usr/lib/libcurl.4.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/ffmpeg",
+      "bytes": 54679648,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+        "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+        "/usr/lib/libSystem.B.dylib",
+        "/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation",
+        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
+        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
+        "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
+        "/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL",
+        "/usr/lib/libz.1.dylib",
+        "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libbz2.1.0.dylib",
+        "/usr/lib/libiconv.2.dylib",
+        "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
+        "/System/Library/Frameworks/CoreImage.framework/Versions/A/CoreImage",
+        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
+        "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText",
+        "/usr/lib/libobjc.A.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/mxf2raw",
+      "bytes": 2794224,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libexpat.1.dylib",
+        "/usr/lib/libcurl.4.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/raw2bmx",
+      "bytes": 3220784,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libexpat.1.dylib",
+        "/usr/lib/libcurl.4.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libSystem.B.dylib"
+      ]
+    },
+    {
+      "path": "Contents/Resources/rclone",
+      "bytes": 39968528,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libresolv.9.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/Security.framework/Versions/A/Security"
+      ]
+    },
+    {
+      "path": "Contents/Resources/tesseract",
+      "bytes": 4751952,
+      "executable": true,
+      "reachableFromExecutable": true,
+      "loadDependencies": [
+        "/usr/lib/libz.1.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libcurl.4.dylib",
+        "/usr/lib/libc++.1.dylib"
+      ]
+    }
+  ],
+  "largestFiles": [
+    {
+      "path": "Contents/MacOS/Aagedal Media Converter",
+      "bytes": 96179928
+    },
+    {
+      "path": "Contents/Resources/ffmpeg",
+      "bytes": 54679648
+    },
+    {
+      "path": "Contents/Resources/rclone",
+      "bytes": 39968528
+    },
+    {
+      "path": "Contents/Resources/Assets.car",
+      "bytes": 32074680
+    },
+    {
+      "path": "Contents/Resources/avmenc",
+      "bytes": 12587456
+    },
+    {
+      "path": "Contents/Resources/avmdec",
+      "bytes": 12553200
+    },
+    {
+      "path": "Contents/Resources/tesseract",
+      "bytes": 4751952
+    },
+    {
+      "path": "Contents/Resources/eng.traineddata",
+      "bytes": 4113088
+    },
+    {
+      "path": "Contents/Resources/bmxtranswrap",
+      "bytes": 3646224
+    },
+    {
+      "path": "Contents/Resources/raw2bmx",
+      "bytes": 3220784
+    },
+    {
+      "path": "Contents/Resources/mxf2raw",
+      "bytes": 2794224
+    },
+    {
+      "path": "Contents/Resources/bmxparse",
+      "bytes": 1923872
+    },
+    {
+      "path": "Contents/Resources/asdcp-wrap",
+      "bytes": 1338064
+    },
+    {
+      "path": "Contents/Resources/SwiftMediaMetadata_SwiftMediaMetadata.bundle/Contents/Resources/GeoLocationDatabase.bin",
+      "bytes": 1107517
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle",
+      "bytes": 977616
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate",
+      "bytes": 726000
+    },
+    {
+      "path": "Contents/Resources/nb.lproj/Localizable.strings",
+      "bytes": 344194
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater",
+      "bytes": 290560
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer",
+      "bytes": 223472
+    },
+    {
+      "path": "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader",
+      "bytes": 188672
+    }
+  ]
+}

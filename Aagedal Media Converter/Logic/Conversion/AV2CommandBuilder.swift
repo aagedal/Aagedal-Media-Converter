@@ -22,9 +22,9 @@ import OSLog
 /// to `avmenc -w/-h` is guaranteed to match the frames it receives.
 ///
 /// Two modes:
-/// - ``build(inputURL:outputURL:trimStart:trimEnd:cropConfig:)`` — the original single-process
-///   encode (tile threading only).
-/// - ``buildSegments(inputURL:trimStart:trimEnd:cropConfig:)`` — splits the source into one
+/// - ``build(inputURL:outputURL:trimStart:trimEnd:cropConfig:visualSourceURL:customInputArguments:expectedDuration:videoFrameRate:)`` —
+///   the single-process encode (tile threading only), including virtual FFmpeg inputs.
+/// - ``buildSegments(inputURL:trimStart:trimEnd:cropConfig:visualSourceURL:customInputArguments:expectedDuration:videoFrameRate:)`` — splits the source into one
 ///   frame-range chunk per CPU core and emits an independent ffmpeg│avmenc command per chunk,
 ///   to be encoded in parallel and joined with ``IVFConcatenator``. This is the dominant speed
 ///   lever: AVM's intra-frame (tile/row) threading scales poorly, whereas independent chunks
@@ -32,6 +32,11 @@ import OSLog
 enum AV2CommandBuilder {
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "AV2CommandBuilder")
+
+    enum MetadataSource: Sendable {
+        case probeIfNeeded
+        case resolved(VideoMetadata?)
+    }
 
     struct AV2Command: Sendable {
         /// ffmpeg arguments that decode/trim/scale the source and write y4m to stdout (`pipe:1`).
@@ -57,7 +62,7 @@ enum AV2CommandBuilder {
     }
 
     /// The full plan for a chunked encode: the per-chunk commands plus shared geometry and the
-    /// temp directory holding the segment files (cleaned up by the caller after concatenation).
+    /// proposed scratch directory. Planning does not create it; execution creates and owns it.
     struct AV2SegmentPlan: Sendable {
         let segments: [AV2SegmentCommand]
         let segmentDirectory: URL
@@ -99,9 +104,26 @@ enum AV2CommandBuilder {
         outputURL: URL,
         trimStart: Double?,
         trimEnd: Double?,
-        cropConfig: CropConfig?
+        cropConfig: CropConfig?,
+        visualSourceURL: URL? = nil,
+        customInputArguments: [String]? = nil,
+        expectedDuration: Double? = nil,
+        videoFrameRate: Double? = nil,
+        metadataSource: MetadataSource = .probeIfNeeded,
+        settings: AV2Settings = AV2Settings()
     ) async -> AV2Command? {
-        guard let r = await resolve(inputURL: inputURL, trimStart: trimStart, trimEnd: trimEnd, cropConfig: cropConfig) else {
+        guard let r = await resolve(
+            inputURL: inputURL,
+            trimStart: trimStart,
+            trimEnd: trimEnd,
+            cropConfig: cropConfig,
+            visualSourceURL: visualSourceURL,
+            customInputArguments: customInputArguments,
+            expectedDuration: expectedDuration,
+            videoFrameRate: videoFrameRate,
+            metadataSource: metadataSource,
+            settings: settings
+        ) else {
             return nil
         }
 
@@ -110,7 +132,7 @@ enum AV2CommandBuilder {
         if let trimStart, trimStart > 0 {
             ffmpeg += ["-ss", String(format: "%.6f", trimStart)]
         }
-        ffmpeg += ["-i", inputURL.path]
+        appendInputArguments(customInputArguments, inputURL: inputURL, to: &ffmpeg)
         if let trimStart, let trimEnd, trimEnd > trimStart {
             ffmpeg += ["-t", String(format: "%.6f", trimEnd - trimStart)]
         } else if let trimEnd, trimEnd > 0, trimStart == nil {
@@ -161,9 +183,30 @@ enum AV2CommandBuilder {
         inputURL: URL,
         trimStart: Double?,
         trimEnd: Double?,
-        cropConfig: CropConfig?
+        cropConfig: CropConfig?,
+        visualSourceURL: URL? = nil,
+        customInputArguments: [String]? = nil,
+        expectedDuration: Double? = nil,
+        videoFrameRate: Double? = nil,
+        metadataSource: MetadataSource = .probeIfNeeded,
+        settings: AV2Settings = AV2Settings()
     ) async -> AV2SegmentPlan? {
-        guard let r = await resolve(inputURL: inputURL, trimStart: trimStart, trimEnd: trimEnd, cropConfig: cropConfig) else {
+        // Seeking each worker independently is not yet validated for concat/image2 demuxers.
+        // Keep virtual inputs on the correct single-process path until their segment boundaries
+        // have generated-media coverage.
+        guard customInputArguments == nil else { return nil }
+        guard let r = await resolve(
+            inputURL: inputURL,
+            trimStart: trimStart,
+            trimEnd: trimEnd,
+            cropConfig: cropConfig,
+            visualSourceURL: visualSourceURL,
+            customInputArguments: customInputArguments,
+            expectedDuration: expectedDuration,
+            videoFrameRate: videoFrameRate,
+            metadataSource: metadataSource,
+            settings: settings
+        ) else {
             return nil
         }
         guard let frameRate = r.frameRate, frameRate > 0,
@@ -172,7 +215,7 @@ enum AV2CommandBuilder {
         }
         let totalFrames = max(1, Int((duration * frameRate).rounded()))
 
-        let hint = intSetting(AppConstants.av2ParallelChunksKey, default: AppConstants.defaultAV2ParallelChunks)
+        let hint = settings.parallelChunks
         let chunkCount = resolvedChunkCount(totalFrames: totalFrames, hint: hint, rateMode: r.rateMode)
         guard chunkCount > 1 else { return nil }
 
@@ -187,7 +230,6 @@ enum AV2CommandBuilder {
 
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("av2chunks_\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         var segments: [AV2SegmentCommand] = []
         var startFrame = 0
@@ -201,7 +243,7 @@ enum AV2CommandBuilder {
             // a key frame at its first input frame, so the chunks stay independently decodable.
             var ff: [String] = ["-y", "-nostdin", "-progress", "pipe:2", "-hide_banner"]
             if startSec > 0 { ff += ["-ss", String(format: "%.6f", startSec)] }
-            ff += ["-i", inputURL.path]
+            appendInputArguments(customInputArguments, inputURL: inputURL, to: &ff)
             ff += ["-frames:v", "\(count)"]
             ff += ["-map", "0:v:0", "-an", "-sn", "-dn"]
             ff += ["-vf", r.videoFilter]
@@ -250,9 +292,23 @@ enum AV2CommandBuilder {
         inputURL: URL,
         trimStart: Double?,
         trimEnd: Double?,
-        cropConfig: CropConfig?
+        cropConfig: CropConfig?,
+        visualSourceURL: URL? = nil,
+        metadataSource: MetadataSource = .probeIfNeeded,
+        settings: AV2Settings = AV2Settings()
     ) async -> Int? {
-        await resolve(inputURL: inputURL, trimStart: trimStart, trimEnd: trimEnd, cropConfig: cropConfig)?.bitDepth
+        await resolve(
+            inputURL: inputURL,
+            trimStart: trimStart,
+            trimEnd: trimEnd,
+            cropConfig: cropConfig,
+            visualSourceURL: visualSourceURL,
+            customInputArguments: nil,
+            expectedDuration: nil,
+            videoFrameRate: nil,
+            metadataSource: metadataSource,
+            settings: settings
+        )?.bitDepth
     }
 
     /// Resolves how many parallel chunks to use. `hint` is the user setting (0 = auto = one per
@@ -289,19 +345,40 @@ enum AV2CommandBuilder {
         inputURL: URL,
         trimStart: Double?,
         trimEnd: Double?,
-        cropConfig: CropConfig?
+        cropConfig: CropConfig?,
+        visualSourceURL: URL?,
+        customInputArguments: [String]?,
+        expectedDuration: Double?,
+        videoFrameRate: Double?,
+        metadataSource: MetadataSource,
+        settings: AV2Settings
     ) async -> Resolved? {
-        guard let metadata = try? await VideoMetadataService.shared.metadata(for: inputURL),
-              let stream = metadata.primaryVideoStream,
-              let srcW = stream.width, let srcH = stream.height,
-              srcW > 0, srcH > 0 else {
-            logger.error("AV2: could not determine source dimensions for \(inputURL.lastPathComponent, privacy: .public)")
+        let metadataURL = visualSourceURL ?? inputURL
+        let metadata: VideoMetadata? = switch metadataSource {
+        case .probeIfNeeded:
+            try? await BoundedVideoMetadataProbe.metadata(for: metadataURL)
+        case .resolved(let metadata):
+            metadata
+        }
+        let stream = metadata?.primaryVideoStream
+        guard let geometry = await FFMPEGCommandBuilder.sourceGeometry(
+            for: metadataURL,
+            sourceMetadata: metadata,
+            probeMetadataIfNeeded: false
+        ) else {
+            logger.error("AV2: could not determine source dimensions for \(metadataURL.lastPathComponent, privacy: .public)")
             return nil
         }
+        let srcW = geometry.width
+        let srcH = geometry.height
 
-        let dar = stream.displayAspectRatio?.doubleValue
-        let par = stream.pixelAspectRatio?.doubleValue
-        let frameRate = stream.frameRate?.value
+        let dar = geometry.displayAspectRatio
+        let par = geometry.pixelAspectRatio
+        let customFrameRate = frameRateArgument(in: customInputArguments)
+        let resolvedFrameRate = VideoMetadata.FrameRate(double: videoFrameRate)
+            ?? customFrameRate
+            ?? stream?.frameRate
+        let frameRate = resolvedFrameRate?.value
 
         // Effective PAR (mirrors FFMPEGCommandBuilder's DAR-priority logic).
         let effectivePAR: Double
@@ -335,8 +412,7 @@ enum AV2CommandBuilder {
         var finalW = evenDimension(Double(basePxW) * effectivePAR)
         var finalH = evenDimension(Double(basePxH))
 
-        let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.av2ResolutionLimitKey) ?? AppConstants.defaultAV2ResolutionLimit
-        if let maxShortEdge = CodecResolutionLimit(rawValue: resolutionRaw)?.maxHeight {
+        if let maxShortEdge = settings.resolutionLimit.maxHeight {
             let shortEdge = min(finalW, finalH)
             if shortEdge > maxShortEdge {
                 let factor = Double(maxShortEdge) / Double(shortEdge)
@@ -346,31 +422,34 @@ enum AV2CommandBuilder {
         }
 
         // Resolve settings.
-        let bitDepthRaw = UserDefaults.standard.string(forKey: AppConstants.av2BitDepthKey) ?? AppConstants.defaultAV2BitDepth
-        let bitDepth = (AV2BitDepthOption(rawValue: bitDepthRaw) ?? .auto).resolved(sourceBitDepth: stream.bitDepth)
-
-        let rateModeRaw = UserDefaults.standard.string(forKey: AppConstants.av2RateControlModeKey) ?? AppConstants.defaultAV2RateControlMode
-        let rateMode = AV2RateControlMode(rawValue: rateModeRaw) ?? .constantQuality
-
-        let qp = intSetting(AppConstants.av2QualityKey, default: AppConstants.defaultAV2Quality)
-        let targetBitrate = intSetting(AppConstants.av2TargetBitrateKey, default: AppConstants.defaultAV2TargetBitrate)
-        let speed = intSetting(AppConstants.av2SpeedKey, default: AppConstants.defaultAV2Speed)
-        let tileColumns = intSetting(AppConstants.av2TileColumnsKey, default: AppConstants.defaultAV2TileColumns)
-        let tileRows = intSetting(AppConstants.av2TileRowsKey, default: AppConstants.defaultAV2TileRows)
-        let threadsSetting = intSetting(AppConstants.av2ThreadsKey, default: AppConstants.defaultAV2Threads)
+        let bitDepth = settings.bitDepth.resolved(sourceBitDepth: stream?.bitDepth)
+        let rateMode = settings.rateControlMode
+        let qp = settings.quality
+        let targetBitrate = settings.targetBitrate
+        let speed = settings.speed
+        let tileColumns = settings.tileColumns
+        let tileRows = settings.tileRows
+        let threadsSetting = settings.threads
         let threads = threadsSetting > 0 ? threadsSetting : ProcessInfo.processInfo.activeProcessorCount
 
-        // Effective duration (trim-aware) for progress + chunk partitioning.
-        let effectiveDuration: Double?
-        if let trimStart, let trimEnd, trimEnd > trimStart {
-            effectiveDuration = trimEnd - trimStart
-        } else if let trimEnd, trimEnd > 0, trimStart == nil {
-            effectiveDuration = trimEnd
-        } else if let streamDuration = stream.duration {
-            effectiveDuration = streamDuration
+        // Effective duration (trim-aware) for progress + chunk partitioning. Resolve the source
+        // duration first so start-only trims subtract their skipped prefix instead of planning the
+        // full source again (which can send the final chunks past EOF).
+        let sourceDuration: Double?
+        if let expectedDuration, expectedDuration >= 0 {
+            sourceDuration = expectedDuration
+        } else if let streamDuration = stream?.duration {
+            sourceDuration = streamDuration
+        } else if visualSourceURL == nil {
+            sourceDuration = await FFMPEGProbeService.getVideoDuration(for: inputURL)
         } else {
-            effectiveDuration = await FFMPEGProbeService.getVideoDuration(for: inputURL)
+            sourceDuration = nil
         }
+        let effectiveDuration = resolvedEffectiveDuration(
+            sourceDuration: sourceDuration,
+            trimStart: trimStart,
+            trimEnd: trimEnd
+        )
 
         // Auto-tiling for the single-process path (chunked omits tiles entirely).
         let autoTileColumns = tileColumns > 0 ? tileColumns : autoTileLog2(finalW, maxLog2: 3)
@@ -395,8 +474,8 @@ enum AV2CommandBuilder {
             threads: max(1, threads),
             autoTileColumns: autoTileColumns,
             autoTileRows: autoTileRows,
-            fpsNum: stream.frameRate.flatMap { $0.numerator > 0 ? $0.numerator : nil },
-            fpsDen: stream.frameRate.flatMap { $0.denominator > 0 ? $0.denominator : nil },
+            fpsNum: resolvedFrameRate.flatMap { $0.numerator > 0 ? $0.numerator : nil },
+            fpsDen: resolvedFrameRate.flatMap { $0.denominator > 0 ? $0.denominator : nil },
             frameRate: frameRate,
             effectiveDuration: effectiveDuration,
             videoFilter: videoFilter,
@@ -405,6 +484,46 @@ enum AV2CommandBuilder {
     }
 
     // MARK: - Helpers
+
+    private static func appendInputArguments(
+        _ customInputArguments: [String]?,
+        inputURL: URL,
+        to arguments: inout [String]
+    ) {
+        if let customInputArguments {
+            arguments.append(contentsOf: customInputArguments)
+        } else {
+            arguments.append(contentsOf: ["-i", inputURL.path])
+        }
+    }
+
+    private static func frameRateArgument(in arguments: [String]?) -> VideoMetadata.FrameRate? {
+        guard let arguments,
+              let index = arguments.firstIndex(of: "-framerate"),
+              arguments.indices.contains(index + 1) else {
+            return nil
+        }
+        return VideoMetadata.FrameRate(frameRateString: arguments[index + 1])
+    }
+
+    /// Mirrors FFmpeg's trim arguments while keeping progress and chunk planning inside the
+    /// source's available duration. An invalid/non-increasing end behaves like a start-only trim,
+    /// matching the command builder's omission of `-t` in that case.
+    static func resolvedEffectiveDuration(
+        sourceDuration: Double?,
+        trimStart: Double?,
+        trimEnd: Double?
+    ) -> Double? {
+        let start = max(0, trimStart ?? 0)
+
+        if let trimEnd, trimEnd > start {
+            let effectiveEnd = sourceDuration.map { min(trimEnd, max(0, $0)) } ?? trimEnd
+            return max(0, effectiveEnd - start)
+        }
+
+        guard let sourceDuration else { return nil }
+        return max(0, sourceDuration - start)
+    }
 
     /// Rounds to the nearest even integer (codec requirement), with a floor of 2.
     private static func evenDimension(_ value: Double) -> Int {
@@ -428,10 +547,4 @@ enum AV2CommandBuilder {
         min(max(qp, 0), 255)
     }
 
-    /// Reads an Int setting, returning `def` when the key has never been written
-    /// (so a legitimate stored value of 0 is preserved, unlike `UserDefaults.integer`).
-    private static func intSetting(_ key: String, default def: Int) -> Int {
-        let defaults = UserDefaults.standard
-        return defaults.object(forKey: key) == nil ? def : defaults.integer(forKey: key)
-    }
 }

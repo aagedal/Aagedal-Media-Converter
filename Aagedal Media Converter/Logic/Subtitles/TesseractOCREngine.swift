@@ -8,74 +8,79 @@ import Foundation
 struct TesseractOCREngine: BitmapSubtitleOCREngine {
     let tesseractPath: String
     let tessdataPrefix: String?
+    private let subprocessRunner: any SubprocessRunning
 
     /// Hard cap per frame. A misbehaving tesseract that wedges shouldn't be able to hang the whole queue.
-    private static let perFrameTimeoutSeconds: UInt64 = 10
+    private static let perFrameTimeout: Duration = .seconds(10)
+    private static let outputCaptureLimit = 256 * 1024
+
+    init(
+        tesseractPath: String,
+        tessdataPrefix: String?,
+        subprocessRunner: any SubprocessRunning = SubprocessRunner()
+    ) {
+        self.tesseractPath = tesseractPath
+        self.tessdataPrefix = tessdataPrefix
+        self.subprocessRunner = subprocessRunner
+    }
 
     func recognize(pngURL: URL, language: String) async throws -> String {
         try Task.checkCancellation()
-
-        let process = Process()
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: tesseractPath)
-        process.arguments = [pngURL.path, "stdout", "--psm", "6", "-l", language]
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
 
         var env = ProcessInfo.processInfo.environment
         if let tessdataPrefix {
             env["TESSDATA_PREFIX"] = tessdataPrefix
         }
-        process.environment = env
 
-        return try await withTaskCancellationHandler {
-            try await Task.detached(priority: .userInitiated) {
-                do {
-                    try process.run()
-                } catch {
-                    throw TesseractOCREngineError.processStartFailed(error.localizedDescription)
-                }
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: tesseractPath),
+            arguments: [pngURL.path, "stdout", "--psm", "6", "-l", language],
+            environment: env,
+            timeout: Self.perFrameTimeout,
+            standardOutputCaptureLimit: Self.outputCaptureLimit,
+            standardErrorCaptureLimit: Self.outputCaptureLimit,
+            sensitiveValues: [pngURL.path]
+        )
 
-                // Hard timeout: terminate the process if it overruns. Cancelled below if the
-                // process exits on its own first.
-                let timeoutTask = Task.detached(priority: .utility) {
-                    try? await Task.sleep(nanoseconds: Self.perFrameTimeoutSeconds * 1_000_000_000)
-                    if process.isRunning { process.terminate() }
-                }
-
-                // Drain stderr concurrently. The 64KB pipe buffer can fill if tesseract prints
-                // a lot of warnings, which would deadlock waitUntilExit.
-                let stderrDrain = Task.detached(priority: .utility) {
-                    stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                }
-
-                process.waitUntilExit()
-                timeoutTask.cancel()
-
-                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let stderrData = await stderrDrain.value
-
-                guard process.terminationStatus == 0 else {
-                    let stderrText = String(data: stderrData, encoding: .utf8)?
-                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    throw TesseractOCREngineError.processFailed(
-                        exitCode: process.terminationStatus,
-                        stderr: String(stderrText.suffix(300))
-                    )
-                }
-                return String(data: stdoutData, encoding: .utf8) ?? ""
-            }.value
-        } onCancel: {
-            process.terminate()
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .failedToStart(_, let underlying):
+                throw TesseractOCREngineError.processStartFailed(underlying)
+            case .timedOut:
+                throw TesseractOCREngineError.timedOut
+            }
+        } catch {
+            throw TesseractOCREngineError.processStartFailed(error.localizedDescription)
         }
+
+        guard result.succeeded else {
+            let stderr = request.redactedDiagnostic(
+                result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),
+                limit: 300
+            )
+            throw TesseractOCREngineError.processFailed(
+                exitCode: result.terminationStatus,
+                stderr: stderr
+            )
+        }
+
+        guard result.discardedStandardOutputBytes == 0 else {
+            throw TesseractOCREngineError.outputTooLarge
+        }
+        return result.standardOutputText
     }
 }
 
 enum TesseractOCREngineError: Error, LocalizedError {
     case processStartFailed(String)
     case processFailed(exitCode: Int32, stderr: String)
+    case timedOut
+    case outputTooLarge
 
     var errorDescription: String? {
         switch self {
@@ -85,6 +90,10 @@ enum TesseractOCREngineError: Error, LocalizedError {
             return stderr.isEmpty
                 ? "tesseract exited \(code)"
                 : "tesseract exited \(code): \(stderr)"
+        case .timedOut:
+            return "tesseract exceeded the 10-second per-frame limit"
+        case .outputTooLarge:
+            return "tesseract returned more text than the per-frame safety limit"
         }
     }
 }

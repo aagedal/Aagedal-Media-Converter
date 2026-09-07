@@ -279,7 +279,7 @@ extension VideoFileCellView {
             return "\(Int(config.uploadProgress * 100))%"
         }
         if config.uploadStatus == .uploaded { return "" }
-        if case .failed = config.uploadStatus { return "" }
+        if case .failed(let error) = config.uploadStatus { return error }
 
         // Subtitle generation — show the active stage in addition to percentage so the
         // user knows what's happening when progress hasn't started moving yet (e.g. an
@@ -298,6 +298,8 @@ extension VideoFileCellView {
         if config.analyticsStatus.isInProgress {
             return "\(Int(config.analyticsProgress * 100))%"
         }
+
+        if case .failed(let error) = config.analyticsStatus { return error }
 
         // Conversion — show percentage and ETA (capsule shows ENCODING/DONE/FAILED/WAITING).
         // For multi-phase exports (DCP, IMF) `statusMessage` carries the active stage label

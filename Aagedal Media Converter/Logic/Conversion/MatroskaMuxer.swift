@@ -11,7 +11,7 @@ import Foundation
 import OSLog
 
 /// A minimal Matroska (`.mkv`) muxer — just enough to wrap an already-encoded video track plus
-/// one audio track into a seekable container.
+/// zero or more audio tracks into a seekable container.
 ///
 /// It exists because FFmpeg cannot (yet) write the experimental AV2 codec: its Matroska demuxer
 /// reads a `V_AV2` track but has no AVCodecID mapping for it, so `ffmpeg -c copy` refuses to remux.
@@ -45,6 +45,12 @@ enum MatroskaMuxer {
         var seekPreRollNs: Int64? = nil   // Opus seek pre-roll (80 ms), in nanoseconds
     }
 
+    /// Global Matroska tags that apply to the whole output file.
+    struct Metadata: Sendable, Equatable {
+        var comment: String? = nil
+        var timecode: String? = nil
+    }
+
     /// A decoded video frame ready to mux: the raw bitstream payload + whether it is a key frame.
     struct VideoFrame: Sendable {
         let data: Data
@@ -56,6 +62,14 @@ enum MatroskaMuxer {
     struct AudioFrame: Sendable {
         let data: Data
         let durationSamples: Int
+    }
+
+    /// One complete encoded audio track ready to mux. Keeping the track description and frames
+    /// together prevents frame arrays from becoming misaligned when routing duplicates or
+    /// reorders source tracks.
+    struct AudioTrack: Sendable {
+        let info: AudioTrackInfo
+        let frames: [AudioFrame]
     }
 
     enum MuxError: LocalizedError {
@@ -80,9 +94,29 @@ enum MatroskaMuxer {
         video: VideoTrackInfo,
         videoFrames: [VideoFrame],
         audio: AudioTrackInfo?,
-        audioFrames: [AudioFrame]
+        audioFrames: [AudioFrame],
+        metadata: Metadata? = nil
+    ) throws {
+        let audioTracks = audio.map { [AudioTrack(info: $0, frames: audioFrames)] } ?? []
+        try write(
+            to: url,
+            video: video,
+            videoFrames: videoFrames,
+            audioTracks: audioTracks,
+            metadata: metadata
+        )
+    }
+
+    /// Writes a `.mkv` containing the given video frames and routed audio tracks.
+    static func write(
+        to url: URL,
+        video: VideoTrackInfo,
+        videoFrames: [VideoFrame],
+        audioTracks: [AudioTrack],
+        metadata: Metadata? = nil
     ) throws {
         guard !videoFrames.isEmpty else { throw MuxError.noVideoFrames }
+        let activeAudioTracks = audioTracks.filter { !$0.frames.isEmpty }
 
         let fpsNum = max(1, video.fpsNumerator)
         let fpsDen = max(1, video.fpsDenominator)
@@ -90,21 +124,23 @@ enum MatroskaMuxer {
         // MARK: Build the block timeline (ms timestamps, TimestampScale = 1,000,000 ns).
         struct Block { let track: Int; let pts: Int64; let data: Data; let key: Bool }
         var blocks: [Block] = []
-        blocks.reserveCapacity(videoFrames.count + audioFrames.count)
+        blocks.reserveCapacity(videoFrames.count + activeAudioTracks.reduce(0) { $0 + $1.frames.count })
 
         for (i, frame) in videoFrames.enumerated() {
             let pts = Int64((Double(i) * 1000.0 * Double(fpsDen) / Double(fpsNum)).rounded())
             blocks.append(Block(track: 1, pts: pts, data: frame.data, key: frame.isKeyframe))
         }
         var lastAudioEndMs: Int64 = 0
-        if let audio, !audioFrames.isEmpty {
+        for (audioIndex, audioTrack) in activeAudioTracks.enumerated() {
+            let trackNumber = audioIndex + 2
             var sampleOffset = 0
-            for frame in audioFrames {
-                let pts = Int64((Double(sampleOffset) * 1000.0 / audio.sampleRate).rounded())
-                blocks.append(Block(track: 2, pts: pts, data: frame.data, key: true))
+            for frame in audioTrack.frames {
+                let pts = Int64((Double(sampleOffset) * 1000.0 / audioTrack.info.sampleRate).rounded())
+                blocks.append(Block(track: trackNumber, pts: pts, data: frame.data, key: true))
                 sampleOffset += max(0, frame.durationSamples)
             }
-            lastAudioEndMs = Int64((Double(sampleOffset) * 1000.0 / audio.sampleRate).rounded())
+            let trackEndMs = Int64((Double(sampleOffset) * 1000.0 / audioTrack.info.sampleRate).rounded())
+            lastAudioEndMs = max(lastAudioEndMs, trackEndMs)
         }
 
         // Stable order: by timestamp, video before audio on ties (keeps each cluster opening on the
@@ -137,8 +173,8 @@ enum MatroskaMuxer {
         // MARK: Segment » Tracks
         var tracks = Data()
         tracks += buildVideoTrackEntry(video, defaultDurationNs: Int64((1_000_000_000.0 * Double(fpsDen) / Double(fpsNum)).rounded()))
-        if let audio, !audioFrames.isEmpty {
-            tracks += buildAudioTrackEntry(audio)
+        for (audioIndex, audioTrack) in activeAudioTracks.enumerated() {
+            tracks += buildAudioTrackEntry(audioTrack.info, trackNumber: audioIndex + 2)
         }
         let tracksElement = element(0x1654AE6B, tracks)
 
@@ -204,6 +240,7 @@ enum MatroskaMuxer {
             cuesBody += element(0xBB, cuePoint)                                    // CuePoint
         }
         let cuesElement = cuePoints.isEmpty ? Data() : element(0x1C53BB6B, cuesBody)
+        let tagsElement = buildTags(metadata)
 
         // MARK: Assemble
         var segmentBody = Data()
@@ -211,6 +248,7 @@ enum MatroskaMuxer {
         segmentBody += tracksElement
         for ce in clusterElements { segmentBody += ce }
         segmentBody += cuesElement
+        segmentBody += tagsElement
         let segment = element(0x18538067, segmentBody)
 
         var file = Data()
@@ -222,7 +260,8 @@ enum MatroskaMuxer {
         } catch {
             throw MuxError.writeFailed(error.localizedDescription)
         }
-        logger.info("Wrote Matroska \(url.lastPathComponent, privacy: .public): \(videoFrames.count) video + \(audioFrames.count) audio frames, \(durationMs) ms")
+        let audioFrameCount = activeAudioTracks.reduce(0) { $0 + $1.frames.count }
+        logger.info("Wrote Matroska \(url.lastPathComponent, privacy: .public): \(videoFrames.count) video + \(audioFrameCount) audio frames across \(activeAudioTracks.count) tracks, \(durationMs) ms")
     }
 
     // MARK: - Track entries
@@ -247,11 +286,12 @@ enum MatroskaMuxer {
         return element(0xAE, entry)                          // TrackEntry
     }
 
-    private static func buildAudioTrackEntry(_ audio: AudioTrackInfo) -> Data {
+    private static func buildAudioTrackEntry(_ audio: AudioTrackInfo, trackNumber: Int) -> Data {
         var entry = Data()
-        entry += element(0xD7, uintData(2))                  // TrackNumber
-        entry += element(0x73C5, uintData(2))                // TrackUID
+        entry += element(0xD7, uintData(UInt64(trackNumber)))   // TrackNumber
+        entry += element(0x73C5, uintData(UInt64(trackNumber))) // TrackUID
         entry += element(0x83, uintData(2))                  // TrackType = audio
+        entry += element(0x88, uintData(trackNumber == 2 ? 1 : 0)) // FlagDefault: first audio only
         entry += element(0x9C, uintData(0))                  // FlagLacing = 0
         entry += element(0x86, Data(audio.codecID.utf8))     // CodecID
         if let cp = audio.codecPrivate, !cp.isEmpty {
@@ -268,6 +308,48 @@ enum MatroskaMuxer {
         audioSub += element(0x9F, uintData(UInt64(max(1, audio.channels)))) // Channels
         entry += element(0xE1, audioSub)                     // Audio
         return element(0xAE, entry)                          // TrackEntry
+    }
+
+    // MARK: - Global tags
+
+    private static func buildTags(_ metadata: Metadata?) -> Data {
+        guard let metadata else { return Data() }
+
+        let values: [(name: String, value: String?)] = [
+            ("COMMENT", metadata.comment),
+            ("TIMECODE", metadata.timecode)
+        ]
+        let populated = values.compactMap { pair -> (String, String)? in
+            guard let value = pair.value?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty else {
+                return nil
+            }
+            return (pair.name, value)
+        }
+        guard !populated.isEmpty else { return Data() }
+
+        var globalTag = element(0x63C0, Data())              // Targets (empty = whole Segment)
+        for (name, value) in populated {
+            var simpleTag = Data()
+            simpleTag += element(0x45A3, Data(name.utf8))    // TagName
+            simpleTag += element(0x4487, Data(value.utf8))   // TagString
+            globalTag += element(0x67C8, simpleTag)          // SimpleTag
+        }
+
+        var tags = element(0x7373, globalTag)                // Global Tag
+        if let timecode = metadata.timecode?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !timecode.isEmpty {
+            var targets = Data()
+            targets += element(0x63C5, uintData(1))          // TrackUID = primary video
+            var trackTag = element(0x63C0, targets)
+            var simpleTag = Data()
+            simpleTag += element(0x45A3, Data("TIMECODE".utf8))
+            simpleTag += element(0x4487, Data(timecode.utf8))
+            trackTag += element(0x67C8, simpleTag)
+            tags += element(0x7373, trackTag)
+        }
+
+        return element(0x1254C367, tags)                     // Tags
     }
 
     // MARK: - EBML primitives

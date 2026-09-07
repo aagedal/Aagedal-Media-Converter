@@ -14,12 +14,13 @@ enum AnalyticsExporter {
 
     /// Automatically exports analytics results next to the encoded file if auto-export is enabled in settings
     @MainActor
-    static func autoExportIfEnabled(results: AnalyticsResults, encodedFileURL: URL) {
-        guard UserDefaults.standard.bool(forKey: AppConstants.analyticsAutoExportKey) else { return }
-
-        let formatRaw = UserDefaults.standard.string(forKey: AppConstants.analyticsAutoExportFormatKey)
-            ?? AppConstants.defaultAnalyticsAutoExportFormat
-        let format = AnalyticsExportFormat(rawValue: formatRaw) ?? .json
+    static func autoExportIfEnabled(
+        results: AnalyticsResults,
+        encodedFileURL: URL,
+        settings: AnalyticsAutoExportSettingsSnapshot
+    ) {
+        guard settings.enabled else { return }
+        let format = settings.format
 
         let baseName = encodedFileURL.deletingPathExtension().lastPathComponent
         let exportURL = encodedFileURL.deletingLastPathComponent()

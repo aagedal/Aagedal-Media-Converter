@@ -152,37 +152,37 @@ struct UploadProfile: Codable, Identifiable, Equatable, Sendable {
 }
 
 enum UploadProfileStore {
-    static func loadProfiles() -> [UploadProfile] {
-        guard let data = UserDefaults.standard.data(forKey: AppConstants.uploadProfilesKey) else {
+    static func loadProfiles(defaults: UserDefaults = .standard) -> [UploadProfile] {
+        guard let data = defaults.data(forKey: AppConstants.uploadProfilesKey) else {
             return []
         }
         return (try? JSONDecoder().decode([UploadProfile].self, from: data)) ?? []
     }
 
-    static func saveProfiles(_ profiles: [UploadProfile]) {
+    static func saveProfiles(_ profiles: [UploadProfile], defaults: UserDefaults = .standard) {
         guard let data = try? JSONEncoder().encode(profiles) else { return }
-        UserDefaults.standard.set(data, forKey: AppConstants.uploadProfilesKey)
+        defaults.set(data, forKey: AppConstants.uploadProfilesKey)
     }
 
-    static func loadSelectedProfileID() -> UUID? {
-        guard let raw = UserDefaults.standard.string(forKey: AppConstants.uploadSelectedProfileIDKey),
+    static func loadSelectedProfileID(defaults: UserDefaults = .standard) -> UUID? {
+        guard let raw = defaults.string(forKey: AppConstants.uploadSelectedProfileIDKey),
               let id = UUID(uuidString: raw) else {
             return nil
         }
         return id
     }
 
-    static func saveSelectedProfileID(_ id: UUID?) {
+    static func saveSelectedProfileID(_ id: UUID?, defaults: UserDefaults = .standard) {
         if let id {
-            UserDefaults.standard.set(id.uuidString, forKey: AppConstants.uploadSelectedProfileIDKey)
+            defaults.set(id.uuidString, forKey: AppConstants.uploadSelectedProfileIDKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: AppConstants.uploadSelectedProfileIDKey)
+            defaults.removeObject(forKey: AppConstants.uploadSelectedProfileIDKey)
         }
     }
 
-    static func resolveSelectedProfile(from profiles: [UploadProfile]) -> UploadProfile? {
+    static func resolveSelectedProfile(from profiles: [UploadProfile], defaults: UserDefaults = .standard) -> UploadProfile? {
         guard !profiles.isEmpty else { return nil }
-        if let selectedID = loadSelectedProfileID(),
+        if let selectedID = loadSelectedProfileID(defaults: defaults),
            let match = profiles.first(where: { $0.id == selectedID }) {
             return match
         }
@@ -191,9 +191,16 @@ enum UploadProfileStore {
 
     /// One-shot migration from the pre-unified per-backend stores to a single list.
     /// Safe to call on every launch; guarded by `uploadProfileMigrationV2Key`.
-    static func migrateLegacyProfilesIfNeeded() {
-        let defaults = UserDefaults.standard
+    static func migrateLegacyProfilesIfNeeded(defaults: UserDefaults = .standard) {
         guard !defaults.bool(forKey: AppConstants.uploadProfileMigrationV2Key) else { return }
+
+        // A modern list (including an explicitly empty one) owns the user's current
+        // choices. Never resurrect old destinations or replace a newer selection.
+        // Keep legacy data available for recovery when no migration is needed.
+        if defaults.object(forKey: AppConstants.uploadProfilesKey) != nil {
+            defaults.set(true, forKey: AppConstants.uploadProfileMigrationV2Key)
+            return
+        }
 
         // Legacy schemas — kept local so the rest of the codebase can forget about them.
         struct LegacyFTP: Codable { var id: UUID; var name: String; var server: String; var port: Int; var username: String; var remotePath: String; var useFTPS: Bool }
@@ -201,47 +208,48 @@ enum UploadProfileStore {
         struct LegacySMB: Codable { var id: UUID; var name: String; var server: String; var port: Int; var username: String; var remotePath: String; var smbShare: String; var smbDomain: String }
         struct LegacyS3: Codable { var id: UUID; var name: String; var bucket: String; var region: String; var endpoint: String; var accessKeyID: String; var remotePath: String }
 
+        func decodeLegacy<T: Decodable>(_ type: [T].Type, key: String) throws -> [T] {
+            guard let value = defaults.object(forKey: key) else { return [] }
+            guard let data = value as? Data else {
+                throw CocoaError(.coderReadCorrupt)
+            }
+            return try JSONDecoder().decode(type, from: data)
+        }
+
         var unified: [UploadProfile] = []
 
-        if let data = defaults.data(forKey: "uploadFTPProfiles"),
-           let legacy = try? JSONDecoder().decode([LegacyFTP].self, from: data) {
-            for l in legacy {
+        do {
+            for l in try decodeLegacy([LegacyFTP].self, key: "uploadFTPProfiles") {
                 unified.append(UploadProfile(
                     id: l.id, name: l.name, backend: .ftp,
                     server: l.server, port: l.port, username: l.username, remotePath: l.remotePath,
                     useFTPS: l.useFTPS
                 ))
             }
-        }
-        if let data = defaults.data(forKey: "uploadSFTPProfiles"),
-           let legacy = try? JSONDecoder().decode([LegacySFTP].self, from: data) {
-            for l in legacy {
+            for l in try decodeLegacy([LegacySFTP].self, key: "uploadSFTPProfiles") {
                 unified.append(UploadProfile(
                     id: l.id, name: l.name, backend: .sftp,
                     server: l.server, port: l.port, username: l.username, remotePath: l.remotePath,
                     useKeyAuth: l.useKeyAuth, keyFilePath: l.keyFilePath
                 ))
             }
-        }
-        if let data = defaults.data(forKey: "uploadSMBProfiles"),
-           let legacy = try? JSONDecoder().decode([LegacySMB].self, from: data) {
-            for l in legacy {
+            for l in try decodeLegacy([LegacySMB].self, key: "uploadSMBProfiles") {
                 unified.append(UploadProfile(
                     id: l.id, name: l.name, backend: .smb,
                     server: l.server, port: l.port, username: l.username, remotePath: l.remotePath,
                     smbShare: l.smbShare, smbDomain: l.smbDomain
                 ))
             }
-        }
-        if let data = defaults.data(forKey: "uploadS3Profiles"),
-           let legacy = try? JSONDecoder().decode([LegacyS3].self, from: data) {
-            for l in legacy {
+            for l in try decodeLegacy([LegacyS3].self, key: "uploadS3Profiles") {
                 unified.append(UploadProfile(
                     id: l.id, name: l.name, backend: .s3,
                     remotePath: l.remotePath,
                     bucket: l.bucket, region: l.region, endpoint: l.endpoint, accessKeyID: l.accessKeyID
                 ))
             }
+        } catch {
+            // Leave every legacy key and the marker untouched so recovery/retry is possible.
+            return
         }
 
         // Preserve previously selected profile by mapping through legacy backend → legacy selection key.
@@ -257,13 +265,13 @@ enum UploadProfileStore {
         if let raw = defaults.string(forKey: legacySelectionKey),
            let id = UUID(uuidString: raw),
            unified.contains(where: { $0.id == id }) {
-            saveSelectedProfileID(id)
+            saveSelectedProfileID(id, defaults: defaults)
         } else if let first = unified.first {
-            saveSelectedProfileID(first.id)
+            saveSelectedProfileID(first.id, defaults: defaults)
         }
 
         if !unified.isEmpty {
-            saveProfiles(unified)
+            saveProfiles(unified, defaults: defaults)
         }
 
         // Clear all legacy keys (profile lists, selections, and transient editing-state fields).

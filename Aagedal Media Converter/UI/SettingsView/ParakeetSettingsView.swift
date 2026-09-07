@@ -13,6 +13,7 @@ struct ParakeetSettingsView: View {
     @State private var downloadedModels: [ParakeetModel] = []
     @State private var modelDownloadProgress: [String: ModelDownloadProgress] = [:]
     @State private var modelDownloading: Set<String> = []
+    @State private var modelDownloadAttempts: [String: UUID] = [:]
     @State private var deleteError: String?
 
     @AppStorage(AppConstants.parakeetModelKey) private var selectedModelId = AppConstants.defaultParakeetModel
@@ -166,6 +167,16 @@ struct ParakeetSettingsView: View {
             }
         }
         .padding(8)
+        .task {
+            while !Task.isCancelled {
+                await refreshModelDownloadState()
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
+            }
+        }
     }
 
     private func modelRow(for model: ParakeetModel) -> some View {
@@ -362,6 +373,8 @@ struct ParakeetSettingsView: View {
     }
 
     private func downloadModel(_ model: ParakeetModel) {
+        let attemptID = UUID()
+        modelDownloadAttempts[model.id] = attemptID
         modelDownloading.insert(model.id)
         modelDownloadProgress[model.id] = nil
         deleteError = nil
@@ -370,11 +383,14 @@ struct ParakeetSettingsView: View {
             do {
                 try await ParakeetModelManager.shared.downloadModel(model) { progress in
                     Task { @MainActor in
+                        guard modelDownloadAttempts[model.id] == attemptID else { return }
                         modelDownloadProgress[model.id] = progress
                     }
                 }
                 await MainActor.run {
+                    guard modelDownloadAttempts[model.id] == attemptID else { return }
                     downloadedModels = ParakeetModelManager.shared.getDownloadedModels()
+                    modelDownloadAttempts.removeValue(forKey: model.id)
                     modelDownloading.remove(model.id)
                     modelDownloadProgress.removeValue(forKey: model.id)
 
@@ -383,22 +399,74 @@ struct ParakeetSettingsView: View {
                         selectedModelId = model.id
                     }
                 }
-            } catch {
+            } catch is CancellationError {
                 await MainActor.run {
+                    guard modelDownloadAttempts[model.id] == attemptID else { return }
+                    modelDownloadAttempts.removeValue(forKey: model.id)
                     modelDownloading.remove(model.id)
                     modelDownloadProgress.removeValue(forKey: model.id)
-                    if !Task.isCancelled {
-                        deleteError = "Failed to download \(model.displayName): \(error.localizedDescription)"
-                    }
+                }
+            } catch ParakeetModelDownloadError.downloadAlreadyInProgress {
+                await MainActor.run {
+                    guard modelDownloadAttempts[model.id] == attemptID else { return }
+                    modelDownloadAttempts.removeValue(forKey: model.id)
+                }
+                await refreshModelDownloadState()
+            } catch {
+                await MainActor.run {
+                    guard modelDownloadAttempts[model.id] == attemptID else { return }
+                    modelDownloadAttempts.removeValue(forKey: model.id)
+                    modelDownloading.remove(model.id)
+                    modelDownloadProgress.removeValue(forKey: model.id)
+                    deleteError = "Failed to download \(model.displayName): \(error.localizedDescription)"
                 }
             }
         }
     }
 
+    private func refreshModelDownloadState() async {
+        var activeModelIDs: Set<String> = []
+        var activeProgress: [String: ModelDownloadProgress] = [:]
+        var terminalFailures: [String] = []
+        for model in ParakeetModel.allModels {
+            if let failure = await ParakeetModelManager.shared.takeDownloadFailure(model) {
+                terminalFailures.append(
+                    "Failed to download \(model.displayName): \(failure)"
+                )
+            }
+            guard await ParakeetModelManager.shared.getModelStatus(model) == .downloading else {
+                continue
+            }
+            activeModelIDs.insert(model.id)
+            if let progress = await ParakeetModelManager.shared.getDownloadProgress(model) {
+                activeProgress[model.id] = progress
+            }
+        }
+        let downloaded = ParakeetModelManager.shared.getDownloadedModels()
+
+        await MainActor.run {
+            let locallyOwnedModelIDs = Set(modelDownloadAttempts.keys)
+            modelDownloading = activeModelIDs.union(locallyOwnedModelIDs)
+            modelDownloadProgress = modelDownloadProgress.filter {
+                locallyOwnedModelIDs.contains($0.key)
+            }
+            for (modelID, progress) in activeProgress {
+                modelDownloadProgress[modelID] = progress
+            }
+            downloadedModels = downloaded
+            if let failure = terminalFailures.last {
+                deleteError = failure
+            }
+        }
+    }
+
     private func cancelDownload(_ model: ParakeetModel) {
+        let attemptID = modelDownloadAttempts[model.id]
         Task {
-            await ParakeetModelManager.shared.cancelDownload()
+            await ParakeetModelManager.shared.cancelDownload(for: model)
             await MainActor.run {
+                guard modelDownloadAttempts[model.id] == attemptID else { return }
+                modelDownloadAttempts.removeValue(forKey: model.id)
                 modelDownloading.remove(model.id)
                 modelDownloadProgress.removeValue(forKey: model.id)
             }

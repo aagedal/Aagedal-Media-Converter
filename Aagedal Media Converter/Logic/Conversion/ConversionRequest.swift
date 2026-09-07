@@ -42,6 +42,10 @@ struct ConversionRequest: Sendable {
     var synthesizedVideoRequest: SynthesizedVideoRequest? = nil
     var waveformBackgroundImageURL: URL? = nil
 
+    /// A representative visual input used for geometry inspection when `inputURL`
+    /// is a virtual source such as an image-sequence directory.
+    var visualSourceURL: URL? = nil
+
     // MARK: - FFMPEG Argument Overrides
     var customInputArguments: [String]? = nil
     var additionalOutputArguments: [String]? = nil

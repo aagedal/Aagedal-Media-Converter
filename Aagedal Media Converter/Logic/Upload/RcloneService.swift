@@ -5,26 +5,34 @@
 import Foundation
 import OSLog
 
-/// Thread-safe state container for upload progress
-private final class UploadProgressState: @unchecked Sendable {
-    var lastError: String?
-    var bytesTransferred: Int64 = 0
+protocol RcloneUpdating: Sendable {
+    func resolveRclonePath() async -> String?
 }
+
+extension RcloneUpdateService: RcloneUpdating {}
 
 /// Service for executing rclone uploads
 actor RcloneService {
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "RcloneService")
-    private var currentProcess: Process?
-    private let updateService = RcloneUpdateService.shared
+    private let updateService: any RcloneUpdating
+    private let subprocessRunner: any SubprocessRunning
 
     /// In-memory remote name used to define the upload destination via env vars.
     /// rclone reads RCLONE_CONFIG_<NAME>_* from the environment, so the secret never appears on argv.
     private static let remoteName = "upload"
 
     /// Hard upper bounds for rclone subprocess runtime. Cancels the process if exceeded.
-    private static let uploadTimeoutSeconds: UInt64 = 6 * 60 * 60   // 6h — large media uploads
-    private static let testTimeoutSeconds: UInt64 = 60               // listing one dir
-    private static let obscureTimeoutSeconds: UInt64 = 5             // pure local CPU
+    private static let uploadTimeout: Duration = .seconds(6 * 60 * 60) // 6h — large media uploads
+    private static let testTimeout: Duration = .seconds(60)             // listing one dir
+    private static let obscureTimeout: Duration = .seconds(5)           // pure local CPU
+
+    init(
+        updateService: any RcloneUpdating = RcloneUpdateService.shared,
+        subprocessRunner: any SubprocessRunning = SubprocessRunner()
+    ) {
+        self.updateService = updateService
+        self.subprocessRunner = subprocessRunner
+    }
 
     /// Uploads a file to a remote server using rclone
     /// - Parameters:
@@ -48,10 +56,6 @@ actor RcloneService {
         let remoteEnv = try await buildRemoteEnvironment(config: config, rclonePath: rclonePath)
         let destination = uploadDestination(for: config)
 
-        let process = Process()
-        let stderrPipe = Pipe()
-        let stdoutPipe = Pipe()
-
         var args: [String] = ["copy", localFile.path, destination]
         args.append(contentsOf: [
             "--config=/dev/null",     // Don't read user's ~/.config/rclone/rclone.conf
@@ -63,90 +67,69 @@ actor RcloneService {
             "--retries=1"
         ])
 
-        process.executableURL = URL(fileURLWithPath: rclonePath)
-        process.arguments = args
-        process.environment = mergedEnvironment(with: remoteEnv)
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
-
-        currentProcess = process
-
-        let startTime = Date()
-        let state = UploadProgressState()
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: rclonePath),
+            arguments: args,
+            environment: mergedEnvironment(with: remoteEnv),
+            timeout: Self.uploadTimeout,
+            standardOutputCaptureLimit: 64 * 1024,
+            standardErrorCaptureLimit: 256 * 1024,
+            sensitiveValues: sensitiveValues(
+                arguments: [localFile.path, destination],
+                remoteEnvironment: remoteEnv
+            )
+        )
+        let state = RcloneOutputState()
 
         logger.info("[rclone] Starting upload: \(localFile.lastPathComponent, privacy: .private) -> \(destination, privacy: .private)")
-        // Command no longer contains secrets — every credential lives in env vars now.
-        logger.info("[rclone] Command: rclone \(args.joined(separator: " "), privacy: .private)")
+        logger.info("[rclone] Command: \(request.redactedCommandDescription, privacy: .public)")
 
         let logger = self.logger
+        let handleLine: @Sendable (SubprocessOutputStream, String) -> Void = { stream, line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
 
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
+            switch stream {
+            case .standardOutput:
+                logger.debug("[rclone stdout] \(trimmed, privacy: .private)")
+            case .standardError:
+                logger.debug("[rclone stderr] \(trimmed, privacy: .private)")
+            }
 
-            if let line = String(data: data, encoding: .utf8) {
-                for singleLine in line.components(separatedBy: .newlines) {
-                    let trimmed = singleLine.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { continue }
+            if let uploadProgress = RcloneProgressParser.parse(trimmed) {
+                state.record(bytesTransferred: uploadProgress.bytesTransferred)
+                progress(uploadProgress.percentage, uploadProgress.speed)
+            }
 
-                    logger.debug("[rclone stderr] \(trimmed, privacy: .private)")
-
-                    if let uploadProgress = RcloneProgressParser.parse(trimmed) {
-                        state.bytesTransferred = uploadProgress.bytesTransferred
-                        progress(uploadProgress.percentage, uploadProgress.speed)
-                    }
-
-                    if let error = RcloneProgressParser.parseError(trimmed) {
-                        state.lastError = error
-                        // Log a category, not the raw rclone string — the string can include hostnames or paths.
-                        logger.error("[rclone] error category: \(categorizeError(error), privacy: .public)")
-                    }
-                }
+            if stream == .standardError,
+               let error = RcloneProgressParser.parseError(trimmed) {
+                state.record(error: error)
+                logger.error("[rclone] error category: \(categorizeError(error), privacy: .public)")
             }
         }
 
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-
-            if let line = String(data: data, encoding: .utf8) {
-                for singleLine in line.components(separatedBy: .newlines) {
-                    let trimmed = singleLine.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { continue }
-
-                    logger.debug("[rclone stdout] \(trimmed, privacy: .private)")
-
-                    if let uploadProgress = RcloneProgressParser.parse(trimmed) {
-                        state.bytesTransferred = uploadProgress.bytesTransferred
-                        progress(uploadProgress.percentage, uploadProgress.speed)
-                    }
-                }
-            }
-        }
-
+        let result: SubprocessResult
         do {
-            try process.run()
+            result = try await subprocessRunner.run(request) { chunk in
+                state.consume(chunk, handler: handleLine)
+            }
+            state.finish(handler: handleLine)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .timedOut:
+                throw UploadError.connectionFailed("Upload exceeded time limit and was cancelled")
+            case .failedToStart:
+                throw UploadError.uploadFailed("Failed to launch rclone")
+            }
         } catch {
-            currentProcess = nil
-            throw UploadError.uploadFailed(error.localizedDescription)
+            throw UploadError.uploadFailed(request.redactedDiagnostic(error.localizedDescription, limit: 500))
         }
 
-        let timedOut = await waitWithTimeout(process: process, seconds: Self.uploadTimeoutSeconds)
-
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
-        stdoutPipe.fileHandleForReading.readabilityHandler = nil
-        currentProcess = nil
-
-        let duration = Date().timeIntervalSince(startTime)
-
-        if timedOut {
-            throw UploadError.connectionFailed("Upload exceeded time limit and was cancelled")
-        }
-
-        if process.terminationStatus != 0 {
-            let raw = state.lastError ?? "Upload failed with exit code \(process.terminationStatus)"
-            let safeMessage = sanitizeErrorMessage(raw)
+        if !result.succeeded {
+            let raw = state.snapshot().lastError ?? "Upload failed with exit code \(result.terminationStatus)"
+            let safeMessage = sanitizeErrorMessage(request.redactedDiagnostic(raw, limit: 500))
 
             if categorizeError(raw) == .authentication {
                 throw UploadError.authenticationFailed
@@ -164,8 +147,8 @@ actor RcloneService {
 
         return UploadResult.success(
             remotePath: remotePath,
-            bytes: state.bytesTransferred,
-            duration: duration
+            bytes: state.snapshot().bytesTransferred,
+            duration: result.duration.timeInterval
         )
     }
 
@@ -182,9 +165,6 @@ actor RcloneService {
         let remoteEnv = try await buildRemoteEnvironment(config: config, rclonePath: rclonePath)
         let destination = uploadDestination(for: config)
 
-        let process = Process()
-        let stderrPipe = Pipe()
-
         let args: [String] = [
             "lsd", destination,
             "--config=/dev/null",
@@ -193,27 +173,36 @@ actor RcloneService {
             "--retries=1"
         ]
 
-        process.executableURL = URL(fileURLWithPath: rclonePath)
-        process.arguments = args
-        process.environment = mergedEnvironment(with: remoteEnv)
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
-
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: rclonePath),
+            arguments: args,
+            environment: mergedEnvironment(with: remoteEnv),
+            timeout: Self.testTimeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 64 * 1024,
+            sensitiveValues: sensitiveValues(
+                arguments: [destination],
+                remoteEnvironment: remoteEnv
+            )
+        )
+        let result: SubprocessResult
         do {
-            try process.run()
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .timedOut:
+                throw UploadError.connectionFailed("Connection test timed out")
+            case .failedToStart:
+                throw UploadError.connectionFailed("Failed to launch rclone")
+            }
         } catch {
-            throw UploadError.connectionFailed(error.localizedDescription)
+            throw UploadError.connectionFailed(request.redactedDiagnostic(error.localizedDescription, limit: 500))
         }
 
-        let timedOut = await waitWithTimeout(process: process, seconds: Self.testTimeoutSeconds)
-        if timedOut {
-            throw UploadError.connectionFailed("Connection test timed out")
-        }
-
-        if process.terminationStatus != 0 {
-            let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let raw = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+        if !result.succeeded {
+            let raw = request.redactedDiagnostic(result.standardErrorText, limit: 500)
 
             if categorizeError(raw) == .authentication {
                 throw UploadError.authenticationFailed
@@ -223,16 +212,6 @@ actor RcloneService {
 
         return true
     }
-
-    /// Cancels the current upload
-    func cancelUpload() {
-        if let process = currentProcess, process.isRunning {
-            process.terminate()
-            currentProcess = nil
-            logger.info("Upload cancelled")
-        }
-    }
-
     // MARK: - Private Methods
 
     /// Builds the destination path for an upload using the in-memory remote name.
@@ -352,78 +331,83 @@ actor RcloneService {
     }
 
     /// Merges our remote-config env vars on top of the parent process environment.
-    /// Replacing the env wholesale would strip PATH/HOME/etc. and break rclone's own behaviour.
+    /// Replacing the env wholesale would strip PATH and other runtime settings that rclone
+    /// needs. Existing rclone config variables are removed first so a parent shell cannot
+    /// inject fields into the in-memory remote used for this request.
     private func mergedEnvironment(with overrides: [String: String]) -> [String: String] {
-        var env = ProcessInfo.processInfo.environment
+        Self.sanitizedEnvironment(
+            base: ProcessInfo.processInfo.environment,
+            overrides: overrides
+        )
+    }
+
+    static func sanitizedEnvironment(
+        base: [String: String],
+        overrides: [String: String]
+    ) -> [String: String] {
+        var env = base.filter { key, _ in
+            key != "RCLONE_CONFIG" && !key.hasPrefix("RCLONE_CONFIG_")
+        }
         for (k, v) in overrides { env[k] = v }
-        // Defense-in-depth: ensure rclone never reads a stray config file from the user's home directory.
         env["RCLONE_CONFIG"] = "/dev/null"
         return env
     }
 
-    /// Waits up to `seconds` for the process to exit. Returns true if a timeout fired and the process was terminated.
-    /// Uses `terminationHandler` instead of `waitUntilExit()` so the timeout watchdog actually races the process.
-    private func waitWithTimeout(process: Process, seconds: UInt64) async -> Bool {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-            let gate = ResumeOnce(continuation: continuation)
-
-            process.terminationHandler = { _ in
-                gate.resume(with: false)
+    /// Paths, remote destinations, and credentials must not appear in runner-generated
+    /// command descriptions or diagnostics. Environment variable names are harmless, but
+    /// their values are not.
+    private func sensitiveValues(
+        arguments: [String],
+        remoteEnvironment: [String: String]
+    ) -> Set<String> {
+        let sensitiveEnvironmentValues = remoteEnvironment.compactMap { key, value -> String? in
+            let key = key.uppercased()
+            guard key.hasSuffix("PASS")
+                    || key.hasSuffix("ACCESS_KEY_ID")
+                    || key.hasSuffix("SECRET_ACCESS_KEY")
+                    || key.hasSuffix("KEY_FILE") else {
+                return nil
             }
-
-            // If the process already finished before terminationHandler was wired (rare race), drain immediately.
-            if !process.isRunning {
-                gate.resume(with: false)
-                return
-            }
-
-            Task.detached {
-                try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
-                guard process.isRunning else { return }
-                process.terminate()
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                if process.isRunning { process.interrupt() }
-                gate.resume(with: true)
-            }
+            return value
         }
+        return Set(arguments + sensitiveEnvironmentValues)
     }
 
     /// Obscures a password using rclone's `obscure` subcommand.
     /// Reads the password from stdin (`rclone obscure -`) so it never appears on argv / `ps` output.
-    private func obscurePassword(_ password: String, rclonePath: String) async throws -> String {
-        let process = Process()
-        let stdoutPipe = Pipe()
-        let stdinPipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: rclonePath)
-        process.arguments = ["obscure", "-"]
-        process.standardOutput = stdoutPipe
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = stdinPipe
-        // Don't inherit RCLONE_CONFIG_* from a parent invocation — obscure doesn't need them and they'd just be noise.
-        process.environment = ProcessInfo.processInfo.environment
-
+    func obscurePassword(_ password: String, rclonePath: String) async throws -> String {
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: rclonePath),
+            arguments: ["obscure", "-"],
+            environment: Self.sanitizedEnvironment(
+                base: ProcessInfo.processInfo.environment,
+                overrides: [:]
+            ),
+            standardInput: Data((password + "\n").utf8),
+            timeout: Self.obscureTimeout,
+            standardOutputCaptureLimit: 16 * 1024,
+            standardErrorCaptureLimit: 16 * 1024,
+            sensitiveValues: [password]
+        )
+        let result: SubprocessResult
         do {
-            try process.run()
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .timedOut:
+                throw UploadError.uploadFailed("Failed to obscure password: timed out")
+            case .failedToStart:
+                throw UploadError.uploadFailed("Failed to launch rclone")
+            }
         } catch {
-            throw UploadError.uploadFailed("Failed to launch rclone: \(error.localizedDescription)")
+            throw UploadError.uploadFailed("Failed to obscure password")
         }
 
-        // rclone obscure reads one line from stdin.
-        let writeHandle = stdinPipe.fileHandleForWriting
-        if let data = (password + "\n").data(using: .utf8) {
-            try? writeHandle.write(contentsOf: data)
-        }
-        try? writeHandle.close()
-
-        let timedOut = await waitWithTimeout(process: process, seconds: Self.obscureTimeoutSeconds)
-        if timedOut {
-            throw UploadError.uploadFailed("Failed to obscure password: timed out")
-        }
-
-        let data = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        guard process.terminationStatus == 0,
-              let obscured = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard result.succeeded,
+              result.discardedStandardOutputBytes == 0,
+              let obscured = String(data: result.standardOutput, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !obscured.isEmpty else {
             throw UploadError.uploadFailed("Failed to obscure password")
         }
@@ -431,27 +415,88 @@ actor RcloneService {
     }
 }
 
-// MARK: - Resume-once continuation gate
-
-/// One-shot gate around a CheckedContinuation so concurrent callers (terminationHandler + watchdog)
-/// can race to resume without crashing the runtime. Whoever wins, wins; the loser is a no-op.
-private final class ResumeOnce: @unchecked Sendable {
-    private let lock = NSLock()
-    private var done = false
-    private let continuation: CheckedContinuation<Bool, Never>
-
-    init(continuation: CheckedContinuation<Bool, Never>) {
-        self.continuation = continuation
+/// Reassembles arbitrary stdout/stderr chunks into lines while keeping upload result
+/// state synchronized. Runner callbacks can arrive concurrently from both pipes.
+private final class RcloneOutputState: @unchecked Sendable {
+    struct Snapshot {
+        let lastError: String?
+        let bytesTransferred: Int64
     }
 
-    func resume(with value: Bool) {
-        lock.lock()
-        let shouldResume = !done
-        done = true
-        lock.unlock()
-        if shouldResume {
-            continuation.resume(returning: value)
+    private let lock = NSLock()
+    private var standardOutput = Data()
+    private var standardError = Data()
+    private var lastError: String?
+    private var bytesTransferred: Int64 = 0
+
+    func consume(
+        _ chunk: SubprocessOutputChunk,
+        handler: (SubprocessOutputStream, String) -> Void
+    ) {
+        let lines = lock.withLock { () -> [String] in
+            switch chunk.stream {
+            case .standardOutput:
+                standardOutput.append(chunk.data)
+                return Self.removeCompleteLines(from: &standardOutput)
+            case .standardError:
+                standardError.append(chunk.data)
+                return Self.removeCompleteLines(from: &standardError)
+            }
         }
+        for line in lines {
+            handler(chunk.stream, line)
+        }
+    }
+
+    func finish(handler: (SubprocessOutputStream, String) -> Void) {
+        let remaining = lock.withLock { () -> [(SubprocessOutputStream, String)] in
+            defer {
+                standardOutput.removeAll()
+                standardError.removeAll()
+            }
+            return [
+                (.standardOutput, String(decoding: standardOutput, as: UTF8.self)),
+                (.standardError, String(decoding: standardError, as: UTF8.self))
+            ]
+        }
+        for (stream, line) in remaining where !line.isEmpty {
+            handler(stream, line)
+        }
+    }
+
+    func record(error: String) {
+        lock.withLock {
+            lastError = error
+        }
+    }
+
+    func record(bytesTransferred: Int64) {
+        lock.withLock {
+            self.bytesTransferred = bytesTransferred
+        }
+    }
+
+    func snapshot() -> Snapshot {
+        lock.withLock {
+            Snapshot(lastError: lastError, bytesTransferred: bytesTransferred)
+        }
+    }
+
+    private static func removeCompleteLines(from buffer: inout Data) -> [String] {
+        var lines: [String] = []
+        while let delimiter = buffer.firstIndex(where: { $0 == 0x0A || $0 == 0x0D }) {
+            lines.append(String(decoding: buffer[..<delimiter], as: UTF8.self))
+            buffer.removeSubrange(...delimiter)
+        }
+        return lines
+    }
+}
+
+private extension Duration {
+    var timeInterval: TimeInterval {
+        let components = self.components
+        return TimeInterval(components.seconds)
+            + TimeInterval(components.attoseconds) / 1_000_000_000_000_000_000
     }
 }
 

@@ -42,6 +42,8 @@ struct ScreenshotSettingsView: View {
                     }
                     .buttonStyle(BorderlessButtonStyle())
                     .help("Show in Finder")
+                    .accessibilityLabel("Show in Finder")
+                    .accessibilityIdentifier("settings.screenshots.reveal")
 
                     Button(action: { selectScreenshotDirectory() }) {
                         Image(systemName: "camera.on.rectangle")
@@ -49,6 +51,8 @@ struct ScreenshotSettingsView: View {
                     }
                     .buttonStyle(BorderlessButtonStyle())
                     .help("Change screenshot folder")
+                    .accessibilityLabel("Change screenshot folder")
+                    .accessibilityIdentifier("settings.screenshots.chooseFolder")
 
                     Button(action: { screenshotDirectoryPath = AppConstants.defaultScreenshotDirectory.path }) {
                         Image(systemName: "arrow.counterclockwise")
@@ -56,6 +60,8 @@ struct ScreenshotSettingsView: View {
                     }
                     .buttonStyle(BorderlessButtonStyle())
                     .help("Reset to Downloads")
+                    .accessibilityLabel("Reset to Downloads")
+                    .accessibilityIdentifier("settings.screenshots.resetFolder")
                 }
             }
             .padding(8)
@@ -66,13 +72,13 @@ struct ScreenshotSettingsView: View {
         Section(header: Text("Formats")) {
             VStack(alignment: .leading, spacing: 8) {
                 LabeledContent("8-bit sources") {
-                    formatPicker(selection: $screenshot8BitFormat)
+                    formatPicker(selection: $screenshot8BitFormat, label: "8-bit sources")
                 }
                 LabeledContent("10-bit sources") {
-                    formatPicker(selection: $screenshot10BitFormat)
+                    formatPicker(selection: $screenshot10BitFormat, label: "10-bit sources")
                 }
                 LabeledContent(">10-bit sources") {
-                    formatPicker(selection: $screenshotHighBitFormat)
+                    formatPicker(selection: $screenshotHighBitFormat, label: ">10-bit sources")
                 }
 
                 Text("Select the image format for screenshots based on source bit depth.")
@@ -88,9 +94,9 @@ struct ScreenshotSettingsView: View {
         Section(header: Text("Transparency")) {
             VStack(alignment: .leading, spacing: 8) {
                 LabeledContent("Alpha channel") {
-                    Picker("", selection: $screenshotAlphaHandling) {
+                    Picker("Alpha channel", selection: $screenshotAlphaHandling) {
                         ForEach(ScreenshotAlphaHandling.allCases) { handling in
-                            Text(handling.displayName).tag(handling.rawValue)
+                            Text(LocalizedStringKey(handling.displayName)).tag(handling.rawValue)
                         }
                     }
                     .labelsHidden()
@@ -108,8 +114,8 @@ struct ScreenshotSettingsView: View {
     }
 
     @ViewBuilder
-    private func formatPicker(selection: Binding<String>) -> some View {
-        Picker("", selection: selection) {
+    private func formatPicker(selection: Binding<String>, label: LocalizedStringKey) -> some View {
+        Picker(label, selection: selection) {
             ForEach(ScreenshotFormat.allCases) { format in
                 Text(format.displayName).tag(format.rawValue)
             }

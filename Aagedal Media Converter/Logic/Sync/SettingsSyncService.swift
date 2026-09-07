@@ -60,10 +60,13 @@ final class SettingsSyncService {
     /// The `defaults` payload we last wrote, used to skip no-op rewrites triggered
     /// by unrelated `UserDefaults` churn.
     private var lastWrittenDefaults: [String: JSONValue]?
+    /// A snapshot that exists but could not be validated must not be replaced by
+    /// a local-change debounce or the write half of "Sync Now".
+    private var protectedUnreadableSnapshotURL: URL?
 
     private var writeDebounce: DispatchWorkItem?
     private var directorySource: DispatchSourceFileSystemObject?
-    private var monitoredFD: Int32 = -1
+    private var monitoringErrorMessage: String?
 
     private static let writeDebounceInterval: TimeInterval = 2.0
 
@@ -151,11 +154,7 @@ final class SettingsSyncService {
     /// Imports a snapshot from an arbitrary file (manual "Import Settings…").
     @discardableResult
     func importSnapshot(from url: URL, notify: Bool) throws -> SettingsSnapshot {
-        let data = try Data(contentsOf: url)
-        let snapshot = try Self.makeDecoder().decode(SettingsSnapshot.self, from: data)
-        guard snapshot.schemaVersion <= SettingsSnapshot.currentSchemaVersion else {
-            throw SyncError.unsupportedSchema(snapshot.schemaVersion)
-        }
+        let snapshot = try readSnapshot(at: url)
         apply(snapshot, notify: notify)
         return snapshot
     }
@@ -249,6 +248,12 @@ final class SettingsSyncService {
             lastErrorMessage = SyncError.locationUnavailable.localizedDescription
             return
         }
+        guard protectedUnreadableSnapshotURL?.standardizedFileURL != fileURL.standardizedFileURL else {
+            return
+        }
+        // Do not seed over an iCloud placeholder while the remote snapshot is
+        // still downloading. The directory monitor will retry after it arrives.
+        guard !hasUndownloadedICloudFile(fileURL) else { return }
         let snapshot = makeSnapshot(modifiedAt: Date())
         // Never clobber a good file with an empty snapshot — that only happens via
         // a bug, and a remote copy could otherwise be wiped out.
@@ -266,7 +271,7 @@ final class SettingsSyncService {
             lastAppliedModifiedAt = snapshot.modifiedAt
             persistLastSyncDate(snapshot.modifiedAt)
             lastSyncDate = snapshot.modifiedAt
-            lastErrorMessage = nil
+            lastErrorMessage = monitoringErrorMessage
         } catch {
             lastErrorMessage = error.localizedDescription
             logger.error("Failed to write settings snapshot: \(error.localizedDescription, privacy: .public)")
@@ -278,15 +283,19 @@ final class SettingsSyncService {
     private func checkForRemoteChanges() {
         guard syncEnabled, !isApplyingRemote, let fileURL = snapshotFileURL() else { return }
         ensureDownloaded(fileURL)
-        guard FileManager.default.fileExists(atPath: fileURL.path),
-              let data = try? Data(contentsOf: fileURL),
-              let snapshot = try? Self.makeDecoder().decode(SettingsSnapshot.self, from: data) else {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            protectedUnreadableSnapshotURL = nil
             return
         }
-        guard snapshot.schemaVersion <= SettingsSnapshot.currentSchemaVersion else {
-            lastErrorMessage = SyncError.unsupportedSchema(snapshot.schemaVersion).localizedDescription
+        let snapshot: SettingsSnapshot
+        do {
+            snapshot = try readSnapshot(at: fileURL)
+        } catch {
+            reportSnapshotReadFailure(error, at: fileURL)
             return
         }
+        protectedUnreadableSnapshotURL = nil
+        lastErrorMessage = monitoringErrorMessage
         // Newest-wins: only import a strictly newer snapshot. This also filters out
         // our own writes (whose timestamp we record in lastAppliedModifiedAt).
         if let applied = lastAppliedModifiedAt, snapshot.modifiedAt <= applied { return }
@@ -294,12 +303,17 @@ final class SettingsSyncService {
         lastSyncDate = snapshot.modifiedAt
     }
 
-    /// Best-effort: if iCloud has only a placeholder on disk, ask it to download
-    /// the real file. Harmless no-op for plain (non-iCloud) folders.
+    /// If iCloud has only a placeholder on disk, request the real file and report
+    /// download failures. This is a no-op for plain (non-iCloud) folders.
     private func ensureDownloaded(_ fileURL: URL) {
         guard !FileManager.default.fileExists(atPath: fileURL.path),
               hasUndownloadedICloudFile(fileURL) else { return }
-        try? FileManager.default.startDownloadingUbiquitousItem(at: fileURL)
+        do {
+            try FileManager.default.startDownloadingUbiquitousItem(at: fileURL)
+        } catch {
+            lastErrorMessage = SyncError.downloadFailed(error.localizedDescription).localizedDescription
+            logger.error("Failed to download settings snapshot: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// `true` when iCloud has a remote snapshot for `fileURL` that hasn't been
@@ -318,18 +332,26 @@ final class SettingsSyncService {
             return
         }
         ensureDownloaded(fileURL)
-        if FileManager.default.fileExists(atPath: fileURL.path),
-           let data = try? Data(contentsOf: fileURL),
-           let snapshot = try? Self.makeDecoder().decode(SettingsSnapshot.self, from: data),
-           snapshot.schemaVersion <= SettingsSnapshot.currentSchemaVersion {
-            apply(snapshot, notify: true)
-            lastSyncDate = snapshot.modifiedAt
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            do {
+                let snapshot = try readSnapshot(at: fileURL)
+                apply(snapshot, notify: true)
+                lastSyncDate = snapshot.modifiedAt
+                protectedUnreadableSnapshotURL = nil
+                lastErrorMessage = monitoringErrorMessage
+            } catch {
+                // Preserve the existing file. Treating a malformed or temporarily
+                // unreadable snapshot as "missing" would let writeSnapshot() replace
+                // the only remote copy with this Mac's settings.
+                reportSnapshotReadFailure(error, at: fileURL)
+            }
         } else if hasUndownloadedICloudFile(fileURL) {
             // A remote snapshot exists but hasn't downloaded yet. Don't seed over
             // it — wait for the download; the directory monitor and app-activation
             // re-check will import it once it lands.
             return
         } else {
+            protectedUnreadableSnapshotURL = nil
             writeSnapshot()
         }
     }
@@ -338,13 +360,19 @@ final class SettingsSyncService {
 
     private func startMonitoring() {
         stopMonitoring()
-        guard let fileURL = snapshotFileURL() else { return }
-        let directory = fileURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        let fd = open(directory.path, O_EVTONLY)
-        guard fd >= 0 else { return }
-        monitoredFD = fd
+        guard let fileURL = snapshotFileURL() else {
+            lastErrorMessage = SyncError.locationUnavailable.localizedDescription
+            return
+        }
+        let fd: Int32
+        do {
+            fd = try Self.openMonitoringDirectory(fileURL.deletingLastPathComponent())
+        } catch {
+            monitoringErrorMessage = error.localizedDescription
+            lastErrorMessage = monitoringErrorMessage
+            logger.error("Failed to monitor settings folder: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .delete, .rename],
@@ -353,15 +381,31 @@ final class SettingsSyncService {
         source.setEventHandler { [weak self] in
             MainActor.assumeIsolated { self?.checkForRemoteChanges() }
         }
-        source.setCancelHandler { [weak self] in
-            guard let self else { close(fd); return }
-            if self.monitoredFD >= 0 { close(self.monitoredFD); self.monitoredFD = -1 }
-        }
+        // Cancellation is asynchronous. Close this source's descriptor, never a
+        // shared property that may already belong to a replacement monitor.
+        source.setCancelHandler { close(fd) }
         directorySource = source
         source.resume()
     }
 
+    /// Creates the sync folder and opens it for monitoring. Kept independent of
+    /// service state so filesystem failures can be tested without user defaults.
+    nonisolated static func openMonitoringDirectory(_ directory: URL) throws -> Int32 {
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let fd = open(directory.path, O_EVTONLY | O_CLOEXEC)
+            guard fd >= 0 else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+            }
+            return fd
+        } catch {
+            throw SyncError.monitoringFailed(error.localizedDescription)
+        }
+    }
+
     private func stopMonitoring() {
+        if lastErrorMessage == monitoringErrorMessage { lastErrorMessage = nil }
+        monitoringErrorMessage = nil
         directorySource?.cancel()
         directorySource = nil
     }
@@ -464,9 +508,17 @@ final class SettingsSyncService {
 
     /// Opens the local backups folder in Finder so the user can recover a past
     /// settings file via "Import Settings…".
-    func revealBackupsInFinder() {
-        try? FileManager.default.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
-        NSWorkspace.shared.open(backupsDirectory)
+    func revealBackupsInFinder() throws {
+        do {
+            try FileManager.default.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
+            guard NSWorkspace.shared.open(backupsDirectory) else {
+                throw SyncError.backupsOpenFailed
+            }
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            logger.error("Failed to open settings backups: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
     }
 
     /// Whether the active sync location is currently usable (iCloud Drive on, or a
@@ -486,15 +538,51 @@ final class SettingsSyncService {
         return encoder
     }
 
-    private static func makeDecoder() -> JSONDecoder {
+    nonisolated private static func makeDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }
 
+    /// Decodes and validates the portable settings format without applying it.
+    /// Kept internal so format failures can be covered without mutating user defaults.
+    nonisolated static func decodeSnapshot(_ data: Data) throws -> SettingsSnapshot {
+        let snapshot: SettingsSnapshot
+        do {
+            snapshot = try makeDecoder().decode(SettingsSnapshot.self, from: data)
+        } catch {
+            throw SyncError.invalidFile
+        }
+        guard snapshot.schemaVersion <= SettingsSnapshot.currentSchemaVersion else {
+            throw SyncError.unsupportedSchema(snapshot.schemaVersion)
+        }
+        return snapshot
+    }
+
+    private func readSnapshot(at url: URL) throws -> SettingsSnapshot {
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw SyncError.fileReadFailed(error.localizedDescription)
+        }
+        return try Self.decodeSnapshot(data)
+    }
+
+    private func reportSnapshotReadFailure(_ error: Error, at url: URL) {
+        protectedUnreadableSnapshotURL = url
+        lastErrorMessage = error.localizedDescription
+        logger.error("Failed to read settings snapshot: \(error.localizedDescription, privacy: .public)")
+    }
+
     enum SyncError: LocalizedError {
         case unsupportedSchema(Int)
         case locationUnavailable
+        case invalidFile
+        case fileReadFailed(String)
+        case monitoringFailed(String)
+        case downloadFailed(String)
+        case backupsOpenFailed
 
         var errorDescription: String? {
             switch self {
@@ -507,6 +595,31 @@ final class SettingsSyncService {
                 return String(
                     localized: "The sync location isn't available. Turn on iCloud Drive or choose a custom folder.",
                     comment: "Settings sync location error."
+                )
+            case .invalidFile:
+                return String(
+                    localized: "The settings file is damaged or isn't a valid Aagedal Media Converter settings file. Choose another file or restore a backup.",
+                    comment: "Settings sync import error for malformed JSON or an invalid settings snapshot."
+                )
+            case .monitoringFailed(let details):
+                return String(
+                    localized: "The settings sync folder couldn't be monitored. Check folder access or choose another sync location: \(details)",
+                    comment: "Settings sync monitoring error followed by the filesystem diagnostic."
+                )
+            case .downloadFailed(let details):
+                return String(
+                    localized: "The settings file couldn't be downloaded from iCloud Drive. Check your connection and try Sync Now again: \(details)",
+                    comment: "Settings sync download error followed by the iCloud diagnostic."
+                )
+            case .backupsOpenFailed:
+                return String(
+                    localized: "The settings backups folder couldn't be opened in Finder. Try again.",
+                    comment: "Settings sync backup folder reveal error."
+                )
+            case .fileReadFailed(let details):
+                return String(
+                    localized: "The settings file couldn't be read: \(details)",
+                    comment: "Settings sync read error followed by the filesystem diagnostic."
                 )
             }
         }

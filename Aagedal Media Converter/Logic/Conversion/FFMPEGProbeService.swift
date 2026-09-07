@@ -16,11 +16,13 @@
 
 import Foundation
 import OSLog
-import SwiftExif
+import SwiftMediaMetadata
 
-/// Probe facade preserved for existing callers (ffprobe removed in favour of SwiftExif).
+/// Probe facade preserved for existing callers (ffprobe removed in favour of SwiftMediaMetadata).
 enum FFMPEGProbeService {
-    struct AudioStreamInfo: Sendable {
+    static let defaultTimeout: Duration = .seconds(15)
+
+    struct AudioStreamInfo: Equatable, Sendable {
         let index: Int?
         let channels: Int?
         let channelLayout: String?
@@ -36,13 +38,47 @@ enum FFMPEGProbeService {
         }
     }
 
-    /// Fetches audio stream metadata for the supplied input URL via SwiftExif.
-    static func fetchAudioStreams(for url: URL) async -> [AudioStreamInfo]? {
+    /// Fetches audio stream metadata for the supplied input URL via SwiftMediaMetadata.
+    static func fetchAudioStreams(
+        for url: URL,
+        timeout: Duration = defaultTimeout
+    ) async -> [AudioStreamInfo]? {
+        await fetchAudioStreams(for: url, timeout: timeout) { url in
+            try await resolvedAudioStreams(for: url, timeout: timeout)
+        }
+    }
+
+    static func fetchAudioStreams(
+        for url: URL,
+        timeout: Duration,
+        probe: @escaping @Sendable (URL) async throws -> [AudioStreamInfo]?
+    ) async -> [AudioStreamInfo]? {
+        do {
+            return try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await probe(url)
+            }
+        } catch is CancellationError {
+            return nil
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            Logger().warning("Audio stream probe timed out for \(url.lastPathComponent, privacy: .public)")
+            return nil
+        } catch {
+            Logger().error("Audio stream probe failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private static func resolvedAudioStreams(
+        for url: URL,
+        timeout: Duration
+    ) async throws -> [AudioStreamInfo]? {
         guard SwiftExifMediaProbe.canReadVideo(url) else {
             // Audio-only containers go through readAudio — still materialise a single
             // AudioStreamInfo so callers that expect a non-nil array keep working.
             if SwiftExifMediaProbe.canReadAudio(url),
-               let meta = try? await SwiftExifMediaProbe.readAudio(url) {
+               let meta = try? await withSecurityScopedAccess(to: url, operation: {
+                   try await SwiftExifMediaProbe.readAudio(url)
+               }) {
                 return [AudioStreamInfo(
                     index: 0,
                     channels: meta.channels,
@@ -53,50 +89,98 @@ enum FFMPEGProbeService {
             return []
         }
 
+        let metadata = try await BoundedVideoMetadataProbe.metadata(for: url, timeout: timeout)
+        let streams = metadata.audioStreams.map { AudioStreamInfo(
+            index: $0.index,
+            channels: $0.channels,
+            channelLayout: $0.channelLayout,
+            codecName: $0.codec
+        ) }
+        Logger().debug("SwiftMediaMetadata audio streams for \(url.lastPathComponent): \(streams.map { "\($0.codecName ?? "unknown"):\($0.channels ?? 0)ch" })")
+        return streams
+    }
+
+    /// Returns the media duration reported by SwiftMediaMetadata (or AVFoundation fallback).
+    static func getVideoDuration(
+        for url: URL,
+        timeout: Duration = defaultTimeout
+    ) async -> Double? {
+        await getVideoDuration(for: url, timeout: timeout) { url in
+            await withSecurityScopedAccess(to: url) {
+                await SwiftExifMediaProbe.duration(for: url)
+            }
+        }
+    }
+
+    static func getVideoDuration(
+        for url: URL,
+        timeout: Duration,
+        probe: @escaping @Sendable (URL) async throws -> Double?
+    ) async -> Double? {
         do {
-            let meta = try await SwiftExifMediaProbe.readVideo(url)
-            let streams = meta.audioStreams.map { AudioStreamInfo(
-                index: $0.index,
-                channels: $0.channels,
-                channelLayout: $0.channelLayout,
-                codecName: $0.codec
-            ) }
-            Logger().debug("SwiftExif audio streams for \(url.lastPathComponent): \(streams.map { "\($0.codecName ?? "unknown"):\($0.channels ?? 0)ch" })")
-            return streams
+            return try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await probe(url)
+            }
+        } catch is CancellationError {
+            return nil
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            Logger().warning("Duration probe timed out for \(url.lastPathComponent, privacy: .public)")
+            return nil
         } catch {
-            Logger().error("SwiftExif audio stream extraction failed for \(url.lastPathComponent): \(error.localizedDescription)")
+            Logger().error("Duration probe failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
 
-    /// Returns the media duration reported by SwiftExif (or AVFoundation fallback).
-    static func getVideoDuration(for url: URL) async -> Double? {
-        await SwiftExifMediaProbe.duration(for: url)
-    }
-
     // MARK: - Chapters
 
-    /// Fetches chapter markers for `url` via SwiftExif's container parsers.
+    /// Fetches chapter markers for `url` via SwiftMediaMetadata's container parsers.
     ///
     /// Supports MP4/MOV `chpl` boxes, QuickTime text-track chapters, and
     /// Matroska `Chapters` master elements. Returns an empty array for
-    /// containers SwiftExif can't parse (e.g. FLV, raw audio) or that carry
+    /// containers SwiftMediaMetadata can't parse (e.g. FLV, raw audio) or that carry
     /// no chapter data.
     ///
     /// Chapters whose duration can't be determined (Matroska open-ended
     /// entries, Nero `chpl` boxes) get their end time inferred from the
     /// start of the next chapter or from the container duration.
-    static func fetchChapters(for url: URL) async -> [Chapter] {
+    static func fetchChapters(
+        for url: URL,
+        timeout: Duration = defaultTimeout
+    ) async -> [Chapter] {
+        await fetchChapters(for: url, timeout: timeout) { url in
+            try await withSecurityScopedAccess(to: url) {
+                try await unboundedChapters(for: url)
+            }
+        }
+    }
+
+    static func fetchChapters(
+        for url: URL,
+        timeout: Duration,
+        probe: @escaping @Sendable (URL) async throws -> [Chapter]
+    ) async -> [Chapter] {
         guard SwiftExifMediaProbe.canReadVideo(url) else { return [] }
 
-        let meta: SwiftExif.VideoMetadata
         do {
-            meta = try await SwiftExifMediaProbe.readVideo(url)
+            return try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await probe(url)
+            }
+        } catch is CancellationError {
+            return []
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "ChapterProbe")
+                .warning("Chapter probe timed out for \(url.lastPathComponent, privacy: .public)")
+            return []
         } catch {
             Logger(subsystem: "com.aagedal.MediaConverter", category: "ChapterProbe")
-                .debug("SwiftExif chapter read failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                .debug("SwiftMediaMetadata chapter read failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return []
         }
+    }
+
+    private static func unboundedChapters(for url: URL) async throws -> [Chapter] {
+        let meta = try await SwiftExifMediaProbe.readVideo(url)
 
         let sorted = meta.chapters.sorted { $0.startTime < $1.startTime }
         let duration = meta.duration ?? 0
@@ -120,24 +204,68 @@ enum FFMPEGProbeService {
 
 extension FFMPEGProbeService {
     /// Result of verifying output file stream presence.
-    struct StreamVerificationResult: Sendable {
+    struct StreamVerificationResult: Equatable, Sendable {
         let videoStreamCount: Int
         let audioStreamCount: Int
     }
 
     /// Probes the output file to count video and audio streams.
     /// Used as a safety check after merge/concat to detect silent data loss.
-    static func verifyOutputStreams(for url: URL) async -> StreamVerificationResult? {
-        if SwiftExifMediaProbe.canReadVideo(url),
-           let meta = try? await SwiftExifMediaProbe.readVideo(url) {
-            let videoCount = meta.videoStreams.filter { $0.isAttachedPic != true }.count
-            let audioCount = meta.audioStreams.count
+    static func verifyOutputStreams(
+        for url: URL,
+        timeout: Duration = defaultTimeout
+    ) async -> StreamVerificationResult? {
+        await verifyOutputStreams(for: url, timeout: timeout) { url in
+            try await resolvedStreamVerification(for: url)
+        }
+    }
+
+    static func verifyOutputStreams(
+        for url: URL,
+        timeout: Duration,
+        probe: @escaping @Sendable (URL) async throws -> StreamVerificationResult?
+    ) async -> StreamVerificationResult? {
+        do {
+            return try await NonJoiningTaskDeadline.run(timeout: timeout) {
+                try await probe(url)
+            }
+        } catch is CancellationError {
+            return nil
+        } catch NonJoiningTaskDeadlineError.timedOut {
+            Logger().warning("Output stream verification timed out for \(url.lastPathComponent, privacy: .public)")
+            return nil
+        } catch {
+            Logger().error("Output stream verification failed for \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private static func resolvedStreamVerification(for url: URL) async throws -> StreamVerificationResult? {
+        if SwiftExifMediaProbe.canReadVideo(url) {
+            let metadata = try await withSecurityScopedAccess(to: url) {
+                try await SwiftExifMediaProbe.readVideo(url)
+            }
+            let videoCount = metadata.videoStreams.filter { $0.isAttachedPic != true }.count
+            let audioCount = metadata.audioStreams.count
             return StreamVerificationResult(videoStreamCount: videoCount, audioStreamCount: audioCount)
         }
         if SwiftExifMediaProbe.canReadAudio(url),
-           (try? await SwiftExifMediaProbe.readAudio(url)) != nil {
+           (try? await withSecurityScopedAccess(to: url, operation: {
+               try await SwiftExifMediaProbe.readAudio(url)
+           })) != nil {
             return StreamVerificationResult(videoStreamCount: 0, audioStreamCount: 1)
         }
         return nil
+    }
+}
+
+private extension FFMPEGProbeService {
+    static func withSecurityScopedAccess<Output: Sendable>(
+        to url: URL,
+        operation: @escaping @Sendable () async throws -> Output
+    ) async rethrows -> Output {
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        return try await operation()
     }
 }

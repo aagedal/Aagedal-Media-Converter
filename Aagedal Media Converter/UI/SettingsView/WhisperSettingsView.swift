@@ -181,7 +181,7 @@ struct WhisperSettingsView: View {
                     }
                 }
 
-                Text(model.description)
+                Text(LocalizedStringKey(model.description))
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -355,20 +355,19 @@ struct WhisperSettingsView: View {
     // MARK: - Actions
 
     private func loadState() async {
-        await MainActor.run { isCheckingStatus = true }
+        isCheckingStatus = true
+        downloadedModels = WhisperModelManager.shared.getDownloadedModels()
 
-        let status = WhisperUpdateService.shared.getInstallationStatus()
-        let models = WhisperModelManager.shared.getDownloadedModels()
-
-        await MainActor.run {
-            installationStatus = status
-            downloadedModels = models
-            isCheckingStatus = false
+        if selectedModel == WhisperModel.custom.rawValue && !customModelExists {
+            selectedModel = AppConstants.defaultWhisperModel
         }
 
-        await MainActor.run {
-            if selectedModel == WhisperModel.custom.rawValue && !customModelExists {
-                selectedModel = AppConstants.defaultWhisperModel
+        let updates = await WhisperUpdateService.shared.stateUpdates()
+        for await state in updates {
+            guard !Task.isCancelled else { return }
+            isCheckingStatus = state.installationStatus == nil
+            if let status = state.installationStatus {
+                installationStatus = status
             }
         }
     }
@@ -394,6 +393,11 @@ struct WhisperSettingsView: View {
                     if downloadedModels.count == 1 {
                         selectedModel = model.rawValue
                     }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    modelDownloading.remove(model)
+                    modelDownloadProgress.removeValue(forKey: model)
                 }
             } catch {
                 await MainActor.run {

@@ -14,40 +14,41 @@ enum RcloneBinaryVerifier {
 
     /// Runs the binary with `--version` and returns its first line, or nil if it does not look like rclone.
     /// Used to validate user-provided custom paths point at an actual rclone binary.
-    static func versionString(of binaryPath: String) async -> String? {
-        let process = Process()
-        let pipe = Pipe()
-
-        process.executableURL = URL(fileURLWithPath: binaryPath)
-        process.arguments = ["--version"]
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-
+    static func versionString(
+        of binaryPath: String,
+        subprocessRunner: any SubprocessRunning = SubprocessRunner()
+    ) async -> String? {
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: binaryPath),
+            arguments: ["--version"],
+            timeout: .seconds(5),
+            standardOutputCaptureLimit: 8 * 1024,
+            standardErrorCaptureLimit: 8 * 1024,
+            sensitiveValues: [binaryPath]
+        )
         do {
-            try process.run()
+            let result = try await subprocessRunner.run(request)
+            guard result.succeeded else {
+                let diagnostic = request.redactedDiagnostic(result.standardErrorText, limit: 512)
+                logger.warning(
+                    "rclone version probe exited \(result.terminationStatus): \(diagnostic, privacy: .public)"
+                )
+                return nil
+            }
+
+            let firstLine = result.standardOutputText.components(separatedBy: .newlines).first?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            // Real rclone always emits "rclone v<semver>" as the first line.
+            guard firstLine.hasPrefix("rclone v") else { return nil }
+            return firstLine
         } catch {
+            if !(error is CancellationError) {
+                let diagnostic = request.redactedDiagnostic(error.localizedDescription, limit: 512)
+                logger.warning("rclone version probe failed: \(diagnostic, privacy: .public)")
+            }
             return nil
         }
-
-        // Bound execution to a short timeout — we're just running a CPU-only `--version`.
-        let watchdog = Task.detached {
-            try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
-            if process.isRunning { process.terminate() }
-        }
-        process.waitUntilExit()
-        watchdog.cancel()
-
-        guard process.terminationStatus == 0 else { return nil }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let output = String(data: data, encoding: .utf8) else { return nil }
-        let firstLine = output.components(separatedBy: .newlines).first?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        // Real rclone always emits "rclone v<semver>" as the first line.
-        guard firstLine.hasPrefix("rclone v") else { return nil }
-        return firstLine
     }
 }
 

@@ -9,6 +9,7 @@ import AppKit
 import AVKit
 import OSLog
 import ImageIO
+import Darwin
 
 /// Screenshot format options for still image capture
 enum ScreenshotFormat: String, CaseIterable, Identifiable, Codable {
@@ -52,6 +53,110 @@ enum ScreenshotAlphaHandling: String, CaseIterable, Identifiable, Codable {
         case .auto: return "Auto (Use PNG or JPEG XL)"
         case .useSelectedFormat: return "Use selected format (discard alpha if unsupported)"
         }
+    }
+}
+
+/// Bounded, cancellable FFmpeg boundary for still-image capture.
+struct ScreenshotCaptureSubprocess: Sendable {
+    static let timeout: Duration = .seconds(30 * 60)
+    static let diagnosticCaptureLimit = 256 * 1024
+
+    private let subprocessRunner: any SubprocessRunning
+
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        self.subprocessRunner = subprocessRunner
+    }
+
+    func run(
+        executable: URL,
+        arguments: [String],
+        sourceURL: URL,
+        outputURL: URL
+    ) async throws {
+        try Task.checkCancellation()
+
+        let privatePaths = Set(arguments.filter { $0.hasPrefix("/") })
+            .union([executable.path, sourceURL.path, outputURL.path])
+        let request = SubprocessRequest(
+            executableURL: executable,
+            arguments: arguments,
+            timeout: Self.timeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: privatePaths
+        )
+
+        do {
+            let result = try await subprocessRunner.run(request)
+            guard result.succeeded else {
+                try? FileManager.default.removeItem(at: outputURL)
+                let diagnostic = request.redactedDiagnostic(result.standardErrorText)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let message = diagnostic.isEmpty
+                    ? "FFmpeg exited with status \(result.terminationStatus)."
+                    : diagnostic
+                throw PreviewPlayerController.ScreenshotError.processFailed(message)
+            }
+        } catch is CancellationError {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw CancellationError()
+        } catch SubprocessRunnerError.timedOut {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PreviewPlayerController.ScreenshotError.processFailed(
+                "Screenshot capture timed out after 30 minutes."
+            )
+        } catch let error as PreviewPlayerController.ScreenshotError {
+            throw error
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PreviewPlayerController.ScreenshotError.processFailed(
+                request.redactedDiagnostic(error.localizedDescription)
+            )
+        }
+
+        let outputSize = (try? outputURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard outputSize > 0 else {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw PreviewPlayerController.ScreenshotError.outputUnavailable
+        }
+    }
+}
+
+/// Publishes a completed staging file without ever replacing an existing screenshot.
+enum ScreenshotOutputPublisher {
+    static func publish(stagedURL: URL, preferredURL: URL) throws -> URL {
+        let baseName = preferredURL.deletingPathExtension().lastPathComponent
+        let fileExtension = preferredURL.pathExtension
+        let directory = preferredURL.deletingLastPathComponent()
+
+        for attempt in 0..<1_000 {
+            let candidate: URL
+            if attempt == 0 {
+                candidate = preferredURL
+            } else {
+                candidate = directory
+                    .appendingPathComponent("\(baseName)_\(attempt)")
+                    .appendingPathExtension(fileExtension)
+            }
+
+            let renameResult = stagedURL.withUnsafeFileSystemRepresentation { sourcePath in
+                candidate.withUnsafeFileSystemRepresentation { destinationPath in
+                    renamex_np(sourcePath, destinationPath, UInt32(RENAME_EXCL))
+                }
+            }
+            if renameResult == 0 {
+                return candidate
+            }
+
+            let errorNumber = errno
+            guard errorNumber == EEXIST else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errorNumber))
+            }
+        }
+
+        throw PreviewPlayerController.ScreenshotError.conversionFailed(
+            "Unable to reserve a unique screenshot filename."
+        )
     }
 }
 
@@ -162,9 +267,6 @@ extension PreviewPlayerController {
         let outputDirectory = directory
 
         let fileManager = FileManager.default
-        try fileManager.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-        let outputURL = outputDirectory.appendingPathComponent(fileName)
-
         var directoryAccess: SecurityAccess = .none
         if outputDirectory.startAccessingSecurityScopedResource() {
             directoryAccess = .direct(outputDirectory)
@@ -173,15 +275,6 @@ extension PreviewPlayerController {
         }
 
         var videoAccess: SecurityAccess = .none
-        if case .none = primaryAccess {
-            let sourceURL = videoItem.url
-            if sourceURL.startAccessingSecurityScopedResource() {
-                videoAccess = .direct(sourceURL)
-            } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: sourceURL) {
-                videoAccess = .bookmark(sourceURL)
-            }
-        }
-
         defer {
             switch directoryAccess {
             case .direct(let url):
@@ -202,12 +295,36 @@ extension PreviewPlayerController {
             }
         }
 
+        do {
+            try fileManager.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        } catch {
+            if case .none = directoryAccess {
+                throw ScreenshotError.securityScopeDenied
+            }
+            throw error
+        }
+
         if case .none = directoryAccess {
             let reachable = (try? outputDirectory.checkResourceIsReachable()) ?? false
             guard reachable else {
                 throw ScreenshotError.securityScopeDenied
             }
         }
+
+        if case .none = primaryAccess {
+            let sourceURL = videoItem.url
+            if sourceURL.startAccessingSecurityScopedResource() {
+                videoAccess = .direct(sourceURL)
+            } else if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: sourceURL) {
+                videoAccess = .bookmark(sourceURL)
+            }
+        }
+
+        let preferredOutputURL = outputDirectory.appendingPathComponent(fileName)
+        let stagingOutputURL = outputDirectory
+            .appendingPathComponent(".screenshot-\(UUID().uuidString)")
+            .appendingPathExtension(parameters.fileExtension)
+        defer { try? fileManager.removeItem(at: stagingOutputURL) }
 
         let ffmpegURL = URL(fileURLWithPath: ffmpegPath)
 
@@ -248,58 +365,71 @@ extension PreviewPlayerController {
 
         arguments += [
             "-y",
-            outputURL.path
+            stagingOutputURL.path
         ]
 
         do {
-            try await runFFmpegCapture(executable: ffmpegURL, arguments: arguments)
+            try await runFFmpegCapture(
+                executable: ffmpegURL,
+                arguments: arguments,
+                outputURL: stagingOutputURL
+            )
         } catch let error as ScreenshotError {
             throw error
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw ScreenshotError.processFailed(error.localizedDescription)
         }
 
-        guard fileManager.fileExists(atPath: outputURL.path) else {
-            throw ScreenshotError.outputUnavailable
+        let outputURL: URL
+        do {
+            outputURL = try ScreenshotOutputPublisher.publish(
+                stagedURL: stagingOutputURL,
+                preferredURL: preferredOutputURL
+            )
+        } catch let error as ScreenshotError {
+            throw error
+        } catch {
+            throw ScreenshotError.conversionFailed("Unable to save the screenshot.")
         }
 
-        Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots").info("Saved screenshot to \(outputURL.path, privacy: .public)")
-        
-        await MainActor.run {
-            self.lastScreenshotURL = outputURL
-            self.showScreenshotConfirmationOverlay()
-        }
+        Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots").info("Saved screenshot to \(outputURL.path, privacy: .private)")
+        lastScreenshotURL = outputURL
+        showScreenshotConfirmationOverlay()
 
         return outputURL
     }
 
-    func runFFmpegCapture(executable: URL, arguments: [String]) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            Task.detached(priority: .userInitiated) {
-                let process = Process()
-                process.executableURL = executable
-                process.arguments = arguments
-                process.standardOutput = Pipe()
-                let stderrPipe = Pipe()
-                process.standardError = stderrPipe
-
-                do {
-                    try process.run()
-                } catch {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                process.waitUntilExit()
-
-                if process.terminationStatus == 0 {
-                    continuation.resume(returning: ())
-                } else {
-                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                    let message = String(data: stderrData, encoding: .utf8) ?? "Unknown ffmpeg error"
-                    continuation.resume(throwing: ScreenshotError.processFailed(message.trimmingCharacters(in: .whitespacesAndNewlines)))
-                }
+    func runFFmpegCapture(executable: URL, arguments: [String], outputURL: URL) async throws {
+        let operationID = UUID()
+        let captureTask = Task { [screenshotCaptureSubprocess, sourceURL = videoItem.url] in
+            try await screenshotCaptureSubprocess.run(
+                executable: executable,
+                arguments: arguments,
+                sourceURL: sourceURL,
+                outputURL: outputURL
+            )
+        }
+        screenshotCaptureOperationID = operationID
+        screenshotCaptureTask = captureTask
+        defer {
+            if screenshotCaptureOperationID == operationID {
+                screenshotCaptureOperationID = nil
+                screenshotCaptureTask = nil
             }
+        }
+
+        try await withTaskCancellationHandler {
+            try await captureTask.value
+        } onCancel: {
+            captureTask.cancel()
+        }
+
+        try Task.checkCancellation()
+        guard screenshotCaptureOperationID == operationID else {
+            try? FileManager.default.removeItem(at: outputURL)
+            throw CancellationError()
         }
     }
     

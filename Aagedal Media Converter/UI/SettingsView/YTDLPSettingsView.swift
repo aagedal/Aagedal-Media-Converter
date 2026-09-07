@@ -30,6 +30,7 @@ struct YTDLPSettingsView: View {
     @State private var ytdlpCustomPath: String = ""
     @State private var denoCustomPath: String = ""
     @State private var ffmpegCustomPath: String = ""
+    @State private var ffmpegStateRefreshTask: Task<Void, Never>?
     @State private var ytdlpStatus: YTDLPStatus = .checking
     @State private var installationStatus: YTDLPInstallationStatus = .notInstalled
     @State private var isDownloading = false
@@ -80,7 +81,10 @@ struct YTDLPSettingsView: View {
             Task { await refreshVersions() }
         }
         .onChange(of: ffmpegBinarySource) { _, _ in
-            Task { await refreshVersions() }
+            scheduleFFmpegStateRefresh()
+        }
+        .onDisappear {
+            ffmpegStateRefreshTask?.cancel()
         }
     }
 
@@ -761,7 +765,7 @@ struct YTDLPSettingsView: View {
                     Text("Filename restrictions:")
                     Picker("", selection: filenameRestrictionMode) {
                         ForEach(YTDLPFilenameRestrictionMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
+                            Text(LocalizedStringKey(mode.displayName)).tag(mode)
                         }
                     }
                     .labelsHidden()
@@ -795,7 +799,7 @@ struct YTDLPSettingsView: View {
         )
     }
 
-    private var filenameRestrictionExplanation: String {
+    private var filenameRestrictionExplanation: LocalizedStringKey {
         switch YTDLPFilenameRestrictionMode(rawValue: filenameRestrictionRaw) ?? .off {
         case .off:
             return "yt-dlp only strips characters illegal on macOS (just '/' and NUL). Filenames may still break on Windows or NTFS drives."
@@ -884,7 +888,7 @@ struct YTDLPSettingsView: View {
                 Divider()
 
                 Button("Refresh Versions") {
-                    Task { await refreshVersions() }
+                    scheduleFFmpegStateRefresh()
                 }
                 .disabled(isCheckingVersions)
             }
@@ -897,7 +901,7 @@ struct YTDLPSettingsView: View {
     private var aboutSection: some View {
         Section(header: Text("About")) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("The app includes a bundled ffmpeg binary. You can optionally point at a Homebrew or custom ffmpeg if you need specific features or codecs. Metadata reading (including chapters) is handled in-process by SwiftExif — no external ffprobe is required.")
+                Text("The app includes a bundled ffmpeg binary. You can optionally point at a Homebrew or custom ffmpeg if you need specific features or codecs. Metadata reading (including chapters) is handled in-process by SwiftMediaMetadata — no external ffprobe is required.")
                     .font(.callout)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -983,7 +987,24 @@ struct YTDLPSettingsView: View {
 
     private func saveFFmpegPath() {
         BinaryPathResolver.saveCustomFFmpegPath(ffmpegCustomPath.isEmpty ? nil : ffmpegCustomPath)
-        Task { await refreshVersions() }
+        scheduleFFmpegStateRefresh(after: .milliseconds(300))
+    }
+
+    private func scheduleFFmpegStateRefresh(after delay: Duration? = nil) {
+        ffmpegStateRefreshTask?.cancel()
+        ffmpegStateRefreshTask = Task {
+            if let delay {
+                try? await Task.sleep(for: delay)
+            }
+            guard !Task.isCancelled else { return }
+            await refreshFFmpegState()
+        }
+    }
+
+    private func refreshFFmpegState() async {
+        async let versions: Void = refreshVersions()
+        async let capability = try? WhisperUpdateService.shared.refreshCapabilitySnapshot()
+        _ = await (versions, capability)
     }
 
     private func seedBinarySourcesIfNeeded() {

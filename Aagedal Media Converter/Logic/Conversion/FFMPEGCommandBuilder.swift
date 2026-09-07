@@ -15,6 +15,7 @@
 // (at your option) any later version.
 
 import Foundation
+import ImageIO
 import OSLog
 
 struct FFMPEGCommand {
@@ -73,6 +74,7 @@ enum FFMPEGCommandBuilder {
         inputURL: URL,
         outputFileURL: URL,
         preset: ExportPreset,
+        dcpSettings: DCPSettings? = nil,
         comment: String,
         includeDateTag: Bool,
         trimStart: Double?,
@@ -80,12 +82,15 @@ enum FFMPEGCommandBuilder {
         audioRoutingConfig: AudioRoutingConfig? = nil,
         cropConfig: CropConfig? = nil,
         timecodeConfig: TimecodeConfig? = nil,
+        sourceMetadata: VideoMetadata? = nil,
         waveformRequest: WaveformVideoRequest? = nil,
         synthesizedVideoRequest: SynthesizedVideoRequest? = nil,
+        visualSourceURL: URL? = nil,
         customInputArguments: [String]? = nil,
         additionalOutputArguments: [String]? = nil,
         isMuted: Bool = false
     ) async -> FFMPEGCommand {
+        let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
         let normalizedTrimStart = normalizedTrimPoint(trimStart)
@@ -119,13 +124,32 @@ enum FFMPEGCommandBuilder {
 
             arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest, includeAudioOutput: includeAudioOutput, audioRoutingConfig: audioRoutingConfig))
 
-            var ffmpegArgs = preset.ffmpegArguments
-            await adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
-            await adjustDeinterlaceFilter(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
+            await adjustArgumentsForInput(
+                preset: preset,
+                inputURL: inputURL,
+                ffmpegArgs: &ffmpegArgs,
+                trimStart: normalizedTrimStart,
+                trimEnd: normalizedTrimEnd,
+                sourceMetadata: sourceMetadata
+            )
+            await adjustDeinterlaceFilter(
+                inputURL: inputURL,
+                ffmpegArgs: &ffmpegArgs,
+                sourceMetadata: sourceMetadata
+            )
             sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
             if !includeAudioOutput {
                 removeArgumentPair("-map", value: "[audout]", from: &arguments)
             }
+            await applyConfiguredTimecode(
+                &ffmpegArgs,
+                preset: preset,
+                inputURL: inputURL,
+                timecodeConfig: timecodeConfig,
+                sourceMetadata: sourceMetadata,
+                trimStart: normalizedTrimStart
+            )
             arguments.append(contentsOf: ffmpegArgs)
             
             // Apply comment metadata AFTER all other arguments to ensure it's not stripped by -map_metadata -1
@@ -157,9 +181,20 @@ enum FFMPEGCommandBuilder {
 
             arguments.append(contentsOf: synthesizedVideoCommandArguments(for: synthesizedVideoRequest))
 
-            var ffmpegArgs = preset.ffmpegArguments
-            await adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
-            await adjustDeinterlaceFilter(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
+            await adjustArgumentsForInput(
+                preset: preset,
+                inputURL: inputURL,
+                ffmpegArgs: &ffmpegArgs,
+                trimStart: normalizedTrimStart,
+                trimEnd: normalizedTrimEnd,
+                sourceMetadata: sourceMetadata
+            )
+            await adjustDeinterlaceFilter(
+                inputURL: inputURL,
+                ffmpegArgs: &ffmpegArgs,
+                sourceMetadata: sourceMetadata
+            )
             sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
             if synthesizedVideoRequest.includeAudio {
                 removeArgumentPair("-an", value: nil, from: &ffmpegArgs)
@@ -169,6 +204,15 @@ enum FFMPEGCommandBuilder {
             if let audioRoutingConfig, preset.outputsAudioTrack, preset.appliesAudioRouting {
                 applyAudioRouting(config: audioRoutingConfig, to: &ffmpegArgs)
             }
+
+            await applyConfiguredTimecode(
+                &ffmpegArgs,
+                preset: preset,
+                inputURL: inputURL,
+                timecodeConfig: timecodeConfig,
+                sourceMetadata: sourceMetadata,
+                trimStart: normalizedTrimStart
+            )
 
             arguments.append(contentsOf: ffmpegArgs)
             
@@ -195,7 +239,7 @@ enum FFMPEGCommandBuilder {
             )
         }
 
-        var ffmpegArgs = preset.ffmpegArguments
+        var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
 
         // Image sequence inputs (via customInputArguments): the inputURL is a directory
         // so skip audio probing. If no associated audio, strip audio args entirely.
@@ -212,8 +256,19 @@ enum FFMPEGCommandBuilder {
         }
 
         if !isImageSequenceInput {
-            await adjustArgumentsForInput(preset: preset, inputURL: inputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
-            await adjustDeinterlaceFilter(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
+            await adjustArgumentsForInput(
+                preset: preset,
+                inputURL: inputURL,
+                ffmpegArgs: &ffmpegArgs,
+                trimStart: normalizedTrimStart,
+                trimEnd: normalizedTrimEnd,
+                sourceMetadata: sourceMetadata
+            )
+            await adjustDeinterlaceFilter(
+                inputURL: inputURL,
+                ffmpegArgs: &ffmpegArgs,
+                sourceMetadata: sourceMetadata
+            )
 
             // Filter out unsupported audio codecs (e.g., APAC spatial audio from iPhone)
             // Skip for stream copy (which doesn't decode) and when audio routing is applied (has its own mapping)
@@ -225,11 +280,14 @@ enum FFMPEGCommandBuilder {
         // Apply crop to video filter if configured and preset supports it
         if let cropConfig = cropConfig,
            cropConfig.isActive,
-           preset.outputsVideoTrack,
+           preset.outputsVisualFrames,
            preset.appliesCrop {
-            if let metadata = try? await VideoMetadataService.shared.metadata(for: inputURL),
-               let width = metadata.primaryVideoStream?.width,
-               let height = metadata.primaryVideoStream?.height {
+            if let geometry = await sourceGeometry(
+                for: visualSourceURL ?? inputURL,
+                sourceMetadata: visualSourceURL == nil ? sourceMetadata : nil
+            ) {
+                let width = geometry.width
+                let height = geometry.height
 
                 // Calculate effective Pixel Aspect Ratio (PAR)
                 // We use a robust detection strategy:
@@ -239,8 +297,8 @@ enum FFMPEGCommandBuilder {
                 // 4. If explicit PAR contradicts DAR (e.g. PAR=1 vs DAR=16:9 for 1440 width), use DAR-derived PAR.
                 // 5. Default to 1.0.
                 let effectivePAR: Double
-                let darValues = metadata.primaryVideoStream?.displayAspectRatio?.doubleValue
-                let parValues = metadata.primaryVideoStream?.pixelAspectRatio?.doubleValue
+                let darValues = geometry.displayAspectRatio
+                let parValues = geometry.pixelAspectRatio
                 
                 if let dar = darValues, dar > 0, height > 0 {
                     let resolutionAspect = Double(width) / Double(height)
@@ -272,8 +330,9 @@ enum FFMPEGCommandBuilder {
             }
         }
 
-        // Only remove video arguments if preset doesn't output video (audio-only export)
-        if !preset.outputsVideoTrack {
+        // Only remove video arguments for audio-only exports. Image sequences do not contain an
+        // embedded video track, but still require their visual codec and filter arguments.
+        if !preset.outputsVisualFrames {
             removeVideoArguments(from: &ffmpegArgs)
         }
         
@@ -291,39 +350,14 @@ enum FFMPEGCommandBuilder {
             applyMute(to: &ffmpegArgs)
         }
 
-        // Apply timecode configuration if preset outputs video
-        if preset.outputsVideoTrack {
-            // Use provided config, or default from settings
-            let effectiveConfig: TimecodeConfig?
-            if let timecodeConfig = timecodeConfig {
-                effectiveConfig = timecodeConfig
-            } else {
-                // Use default from settings
-                let defaultMode = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeModeKey) ?? AppConstants.defaultTimecodeModeRaw
-                let defaultValue = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeValueKey) ?? AppConstants.defaultTimecodeValue
-
-                switch defaultMode {
-                case "preserveSource":
-                    effectiveConfig = TimecodeConfig(mode: .preserveSource)
-                case "manual":
-                    effectiveConfig = TimecodeConfig(mode: .manual(defaultValue))
-                default: // "disabled"
-                    // Skip timecode application if disabled by default
-                    effectiveConfig = nil
-                }
-            }
-
-            if let effectiveConfig = effectiveConfig,
-               effectiveConfig.isActive,
-               let metadata = try? await VideoMetadataService.shared.metadata(for: inputURL) {
-                await applyTimecode(
-                    &ffmpegArgs,
-                    timecodeConfig: effectiveConfig,
-                    sourceMetadata: metadata,
-                    trimStart: normalizedTrimStart
-                )
-            }
-        }
+        await applyConfiguredTimecode(
+            &ffmpegArgs,
+            preset: preset,
+            inputURL: inputURL,
+            timecodeConfig: timecodeConfig,
+            sourceMetadata: sourceMetadata,
+            trimStart: normalizedTrimStart
+        )
 
         if preset == .streamCopy {
             adjustStreamCopyArguments(inputURL: inputURL, outputURL: outputFileURL, ffmpegArgs: &ffmpegArgs)
@@ -336,19 +370,14 @@ enum FFMPEGCommandBuilder {
         arguments.append(contentsOf: ffmpegArgs)
 
         // Map subtitle streams if the user has enabled subtitle preservation.
-        // Only applies to encoding presets (not stream copy, audio-only, or image sequences)
-        // that output into containers supporting subtitles.
+        // Unsupported outputs (image sequences, DCP/IMF MXF, animated stills, etc.)
+        // must not receive subtitle codec arguments because FFmpeg rejects them.
         if preset != .streamCopy && preset.outputsVideoTrack {
             let keepSubtitles = UserDefaults.standard.bool(forKey: AppConstants.keepSubtitlesKey)
-            if keepSubtitles {
-                let outputExtension = outputFileURL.pathExtension.lowercased()
-                if outputExtension == "mkv" {
-                    arguments.append(contentsOf: ["-map", "0:s?", "-c:s", "copy"])
-                } else {
-                    // MP4/MOV only support mov_text subtitles; bitmap subs will be skipped by FFmpeg
-                    arguments.append(contentsOf: ["-map", "0:s?", "-c:s", "mov_text"])
-                }
-            }
+            arguments.append(contentsOf: subtitleArguments(
+                keepSubtitles: keepSubtitles,
+                outputExtension: outputFileURL.pathExtension
+            ))
         }
 
         // For MOV/QuickTime files with stream copy, add movflags to preserve vendor-specific metadata
@@ -396,6 +425,78 @@ enum FFMPEGCommandBuilder {
 }
 
 extension FFMPEGCommandBuilder {
+    struct SourceGeometry {
+        let width: Int
+        let height: Int
+        let pixelAspectRatio: Double?
+        let displayAspectRatio: Double?
+    }
+
+    /// Resolve crop geometry from request metadata, a timed-media probe, or a still image.
+    /// Image-sequence requests point this at their first frame because their primary input URL
+    /// is the containing directory and cannot be probed as media.
+    static func sourceGeometry(
+        for sourceURL: URL,
+        sourceMetadata: VideoMetadata?,
+        probeMetadataIfNeeded: Bool = true
+    ) async -> SourceGeometry? {
+        if let stream = sourceMetadata?.primaryVideoStream,
+           let width = stream.width,
+           let height = stream.height {
+            return SourceGeometry(
+                width: width,
+                height: height,
+                pixelAspectRatio: stream.pixelAspectRatio?.doubleValue,
+                displayAspectRatio: stream.displayAspectRatio?.doubleValue
+            )
+        }
+
+        if probeMetadataIfNeeded,
+           let metadata = try? await BoundedVideoMetadataProbe.metadata(for: sourceURL),
+           let stream = metadata.primaryVideoStream,
+           let width = stream.width,
+           let height = stream.height {
+            return SourceGeometry(
+                width: width,
+                height: height,
+                pixelAspectRatio: stream.pixelAspectRatio?.doubleValue,
+                displayAspectRatio: stream.displayAspectRatio?.doubleValue
+            )
+        }
+
+        guard let imageSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0,
+              height > 0 else {
+            return nil
+        }
+
+        return SourceGeometry(
+            width: width,
+            height: height,
+            pixelAspectRatio: 1,
+            displayAspectRatio: Double(width) / Double(height)
+        )
+    }
+
+    /// Returns subtitle mapping arguments only for containers supported by the
+    /// preservation setting. Matroska can copy subtitle streams verbatim, while
+    /// MP4 and MOV require text subtitles to be encoded as `mov_text`.
+    static func subtitleArguments(keepSubtitles: Bool, outputExtension: String) -> [String] {
+        guard keepSubtitles else { return [] }
+
+        switch outputExtension.lowercased() {
+        case "mkv":
+            return ["-map", "0:s?", "-c:s", "copy"]
+        case "mp4", "mov":
+            return ["-map", "0:s?", "-c:s", "mov_text"]
+        default:
+            return []
+        }
+    }
+
     static func normalizedTrimPoint(_ value: Double?) -> Double? {
         guard let value, value.isFinite, value > 0 else { return nil }
         return max(value, 0)
@@ -597,6 +698,7 @@ extension FFMPEGCommandBuilder {
         audioInputURL: URL,
         outputFileURL: URL,
         preset: ExportPreset,
+        dcpSettings: DCPSettings? = nil,
         width: Int,
         height: Int,
         frameRate: Double,
@@ -608,6 +710,7 @@ extension FFMPEGCommandBuilder {
         includeDateTag: Bool = true,
         additionalOutputArguments: [String]? = nil
     ) async -> FFMPEGCommand {
+        let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let finalWidth = evenDimension(max(width, 2))
         let finalHeight = evenDimension(max(height, 2))
         let resolution = "\(finalWidth)x\(finalHeight)"
@@ -642,7 +745,7 @@ extension FFMPEGCommandBuilder {
         arguments.append(contentsOf: ["-map", "0:v", "-map", "1:a"])
 
         // Preset encoding arguments (sanitized for our custom video pipeline)
-        var ffmpegArgs = preset.ffmpegArguments
+        var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
         await adjustArgumentsForInput(preset: preset, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
         sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
 
@@ -751,7 +854,11 @@ extension FFMPEGCommandBuilder {
         value % 2 == 0 ? value : value + 1
     }
 
-    static func applyCommentMetadata(to ffmpegArgs: inout [String], comment: String, includeDateTag: Bool) {
+    static func commentMetadataValue(
+        comment: String,
+        includeDateTag: Bool,
+        date: Date = Date()
+    ) -> String? {
         let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Get prefix, suffix, separator, and date format from UserDefaults
@@ -768,7 +875,7 @@ extension FFMPEGCommandBuilder {
             if includeDateTag {
                 let dateFormatter = DateFormatter()
                 dateFormatter.dateFormat = commentDateFormat
-                let currentDateString = dateFormatter.string(from: Date())
+                let currentDateString = dateFormatter.string(from: date)
                 parts.append("\(effectiveDateTagPrefix): \(currentDateString)")
             }
             
@@ -787,6 +894,12 @@ extension FFMPEGCommandBuilder {
             guard !parts.isEmpty else { return nil }
             return parts.joined(separator: commentSeparator)
         }()
+
+        return commentText
+    }
+
+    static func applyCommentMetadata(to ffmpegArgs: inout [String], comment: String, includeDateTag: Bool) {
+        let commentText = commentMetadataValue(comment: comment, includeDateTag: includeDateTag)
 
         // First, remove any existing comment metadata from the arguments
         var index = 0
@@ -809,31 +922,53 @@ extension FFMPEGCommandBuilder {
     static func applyTimecode(
         _ ffmpegArgs: inout [String],
         timecodeConfig: TimecodeConfig,
-        sourceMetadata: VideoMetadata,
+        sourceMetadata: VideoMetadata?,
         trimStart: Double?
     ) async {
-        let timecodeValue: String?
+        let timecodeValue = resolvedTimecode(
+            timecodeConfig: timecodeConfig,
+            sourceMetadata: sourceMetadata,
+            trimStart: trimStart
+        )
 
+        replaceTimecodeMetadata(in: &ffmpegArgs, with: timecodeValue)
+    }
+
+    /// Resolves a configured timecode without assuming an FFmpeg output. The AV2
+    /// Matroska path uses the same policy when writing native container tags.
+    static func resolvedTimecode(
+        timecodeConfig: TimecodeConfig,
+        sourceMetadata: VideoMetadata?,
+        trimStart: Double?
+    ) -> String? {
         switch timecodeConfig.mode {
         case .preserveSource:
-            // Use timecode from source metadata, offsetting by trim-in point if present
-            if let sourceTimecode = sourceMetadata.timecode,
+            if let sourceTimecode = sourceMetadata?.timecode,
                let trimOffset = trimStart,
                trimOffset > 0,
-               let frameRate = sourceMetadata.primaryVideoStream?.frameRate?.value {
-                timecodeValue = offsetTimecode(sourceTimecode, bySeconds: trimOffset, frameRate: frameRate)
-            } else {
-                timecodeValue = sourceMetadata.timecode
+               let frameRate = sourceMetadata?.primaryVideoStream?.frameRate?.value {
+                return offsetTimecode(sourceTimecode, bySeconds: trimOffset, frameRate: frameRate)
             }
-        case .manual(let tc):
-            // Use manually specified timecode
-            timecodeValue = tc.isEmpty ? nil : tc
+            return sourceMetadata?.timecode
+        case .manual(let timecode):
+            return timecode.isEmpty ? nil : timecode
         }
+    }
 
-        // Remove existing timecode metadata if present in args
+    /// Replaces both container and primary-video timecode metadata. QuickTime's
+    /// muxer can synthesize a `tmcd` track from either value, so clearing only
+    /// the container tag still allows a copied video-stream tag to recreate the
+    /// source timecode.
+    private static func replaceTimecodeMetadata(
+        in ffmpegArgs: inout [String],
+        with timecode: String?
+    ) {
+        let metadataOptions = ["-metadata", "-metadata:s:v:0"]
+
         var index = 0
         while index < ffmpegArgs.count - 1 {
-            if ffmpegArgs[index] == "-metadata" && ffmpegArgs[index + 1].hasPrefix("timecode=") {
+            if metadataOptions.contains(ffmpegArgs[index])
+                && ffmpegArgs[index + 1].hasPrefix("timecode=") {
                 ffmpegArgs.remove(at: index + 1)
                 ffmpegArgs.remove(at: index)
                 continue
@@ -841,11 +976,57 @@ extension FFMPEGCommandBuilder {
             index += 1
         }
 
-        if let timecode = timecodeValue {
-            // Set our timecode value
-            // This should override any timecode from -map_metadata since it comes later in args
-            ffmpegArgs.append(contentsOf: ["-metadata", "timecode=\(timecode)"])
+        let value = timecode.map { "timecode=\($0)" } ?? "timecode="
+        ffmpegArgs.append(contentsOf: [
+            "-metadata", value,
+            "-metadata:s:v:0", value
+        ])
+    }
+
+    /// Applies an already-resolved per-item timecode choice. Video items receive
+    /// their global default when they are created, so nil here means the user
+    /// explicitly disabled timecode and must not reload settings. Manual values
+    /// do not require source metadata; preservation probes only when needed.
+    static func applyConfiguredTimecode(
+        _ ffmpegArgs: inout [String],
+        preset: ExportPreset,
+        inputURL: URL,
+        timecodeConfig: TimecodeConfig?,
+        sourceMetadata knownSourceMetadata: VideoMetadata? = nil,
+        trimStart: Double?
+    ) async {
+        guard preset.outputsVideoTrack else {
+            return
         }
+
+        guard let timecodeConfig, timecodeConfig.isActive else {
+            replaceTimecodeMetadata(in: &ffmpegArgs, with: nil)
+            return
+        }
+
+        let sourceMetadata: VideoMetadata?
+        switch timecodeConfig.mode {
+        case .preserveSource:
+            if let knownSourceMetadata {
+                sourceMetadata = knownSourceMetadata
+            } else if let probedMetadata = try? await BoundedVideoMetadataProbe.metadata(for: inputURL) {
+                sourceMetadata = probedMetadata
+            } else {
+                // Preserve FFmpeg's source metadata mapping when the in-process
+                // probe fails instead of interpreting a probe failure as an
+                // explicit request to remove timecode.
+                return
+            }
+        case .manual:
+            sourceMetadata = nil
+        }
+
+        await applyTimecode(
+            &ffmpegArgs,
+            timecodeConfig: timecodeConfig,
+            sourceMetadata: sourceMetadata,
+            trimStart: trimStart
+        )
     }
 
     /// Offsets a timecode string by a given number of seconds
@@ -867,25 +1048,48 @@ extension FFMPEGCommandBuilder {
             return timecode
         }
 
-        // Determine frame rate (round to nearest integer for frame calculation)
-        let fps = Int(frameRate.rounded())
+        // Timecode labels count at the nominal integer rate even when their media
+        // timestamps use a fractional NTSC rate. Guard very-low/invalid rates so
+        // the modulo operations below can never divide by zero.
+        let nominalFPS = Int(frameRate.rounded())
+        guard nominalFPS > 0 else {
+            logger.warning("Cannot offset timecode at invalid frame rate: \(frameRate, privacy: .public)")
+            return timecode
+        }
+
+        let isDropFrame = timecode.contains(";") && isSupportedDropFrameRate(frameRate)
+        let droppedFramesPerMinute = nominalFPS == 60 ? 4 : 2
 
         // Convert timecode to total frames
-        var totalFrames = hours * 3600 * fps
-        totalFrames += minutes * 60 * fps
-        totalFrames += secs * fps
+        var totalFrames = hours * 3600 * nominalFPS
+        totalFrames += minutes * 60 * nominalFPS
+        totalFrames += secs * nominalFPS
         totalFrames += frames
 
+        if isDropFrame {
+            let totalMinutes = hours * 60 + minutes
+            let skippedLabels = droppedFramesPerMinute * (totalMinutes - totalMinutes / 10)
+            totalFrames -= skippedLabels
+        }
+
         // Add offset in frames (round to nearest frame to avoid off-by-one errors)
-        let offsetFrames = Int(round(seconds * Double(fps)))
+        let offsetFrames = Int(round(seconds * frameRate))
         totalFrames += offsetFrames
 
         // Ensure non-negative
         totalFrames = max(0, totalFrames)
 
+        if isDropFrame {
+            totalFrames = dropFrameLabelFrame(
+                forAbsoluteFrame: totalFrames,
+                nominalFPS: nominalFPS,
+                droppedFramesPerMinute: droppedFramesPerMinute
+            )
+        }
+
         // Convert back to timecode components
-        let newFrames = totalFrames % fps
-        var remainingFrames = totalFrames / fps
+        let newFrames = totalFrames % nominalFPS
+        var remainingFrames = totalFrames / nominalFPS
 
         let newSeconds = remainingFrames % 60
         remainingFrames /= 60
@@ -909,6 +1113,36 @@ extension FFMPEGCommandBuilder {
         logger.debug("Offset timecode from \(timecode, privacy: .public) to \(offsetTimecode, privacy: .public) (offset: \(seconds, privacy: .public)s at \(frameRate, privacy: .public)fps)")
 
         return offsetTimecode
+    }
+
+    private static func isSupportedDropFrameRate(_ frameRate: Double) -> Bool {
+        abs(frameRate - (30_000.0 / 1_001.0)) < 0.01 ||
+            abs(frameRate - (60_000.0 / 1_001.0)) < 0.01
+    }
+
+    /// Converts a zero-based absolute frame count into its drop-frame label frame.
+    /// Drop-frame timecode skips two labels per minute at 29.97 fps (four at
+    /// 59.94), except every tenth minute. The media frames themselves are not
+    /// dropped; only their displayed labels are discontinuous.
+    private static func dropFrameLabelFrame(
+        forAbsoluteFrame absoluteFrame: Int,
+        nominalFPS: Int,
+        droppedFramesPerMinute: Int
+    ) -> Int {
+        let framesPerMinute = nominalFPS * 60 - droppedFramesPerMinute
+        let framesPerTenMinutes = nominalFPS * 60 * 10 - droppedFramesPerMinute * 9
+        let framesPerHour = framesPerTenMinutes * 6
+        let framesPerDay = framesPerHour * 24
+        let wrappedFrame = absoluteFrame % framesPerDay
+        let completeTenMinuteBlocks = wrappedFrame / framesPerTenMinutes
+        let remainder = wrappedFrame % framesPerTenMinutes
+
+        var skippedLabels = droppedFramesPerMinute * 9 * completeTenMinuteBlocks
+        if remainder > droppedFramesPerMinute {
+            skippedLabels += droppedFramesPerMinute * ((remainder - droppedFramesPerMinute) / framesPerMinute)
+        }
+
+        return wrappedFrame + skippedLabels
     }
 
     /// Replaces generic `-map 0:a` with explicit mapping of only decodable audio streams.
@@ -1016,12 +1250,18 @@ extension FFMPEGCommandBuilder {
         inputURL: URL,
         ffmpegArgs: inout [String],
         trimStart: Double? = nil,
-        trimEnd: Double? = nil
+        trimEnd: Double? = nil,
+        sourceMetadata: VideoMetadata? = nil
     ) async {
         // Handle AVC-Intra mono channel splitting
         if preset == .tvAVCIntra {
             // Calculate effective duration for silent streams
-            let effectiveDuration = await calculateEffectiveDurationForAudio(inputURL: inputURL, trimStart: trimStart, trimEnd: trimEnd)
+            let effectiveDuration = await calculateEffectiveDurationForAudio(
+                inputURL: inputURL,
+                trimStart: trimStart,
+                trimEnd: trimEnd,
+                sourceMetadata: sourceMetadata
+            )
             await adjustAVCIntraAudio(inputURL: inputURL, ffmpegArgs: &ffmpegArgs, duration: effectiveDuration)
             return
         }
@@ -1052,7 +1292,8 @@ extension FFMPEGCommandBuilder {
     private static func calculateEffectiveDurationForAudio(
         inputURL: URL,
         trimStart: Double?,
-        trimEnd: Double?
+        trimEnd: Double?,
+        sourceMetadata: VideoMetadata?
     ) async -> Double? {
         // If we have both trim points, use the difference
         if let start = trimStart, let end = trimEnd {
@@ -1060,8 +1301,13 @@ extension FFMPEGCommandBuilder {
         }
 
         // Try to get the file's total duration
-        if let metadata = try? await VideoMetadataService.shared.metadata(for: inputURL),
-           let totalDuration = metadata.duration {
+        let resolvedMetadata: VideoMetadata?
+        if let sourceMetadata {
+            resolvedMetadata = sourceMetadata
+        } else {
+            resolvedMetadata = try? await BoundedVideoMetadataProbe.metadata(for: inputURL)
+        }
+        if let totalDuration = resolvedMetadata?.duration {
             if let start = trimStart {
                 return totalDuration - start
             } else if let end = trimEnd {
@@ -1336,15 +1582,31 @@ extension FFMPEGCommandBuilder {
 
     static func adjustDeinterlaceFilter(
         inputURL: URL,
-        ffmpegArgs: inout [String]
+        ffmpegArgs: inout [String],
+        sourceMetadata: VideoMetadata? = nil,
+        metadataTimeout: Duration = BoundedVideoMetadataProbe.defaultTimeout,
+        metadataProbe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        }
     ) async {
         // Only proceed if a video filter graph exists
         guard let vfIndex = ffmpegArgs.firstIndex(of: "-vf"), vfIndex + 1 < ffmpegArgs.count else {
             return
         }
 
+        let metadata: VideoMetadata?
+        if let sourceMetadata {
+            metadata = sourceMetadata
+        } else {
+            metadata = try? await BoundedVideoMetadataProbe.metadata(
+                for: inputURL,
+                timeout: metadataTimeout,
+                probe: metadataProbe
+            )
+        }
+
         let isInterlaced: Bool
-        if let metadata = try? await VideoMetadataService.shared.metadata(for: inputURL) {
+        if let metadata {
             isInterlaced = metadata.primaryVideoStream?.isInterlaced ?? false
         } else {
             isInterlaced = false
@@ -1501,15 +1763,13 @@ extension FFMPEGCommandBuilder {
 
     /// Applies audio routing configuration by replacing preset's audio map arguments
     /// with custom track selection, ordering, or channel-level operations
-    private static func applyAudioRouting(config: AudioRoutingConfig, to ffmpegArgs: inout [String]) {
+    static func applyAudioRouting(config: AudioRoutingConfig, to ffmpegArgs: inout [String]) {
         // Check if there's already a video map - if not, we need to add one
-        let hasVideoMap = ffmpegArgs.contains(where: { arg in
-            if let idx = ffmpegArgs.firstIndex(of: "-map"),
-               idx + 1 < ffmpegArgs.count {
-                return ffmpegArgs[idx + 1].hasPrefix("0:v")
-            }
-            return false
-        })
+        let hasVideoMap = ffmpegArgs.indices.contains { index in
+            ffmpegArgs[index] == "-map"
+                && ffmpegArgs.indices.contains(index + 1)
+                && ffmpegArgs[index + 1].hasPrefix("0:v")
+        }
 
         // Remove all existing audio mapping arguments from preset
         removeArgumentPair("-map", value: "0:a", from: &ffmpegArgs)
@@ -1596,7 +1856,8 @@ extension FFMPEGCommandBuilder {
     }
 
     /// Applies crop filter to video filter chain
-    /// - If the chain contains a DAR-based desqueeze (e.g. scale='trunc(ih*dar...)',setsar=1/1), crop is inserted BEFORE it.
+    /// - If the chain contains a DAR-based desqueeze (e.g. scale='trunc(ih*dar...)',setsar=1/1),
+    ///   it is replaced with crop plus explicit square-pixel normalization when PAR is known.
     /// - Otherwise, crop is inserted after setsar and before any final scale when possible.
     static func applyCropToVideoFilter(
         _ ffmpegArgs: inout [String],
@@ -1608,6 +1869,11 @@ extension FFMPEGCommandBuilder {
         // Don't apply crop to stream copy preset
         guard !ffmpegArgs.contains("-c:v") || !ffmpegArgs.contains("copy") else {
             logger.debug("Skipping crop for stream copy preset")
+            return
+        }
+
+        guard cropConfig.isActive else {
+            logger.debug("Skipping inactive crop config")
             return
         }
 
@@ -1633,8 +1899,6 @@ extension FFMPEGCommandBuilder {
             return
         }
 
-        let filterChainNormalizesAnamorphic = filterChain.contains("trunc(ih*dar") && filterChain.contains("setsar=1/1")
-
         // Generate crop filter
         guard var cropFilter = CropService.buildCropFilter(
             config: cropConfig,
@@ -1647,14 +1911,19 @@ extension FFMPEGCommandBuilder {
 
         // Check for anamorphic content (non-square pixels)
         // If PAR deviates significantly from 1.0, scale to square pixels
-        // Note: Many built-in presets already normalize anamorphic sources using a DAR-based scale + setsar=1/1.
-        // In that case, avoid applying a second desqueeze stage here.
-        if let par = pixelAspectRatio, abs(par - 1.0) > 0.01, !filterChainNormalizesAnamorphic {
+        // Normalize the cropped frame explicitly when the effective PAR is known. This must happen
+        // after crop: a 1:1 display crop from 1440x1080 SAR 4:3 is 810x1080 stored pixels, which
+        // becomes 1080x1080 square pixels. Merely setting SAR to 1 would incorrectly produce 3:4.
+        let hasKnownPixelAspectRatio = pixelAspectRatio.map { $0.isFinite && $0 > 0 } ?? false
+        let needsAnamorphicNormalization = pixelAspectRatio.map { abs($0 - 1.0) > 0.01 } ?? false
+        if let par = pixelAspectRatio, hasKnownPixelAspectRatio, needsAnamorphicNormalization {
             // We need to scale the cropped output to square pixels using the effective PAR.
             // We calculate the target dimensions explicitly in Swift rather than relying on ffmpeg's 'sar' variable,
             // because the stream's internal SAR might be 1:1 even if the effective PAR is not (as detected by our DAR priority logic).
 
             let pixelRect = cropConfig.pixelRect(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
+                .evenDimensions()
+                .clamped(maxWidth: sourceWidth, maxHeight: sourceHeight)
             let targetWidth = Double(pixelRect.width) * par
             let targetHeight = Double(pixelRect.height)
 
@@ -1662,8 +1931,8 @@ extension FFMPEGCommandBuilder {
             let finalWidth = evenDimension(Int(round(targetWidth)))
             let finalHeight = evenDimension(Int(round(targetHeight)))
 
-            // scale=FINAL_W:FINAL_H,setsar=1
-            let scaleFilter = "scale=\(finalWidth):\(finalHeight),setsar=1"
+            // scale=FINAL_W:FINAL_H,setsar=1/1
+            let scaleFilter = "scale=\(finalWidth):\(finalHeight),setsar=1/1"
             cropFilter = "\(cropFilter),\(scaleFilter)"
             logger.info("Added anamorphic scaling to crop filter: PAR \(par) -> \(finalWidth)x\(finalHeight)")
         }
@@ -1674,39 +1943,25 @@ extension FFMPEGCommandBuilder {
             filterChain = cropFilter
         } else if let desqueezeRange = (filterChain.range(of: "scale='trunc(ih*dar") ?? filterChain.range(of: "scale=trunc(ih*dar")) {
             // Built-in presets start by normalizing display aspect ratio (DAR) into square pixels.
-            // When crop is applied, we should SKIP the DAR-based desqueeze entirely because:
-            // 1. The crop rect is defined in source pixel coordinates
-            // 2. After cropping, we have the exact pixels we want
-            // 3. The DAR-based desqueeze uses source metadata which can stretch the cropped content incorrectly
-            // Instead, we replace the desqueeze+setsar with just crop+setsar, then continue to final scale/pad.
-
-            // Find where the desqueeze ends (look for the setsar=1/1 that follows)
+            // The crop rect is stored in source-pixel coordinates, so crop must happen before any
+            // normalization. When metadata supplied an effective PAR, replace the metadata-driven
+            // desqueeze with the explicit normalization above. If PAR is unavailable, preserve the
+            // DAR-based filter and insert crop before it so FFmpeg can derive the display geometry.
+            let beforeDesqueeze = String(filterChain[..<desqueezeRange.lowerBound])
             let afterDesqueezeStart = String(filterChain[desqueezeRange.lowerBound...])
 
-            // The desqueeze pattern is: scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1
-            // We want to remove this entire segment and replace with crop,setsar=1/1
-            var newChain = ""
-
-            // Find the setsar=1/1 that follows the desqueeze
-            if let setsarRange = afterDesqueezeStart.range(of: ",setsar=1/1") {
-                // Get everything after the setsar=1/1
+            if !hasKnownPixelAspectRatio {
+                filterChain = joinedFilterSegments([beforeDesqueeze, cropFilter, afterDesqueezeStart])
+            } else if let setsarRange = afterDesqueezeStart.range(of: ",setsar=1/1") {
                 let afterSetsar = String(afterDesqueezeStart[setsarRange.upperBound...])
-
-                // Build new chain: crop,setsar=1/1,<rest of filters>
-                newChain = "\(cropFilter),setsar=1/1"
-
-                if !afterSetsar.isEmpty {
-                    if !afterSetsar.hasPrefix(",") {
-                        newChain.append(",")
-                    }
-                    newChain.append(afterSetsar)
-                }
+                let normalizedCropFilter = needsAnamorphicNormalization
+                    ? cropFilter
+                    : "\(cropFilter),setsar=1/1"
+                filterChain = joinedFilterSegments([beforeDesqueeze, normalizedCropFilter, afterSetsar])
             } else {
-                // No setsar found after desqueeze, just prepend crop with setsar
-                newChain = "\(cropFilter),setsar=1/1,\(filterChain)"
+                // An unfamiliar DAR filter is safer to preserve than partially remove.
+                filterChain = joinedFilterSegments([beforeDesqueeze, cropFilter, afterDesqueezeStart])
             }
-
-            filterChain = newChain
         } else if let scaleRange = filterChain.range(of: ",scale=w=") {
             // Insert crop AFTER setsar, BEFORE final scale
             let beforeScale = filterChain[..<scaleRange.lowerBound]
@@ -1742,6 +1997,13 @@ extension FFMPEGCommandBuilder {
         // Update args
         ffmpegArgs[vfIndex + 1] = filterChain
         logger.info("Applied crop to video filter chain: \(filterChain, privacy: .public)")
+    }
+
+    private static func joinedFilterSegments(_ segments: [String]) -> String {
+        segments
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ",")) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ",")
     }
 
     // MARK: - Conformance Merge Encoding

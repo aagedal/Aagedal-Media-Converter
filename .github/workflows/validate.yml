@@ -1,0 +1,125 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  PROJECT: Aagedal Media Converter.xcodeproj
+  SCHEME: Aagedal Media Converter
+
+jobs:
+  debug:
+    name: Debug build and unit tests
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verify bundled dependency manifest
+        run: scripts/bundled-dependency-manifest.py --check
+
+      - name: Test release validation scripts
+        run: python3 -m unittest discover -s scripts/tests -v
+
+      - name: Check localization catalog
+        run: python3 scripts/check-localizations.py
+
+      - name: Build Debug app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/Debug-Build.xcresult" \
+            -disableAutomaticPackageResolution \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "Aagedal Media Converter Unit Tests" \
+            -configuration Debug \
+            -destination "platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/Unit-Tests.xcresult" \
+            -disableAutomaticPackageResolution \
+            -only-testing:"Aagedal Media ConverterTests" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: debug-xcresults-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
+  release:
+    name: Release build
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build Release app
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination "platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/Release-Build.xcresult" \
+            -disableAutomaticPackageResolution \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Verify Release architectures and library resolution
+        run: python3 scripts/verify-release-bundle.py "$RUNNER_TEMP/DerivedData/Build/Products/Release/$SCHEME.app" --architecture arm64 --manifest BundledDependencies.json --report "$RUNNER_TEMP/Release-Footprint.json"
+
+      - name: Upload Release size and dependency report
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-footprint-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/Release-Footprint.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-xcresult-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/Release-Build.xcresult
+          if-no-files-found: warn
+          retention-days: 14

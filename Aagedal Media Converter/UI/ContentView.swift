@@ -40,6 +40,28 @@ private final class MergeCompatibilityScheduler: ObservableObject {
     }
 }
 
+@MainActor
+final class FileImportTaskCoordinator: ObservableObject {
+    private var tasks: [UUID: Task<Void, Never>] = [:]
+
+    func start(_ operation: @escaping @MainActor () async -> Void) {
+        let id = UUID()
+        let task = Task { @MainActor [weak self] in
+            await operation()
+            self?.tasks.removeValue(forKey: id)
+        }
+        tasks[id] = task
+    }
+
+    func cancelAll() {
+        let activeTasks = Array(tasks.values)
+        tasks.removeAll()
+        for task in activeTasks {
+            task.cancel()
+        }
+    }
+}
+
 struct ContentView: View {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ContentView")
     @Environment(\.openSettings) private var openSettings
@@ -64,6 +86,9 @@ struct ContentView: View {
     @State private var isConverting: Bool = false
     @State private var overallProgress: Double = 0.0
     @State private var isFileImporterPresented = false
+#if DEBUG
+    @State private var hasHandledUITestFixtureLaunch = false
+#endif
     /// Set when a convert App Intent opened the file importer with no file input
     /// (Spotlight/Siri phrase). After the user picks files, conversion starts.
     @State private var pendingConvertAfterImport = false
@@ -75,6 +100,7 @@ struct ContentView: View {
     @State private var hasUserChangedPreset = false
     @State private var dockProgressUpdater = DockProgressUpdater()
     @State private var progressTask: Task<Void, Never>?
+    @StateObject private var fileImportTaskCoordinator = FileImportTaskCoordinator()
     private let presetManager = PresetManager.shared
     @AppStorage(AppConstants.videoLoopDefaultMutedKey) private var videoLoopDefaultMuted = AppConstants.defaultVideoLoopMuted
     @AppStorage(AppConstants.watchFolderModeKey) private var watchFolderModeEnabled = false
@@ -429,9 +455,7 @@ struct ContentView: View {
                 DownloadManager.shared.cancelScheduledDownload(itemID: item.id)
             }
             if item.subtitleStatus.isInProgress {
-                Task { await TesseractService.shared.cancelGeneration() }
-                Task { await WhisperService.shared.cancelGeneration() }
-                Task { await ParakeetService.shared.cancelGeneration() }
+                cancelSubtitleGeneration(for: item)
             }
             // Cancel in-progress preview generation (thumbnails/waveforms) to free CPU
             Task { await PreviewAssetGenerator.shared.cancelGeneration(for: item.url) }
@@ -595,12 +619,15 @@ struct ContentView: View {
                     mergeCompatibilityResult: cardMergeCompatibilityResult,
                     isCheckingCompatibility: isCheckingCardCompatibility,
                     onImport: {
+                        cancelCardMergeCompatibilityCheck()
                         Task { await performCameraCardImport() }
                     },
                     onCancel: {
+                        cancelCardMergeCompatibilityCheck()
                         cameraCardImportState = nil
                     },
                     onAutoSplit: {
+                        cancelCardMergeCompatibilityCheck()
                         Task { await performCameraCardAutoSplit() }
                     },
                     onForceMerge: {
@@ -608,6 +635,7 @@ struct ContentView: View {
                     }
                 )
                 .onAppear { checkCardMergeCompatibility() }
+                .onDisappear { cancelCardMergeCompatibilityCheck() }
                 .onChange(of: cameraCardPresetRaw) { _, _ in checkCardMergeCompatibility() }
                 .sheet(isPresented: $showCardConformanceMergeDialog) {
                     if cameraCardImportState != nil {
@@ -649,10 +677,24 @@ struct ContentView: View {
                     allowedContentTypes: supportedVideoTypes,
                     allowsMultipleSelection: true
                 ) { result in
-                    handleFileSelection(result: result)
+                    fileImportTaskCoordinator.start {
+                        await handleFileSelection(result: result)
+                    }
                 }
                 .task {
                     await startProgressUpdates()
+#if DEBUG
+                    await importUITestFixtureIfRequested()
+#endif
+                }
+#if DEBUG
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    guard ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1" else { return }
+                    try? FileManager.default.removeItem(at: UITestFixtureConfiguration.directory)
+                }
+#endif
+                .onDisappear {
+                    fileImportTaskCoordinator.cancelAll()
                 }
                 .onAppear {
                     setupScheduledDownloads()
@@ -966,6 +1008,7 @@ struct ContentView: View {
     @State private var cardMergeCompatibilityResult: ConversionManager.MergeCompatibilityResult?
     @State private var isCheckingCardCompatibility = false
     @State private var cardCompatibilityCheckTask: Task<Void, Never>?
+    @State private var cardCompatibilityCheckID: UUID?
     @State private var showCardConformanceMergeDialog = false
     @State private var cardConformanceItems: [VideoItem] = []
     @State private var cardConformanceMetadata: [UUID: VideoMetadata] = [:]
@@ -1089,7 +1132,7 @@ struct ContentView: View {
 
     /// Runs merge compatibility check for the card import dialog in background.
     private func checkCardMergeCompatibility() {
-        cardCompatibilityCheckTask?.cancel()
+        cancelCardMergeCompatibilityCheck()
         cardMergeCompatibilityResult = nil
 
         guard let state = cameraCardImportState, state.videoURLs.count >= 2 else {
@@ -1101,36 +1144,53 @@ struct ContentView: View {
         let urls = state.videoURLs
         let folderURL = state.folderURL
         let preset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let checkID = UUID()
+        cardCompatibilityCheckID = checkID
 
         cardCompatibilityCheckTask = Task {
             let hasAccess = folderURL.startAccessingSecurityScopedResource()
             defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
 
-            var tempItems: [VideoItem] = []
+            var tempItems = urls.compactMap {
+                VideoFileUtils.makePlaceholderItem(from: $0, outputFolder: outputFolder, preset: preset)
+            }
             var metadataMap: [UUID: VideoMetadata] = [:]
 
-            for url in urls {
-                if Task.isCancelled { return }
-                if var item = VideoFileUtils.makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset) {
-                    if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
-                        item.metadata = metadata
-                        metadataMap[item.id] = metadata
+            do {
+                let metadataByURL = try await BoundedVideoMetadataProbe.availableMetadata(for: tempItems.map(\.url))
+                for index in tempItems.indices {
+                    if let metadata = metadataByURL[tempItems[index].url] {
+                        tempItems[index].metadata = metadata
+                        metadataMap[tempItems[index].id] = metadata
                     }
-                    tempItems.append(item)
                 }
+            } catch is CancellationError {
+                return
+            } catch {
+                // Per-file failures are omitted by availableMetadata; no other error is expected.
             }
 
             guard !Task.isCancelled else { return }
 
             let result = ConversionManager.checkMergeCompatibility(items: tempItems, metadata: metadataMap)
             await MainActor.run {
+                guard cardCompatibilityCheckID == checkID else { return }
                 cardMergeCompatibilityResult = result
                 isCheckingCardCompatibility = false
+                cardCompatibilityCheckTask = nil
+                cardCompatibilityCheckID = nil
                 // Store for conformance merge dialog
                 cardConformanceItems = tempItems
                 cardConformanceMetadata = metadataMap
             }
         }
+    }
+
+    private func cancelCardMergeCompatibilityCheck() {
+        cardCompatibilityCheckTask?.cancel()
+        cardCompatibilityCheckTask = nil
+        cardCompatibilityCheckID = nil
+        isCheckingCardCompatibility = false
     }
 
     @MainActor
@@ -1149,19 +1209,30 @@ struct ContentView: View {
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
         }
 
-        // Build items with metadata
-        var allItems: [VideoItem] = []
+        // Build items and gather their independent metadata probes concurrently so the
+        // operation has one 15-second probe window regardless of card size.
+        var allItems = state.videoURLs.compactMap {
+            VideoFileUtils.makePlaceholderItem(from: $0, outputFolder: outputFolder, preset: cardPreset)
+        }
+        if uploadEnabled {
+            for index in allItems.indices {
+                allItems[index].uploadEnabled = true
+            }
+        }
         var metadataMap: [UUID: VideoMetadata] = [:]
 
-        for url in state.videoURLs {
-            if var item = VideoFileUtils.makePlaceholderItem(from: url, outputFolder: outputFolder, preset: cardPreset) {
-                if uploadEnabled { item.uploadEnabled = true }
-                if let metadata = try? await VideoMetadataService.shared.metadata(for: url) {
-                    item.metadata = metadata
-                    metadataMap[item.id] = metadata
+        do {
+            let metadataByURL = try await BoundedVideoMetadataProbe.availableMetadata(for: allItems.map(\.url))
+            for index in allItems.indices {
+                if let metadata = metadataByURL[allItems[index].url] {
+                    allItems[index].metadata = metadata
+                    metadataMap[allItems[index].id] = metadata
                 }
-                allItems.append(item)
             }
+        } catch is CancellationError {
+            return
+        } catch {
+            // Per-file failures are omitted by availableMetadata; no other error is expected.
         }
 
         guard !allItems.isEmpty else { return }
@@ -1426,7 +1497,7 @@ struct ContentView: View {
     }
 
     // Handle file selection from file picker
-    private func handleFileSelection(result: Result<[URL], Error>) {
+    private func handleFileSelection(result: Result<[URL], Error>) async {
         switch result {
         case .success(let urls):
             for url in urls {
@@ -1439,10 +1510,15 @@ struct ContentView: View {
                 var isDirectory: ObjCBool = false
                 if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
                     let hasAccess = url.startAccessingSecurityScopedResource()
-                    let sequences = ImageSequenceDetector.detectSequences(inFolder: url)
+                    let sequences = await ImageSequenceDetector.detectSequences(
+                        inFolder: url,
+                        securityScopedAccessURL: url
+                    )
                     _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
                     if hasAccess { url.stopAccessingSecurityScopedResource() }
+                    guard !Task.isCancelled else { return }
                     for config in sequences {
+                        guard !containsImageSequence(config) else { continue }
                         let item = VideoFileUtils.makePlaceholderItem(
                             fromImageSequence: config,
                             outputFolder: outputFolder,
@@ -1459,9 +1535,26 @@ struct ContentView: View {
                 if AppConstants.supportedImageSequenceExtensions.contains(ext) {
                     let hasAccess = url.startAccessingSecurityScopedResource()
                     defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
-                    if let config = ImageSequenceDetector.detectSequence(fromFile: url) {
-                        let parentDir = url.deletingLastPathComponent()
+                    let parentDir = url.deletingLastPathComponent()
+                    let parentAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: parentDir)
+                    defer { SecurityScopedBookmarkManager.shared.stopAccessing(parentAccess) }
+                    let parentScopedURL: URL?
+                    switch parentAccess {
+                    case .direct(let scopedURL):
+                        parentScopedURL = scopedURL
+                    case .bookmark(let bookmarkedURL):
+                        parentScopedURL = SecurityScopedBookmarkManager.shared.resolveBookmark(for: bookmarkedURL)
+                    case .none:
+                        parentScopedURL = nil
+                    }
+                    if let config = await ImageSequenceDetector.detectSequence(
+                        fromFile: url,
+                        securityScopedAccessURL: parentScopedURL,
+                        detectsAssociatedAudio: parentScopedURL != nil
+                    ) {
+                        guard !Task.isCancelled else { return }
                         _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: parentDir)
+                        guard !containsImageSequence(config) else { continue }
                         let item = VideoFileUtils.makePlaceholderItem(
                             fromImageSequence: config,
                             outputFolder: outputFolder,
@@ -1517,6 +1610,95 @@ struct ContentView: View {
             Self.logger.error("Error selecting files: \(error.localizedDescription, privacy: .public)")
         }
     }
+
+    private func containsImageSequence(_ config: ImageSequenceConfig) -> Bool {
+        droppedFiles.contains { item in
+            guard let existing = item.imageSequenceConfig else { return false }
+            return existing.pattern == config.pattern
+                && existing.directory.standardizedFileURL == config.directory.standardizedFileURL
+        }
+    }
+
+#if DEBUG
+    @MainActor
+    private func importUITestFixtureIfRequested() async {
+        let environment = ProcessInfo.processInfo.environment
+        guard !hasHandledUITestFixtureLaunch,
+              environment["AMC_UI_TEST_SESSION"] == "1" else {
+            return
+        }
+        hasHandledUITestFixtureLaunch = true
+
+        do {
+            let directory = UITestFixtureConfiguration.directory
+            // Also recover artifacts after force termination, which may bypass
+            // willTerminateNotification. Ordinary app launches never touch this folder.
+            if FileManager.default.fileExists(atPath: directory.path) {
+                try FileManager.default.removeItem(at: directory)
+            }
+            guard environment["AMC_UI_TEST_GENERATED_FIXTURE"] == "1" else { return }
+
+            currentOutputFolder = directory
+
+            let fixtureURL = try await Self.generateUITestFixture(in: directory)
+            await handleFileSelection(result: .success([fixtureURL]))
+            if environment["AMC_UI_TEST_REMOVE_FIXTURE_AFTER_IMPORT"] == "1" {
+                try FileManager.default.removeItem(at: fixtureURL)
+            }
+        } catch {
+            Self.logger.error("Unable to prepare UI test fixture: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    nonisolated private static func generateUITestFixture(in directory: URL) async throws -> URL {
+        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
+            throw UITestFixtureError.missingFFmpeg
+        }
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fixtureURL = directory.appendingPathComponent("ui-test-fixture.mp4")
+        let fixtureDuration = ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1"
+            ? 15
+            : 2
+
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: [
+                "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)",
+                "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)",
+                "-map", "0:v:0", "-map", "1:a:0",
+                "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-shortest", fixtureURL.path,
+            ],
+            timeout: .seconds(30),
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 8 * 1024,
+            sensitiveValues: [directory.path, fixtureURL.path]
+        )
+        let result = try await SubprocessRunner().run(request)
+        guard result.succeeded,
+              FileManager.default.fileExists(atPath: fixtureURL.path) else {
+            Logger(subsystem: "com.aagedal.MediaConverter", category: "UITestFixture").error("UI test fixture FFmpeg diagnostic: \(request.redactedDiagnostic(result.standardErrorText), privacy: .public)")
+            throw UITestFixtureError.generationFailed(result.terminationStatus)
+        }
+        return fixtureURL
+    }
+
+    private enum UITestFixtureError: LocalizedError {
+        case missingFFmpeg
+        case generationFailed(Int32)
+
+        var errorDescription: String? {
+            switch self {
+            case .missingFFmpeg:
+                return "The bundled FFmpeg executable could not be resolved."
+            case .generationFailed(let status):
+                return "FFmpeg exited with status \(status)."
+            }
+        }
+    }
+#endif
 
     private func startProgressUpdates() async {
         progressTask?.cancel()
@@ -2096,16 +2278,27 @@ struct ContentView: View {
     private func clearAllFiles() {
         guard !isConverting else { return }
 
-        for item in droppedFiles {
+        Task { @MainActor in
+            // Invalidate manager-owned mux attempts before removing their rows so a
+            // completed-but-not-yet-published subtitle embed cannot replace a file late.
+            await ConversionManager.shared.cancelAllSubtitleEmbeddings()
+            guard !isConverting else { return }
+            clearAllFilesAfterEmbeddingCancellation()
+        }
+    }
+
+    @MainActor
+    private func clearAllFilesAfterEmbeddingCancellation() {
+        let allItems = droppedFiles + encodingGroups.flatMap(\.items)
+
+        for item in allItems {
             if item.isDownloading {
                 DownloadManager.shared.cancelDownload(itemID: item.id)
             } else if let _ = item.scheduledDownloadTime {
                 DownloadManager.shared.cancelScheduledDownload(itemID: item.id)
             }
             if item.subtitleStatus.isInProgress {
-                Task { await TesseractService.shared.cancelGeneration() }
-                Task { await WhisperService.shared.cancelGeneration() }
-                Task { await ParakeetService.shared.cancelGeneration() }
+                cancelSubtitleGeneration(for: item)
             }
             // Cancel in-progress preview generation (thumbnails/waveforms) to free CPU
             Task { await PreviewAssetGenerator.shared.cancelGeneration(for: item.url) }
@@ -2124,6 +2317,23 @@ struct ContentView: View {
         queueOrder.removeAll()
         overallProgress = 0.0
         dockProgressUpdater.reset()
+    }
+
+    private func cancelSubtitleGeneration(for item: VideoItem) {
+        switch item.subtitleMethod {
+        case .ocr:
+            if let operationID = item.subtitleOperationID {
+                Task { await TesseractService.shared.cancelGeneration(operationID: operationID) }
+            }
+        case .whisper:
+            if let operationID = item.subtitleOperationID {
+                Task { await WhisperService.shared.cancelGeneration(operationID: operationID) }
+            }
+        case .parakeet:
+            if let operationID = item.subtitleOperationID {
+                Task { await ParakeetService.shared.cancelGeneration(operationID: operationID) }
+            }
+        }
     }
 
     private func resetAllFiles(optionKeyPressed: Bool = false) {
@@ -2806,3 +3016,48 @@ private struct ContentViewNotificationHandlers: ViewModifier {
         }
     }
 }
+
+#if DEBUG
+/// The app owns all fixture filesystem operations; the UI runner's temporary
+/// directory is private to its sandbox and cannot be shared with bundled FFmpeg.
+enum UITestFixtureConfiguration {
+    static var directory: URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("AagedalMediaConverterUITestFixtures", isDirectory: true)
+    }
+
+    static func configureLaunchDefaults() {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["AMC_UI_TEST_SESSION"] == "1" else { return }
+        // Settings audits must not inspect personal upload destinations or
+        // touch their Keychain credentials. A volatile fixture also prevents
+        // the Upload pane's first-run path from persisting a default profile.
+        let profile = UploadProfile(
+            id: UUID(uuidString: "84A6535B-CE10-4DE4-AE11-ED740CA1A420")!,
+            name: "UI Test Upload"
+        )
+        var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        arguments[AppConstants.uploadProfilesKey] = try? JSONEncoder().encode([profile])
+        arguments[AppConstants.uploadSelectedProfileIDKey] = profile.id.uuidString
+        arguments[AppConstants.uploadProfileMigrationV2Key] = true
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+        if environment["AMC_UI_TEST_CLEANUP_FIXTURES"] == "1" {
+            // Runs in App.init, before XCUIApplication.launch() returns.
+            if FileManager.default.fileExists(atPath: directory.path) {
+                do {
+                    try FileManager.default.removeItem(at: directory)
+                } catch {
+                    Logger(subsystem: "com.aagedal.MediaConverter", category: "UITestFixture")
+                        .error("Unable to clean UI test fixtures: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            return
+        }
+        guard environment["AMC_UI_TEST_GENERATED_FIXTURE"] == "1" else { return }
+        // Configure before any @AppStorage is constructed, so syncing the view's
+        // current folder cannot write the fixture path into the saved preferences.
+        arguments["outputFolder"] = directory.path
+        UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
+    }
+}
+#endif

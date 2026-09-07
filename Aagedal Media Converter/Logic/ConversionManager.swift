@@ -27,9 +27,227 @@ private func progressIsDuration(_ s: String?) -> Bool {
     return etaDurationRegex.firstMatch(in: s, range: range) != nil
 }
 
+@MainActor
+enum SubtitleEmbeddingCommit {
+    /// Keeps attempt validation and filesystem publication in one synchronous
+    /// MainActor critical section. `replaceItemAt` preserves the destination if
+    /// publication fails, unlike a remove-then-move sequence.
+    static func publishIfCurrent(
+        temporaryURL: URL,
+        destinationURL: URL,
+        isCurrent: () -> Bool,
+        didPublish: () -> Void
+    ) throws -> Bool {
+        guard isCurrent() else { return false }
+        _ = try FileManager.default.replaceItemAt(destinationURL, withItemAt: temporaryURL)
+        didPublish()
+        return true
+    }
+}
+
+enum SubtitleEmbeddingSubprocessError: LocalizedError {
+    case failed(status: Int32, diagnostic: String)
+    case missingOutput
+    case timedOut
+    case failedToStart(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .failed(let status, let diagnostic):
+            let detail = diagnostic.isEmpty ? "" : ": \(diagnostic)"
+            return "Subtitle embedding failed with exit code \(status)\(detail)"
+        case .missingOutput:
+            return "Subtitle embedding completed without producing a valid output file."
+        case .timedOut:
+            return "Subtitle embedding timed out after 12 hours."
+        case .failedToStart(let diagnostic):
+            return "Unable to start subtitle embedding: \(diagnostic)"
+        }
+    }
+}
+
+/// One-shot FFmpeg subtitle mux behind the shared cancellable subprocess boundary.
+/// The caller owns publication of the staged output after this returns successfully.
+struct SubtitleEmbeddingSubprocess: Sendable {
+    static let timeout: Duration = .seconds(12 * 60 * 60)
+    static let diagnosticCaptureLimit = 256 * 1024
+
+    private let subprocessRunner: any SubprocessRunning
+
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        self.subprocessRunner = subprocessRunner
+    }
+
+    func run(
+        ffmpegPath: String,
+        srtURL: URL,
+        videoURL: URL,
+        stagedURL: URL,
+        subtitleCodec: String,
+        languageCode: String?
+    ) async throws {
+        var arguments = [
+            "-y",
+            "-i", videoURL.path,
+            "-i", srtURL.path,
+            "-map", "0",
+            "-map", "1:s",
+            "-c", "copy",
+            "-c:s", subtitleCodec,
+        ]
+        if let languageCode {
+            arguments.append(contentsOf: ["-metadata:s:s:0", "language=\(languageCode)"])
+        }
+        arguments.append(stagedURL.path)
+
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: arguments,
+            timeout: Self.timeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: [ffmpegPath, srtURL.path, videoURL.path, stagedURL.path]
+        )
+
+        do {
+            let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
+            guard result.succeeded else {
+                throw SubtitleEmbeddingSubprocessError.failed(
+                    status: result.terminationStatus,
+                    diagnostic: request.redactedDiagnostic(result.standardErrorText)
+                )
+            }
+        } catch is CancellationError {
+            try? FileManager.default.removeItem(at: stagedURL)
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            try? FileManager.default.removeItem(at: stagedURL)
+            switch error {
+            case .timedOut:
+                throw SubtitleEmbeddingSubprocessError.timedOut
+            case .failedToStart(_, let underlying):
+                throw SubtitleEmbeddingSubprocessError.failedToStart(
+                    request.redactedDiagnostic(underlying)
+                )
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: stagedURL)
+            throw error
+        }
+
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: stagedURL.path),
+              let size = attributes[.size] as? NSNumber,
+              size.int64Value > 0 else {
+            try? FileManager.default.removeItem(at: stagedURL)
+            throw SubtitleEmbeddingSubprocessError.missingOutput
+        }
+    }
+}
+
+private final class SubtitleEmbeddingOwnership: @unchecked Sendable {
+    private let current = OSAllocatedUnfairLock(initialState: true)
+
+    func whileCurrent<T>(_ operation: () throws -> T) rethrows -> T? {
+        try current.withLockUnchecked { isCurrent in
+            guard isCurrent else { return nil }
+            return try operation()
+        }
+    }
+
+    func invalidate() {
+        current.withLock { $0 = false }
+    }
+}
+
+struct MergePreparationSubprocess: Sendable {
+    private let subprocessRunner: any SubprocessRunning
+
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        self.subprocessRunner = subprocessRunner
+    }
+
+    func runFFmpeg(
+        at executablePath: String,
+        arguments: [String],
+        outputURL: URL,
+        context: String
+    ) async -> Bool {
+        let privatePaths = Set(
+            arguments.filter { $0.hasPrefix("/") }
+        ).union([executablePath, outputURL.path])
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: executablePath),
+            arguments: arguments,
+            timeout: .seconds(12 * 60 * 60),
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 256 * 1024,
+            sensitiveValues: privatePaths
+        )
+        let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "MergeCompatibility")
+
+        do {
+            let result = try await subprocessRunner.run(request)
+            guard result.succeeded else {
+                try? FileManager.default.removeItem(at: outputURL)
+                let diagnostic = request.redactedDiagnostic(result.standardErrorText)
+                logger.error("FFmpeg \(context, privacy: .private) failed with code \(result.terminationStatus). \(diagnostic, privacy: .public)")
+                return false
+            }
+
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: outputURL.path),
+                  let size = attributes[.size] as? NSNumber,
+                  size.int64Value > 0 else {
+                try? FileManager.default.removeItem(at: outputURL)
+                logger.error("FFmpeg \(context, privacy: .private) completed without a nonempty output")
+                return false
+            }
+            return true
+        } catch is CancellationError {
+            try? FileManager.default.removeItem(at: outputURL)
+            return false
+        } catch let error as SubprocessRunnerError {
+            try? FileManager.default.removeItem(at: outputURL)
+            switch error {
+            case .timedOut:
+                logger.error("FFmpeg \(context, privacy: .private) timed out after 12 hours")
+            case .failedToStart(_, let underlying):
+                let diagnostic = request.redactedDiagnostic(underlying)
+                logger.error("Failed to launch FFmpeg \(context, privacy: .private): \(diagnostic, privacy: .public)")
+            }
+            return false
+        } catch {
+            try? FileManager.default.removeItem(at: outputURL)
+            let diagnostic = request.redactedDiagnostic(error.localizedDescription)
+            logger.error("FFmpeg \(context, privacy: .private) failed: \(diagnostic, privacy: .public)")
+            return false
+        }
+    }
+}
+
 actor ConversionManager: Sendable {
     @MainActor static let shared = ConversionManager()
-    private init() {}
+    private let mergePreparationSubprocess: MergePreparationSubprocess
+    private let subtitleEmbeddingSubprocess: SubtitleEmbeddingSubprocess
+    private let ffmpegPathProvider: @Sendable () -> String?
+    private let transcriptionSettings: any TranscriptionSettingsProviding
+    private let ocrSettings: any OCRSettingsProviding
+    private let analyticsSettings: any AnalyticsSettingsProviding
+
+    init(
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
+        transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings(),
+        ocrSettings: any OCRSettingsProviding = PostConversionSettings(),
+        analyticsSettings: any AnalyticsSettingsProviding = PostConversionSettings()
+    ) {
+        self.mergePreparationSubprocess = MergePreparationSubprocess(subprocessRunner: subprocessRunner)
+        self.subtitleEmbeddingSubprocess = SubtitleEmbeddingSubprocess(subprocessRunner: subprocessRunner)
+        self.ffmpegPathProvider = ffmpegPathProvider
+        self.transcriptionSettings = transcriptionSettings
+        self.ocrSettings = ocrSettings
+        self.analyticsSettings = analyticsSettings
+    }
 
     enum ConversionStatus {
         case waiting
@@ -48,7 +266,18 @@ actor ConversionManager: Sendable {
     private var currentOutputFolder: String?
     private var currentPreset: ExportPreset = .videoLoop
     private var allowedItemIDs: Set<UUID>? = nil
-    private var batchCompletionContinuation: CheckedContinuation<Void, Never>?
+    private var activeBatchID: UUID?
+    private var batchCompletionContinuation: (
+        batchID: UUID,
+        continuation: CheckedContinuation<Void, Never>
+    )?
+    private struct SubtitleEmbeddingAttempt {
+        let id: UUID
+        let operationID: UUID?
+        let ownership: SubtitleEmbeddingOwnership
+        let task: Task<Void, Error>
+    }
+    private var subtitleEmbeddingAttempts: [UUID: SubtitleEmbeddingAttempt] = [:]
 
     // Progress tracking with Swift Concurrency
     private var progressContinuation: AsyncStream<Double>.Continuation?
@@ -161,6 +390,9 @@ actor ConversionManager: Sendable {
         var needsConformance: Bool { needsVideoReencode || needsAudioReencode }
     }
     private var mergePlan: MergePlan?
+    private var mergePreparationTask: (id: UUID, itemID: UUID, task: Task<Bool, Never>)?
+    private var mergePreparationScope: (batchID: UUID, itemIDs: Set<UUID>)?
+    private var invalidatedMergePreparationBatchIDs: Set<UUID> = []
     private var lastMergeMetadata: [UUID: VideoMetadata] = [:]
     private let mergeLogger = Logger(subsystem: "com.aagedal.MediaConverter", category: "MergeCompatibility")
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ConversionManager")
@@ -210,9 +442,12 @@ actor ConversionManager: Sendable {
         from items: [VideoItem],
         preset: ExportPreset,
         outputFolder: String,
-        groupName: String? = nil
+        groupName: String? = nil,
+        batchID: UUID
     ) async -> MergePlan? {
-        guard case .compatible = await evaluateMergeCompatibility(for: items, preset: preset) else {
+        guard isMergePreparationActive(batchID),
+              case .compatible = await evaluateMergeCompatibility(for: items, preset: preset),
+              isMergePreparationActive(batchID) else {
             return nil
         }
 
@@ -226,7 +461,8 @@ actor ConversionManager: Sendable {
 
         guard let (segments, temporaryFiles, totalDuration) = await prepareMergeSegments(
             from: orderedWaitingItems,
-            durationLookup: durationLookup
+            durationLookup: durationLookup,
+            batchID: batchID
         ) else {
             return nil
         }
@@ -358,13 +594,18 @@ actor ConversionManager: Sendable {
 
     private func prepareMergeSegments(
         from items: [VideoItem],
-        durationLookup: [UUID: Double]
+        durationLookup: [UUID: Double],
+        batchID: UUID
     ) async -> ([MergeSegment], [URL], Double?)? {
         var segments: [MergeSegment] = []
         var temporaryFiles: [URL] = []
         var totalDuration: Double = 0
 
         for item in items {
+            guard isMergePreparationActive(batchID) else {
+                cleanupTemporaryFiles(temporaryFiles)
+                return nil
+            }
             let baseDuration = durationLookup[item.id]
             let hasTrim = hasActiveTrim(item)
             let segmentDuration = resolveSegmentDuration(for: item, baseDuration: baseDuration, hasTrim: hasTrim)
@@ -373,7 +614,7 @@ actor ConversionManager: Sendable {
             }
 
             if hasTrim {
-                guard let trimmedURL = await prepareTrimmedClip(for: item) else {
+                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID) else {
                     cleanupTemporaryFiles(temporaryFiles)
                     return nil
                 }
@@ -446,7 +687,7 @@ actor ConversionManager: Sendable {
         return false
     }
 
-    private func prepareTrimmedClip(for item: VideoItem) async -> URL? {
+    private func prepareTrimmedClip(for item: VideoItem, batchID: UUID) async -> URL? {
         guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
             mergeLogger.error("FFmpeg binary not found while preparing trimmed clip for \(item.name, privacy: .public)")
             return nil
@@ -479,45 +720,75 @@ actor ConversionManager: Sendable {
 
         arguments.append(contentsOf: ["-c", "copy", "-avoid_negative_ts", "make_zero", tempURL.path])
 
-        let success = await runFFmpeg(at: ffmpegPath, arguments: arguments, context: "trim \(item.name)")
-        if success {
-            return tempURL
-        } else {
-            do {
-                try FileManager.default.removeItem(at: tempURL)
-            } catch {
-                mergeLogger.warning("Failed to remove temporary trim file \(tempURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-            return nil
+        let success = await runMergePreparationFFmpeg(
+            at: ffmpegPath,
+            arguments: arguments,
+            outputURL: tempURL,
+            itemID: item.id,
+            batchID: batchID,
+            context: "trim \(item.name)"
+        )
+        return success ? tempURL : nil
+    }
+
+    private func runMergePreparationFFmpeg(
+        at executablePath: String,
+        arguments: [String],
+        outputURL: URL,
+        itemID: UUID,
+        batchID: UUID,
+        context: String
+    ) async -> Bool {
+        guard isMergePreparationActive(batchID) else { return false }
+        let operationID = UUID()
+        let task = Task {
+            await mergePreparationSubprocess.runFFmpeg(
+                at: executablePath,
+                arguments: arguments,
+                outputURL: outputURL,
+                context: context
+            )
+        }
+        mergePreparationTask = (operationID, itemID, task)
+        let succeeded = await task.value
+        if mergePreparationTask?.id == operationID {
+            mergePreparationTask = nil
+        }
+        guard isMergePreparationActive(batchID) else {
+            try? FileManager.default.removeItem(at: outputURL)
+            return false
+        }
+        return succeeded
+    }
+
+    private func cancelMergePreparation() {
+        mergePreparationTask?.task.cancel()
+        mergePreparationTask = nil
+    }
+
+    private func cancelMergePreparation(for itemID: UUID) {
+        if let scope = mergePreparationScope, scope.itemIDs.contains(itemID) {
+            invalidatedMergePreparationBatchIDs.insert(scope.batchID)
+            cancelMergePreparation()
+        } else if mergePreparationTask?.itemID == itemID {
+            cancelMergePreparation()
         }
     }
 
-    private func runFFmpeg(at executablePath: String, arguments: [String], context: String) async -> Bool {
-        let logger = mergeLogger
-        return await withCheckedContinuation { continuation in
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executablePath)
-            process.arguments = arguments
-            process.standardOutput = Pipe()
-            let errorPipe = Pipe()
-            process.standardError = errorPipe
+    private func isMergePreparationActive(_ batchID: UUID) -> Bool {
+        isBatchActive(batchID) && !invalidatedMergePreparationBatchIDs.contains(batchID)
+    }
 
-            process.terminationHandler = { process in
-                let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                if process.terminationStatus != 0 {
-                    let stderr = String(data: data, encoding: .utf8) ?? "(unable to decode ffmpeg stderr)"
-                    logger.error("FFmpeg \(context, privacy: .public) failed with code \(process.terminationStatus). \(stderr, privacy: .public)")
-                }
-                continuation.resume(returning: process.terminationStatus == 0)
-            }
+    private func beginMergePreparation(batchID: UUID, items: [VideoItem]) {
+        invalidatedMergePreparationBatchIDs.remove(batchID)
+        mergePreparationScope = (batchID, Set(items.filter { $0.status == .waiting }.map(\.id)))
+    }
 
-            do {
-                try process.run()
-            } catch {
-                logger.error("Failed to launch FFmpeg \(context, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                continuation.resume(returning: false)
-            }
+    private func finishMergePreparation(batchID: UUID) {
+        if mergePreparationScope?.batchID == batchID {
+            mergePreparationScope = nil
         }
+        invalidatedMergePreparationBatchIDs.remove(batchID)
     }
 
     private func cleanupTemporaryFiles(_ urls: [URL]) {
@@ -530,8 +801,8 @@ actor ConversionManager: Sendable {
         }
     }
 
-    private func executeMergePlan(droppedFiles: Binding<[VideoItem]>) async {
-        guard let plan = mergePlan else { return }
+    private func executeMergePlan(droppedFiles: Binding<[VideoItem]>, batchID: UUID) async {
+        guard activeBatchID == batchID, let plan = mergePlan else { return }
 
         let indices: [Int] = plan.itemIDs.compactMap { id in
             droppedFiles.wrappedValue.firstIndex(where: { $0.id == id })
@@ -540,7 +811,12 @@ actor ConversionManager: Sendable {
         guard indices.count == plan.itemIDs.count else {
             cleanupMergeArtifacts(for: plan)
             mergePlan = nil
-            await convertNextFile(droppedFiles: droppedFiles, outputFolder: plan.outputFolder, preset: plan.preset)
+            await convertNextFile(
+                droppedFiles: droppedFiles,
+                outputFolder: plan.outputFolder,
+                preset: plan.preset,
+                batchID: batchID
+            )
             return
         }
 
@@ -607,8 +883,12 @@ actor ConversionManager: Sendable {
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let mergeUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
+        let av2Settings = plan.preset == .av2 ? AV2Settings() : nil
+        let outputExtension = av2Settings?.container.fileExtension
+            ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
         await ffmpegConverter.convert(
             request: mergeRequest,
+            av2Settings: av2Settings,
             progressUpdate: { progress, status in
                 let now = Date()
                 let shouldUpdate = mergeUIThrottle.withLock { last -> Bool in
@@ -636,10 +916,12 @@ actor ConversionManager: Sendable {
                     guard let self else { return }
                     await self.handleMergeCompletion(
                         plan: plan,
+                        outputExtension: outputExtension,
                         indices: indices,
                         success: success,
                         errorReason: errorReason,
-                        droppedFiles: droppedFiles
+                        droppedFiles: droppedFiles,
+                        batchID: batchID
                     )
                 }
             }
@@ -676,7 +958,8 @@ actor ConversionManager: Sendable {
     /// Re-encodes a single clip to match the conformance target format.
     private func prepareConformedClip(
         for item: VideoItem,
-        target: ConformanceTarget
+        target: ConformanceTarget,
+        batchID: UUID
     ) async -> URL? {
         guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
             mergeLogger.error("FFmpeg binary not found while preparing conformed clip for \(item.name, privacy: .public)")
@@ -695,7 +978,14 @@ actor ConversionManager: Sendable {
         )
 
         mergeLogger.info("Conforming \(item.name, privacy: .public) to \(target.formatSummary, privacy: .public)")
-        let success = await runFFmpeg(at: ffmpegPath, arguments: arguments, context: "conform \(item.name)")
+        let success = await runMergePreparationFFmpeg(
+            at: ffmpegPath,
+            arguments: arguments,
+            outputURL: tempURL,
+            itemID: item.id,
+            batchID: batchID,
+            context: "conform \(item.name)"
+        )
         if success {
             return tempURL
         } else {
@@ -710,6 +1000,7 @@ actor ConversionManager: Sendable {
         durationLookup: [UUID: Double],
         target: ConformanceTarget,
         metadata: [UUID: VideoMetadata],
+        batchID: UUID,
         statusUpdate: @MainActor @Sendable (String) -> Void
     ) async -> ([MergeSegment], [URL], Double?)? {
         var segments: [MergeSegment] = []
@@ -717,7 +1008,10 @@ actor ConversionManager: Sendable {
         var totalDuration: Double = 0
 
         for (index, item) in items.enumerated() {
-            if Task.isCancelled { return nil }
+            guard !Task.isCancelled, isMergePreparationActive(batchID) else {
+                cleanupTemporaryFiles(temporaryFiles)
+                return nil
+            }
 
             let segmentDuration = durationLookup[item.id] ?? item.durationSeconds
             totalDuration += segmentDuration
@@ -734,7 +1028,11 @@ actor ConversionManager: Sendable {
             if needsConformance {
                 // Re-encode to match reference (trim applied in same pass)
                 await statusUpdate("Conforming clip \(index + 1) of \(items.count): \(item.name)")
-                guard let conformedURL = await prepareConformedClip(for: item, target: target) else {
+                guard let conformedURL = await prepareConformedClip(
+                    for: item,
+                    target: target,
+                    batchID: batchID
+                ) else {
                     cleanupTemporaryFiles(temporaryFiles)
                     return nil
                 }
@@ -746,7 +1044,7 @@ actor ConversionManager: Sendable {
                 temporaryFiles.append(conformedURL)
             } else if hasActiveTrim(item) {
                 // Already matches but needs trim — stream copy trim
-                guard let trimmedURL = await prepareTrimmedClip(for: item) else {
+                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID) else {
                     cleanupTemporaryFiles(temporaryFiles)
                     return nil
                 }
@@ -776,8 +1074,10 @@ actor ConversionManager: Sendable {
         referenceItemID: UUID,
         outputFolder: String,
         groupName: String? = nil,
+        batchID: UUID,
         statusUpdate: @MainActor @Sendable (String) -> Void
     ) async -> MergePlan? {
+        guard isMergePreparationActive(batchID) else { return nil }
         let waitingItems = items.filter { $0.status == .waiting }
         guard waitingItems.count >= 2 else { return nil }
 
@@ -822,6 +1122,7 @@ actor ConversionManager: Sendable {
             durationLookup: durationLookup,
             target: target,
             metadata: metadata,
+            batchID: batchID,
             statusUpdate: statusUpdate
         ) else {
             return nil
@@ -867,13 +1168,16 @@ actor ConversionManager: Sendable {
 
     private func handleMergeCompletion(
         plan: MergePlan,
+        outputExtension: String,
         indices: [Int],
         success: Bool,
         errorReason: String?,
-        droppedFiles: Binding<[VideoItem]>
+        droppedFiles: Binding<[VideoItem]>,
+        batchID: UUID
     ) async {
-        let referenceURL = plan.segments.first?.originalURL
-        let finalURL = plan.outputBaseURL.appendingPathExtension(plan.preset.outputExtension(for: referenceURL))
+        guard isBatchActive(batchID) else { return }
+
+        let finalURL = plan.outputBaseURL.appendingPathExtension(outputExtension)
 
         // Capture file size - try with security-scoped access
         var outputFileSizeBytes: Int64?
@@ -920,9 +1224,9 @@ actor ConversionManager: Sendable {
         }
 
         // Trigger upload for merged output (upload once since all items share the same file)
-        if success,
-           let firstUploadIdx = indices.first(where: { droppedFiles.wrappedValue[$0].uploadEnabled }) {
-            let itemID = droppedFiles.wrappedValue[firstUploadIdx].id
+        if let itemID = ConversionUploadFollowUp.itemID(
+            afterSuccess: success, mergedIndices: indices, items: droppedFiles.wrappedValue
+        ) {
             Task {
                 await UploadManager.shared.startUpload(itemID: itemID)
             }
@@ -957,11 +1261,12 @@ actor ConversionManager: Sendable {
         cleanupMergeArtifacts(for: plan)
         mergePlan = nil
 
-        if isConverting {
+        if isConverting, activeBatchID == batchID {
             await convertNextFile(
                 droppedFiles: droppedFiles,
                 outputFolder: plan.outputFolder,
-                preset: plan.preset
+                preset: plan.preset,
+                batchID: batchID
             )
         }
 
@@ -1070,7 +1375,14 @@ actor ConversionManager: Sendable {
         return isConverting
     }
 
-    func evaluateMergeCompatibility(for items: [VideoItem], preset: ExportPreset) async -> MergeCompatibilityResult {
+    func evaluateMergeCompatibility(
+        for items: [VideoItem],
+        preset: ExportPreset,
+        metadataTimeout: Duration = BoundedVideoMetadataProbe.defaultTimeout,
+        metadataProbe: @escaping @Sendable (URL) async throws -> VideoMetadata = {
+            try await VideoMetadataService.shared.metadata(for: $0)
+        }
+    ) async -> MergeCompatibilityResult {
         lastMergeMetadata = [:]
         // Filter for waiting items, excluding downloads and scheduled downloads
         let waitingItems = items.filter {
@@ -1095,8 +1407,14 @@ actor ConversionManager: Sendable {
             }
 
             do {
-                let metadata = try await VideoMetadataService.shared.metadata(for: item.url)
+                let metadata = try await BoundedVideoMetadataProbe.metadata(
+                    for: item.url,
+                    timeout: metadataTimeout,
+                    probe: metadataProbe
+                )
                 resolvedMetadata[item.id] = metadata
+            } catch is CancellationError {
+                return .cancelled
             } catch {
                 mergeLogger.debug("Merge incompatible: metadata unavailable for \(item.name, privacy: .public) – \(error.localizedDescription, privacy: .public)")
                 return .metadataUnavailable(item)
@@ -1221,7 +1539,7 @@ actor ConversionManager: Sendable {
             case .insufficientItems(let count):
                 return count == 0 ? "Add clips to enable merging." : "Need at least two queued clips to merge."
             case .metadataUnavailable(let item):
-                return "Gathering metadata for \(item.name)…"
+                return "Metadata is unavailable for \(item.name)."
             case .missingVideoTrack:
                 return "All clips must contain a video track for merging."
             case .videoCodecMismatch:
@@ -1263,9 +1581,13 @@ actor ConversionManager: Sendable {
             return .insufficientItems(waitingItems.count)
         }
 
-        guard let firstItem = waitingItems.first,
-              let referenceMetadata = metadata[firstItem.id],
-              !referenceMetadata.videoStreams.isEmpty else {
+        guard let firstItem = waitingItems.first else {
+            return .insufficientItems(0)
+        }
+        guard let referenceMetadata = metadata[firstItem.id] else {
+            return .metadataUnavailable(firstItem)
+        }
+        guard !referenceMetadata.videoStreams.isEmpty else {
             return .missingVideoTrack
         }
 
@@ -1273,7 +1595,10 @@ actor ConversionManager: Sendable {
         let referenceAudio = referenceMetadata.audioStreams.first
 
         for item in waitingItems {
-            guard let meta = metadata[item.id], !meta.videoStreams.isEmpty else {
+            guard let meta = metadata[item.id] else {
+                return .metadataUnavailable(item)
+            }
+            guard !meta.videoStreams.isEmpty else {
                 return .missingVideoTrack
             }
 
@@ -1499,7 +1824,12 @@ actor ConversionManager: Sendable {
         conformanceReferenceItemID: UUID? = nil,
         conformanceMetadata: [UUID: VideoMetadata]? = nil
     ) async {
+        let batchID = UUID()
+        activeBatchID = batchID
         self.isConverting = true
+        self.currentDroppedFiles = items
+        self.currentOutputFolder = outputFolder
+        self.currentPreset = preset
 
         // Apply group-level settings to individual items
         if transcriptionEnabled || uploadEnabled || analyticsEnabled {
@@ -1526,36 +1856,65 @@ actor ConversionManager: Sendable {
            let meta = conformanceMetadata,
            items.wrappedValue.filter({ $0.status == .waiting }).count >= 2 {
             // Two-pass conformance merge: re-encode mismatched clips, then stream-copy concat
-            self.mergePlan = await buildConformanceMergePlan(
+            beginMergePreparation(batchID: batchID, items: items.wrappedValue)
+            let preparedPlan = await buildConformanceMergePlan(
                 from: items.wrappedValue,
                 metadata: meta,
                 referenceItemID: refID,
                 outputFolder: outputFolder,
                 groupName: groupName,
+                batchID: batchID,
                 statusUpdate: { message in
                     // Could update UI status here in future
                     self.mergeLogger.info("\(message, privacy: .public)")
                 }
             )
+            let preparationIsActive = isMergePreparationActive(batchID)
+            finishMergePreparation(batchID: batchID)
+            if preparationIsActive {
+                self.mergePlan = preparedPlan
+            } else {
+                if let preparedPlan { cleanupMergeArtifacts(for: preparedPlan) }
+                guard isBatchActive(batchID) else { return }
+                self.mergePlan = nil
+            }
         } else if concatEnabled && items.wrappedValue.filter({ $0.status == .waiting }).count >= 2 {
-            self.mergePlan = await buildMergePlan(from: items.wrappedValue, preset: preset, outputFolder: outputFolder, groupName: groupName)
+            beginMergePreparation(batchID: batchID, items: items.wrappedValue)
+            let preparedPlan = await buildMergePlan(
+                from: items.wrappedValue,
+                preset: preset,
+                outputFolder: outputFolder,
+                groupName: groupName,
+                batchID: batchID
+            )
+            let preparationIsActive = isMergePreparationActive(batchID)
+            finishMergePreparation(batchID: batchID)
+            if preparationIsActive {
+                self.mergePlan = preparedPlan
+            } else {
+                if let preparedPlan { cleanupMergeArtifacts(for: preparedPlan) }
+                guard isBatchActive(batchID) else { return }
+                self.mergePlan = nil
+            }
         } else {
             self.mergePlan = nil
         }
 
-        self.currentDroppedFiles = items
-        self.currentOutputFolder = outputFolder
-        self.currentPreset = preset
-
         startProgressTimer(droppedFiles: items)
-        await convertNextFile(
-            droppedFiles: items,
-            outputFolder: outputFolder,
-            preset: preset
-        )
-        // Wait for the batch to fully complete before returning to the caller.
+        guard isBatchActive(batchID) else { return }
+        // Install the completion continuation before starting work. The actor can
+        // be re-entered while convertNextFile awaits process launch, so cancellation
+        // must never be able to arrive before the waiter exists.
         await withCheckedContinuation { continuation in
-            self.batchCompletionContinuation = continuation
+            self.batchCompletionContinuation = (batchID, continuation)
+            Task {
+                await self.convertNextFile(
+                    droppedFiles: items,
+                    outputFolder: outputFolder,
+                    preset: preset,
+                    batchID: batchID
+                )
+            }
         }
     }
 
@@ -1567,64 +1926,94 @@ actor ConversionManager: Sendable {
         limitToIDs: Set<UUID>? = nil
     ) async {
         guard !self.isConverting else { return }
+        let batchID = UUID()
+        activeBatchID = batchID
         self.isConverting = true
         self.allowedItemIDs = limitToIDs
         self.currentDroppedFiles = droppedFiles
         self.currentOutputFolder = outputFolder
         self.currentPreset = preset
         if mergeClipsEnabled {
-            self.mergePlan = await buildMergePlan(from: droppedFiles.wrappedValue, preset: preset, outputFolder: outputFolder)
+            beginMergePreparation(batchID: batchID, items: droppedFiles.wrappedValue)
+            let preparedPlan = await buildMergePlan(
+                from: droppedFiles.wrappedValue,
+                preset: preset,
+                outputFolder: outputFolder,
+                batchID: batchID
+            )
+            let preparationIsActive = isMergePreparationActive(batchID)
+            finishMergePreparation(batchID: batchID)
+            if preparationIsActive {
+                self.mergePlan = preparedPlan
+            } else {
+                if let preparedPlan { cleanupMergeArtifacts(for: preparedPlan) }
+                guard isBatchActive(batchID) else { return }
+                self.mergePlan = nil
+            }
         } else {
             self.mergePlan = nil
         }
         progressContinuation?.yield(0.0)
         // Start periodic updates so dock appears immediately
         startProgressTimer(droppedFiles: droppedFiles)
-        await convertNextFile(
-            droppedFiles: droppedFiles,
-            outputFolder: outputFolder,
-            preset: preset
-        )
-        // convertNextFile returns after starting the first file (completion is callback-based).
-        // Wait for the batch to fully complete before returning to the caller.
+        guard isBatchActive(batchID) else { return }
+        // Install the completion continuation before starting work. The actor can
+        // be re-entered while convertNextFile awaits process launch, so cancellation
+        // must never be able to arrive before the waiter exists.
         await withCheckedContinuation { continuation in
-            self.batchCompletionContinuation = continuation
+            self.batchCompletionContinuation = (batchID, continuation)
+            Task {
+                await self.convertNextFile(
+                    droppedFiles: droppedFiles,
+                    outputFolder: outputFolder,
+                    preset: preset,
+                    batchID: batchID
+                )
+            }
         }
     }
 
     private func convertNextFile(
         droppedFiles: Binding<[VideoItem]>,
         outputFolder: String,
-        preset: ExportPreset
+        preset: ExportPreset,
+        batchID: UUID
     ) async {
+        guard isConverting, activeBatchID == batchID else { return }
+
         // Update overall progress before starting next file
         await updateOverallProgress(droppedFiles: droppedFiles)
+        guard isConverting, activeBatchID == batchID else { return }
 
         if let plan = mergePlan, !plan.hasExecuted {
             mergePlan?.hasExecuted = true
-            await executeMergePlan(droppedFiles: droppedFiles)
+            await executeMergePlan(droppedFiles: droppedFiles, batchID: batchID)
             return
         }
 
-        guard let nextFile = droppedFiles.wrappedValue.first(where: {
-            $0.status == .waiting && (allowedItemIDs?.contains($0.id) ?? true)
-        }) else {
+        guard let nextFile = ConversionQueueState.nextItem(
+            in: droppedFiles.wrappedValue,
+            allowedItemIDs: allowedItemIDs
+        ) else {
             self.isConverting = false
+            self.activeBatchID = nil
             self.allowedItemIDs = nil
             progressContinuation?.yield(1.0)
             stopProgressTimer()
             releaseAllSecurityScopedAccess()
             // Signal batch completion so startConversion/convertGroup can return
-            if let continuation = batchCompletionContinuation {
-                batchCompletionContinuation = nil
-                continuation.resume()
-            }
+            finishBatch(batchID)
             return
         }
         
         let fileId = nextFile.id
         guard let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) else {
-            await convertNextFile(droppedFiles: droppedFiles, outputFolder: outputFolder, preset: preset)
+            await convertNextFile(
+                droppedFiles: droppedFiles,
+                outputFolder: outputFolder,
+                preset: preset,
+                batchID: batchID
+            )
             return
         }
         
@@ -1646,6 +2035,7 @@ actor ConversionManager: Sendable {
             droppedFiles.wrappedValue[idx].apply(details: details)
             droppedFiles.wrappedValue[idx].detailsLoaded = true
         }
+        guard isConverting, activeBatchID == batchID else { return }
         
         // Update status to converting
         droppedFiles.wrappedValue[idx].status = .converting
@@ -1664,7 +2054,12 @@ actor ConversionManager: Sendable {
                 droppedFiles.wrappedValue[idx].statusMessage = nil
                 SoundManager.shared.playError()
             }
-            await convertNextFile(droppedFiles: droppedFiles, outputFolder: outputFolder, preset: preset)
+            await convertNextFile(
+                droppedFiles: droppedFiles,
+                outputFolder: outputFolder,
+                preset: preset,
+                batchID: batchID
+            )
             return
         }
 
@@ -1683,7 +2078,12 @@ actor ConversionManager: Sendable {
                 droppedFiles.wrappedValue[idx].statusMessage = nil
                 SoundManager.shared.playError()
             }
-            await convertNextFile(droppedFiles: droppedFiles, outputFolder: outputFolder, preset: preset)
+            await convertNextFile(
+                droppedFiles: droppedFiles,
+                outputFolder: outputFolder,
+                preset: preset,
+                batchID: batchID
+            )
             return
         }
 
@@ -1741,7 +2141,15 @@ actor ConversionManager: Sendable {
         }()
 
         // For image sequence input, pass the FFMPEG input arguments and expected duration
-        let imageSeqInputArgs = currentItem.imageSequenceConfig?.ffmpegInputArguments
+        var customInputArguments = currentItem.imageSequenceConfig?.ffmpegInputArguments
+#if DEBUG
+        // Keep the real process/cancellation path under UI test while ensuring a
+        // tiny fixture cannot finish before automation has a chance to cancel it.
+        if customInputArguments == nil,
+           ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1" {
+            customInputArguments = ["-re", "-i", inputURL.path]
+        }
+#endif
         let imageSeqExpectedDuration = currentItem.imageSequenceConfig?.durationSeconds
 
         // Auto-populate DCP/IMF metadata when the user never opened the editor.
@@ -1773,13 +2181,17 @@ actor ConversionManager: Sendable {
             waveformRequest: waveformRequest,
             synthesizedVideoRequest: synthesizedVideoRequest,
             waveformBackgroundImageURL: currentItem.waveformBackgroundImageURL,
-            customInputArguments: imageSeqInputArgs
+            visualSourceURL: currentItem.imageSequenceConfig?.firstFrameURL,
+            customInputArguments: customInputArguments
         )
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let singleUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
+        let av2Settings = preset == .av2 ? AV2Settings() : nil
+        let outputExtension = av2Settings?.container.fileExtension ?? preset.outputExtension(for: inputURL)
         await ffmpegConverter.convert(
             request: conversionRequest,
+            av2Settings: av2Settings,
             progressUpdate: { progress, status in
                 let now = Date()
                 let shouldUpdate = singleUIThrottle.withLock { last -> Bool in
@@ -1804,6 +2216,10 @@ actor ConversionManager: Sendable {
             }
         ) { success, errorReason in
             Task { @MainActor in
+                // A cancelled batch may finish after the user has reset and started
+                // another one. Never let that stale callback mutate the new batch.
+                guard await self.isBatchActive(batchID) else { return }
+
                 if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {
                     // Capture file size FIRST (before setting status to .done)
                     // This ensures all data is ready before SwiftUI re-renders
@@ -1826,7 +2242,7 @@ actor ConversionManager: Sendable {
                                 }
                             }
                         } else {
-                            outputFileURL = outputURL.appendingPathExtension(preset.outputExtension(for: inputURL))
+                            outputFileURL = outputURL.appendingPathExtension(outputExtension)
                         }
 
                         // Capture file size - try multiple approaches
@@ -1899,9 +2315,11 @@ actor ConversionManager: Sendable {
                     self.logger.debug("Final state - status: \(String(describing: droppedFiles.wrappedValue[idx].status), privacy: .public)")
 
                     // Trigger upload if enabled for this item
-                    if success && droppedFiles.wrappedValue[idx].uploadEnabled {
+                    if let itemID = ConversionUploadFollowUp.itemID(
+                        afterSuccess: success, item: droppedFiles.wrappedValue[idx]
+                    ) {
                         Task {
-                            await UploadManager.shared.startUpload(itemID: fileId)
+                            UploadManager.shared.startUpload(itemID: itemID)
                         }
                     }
 
@@ -1969,11 +2387,12 @@ actor ConversionManager: Sendable {
                 }
 
                 // Only continue if conversion has not been cancelled
-                if await self.isConverting {
+                if await self.isBatchActive(batchID) {
                     await self.convertNextFile(
                         droppedFiles: droppedFiles,
                         outputFolder: outputFolder,
-                        preset: preset
+                        preset: preset,
+                        batchID: batchID
                     )
                 }
                 
@@ -1987,7 +2406,11 @@ actor ConversionManager: Sendable {
     }
 
     func cancelConversion() async {
+        let cancelledBatchID = activeBatchID
         self.isConverting = false
+        self.activeBatchID = nil
+        cancelMergePreparation()
+        cancelAllSubtitleEmbeddings()
         await ffmpegConverter.cancelConversion()
         currentProcess = nil
 
@@ -1999,13 +2422,7 @@ actor ConversionManager: Sendable {
 
         // Update UI-bound items to cancelled
         if let droppedFiles = currentDroppedFiles {
-            for idx in droppedFiles.wrappedValue.indices
-                where droppedFiles.wrappedValue[idx].status == .converting {
-                droppedFiles.wrappedValue[idx].status = .cancelled
-                droppedFiles.wrappedValue[idx].progress = 0.0
-                droppedFiles.wrappedValue[idx].eta = nil
-                droppedFiles.wrappedValue[idx].statusMessage = nil
-            }
+            ConversionQueueState.cancel(&droppedFiles.wrappedValue, scope: .converting)
         }
 
         // Update internal queue
@@ -2015,14 +2432,17 @@ actor ConversionManager: Sendable {
         stopProgressTimer()
         releaseAllSecurityScopedAccess()
         // Signal batch completion so the caller's await returns
-        if let continuation = batchCompletionContinuation {
-            batchCompletionContinuation = nil
-            continuation.resume()
-        }
+        finishBatch(cancelledBatchID)
     }
 
     /// Cancels a single video item without aborting the entire queue
     func cancelItem(with id: UUID) async {
+        cancelMergePreparation(for: id)
+        cancelSubtitleEmbedding(itemID: id, operationID: nil)
+        if let plan = mergePlan, !plan.hasExecuted, plan.itemIDs.contains(id) {
+            cleanupMergeArtifacts(for: plan)
+            mergePlan = nil
+        }
         guard let droppedFiles = currentDroppedFiles else { return }
         
         // If the item is currently converting
@@ -2054,7 +2474,11 @@ actor ConversionManager: Sendable {
         }
     }
     func cancelAllConversions() async {
+        let cancelledBatchID = activeBatchID
         self.isConverting = false
+        self.activeBatchID = nil
+        cancelMergePreparation()
+        cancelAllSubtitleEmbeddings()
         await ffmpegConverter.cancelConversion()
 
         // Clean up merge temp files if a merge was in progress
@@ -2065,14 +2489,7 @@ actor ConversionManager: Sendable {
 
         // Update UI-bound items to cancelled
         if let droppedFiles = currentDroppedFiles {
-            for idx in droppedFiles.wrappedValue.indices
-                where droppedFiles.wrappedValue[idx].status == .converting
-                   || droppedFiles.wrappedValue[idx].status == .waiting {
-                droppedFiles.wrappedValue[idx].status = .cancelled
-                droppedFiles.wrappedValue[idx].progress = 0.0
-                droppedFiles.wrappedValue[idx].eta = nil
-                droppedFiles.wrappedValue[idx].statusMessage = nil
-            }
+            ConversionQueueState.cancel(&droppedFiles.wrappedValue, scope: .waitingAndConverting)
         }
 
         // Clear internal queue
@@ -2080,6 +2497,19 @@ actor ConversionManager: Sendable {
         progressContinuation?.yield(0.0)
         stopProgressTimer()
         releaseAllSecurityScopedAccess()
+        finishBatch(cancelledBatchID)
+    }
+
+    private func isBatchActive(_ batchID: UUID) -> Bool {
+        isConverting && activeBatchID == batchID
+    }
+
+    private func finishBatch(_ batchID: UUID?) {
+        guard let batchID,
+              let waiter = batchCompletionContinuation,
+              waiter.batchID == batchID else { return }
+        batchCompletionContinuation = nil
+        waiter.continuation.resume()
     }
     
     // Convert duration string ("hh:mm:ss" or "mm:ss" or "ss") to seconds
@@ -2103,41 +2533,9 @@ actor ConversionManager: Sendable {
         #endif
         let files = droppedFiles.wrappedValue
         
-        // Filter out cancelled items
+        let progress = ConversionQueueState.overallProgress(for: files)
         #if DEBUG
-        logger.debug("Files: \(files.map { ($0.name, $0.status, $0.durationSeconds, $0.progress) }, privacy: .public)")
-        #endif
-        let activeFiles = files.filter { $0.status != .cancelled && $0.status != .failed }
-        
-        guard !activeFiles.isEmpty else {
-            progressContinuation?.yield(0.0)
-            return
-        }
-
-        // Total duration of active files (seconds)
-        let totalDuration = activeFiles.reduce(0.0) { sum, file in
-            sum + file.trimmedDuration
-        }
-        guard totalDuration > 0 else {
-            progressContinuation?.yield(0.0)
-            return
-        }
-
-        // Completed duration so far (seconds)
-        let completedDuration = activeFiles.reduce(0.0) { sum, file in
-            let durSec = file.trimmedDuration
-            switch file.status {
-            case .done:
-                return sum + durSec
-            case .converting:
-                return sum + durSec * file.progress
-            default:
-                return sum
-            }
-        }
-        let progress = min(max(completedDuration / totalDuration, 0.0), 1.0)
-        #if DEBUG
-        logger.debug("totalDuration: \(totalDuration) s, completedDuration: \(completedDuration) s, overallProgress: \(progress * 100)%")
+        logger.debug("overallProgress: \(progress * 100)%")
         #endif
         progressContinuation?.yield(progress)
     }
@@ -2151,23 +2549,26 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>
     ) async {
         logger.info("[subtitle-trigger] post-encode Whisper for item \(itemID, privacy: .public) inputURL=\(inputURL.lastPathComponent, privacy: .public)")
-        // Get selected model and language from settings
-        let modelRaw = UserDefaults.standard.string(forKey: AppConstants.whisperModelKey) ?? AppConstants.defaultWhisperModel
-        let model = WhisperModel(rawValue: modelRaw) ?? .base
-        let language = UserDefaults.standard.string(forKey: AppConstants.whisperLanguageKey) ?? AppConstants.defaultWhisperLanguage
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = settings.whisperModel
+        let language = settings.whisperLanguage
 
-        // Update status to pending
+        let operationID = UUID()
+        // Publish the attempt token before dispatching work so an immediate cancel is routable.
         await MainActor.run {
             if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
                 droppedFiles.wrappedValue[idx].subtitleStatus = .pending
+                droppedFiles.wrappedValue[idx].subtitleOperationID = operationID
             }
         }
 
         // Verify model is downloaded
         guard WhisperModelManager.shared.isModelDownloaded(model) else {
             await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                     droppedFiles.wrappedValue[idx].subtitleStatus = .failed("Model not downloaded")
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
                 }
             }
             return
@@ -2182,11 +2583,13 @@ actor ConversionManager: Sendable {
                 outputDirectory: outputDir,
                 model: model,
                 language: language,
+                operationID: operationID,
                 audioStreamIndex: audioStreamIndex
             ) { [weak self] whisperProgress in
                 Task { @MainActor in
                     guard let _ = self else { return }
-                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                       droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                         switch whisperProgress.stage {
                         case .extractingAudio:
                             droppedFiles.wrappedValue[idx].subtitleStatus = .extractingAudio
@@ -2204,31 +2607,52 @@ actor ConversionManager: Sendable {
                 }
             }
 
-            await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+            let isCurrentAttempt = await MainActor.run { () -> Bool in
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                     droppedFiles.wrappedValue[idx].subtitleStatus = .completed
                     droppedFiles.wrappedValue[idx].subtitleFilePath = srtURL
                     droppedFiles.wrappedValue[idx].subtitleProgress = 1.0
+                    return true
                 }
+                return false
             }
+            guard isCurrentAttempt else { return }
 
             logger.info("Subtitles generated: \(srtURL.lastPathComponent, privacy: .public)")
 
             // Embed SRT into the output file if enabled
-            let shouldEmbed = UserDefaults.standard.bool(forKey: AppConstants.embedSubtitlesKey)
-            if shouldEmbed {
+            if settings.embedSubtitles {
                 await embedSubtitles(
                     srtURL: srtURL,
                     into: inputURL,
                     itemID: itemID,
+                    operationID: operationID,
                     droppedFiles: droppedFiles
                 )
             }
 
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
+
+        } catch WhisperServiceError.cancelled {
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .notQueued
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
         } catch {
             await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                     droppedFiles.wrappedValue[idx].subtitleStatus = .failed(error.localizedDescription)
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
                 }
             }
             logger.error("Subtitle generation failed: \(error.localizedDescription, privacy: .public)")
@@ -2244,15 +2668,16 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>
     ) async {
         logger.info("[subtitle-trigger] post-encode Parakeet for item \(itemID, privacy: .public) inputURL=\(inputURL.lastPathComponent, privacy: .public)")
-        // Get selected model and language from settings
-        let modelId = UserDefaults.standard.string(forKey: AppConstants.parakeetModelKey) ?? AppConstants.defaultParakeetModel
-        let model = ParakeetModel.model(for: modelId) ?? ParakeetModel.allModels[0]
-        let language = UserDefaults.standard.string(forKey: AppConstants.parakeetLanguageKey) ?? AppConstants.defaultParakeetLanguage
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = settings.parakeetModel
+        let language = settings.parakeetLanguage
 
-        // Update status to pending
+        let operationID = UUID()
+        // Publish the attempt token before dispatching work so an immediate cancel is routable.
         await MainActor.run {
             if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
                 droppedFiles.wrappedValue[idx].subtitleStatus = .pending
+                droppedFiles.wrappedValue[idx].subtitleOperationID = operationID
             }
         }
 
@@ -2265,11 +2690,13 @@ actor ConversionManager: Sendable {
                 outputDirectory: outputDir,
                 model: model,
                 language: language,
+                operationID: operationID,
                 audioStreamIndex: audioStreamIndex
             ) { [weak self] parakeetProgress in
                 Task { @MainActor in
                     guard let _ = self else { return }
-                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                       droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                         switch parakeetProgress.stage {
                         case .extractingAudio:
                             droppedFiles.wrappedValue[idx].subtitleStatus = .extractingAudio
@@ -2285,31 +2712,52 @@ actor ConversionManager: Sendable {
                 }
             }
 
-            await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+            let isCurrentAttempt = await MainActor.run { () -> Bool in
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                     droppedFiles.wrappedValue[idx].subtitleStatus = .completed
                     droppedFiles.wrappedValue[idx].subtitleFilePath = srtURL
                     droppedFiles.wrappedValue[idx].subtitleProgress = 1.0
+                    return true
                 }
+                return false
             }
+            guard isCurrentAttempt else { return }
 
             logger.info("Parakeet subtitles generated: \(srtURL.lastPathComponent, privacy: .public)")
 
             // Embed SRT into the output file if enabled
-            let shouldEmbed = UserDefaults.standard.bool(forKey: AppConstants.embedSubtitlesKey)
-            if shouldEmbed {
+            if settings.embedSubtitles {
                 await embedSubtitles(
                     srtURL: srtURL,
                     into: inputURL,
                     itemID: itemID,
+                    operationID: operationID,
                     droppedFiles: droppedFiles
                 )
             }
 
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
+
+        } catch ParakeetServiceError.cancelled {
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .notQueued
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
         } catch {
             await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                     droppedFiles.wrappedValue[idx].subtitleStatus = .failed(error.localizedDescription)
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
                 }
             }
             logger.error("Parakeet subtitle generation failed: \(error.localizedDescription, privacy: .public)")
@@ -2328,6 +2776,7 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>
     ) async {
         logger.info("[subtitle-trigger] post-encode OCR for item \(itemID, privacy: .public) sourceURL=\(sourceURL.lastPathComponent, privacy: .public)")
+        let settings = ocrSettings.ocrSnapshot()
         // Identify the chosen (or first) bitmap subtitle stream
         let chosenStreamIndex = droppedFiles.wrappedValue.first(where: { $0.id == itemID })?.selectedBitmapSubtitleStreamIndex
         // FFprobe-style + Matroska container IDs (SwiftExif's MKV reader surfaces the latter).
@@ -2349,22 +2798,13 @@ actor ConversionManager: Sendable {
 
         // Language: stream language wins (ISO 639-2; both engines accept it).
         // Otherwise fall back to the engine-specific user preference.
-        let streamLang = stream.languageCode
-        let language: String = {
-            if let streamLang { return streamLang }
-            switch OCREngineKind.userPreferred {
-            case .tesseract:
-                return UserDefaults.standard.string(forKey: AppConstants.tesseractLanguageKey)
-                    ?? AppConstants.defaultTesseractLanguage
-            case .appleVision:
-                return UserDefaults.standard.string(forKey: AppConstants.visionLanguageKey)
-                    ?? AppConstants.defaultVisionLanguage
-            }
-        }()
+        let language = settings.language(forStreamLanguage: stream.languageCode)
 
+        let operationID = UUID()
         await MainActor.run {
             if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
                 droppedFiles.wrappedValue[idx].subtitleStatus = .pending
+                droppedFiles.wrappedValue[idx].subtitleOperationID = operationID
             }
         }
 
@@ -2374,13 +2814,16 @@ actor ConversionManager: Sendable {
             let srtURL = try await TesseractService.shared.generateSubtitles(
                 sourceFile: sourceURL,
                 outputDirectory: outputDir,
+                operationID: operationID,
                 subtitleStreamIndex: streamIndex,
                 codec: codec,
-                language: language
+                language: language,
+                engineKind: settings.engine
             ) { [weak self] ocrProgress in
                 Task { @MainActor in
                     guard let _ = self else { return }
-                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                       droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                         switch ocrProgress.stage {
                         case .extractingTrack:
                             droppedFiles.wrappedValue[idx].subtitleStatus = .extractingAudio
@@ -2400,31 +2843,52 @@ actor ConversionManager: Sendable {
                 }
             }
 
-            await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+            let isCurrentAttempt = await MainActor.run { () -> Bool in
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                     droppedFiles.wrappedValue[idx].subtitleStatus = .completed
                     droppedFiles.wrappedValue[idx].subtitleFilePath = srtURL
                     droppedFiles.wrappedValue[idx].subtitleProgress = 1.0
+                    return true
                 }
+                return false
             }
+            guard isCurrentAttempt else { return }
 
             logger.info("OCR subtitles generated: \(srtURL.lastPathComponent, privacy: .public)")
 
             // Embed SRT into the output file if enabled
-            let shouldEmbed = UserDefaults.standard.bool(forKey: AppConstants.embedSubtitlesKey)
-            if shouldEmbed {
+            if settings.embedSubtitles {
                 await embedSubtitles(
                     srtURL: srtURL,
                     into: outputURL,
                     itemID: itemID,
+                    operationID: operationID,
                     droppedFiles: droppedFiles
                 )
             }
 
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
+
+        } catch TesseractServiceError.cancelled {
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .notQueued
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
         } catch {
             await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                     droppedFiles.wrappedValue[idx].subtitleStatus = .failed(error.localizedDescription)
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
                 }
             }
             logger.error("OCR subtitle generation failed: \(error.localizedDescription, privacy: .public)")
@@ -2439,93 +2903,94 @@ actor ConversionManager: Sendable {
         srtURL: URL,
         into videoURL: URL,
         itemID: UUID,
+        operationID: UUID?,
         droppedFiles: Binding<[VideoItem]>
     ) async {
-        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
+        guard let ffmpegPath = ffmpegPathProvider() else {
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   operationID == nil || droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .failed("FFmpeg is unavailable")
+                }
+            }
             logger.error("FFmpeg binary not found for subtitle embedding")
             return
         }
 
-        await MainActor.run {
-            if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+        let beganCurrentAttempt = await MainActor.run { () -> Bool in
+            if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+               operationID == nil || droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
                 droppedFiles.wrappedValue[idx].subtitleStatus = .embedding
+                return true
             }
+            return false
         }
+        guard beganCurrentAttempt else { return }
 
-        let ext = videoURL.pathExtension.lowercased()
-        let tempURL = videoURL.deletingLastPathComponent()
-            .appendingPathComponent(UUID().uuidString + "." + ext)
-
-        // Choose subtitle codec based on container
-        let subtitleCodec: String
-        switch ext {
-        case "mkv", "mka":
-            subtitleCodec = "srt"
-        default:
-            // MP4, MOV, and others that support mov_text
-            subtitleCodec = "mov_text"
-        }
-
-        var arguments = [
-            "-y",
-            "-i", videoURL.path,
-            "-i", srtURL.path,
-            "-map", "0",          // all streams from the video
-            "-map", "1:s",        // subtitle stream from the SRT
-            "-c", "copy",         // copy all existing streams
-            "-c:s", subtitleCodec // encode the subtitle track
-        ]
-
-        // Tag the subtitle stream with a language if we can infer it from the SRT filename
-        // (e.g. "output.eng.srt") — otherwise leave unset
-        let srtStem = srtURL.deletingPathExtension().pathExtension
-        if !srtStem.isEmpty && srtStem.count <= 3 {
-            arguments.append(contentsOf: ["-metadata:s:s:0", "language=\(srtStem)"])
-        }
-
-        arguments.append(tempURL.path)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: ffmpegPath)
-        process.arguments = arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        let attempt = startSubtitleEmbedding(
+            ffmpegPath: ffmpegPath,
+            srtURL: srtURL,
+            videoURL: videoURL,
+            itemID: itemID,
+            operationID: operationID
+        )
+        defer { finishSubtitleEmbedding(itemID: itemID, attemptID: attempt.id) }
 
         do {
-            try process.run()
-            process.waitUntilExit()
+            try await withTaskCancellationHandler {
+                try await attempt.task.value
+            } onCancel: {
+                attempt.task.cancel()
+            }
+            guard subtitleEmbeddingAttempts[itemID]?.id == attempt.id else {
+                try? FileManager.default.removeItem(at: attempt.stagedURL)
+                return
+            }
 
-            if process.terminationStatus == 0 {
-                // Replace original with muxed version
-                let fm = FileManager.default
-                try fm.removeItem(at: videoURL)
-                try fm.moveItem(at: tempURL, to: videoURL)
-
-                logger.info("Subtitles embedded into \(videoURL.lastPathComponent, privacy: .public)")
-
-                await MainActor.run {
-                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
-                        droppedFiles.wrappedValue[idx].subtitleStatus = .completed
-                    }
-                }
-            } else {
-                // Clean up temp file on failure
-                try? FileManager.default.removeItem(at: tempURL)
-                logger.error("Subtitle embedding failed with exit code \(process.terminationStatus)")
-
-                await MainActor.run {
-                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
-                        droppedFiles.wrappedValue[idx].subtitleStatus = .failed("Subtitle embedding failed")
-                    }
+            let didPublish = try await MainActor.run { () throws -> Bool in
+                try attempt.ownership.whileCurrent {
+                    try SubtitleEmbeddingCommit.publishIfCurrent(
+                        temporaryURL: attempt.stagedURL,
+                        destinationURL: videoURL,
+                        isCurrent: {
+                            guard let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) else {
+                                return false
+                            }
+                            return operationID == nil ||
+                                droppedFiles.wrappedValue[idx].subtitleOperationID == operationID
+                        },
+                        didPublish: {
+                            if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
+                                droppedFiles.wrappedValue[idx].subtitleStatus = .completed
+                            }
+                        }
+                    )
+                } ?? false
+            }
+            guard didPublish else {
+                try? FileManager.default.removeItem(at: attempt.stagedURL)
+                return
+            }
+            logger.info("Subtitles embedded into \(videoURL.lastPathComponent, privacy: .public)")
+        } catch is CancellationError {
+            try? FileManager.default.removeItem(at: attempt.stagedURL)
+            guard subtitleEmbeddingAttempts[itemID]?.id == attempt.id else { return }
+            await MainActor.run {
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   operationID == nil || droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .notQueued
                 }
             }
         } catch {
-            try? FileManager.default.removeItem(at: tempURL)
-            logger.error("Subtitle embedding error: \(error.localizedDescription, privacy: .public)")
+            try? FileManager.default.removeItem(at: attempt.stagedURL)
+            guard subtitleEmbeddingAttempts[itemID]?.id == attempt.id else { return }
+            let message = subtitleEmbeddingErrorMessage(error)
+            logger.error("Subtitle embedding error: \(message, privacy: .public)")
 
             await MainActor.run {
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
-                    droppedFiles.wrappedValue[idx].subtitleStatus = .failed(error.localizedDescription)
+                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }),
+                   operationID == nil || droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .failed(message)
                 }
             }
         }
@@ -2538,63 +3003,114 @@ actor ConversionManager: Sendable {
         videoURL: URL,
         itemID: UUID
     ) async {
-        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
+        guard let ffmpegPath = ffmpegPathProvider() else {
             logger.error("FFmpeg binary not found for subtitle embedding")
             return
         }
 
-        let ext = videoURL.pathExtension.lowercased()
-        let tempURL = videoURL.deletingLastPathComponent()
-            .appendingPathComponent(UUID().uuidString + "." + ext)
-
-        let subtitleCodec: String
-        switch ext {
-        case "mkv", "mka":
-            subtitleCodec = "srt"
-        default:
-            subtitleCodec = "mov_text"
-        }
-
-        var arguments = [
-            "-y",
-            "-i", videoURL.path,
-            "-i", srtURL.path,
-            "-map", "0",
-            "-map", "1:s",
-            "-c", "copy",
-            "-c:s", subtitleCodec
-        ]
-
-        let srtStem = srtURL.deletingPathExtension().pathExtension
-        if !srtStem.isEmpty && srtStem.count <= 3 {
-            arguments.append(contentsOf: ["-metadata:s:s:0", "language=\(srtStem)"])
-        }
-
-        arguments.append(tempURL.path)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: ffmpegPath)
-        process.arguments = arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        let attempt = startSubtitleEmbedding(
+            ffmpegPath: ffmpegPath,
+            srtURL: srtURL,
+            videoURL: videoURL,
+            itemID: itemID,
+            operationID: nil
+        )
+        defer { finishSubtitleEmbedding(itemID: itemID, attemptID: attempt.id) }
 
         do {
-            try process.run()
-            process.waitUntilExit()
-
-            if process.terminationStatus == 0 {
-                let fm = FileManager.default
-                try fm.removeItem(at: videoURL)
-                try fm.moveItem(at: tempURL, to: videoURL)
-                logger.info("Subtitles embedded (attached) into \(videoURL.lastPathComponent, privacy: .public)")
-            } else {
-                try? FileManager.default.removeItem(at: tempURL)
-                logger.error("Subtitle embedding (attached) failed with exit code \(process.terminationStatus)")
+            try await withTaskCancellationHandler {
+                try await attempt.task.value
+            } onCancel: {
+                attempt.task.cancel()
             }
+            guard subtitleEmbeddingAttempts[itemID]?.id == attempt.id else {
+                try? FileManager.default.removeItem(at: attempt.stagedURL)
+                return
+            }
+
+            let didPublish = try attempt.ownership.whileCurrent {
+                _ = try FileManager.default.replaceItemAt(videoURL, withItemAt: attempt.stagedURL)
+            } != nil
+            guard didPublish else {
+                try? FileManager.default.removeItem(at: attempt.stagedURL)
+                return
+            }
+            logger.info("Subtitles embedded (attached) into \(videoURL.lastPathComponent, privacy: .public)")
         } catch {
-            try? FileManager.default.removeItem(at: tempURL)
-            logger.error("Subtitle embedding (attached) error: \(error.localizedDescription, privacy: .public)")
+            try? FileManager.default.removeItem(at: attempt.stagedURL)
+            if error is CancellationError { return }
+            let message = subtitleEmbeddingErrorMessage(error)
+            logger.error("Subtitle embedding (attached) error: \(message, privacy: .public)")
         }
+    }
+
+    func cancelSubtitleEmbedding(itemID: UUID, operationID: UUID?) {
+        guard let attempt = subtitleEmbeddingAttempts[itemID],
+              operationID == nil || attempt.operationID == operationID else { return }
+        attempt.ownership.invalidate()
+        subtitleEmbeddingAttempts.removeValue(forKey: itemID)
+        attempt.task.cancel()
+    }
+
+    private func startSubtitleEmbedding(
+        ffmpegPath: String,
+        srtURL: URL,
+        videoURL: URL,
+        itemID: UUID,
+        operationID: UUID?
+    ) -> (id: UUID, stagedURL: URL, ownership: SubtitleEmbeddingOwnership, task: Task<Void, Error>) {
+        if let previousAttempt = subtitleEmbeddingAttempts[itemID] {
+            previousAttempt.ownership.invalidate()
+            previousAttempt.task.cancel()
+        }
+
+        let attemptID = UUID()
+        let ownership = SubtitleEmbeddingOwnership()
+        let ext = videoURL.pathExtension.lowercased()
+        let stagedURL = videoURL.deletingLastPathComponent()
+            .appendingPathComponent(".subtitle-embed-\(attemptID.uuidString).\(ext)")
+        let subtitleCodec = ext == "mkv" || ext == "mka" ? "srt" : "mov_text"
+        let srtStem = srtURL.deletingPathExtension().pathExtension
+        let languageCode = !srtStem.isEmpty && srtStem.count <= 3 ? srtStem : nil
+        let subprocess = subtitleEmbeddingSubprocess
+        let task = Task {
+            try await subprocess.run(
+                ffmpegPath: ffmpegPath,
+                srtURL: srtURL,
+                videoURL: videoURL,
+                stagedURL: stagedURL,
+                subtitleCodec: subtitleCodec,
+                languageCode: languageCode
+            )
+        }
+        subtitleEmbeddingAttempts[itemID] = SubtitleEmbeddingAttempt(
+            id: attemptID,
+            operationID: operationID,
+            ownership: ownership,
+            task: task
+        )
+        return (attemptID, stagedURL, ownership, task)
+    }
+
+    private func finishSubtitleEmbedding(itemID: UUID, attemptID: UUID) {
+        guard subtitleEmbeddingAttempts[itemID]?.id == attemptID else { return }
+        subtitleEmbeddingAttempts.removeValue(forKey: itemID)
+    }
+
+    func cancelAllSubtitleEmbeddings() {
+        let attempts = Array(subtitleEmbeddingAttempts.values)
+        subtitleEmbeddingAttempts.removeAll()
+        for attempt in attempts {
+            attempt.ownership.invalidate()
+            attempt.task.cancel()
+        }
+    }
+
+    private func subtitleEmbeddingErrorMessage(_ error: Error) -> String {
+        if let subprocessError = error as? SubtitleEmbeddingSubprocessError {
+            return subprocessError.localizedDescription
+        }
+        return "Subtitle embedding could not replace the output file."
     }
 
     // MARK: - Quality Analytics
@@ -2606,13 +3122,9 @@ actor ConversionManager: Sendable {
         encodedURL: URL,
         droppedFiles: Binding<[VideoItem]>
     ) async {
-        // Load analytics config from settings
-        let enabledMetricsRaw = UserDefaults.standard.stringArray(forKey: AppConstants.analyticsEnabledMetricsKey)
-            ?? AppConstants.defaultAnalyticsEnabledMetrics
-        let enabledMetrics = enabledMetricsRaw.compactMap { QualityMetric(rawValue: $0) }
-        let vmafModelRaw = UserDefaults.standard.string(forKey: AppConstants.analyticsVMAFModelKey)
-            ?? AppConstants.defaultAnalyticsVMAFModel
-        let vmafModel = VMAFModel(rawValue: vmafModelRaw) ?? .vmaf_v0_6_1
+        let settings = analyticsSettings.analyticsSnapshot()
+        let enabledMetrics = settings.enabledMetrics
+        let vmafModel = settings.vmafModel
 
         guard !enabledMetrics.isEmpty else { return }
 
@@ -2628,7 +3140,8 @@ actor ConversionManager: Sendable {
                 sourceFile: sourceURL,
                 encodedFile: encodedURL,
                 enabledMetrics: enabledMetrics,
-                vmafModel: vmafModel
+                vmafModel: vmafModel,
+                ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames
             ) { metric, progressValue in
                 Task { @MainActor in
                     if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == itemID }) {
@@ -2658,7 +3171,7 @@ actor ConversionManager: Sendable {
                     droppedFiles.wrappedValue[idx].analyticsResults = analyticsResults
                     droppedFiles.wrappedValue[idx].analyticsProgress = 1.0
                 }
-                AnalyticsExporter.autoExportIfEnabled(results: analyticsResults, encodedFileURL: encodedURL)
+                AnalyticsExporter.autoExportIfEnabled(results: analyticsResults, encodedFileURL: encodedURL, settings: settings.autoExport)
             }
 
             logger.info("Quality analytics completed for \(encodedURL.lastPathComponent, privacy: .public)")

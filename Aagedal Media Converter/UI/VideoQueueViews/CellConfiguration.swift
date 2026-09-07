@@ -129,6 +129,83 @@ struct VideoFileCellConfiguration: Equatable {
     let isUploadConfigured: Bool
 }
 
+// MARK: - Queue failure diagnostics
+
+extension VideoFileCellConfiguration {
+    /// Preserve every failed stage, including follow-up failures after a successful encode.
+    var failureDetails: String? {
+        QueueFailureDiagnostics.details(
+            downloadError: downloadError,
+            conversionFailed: status == .failed,
+            conversionError: conversionError,
+            subtitleStatus: subtitleStatus,
+            uploadStatus: uploadStatus,
+            analyticsStatus: analyticsStatus
+        )
+    }
+
+    var diagnosticReport: String? {
+        guard let failureDetails else { return nil }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        return QueueFailureDiagnostics.report(
+            details: failureDetails,
+            appVersion: "\(version) (\(build))",
+            systemVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            preset: preset.rawValue,
+            privateValues: [url.path, url.absoluteString, url.lastPathComponent,
+                            outputURL?.path ?? "", outputURL?.absoluteString ?? "",
+                            outputURL?.lastPathComponent ?? "", sourceURL ?? "", name,
+                            NSHomeDirectory()]
+        )
+    }
+}
+
+enum QueueFailureDiagnostics {
+    static func details(
+        downloadError: String?,
+        conversionFailed: Bool,
+        conversionError: String?,
+        subtitleStatus: SubtitleStatus,
+        uploadStatus: UploadStatus,
+        analyticsStatus: AnalyticsStatus
+    ) -> String? {
+        var failures: [String] = []
+        func append(_ title: String, _ detail: String?) {
+            let message = detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            failures.append(title + (message.isEmpty ? "" : "\n" + message))
+        }
+        if let downloadError { append(String(localized: "Download failed"), downloadError) }
+        if conversionFailed { append(String(localized: "Conversion failed"), conversionError) }
+        if case .failed(let error) = subtitleStatus { append(String(localized: "Subtitle generation failed"), error) }
+        if case .failed(let error) = uploadStatus { append(String(localized: "Upload failed"), error) }
+        if case .failed(let error) = analyticsStatus { append(String(localized: "Analysis failed"), error) }
+        return failures.isEmpty ? nil : failures.joined(separator: "\n\n")
+    }
+
+    /// Share the subprocess redactor so URLs and known source/output paths are not copied.
+    /// This report intentionally contains only captured errors, never a reconstructed command.
+    static func report(
+        details: String,
+        appVersion: String,
+        systemVersion: String,
+        preset: String,
+        privateValues: Set<String>
+    ) -> String {
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: "/diagnostics"),
+            sensitiveValues: privateValues
+        )
+        return """
+        Aagedal Media Converter \(appVersion)
+        \(systemVersion)
+        Preset: \(preset)
+
+        \(request.redactedDiagnostic(details, limit: 32 * 1024))
+        """
+    }
+}
+
 // MARK: - EncodingGroupCellConfiguration
 
 /// Snapshot of all data an EncodingGroupHeaderCellView needs to render.

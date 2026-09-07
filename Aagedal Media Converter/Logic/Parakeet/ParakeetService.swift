@@ -5,317 +5,465 @@
 import Foundation
 import OSLog
 
-/// Service for generating subtitles using parakeet-mlx CLI
+/// Service for generating subtitles using parakeet-mlx CLI.
 actor ParakeetService {
     static let shared = ParakeetService()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ParakeetService")
-    private let modelManager = ParakeetModelManager.shared
+    private let transcriber: ParakeetCLITranscriber
+    private let audioExtractor: ParakeetAudioExtractor
+    private let parakeetPathProvider: @Sendable () -> String?
+    private let ffmpegPathProvider: @Sendable () -> String?
+    private let chunkDurationProvider: @Sendable () -> Int
+    private let overlapDurationProvider: @Sendable () -> Int
 
-    private var isCancelled = false
-    private var currentProcess: Process?
+    private var activeRunIDs: Set<UUID> = []
+    private var cancelledRunIDs: Set<UUID> = []
+    private var cancelledOperationIDs: Set<UUID> = []
+    private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
+    private var currentGenerationTasks: [UUID: Task<Void, Error>] = [:]
+    private var reservedOutputPaths: Set<String> = []
 
-    private init() {}
+    init(
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        parakeetPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.parakeetMlxPath },
+        ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
+        chunkDurationProvider: @escaping @Sendable () -> Int = {
+            UserDefaults.standard.integer(forKey: AppConstants.parakeetChunkDurationKey)
+        },
+        overlapDurationProvider: @escaping @Sendable () -> Int = {
+            UserDefaults.standard.integer(forKey: AppConstants.parakeetOverlapDurationKey)
+        }
+    ) {
+        transcriber = ParakeetCLITranscriber(subprocessRunner: subprocessRunner)
+        audioExtractor = ParakeetAudioExtractor(subprocessRunner: subprocessRunner)
+        self.parakeetPathProvider = parakeetPathProvider
+        self.ffmpegPathProvider = ffmpegPathProvider
+        self.chunkDurationProvider = chunkDurationProvider
+        self.overlapDurationProvider = overlapDurationProvider
+    }
 
-    /// Generates SRT subtitle file from video/audio using parakeet-mlx
-    /// - Parameters:
-    ///   - inputFile: The input video or audio file
-    ///   - outputDirectory: Directory to save the SRT file
-    ///   - model: The Parakeet model to use
-    ///   - language: Language code (or "auto" for auto-detect), nil for English-only models
-    ///   - audioStreamIndex: Specific audio stream to transcribe (nil = default)
-    ///   - progress: Callback for progress updates
-    /// - Returns: URL to the generated .srt file
     func generateSubtitles(
         inputFile: URL,
         outputDirectory: URL,
         model: ParakeetModel,
         language: String?,
+        operationID: UUID,
         audioStreamIndex: Int? = nil,
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws -> URL {
-        isCancelled = false
+        let runID = UUID()
+        registerRun(runID, operationID: operationID)
+        defer { finishRun(runID, operationID: operationID) }
+        guard !cancelledRunIDs.contains(runID) else { throw ParakeetServiceError.cancelled }
 
-        guard let parakeetPath = BinaryPathResolver.parakeetMlxPath else {
+        guard let parakeetPath = parakeetPathProvider() else {
             throw ParakeetServiceError.binaryNotFound
         }
-
-        logger.info("Starting Parakeet transcription: \(model.displayName), language: \(language ?? "default")")
-        progress(ParakeetProgress(stage: .transcribing, percentage: 0, message: "Starting transcription..."))
-
-        // If a specific audio stream is requested, extract it first
-        var actualInputFile = inputFile
-        var tempAudioFile: URL?
-
-        if let idx = audioStreamIndex {
-            guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
+        let ffmpegPath: String?
+        if audioStreamIndex != nil {
+            guard let resolved = ffmpegPathProvider() else {
                 throw ParakeetServiceError.ffmpegNotFound
             }
-
-            progress(ParakeetProgress(stage: .extractingAudio, percentage: 0, message: "Extracting audio track..."))
-
-            let tempDir = FileManager.default.temporaryDirectory
-            let tempWav = tempDir.appendingPathComponent(UUID().uuidString + ".wav")
-            tempAudioFile = tempWav
-
-            let extractProcess = Process()
-            extractProcess.executableURL = URL(fileURLWithPath: ffmpegPath)
-            extractProcess.arguments = [
-                "-y", "-nostdin",
-                "-i", inputFile.path,
-                "-map", "0:\(idx)",
-                "-acodec", "pcm_s16le",
-                "-ar", "16000",
-                "-ac", "1",
-                tempWav.path
-            ]
-            extractProcess.standardOutput = FileHandle.nullDevice
-            extractProcess.standardError = FileHandle.nullDevice
-            extractProcess.standardInput = FileHandle.nullDevice
-
-            do {
-                try extractProcess.run()
-                extractProcess.waitUntilExit()
-            } catch {
-                try? FileManager.default.removeItem(at: tempWav)
-                throw ParakeetServiceError.audioExtractionFailed
-            }
-
-            guard extractProcess.terminationStatus == 0 else {
-                try? FileManager.default.removeItem(at: tempWav)
-                throw ParakeetServiceError.audioExtractionFailed
-            }
-
-            actualInputFile = tempWav
+            ffmpegPath = resolved
+        } else {
+            ffmpegPath = ffmpegPathProvider()
         }
 
-        defer {
-            if let tempFile = tempAudioFile {
-                try? FileManager.default.removeItem(at: tempFile)
-            }
-        }
+        let baseName = inputFile.deletingPathExtension().lastPathComponent
+        let finalSRT = reserveOutputURL(directory: outputDirectory, baseName: baseName)
+        defer { reservedOutputPaths.remove(finalSRT.path) }
 
-        // Build parakeet-mlx arguments
-        var args = [actualInputFile.path]
-        args += ["--output-format", "srt"]
-        args += ["--output-dir", outputDirectory.path]
-        args += ["--model", model.id]
-
-        // Note: parakeet-mlx auto-detects language; no --language flag exists
-
-        let chunkDuration = UserDefaults.standard.integer(forKey: AppConstants.parakeetChunkDurationKey)
-        if chunkDuration > 0 && chunkDuration != AppConstants.defaultParakeetChunkDuration {
-            args += ["--chunk-duration", "\(chunkDuration)"]
-        }
-
-        let overlapDuration = UserDefaults.standard.integer(forKey: AppConstants.parakeetOverlapDurationKey)
-        if overlapDuration > 0 && overlapDuration != AppConstants.defaultParakeetOverlapDuration {
-            args += ["--overlap-duration", "\(overlapDuration)"]
-        }
-
-        logger.info("parakeet-mlx args: \(args.joined(separator: " "))")
-
-        progress(ParakeetProgress(stage: .transcribing, percentage: 0.01, message: "Transcribing..."))
-
-        let process = Process()
-        let stderrPipe = Pipe()
-        let stdoutPipe = Pipe()
-
-        // Configure process using the generic Python tool executor
-        // Inject bundled ffmpeg into PATH so parakeet-mlx can find it
-        var extraPathEntries: [String] = []
-        if let ffmpegPath = BinaryPathResolver.ffmpegPath {
-            let ffmpegDir = (ffmpegPath as NSString).deletingLastPathComponent
-            extraPathEntries.append(ffmpegDir)
-        }
-
-        HomebrewPythonExecutor.configurePythonToolProcess(
-            process,
-            scriptPath: parakeetPath,
-            arguments: args,
-            extraPathEntries: extraPathEntries
+        let stagingDirectory = outputDirectory.appendingPathComponent(
+            ".parakeet-\(runID.uuidString)", isDirectory: true
         )
-
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        process.standardInput = FileHandle.nullDevice
-
-        currentProcess = process
-
-        // Thread-safe state for progress parsing
-        final class ProgressState: @unchecked Sendable {
-            var lastReportedProgress: Double = 0.01
-        }
-        let state = ProgressState()
-
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty, let line = String(data: data, encoding: .utf8),
-                  !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            self.logger.debug("parakeet stdout: \(line, privacy: .public)")
+        let temporaryAudio = FileManager.default.temporaryDirectory
+            .appendingPathComponent("parakeet-\(runID.uuidString).wav")
+        defer {
+            try? FileManager.default.removeItem(at: temporaryAudio)
+            try? FileManager.default.removeItem(at: stagingDirectory)
         }
 
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
+        logger.info("Starting Parakeet transcription with \(model.displayName, privacy: .public), language setting: \(language ?? "default", privacy: .public)")
+        progress(ParakeetProgress(stage: .transcribing, percentage: 0, message: "Starting transcription..."))
 
-            if let line = String(data: data, encoding: .utf8) {
-                // Log parakeet output for debugging
-                if !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    self.logger.debug("parakeet stderr: \(line, privacy: .public)")
-                }
-
-                // Try to parse progress from stderr
-                // parakeet-mlx outputs chunk progress like "Processing chunk 3/10" or percentage patterns
-                if let chunkMatch = line.range(of: #"(\d+)/(\d+)"#, options: .regularExpression) {
-                    let parts = String(line[chunkMatch]).components(separatedBy: "/")
-                    if parts.count == 2,
-                       let current = Double(parts[0]),
-                       let total = Double(parts[1]),
-                       total > 0 {
-                        let currentProgress = min(current / total, 0.99)
-                        if currentProgress - state.lastReportedProgress >= 0.01 {
-                            state.lastReportedProgress = currentProgress
-                            Task { @MainActor in
-                                progress(ParakeetProgress(
-                                    stage: .transcribing,
-                                    percentage: currentProgress,
-                                    message: nil
-                                ))
-                            }
-                        }
-                    }
-                }
-
-                // Also try percentage patterns like "50%" or "50.0%"
-                if let pctMatch = line.range(of: #"(\d+(?:\.\d+)?)%"#, options: .regularExpression) {
-                    let pctStr = String(line[pctMatch]).replacingOccurrences(of: "%", with: "")
-                    if let pct = Double(pctStr) {
-                        let currentProgress = min(pct / 100.0, 0.99)
-                        if currentProgress - state.lastReportedProgress >= 0.01 {
-                            state.lastReportedProgress = currentProgress
-                            Task { @MainActor in
-                                progress(ParakeetProgress(
-                                    stage: .transcribing,
-                                    percentage: currentProgress,
-                                    message: nil
-                                ))
-                            }
-                        }
-                    }
-                }
+        let chunkDuration = chunkDurationProvider()
+        let overlapDuration = overlapDurationProvider()
+        let transcriber = self.transcriber
+        let audioExtractor = self.audioExtractor
+        let generationTask = Task {
+            try Task.checkCancellation()
+            var transcriptionInput = inputFile
+            if let audioStreamIndex, let ffmpegPath {
+                progress(ParakeetProgress(stage: .extractingAudio, percentage: 0, message: "Extracting audio track..."))
+                try await audioExtractor.extract(
+                    inputFile: inputFile,
+                    outputFile: temporaryAudio,
+                    ffmpegPath: ffmpegPath,
+                    audioStreamIndex: audioStreamIndex
+                )
+                transcriptionInput = temporaryAudio
             }
-        }
 
-        logger.info("Launching: \(process.executableURL?.path ?? "nil") \(process.arguments?.joined(separator: " ") ?? "", privacy: .public)")
+            try Task.checkCancellation()
+            try FileManager.default.createDirectory(at: stagingDirectory, withIntermediateDirectories: false)
+
+            // parakeet-mlx derives the SRT name from the input basename. A short run-local
+            // symlink gives it a deterministic staging name without copying large media.
+            let extensionSuffix = transcriptionInput.pathExtension.isEmpty
+                ? "" : ".\(transcriptionInput.pathExtension)"
+            let stagedInput = stagingDirectory.appendingPathComponent("input" + extensionSuffix)
+            try FileManager.default.createSymbolicLink(at: stagedInput, withDestinationURL: transcriptionInput)
+
+            progress(ParakeetProgress(stage: .transcribing, percentage: 0.01, message: "Transcribing..."))
+            try await transcriber.transcribe(
+                inputFile: stagedInput,
+                outputDirectory: stagingDirectory,
+                parakeetPath: parakeetPath,
+                ffmpegPath: ffmpegPath,
+                modelID: model.id,
+                chunkDuration: chunkDuration,
+                overlapDuration: overlapDuration,
+                progress: progress
+            )
+        }
+        currentGenerationTasks[runID] = generationTask
 
         do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            throw ParakeetServiceError.transcriptionFailed(error.localizedDescription)
-        }
-
-        let exitCode = process.terminationStatus
-        logger.info("parakeet-mlx exited with code \(exitCode)")
-
-        stdoutPipe.fileHandleForReading.readabilityHandler = nil
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
-        currentProcess = nil
-
-        guard !isCancelled else {
+            try await withTaskCancellationHandler {
+                try await generationTask.value
+            } onCancel: {
+                generationTask.cancel()
+            }
+        } catch is CancellationError {
             throw ParakeetServiceError.cancelled
-        }
-
-        guard exitCode == 0 else {
-            // Read stderr for error details
-            let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-            let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
-            let lastLine = errorOutput.components(separatedBy: .newlines)
-                .last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? ""
-            logger.error("parakeet-mlx stderr: \(errorOutput, privacy: .public)")
+        } catch let error as ParakeetServiceError {
+            throw error
+        } catch {
             throw ParakeetServiceError.transcriptionFailed(
-                "parakeet-mlx exited with code \(exitCode)" +
-                (lastLine.isEmpty ? "" : ": \(lastLine)")
+                "Could not prepare transcription staging"
             )
         }
 
-        // parakeet-mlx writes <baseName>.srt next to its --output-dir. When we extracted
-        // a temp audio track, that baseName is a UUID; otherwise it's the input file's
-        // own base. Either way, we normalize to the canonical, collision-aware path
-        // SubtitleSRTNaming chooses for the .parakeet engine so OCR/Whisper outputs
-        // can coexist on disk.
-        let writtenBaseName = actualInputFile.deletingPathExtension().lastPathComponent
-        let writtenSrt = outputDirectory.appendingPathComponent(writtenBaseName + ".srt")
+        guard !cancelledRunIDs.contains(runID) else { throw ParakeetServiceError.cancelled }
+        do { try Task.checkCancellation() } catch { throw ParakeetServiceError.cancelled }
 
-        guard FileManager.default.fileExists(atPath: writtenSrt.path) else {
+        let stagedSRT = stagingDirectory.appendingPathComponent("input.srt")
+        guard FileManager.default.fileExists(atPath: stagedSRT.path) else {
             throw ParakeetServiceError.srtGenerationFailed
         }
-
-        let originalBaseName = inputFile.deletingPathExtension().lastPathComponent
-        let finalSrt = SubtitleSRTNaming.outputURL(directory: outputDirectory, baseName: originalBaseName, method: .parakeet)
-        if writtenSrt.path != finalSrt.path {
-            try? FileManager.default.removeItem(at: finalSrt)
-            try FileManager.default.moveItem(at: writtenSrt, to: finalSrt)
-            guard FileManager.default.fileExists(atPath: finalSrt.path) else {
-                throw ParakeetServiceError.srtGenerationFailed
-            }
+        do {
+            try publish(stagedSRT, to: finalSRT)
+        } catch {
+            throw ParakeetServiceError.transcriptionFailed("Could not publish subtitle output")
         }
 
-        progress(ParakeetProgress(stage: .complete, percentage: 1.0, message: nil))
-        logger.info("Subtitles generated: \(finalSrt.lastPathComponent)")
-        return finalSrt
+        progress(ParakeetProgress(stage: .complete, percentage: 1, message: nil))
+        logger.info("Subtitles generated: \(finalSRT.lastPathComponent, privacy: .public)")
+        return finalSRT
     }
 
-    /// Generates SRT subtitle file directly from input file (no encoding)
-    /// Saves the SRT alongside the input file
     func generateSubtitlesOnly(
         inputFile: URL,
         model: ParakeetModel,
         language: String?,
+        operationID: UUID,
         audioStreamIndex: Int? = nil,
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws -> URL {
-        let outputDirectory = inputFile.deletingLastPathComponent()
-        return try await generateSubtitles(
+        try await generateSubtitles(
             inputFile: inputFile,
-            outputDirectory: outputDirectory,
+            outputDirectory: inputFile.deletingLastPathComponent(),
             model: model,
             language: language,
+            operationID: operationID,
             audioStreamIndex: audioStreamIndex,
             progress: progress
         )
     }
 
-    /// Cancels the current subtitle generation
-    func cancelGeneration() {
-        isCancelled = true
-        if let process = currentProcess, process.isRunning {
-            process.terminate()
-            currentProcess = nil
-        }
+    func cancelGeneration(operationID: UUID) {
+        cancelledOperationIDs.insert(operationID)
+        let runIDs = runIDsByOperationID[operationID] ?? []
+        cancelledRunIDs.formUnion(runIDs)
+        for runID in runIDs { currentGenerationTasks[runID]?.cancel() }
         logger.info("Parakeet subtitle generation cancelled")
     }
 
-    /// Cached availability — checked once at first access, avoids repeated filesystem checks.
-    private static let _cachedIsAvailable: Bool = BinaryPathResolver.parakeetMlxPath != nil
+    func cancelAllGeneration() {
+        cancelledRunIDs.formUnion(activeRunIDs)
+        for task in currentGenerationTasks.values { task.cancel() }
+        logger.info("All Parakeet subtitle generation cancelled")
+    }
 
-    /// Gets the installation status of parakeet-mlx (uses cached result)
+    private static let cachedIsAvailable = BinaryPathResolver.parakeetMlxPath != nil
+
     nonisolated func getInstallationStatus() -> ParakeetInstallationStatus {
-        guard Self._cachedIsAvailable else {
-            return .notInstalled
-        }
+        guard Self.cachedIsAvailable else { return .notInstalled }
         return .installed(version: "parakeet-mlx")
+    }
+
+    private func registerRun(_ runID: UUID, operationID: UUID) {
+        activeRunIDs.insert(runID)
+        runIDsByOperationID[operationID, default: []].insert(runID)
+        if cancelledOperationIDs.contains(operationID) { cancelledRunIDs.insert(runID) }
+    }
+
+    private func finishRun(_ runID: UUID, operationID: UUID) {
+        currentGenerationTasks.removeValue(forKey: runID)?.cancel()
+        activeRunIDs.remove(runID)
+        cancelledRunIDs.remove(runID)
+        runIDsByOperationID[operationID]?.remove(runID)
+        if runIDsByOperationID[operationID]?.isEmpty == true {
+            runIDsByOperationID.removeValue(forKey: operationID)
+            cancelledOperationIDs.remove(operationID)
+        }
+    }
+
+    private func reserveOutputURL(directory: URL, baseName: String) -> URL {
+        let preferred = SubtitleSRTNaming.outputURL(directory: directory, baseName: baseName, method: .parakeet)
+        if !reservedOutputPaths.contains(preferred.path) {
+            reservedOutputPaths.insert(preferred.path)
+            return preferred
+        }
+
+        let methodSpecific = outputCandidate(directory: directory, baseName: baseName, suffix: ".parakeet")
+        if !reservedOutputPaths.contains(methodSpecific.path),
+           !FileManager.default.fileExists(atPath: methodSpecific.path) {
+            reservedOutputPaths.insert(methodSpecific.path)
+            return methodSpecific
+        }
+
+        var suffix = 2
+        while true {
+            let candidate = outputCandidate(directory: directory, baseName: baseName, suffix: ".parakeet-\(suffix)")
+            if !reservedOutputPaths.contains(candidate.path),
+               !FileManager.default.fileExists(atPath: candidate.path) {
+                reservedOutputPaths.insert(candidate.path)
+                return candidate
+            }
+            suffix += 1
+        }
+    }
+
+    private func outputCandidate(directory: URL, baseName: String, suffix: String) -> URL {
+        let ending = suffix + ".srt"
+        let maximumBaseBytes = max(255 - ending.utf8.count, 1)
+        var shortenedBase = baseName
+        while shortenedBase.utf8.count > maximumBaseBytes { shortenedBase.removeLast() }
+        return directory.appendingPathComponent(shortenedBase + ending)
+    }
+
+    private func publish(_ stagedURL: URL, to destinationURL: URL) throws {
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            _ = try FileManager.default.replaceItemAt(destinationURL, withItemAt: stagedURL)
+        } else {
+            try FileManager.default.moveItem(at: stagedURL, to: destinationURL)
+        }
     }
 }
 
-// MARK: - Error Types
+/// FFmpeg boundary used when one specific audio stream must be handed to Parakeet.
+struct ParakeetAudioExtractor: Sendable {
+    static let timeout: Duration = .seconds(2 * 60 * 60)
+    static let diagnosticCaptureLimit = 256 * 1024
+    private let subprocessRunner: any SubprocessRunning
+
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        self.subprocessRunner = subprocessRunner
+    }
+
+    func extract(inputFile: URL, outputFile: URL, ffmpegPath: String, audioStreamIndex: Int) async throws {
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: [
+                "-y", "-nostdin", "-i", inputFile.path, "-map", "0:\(audioStreamIndex)",
+                "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", outputFile.path
+            ],
+            timeout: Self.timeout,
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: [inputFile.path, outputFile.path]
+        )
+
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .failedToStart(_, let underlying):
+                throw ParakeetServiceError.audioExtractionFailed(request.redactedDiagnostic(underlying, limit: 500))
+            case .timedOut:
+                throw ParakeetServiceError.audioExtractionFailed("FFmpeg exceeded the two-hour audio extraction limit")
+            }
+        } catch {
+            throw ParakeetServiceError.audioExtractionFailed(request.redactedDiagnostic(error.localizedDescription, limit: 500))
+        }
+
+        guard result.succeeded else {
+            let diagnostic = request.redactedDiagnostic(
+                result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines), limit: 500
+            )
+            throw ParakeetServiceError.audioExtractionFailed(
+                "FFmpeg exited \(result.terminationStatus): \(diagnostic.isEmpty ? "unknown error" : diagnostic)"
+            )
+        }
+    }
+}
+
+/// parakeet-mlx boundary that keeps process policy and output parsing independently testable.
+struct ParakeetCLITranscriber: Sendable {
+    static let timeout: Duration = .seconds(12 * 60 * 60)
+    static let diagnosticCaptureLimit = 256 * 1024
+    private let subprocessRunner: any SubprocessRunning
+
+    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+        self.subprocessRunner = subprocessRunner
+    }
+
+    func transcribe(
+        inputFile: URL,
+        outputDirectory: URL,
+        parakeetPath: String,
+        ffmpegPath: String?,
+        modelID: String,
+        chunkDuration: Int,
+        overlapDuration: Int,
+        progress: @escaping @Sendable (ParakeetProgress) -> Void
+    ) async throws {
+        try Task.checkCancellation()
+        var arguments = [
+            inputFile.path, "--output-format", "srt", "--output-dir", outputDirectory.path,
+            "--model", modelID
+        ]
+        if chunkDuration > 0, chunkDuration != AppConstants.defaultParakeetChunkDuration {
+            arguments += ["--chunk-duration", "\(chunkDuration)"]
+        }
+        if overlapDuration > 0, overlapDuration != AppConstants.defaultParakeetOverlapDuration {
+            arguments += ["--overlap-duration", "\(overlapDuration)"]
+        }
+
+        let extraPathEntries = ffmpegPath.map { [($0 as NSString).deletingLastPathComponent] } ?? []
+        let configuration = HomebrewPythonExecutor.pythonToolExecutionConfiguration(
+            scriptPath: parakeetPath,
+            arguments: arguments,
+            extraPathEntries: extraPathEntries
+        )
+
+        let request = SubprocessRequest(
+            executableURL: configuration.executableURL,
+            arguments: configuration.arguments,
+            environment: configuration.environment,
+            timeout: Self.timeout,
+            standardOutputCaptureLimit: Self.diagnosticCaptureLimit,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: [inputFile.path, outputDirectory.path, parakeetPath]
+        )
+        let progressParser = ParakeetProgressParser(progress: progress)
+
+        let result: SubprocessResult
+        do {
+            result = try await subprocessRunner.run(request) { chunk in
+                progressParser.consume(chunk)
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as SubprocessRunnerError {
+            switch error {
+            case .failedToStart(_, let underlying):
+                throw ParakeetServiceError.transcriptionFailed(request.redactedDiagnostic(underlying, limit: 500))
+            case .timedOut:
+                throw ParakeetServiceError.transcriptionFailed("parakeet-mlx exceeded the 12-hour transcription limit")
+            }
+        } catch {
+            throw ParakeetServiceError.transcriptionFailed(request.redactedDiagnostic(error.localizedDescription, limit: 500))
+        }
+        progressParser.finish()
+
+        guard result.succeeded else {
+            let combined = [result.standardErrorText, result.standardOutputText]
+                .filter { !$0.isEmpty }.joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let diagnostic = request.redactedDiagnostic(combined, limit: 500)
+            throw ParakeetServiceError.transcriptionFailed(
+                "parakeet-mlx exited \(result.terminationStatus): \(diagnostic.isEmpty ? "unknown error" : diagnostic)"
+            )
+        }
+    }
+}
+
+private final class ParakeetProgressParser: @unchecked Sendable {
+    private let lock = NSLock()
+    private let progress: @Sendable (ParakeetProgress) -> Void
+    private var lastReportedProgress = 0.01
+    private var pendingStandardOutput = ""
+    private var pendingStandardError = ""
+
+    init(progress: @escaping @Sendable (ParakeetProgress) -> Void) { self.progress = progress }
+
+    func consume(_ chunk: SubprocessOutputChunk) {
+        guard !chunk.data.isEmpty else { return }
+        lock.withLock {
+            let records: [String]
+            switch chunk.stream {
+            case .standardOutput:
+                records = Self.append(chunk.data, to: &pendingStandardOutput)
+            case .standardError:
+                records = Self.append(chunk.data, to: &pendingStandardError)
+            }
+            for record in records { parse(record) }
+        }
+    }
+
+    func finish() {
+        lock.withLock {
+            for record in [pendingStandardOutput, pendingStandardError] where !record.isEmpty {
+                parse(record)
+            }
+            pendingStandardOutput = ""
+            pendingStandardError = ""
+        }
+    }
+
+    private static func append(_ data: Data, to buffer: inout String) -> [String] {
+        var records: [String] = []
+        buffer += String(decoding: data, as: UTF8.self)
+        while let separator = buffer.firstIndex(where: { $0 == "\n" || $0 == "\r" }) {
+            records.append(String(buffer[..<separator]))
+            buffer.removeSubrange(...separator)
+        }
+        if buffer.count > 8 * 1024 { buffer = String(buffer.suffix(8 * 1024)) }
+        return records
+    }
+
+    private func parse(_ text: String) {
+        var parsedProgress: Double?
+        if let match = text.range(of: #"(\d+)/(\d+)"#, options: .regularExpression) {
+            let parts = text[match].split(separator: "/")
+            if parts.count == 2, let current = Double(parts[0]), let total = Double(parts[1]), total > 0 {
+                parsedProgress = current / total
+            }
+        }
+        if let match = text.range(of: #"(\d+(?:\.\d+)?)%"#, options: .regularExpression),
+           let percentage = Double(text[match].dropLast()) {
+            parsedProgress = max(parsedProgress ?? 0, percentage / 100)
+        }
+
+        guard let parsedProgress else { return }
+        let bounded = min(max(parsedProgress, 0), 0.99)
+        guard bounded - lastReportedProgress >= 0.01 else { return }
+        lastReportedProgress = bounded
+        progress(ParakeetProgress(stage: .transcribing, percentage: bounded, message: nil))
+    }
+}
 
 enum ParakeetServiceError: Error, LocalizedError {
     case binaryNotFound
     case modelNotDownloaded(ParakeetModel)
     case ffmpegNotFound
-    case audioExtractionFailed
+    case audioExtractionFailed(String? = nil)
     case transcriptionFailed(String)
     case srtGenerationFailed
     case cancelled
@@ -328,8 +476,8 @@ enum ParakeetServiceError: Error, LocalizedError {
             return "Model '\(model.displayName)' is not downloaded. It will be downloaded on first use."
         case .ffmpegNotFound:
             return "FFmpeg not found"
-        case .audioExtractionFailed:
-            return "Failed to extract audio from video"
+        case .audioExtractionFailed(let detail):
+            return detail.map { "Failed to extract audio from video: \($0)" } ?? "Failed to extract audio from video"
         case .transcriptionFailed(let message):
             return "Transcription failed: \(message)"
         case .srtGenerationFailed:
