@@ -29,13 +29,9 @@ actor WatchFolderManager {
         Self.logger.info("Starting watch folder monitoring: \(folderPath, privacy: .public)")
         
         monitorTask = Task { [weak self] in
-            guard let self else { return }
-            
-            while await self.isMonitoring {
-                await self.scanFolder(folderPath: folderPath, onNewFiles: onNewFiles)
-                
-                // Wait 5 seconds before next scan
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            await WatchFolderPollingLoop.run { [weak self] in
+                guard let self else { return false }
+                return await self.scanIfMonitoring(folderPath: folderPath, onNewFiles: onNewFiles)
             }
         }
     }
@@ -50,10 +46,18 @@ actor WatchFolderManager {
     }
     
     /// Scan the folder and detect stable files (not growing)
+    private func scanIfMonitoring(folderPath: String, onNewFiles: @escaping @Sendable ([URL]) -> Void) -> Bool {
+        // Check on the manager actor, after the polling task's actor hop: Stop
+        // may have cancelled an older task and started a replacement meanwhile.
+        guard isMonitoring, !Task.isCancelled else { return false }
+        scanFolder(folderPath: folderPath, onNewFiles: onNewFiles)
+        return true
+    }
+
     private func scanFolder(
         folderPath: String,
         onNewFiles: @escaping @Sendable ([URL]) -> Void
-    ) async {
+    ) {
         let folderURL = URL(fileURLWithPath: folderPath)
         
         // Check if folder exists
@@ -158,6 +162,21 @@ actor WatchFolderManager {
     
     func isCurrentlyMonitoring() -> Bool {
         return isMonitoring
+    }
+}
+
+/// Each polling task owns its cancellation state, so a newer monitor cannot
+/// reactivate an old task by changing the manager's shared monitoring flag.
+enum WatchFolderPollingLoop {
+    static func run(
+        wait: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(5)) },
+        scan: @escaping @Sendable () async -> Bool
+    ) async {
+        while !Task.isCancelled {
+            guard await scan(), !Task.isCancelled else { return }
+            do { try await wait() }
+            catch { return }
+        }
     }
 }
 

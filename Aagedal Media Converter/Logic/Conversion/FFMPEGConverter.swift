@@ -464,6 +464,7 @@ actor FFMPEGConverter {
         request: ConversionRequest,
         av2Settings: AV2Settings? = nil,
         dcpSettings: DCPSettings? = nil,
+        imfSettings: IMFSettings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -474,6 +475,7 @@ actor FFMPEGConverter {
         // Capture encoding and packaging preferences before cancellation or metadata work can suspend.
         let capturedAV2Settings = preset == .av2 ? (av2Settings ?? AV2Settings()) : nil
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
+        let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -791,6 +793,7 @@ actor FFMPEGConverter {
                 ffmpegPath: ffmpegPath,
                 preset: preset,
                 dcpSettings: capturedDCPSettings,
+                imfSettings: capturedIMFSettings,
                 waveformRequest: waveformRequest,
                 audioRoutingConfig: request.audioRoutingConfig,
                 trimStart: request.trimStart,
@@ -978,6 +981,7 @@ actor FFMPEGConverter {
             outputFileURL: ffmpegOutputURL,  // Use temp file for AVC-Intra, final file otherwise
             preset: preset,
             dcpSettings: capturedDCPSettings,
+            imfSettings: capturedIMFSettings,
             comment: request.comment,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
@@ -1440,16 +1444,14 @@ actor FFMPEGConverter {
                 }
 
                 // IMF assembly: produce video MXF + audio MXF essences and emit CPL/PKL/ASSETMAP.
-                if success && capturedIsIMFExport, let imfFolder = capturedIMFSubfolderURL {
+                if success && capturedIsIMFExport, let imfFolder = capturedIMFSubfolderURL,
+                   let imfSettings = capturedIMFSettings {
                     Self.logger.info("Starting IMF assembly...")
                     print("[IMF] starting assembly, imfFolder=\(imfFolder.path)")
 
-                    let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.imfResolutionKey) ?? AppConstants.defaultIMFResolution
-                    let resolution = IMFResolution(rawValue: resolutionRaw) ?? .hd1080
-                    let frameRateRaw = UserDefaults.standard.string(forKey: AppConstants.imfFrameRateKey) ?? AppConstants.defaultIMFFrameRate
-                    let frameRate = IMFFrameRate(rawValue: frameRateRaw) ?? .fps24
-                    let colorRaw = UserDefaults.standard.string(forKey: AppConstants.imfJ2KColorEncodingKey) ?? AppConstants.defaultIMFJ2KColorEncoding
-                    let color = IMFColorEncoding(rawValue: colorRaw) ?? .rec709
+                    let resolution = imfSettings.resolution
+                    let frameRate = imfSettings.frameRate
+                    let color = imfSettings.color
                     let application: IMFApplication = capturedIsIMFJ2KExport ? .app2e : .app5
 
                     let fm = FileManager.default
@@ -1584,7 +1586,7 @@ actor FFMPEGConverter {
                         }
 
                         // Clean up JP2 working folder
-                        let keepIntermediates = UserDefaults.standard.bool(forKey: AppConstants.imfKeepIntermediatesKey)
+                        let keepIntermediates = imfSettings.keepIntermediates
                         if !keepIntermediates {
                             Self.cleanupTempFile(at: jp2Dir, label: "IMF JP2 images")
                         }
@@ -1633,7 +1635,7 @@ actor FFMPEGConverter {
                             success = false
                         }
                         // Remove the temporary MOV; if user wants to keep, they can use the .prores preset directly.
-                        let keepIntermediates = UserDefaults.standard.bool(forKey: AppConstants.imfKeepIntermediatesKey)
+                        let keepIntermediates = imfSettings.keepIntermediates
                         if !keepIntermediates {
                             Self.cleanupTempFile(at: capturedFinalOutputURL, label: "IMF ProRes temp MOV")
                         }
@@ -3275,6 +3277,7 @@ actor FFMPEGConverter {
         ffmpegPath: String,
         preset: ExportPreset,
         dcpSettings: DCPSettings?,
+        imfSettings: IMFSettings?,
         waveformRequest: WaveformVideoRequest,
         audioRoutingConfig: AudioRoutingConfig?,
         trimStart: Double?,
@@ -3378,6 +3381,7 @@ actor FFMPEGConverter {
             outputFileURL: ffmpegOutputURL,
             preset: preset,
             dcpSettings: dcpSettings,
+            imfSettings: imfSettings,
             width: waveformRequest.width,
             height: waveformRequest.height,
             frameRate: waveformRequest.frameRate,

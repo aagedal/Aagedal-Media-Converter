@@ -760,7 +760,6 @@ struct CaptureModeView: View {
 
     private func startPreview(with cachedContent: SCShareableContent?) async {
         guard isViewActive, !captureManager.isRecording else { return }
-        await captureManager.stopPreview()
         let displayID = captureDisplayID == 0 ? nil : CGDirectDisplayID(captureDisplayID)
         await captureManager.startPreview(
             displayID: displayID,
