@@ -5,6 +5,39 @@ import os
 @testable import Aagedal_Media_Converter
 
 final class CaptureFrameRateTests: XCTestCase {
+    func testPreviewConfigurationReplacesEveryChangedCaptureOption() {
+        let original = CaptureSettings()
+        let configuration = CapturePreviewConfiguration(settings: original, maxWidth: 1280)
+        let changes: [(inout CaptureSettings) -> Void] = [
+            { $0.frameRate = .fps25 },
+            { $0.includeSystemAudio = false },
+            { $0.includeMicrophone = true },
+            { $0.microphoneDeviceID = "replacement-microphone" },
+            { $0.hideCursor = true },
+            { $0.excludeCurrentApp = true },
+            { $0.excludedAppBundleIDs = ["com.example.excluded"] },
+            { $0.regionRect = CGRect(x: 10, y: 20, width: 640, height: 480) }
+        ]
+        for (index, change) in changes.enumerated() {
+            var requested = original
+            change(&requested)
+            XCTAssertTrue(configuration.requiresReplacement(
+                settings: requested, maxWidth: 1280, isRecording: false
+            ), "Changed option \(index) must reach the live preview")
+            XCTAssertFalse(configuration.requiresReplacement(
+                settings: requested, maxWidth: 1280, isRecording: true
+            ), "Changed option \(index) must preserve the active recording")
+        }
+    }
+
+    func testPreviewConfigurationPreservesUnchangedTileAndRebuildsForWidth() {
+        let settings = CaptureSettings()
+        let configuration = CapturePreviewConfiguration(settings: settings, maxWidth: 1280)
+        XCTAssertFalse(configuration.requiresReplacement(settings: settings, maxWidth: 1280, isRecording: false))
+        XCTAssertTrue(configuration.requiresReplacement(settings: settings, maxWidth: 640, isRecording: false))
+        XCTAssertFalse(configuration.requiresReplacement(settings: settings, maxWidth: 640, isRecording: true))
+    }
+
     @MainActor
     func testPreviewSelectionRetiresPendingDeliveryAndRejectsLateAdoption() throws {
         let operations = CapturePreviewOperations()

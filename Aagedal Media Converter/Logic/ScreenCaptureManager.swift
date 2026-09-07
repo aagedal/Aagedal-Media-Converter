@@ -32,7 +32,7 @@ struct CaptureDisplay: Identifiable, Hashable {
 
 /// The capture options shared across every selected display (one preset/audio choice applies to
 /// all per-screen streams). `regionRect` is only meaningful for a single-display selection.
-struct CaptureSettings: Sendable {
+struct CaptureSettings: Sendable, Equatable {
     var frameRate: CaptureFrameRateOption = .auto
     var includeSystemAudio: Bool = true
     var includeMicrophone: Bool = false
@@ -41,6 +41,17 @@ struct CaptureSettings: Sendable {
     var excludeCurrentApp: Bool = false
     var excludedAppBundleIDs: Set<String> = []
     var regionRect: CGRect? = nil
+}
+
+/// Snapshot the options actually used to create a preview, rather than comparing
+/// against the most recently requested settings while another request suspends.
+struct CapturePreviewConfiguration: Equatable {
+    let settings: CaptureSettings
+    let maxWidth: CGFloat
+
+    func requiresReplacement(settings: CaptureSettings, maxWidth: CGFloat, isRecording: Bool) -> Bool {
+        !isRecording && self != CapturePreviewConfiguration(settings: settings, maxWidth: maxWidth)
+    }
 }
 
 enum CapturePreset: String, CaseIterable, Identifiable {
@@ -387,15 +398,17 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     private final class DisplayTile {
         let displayID: CGDirectDisplayID
         let delivery = CaptureSampleDelivery()
+        let configuration: CapturePreviewConfiguration
         var stream: SCStream?
         var output: CaptureStreamOutput?
         var writer: AnyCaptureOutputWriter?   // non-nil only while recording
         var recordingURL: URL?
         enum Mode { case preview, recording }
         var mode: Mode
-        init(displayID: CGDirectDisplayID, mode: Mode) {
+        init(displayID: CGDirectDisplayID, mode: Mode, configuration: CapturePreviewConfiguration) {
             self.displayID = displayID
             self.mode = mode
+            self.configuration = configuration
         }
     }
     private var tiles: [CGDirectDisplayID: DisplayTile] = [:]
@@ -459,6 +472,30 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
             await teardownTile(tile)
             guard previewOperations.generation == selection, !Task.isCancelled else { return }
         }
+
+        // Replace changed previews through the bounded start/stop lifecycle. A
+        // stream's sample handler captures audio/filter options at construction,
+        // so updating only SCStreamConfiguration would leave those options stale.
+        // Retire all obsolete delivery before the first framework suspension.
+        let obsoletePreviews = tiles.filter {
+            $0.value.configuration.requiresReplacement(
+                settings: settings, maxWidth: maxPreviewWidth,
+                isRecording: $0.value.mode == .recording
+            )
+        }
+        for (id, tile) in obsoletePreviews {
+            tile.delivery.invalidate()
+            tiles[id] = nil
+            previewImages[id] = nil
+        }
+        recomputeMeterSource()
+        updatePreviewingFlag()
+        for tile in obsoletePreviews.values {
+            await stopStream(for: tile, reportErrorIf: {
+                self.previewOperations.generation == selection && !Task.isCancelled
+            })
+        }
+        guard previewOperations.generation == selection, !Task.isCancelled else { return }
 
         guard let microphoneEnabled = await resolveMicrophoneCapture(requested: settings.includeMicrophone),
               previewOperations.generation == selection, !Task.isCancelled else {
@@ -655,7 +692,10 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         previewOperation: CapturePreviewOperations.Start? = nil
     ) async throws -> DisplayTile {
         let displayID = display.displayID
-        let tile = DisplayTile(displayID: displayID, mode: mode)
+        let tile = DisplayTile(
+            displayID: displayID, mode: mode,
+            configuration: CapturePreviewConfiguration(settings: settings, maxWidth: maxPreviewWidth)
+        )
         let delivery = tile.delivery
         if let recordingOperation { recordingOperations.registerDelivery(delivery, for: recordingOperation) }
         if let previewOperation { previewOperations.registerDelivery(delivery, for: previewOperation) }
@@ -801,7 +841,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
     }
 
     /// Retires sample delivery and bounds the framework stop callback.
-    private func stopStream(for tile: DisplayTile) async {
+    private func stopStream(for tile: DisplayTile, reportErrorIf: () -> Bool = { true }) async {
         // Retire delivery before suspending: callbacks already queued on the main
         // actor must not overwrite a replacement tile or its meter readings.
         tile.delivery.invalidate()
@@ -812,7 +852,7 @@ final class ScreenCaptureManager: NSObject, ObservableObject {
         do {
             try await CaptureStreamShutdown.stop { try await operation.stop() }
         } catch {
-            errorMessage = error.localizedDescription
+            if reportErrorIf() { errorMessage = error.localizedDescription }
         }
     }
 

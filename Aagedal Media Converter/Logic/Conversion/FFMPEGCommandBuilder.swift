@@ -75,6 +75,7 @@ enum FFMPEGCommandBuilder {
         outputFileURL: URL,
         preset: ExportPreset,
         dcpSettings: DCPSettings? = nil,
+        imfSettings: IMFSettings? = nil,
         comment: String,
         includeDateTag: Bool,
         trimStart: Double?,
@@ -91,6 +92,7 @@ enum FFMPEGCommandBuilder {
         isMuted: Bool = false
     ) async -> FFMPEGCommand {
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
+        let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
         let normalizedTrimStart = normalizedTrimPoint(trimStart)
@@ -124,7 +126,9 @@ enum FFMPEGCommandBuilder {
 
             arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest, includeAudioOutput: includeAudioOutput, audioRoutingConfig: audioRoutingConfig))
 
-            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
+            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
+                ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+                ?? preset.ffmpegArguments
             await adjustArgumentsForInput(
                 preset: preset,
                 inputURL: inputURL,
@@ -181,7 +185,9 @@ enum FFMPEGCommandBuilder {
 
             arguments.append(contentsOf: synthesizedVideoCommandArguments(for: synthesizedVideoRequest))
 
-            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
+            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
+                ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+                ?? preset.ffmpegArguments
             await adjustArgumentsForInput(
                 preset: preset,
                 inputURL: inputURL,
@@ -239,7 +245,9 @@ enum FFMPEGCommandBuilder {
             )
         }
 
-        var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
+        var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
+            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? preset.ffmpegArguments
 
         // Image sequence inputs (via customInputArguments): the inputURL is a directory
         // so skip audio probing. If no associated audio, strip audio args entirely.
@@ -699,6 +707,7 @@ extension FFMPEGCommandBuilder {
         outputFileURL: URL,
         preset: ExportPreset,
         dcpSettings: DCPSettings? = nil,
+        imfSettings: IMFSettings? = nil,
         width: Int,
         height: Int,
         frameRate: Double,
@@ -711,6 +720,7 @@ extension FFMPEGCommandBuilder {
         additionalOutputArguments: [String]? = nil
     ) async -> FFMPEGCommand {
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
+        let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         let finalWidth = evenDimension(max(width, 2))
         let finalHeight = evenDimension(max(height, 2))
         let resolution = "\(finalWidth)x\(finalHeight)"
@@ -745,7 +755,9 @@ extension FFMPEGCommandBuilder {
         arguments.append(contentsOf: ["-map", "0:v", "-map", "1:a"])
 
         // Preset encoding arguments (sanitized for our custom video pipeline)
-        var ffmpegArgs = capturedDCPSettings?.ffmpegArguments ?? preset.ffmpegArguments
+        var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
+            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? preset.ffmpegArguments
         await adjustArgumentsForInput(preset: preset, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
         sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
 
