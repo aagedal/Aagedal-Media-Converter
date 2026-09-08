@@ -1586,19 +1586,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .audioOnly:
             return AudioOnlySettings().ffmpegArguments
         case .imageSequence:
-            let formatRaw = UserDefaults.standard.string(forKey: AppConstants.imageSequenceExportFormatKey) ?? AppConstants.defaultImageSequenceExportFormat
-            let format = ImageSequenceFormat(rawValue: formatRaw) ?? .png
-            var args = commonArgs + [
-                "-c:v", format.ffmpegEncoder,
-                "-an"
-            ]
-            // Add quality setting for JPEG
-            if format == .jpeg {
-                let quality = UserDefaults.standard.integer(forKey: AppConstants.imageSequenceExportQualityKey)
-                let q = quality > 0 ? quality : AppConstants.defaultImageSequenceExportQuality
-                args += ["-q:v", "\(q)"]
-            }
-            return args
+            return ImageSequenceSettings().ffmpegArguments
         case .dcp:
             return DCPSettings().ffmpegArguments
         case .imfJ2K:

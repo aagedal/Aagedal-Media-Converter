@@ -128,6 +128,41 @@ private final class BlockingOperationResolution<Result: Sendable>: @unchecked Se
     }
 }
 
+/// Owns the asynchronous preparation window before a display becomes visible to
+/// the manager. Teardown invalidates even creations that have no handle yet.
+@MainActor
+final class VirtualDisplayCreationLifetime {
+    enum Outcome: Equatable {
+        case ready
+        case failed
+        case abandoned
+    }
+
+    private(set) var generation = UUID()
+
+    func invalidate() {
+        generation = UUID()
+    }
+
+    func prepare(
+        apply: () async -> Bool,
+        settle: () async throws -> Void = { try await Task.sleep(for: .milliseconds(200)) }
+    ) async -> Outcome {
+        let requestGeneration = generation
+        guard !Task.isCancelled else { return .abandoned }
+        let applied = await apply()
+        guard !Task.isCancelled, requestGeneration == generation else { return .abandoned }
+        guard applied else { return .failed }
+        do {
+            try await settle()
+        } catch {
+            return .abandoned
+        }
+        guard !Task.isCancelled, requestGeneration == generation else { return .abandoned }
+        return .ready
+    }
+}
+
 @MainActor
 final class VirtualDisplayManager: ObservableObject {
     static let shared = VirtualDisplayManager()
@@ -147,6 +182,7 @@ final class VirtualDisplayManager: ObservableObject {
     /// Strong references keep the displays alive — releasing a `CGVirtualDisplay`
     /// instance destroys the display immediately.
     private var handles: [CGDirectDisplayID: CGVirtualDisplay] = [:]
+    private let creationLifetime = VirtualDisplayCreationLifetime()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "VirtualDisplay")
 
@@ -222,10 +258,19 @@ final class VirtualDisplayManager: ObservableObject {
 
         // applySettings blocks on WindowServer IPC; run it off the main thread with a timeout.
         let box = VirtualDisplayApplyBox(display: display, settings: settings)
-        let applied = await Self.applySettings(box, timeoutSeconds: 10)
-        guard applied else {
+        let requestGeneration = creationLifetime.generation
+        let outcome = await creationLifetime.prepare {
+            await Self.applySettings(box, timeoutSeconds: 10)
+        }
+        guard !Task.isCancelled, requestGeneration == creationLifetime.generation else { return nil }
+        switch outcome {
+        case .abandoned:
+            return nil
+        case .failed:
             lastError = "The virtual display didn’t respond in time."
             return nil
+        case .ready:
+            break
         }
 
         let id = display.displayID
@@ -239,8 +284,7 @@ final class VirtualDisplayManager: ObservableObject {
         // macOS puts a freshly created virtual display into a mirror set (pinned
         // on top of the main display). Convert it to an extended desktop so the
         // user can drag a window onto it and record it independently. Give the
-        // display a moment to settle before reconfiguring.
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        // display a moment to settle before reconfiguring (done during preparation).
         ensureExtended(id)
 
         activeDisplays.append(ActiveDisplay(id: id, name: displayName, width: width, height: height))
@@ -273,6 +317,7 @@ final class VirtualDisplayManager: ObservableObject {
 
     /// Destroy all virtual displays. Call on app termination so none linger.
     func destroyAll() {
+        creationLifetime.invalidate()
         guard !handles.isEmpty else { return }
         handles.removeAll()
         activeDisplays.removeAll()

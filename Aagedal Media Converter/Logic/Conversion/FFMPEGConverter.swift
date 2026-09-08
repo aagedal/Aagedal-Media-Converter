@@ -466,6 +466,7 @@ actor FFMPEGConverter {
         dcpSettings: DCPSettings? = nil,
         imfSettings: IMFSettings? = nil,
         audioOnlySettings: AudioOnlySettings? = nil,
+        imageSequenceSettings: ImageSequenceSettings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -478,6 +479,7 @@ actor FFMPEGConverter {
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
+        let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -662,12 +664,7 @@ actor FFMPEGConverter {
             // FFmpeg outputs to a temp MOV inside the working folder; bmxtranswrap will produce the OP1a MXF.
             outputFileURL = finalSubfolderURL.appendingPathComponent("imf_prores_temp.mov")
             Self.logger.info("IMF App 5: FFmpeg will output ProRes MOV for OP1a rewrap")
-        } else if isImageSequenceExport {
-            let formatRaw = UserDefaults.standard.string(forKey: AppConstants.imageSequenceExportFormatKey) ?? AppConstants.defaultImageSequenceExportFormat
-            let format = ImageSequenceFormat(rawValue: formatRaw) ?? .png
-            let padding = UserDefaults.standard.integer(forKey: AppConstants.imageSequenceNumberingPaddingKey)
-            let effectivePadding = padding > 0 ? padding : AppConstants.defaultImageSequenceNumberingPadding
-
+        } else if let imageSequenceSettings = capturedImageSequenceSettings {
             // Create subfolder: outputDir/basename_seq/
             let subfolderName = outputURL.lastPathComponent
             let subfolderURL = outputDir.appendingPathComponent(subfolderName, isDirectory: true)
@@ -690,7 +687,7 @@ actor FFMPEGConverter {
 
             // Build the FFMPEG output pattern: subfolder/basename_%06d.png
             let baseName = outputURL.lastPathComponent
-            let patternFileName = "\(baseName)_%0\(effectivePadding)d.\(format.primaryExtension)"
+            let patternFileName = imageSequenceSettings.outputPattern(baseName: baseName)
             outputFileURL = finalSubfolderURL.appendingPathComponent(patternFileName)
         } else {
             // Use the captured container for naming and encoding.
@@ -799,6 +796,7 @@ actor FFMPEGConverter {
                 dcpSettings: capturedDCPSettings,
                 imfSettings: capturedIMFSettings,
                 audioOnlySettings: capturedAudioOnlySettings,
+                imageSequenceSettings: capturedImageSequenceSettings,
                 waveformRequest: waveformRequest,
                 audioRoutingConfig: request.audioRoutingConfig,
                 trimStart: request.trimStart,
@@ -988,6 +986,7 @@ actor FFMPEGConverter {
             dcpSettings: capturedDCPSettings,
             imfSettings: capturedIMFSettings,
             audioOnlySettings: capturedAudioOnlySettings,
+            imageSequenceSettings: capturedImageSequenceSettings,
             comment: request.comment,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
@@ -1853,13 +1852,14 @@ actor FFMPEGConverter {
                         errorReason = "Conversion cancelled"
                     }
 
-                    if success {
+                    if success, let imageSequenceSettings = capturedImageSequenceSettings {
                         let stillOwnsPostProcessing = await self?.generateImageSequenceMetadataSidecarIfOwned(
                             conversionID: conversionID,
                             originalFileName: capturedInputBaseName,
                             outputFolder: outputFolder,
                             metadata: capturedRequest.sourceMetadata,
-                            cameraMetadata: capturedRequest.sourceCameraMetadata
+                            cameraMetadata: capturedRequest.sourceCameraMetadata,
+                            settings: imageSequenceSettings
                         ) ?? false
                         if !stillOwnsPostProcessing {
                             success = false
@@ -3285,6 +3285,7 @@ actor FFMPEGConverter {
         dcpSettings: DCPSettings?,
         imfSettings: IMFSettings?,
         audioOnlySettings: AudioOnlySettings?,
+        imageSequenceSettings: ImageSequenceSettings?,
         waveformRequest: WaveformVideoRequest,
         audioRoutingConfig: AudioRoutingConfig?,
         trimStart: Double?,
@@ -3390,6 +3391,7 @@ actor FFMPEGConverter {
             dcpSettings: dcpSettings,
             imfSettings: imfSettings,
             audioOnlySettings: audioOnlySettings,
+            imageSequenceSettings: imageSequenceSettings,
             width: waveformRequest.width,
             height: waveformRequest.height,
             frameRate: waveformRequest.frameRate,
@@ -3840,27 +3842,18 @@ actor FFMPEGConverter {
         originalFileName: String,
         outputFolder: URL,
         metadata: VideoMetadata?,
-        cameraMetadata: CameraMetadata?
+        cameraMetadata: CameraMetadata?,
+        settings: ImageSequenceSettings
     ) -> Bool {
         guard postProcessingConversionID == conversionID else { return false }
 
-        let sidecarEnabled = UserDefaults.standard.object(
-            forKey: AppConstants.imageSequenceMetadataSidecarEnabledKey
-        ) != nil
-            ? UserDefaults.standard.bool(forKey: AppConstants.imageSequenceMetadataSidecarEnabledKey)
-            : AppConstants.defaultImageSequenceMetadataSidecarEnabled
-
-        if sidecarEnabled, let metadata {
-            let formatRaw = UserDefaults.standard.string(
-                forKey: AppConstants.imageSequenceMetadataSidecarFormatKey
-            ) ?? AppConstants.defaultImageSequenceMetadataSidecarFormat
-            let format = MetadataSidecarGenerator.SidecarFormat(rawValue: formatRaw) ?? .markdown
+        if settings.metadataSidecarEnabled, let metadata {
             MetadataSidecarGenerator.generateSidecar(
                 originalFileName: originalFileName,
                 outputFolder: outputFolder,
                 metadata: metadata,
                 cameraMetadata: cameraMetadata,
-                format: format
+                format: settings.metadataSidecarFormat
             )
         }
         return true

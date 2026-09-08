@@ -1547,6 +1547,61 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(runner.cancelledCount, 1)
     }
 
+    @MainActor
+    func testVirtualDisplayTeardownRejectsPendingApplyAndAllowsRetry() async {
+        let lifetime = VirtualDisplayCreationLifetime()
+        var settleCalled = false
+        let outcome = await lifetime.prepare {
+            // Teardown can occur while WindowServer has yet to return a handle.
+            await Task.yield()
+            lifetime.invalidate()
+            return true
+        } settle: {
+            settleCalled = true
+        }
+        XCTAssertEqual(outcome, .abandoned)
+        XCTAssertFalse(settleCalled)
+        let retry = await lifetime.prepare(apply: { true }, settle: {})
+        XCTAssertEqual(retry, .ready)
+    }
+
+    @MainActor
+    func testVirtualDisplayTeardownDuringSettleRejectsPublication() async {
+        let lifetime = VirtualDisplayCreationLifetime()
+        let outcome = await lifetime.prepare(apply: { true }) {
+            await Task.yield()
+            lifetime.invalidate()
+        }
+        XCTAssertEqual(outcome, .abandoned)
+    }
+
+    @MainActor
+    func testVirtualDisplayCancellationDuringSettleRejectsPublication() async {
+        let lifetime = VirtualDisplayCreationLifetime()
+        let settling = expectation(description: "Display is settling")
+        let task = Task { @MainActor in
+            await lifetime.prepare(apply: { true }) {
+                settling.fulfill()
+                try await Task.sleep(for: .seconds(30))
+            }
+        }
+        await fulfillment(of: [settling], timeout: 1)
+        task.cancel()
+        let outcome = await task.value
+        XCTAssertEqual(outcome, .abandoned)
+    }
+
+    @MainActor
+    func testVirtualDisplayApplyFailureDoesNotSettle() async {
+        let lifetime = VirtualDisplayCreationLifetime()
+        var settleCalled = false
+        let outcome = await lifetime.prepare(apply: { false }) {
+            settleCalled = true
+        }
+        XCTAssertEqual(outcome, .failed)
+        XCTAssertFalse(settleCalled)
+    }
+
     func testBlockingOperationDeadlineReturnsImmediateOperationResult() async {
         let result = await BlockingOperationDeadline.run(
             timeout: .seconds(1),
@@ -7390,6 +7445,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let progressValues = OSAllocatedUnfairLock<[Double]>(initialState: [])
         let halfProgressReported = expectation(description: "FFmpeg half progress reported")
+        let runnerMayFinish = expectation(description: "Active FFmpeg progress observed before exit")
         let runner = RecordingSubprocessRunner { request, outputHandler in
             outputHandler?(SubprocessOutputChunk(
                 stream: .standardError,
@@ -7399,6 +7455,11 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 stream: .standardError,
                 data: Data("5.00 speed=1.0x\r".utf8)
             ))
+            // The production gate intentionally rejects queued UI callbacks after
+            // process completion. Keep this fake process active until its split
+            // record is observed, rather than racing main-actor delivery against exit.
+            let progressResult = await XCTWaiter.fulfillment(of: [runnerMayFinish], timeout: 1.0)
+            XCTAssertEqual(progressResult, .completed)
             let outputPath = try XCTUnwrap(request.arguments.last)
             let outputURL = URL(fileURLWithPath: outputPath)
             try Data("encoded fixture".utf8).write(to: outputURL)
@@ -7434,6 +7495,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 progressValues.withLock { $0.append(progress) }
                 if abs(progress - 0.5) < 0.001 {
                     halfProgressReported.fulfill()
+                    runnerMayFinish.fulfill()
                 }
             }
         )

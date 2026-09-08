@@ -1,5 +1,8 @@
 # v.4.3.0
 
+- **Image-sequence exports keep frame and sidecar settings consistent throughout a job**, including format, JPEG quality, numbering width, and metadata sidecar choice.
+- **Closing capture discards pending virtual displays**, including creation that finishes after teardown or cancellation during startup.
+
 - **Audio Only exports keep their selected settings throughout a job**, including file format, codec, bit depth, bitrate, metadata preservation, and output naming.
 - **Cold-launch Shortcuts requests replay in submission order**, preserving the order in which requests reached the app.
 - **Delayed camera and C2PA metadata reads retain file access** until parsing finishes, even if the interface has already stopped waiting.

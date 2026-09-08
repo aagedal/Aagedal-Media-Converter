@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 476 tests pass. The
+- The unit-test baseline is green: 487 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 476 unit tests. The UI test target now has deterministic smoke
+- There are 487 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -705,6 +705,13 @@ semantics, descendant cleanup, TERM-ignoring escalation, pipelines, streaming in
 capture, and cancellation. A child that deliberately escapes with `setsid`/`setpgid` remains
 outside the runner's control, matching ordinary process-group semantics.
 
+The split-progress fake-runner regression now waits for its expected intermediate
+callback before completing the process. Previously its immediate return raced the
+intentional terminal progress gate, intermittently demanding progress after the
+conversion had already completed. The handshake preserves the active-conversion
+split-record assertions and production suppression of late callbacks
+(Codex, 2026-09-08).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -999,6 +1006,14 @@ AVFoundation/VLC duration/support helpers were removed instead of retaining dorm
 unbounded framework waits. The wider active-callback audit and live sandbox access
 validation remain open (Codex, 2026-09-08).
 
+Virtual-display creation now retains a generation fence across the bounded
+WindowServer apply and settling delay. Teardown invalidates pending creations even
+when no handle has been published; cancellation during settling and late apply
+results cannot restore a retired display. Four deterministic regressions cover
+teardown during both phases, cancellation, apply failure, and retry. Live virtual
+display/capture validation and the broader callback audit remain open
+(Codex, 2026-09-08).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1129,6 +1144,8 @@ coordinator work and live Shortcuts integration remain open (Codex, 2026-09-08).
 
 ### 3.2 Make conversion plans typed
 
+Status: in progress; typed audio routing introduced 2026-09-08 (Codex).
+
 - Replace repeated mutation of raw `[String]` arguments with a typed conversion
   plan: inputs, video filters, audio routes, maps, codecs, metadata, and outputs.
 - Render the plan to arguments at the process boundary.
@@ -1136,6 +1153,18 @@ coordinator work and live Shortcuts integration remain open (Codex, 2026-09-08).
 
 Acceptance: filter ordering and map ownership are explicit, and invalid
 combinations produce a preflight explanation before encoding starts.
+
+Audio routing now resolves into an immutable `AudioRoutingPlan` before rendering
+FFmpeg arguments. Direct tracks, ordered duplicates, mixed downmix/pass-through,
+merge, split, swap, and channel extraction have explicit cases; filtered plans own
+both their graph and ordered maps. The compatibility entry point delegates to this
+renderer, preserving existing command behavior and invalid-operation fallback.
+Negative extraction indices now use that fallback rather than generating an invalid
+filter. Four focused regressions cover immutable ordering, filter/map ownership,
+operation output counts, and invalid channel operations; existing generated-media
+routing tests continue to validate actual encoded outputs. Full typed inputs,
+video filters, codecs, metadata, output ownership, and incompatible-option preflight
+remain open.
 
 ### 3.3 Centralize settings access
 
@@ -1225,6 +1254,16 @@ regressions cover defaults and invalid choices, bitrate/codec combinations, comm
 stability, a suspended stream probe, and converter-level source-collision naming and
 source preservation. Image-sequence and other codec families, UI/request-generation
 settings, and remaining migrations stay open (Codex, 2026-09-08).
+
+Image-sequence exports now capture image format, JPEG quality, numbering width,
+and sidecar enablement/format before conversion suspends. Output naming, ordinary
+and native waveform encoders, and post-encode sidecars use the same injected
+snapshot. Isolated settings tests cover invalid saved values without rewriting them,
+explicitly disabled sidecars, and command/naming stability after preferences change.
+A generated red-video fixture drives the actual converter after settings mutation,
+verifying JPEG filenames, decoded dimensions/pixels, and a JSON metadata sidecar.
+Other codec families, UI/request-generation settings, and remaining schema migrations
+stay open (Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1539,7 +1578,19 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 476 unit tests
+Latest validation (2026-09-08, Codex): Debug compilation and all 487 unit tests
+pass with zero failures or skips using the shared unit-only scheme. Eleven new
+regressions cover typed audio routing, image-sequence settings (including actual
+JPEG pixels and JSON sidecar output), and virtual-display creation lifetime.
+All 43 release-script tests, manifest freshness, and localization checks pass
+(1,484 entries, 15 intentional omissions). An intermediate full run exposed an
+existing split-progress fixture race; the bounded observation handshake removes
+its dependence on callback/terminal scheduling. The final rebuilt suite is green.
+Independent audio-routing review found no introduced regression. Live virtual
+display/capture, preview and sandbox access, VoiceOver, bilingual UI, Release
+build, clean-machine installation, and credentialed release checks were not run.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 476 unit tests
 pass with zero failures using the shared unit-only scheme, including seventeen new
 Audio Only settings, App Intent hand-off, and metadata-scope lifecycle regressions.
 All 43 release-script tests, manifest freshness, and localization checks pass
