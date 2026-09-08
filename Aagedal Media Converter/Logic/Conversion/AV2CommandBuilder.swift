@@ -129,15 +129,10 @@ enum AV2CommandBuilder {
 
         // MARK: ffmpeg decode → y4m
         var ffmpeg: [String] = ["-y", "-nostdin", "-progress", "pipe:2", "-hide_banner"]
-        if let trimStart, trimStart > 0 {
-            ffmpeg += ["-ss", String(format: "%.6f", trimStart)]
-        }
+        let trim = AV2TrimPlan(start: trimStart, end: trimEnd)
+        ffmpeg += trim.inputArguments
         appendInputArguments(customInputArguments, inputURL: inputURL, to: &ffmpeg)
-        if let trimStart, let trimEnd, trimEnd > trimStart {
-            ffmpeg += ["-t", String(format: "%.6f", trimEnd - trimStart)]
-        } else if let trimEnd, trimEnd > 0, trimStart == nil {
-            ffmpeg += ["-t", String(format: "%.6f", trimEnd)]
-        }
+        ffmpeg += trim.outputArguments
         ffmpeg += ["-map", "0:v:0", "-an", "-sn", "-dn"]
         ffmpeg += ["-vf", r.videoFilter]
         ffmpeg += ["-pix_fmt", r.pixFmt]
@@ -156,7 +151,7 @@ enum AV2CommandBuilder {
         // The .mkv muxer assigns one presentation timestamp per IVF frame record, so the bitstream
         // must have one record per displayed frame. By default avmenc uses alt-ref/lag frames, which
         // makes records ≠ displayed frames with non-sequential timestamps — disable it for muxing.
-        if AV2Container.current == .mkv { avmenc += ["--lag-in-frames=0"] }
+        if settings.container == .mkv { avmenc += ["--lag-in-frames=0"] }
         if r.autoTileColumns > 0 { avmenc += ["--tile-columns=\(r.autoTileColumns)"] }
         if r.autoTileRows > 0 { avmenc += ["--tile-rows=\(r.autoTileRows)"] }
         avmenc += ["-o", outputURL.path, "-"]
@@ -213,7 +208,9 @@ enum AV2CommandBuilder {
               let duration = r.effectiveDuration, duration > 0 else {
             return nil // can't partition without a frame count
         }
-        let totalFrames = max(1, Int((duration * frameRate).rounded()))
+        let frameCount = (duration * frameRate).rounded()
+        guard frameCount.isFinite, frameCount < Double(Int.max) else { return nil }
+        let totalFrames = max(1, Int(frameCount))
 
         let hint = settings.parallelChunks
         let chunkCount = resolvedChunkCount(totalFrames: totalFrames, hint: hint, rateMode: r.rateMode)
@@ -226,7 +223,7 @@ enum AV2CommandBuilder {
 
         let base = totalFrames / chunkCount
         let remainder = totalFrames % chunkCount
-        let trimBase = trimStart ?? 0
+        let trimBase = AV2TrimPlan(start: trimStart, end: trimEnd).start
 
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("av2chunks_\(UUID().uuidString)", isDirectory: true)
@@ -257,7 +254,7 @@ enum AV2CommandBuilder {
             av += ["--cpu-used=\(r.speed)"]
             av += ["-t", "\(threadsPerWorker)"]
             // 1 IVF record per displayed frame for correct Matroska timing (see build()).
-            if AV2Container.current == .mkv { av += ["--lag-in-frames=0"] }
+            if settings.container == .mkv { av += ["--lag-in-frames=0"] }
             av += ["--limit=\(count)"]
             av += ["-o", segURL.path, "-"]
 
@@ -514,15 +511,7 @@ enum AV2CommandBuilder {
         trimStart: Double?,
         trimEnd: Double?
     ) -> Double? {
-        let start = max(0, trimStart ?? 0)
-
-        if let trimEnd, trimEnd > start {
-            let effectiveEnd = sourceDuration.map { min(trimEnd, max(0, $0)) } ?? trimEnd
-            return max(0, effectiveEnd - start)
-        }
-
-        guard let sourceDuration else { return nil }
-        return max(0, sourceDuration - start)
+        AV2TrimPlan(start: trimStart, end: trimEnd).effectiveDuration(sourceDuration: sourceDuration)
     }
 
     /// Rounds to the nearest even integer (codec requirement), with a floor of 2.

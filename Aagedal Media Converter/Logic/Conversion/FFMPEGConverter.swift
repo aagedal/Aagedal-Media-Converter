@@ -469,6 +469,7 @@ actor FFMPEGConverter {
         imageSequenceSettings: ImageSequenceSettings? = nil,
         codecSettings: CodecExportSettings? = nil,
         subtitleSettings: SubtitleExportSettings? = nil,
+        commentSettings: CommentSettings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -484,6 +485,7 @@ actor FFMPEGConverter {
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
+        let capturedCommentSettings = commentSettings ?? CommentSettings()
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -809,6 +811,7 @@ actor FFMPEGConverter {
                 trimEnd: request.trimEnd,
                 comment: request.comment,
                 includeDateTag: request.includeDateTag,
+                commentSettings: capturedCommentSettings,
                 isMuted: request.isMuted,
                 additionalOutputArguments: request.additionalOutputArguments,
                 expectedDuration: request.expectedDuration,
@@ -923,6 +926,7 @@ actor FFMPEGConverter {
                     audioRoutingConfig: request.audioRoutingConfig,
                     comment: request.comment,
                     includeDateTag: request.includeDateTag,
+                    commentSettings: capturedCommentSettings,
                     timecodeConfig: request.timecodeConfig,
                     sourceMetadata: request.sourceMetadata ?? (request.visualSourceURL == nil ? av2PlanningMetadata : nil),
                     trimStart: request.trimStart,
@@ -994,6 +998,7 @@ actor FFMPEGConverter {
             audioOnlySettings: capturedAudioOnlySettings,
             imageSequenceSettings: capturedImageSequenceSettings,
             codecSettings: capturedCodecSettings,
+            commentSettings: capturedCommentSettings,
             subtitleSettings: capturedSubtitleSettings,
             comment: request.comment,
             includeDateTag: request.includeDateTag,
@@ -2637,6 +2642,7 @@ actor FFMPEGConverter {
         audioRoutingConfig: AudioRoutingConfig?,
         comment: String,
         includeDateTag: Bool,
+        commentSettings: CommentSettings,
         timecodeConfig: TimecodeConfig?,
         sourceMetadata knownSourceMetadata: VideoMetadata?,
         trimStart: Double?,
@@ -2741,7 +2747,8 @@ actor FFMPEGConverter {
         let metadata = MatroskaMuxer.Metadata(
             comment: FFMPEGCommandBuilder.commentMetadataValue(
                 comment: comment,
-                includeDateTag: includeDateTag
+                includeDateTag: includeDateTag,
+                settings: commentSettings
             ),
             timecode: timecode
         )
@@ -2909,13 +2916,10 @@ actor FFMPEGConverter {
         defer { Self.cleanupTempFile(at: routedAudioURL, label: "AV2 routed audio") }
 
         var args = ["-y", "-nostdin", "-hide_banner"]
-        if let trimStart, trimStart > 0 { args += ["-ss", String(format: "%.6f", trimStart)] }
+        let trim = AV2TrimPlan(start: trimStart, end: trimEnd)
+        args += trim.inputArguments
         args += source.arguments
-        if let trimStart, let trimEnd, trimEnd > trimStart {
-            args += ["-t", String(format: "%.6f", trimEnd - trimStart)]
-        } else if let trimEnd, trimEnd > 0, trimStart == nil {
-            args += ["-t", String(format: "%.6f", trimEnd)]
-        }
+        args += trim.outputArguments
         args += ["-vn"]
         args += routingArguments
         args += ["-c:a", codec.ffmpegEncoder, "-b:a", bitrate, "-f", "matroska", routedAudioURL.path]
@@ -3301,6 +3305,7 @@ actor FFMPEGConverter {
         trimEnd: Double?,
         comment: String,
         includeDateTag: Bool,
+        commentSettings: CommentSettings,
         isMuted: Bool,
         additionalOutputArguments: [String]?,
         expectedDuration: Double?,
@@ -3402,6 +3407,7 @@ actor FFMPEGConverter {
             audioOnlySettings: audioOnlySettings,
             imageSequenceSettings: imageSequenceSettings,
             codecSettings: codecSettings,
+            commentSettings: commentSettings,
             width: waveformRequest.width,
             height: waveformRequest.height,
             frameRate: waveformRequest.frameRate,

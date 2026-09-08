@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 513 tests pass. The
+- The unit-test baseline is green: 522 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 513 unit tests. The UI test target now has deterministic smoke
+- There are 522 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -1030,6 +1030,14 @@ regressions cover success, cancellation with a non-cooperative worker, replaceme
 and timeout. Real download cancellation/retry and the wider callback audit remain
 open (Codex, 2026-09-08).
 
+Post-download file-details discovery now uses the same owned task store with a
+60-second non-joining deadline. Cancellation, removal, and retry invalidate pending
+metadata work even after the download subprocess finishes. Same-path replacement
+results cannot overwrite current details or trigger stale auto-encoding; retry also
+cancels the previous download before installing its replacement. Two manager-level
+regressions cover cancellation and same-URL supersession. Live download retry and
+auto-encode validation remain open (Codex, 2026-09-08).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1202,6 +1210,14 @@ these policies, captured settings after edits, and converter propagation. Full t
 inputs, video filters, codecs, metadata, and output ownership remain open
 (Codex, 2026-09-08).
 
+AV2 picture decoding, routed audio, chunk origins, and progress now share an
+immutable `AV2TrimPlan`. Invalid/nonfinite starts normalize to zero and invalid ends
+are omitted consistently, preventing decode duration from disagreeing with chunk
+planning. Frame counts outside the integer range fall back before conversion to
+`Int`. Four regressions cover trim arguments/duration, single/chunk agreement,
+overflow fallback, and captured-container frame-lag policy. General typed inputs,
+video filters, codecs, metadata, and output ownership remain open (Codex, 2026-09-08).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1318,6 +1334,16 @@ is also captured at conversion entry before suspension and passed to command gen
 changes during preparation affect the next conversion. TV/AVC-Intra, proxy, animated
 stills, Stream Copy, custom presets, generic filename-template labels, comment and UI
 request settings, and remaining migrations still need review (Codex, 2026-09-08).
+
+Comment prefix/suffix, separator, date format, and date-prefix preferences now use
+an immutable `CommentSettings` snapshot captured before conversion suspends.
+Ordinary, synthesized, native waveform, and AV2 Matroska paths receive that same
+snapshot. Three isolated regressions cover legacy defaults, preference changes,
+metadata replacement, and converter propagation. AV2's single and segmented
+encoders now also use the captured container for their frame-lag policy, preventing
+Matroska frame timing from following a later preference edit. TV/AVC-Intra, proxy,
+animated stills, Stream Copy, custom presets, filename-template labels, UI request
+settings, and remaining migrations still need review (Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1632,7 +1658,24 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 513 unit tests
+Latest validation (2026-09-08, Codex): Debug compilation and all 522 unit tests
+pass with zero failures or skips using the shared unit-only scheme. Nine new
+regressions cover captured comment/date formatting, AV2 container frame-lag policy,
+shared trim normalization and chunk-count overflow, and downloaded-file metadata
+cancellation/supersession. All 43 release-script tests, manifest freshness, and
+localization checks pass (1,484 entries, 15 intentional omissions). The unsigned
+Release build passes; its bundle audit verifies all 44 Mach-O images and six packaged
+license notices. Initial compilation
+caught missing Xcode entries for the new files; the registered sources and tests then
+passed the full suite. Independent reviews found no introduced lifecycle, trim, or
+formatting regressions. The running app exposed its empty queue; that observation
+does not establish the newly built download/conversion behavior. Live download
+retry/auto-encode, preview/conversion UI, sandbox reauthorization, VoiceOver,
+bilingual UI, capture/editor, clean-machine installation/update, and credentialed
+release checks remain unperformed in this batch.
+
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 513 unit tests
 pass with zero failures or skips using the shared unit-only scheme. Nine new
 regressions cover ProRes/video-loop settings, typed subtitle mapping and preference
 capture, and optional download-task lifetime. All 43 release-script tests, manifest

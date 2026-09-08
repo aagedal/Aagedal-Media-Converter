@@ -26,6 +26,8 @@ class DownloadManager {
     /// Live recording stat update tasks keyed by VideoItem ID
     private var liveRecordingStatTasks: [UUID: Task<Void, Never>] = [:]
     private let thumbnailTasks = DownloadAuxiliaryTaskStore()
+    private let detailsTasks = DownloadAuxiliaryTaskStore()
+    private let detailsLoader: @Sendable (URL) async -> VideoFileUtils.VideoItemDetails
 
     /// Queue of video items (bound from ContentView)
     var videoItems: Binding<[VideoItem]>?
@@ -36,7 +38,35 @@ class DownloadManager {
     /// Callback to trigger encoding for a specific item (set by ContentView)
     var onAutoEncode: ((UUID) -> Void)?
 
-    private init() {}
+    init(detailsLoader: @escaping @Sendable (URL) async -> VideoFileUtils.VideoItemDetails = {
+        await VideoFileUtils.loadDetails(for: $0)
+    }) {
+        self.detailsLoader = detailsLoader
+    }
+
+    /// Own post-download probes separately: the subprocess has already completed,
+    /// but cancellation or a retry must still invalidate metadata and auto-encoding.
+    @discardableResult
+    func loadDownloadedFileDetails(itemID: UUID, fileURL: URL, autoEncode: Bool) -> Task<Void, Never> {
+        let loader = detailsLoader
+        return detailsTasks.start(itemID: itemID, timeout: .seconds(60)) {
+            await loader(fileURL)
+        } completion: { [weak self] result in
+            guard let self, self.findItem(itemID)?.url == fileURL else { return }
+            switch result {
+            case .success(let details):
+                self.updateItem(itemID) { item in
+                    item.apply(details: details)
+                    item.detailsLoaded = true
+                }
+                if autoEncode {
+                    self.onAutoEncode?(itemID)
+                }
+            case .failure(let error):
+                self.logger.warning("Downloaded file details unavailable: \(error.localizedDescription)")
+            }
+        }
+    }
 
     // MARK: - Live Recording Stats
 
@@ -665,22 +695,9 @@ class DownloadManager {
             // Trigger details and metadata loading for the downloaded file
             if let item = findItem(itemID) {
                 let shouldAutoEncode = item.autoEncodeAfterDownload
-                Task.detached {
-                    let details = await VideoFileUtils.loadDetails(for: item.url)
-                    await MainActor.run {
-                        guard self.findItem(itemID)?.url == result.outputURL else { return }
-                        self.updateItem(itemID) { item in
-                            item.apply(details: details)
-                            item.detailsLoaded = true
-                        }
-
-                        // Trigger auto-encode if enabled
-                        if shouldAutoEncode {
-                            self.logger.info("Auto-encoding enabled for downloaded item: \(itemID)")
-                            self.onAutoEncode?(itemID)
-                        }
-                    }
-                }
+                loadDownloadedFileDetails(
+                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode
+                )
             }
 
         } catch let error as YTDLPError {
@@ -757,16 +774,7 @@ class DownloadManager {
                     )
 
                     // Load details and metadata for the file
-                    Task.detached { [finalFile] in
-                        let details = await VideoFileUtils.loadDetails(for: finalFile)
-                        await MainActor.run {
-                            guard self.findItem(itemID)?.url == finalFile else { return }
-                            self.updateItem(itemID) { item in
-                                item.apply(details: details)
-                                item.detailsLoaded = true
-                            }
-                        }
-                    }
+                    loadDownloadedFileDetails(itemID: itemID, fileURL: finalFile, autoEncode: false)
                 } else {
                     logger.warning("Could not find partial file for stopped download")
                     updateItem(itemID) { item in
@@ -828,6 +836,7 @@ class DownloadManager {
         logger.info("Cancel download requested for item: \(itemID)")
 
         thumbnailTasks.cancel(itemID: itemID)
+        detailsTasks.cancel(itemID: itemID)
 
         // Stop live recording stat updates immediately
         stopLiveRecordingStatUpdates(itemID: itemID)
@@ -879,6 +888,8 @@ class DownloadManager {
             return
         }
 
+        cancelDownload(itemID: itemID)
+
         // Reset item state
         updateItem(itemID) { item in
             item.isDownloading = true
@@ -913,6 +924,8 @@ class DownloadManager {
               let outputFolder = outputFolder else {
             return
         }
+
+        cancelDownload(itemID: itemID)
 
         // Reset item state
         updateItem(itemID) { item in
@@ -1046,22 +1059,9 @@ class DownloadManager {
             // Trigger details and metadata loading for the downloaded file
             if let item = findItem(itemID) {
                 let shouldAutoEncode = item.autoEncodeAfterDownload
-                Task.detached {
-                    let details = await VideoFileUtils.loadDetails(for: item.url)
-                    await MainActor.run {
-                        guard self.findItem(itemID)?.url == result.outputURL else { return }
-                        self.updateItem(itemID) { item in
-                            item.apply(details: details)
-                            item.detailsLoaded = true
-                        }
-
-                        // Trigger auto-encode if enabled
-                        if shouldAutoEncode {
-                            self.logger.info("Auto-encoding enabled for re-downloaded item: \(itemID)")
-                            self.onAutoEncode?(itemID)
-                        }
-                    }
-                }
+                loadDownloadedFileDetails(
+                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode
+                )
             }
 
         } catch YTDLPError.cancelled {

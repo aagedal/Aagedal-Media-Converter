@@ -79,6 +79,7 @@ enum FFMPEGCommandBuilder {
         audioOnlySettings: AudioOnlySettings? = nil,
         imageSequenceSettings: ImageSequenceSettings? = nil,
         codecSettings: CodecExportSettings? = nil,
+        commentSettings: CommentSettings? = nil,
         subtitleSettings: SubtitleExportSettings? = nil,
         comment: String,
         includeDateTag: Bool,
@@ -100,6 +101,7 @@ enum FFMPEGCommandBuilder {
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
+        let capturedCommentSettings = commentSettings ?? CommentSettings()
         let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
@@ -172,7 +174,8 @@ enum FFMPEGCommandBuilder {
             applyCommentMetadata(
                 to: &arguments,
                 comment: comment,
-                includeDateTag: includeDateTag
+                includeDateTag: includeDateTag,
+                settings: capturedCommentSettings
             )
             
             if let additionalOutputArguments {
@@ -242,7 +245,8 @@ enum FFMPEGCommandBuilder {
             applyCommentMetadata(
                 to: &arguments,
                 comment: comment,
-                includeDateTag: includeDateTag
+                includeDateTag: includeDateTag,
+                settings: capturedCommentSettings
             )
             
             if let additionalOutputArguments {
@@ -431,7 +435,8 @@ enum FFMPEGCommandBuilder {
             applyCommentMetadata(
                 to: &arguments,
                 comment: comment,
-                includeDateTag: includeDateTag
+                includeDateTag: includeDateTag,
+                settings: capturedCommentSettings
             )
         }
 
@@ -724,6 +729,7 @@ extension FFMPEGCommandBuilder {
         audioOnlySettings: AudioOnlySettings? = nil,
         imageSequenceSettings: ImageSequenceSettings? = nil,
         codecSettings: CodecExportSettings? = nil,
+        commentSettings: CommentSettings? = nil,
         width: Int,
         height: Int,
         frameRate: Double,
@@ -740,6 +746,7 @@ extension FFMPEGCommandBuilder {
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
+        let capturedCommentSettings = commentSettings ?? CommentSettings()
         let finalWidth = evenDimension(max(width, 2))
         let finalHeight = evenDimension(max(height, 2))
         let resolution = "\(finalWidth)x\(finalHeight)"
@@ -800,7 +807,8 @@ extension FFMPEGCommandBuilder {
         applyCommentMetadata(
             to: &arguments,
             comment: comment,
-            includeDateTag: includeDateTag
+            includeDateTag: includeDateTag,
+            settings: capturedCommentSettings
         )
 
         if let additionalOutputArguments {
@@ -891,49 +899,45 @@ extension FFMPEGCommandBuilder {
     static func commentMetadataValue(
         comment: String,
         includeDateTag: Bool,
-        date: Date = Date()
+        date: Date = Date(),
+        settings: CommentSettings = CommentSettings()
     ) -> String? {
         let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Get prefix, suffix, separator, and date format from UserDefaults
-        let commentPrefix = UserDefaults.standard.string(forKey: AppConstants.commentPrefixKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let commentSuffixSetting = UserDefaults.standard.string(forKey: AppConstants.commentSuffixKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let commentSeparator = UserDefaults.standard.string(forKey: AppConstants.commentSeparatorKey) ?? AppConstants.defaultCommentSeparator
-        let commentDateFormat = UserDefaults.standard.string(forKey: AppConstants.commentDateFormatKey) ?? AppConstants.defaultCommentDateFormat
-        let dateTagPrefixSetting = UserDefaults.standard.string(forKey: AppConstants.dateTagPrefixKey) ?? AppConstants.defaultDateTagPrefix
-        let effectiveDateTagPrefix = dateTagPrefixSetting.isEmpty ? AppConstants.defaultDateTagPrefix : dateTagPrefixSetting
         
         let commentText: String? = {
             var parts: [String] = []
             
             if includeDateTag {
                 let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = commentDateFormat
+                dateFormatter.dateFormat = settings.dateFormat
                 let currentDateString = dateFormatter.string(from: date)
-                parts.append("\(effectiveDateTagPrefix): \(currentDateString)")
+                parts.append("\(settings.dateTagPrefix): \(currentDateString)")
             }
             
-            if !commentPrefix.isEmpty {
-                parts.append(commentPrefix)
+            if !settings.prefix.isEmpty {
+                parts.append(settings.prefix)
             }
             
             if !trimmedComment.isEmpty {
                 parts.append(trimmedComment)
             }
             
-            if !commentSuffixSetting.isEmpty {
-                parts.append(commentSuffixSetting)
+            if !settings.suffix.isEmpty {
+                parts.append(settings.suffix)
             }
             
             guard !parts.isEmpty else { return nil }
-            return parts.joined(separator: commentSeparator)
+            return parts.joined(separator: settings.separator)
         }()
 
         return commentText
     }
 
-    static func applyCommentMetadata(to ffmpegArgs: inout [String], comment: String, includeDateTag: Bool) {
-        let commentText = commentMetadataValue(comment: comment, includeDateTag: includeDateTag)
+    static func applyCommentMetadata(
+        to ffmpegArgs: inout [String], comment: String, includeDateTag: Bool,
+        settings: CommentSettings = CommentSettings()
+    ) {
+        let commentText = commentMetadataValue(comment: comment, includeDateTag: includeDateTag, settings: settings)
 
         // First, remove any existing comment metadata from the arguments
         var index = 0
