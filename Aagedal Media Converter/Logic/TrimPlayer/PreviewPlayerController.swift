@@ -129,7 +129,9 @@ final class PreviewPlayerController: ObservableObject {
     var playerItemStatusTask: Task<Void, Never>?
     private var audioSelectionTask: Task<Void, Never>?
     private var audioSelectionOperationID: UUID?
-    var mpvEndObserver: AnyCancellable?
+    var mpvObservers = Set<AnyCancellable>()
+    var mpvObservationID: UUID?
+    var mpvTrackRefreshTask: Task<Void, Never>?
     var primaryAccess: SecurityScopedAccess = .none
     var imageSequenceAudioAccess: SecurityScopedAccess = .none
     weak var playerView: AVPlayerView?
@@ -335,18 +337,14 @@ final class PreviewPlayerController: ObservableObject {
         self.useMPV = true
         self.isPreparing = false
 
-        mpvEndObserver?.cancel()
-        mpvEndObserver = mpv.$reachedEnd
-            .removeDuplicates()
-            .sink { [weak self] reached in
-                self?.logger.debug("mpvEndObserver: reachedEnd changed to \(reached, privacy: .public)")
-                guard reached else { return }
-                Task { @MainActor in
-                    let hasCallback = self?.playbackDidFinish != nil
-                    self?.logger.debug("mpvEndObserver: calling playbackDidFinish (callback exists: \(hasCallback, privacy: .public))")
-                    self?.playbackDidFinish?()
-                }
-            }
+        installMPVObservers(
+            timePosition: mpv.$timePos.eraseToAnyPublisher(),
+            fileLoaded: mpv.$isFileLoaded.eraseToAnyPublisher(),
+            reachedEnd: mpv.$reachedEnd.eraseToAnyPublisher()
+        ) { [weak self] in
+            guard let self else { return }
+            self.refreshAudioTrackOptions(for: self.videoItem, playerItem: nil)
+        }
 
         // Apply volume/mute state before loading
         mpv.volume = volume
@@ -354,31 +352,6 @@ final class PreviewPlayerController: ObservableObject {
 
         // Load without autostarting, with start time
         mpv.load(url: url, startTime: startTime, autostart: false)
-
-        // Sync time position
-        Task { @MainActor [weak self, weak mpv] in
-            guard let self, let mpv else { return }
-            for await time in mpv.$timePos.values {
-                self.currentPlaybackTime = time
-            }
-        }
-
-        // Observe file loaded state for isReady
-        Task { @MainActor [weak self, weak mpv] in
-            guard let self, let mpv else { return }
-            for await isLoaded in mpv.$isFileLoaded.values {
-                if isLoaded {
-                    self.isReady = true
-                    break  // Only need to set once per file
-                }
-            }
-        }
-
-        // Refresh audio tracks after a brief delay for MPV to parse the media
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            guard let self else { return }
-            self.refreshAudioTrackOptions(for: self.videoItem, playerItem: nil)
-        }
 
         // Install MPV trim boundary observer for looping
         installMPVTrimObserver()
@@ -1355,6 +1328,7 @@ final class PreviewPlayerController: ObservableObject {
 
     func teardown(resetAudioSelection: Bool = true) {
         trimPlayback.invalidate()
+        removeMPVObservers()
         audioSelectionOperationID = nil
         audioSelectionTask?.cancel()
         audioSelectionTask = nil
@@ -1392,8 +1366,6 @@ final class PreviewPlayerController: ObservableObject {
             mpv.stop()
             mpvPlayer = nil
         }
-        mpvEndObserver?.cancel()
-        mpvEndObserver = nil
         useMPV = false
 
         // Clean up image sequence state

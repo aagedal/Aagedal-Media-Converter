@@ -108,6 +108,41 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testOutputFolderErrorsPreserveLocationInBothLanguages() throws {
+        for (language, locale, cleanupPrefix, unavailablePrefix) in [
+            ("en", "en_US", "Automatic cleanup", "The output folder is unavailable"),
+            ("nb", "nb_NO", "Automatisk opprydding", "Utdatamappen er utilgjengelig")
+        ] {
+            let missingFolder = "/private/tmp/AMC-UITest-Missing-\(UUID().uuidString)"
+            launchApp(language: language, locale: locale, additionalArguments: [
+                "-outputFolder", missingFolder, "-saveNextToOriginal", "NO",
+                "-autoDeleteOldEncodes", "YES", "-autoDeleteOldEncodesDays", "7"
+            ])
+            defer { app.terminate() }
+            let settingsButton = element("toolbar.settings")
+            XCTAssertTrue(settingsButton.waitForExistence(timeout: 10))
+            settingsButton.click()
+            let cleanupError = element("settings.general.cleanupError")
+            XCTAssertTrue(cleanupError.waitForExistence(timeout: 10))
+            attachWindowScreenshot(named: "Output cleanup error - \(language)")
+            // Selectable SwiftUI text exposes its contents as an accessibility value.
+            let cleanupText = cleanupError.value as? String ?? cleanupError.label
+            XCTAssertTrue(cleanupText.hasPrefix(cleanupPrefix), cleanupText)
+            element("settings.general.retryCleanup").click()
+            XCTAssertTrue(cleanupError.exists)
+            XCTAssertTrue(app.staticTexts[missingFolder].exists)
+            element("settings.general.revealOutput").click()
+            let alert = app.sheets.firstMatch
+            XCTAssertTrue(alert.waitForExistence(timeout: 5))
+            XCTAssertTrue(alert.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", unavailablePrefix, unavailablePrefix)).firstMatch.exists)
+            attachWindowScreenshot(named: "Output location error - \(language)")
+            alert.buttons["OK"].click()
+            XCTAssertTrue(app.staticTexts[missingFolder].exists)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testMainWindowAndEverySettingsPaneInBothLanguages() throws {
         let panes = [
             ("general", "General", "Generelt"),

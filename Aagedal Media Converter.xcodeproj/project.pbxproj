@@ -268,6 +268,10 @@
 		A90606000000000000000102 /* bmx-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000202 /* bmx-LICENSE.txt */; };
 		A90606000000000000000103 /* mpv-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000203 /* mpv-LICENSE.txt */; };
 		A90606000000000000000104 /* tesseract-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000204 /* tesseract-LICENSE.txt */; };
+		7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */; };
+		8742E2B3B67147A68FB45282 /* OutputFolderCleanupServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */; };
+		12B0864F27DD4CD6BADB329A /* OutputFolderSelectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */; };
+		EFCEC47F414C44D586CF7F5D /* OutputFolderSelectionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C054964A86C4E138E4DC9AF /* OutputFolderSelectionServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -580,6 +584,10 @@
 		A90606000000000000000202 /* bmx-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "bmx-LICENSE.txt"; sourceTree = "<group>"; };
 		A90606000000000000000203 /* mpv-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mpv-LICENSE.txt"; sourceTree = "<group>"; };
 		A90606000000000000000204 /* tesseract-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "tesseract-LICENSE.txt"; sourceTree = "<group>"; };
+		3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPreviewObservationTests.swift; sourceTree = "<group>"; };
+		1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputFolderCleanupServiceTests.swift; sourceTree = "<group>"; };
+		AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputFolderSelectionService.swift; sourceTree = "<group>"; };
+		8C054964A86C4E138E4DC9AF /* OutputFolderSelectionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputFolderSelectionServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -736,6 +744,7 @@
 				C52C02E1A35246D6A0CBE187 /* AudioOnlySettings.swift */,
 				CDD5417879E5419D97AE3672 /* CodecExportSettings.swift */,
 				4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */,
+				AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */,
 				EE7542FB9D7445F09123B467 /* CommentSettings.swift */,
 				045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */,
 				596BC21F86AEFDA304EF948F /* MetadataWindowState.swift */,
@@ -949,6 +958,9 @@
 				2FD0FB88746A404DB8BB3AF6 /* CodecExportSettingsTests.swift */,
 				3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */,
 				FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */,
+				3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */,
+				1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */,
+				8C054964A86C4E138E4DC9AF /* OutputFolderSelectionServiceTests.swift */,
 				427AD30186974A2CAF5EFC5D /* CommentSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
 				F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */,
@@ -1378,6 +1390,7 @@
 				D2C68A8AFFE2425D993E231E /* AudioOnlySettings.swift in Sources */,
 				E30950B6AEDF449BA17C59D7 /* CodecExportSettings.swift in Sources */,
 				9F8D99DD5029416DA4559EF2 /* SubtitleExportSettings.swift in Sources */,
+				12B0864F27DD4CD6BADB329A /* OutputFolderSelectionService.swift in Sources */,
 				1122330BD4DA4103ACF80E38 /* CommentSettings.swift in Sources */,
 				BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */,
 				CC01A1C0PY00010000000002 /* CopyableCommandRow.swift in Sources */,
@@ -1594,6 +1607,9 @@
 				550B38605304491DB16F9879 /* CodecExportSettingsTests.swift in Sources */,
 				6A8F1890F8004362BBE6461C /* SubtitleExportSettingsTests.swift in Sources */,
 				C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */,
+				7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */,
+				8742E2B3B67147A68FB45282 /* OutputFolderCleanupServiceTests.swift in Sources */,
+				EFCEC47F414C44D586CF7F5D /* OutputFolderSelectionServiceTests.swift in Sources */,
 				77B54981696C4441A4B5AA25 /* CommentSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
 				D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */,

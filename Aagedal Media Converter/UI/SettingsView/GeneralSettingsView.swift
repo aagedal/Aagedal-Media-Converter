@@ -19,6 +19,9 @@ struct GeneralSettingsView: View {
     @AppStorage(AppConstants.playSoundOnErrorKey) private var playSoundOnError = AppConstants.defaultPlaySoundOnError
     @AppStorage(AppConstants.preferredTimecodeDisplayModeKey) private var preferredTimecodeDisplayMode = AppConstants.defaultPreferredTimecodeDisplayMode
 
+    @State private var outputFolderError: String?
+    @State private var showingOutputFolderError = false
+    @State private var cleanupService = OutputFolderCleanupService.shared
     @State private var isClearingPreviewCache = false
     @State private var previewCacheSizeBytes: Int64 = 0
 
@@ -32,6 +35,11 @@ struct GeneralSettingsView: View {
             previewCacheSection
         }
         .formStyle(.grouped)
+        .alert("Output Location", isPresented: $showingOutputFolderError) {
+            Button("OK", role: .cancel) { outputFolderError = nil }
+        } message: {
+            Text(outputFolderError ?? "")
+        }
         .onChange(of: previewCacheCleanupPolicyRaw) { _, newValue in
             let policy = PreviewCacheCleanupPolicy(rawValue: newValue) ?? .purgeOnLaunch
             Task {
@@ -114,14 +122,11 @@ struct GeneralSettingsView: View {
                                 .help(outputFolder)
 
                             Button(action: {
-                                let url = URL(fileURLWithPath: outputFolder)
-                                guard FileManager.default.fileExists(atPath: url.path) else {
-                                    outputFolder = AppConstants.defaultOutputDirectory.path
-                                    NSWorkspace.shared.activateFileViewerSelecting([AppConstants.defaultOutputDirectory])
-                                    return
+                                do {
+                                    try OutputFolderSelectionService().reveal(URL(fileURLWithPath: outputFolder))
+                                } catch {
+                                    presentOutputFolderError(error)
                                 }
-
-                                NSWorkspace.shared.activateFileViewerSelecting([url])
                             }) {
                                 Image(systemName: "arrow.right.circle.fill")
                                     .foregroundColor(.accentColor)
@@ -161,6 +166,19 @@ struct GeneralSettingsView: View {
                                 .frame(maxWidth: 120)
                             }
                             .padding(.leading, 16)
+
+                            if let error = cleanupService.lastError {
+                                Label(error, systemImage: "exclamationmark.triangle")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("settings.general.cleanupError")
+                                Button("Retry Cleanup") {
+                                    cleanupService.performCleanupIfNeeded()
+                                }
+                                .accessibilityIdentifier("settings.general.retryCleanup")
+                            }
                         }
 
                         Text("Only applies to the default output folder. Files in other locations are never deleted.")
@@ -319,6 +337,11 @@ struct GeneralSettingsView: View {
         await MainActor.run { previewCacheSizeBytes = size }
     }
 
+    private func presentOutputFolderError(_ error: Error) {
+        outputFolderError = error.localizedDescription
+        showingOutputFolderError = true
+    }
+
     private func selectNewOutputFolder() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -327,11 +350,11 @@ struct GeneralSettingsView: View {
         panel.directoryURL = URL(fileURLWithPath: outputFolder)
 
         if panel.runModal() == .OK, let url = panel.url {
-            // Ensure directory exists
-            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            outputFolder = url.path
-            // Persist a writable bookmark so the folder survives across launches.
-            _ = SecurityScopedBookmarkManager.shared.saveWritableBookmark(for: url)
+            do {
+                try OutputFolderSelectionService().select(url)
+            } catch {
+                presentOutputFolderError(error)
+            }
         }
     }
 

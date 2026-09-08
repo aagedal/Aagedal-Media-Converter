@@ -137,7 +137,7 @@ struct VideoFileUtils: Sendable {
     }
 
     static func createVideoItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") async -> VideoItem? {
-        guard var placeholder = makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset, comment: comment) else {
+        guard var placeholder = await makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset, comment: comment) else {
             return nil
         }
 
@@ -148,6 +148,7 @@ struct VideoFileUtils: Sendable {
         return placeholder
     }
 
+    @MainActor
     static func makePlaceholderItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") -> VideoItem? {
         guard isVideoFile(url: url) else { return nil }
 
@@ -189,6 +190,7 @@ struct VideoFileUtils: Sendable {
     }
 
     /// Create a placeholder VideoItem from a detected image sequence
+    @MainActor
     static func makePlaceholderItem(
         fromImageSequence config: ImageSequenceConfig,
         outputFolder: String? = nil,
@@ -395,18 +397,16 @@ struct VideoFileUtils: Sendable {
     private static func makeOutputURL(for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil) -> URL? {
         let resolvedOutputFolder = resolveOutputFolder(for: url, defaultOutputFolder: outputFolder, preset: preset)
         guard let resolvedOutputFolder else { return nil }
-        let sanitizedBaseName = FileNameProcessor.processFileName(url.deletingPathExtension().lastPathComponent)
-        let templatedBaseName = FileNameProcessor.applyCustomTemplate(sourceName: sanitizedBaseName, counter: counter)
+        let nameParts = FileNameProcessor.outputNameParts(inputURL: url, counter: counter, preset: preset)
         let resolvedExtension = preset.outputExtension(for: url)
-        let suffixPart = FileNameProcessor.includePresetSuffix ? preset.fileSuffix : ""
 
         // Use FileSafetyUtils to prevent overwriting the input file
         let outputFolderURL = URL(fileURLWithPath: resolvedOutputFolder)
         return FileSafetyUtils.safeOutputURL(
             inputURL: url,
             outputFolder: outputFolderURL,
-            baseName: templatedBaseName,
-            suffix: suffixPart,
+            baseName: nameParts.baseName,
+            suffix: nameParts.suffix,
             fileExtension: resolvedExtension
         )
     }

@@ -1920,17 +1920,10 @@ struct ContentView: View {
     }
 
     private func outputBaseName(for item: VideoItem, preset: ExportPreset) -> String {
-        if let override = item.outputFileNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !override.isEmpty {
-            let baseName = (override as NSString).deletingPathExtension
-            return FileNameProcessor.processFileName(baseName)
-        }
-
-        let sanitizedBaseName = FileNameProcessor.processFileName(item.url.deletingPathExtension().lastPathComponent)
-        let templatedBaseName = FileNameProcessor.applyCustomTemplate(sourceName: sanitizedBaseName, counter: item.customCounterValue, preset: preset)
-        let suppressAutoSuffix = FileNameProcessor.customTemplateUsesPresetSuffix
-        let suffixPart = (FileNameProcessor.includePresetSuffix && !suppressAutoSuffix) ? preset.fileSuffix : ""
-        return templatedBaseName + suffixPart
+        FileNameProcessor.outputBaseName(
+            inputURL: item.url, override: item.outputFileNameOverride,
+            counter: item.customCounterValue, preset: preset
+        )
     }
 
     private func handleOutputFileNameOverride(itemID: UUID, newName: String?) {

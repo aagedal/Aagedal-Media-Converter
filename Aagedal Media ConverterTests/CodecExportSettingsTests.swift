@@ -7,6 +7,181 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class CodecExportSettingsTests: XCTestCase {
+    func testBroadcastCommandsRetainCapturedFramerateResolutionAndClass() async throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for preset in [ExportPreset.tvHEVC, .tvAVCIntra] {
+            defaults.set(TVFramerateMode.p25.rawValue, forKey: AppConstants.tvFramerateModeKey)
+            defaults.set(TVResolutionLimit.r720.rawValue, forKey: AppConstants.tvResolutionLimitKey)
+            defaults.set(AVCIntraClass.class50.rawValue, forKey: AppConstants.avcIntraClassKey)
+            let captured = try XCTUnwrap(CodecExportSettings(preset: preset, defaults: defaults))
+            defaults.set(TVFramerateMode.p50.rawValue, forKey: AppConstants.tvFramerateModeKey)
+            defaults.set(TVResolutionLimit.r2160.rawValue, forKey: AppConstants.tvResolutionLimitKey)
+            defaults.set(AVCIntraClass.class200.rawValue, forKey: AppConstants.avcIntraClassKey)
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/source/video.mov"),
+                outputFileURL: URL(fileURLWithPath: "/output/video.\(captured.fileExtension)"),
+                preset: preset, codecSettings: captured, comment: "", includeDateTag: false,
+                trimStart: nil, trimEnd: nil,
+                customInputArguments: ["-framerate", "24", "-i", "/source/video.mov"]
+            )
+            let rateIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-r"))
+            XCTAssertEqual(command.arguments[rateIndex + 1], "25")
+            let bitrateIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-b:v"))
+            XCTAssertEqual(command.arguments[bitrateIndex + 1], preset == .tvHEVC ? "8M" : "50M")
+            let filterIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-vf"))
+            XCTAssertTrue(command.arguments[filterIndex + 1].contains("1280"))
+            XCTAssertTrue(command.arguments[filterIndex + 1].contains("720"))
+            XCTAssertEqual(captured.fileExtension, preset == .tvHEVC ? "mov" : "mxf")
+        }
+    }
+
+    func testAVCIntraAudioUsesCapturedChannelCountAcrossStreamProbe() async throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(AVCIntraAudioChannels.ch4.rawValue, forKey: AppConstants.avcIntraAudioChannelsKey)
+        let captured = try XCTUnwrap(CodecExportSettings(preset: .tvAVCIntra, defaults: defaults))
+        var arguments = captured.ffmpegArguments
+        await FFMPEGCommandBuilder.adjustArgumentsForInput(
+            preset: .tvAVCIntra, codecSettings: captured,
+            inputURL: URL(fileURLWithPath: "/source/video.mov"), ffmpegArgs: &arguments,
+            trimStart: 0, trimEnd: 2,
+            audioStreamProvider: { _ in
+                // Use a fresh store handle so this Sendable closure captures only the suite name.
+                UserDefaults(suiteName: suite)?.set(
+                    AVCIntraAudioChannels.ch16.rawValue, forKey: AppConstants.avcIntraAudioChannelsKey
+                )
+                await Task.yield()
+                return []
+            }
+        )
+        let filterIndex = try XCTUnwrap(arguments.firstIndex(of: "-filter_complex"))
+        XCTAssertTrue(arguments[filterIndex + 1].contains("asplit=4"))
+        XCTAssertFalse(arguments[filterIndex + 1].contains("asplit=16"))
+        XCTAssertEqual(arguments.filter { $0.hasPrefix("[silent") }.count, 4)
+        XCTAssertEqual(CodecExportSettings(preset: .tvAVCIntra, defaults: defaults)?.avcIntraAudioChannels, .ch16)
+    }
+
+    func testAVCIntraLabelsRetainCapturedTrackCountAcrossProbe() async throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(AVCIntraAudioChannels.ch4.rawValue, forKey: AppConstants.avcIntraAudioChannelsKey)
+        let captured = try XCTUnwrap(CodecExportSettings(preset: .tvAVCIntra, defaults: defaults))
+        let labelsURL = await FFMPEGConverter.prepareAVCIntraMCALabelsFile(
+            inputURL: URL(fileURLWithPath: "/source/video.mov"),
+            audioRoutingConfig: AudioRoutingConfig(inputTracks: [], outputTracks: (0..<3).map {
+                OutputTrack(streamIndex: $0, mcaOverride: MCALabelOverride(soundfield: .stereo))
+            }),
+            targetChannelCount: try XCTUnwrap(captured.avcIntraAudioChannels).count,
+            audioStreamProvider: { _ in
+                UserDefaults(suiteName: suite)?.set(
+                    AVCIntraAudioChannels.ch16.rawValue, forKey: AppConstants.avcIntraAudioChannelsKey
+                )
+                await Task.yield()
+                return (0..<3).map {
+                    .init(index: $0, channels: 2, channelLayout: "stereo", codecName: "pcm_s24le")
+                }
+            }
+        )
+        let url = try XCTUnwrap(labelsURL)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let labels = try String(contentsOf: url, encoding: .utf8)
+        let labeledTrackIndices = labels.split(separator: "\n").compactMap { Int($0) }
+        XCTAssertEqual(labeledTrackIndices, [0, 1, 2, 3])
+        XCTAssertEqual(CodecExportSettings(preset: .tvAVCIntra, defaults: defaults)?.avcIntraAudioChannels, .ch16)
+    }
+
+    func testAnimatedFormatsAndProxyCodecsCaptureMatchingOutputExtensions() async throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for format in AnimatedStillFormat.allCases {
+            defaults.set(format.rawValue, forKey: AppConstants.animatedStillFormatKey)
+            let captured = try XCTUnwrap(CodecExportSettings(preset: .animatedStill, defaults: defaults))
+            defaults.set("Invalid format", forKey: AppConstants.animatedStillFormatKey)
+            XCTAssertEqual(captured.fileExtension, format.fileExtension)
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/source/video.mov"),
+                outputFileURL: URL(fileURLWithPath: "/output/video.\(captured.fileExtension)"),
+                preset: .animatedStill, codecSettings: captured, comment: "", includeDateTag: false,
+                trimStart: nil, trimEnd: nil,
+                customInputArguments: ["-framerate", "24", "-i", "/source/video.mov"]
+            )
+            switch format {
+            case .avif: XCTAssertTrue(command.arguments.contains("libsvtav1"))
+            case .gif: XCTAssertTrue(command.arguments.contains { $0.contains("palettegen") })
+            case .apng: XCTAssertTrue(command.arguments.contains("-plays"))
+            case .jpegXL: XCTAssertTrue(command.arguments.contains("libjxl_anim"))
+            case .webp: XCTAssertTrue(command.arguments.contains("libwebp"))
+            }
+            XCTAssertTrue(captured.ffmpegArguments.contains("-an"))
+        }
+        for (codec, encoder) in [(ProxyCodec.hevc, "hevc_videotoolbox"), (.prores, "prores_videotoolbox"), (.dnxhd, "dnxhd")] {
+            defaults.set(codec.rawValue, forKey: AppConstants.proxyCodecKey)
+            defaults.set(ProxyResolutionLimit.r480.rawValue, forKey: AppConstants.proxyResolutionLimitKey)
+            let captured = try XCTUnwrap(CodecExportSettings(preset: .proxy, defaults: defaults))
+            defaults.set("Invalid codec", forKey: AppConstants.proxyCodecKey)
+            defaults.set(ProxyResolutionLimit.source.rawValue, forKey: AppConstants.proxyResolutionLimitKey)
+            XCTAssertEqual(captured.fileExtension, codec.fileExtension)
+            XCTAssertTrue(captured.ffmpegArguments.contains(encoder))
+            let command = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
+                audioInputURL: URL(fileURLWithPath: "/source/audio.wav"),
+                outputFileURL: URL(fileURLWithPath: "/output/proxy.\(captured.fileExtension)"),
+                preset: .proxy, codecSettings: captured, width: 1280, height: 720,
+                frameRate: 24, trimStart: nil, trimEnd: nil, includeDateTag: false
+            )
+            XCTAssertTrue(command.arguments.contains(encoder))
+            let filterIndex = try XCTUnwrap(captured.ffmpegArguments.firstIndex(of: "-vf"))
+            XCTAssertTrue(captured.ffmpegArguments[filterIndex + 1].contains("480"))
+        }
+        let fallbackProxy = try XCTUnwrap(CodecExportSettings(preset: .proxy, defaults: defaults))
+        let fallbackStill = try XCTUnwrap(CodecExportSettings(preset: .animatedStill, defaults: defaults))
+        XCTAssertEqual(fallbackProxy.fileExtension, "mov")
+        XCTAssertTrue(fallbackProxy.ffmpegArguments.contains("hevc_videotoolbox"))
+        XCTAssertEqual(fallbackStill.fileExtension, "avif")
+        XCTAssertEqual(defaults.string(forKey: AppConstants.proxyCodecKey), "Invalid codec")
+        XCTAssertEqual(defaults.string(forKey: AppConstants.animatedStillFormatKey), "Invalid format")
+    }
+
+    func testConverterUsesCapturedMXFProxyAndWebPFormatAfterPreferencesChange() async throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for (preset, encoder, extensionName) in [(ExportPreset.proxy, "dnxhd", "mxf"), (.animatedStill, "libwebp", "webp")] {
+            defaults.set(ProxyCodec.dnxhd.rawValue, forKey: AppConstants.proxyCodecKey)
+            defaults.set(AnimatedStillFormat.webp.rawValue, forKey: AppConstants.animatedStillFormatKey)
+            let captured = try XCTUnwrap(CodecExportSettings(preset: preset, defaults: defaults))
+            defaults.set(ProxyCodec.hevc.rawValue, forKey: AppConstants.proxyCodecKey)
+            defaults.set(AnimatedStillFormat.gif.rawValue, forKey: AppConstants.animatedStillFormatKey)
+            let source = directory.appendingPathComponent("source.\(extensionName)")
+            try Data("source sentinel".utf8).write(to: source)
+            let runner = CodecSettingsRecordingRunner()
+            let finished = expectation(description: "\(preset) conversion completed")
+            let request = ConversionRequest(
+                inputURL: source, outputURL: source.deletingPathExtension(), preset: preset,
+                includeDateTag: false, expectedDuration: 1,
+                customInputArguments: ["-framerate", "24", "-i", source.path]
+            )
+            let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+            await converter.convert(
+                request: request, codecSettings: captured,
+                progressUpdate: { _, _ in }, completion: { _, _ in finished.fulfill() }
+            )
+            await fulfillment(of: [finished], timeout: 5)
+            let recorded = await runner.request
+            let args = try XCTUnwrap(recorded).arguments
+            XCTAssertEqual(args.last, directory.appendingPathComponent("source_encoded.\(extensionName)").path)
+            XCTAssertTrue(args.contains(encoder))
+            XCTAssertEqual(try Data(contentsOf: source), Data("source sentinel".utf8))
+        }
+    }
+
     func testProResAndVideoLoopCommandsRetainCapturedPreferences() async throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -18,7 +193,7 @@ final class CodecExportSettingsTests: XCTestCase {
             await Task.yield()
             defaults.set(ProResProfile.proxy.rawValue, forKey: AppConstants.proResProfileKey)
             defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
-            let output = URL(fileURLWithPath: "/output/video.\(captured.container.fileExtension)")
+            let output = URL(fileURLWithPath: "/output/video.\(captured.fileExtension)")
             let standard = await FFMPEGCommandBuilder.buildCommand(
                 inputURL: URL(fileURLWithPath: "/source/video.mov"), outputFileURL: output,
                 preset: preset, codecSettings: captured, comment: "", includeDateTag: false,
@@ -79,7 +254,7 @@ final class CodecExportSettingsTests: XCTestCase {
             defaults.set(CodecAudioFormat.aac.rawValue, forKey: audioKey)
             let command = await FFMPEGCommandBuilder.buildCommand(
                 inputURL: URL(fileURLWithPath: "/source/video.mov"),
-                outputFileURL: URL(fileURLWithPath: "/output/video.\(captured.container.fileExtension)"),
+                outputFileURL: URL(fileURLWithPath: "/output/video.\(captured.fileExtension)"),
                 preset: preset, codecSettings: captured, comment: "", includeDateTag: false,
                 trimStart: nil, trimEnd: nil,
                 customInputArguments: [

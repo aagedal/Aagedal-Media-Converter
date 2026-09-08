@@ -1409,35 +1409,11 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
-        default:
-            return []
-        }
-    }
-
-    var ffmpegArguments: [String] {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd"
-
-        let commonArgs = ["-hide_banner"]
-        let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
-
-        switch self {
-        case .videoLoop, .videoLoopWithSound:
-            return codecFFmpegArguments(defaults: .standard)
-        case .h264, .h265:
-            return codecFFmpegArguments(defaults: .standard)
-        case .av2:
-            // AV2 does NOT use ffmpegArguments — it is encoded by the external `avmenc`
-            // binary via a dedicated two-process pipe built in `AV2CommandBuilder`.
-            // This branch only exists to satisfy the exhaustive switch.
-            return commonArgs
-        case .av1:
-            return codecFFmpegArguments(defaults: .standard)
         case .tvHEVC:
             // Get framerate and resolution settings
-            let framerateRaw = UserDefaults.standard.string(forKey: AppConstants.tvFramerateModeKey) ?? AppConstants.defaultTVFramerateMode
+            let framerateRaw = defaults.string(forKey: AppConstants.tvFramerateModeKey) ?? AppConstants.defaultTVFramerateMode
             let framerateMode = TVFramerateMode(rawValue: framerateRaw) ?? .p50
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.tvResolutionLimitKey) ?? AppConstants.defaultTVResolutionLimit
+            let resolutionRaw = defaults.string(forKey: AppConstants.tvResolutionLimitKey) ?? AppConstants.defaultTVResolutionLimit
             let resolution = TVResolutionLimit(rawValue: resolutionRaw) ?? .r1080
 
             // Build scale filter based on resolution
@@ -1468,15 +1444,15 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return args
         case .tvAVCIntra:
             // Get framerate and resolution settings (same as tvHEVC)
-            let framerateRaw = UserDefaults.standard.string(forKey: AppConstants.tvFramerateModeKey) ?? AppConstants.defaultTVFramerateMode
+            let framerateRaw = defaults.string(forKey: AppConstants.tvFramerateModeKey) ?? AppConstants.defaultTVFramerateMode
             let framerateMode = TVFramerateMode(rawValue: framerateRaw) ?? .p50
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.tvResolutionLimitKey) ?? AppConstants.defaultTVResolutionLimit
+            let resolutionRaw = defaults.string(forKey: AppConstants.tvResolutionLimitKey) ?? AppConstants.defaultTVResolutionLimit
             let resolution = TVResolutionLimit(rawValue: resolutionRaw) ?? .r1080
 
             // Get AVC-Intra specific settings
-            let classRaw = UserDefaults.standard.string(forKey: AppConstants.avcIntraClassKey) ?? AppConstants.defaultAVCIntraClass
+            let classRaw = defaults.string(forKey: AppConstants.avcIntraClassKey) ?? AppConstants.defaultAVCIntraClass
             let avcClass = AVCIntraClass(rawValue: classRaw) ?? .class100
-            let audioChannelsRaw = UserDefaults.standard.string(forKey: AppConstants.avcIntraAudioChannelsKey) ?? AppConstants.defaultAVCIntraAudioChannels
+            let audioChannelsRaw = defaults.string(forKey: AppConstants.avcIntraAudioChannelsKey) ?? AppConstants.defaultAVCIntraAudioChannels
             let audioChannels = AVCIntraAudioChannels(rawValue: audioChannelsRaw) ?? .ch8
 
             // Build scale filter based on resolution
@@ -1509,7 +1485,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
         case .animatedStill:
-            let formatRaw = UserDefaults.standard.string(forKey: AppConstants.animatedStillFormatKey) ?? AppConstants.defaultAnimatedStillFormat
+            let formatRaw = defaults.string(forKey: AppConstants.animatedStillFormatKey) ?? AppConstants.defaultAnimatedStillFormat
             let format = AnimatedStillFormat(rawValue: formatRaw) ?? .avif
             var args = commonArgs
 
@@ -1559,9 +1535,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return args
         case .proxy:
             // Get proxy codec and resolution settings
-            let codecRaw = UserDefaults.standard.string(forKey: AppConstants.proxyCodecKey) ?? AppConstants.defaultProxyCodec
+            let codecRaw = defaults.string(forKey: AppConstants.proxyCodecKey) ?? AppConstants.defaultProxyCodec
             let codec = ProxyCodec(rawValue: codecRaw) ?? .hevc
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.proxyResolutionLimitKey) ?? AppConstants.defaultProxyResolutionLimit
+            let resolutionRaw = defaults.string(forKey: AppConstants.proxyResolutionLimitKey) ?? AppConstants.defaultProxyResolutionLimit
             let resolution = ProxyResolutionLimit(rawValue: resolutionRaw) ?? .r1080
 
             // Build scale filter based on resolution
@@ -1600,6 +1576,32 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
+        default:
+            return []
+        }
+    }
+
+    var ffmpegArguments: [String] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyyMMdd"
+
+        let commonArgs = ["-hide_banner"]
+        let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+
+        switch self {
+        case .videoLoop, .videoLoopWithSound:
+            return codecFFmpegArguments(defaults: .standard)
+        case .h264, .h265:
+            return codecFFmpegArguments(defaults: .standard)
+        case .av2:
+            // AV2 does NOT use ffmpegArguments — it is encoded by the external `avmenc`
+            // binary via a dedicated two-process pipe built in `AV2CommandBuilder`.
+            // This branch only exists to satisfy the exhaustive switch.
+            return commonArgs
+        case .av1:
+            return codecFFmpegArguments(defaults: .standard)
+        case .tvHEVC, .tvAVCIntra, .animatedStill, .proxy:
+            return codecFFmpegArguments(defaults: .standard)
         case .prores:
             return codecFFmpegArguments(defaults: .standard)
         case .streamCopy:

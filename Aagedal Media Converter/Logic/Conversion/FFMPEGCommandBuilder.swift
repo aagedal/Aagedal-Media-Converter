@@ -145,6 +145,7 @@ enum FFMPEGCommandBuilder {
             await adjustArgumentsForInput(
                 preset: preset,
                 audioOnlySettings: capturedAudioOnlySettings,
+                codecSettings: capturedCodecSettings,
                 inputURL: inputURL,
                 ffmpegArgs: &ffmpegArgs,
                 trimStart: normalizedTrimStart,
@@ -209,6 +210,7 @@ enum FFMPEGCommandBuilder {
             await adjustArgumentsForInput(
                 preset: preset,
                 audioOnlySettings: capturedAudioOnlySettings,
+                codecSettings: capturedCodecSettings,
                 inputURL: inputURL,
                 ffmpegArgs: &ffmpegArgs,
                 trimStart: normalizedTrimStart,
@@ -290,6 +292,7 @@ enum FFMPEGCommandBuilder {
             await adjustArgumentsForInput(
                 preset: preset,
                 audioOnlySettings: capturedAudioOnlySettings,
+                codecSettings: capturedCodecSettings,
                 inputURL: inputURL,
                 ffmpegArgs: &ffmpegArgs,
                 trimStart: normalizedTrimStart,
@@ -787,7 +790,7 @@ extension FFMPEGCommandBuilder {
             ?? capturedAudioOnlySettings?.ffmpegArguments
             ?? capturedCodecSettings?.ffmpegArguments
             ?? preset.ffmpegArguments
-        await adjustArgumentsForInput(preset: preset, audioOnlySettings: capturedAudioOnlySettings, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+        await adjustArgumentsForInput(preset: preset, audioOnlySettings: capturedAudioOnlySettings, codecSettings: capturedCodecSettings, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
         sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
 
         // Audio routing uses input index 1 (the audio file)
@@ -1286,6 +1289,7 @@ extension FFMPEGCommandBuilder {
     static func adjustArgumentsForInput(
         preset: ExportPreset,
         audioOnlySettings: AudioOnlySettings? = nil,
+        codecSettings: CodecExportSettings? = nil,
         inputURL: URL,
         ffmpegArgs: inout [String],
         trimStart: Double? = nil,
@@ -1297,6 +1301,7 @@ extension FFMPEGCommandBuilder {
     ) async {
         // Handle AVC-Intra mono channel splitting
         if preset == .tvAVCIntra {
+            let targetChannelCount = (codecSettings ?? CodecExportSettings(preset: preset))?.avcIntraAudioChannels?.count ?? 8
             // Calculate effective duration for silent streams
             let effectiveDuration = await calculateEffectiveDurationForAudio(
                 inputURL: inputURL,
@@ -1304,7 +1309,10 @@ extension FFMPEGCommandBuilder {
                 trimEnd: trimEnd,
                 sourceMetadata: sourceMetadata
             )
-            await adjustAVCIntraAudio(inputURL: inputURL, ffmpegArgs: &ffmpegArgs, duration: effectiveDuration)
+            await adjustAVCIntraAudio(
+                inputURL: inputURL, ffmpegArgs: &ffmpegArgs, duration: effectiveDuration,
+                targetChannelCount: targetChannelCount, audioStreamProvider: audioStreamProvider
+            )
             return
         }
 
@@ -1366,14 +1374,10 @@ extension FFMPEGCommandBuilder {
     private static func adjustAVCIntraAudio(
         inputURL: URL,
         ffmpegArgs: inout [String],
-        duration: Double?
+        duration: Double?,
+        targetChannelCount: Int,
+        audioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
     ) async {
-        // Get desired mono channel count from settings
-        let audioChannelsRaw = UserDefaults.standard.string(forKey: AppConstants.avcIntraAudioChannelsKey)
-            ?? AppConstants.defaultAVCIntraAudioChannels
-        let audioChannels = AVCIntraAudioChannels(rawValue: audioChannelsRaw) ?? .ch8
-        let targetChannelCount = audioChannels.count
-
         // Format duration for anullsrc (add small buffer to ensure it's long enough)
         let durationStr: String
         if let dur = duration {
@@ -1383,7 +1387,7 @@ extension FFMPEGCommandBuilder {
         }
 
         // Fetch audio stream info from input and filter to only decodable streams
-        let allAudioStreams = await FFMPEGProbeService.fetchAudioStreams(for: inputURL) ?? []
+        let allAudioStreams = await audioStreamProvider(inputURL) ?? []
         let audioStreams = allAudioStreams.filter { $0.isDecodable }
 
         // Log filtered streams

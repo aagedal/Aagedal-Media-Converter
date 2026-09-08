@@ -822,7 +822,7 @@ actor ConversionManager: Sendable {
         let codecSettings = CodecExportSettings(preset: plan.preset)
         let outputExtension = av2Settings?.container.fileExtension
             ?? audioOnlySettings?.format.fileExtension
-            ?? codecSettings?.container.fileExtension
+            ?? codecSettings?.fileExtension
             ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
         await ffmpegConverter.convert(
             request: mergeRequest,
@@ -1801,7 +1801,7 @@ actor ConversionManager: Sendable {
         let codecSettings = CodecExportSettings(preset: preset)
         let outputExtension = av2Settings?.container.fileExtension
             ?? audioOnlySettings?.format.fileExtension
-            ?? codecSettings?.container.fileExtension
+            ?? codecSettings?.fileExtension
             ?? preset.outputExtension(for: inputURL)
         await ffmpegConverter.convert(
             request: conversionRequest,
@@ -2928,18 +2928,9 @@ actor ConversionManager: Sendable {
     }
 
     private func outputBaseName(for item: VideoItem, inputURL: URL, preset: ExportPreset) -> String {
-        if let override = item.outputFileNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !override.isEmpty {
-            let baseName = (override as NSString).deletingPathExtension
-            return FileNameProcessor.processFileName(baseName)
-        }
-
-        let sanitizedBaseName = FileNameProcessor.processFileName(inputURL.deletingPathExtension().lastPathComponent)
-        let templatedBaseName = FileNameProcessor.applyCustomTemplate(sourceName: sanitizedBaseName, counter: item.customCounterValue, preset: preset)
-        // Suppress the auto-appended suffix when the template already injected it via {presetSuffix},
-        // otherwise users would see "_h264_h264".
-        let suppressAutoSuffix = FileNameProcessor.customTemplateUsesPresetSuffix
-        let suffixPart = (FileNameProcessor.includePresetSuffix && !suppressAutoSuffix) ? preset.fileSuffix : ""
-        return templatedBaseName + suffixPart
+        FileNameProcessor.outputBaseName(
+            inputURL: inputURL, override: item.outputFileNameOverride,
+            counter: item.customCounterValue, preset: preset
+        )
     }
 }

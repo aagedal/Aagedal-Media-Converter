@@ -201,11 +201,15 @@ actor FFMPEGConverter {
     /// the labels flag in that case, preserving today's behavior). Mirrors the
     /// AVC-Intra mono-split layout in `FFMPEGCommandBuilder.adjustAVCIntraAudio`:
     /// each input audio channel becomes one mono output track in input order.
-    private static func prepareAVCIntraMCALabelsFile(
+    static func prepareAVCIntraMCALabelsFile(
         inputURL: URL,
-        audioRoutingConfig: AudioRoutingConfig?
+        audioRoutingConfig: AudioRoutingConfig?,
+        targetChannelCount: Int,
+        audioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = { url in
+            await FFMPEGProbeService.fetchAudioStreams(for: url)
+        }
     ) async -> URL? {
-        let allStreams = await FFMPEGProbeService.fetchAudioStreams(for: inputURL) ?? []
+        let allStreams = await audioStreamProvider(inputURL) ?? []
         // Walk the unfiltered list so audio-relative indices match the routing UI
         // (which sees every audio stream, decodable or not). Only decodable streams
         // produce output tracks, but the override key must use the original index.
@@ -240,10 +244,6 @@ actor FFMPEGConverter {
                 }
             }
         }
-
-        let audioChannelsRaw = UserDefaults.standard.string(forKey: AppConstants.avcIntraAudioChannelsKey)
-            ?? AppConstants.defaultAVCIntraAudioChannels
-        let targetChannelCount = (AVCIntraAudioChannels(rawValue: audioChannelsRaw) ?? .ch8).count
 
         guard let content = MCALabelsBuilder.buildAVCIntraLabelsFile(
             inputStreams: inputInfos,
@@ -699,7 +699,7 @@ actor FFMPEGConverter {
             // Use the captured container for naming and encoding.
             let outputExtension = capturedAV2Settings?.container.fileExtension
                 ?? capturedAudioOnlySettings?.format.fileExtension
-                ?? capturedCodecSettings?.container.fileExtension
+                ?? capturedCodecSettings?.fileExtension
                 ?? preset.outputExtension(for: inputURL)
             outputFileURL = outputURL.appendingPathExtension(outputExtension)
 
@@ -769,7 +769,8 @@ actor FFMPEGConverter {
                 ffmpegPath: ffmpegPath,
                 trimStart: request.trimStart,
                 trimEnd: request.trimEnd,
-                conversionID: conversionID
+                conversionID: conversionID,
+                targetChannelCount: capturedCodecSettings?.avcIntraAudioChannels?.count ?? 8
             )
             switch preprocessingResult {
             case .success(let preProcessedURL):
@@ -1152,7 +1153,8 @@ actor FFMPEGConverter {
 
                     let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
                         inputURL: capturedInputURL,
-                        audioRoutingConfig: capturedRequest.audioRoutingConfig
+                        audioRoutingConfig: capturedRequest.audioRoutingConfig,
+                        targetChannelCount: capturedCodecSettings?.avcIntraAudioChannels?.count ?? 8
                     )
                     let bmxResult = await BMXService.shared.rewrapToOP1a(
                         inputURL: tempMXF,
@@ -3553,7 +3555,8 @@ actor FFMPEGConverter {
 
                 let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
                     inputURL: capturedInputURL,
-                    audioRoutingConfig: capturedAudioRoutingConfig
+                    audioRoutingConfig: capturedAudioRoutingConfig,
+                    targetChannelCount: codecSettings?.avcIntraAudioChannels?.count ?? 8
                 )
                 if await self?.activateBMXOperationIfActiveConversion(conversionID) == true {
                     let bmxResult = await BMXService.shared.rewrapToOP1a(
@@ -4618,14 +4621,9 @@ actor FFMPEGConverter {
         ffmpegPath: String,
         trimStart: Double?,
         trimEnd: Double?,
-        conversionID: UUID
+        conversionID: UUID,
+        targetChannelCount: Int
     ) async -> AVCIntraAudioPreprocessingResult {
-        // Get target channel count from settings
-        let audioChannelsRaw = UserDefaults.standard.string(forKey: AppConstants.avcIntraAudioChannelsKey)
-            ?? AppConstants.defaultAVCIntraAudioChannels
-        let audioChannels = AVCIntraAudioChannels(rawValue: audioChannelsRaw) ?? .ch8
-        let targetChannelCount = audioChannels.count
-
         // Create temp file
         let tempDir = FileManager.default.temporaryDirectory
         let tempURL = tempDir.appendingPathComponent("avc_audio_\(UUID().uuidString)").appendingPathExtension("mka")

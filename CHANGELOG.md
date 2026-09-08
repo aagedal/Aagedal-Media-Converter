@@ -1,5 +1,10 @@
 # v.4.3.0
 
+- **TV/AVC-Intra, proxy, and animated-still exports retain their selected settings**, including output format and AVC-Intra audio channel labels.
+- **Import, queue, and Settings filename previews share template formatting**, with accurate large counters and no unnecessary source-protection suffix for already-renamed outputs.
+- **MPV preview cleanup cancels pending observations and track refreshes**, preventing closed or replaced players from publishing stale playback events.
+- **Output-folder and automatic-cleanup failures now show recovery guidance.** Failed folder selection and unavailable drives preserve the saved output location; cleanup restores saved folder access and offers retry.
+
 - **Export comment and date formatting stay consistent throughout a conversion**, including AV2 Matroska and generated-video output.
 - **AV2 keeps captured container timing and consistent trim boundaries** across picture, audio, progress, and parallel chunks, including invalid trim values.
 - **Cancelled or replaced downloads discard late file details**, preventing stale metadata from triggering auto-encoding.

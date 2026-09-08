@@ -4,17 +4,37 @@
 
 import Foundation
 import OSLog
+import Observation
 
 /// Periodically deletes files older than N days from the default output folder.
 /// Runs on app launch and every hour while the app is running.
 @MainActor
+@Observable
 final class OutputFolderCleanupService {
     static let shared = OutputFolderCleanupService()
 
     private let logger = Logger(subsystem: "me.aagedal.MediaConverter", category: "OutputFolderCleanup")
     private var timer: Timer?
+    private let defaults: UserDefaults
+    private let fileManager: FileManager
+    private let bookmarkManager: SecurityScopedBookmarkManager
+    private let readResourceValues: (URL) throws -> URLResourceValues
 
-    private init() {}
+    private(set) var lastError: String?
+
+    init(
+        defaults: UserDefaults = .standard,
+        fileManager: FileManager = .default,
+        bookmarkManager: SecurityScopedBookmarkManager = .shared,
+        readResourceValues: @escaping (URL) throws -> URLResourceValues = {
+            try $0.resourceValues(forKeys: [.creationDateKey, .isRegularFileKey])
+        }
+    ) {
+        self.defaults = defaults
+        self.fileManager = fileManager
+        self.bookmarkManager = bookmarkManager
+        self.readResourceValues = readResourceValues
+    }
 
     /// Start the service: run cleanup immediately and schedule hourly repeats.
     func start() {
@@ -32,7 +52,7 @@ final class OutputFolderCleanupService {
     }
 
     func performCleanupIfNeeded() {
-        let defaults = UserDefaults.standard
+        lastError = nil
         guard defaults.bool(forKey: AppConstants.autoDeleteOldEncodesKey) else { return }
 
         let days = defaults.integer(forKey: AppConstants.autoDeleteOldEncodesDaysKey)
@@ -42,31 +62,45 @@ final class OutputFolderCleanupService {
         let folderURL = URL(fileURLWithPath: outputFolder)
 
         let cutoffDate = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
-        let fm = FileManager.default
-
-        guard let contents = try? fm.contentsOfDirectory(
-            at: folderURL,
-            includingPropertiesForKeys: [.creationDateKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-        ) else {
-            logger.info("Could not enumerate output folder at \(outputFolder)")
+        let access = bookmarkManager.startAccessing(url: folderURL)
+        defer { bookmarkManager.stopAccessing(access) }
+        let contents: [URL]
+        do {
+            contents = try fileManager.contentsOfDirectory(
+                at: folderURL,
+                includingPropertiesForKeys: [.creationDateKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+            )
+        } catch {
+            logger.error("Could not enumerate output folder at \(outputFolder): \(error.localizedDescription)")
+            lastError = String(localized: "Automatic cleanup could not open the output folder. Check that it is available and select it again in Settings. \(error.localizedDescription)")
             return
         }
 
         var deletedCount = 0
+        var failedCount = 0
+        var firstFailure: String?
         for fileURL in contents {
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.creationDateKey, .isRegularFileKey]),
-                  resourceValues.isRegularFile == true,
-                  let creationDate = resourceValues.creationDate,
-                  creationDate < cutoffDate else { continue }
-
             do {
-                try fm.removeItem(at: fileURL)
+                // A metadata failure must not make an unknown-age file eligible for deletion.
+                let resourceValues = try readResourceValues(fileURL)
+                guard resourceValues.isRegularFile == true,
+                      let creationDate = resourceValues.creationDate,
+                      creationDate < cutoffDate else { continue }
+                try fileManager.removeItem(at: fileURL)
                 deletedCount += 1
                 logger.debug("Deleted old encode: \(fileURL.lastPathComponent)")
             } catch {
-                logger.warning("Failed to delete \(fileURL.lastPathComponent): \(error.localizedDescription)")
+                failedCount += 1
+                if firstFailure == nil {
+                    firstFailure = "\(fileURL.lastPathComponent): \(error.localizedDescription)"
+                }
+                logger.warning("Could not inspect or delete \(fileURL.lastPathComponent): \(error.localizedDescription)")
             }
+        }
+
+        if let firstFailure {
+            lastError = String(localized: "Automatic cleanup could not inspect or delete \(failedCount) file(s). Check the output folder’s permissions. \(firstFailure)")
         }
 
         if deletedCount > 0 {

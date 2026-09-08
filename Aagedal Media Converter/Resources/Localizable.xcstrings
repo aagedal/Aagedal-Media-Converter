@@ -1,6 +1,86 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "The output folder could not be prepared. Choose a writable folder and try again. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Utdatamappen kunne ikke klargjøres. Velg en mappe du har skrivetilgang til, og prøv igjen. %@"
+        }
+      }
+    }
+  },
+  "Access to the selected output folder could not be saved. Select the folder again or choose another location. Your previous output folder is unchanged.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Tilgangen til den valgte utdatamappen kunne ikke lagres. Velg mappen på nytt eller velg en annen plassering. Den forrige utdatamappen din er uendret."
+        }
+      }
+    }
+  },
+  "The output folder is unavailable. Reconnect its drive or select the folder again. Your saved output location is unchanged. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Utdatamappen er utilgjengelig. Koble til stasjonen igjen eller velg mappen på nytt. Den lagrede utdataplasseringen din er uendret. %@"
+        }
+      }
+    }
+  },
+  "The saved output location is not a folder. Choose another output folder in Settings.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Den lagrede utdataplasseringen er ikke en mappe. Velg en annen utdatamappe i Innstillinger."
+        }
+      }
+    }
+  },
+  "Finder could not open the output folder. Try again or open the folder manually.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Finder kunne ikke åpne utdatamappen. Prøv igjen eller åpne mappen manuelt."
+        }
+      }
+    }
+  },
+  "Automatic cleanup could not open the output folder. Check that it is available and select it again in Settings. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Automatisk opprydding kunne ikke åpne utdatamappen. Kontroller at den er tilgjengelig, og velg den på nytt i Innstillinger. %@"
+        }
+      }
+    }
+  },
+  "Automatic cleanup could not inspect or delete %lld file(s). Check the output folder’s permissions. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Automatisk opprydding kunne ikke kontrollere eller slette %lld fil(er). Kontroller tilgangsrettighetene til utdatamappen. %@"
+        }
+      }
+    }
+  },
+  "Retry Cleanup": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Prøv opprydding på nytt"
+        }
+      }
+    }
+  },
   "Export requires the bundled %@ helper, whose architecture is not supported on this Mac. Open Settings > Tool Diagnostics to inspect the tools, or reinstall the app.": {
     "localizations": {
       "nb": {

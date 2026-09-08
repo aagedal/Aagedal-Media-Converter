@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 522 tests pass. The
+- The unit-test baseline is green: 552 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 522 unit tests. The UI test target now has deterministic smoke
+- There are 552 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,484 entries. All 59 previously missing App Intent
+- The string catalog has 1,492 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -1038,6 +1038,13 @@ cancels the previous download before installing its replacement. Two manager-lev
 regressions cover cancellation and same-URL supersession. Live download retry and
 auto-encode validation remain open (Codex, 2026-09-08).
 
+MPV preview now owns cancellable time, readiness, and completion subscriptions.
+Queued callbacks and trim-timer work reject replaced or retired players; delayed
+audio-track refresh is cancelled on teardown. Four injected-publisher regressions
+cover current delivery, replacement, teardown, and release with never-completing
+publishers. Live MPV playback and the wider callback audit remain open
+(Codex, 2026-09-08).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1130,6 +1137,16 @@ cover persistence, failure preservation, renewal, legacy modes, overlapping acce
 and rejected acquisition. Live sandbox/bookmark validation and the broader
 filesystem error audit remain open (Codex, 2026-09-08).
 
+Automatic output cleanup now restores scoped folder access and reports enumeration,
+metadata, and deletion failures in General Settings with retry guidance. Unknown-age
+files are preserved while independent eligible files continue through cleanup.
+Output-folder selection now commits its preference only after directory preparation
+and writable bookmark persistence succeed. Finder failures retain the saved location,
+including unavailable volumes; directory symlinks remain supported. Thirteen injected
+regressions cover scope lifetime, saved-bookmark fallback, filtering, failure/retry,
+selection commit ordering, and Finder outcomes. Actual Finder and sandbox
+reauthorization still need manual validation (Codex, 2026-09-08).
+
 ## Priority 3 — Reduce change risk in architecture
 
 Target: continuous work after Priority 1 tests exist.
@@ -1177,6 +1194,13 @@ Cold-launch buffering now retains submission order rather than replaying diction
 values in unspecified order. This guarantees notification replay order, not serial
 execution of asynchronous conversion requests. Broader import/execution/presentation
 coordinator work and live Shortcuts integration remain open (Codex, 2026-09-08).
+
+Import, queue filename previews, and conversion execution now share a filename
+renderer. Import resolves preset template labels through the same path, while
+Settings previews reuse its formatting and sanitization. Source protection compares
+the complete rendered filename, preventing unnecessary `_encoded` additions when a
+template has already changed the name. Broader import/presentation coordinators and
+conversion execution remain open (Codex, 2026-09-08).
 
 ### 3.2 Make conversion plans typed
 
@@ -1344,6 +1368,25 @@ encoders now also use the captured container for their frame-lag policy, prevent
 Matroska frame timing from following a later preference edit. TV/AVC-Intra, proxy,
 animated stills, Stream Copy, custom presets, filename-template labels, UI request
 settings, and remaining migrations still need review (Codex, 2026-09-08).
+
+TV/AVC-Intra, proxy, and animated-still exports now capture codec arguments and
+output extensions before asynchronous work. AVC-Intra preprocessing, channel
+splitting, and ordinary/native-waveform MCA labels reuse the captured channel count.
+Five regressions cover broadcast policy, proxy and animated formats, invalid saved
+values, suspended probes, actual label files, and converter source protection.
+`FFMPEGConverter` now has no direct `UserDefaults` reads. Stream Copy/custom presets,
+request-generation preferences, nested MCA default soundfield preferences, and
+remaining settings migrations stay open.
+
+Filename sanitization, templates, date formatting, and suffix inclusion now use an
+injectable immutable snapshot. Preset labels are captured once per render; they are
+not yet derived from the conversion's complete settings snapshot. Counter rendering
+preserves full-width integers and bounds invalid padding; main-actor queue insertion
+serializes reservations without holding a lock across preference notifications.
+Eight regressions cover snapshots, overrides/suffixes, same-folder source protection,
+large counters, integer limits, concurrent reservations, and dates. Template labels
+across asynchronous conversion preparation and remaining request settings still need
+review (Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1658,7 +1701,35 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 522 unit tests
+Latest validation (2026-09-08, Codex): Debug compilation and all 552 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Thirty new regressions
+cover broadcast/proxy/animated settings, AVC-Intra channel labels, filename snapshots
+and counters, MPV observation lifetime, and cleanup/output-folder failures. Settings
+navigation and generated-fixture conversion UI smoke tests pass. A new bilingual
+output-folder failure test also passes, including cleanup retry, recovery guidance,
+and preservation of the saved location; all four English/Norwegian screenshots were
+visually reviewed. All 43 release-script tests, manifest freshness, and localization
+checks pass (1,492 catalog entries, 15 intentional omissions). The unsigned Release
+build passes, and its audit verifies all 44 Mach-O images and six packaged notices.
+
+Initial validation exposed a new counter-lock/preference-notification deadlock,
+cleanup fixtures with mismatched directory URL forms, and an MCA fixture missing its
+opt-in labels. Main-actor counter reservations and corrected fixtures resolve these;
+the complete rebuilt suite is green. The new UI assertions were corrected to use
+macOS selectable-text values and sheet semantics. Independent review also caught the
+last AVC-Intra channel-count rereads and unnecessary filename suffixing before final
+validation. Live MPV playback, Shortcuts, sandbox reauthorization, VoiceOver, broader
+bilingual/scrolled UI, live capture/editor, clean-machine install/update, runtime
+memory/dynamic dependency measurements, and credentialed release checks remain.
+
+The next implementation work is full typed conversion plans and orchestration
+extraction; Stream Copy/custom and nested MCA settings; filename labels derived from
+conversion snapshots; broader callback/filesystem error audits; AV2 audio offsets,
+uncommon layouts and generated video; and IMF descriptor conformance. Release
+provenance still has 99 unresolved license entries. These are open roadmap tasks,
+not completion claims for this batch.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 522 unit tests
 pass with zero failures or skips using the shared unit-only scheme. Nine new
 regressions cover captured comment/date formatting, AV2 container frame-lag policy,
 shared trim normalization and chunk-count overflow, and downloaded-file metadata
