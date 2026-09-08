@@ -76,6 +76,7 @@ enum FFMPEGCommandBuilder {
         preset: ExportPreset,
         dcpSettings: DCPSettings? = nil,
         imfSettings: IMFSettings? = nil,
+        audioOnlySettings: AudioOnlySettings? = nil,
         comment: String,
         includeDateTag: Bool,
         trimStart: Double?,
@@ -93,6 +94,7 @@ enum FFMPEGCommandBuilder {
     ) async -> FFMPEGCommand {
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
+        let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
         let normalizedTrimStart = normalizedTrimPoint(trimStart)
@@ -128,9 +130,11 @@ enum FFMPEGCommandBuilder {
 
             var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
                 ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+                ?? capturedAudioOnlySettings?.ffmpegArguments
                 ?? preset.ffmpegArguments
             await adjustArgumentsForInput(
                 preset: preset,
+                audioOnlySettings: capturedAudioOnlySettings,
                 inputURL: inputURL,
                 ffmpegArgs: &ffmpegArgs,
                 trimStart: normalizedTrimStart,
@@ -187,9 +191,11 @@ enum FFMPEGCommandBuilder {
 
             var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
                 ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+                ?? capturedAudioOnlySettings?.ffmpegArguments
                 ?? preset.ffmpegArguments
             await adjustArgumentsForInput(
                 preset: preset,
+                audioOnlySettings: capturedAudioOnlySettings,
                 inputURL: inputURL,
                 ffmpegArgs: &ffmpegArgs,
                 trimStart: normalizedTrimStart,
@@ -247,6 +253,7 @@ enum FFMPEGCommandBuilder {
 
         var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
             ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? capturedAudioOnlySettings?.ffmpegArguments
             ?? preset.ffmpegArguments
 
         // Image sequence inputs (via customInputArguments): the inputURL is a directory
@@ -266,6 +273,7 @@ enum FFMPEGCommandBuilder {
         if !isImageSequenceInput {
             await adjustArgumentsForInput(
                 preset: preset,
+                audioOnlySettings: capturedAudioOnlySettings,
                 inputURL: inputURL,
                 ffmpegArgs: &ffmpegArgs,
                 trimStart: normalizedTrimStart,
@@ -708,6 +716,7 @@ extension FFMPEGCommandBuilder {
         preset: ExportPreset,
         dcpSettings: DCPSettings? = nil,
         imfSettings: IMFSettings? = nil,
+        audioOnlySettings: AudioOnlySettings? = nil,
         width: Int,
         height: Int,
         frameRate: Double,
@@ -721,6 +730,7 @@ extension FFMPEGCommandBuilder {
     ) async -> FFMPEGCommand {
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
+        let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         let finalWidth = evenDimension(max(width, 2))
         let finalHeight = evenDimension(max(height, 2))
         let resolution = "\(finalWidth)x\(finalHeight)"
@@ -757,8 +767,9 @@ extension FFMPEGCommandBuilder {
         // Preset encoding arguments (sanitized for our custom video pipeline)
         var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
             ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? capturedAudioOnlySettings?.ffmpegArguments
             ?? preset.ffmpegArguments
-        await adjustArgumentsForInput(preset: preset, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+        await adjustArgumentsForInput(preset: preset, audioOnlySettings: capturedAudioOnlySettings, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
         sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
 
         // Audio routing uses input index 1 (the audio file)
@@ -1259,11 +1270,15 @@ extension FFMPEGCommandBuilder {
 
     static func adjustArgumentsForInput(
         preset: ExportPreset,
+        audioOnlySettings: AudioOnlySettings? = nil,
         inputURL: URL,
         ffmpegArgs: inout [String],
         trimStart: Double? = nil,
         trimEnd: Double? = nil,
-        sourceMetadata: VideoMetadata? = nil
+        sourceMetadata: VideoMetadata? = nil,
+        audioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = { url in
+            await FFMPEGProbeService.fetchAudioStreams(for: url)
+        }
     ) async {
         // Handle AVC-Intra mono channel splitting
         if preset == .tvAVCIntra {
@@ -1279,10 +1294,9 @@ extension FFMPEGCommandBuilder {
         }
 
         guard preset == .audioOnly else { return }
-        let formatRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyFormatKey) ?? AppConstants.defaultAudioOnlyFormat
-        let format = AudioOnlyFormat(rawValue: formatRaw) ?? .wav
+        let format = (audioOnlySettings ?? AudioOnlySettings()).format
         guard format.supportsSingleStreamOnly else { return }
-        guard let audioStreams = await FFMPEGProbeService.fetchAudioStreams(for: inputURL),
+        guard let audioStreams = await audioStreamProvider(inputURL),
               audioStreams.count > 1 else {
             return
         }

@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **Audio Only exports keep their selected settings throughout a job**, including file format, codec, bit depth, bitrate, metadata preservation, and output naming.
+- **Cold-launch Shortcuts requests replay in submission order**, preserving the order in which requests reached the app.
+- **Delayed camera and C2PA metadata reads retain file access** until parsing finishes, even if the interface has already stopped waiting.
+
 - **IMF exports keep encoding and package settings consistent**, including resolution, frame rate, color, codec profile, and intermediate-file retention when preferences change during a job.
 - **Capture preview changes use one guarded restart**, including system-audio and microphone-device changes, while active recordings retain their settings.
 - **Watch-folder monitoring stops reliably during rapid restarts**, preventing a cancelled polling task from scanning alongside its replacement.

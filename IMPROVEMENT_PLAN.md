@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-07
+Last reviewed: 2026-09-08
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 459 tests pass. The
+- The unit-test baseline is green: 476 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 459 unit tests. The UI test target now has deterministic smoke
+- There are 476 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -991,6 +991,14 @@ waiting. Three deterministic tests cover delayed old callbacks after replacement
 cancellation during a scan, and delay failure without touching user folders or
 preferences (Codex, 2026-09-07).
 
+Lazy C2PA and camera metadata workers now retain independent security-scoped access
+until parsing actually finishes, even after their non-joining timeout or caller
+cancellation returns. Four lifecycle regressions verify that access remains held
+until the delayed parser exits and is then released exactly once. Three unused
+AVFoundation/VLC duration/support helpers were removed instead of retaining dormant
+unbounded framework waits. The wider active-callback audit and live sandbox access
+validation remain open (Codex, 2026-09-08).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1110,6 +1118,15 @@ Four direct regressions protect eligibility exclusions, codec/PAR/frame-rate tol
 group ordering and missing metadata, and conformance decisions. Broader execution and
 view coordinator extractions remain open (Codex, 2026-09-07).
 
+App Intent notification handling now lives outside ContentView, with a typed
+`AppIntentHandoff` decoder that can be tested without launching SwiftUI. Eight
+regressions cover single/multiple URL payloads, preset fallback, picker conversion
+versus enqueue behavior, malformed requests, consumed requests, and buffered replay.
+Cold-launch buffering now retains submission order rather than replaying dictionary
+values in unspecified order. This guarantees notification replay order, not serial
+execution of asynchronous conversion requests. Broader import/execution/presentation
+coordinator work and live Shortcuts integration remain open (Codex, 2026-09-08).
+
 ### 3.2 Make conversion plans typed
 
 - Replace repeated mutation of raw `[String]` arguments with a typed conversion
@@ -1200,6 +1217,14 @@ that same injected snapshot. Two regressions cover defaults/invalid values and b
 applications' commands after preferences change. Image-sequence and other codec
 settings, UI/request-generation settings, and remaining schema migrations remain
 open (Codex, 2026-09-07).
+
+Audio Only exports now capture format, PCM depth, AAC/MP4 codec and bitrate, and
+metadata preservation before conversion suspends. Naming, stream merging, encoding,
+and single/merged completion handling use the same immutable snapshot. Five isolated
+regressions cover defaults and invalid choices, bitrate/codec combinations, command
+stability, a suspended stream probe, and converter-level source-collision naming and
+source preservation. Image-sequence and other codec families, UI/request-generation
+settings, and remaining migrations stay open (Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1514,7 +1539,24 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-07, Codex): Debug compilation and all 459 unit tests
+Latest validation (2026-09-08, Codex): Debug compilation and all 476 unit tests
+pass with zero failures using the shared unit-only scheme, including seventeen new
+Audio Only settings, App Intent hand-off, and metadata-scope lifecycle regressions.
+All 43 release-script tests, manifest freshness, and localization checks pass
+(1,484 entries, 15 intentional omissions). Existing metadata test closures were
+updated to explicitly select the injected probe after compilation caught ambiguous
+trailing-closure matching. Independent hand-off review found no further regression.
+No live Shortcuts, preview/conversion UI, sandbox bookmark, VoiceOver, capture,
+Release build, or credentialed release checks were performed in this batch.
+
+Remaining work includes typed conversion plans; broader settings, orchestration,
+and callback/error audits; AV2 audio offsets/layouts and generated video support;
+IMF descriptor conformance; manual accessibility/localization and capture/editor
+validation; dependency provenance (99 unresolved license entries), runtime memory
+and dynamic reachability measurements, clean-machine installation/update tests,
+and a credentialed release run.
+
+Previous validation (2026-09-07, Codex): Debug compilation and all 459 unit tests
 pass with zero failures or skips using the permanent shared unit-only scheme,
 including eleven new IMF-settings, merge-policy, preview-configuration, and
 watch-polling regressions. All 43 release-script tests, manifest freshness, and

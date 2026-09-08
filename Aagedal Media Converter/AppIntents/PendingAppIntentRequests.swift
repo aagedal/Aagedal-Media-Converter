@@ -34,7 +34,11 @@ import Foundation
 @MainActor
 final class PendingAppIntentRequests {
     static let shared = PendingAppIntentRequests()
-    private init() {}
+    private let post: (Notification) -> Void
+
+    init(post: @escaping (Notification) -> Void = { NotificationCenter.default.post($0) }) {
+        self.post = post
+    }
 
     private struct Request {
         let name: Notification.Name
@@ -43,6 +47,7 @@ final class PendingAppIntentRequests {
     }
 
     private var pending: [UUID: Request] = [:]
+    private var pendingOrder: [UUID] = []
 
     /// The userInfo key under which callers must place a `UUID` request id.
     static let requestIDKey = "requestID"
@@ -51,25 +56,28 @@ final class PendingAppIntentRequests {
     /// userInfo carries no `requestID`, the request is posted without buffering.
     func submit(name: Notification.Name, object: Any?, userInfo: [AnyHashable: Any]) {
         if let id = userInfo[Self.requestIDKey] as? UUID {
+            if pending[id] == nil { pendingOrder.append(id) }
             pending[id] = Request(name: name, object: object, userInfo: userInfo)
         }
-        NotificationCenter.default.post(name: name, object: object, userInfo: userInfo)
+        post(Notification(name: name, object: object, userInfo: userInfo))
     }
 
     /// Mark a request handled so a later ``drain()`` won't replay it. Called by
     /// the live notification handler.
     func consume(id: UUID) {
         pending.removeValue(forKey: id)
+        pendingOrder.removeAll { $0 == id }
     }
 
     /// Replay and clear any requests not yet consumed. Called once a window's
     /// receivers are attached (e.g. from `ContentView`'s `onAppear`).
     func drain() {
         guard !pending.isEmpty else { return }
-        let requests = Array(pending.values)
+        let requests = pendingOrder.compactMap { pending[$0] }
         pending.removeAll()
+        pendingOrder.removeAll()
         for request in requests {
-            NotificationCenter.default.post(name: request.name, object: request.object, userInfo: request.userInfo)
+            post(Notification(name: request.name, object: request.object, userInfo: request.userInfo))
         }
     }
 }

@@ -2832,16 +2832,17 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let metadata = await VideoFileUtils.fetchC2PAMetadata(
             for: temporaryURL,
-            timeout: .milliseconds(50)
-        ) { _ in
-            try await withCheckedThrowingContinuation { continuation in
-                probeStarted.signal()
-                DispatchQueue.global(qos: .utility).async {
-                    releaseProbe.wait()
-                    continuation.resume(throwing: CancellationError())
+            timeout: .milliseconds(50),
+            metadataProbe: { _ in
+                try await withCheckedThrowingContinuation { continuation in
+                    probeStarted.signal()
+                    DispatchQueue.global(qos: .utility).async {
+                        releaseProbe.wait()
+                        continuation.resume(throwing: CancellationError())
+                    }
                 }
             }
-        }
+        )
 
         XCTAssertEqual(probeStarted.wait(timeout: .now() + 1), .success)
         XCTAssertNil(metadata)
@@ -2860,16 +2861,17 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let task = Task {
             await VideoFileUtils.fetchCameraMetadata(
                 for: temporaryURL,
-                timeout: .seconds(10)
-            ) { _ in
-                try await withCheckedThrowingContinuation { continuation in
-                    probeStarted.signal()
-                    DispatchQueue.global(qos: .utility).async {
-                        releaseProbe.wait()
-                        continuation.resume(throwing: CancellationError())
+                timeout: .seconds(10),
+                metadataProbe: { _ in
+                    try await withCheckedThrowingContinuation { continuation in
+                        probeStarted.signal()
+                        DispatchQueue.global(qos: .utility).async {
+                            releaseProbe.wait()
+                            continuation.resume(throwing: CancellationError())
+                        }
                     }
                 }
-            }
+            )
         }
 
         XCTAssertEqual(probeStarted.wait(timeout: .now() + 1), .success)

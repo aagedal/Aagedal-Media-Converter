@@ -7,7 +7,6 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import AVFoundation
 import Cocoa
 import OSLog
 
@@ -486,6 +485,12 @@ struct VideoFileUtils: Sendable {
     static func fetchC2PAMetadata(
         for url: URL,
         timeout: Duration = .seconds(15),
+        startAccess: @escaping @Sendable (URL) -> SecurityScopedAccess = {
+            SecurityScopedBookmarkManager.shared.startAccessing(url: $0)
+        },
+        stopAccess: @escaping @Sendable (SecurityScopedAccess) -> Void = {
+            SecurityScopedBookmarkManager.shared.stopAccessing($0)
+        },
         metadataProbe: @escaping @Sendable (URL) async throws -> C2PAMetadata? = {
             try await SwiftExifMetadataService.shared.getC2PAMetadata(for: $0)
         }
@@ -502,7 +507,15 @@ struct VideoFileUtils: Sendable {
 
         do {
             let c2paMetadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
-                try await metadataProbe(url)
+                try Task.checkCancellation()
+                // A timed-out parser may keep reading after the metadata view closes.
+                // Retain independent access until that worker actually finishes.
+                let access = startAccess(url)
+                defer { stopAccess(access) }
+                try Task.checkCancellation()
+                let metadata = try await metadataProbe(url)
+                try Task.checkCancellation()
+                return metadata
             }
             if c2paMetadata != nil {
                 logger.debug("[fetchC2PAMetadata] Found C2PA metadata for: \(fileName, privacy: .public)")
@@ -526,6 +539,12 @@ struct VideoFileUtils: Sendable {
     static func fetchCameraMetadata(
         for url: URL,
         timeout: Duration = .seconds(15),
+        startAccess: @escaping @Sendable (URL) -> SecurityScopedAccess = {
+            SecurityScopedBookmarkManager.shared.startAccessing(url: $0)
+        },
+        stopAccess: @escaping @Sendable (SecurityScopedAccess) -> Void = {
+            SecurityScopedBookmarkManager.shared.stopAccessing($0)
+        },
         metadataProbe: @escaping @Sendable (URL) async throws -> CameraMetadata? = {
             try await SwiftExifMetadataService.shared.getCameraMetadata(for: $0)
         }
@@ -542,7 +561,15 @@ struct VideoFileUtils: Sendable {
 
         do {
             let cameraMetadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
-                try await metadataProbe(url)
+                try Task.checkCancellation()
+                // A timed-out parser may keep reading after the metadata view closes.
+                // Retain independent access until that worker actually finishes.
+                let access = startAccess(url)
+                defer { stopAccess(access) }
+                try Task.checkCancellation()
+                let metadata = try await metadataProbe(url)
+                try Task.checkCancellation()
+                return metadata
             }
             if cameraMetadata != nil {
                 logger.debug("[fetchCameraMetadata] Found camera metadata for: \(fileName, privacy: .public)")
@@ -574,33 +601,6 @@ struct VideoFileUtils: Sendable {
         }
     }
     
-    /// Lightweight duration fetch: cache → AVFoundation → lightweight ffprobe.
-    /// Does NOT trigger the heavy full-metadata probe.
-    static func getQuickDuration(for url: URL) async -> Double {
-        // Check cache first
-        if let cached = await VideoMetadataService.shared.cachedDuration(for: url), cached > 0 {
-            return cached
-        }
-
-        let avFoundationUnsupportedExtensions: Set<String> = [
-            "avi", "asf", "dv", "flv", "gxf", "mkv", "mk3d", "mxf",
-            "ogv", "ogm", "ogg", "oga", "rm", "rmvb", "roq", "ts",
-            "mts", "m2ts", "m2t", "trp", "vob", "webm", "wmv", "wtv", "y4m"
-        ]
-        let ext = url.pathExtension.lowercased()
-
-        if !avFoundationUnsupportedExtensions.contains(ext) {
-            let asset = AVURLAsset(url: url)
-            if let cmDuration = try? await asset.load(.duration) {
-                let sec = CMTimeGetSeconds(cmDuration)
-                if sec > 0 { return sec }
-            }
-        }
-
-        // Lightweight ffprobe (duration only, no full stream analysis)
-        return await FFMPEGConverter.getVideoDuration(url: url) ?? 0.0
-    }
-
     static func getVideoDuration(url: URL) async -> String {
         let fileName = url.lastPathComponent
         var duration: Double = 0.0
@@ -722,69 +722,7 @@ struct VideoFileUtils: Sendable {
         }
     }
 
-    private static func isNativelySupported(_ url: URL) async -> Bool {
-        let asset = AVURLAsset(url: url)
-        do {
-            let isPlayable = try await asset.load(.isPlayable)
-            guard isPlayable else { return false }
-            
-            let tracks = try await asset.loadTracks(withMediaType: .video)
-            if tracks.isEmpty { return true }
-            
-            for track in tracks {
-                let formats = try await track.load(.formatDescriptions) as [CMFormatDescription]
-                for desc in formats {
-                    let codec = CMFormatDescriptionGetMediaSubType(desc)
-                    let codecBytes: [UInt8] = [
-                        UInt8((codec >> 24) & 0xFF),
-                        UInt8((codec >> 16) & 0xFF),
-                        UInt8((codec >> 8) & 0xFF),
-                        UInt8(codec & 0xFF)
-                    ]
-                    if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters) {
-                        if fourCC == "apv1" || fourCC == "apvx" { return false }
-                    }
-                }
-            }
-            return true
-        } catch {
-            return false
-        }
-    }
-    
-    private static func isVLCSupported(_ url: URL) async -> Bool {
-        // VLC supports most formats that AVPlayer doesn't, EXCEPT APV
-        // Check if it's APV first (APV needs chunk fallback)
-        let asset = AVURLAsset(url: url)
-        do {
-            let tracks = try await asset.loadTracks(withMediaType: .video)
-            for track in tracks {
-                let formats = try await track.load(.formatDescriptions) as [CMFormatDescription]
-                for desc in formats {
-                    let codec = CMFormatDescriptionGetMediaSubType(desc)
-                    let codecBytes: [UInt8] = [
-                        UInt8((codec >> 24) & 0xFF),
-                        UInt8((codec >> 16) & 0xFF),
-                        UInt8((codec >> 8) & 0xFF),
-                        UInt8(codec & 0xFF)
-                    ]
-                   if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters) {
-                        // APV is NOT supported by VLC
-                        if fourCC == "apv1" || fourCC == "apvx" {
-                            return false
-                        }
-                    }
-                }
-            }
-        } catch {
-            // If we can't inspect, assume VLC can handle it
-            return true
-        }
-        
-        // If it's not natively supported and not APV, VLC can likely play it
-        let isNative = await isNativelySupported(url)
-        return !isNative
-    }
+
 }
 
 /// Configuration for timecode preservation or manual override

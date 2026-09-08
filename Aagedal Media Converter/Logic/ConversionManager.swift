@@ -818,11 +818,14 @@ actor ConversionManager: Sendable {
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let mergeUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
         let av2Settings = plan.preset == .av2 ? AV2Settings() : nil
+        let audioOnlySettings = plan.preset == .audioOnly ? AudioOnlySettings() : nil
         let outputExtension = av2Settings?.container.fileExtension
+            ?? audioOnlySettings?.format.fileExtension
             ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
         await ffmpegConverter.convert(
             request: mergeRequest,
             av2Settings: av2Settings,
+            audioOnlySettings: audioOnlySettings,
             progressUpdate: { progress, status in
                 let now = Date()
                 let shouldUpdate = mergeUIThrottle.withLock { last -> Bool in
@@ -1791,10 +1794,14 @@ actor ConversionManager: Sendable {
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let singleUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
         let av2Settings = preset == .av2 ? AV2Settings() : nil
-        let outputExtension = av2Settings?.container.fileExtension ?? preset.outputExtension(for: inputURL)
+        let audioOnlySettings = preset == .audioOnly ? AudioOnlySettings() : nil
+        let outputExtension = av2Settings?.container.fileExtension
+            ?? audioOnlySettings?.format.fileExtension
+            ?? preset.outputExtension(for: inputURL)
         await ffmpegConverter.convert(
             request: conversionRequest,
             av2Settings: av2Settings,
+            audioOnlySettings: audioOnlySettings,
             progressUpdate: { progress, status in
                 let now = Date()
                 let shouldUpdate = singleUIThrottle.withLock { last -> Bool in

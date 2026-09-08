@@ -1584,39 +1584,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
         case .audioOnly:
-            let formatRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyFormatKey) ?? AppConstants.defaultAudioOnlyFormat
-            let format = AudioOnlyFormat(rawValue: formatRaw) ?? .wav
-
-            var args = commonArgs + ["-vn", "-map", "0:a"]
-
-            switch format {
-            case .wav:
-                let bitDepthRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyBitDepthKey) ?? AppConstants.defaultAudioOnlyBitDepth
-                let bitDepth = AudioOnlyBitDepth(rawValue: bitDepthRaw) ?? .pcm24
-                args += ["-rf64", "auto", "-c:a", bitDepth.ffmpegCodec]
-
-            case .aac:
-                let bitrateRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyAACBitrateKey) ?? AppConstants.defaultAudioOnlyAACBitrate
-                let bitrate = AudioBitrate(rawValue: bitrateRaw) ?? .k192
-                args += ["-c:a", "aac", "-b:a", bitrate.ffmpegValue, "-movflags", "+faststart"]
-
-            case .mp4:
-                let codecRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyMP4CodecKey) ?? AppConstants.defaultAudioOnlyMP4Codec
-                let codec = AudioOnlyMP4Codec(rawValue: codecRaw) ?? .aac
-                args += ["-c:a", codec.ffmpegCodec]
-                if codec.requiresBitrate {
-                    let bitrateRaw = UserDefaults.standard.string(forKey: AppConstants.audioOnlyMP4BitrateKey) ?? AppConstants.defaultAudioOnlyMP4Bitrate
-                    let bitrate = AudioBitrate(rawValue: bitrateRaw) ?? .k192
-                    args += ["-b:a", bitrate.ffmpegValue]
-                }
-                args += ["-movflags", "+faststart"]
-
-            case .flac:
-                args += ["-c:a", "flac"]
-            }
-
-            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
-            return args
+            return AudioOnlySettings().ffmpegArguments
         case .imageSequence:
             let formatRaw = UserDefaults.standard.string(forKey: AppConstants.imageSequenceExportFormatKey) ?? AppConstants.defaultImageSequenceExportFormat
             let format = ImageSequenceFormat(rawValue: formatRaw) ?? .png

@@ -465,6 +465,7 @@ actor FFMPEGConverter {
         av2Settings: AV2Settings? = nil,
         dcpSettings: DCPSettings? = nil,
         imfSettings: IMFSettings? = nil,
+        audioOnlySettings: AudioOnlySettings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -476,6 +477,7 @@ actor FFMPEGConverter {
         let capturedAV2Settings = preset == .av2 ? (av2Settings ?? AV2Settings()) : nil
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
+        let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -691,8 +693,10 @@ actor FFMPEGConverter {
             let patternFileName = "\(baseName)_%0\(effectivePadding)d.\(format.primaryExtension)"
             outputFileURL = finalSubfolderURL.appendingPathComponent(patternFileName)
         } else {
-            // Use the same captured container for AV2 naming and muxing.
-            let outputExtension = capturedAV2Settings?.container.fileExtension ?? preset.outputExtension(for: inputURL)
+            // Use the captured container for naming and encoding.
+            let outputExtension = capturedAV2Settings?.container.fileExtension
+                ?? capturedAudioOnlySettings?.format.fileExtension
+                ?? preset.outputExtension(for: inputURL)
             outputFileURL = outputURL.appendingPathExtension(outputExtension)
 
             // CRITICAL: Ensure we never overwrite the source file
@@ -794,6 +798,7 @@ actor FFMPEGConverter {
                 preset: preset,
                 dcpSettings: capturedDCPSettings,
                 imfSettings: capturedIMFSettings,
+                audioOnlySettings: capturedAudioOnlySettings,
                 waveformRequest: waveformRequest,
                 audioRoutingConfig: request.audioRoutingConfig,
                 trimStart: request.trimStart,
@@ -982,6 +987,7 @@ actor FFMPEGConverter {
             preset: preset,
             dcpSettings: capturedDCPSettings,
             imfSettings: capturedIMFSettings,
+            audioOnlySettings: capturedAudioOnlySettings,
             comment: request.comment,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
@@ -3278,6 +3284,7 @@ actor FFMPEGConverter {
         preset: ExportPreset,
         dcpSettings: DCPSettings?,
         imfSettings: IMFSettings?,
+        audioOnlySettings: AudioOnlySettings?,
         waveformRequest: WaveformVideoRequest,
         audioRoutingConfig: AudioRoutingConfig?,
         trimStart: Double?,
@@ -3382,6 +3389,7 @@ actor FFMPEGConverter {
             preset: preset,
             dcpSettings: dcpSettings,
             imfSettings: imfSettings,
+            audioOnlySettings: audioOnlySettings,
             width: waveformRequest.width,
             height: waveformRequest.height,
             frameRate: waveformRequest.frameRate,
