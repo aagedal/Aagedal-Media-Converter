@@ -1055,9 +1055,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             let raw = defaults.string(forKey: AppConstants.imfFrameRateKey) ?? AppConstants.defaultIMFFrameRate
             return IMFFrameRate(rawValue: raw)?.folderTag
         case .imageSequence:
-            let value = defaults.object(forKey: AppConstants.imageSequenceFrameRateKey) as? Double
-                ?? AppConstants.defaultImageSequenceFrameRate
-            return Self.cleanFramerateLabel(value)
+            // Image exports preserve the per-item source or rendering request rate.
+            // The image-sequence preference only configures newly imported sequences.
+            return nil
         default:
             return nil
         }
@@ -1092,17 +1092,6 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         // DCP raw values look like "2K Full (2048x1080)" — extract the leading token (e.g. "2K", "4K").
         guard let firstWord = raw.split(separator: " ").first else { return nil }
         return String(firstWord)
-    }
-
-    private static func cleanFramerateLabel(_ storedValue: Double) -> String {
-        // Malformed stored preferences must not trap during Double → Int conversion.
-        let value = storedValue.isFinite && storedValue > 0 && storedValue < Double(Int.max)
-            ? storedValue : AppConstants.defaultImageSequenceFrameRate
-        // Render integer framerates without a decimal: 24.0 → "24", 23.976 → "23.976".
-        if value.rounded() == value {
-            return String(Int(value))
-        }
-        return String(format: "%g", value)
     }
 
     /// Resolves the codec family preferences synchronously from an injectable store.
@@ -1812,10 +1801,14 @@ extension ExportPreset {
 
     /// Optional per-preset override for waveform/padded video resolution.
     var waveformResolutionOverride: CGSize? {
+        waveformResolutionOverride(defaults: .standard)
+    }
+
+    func waveformResolutionOverride(defaults: UserDefaults) -> CGSize? {
         switch self {
         case .tvHEVC, .tvAVCIntra:
             // Use resolution based on current setting
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.tvResolutionLimitKey) ?? AppConstants.defaultTVResolutionLimit
+            let resolutionRaw = defaults.string(forKey: AppConstants.tvResolutionLimitKey) ?? AppConstants.defaultTVResolutionLimit
             let resolution = TVResolutionLimit(rawValue: resolutionRaw) ?? .r1080
             switch resolution {
             case .r720: return CGSize(width: 1280, height: 720)
@@ -1824,16 +1817,16 @@ extension ExportPreset {
             case .unlimited: return CGSize(width: 1920, height: 1080) // Default to 1080p for unlimited
             }
         case .dcp:
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.dcpResolutionKey) ?? AppConstants.defaultDCPResolution
+            let resolutionRaw = defaults.string(forKey: AppConstants.dcpResolutionKey) ?? AppConstants.defaultDCPResolution
             let resolution = DCPResolution(rawValue: resolutionRaw) ?? .twoKFull
             return CGSize(width: resolution.width, height: resolution.height)
         case .imfJ2K, .imfProRes:
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.imfResolutionKey) ?? AppConstants.defaultIMFResolution
+            let resolutionRaw = defaults.string(forKey: AppConstants.imfResolutionKey) ?? AppConstants.defaultIMFResolution
             let resolution = IMFResolution(rawValue: resolutionRaw) ?? .hd1080
             return CGSize(width: resolution.width, height: resolution.height)
         case .proxy:
             // Use resolution based on current proxy setting
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.proxyResolutionLimitKey) ?? AppConstants.defaultProxyResolutionLimit
+            let resolutionRaw = defaults.string(forKey: AppConstants.proxyResolutionLimitKey) ?? AppConstants.defaultProxyResolutionLimit
             let resolution = ProxyResolutionLimit(rawValue: resolutionRaw) ?? .r1080
             switch resolution {
             case .r480: return CGSize(width: 854, height: 480)
@@ -1846,8 +1839,8 @@ extension ExportPreset {
         }
     }
 
-    func resolvedWaveformResolution(defaultResolution: CGSize) -> CGSize {
-        waveformResolutionOverride ?? defaultResolution
+    func resolvedWaveformResolution(defaultResolution: CGSize, defaults: UserDefaults = .standard) -> CGSize {
+        waveformResolutionOverride(defaults: defaults) ?? defaultResolution
     }
 }
 

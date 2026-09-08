@@ -26,6 +26,39 @@ struct FFMPEGCommand {
     var preparationError: String? = nil
 }
 
+/// Keeps probe failure distinct from an explicit request to clear source timecode.
+/// Both QuickTime tag locations belong to this plan because either can recreate tmcd.
+enum TimecodeMetadataPlan: Equatable, Sendable {
+    case unchanged
+    case clear
+    case set(String)
+
+    init(resolvedValue: String?) {
+        self = resolvedValue.flatMap { $0.isEmpty ? nil : $0 }.map(Self.set) ?? .clear
+    }
+
+    func apply(to arguments: inout [String]) {
+        guard self != .unchanged else { return }
+        var index = 0
+        while index + 1 < arguments.count {
+            let option = arguments[index]
+            if option == "-timecode" ||
+                (["-metadata", "-metadata:s:v:0"].contains(option) && arguments[index + 1].hasPrefix("timecode=")) {
+                arguments.removeSubrange(index...index + 1)
+            } else {
+                index += 1
+            }
+        }
+        let value: String
+        switch self {
+        case .set(let timecode): value = timecode
+        case .clear: value = ""
+        case .unchanged: return
+        }
+        arguments += ["-metadata", "timecode=\(value)", "-metadata:s:v:0", "timecode=\(value)"]
+    }
+}
+
 struct WaveformVideoRequest: Sendable {
     let width: Int
     let height: Int
@@ -1022,7 +1055,7 @@ extension FFMPEGCommandBuilder {
             trimStart: trimStart
         )
 
-        replaceTimecodeMetadata(in: &ffmpegArgs, with: timecodeValue)
+        TimecodeMetadataPlan(resolvedValue: timecodeValue).apply(to: &ffmpegArgs)
     }
 
     /// Resolves a configured timecode without assuming an FFmpeg output. The AV2
@@ -1046,34 +1079,6 @@ extension FFMPEGCommandBuilder {
         }
     }
 
-    /// Replaces both container and primary-video timecode metadata. QuickTime's
-    /// muxer can synthesize a `tmcd` track from either value, so clearing only
-    /// the container tag still allows a copied video-stream tag to recreate the
-    /// source timecode.
-    private static func replaceTimecodeMetadata(
-        in ffmpegArgs: inout [String],
-        with timecode: String?
-    ) {
-        let metadataOptions = ["-metadata", "-metadata:s:v:0"]
-
-        var index = 0
-        while index < ffmpegArgs.count - 1 {
-            if metadataOptions.contains(ffmpegArgs[index])
-                && ffmpegArgs[index + 1].hasPrefix("timecode=") {
-                ffmpegArgs.remove(at: index + 1)
-                ffmpegArgs.remove(at: index)
-                continue
-            }
-            index += 1
-        }
-
-        let value = timecode.map { "timecode=\($0)" } ?? "timecode="
-        ffmpegArgs.append(contentsOf: [
-            "-metadata", value,
-            "-metadata:s:v:0", value
-        ])
-    }
-
     /// Applies an already-resolved per-item timecode choice. Video items receive
     /// their global default when they are created, so nil here means the user
     /// explicitly disabled timecode and must not reload settings. Manual values
@@ -1086,13 +1091,29 @@ extension FFMPEGCommandBuilder {
         sourceMetadata knownSourceMetadata: VideoMetadata? = nil,
         trimStart: Double?
     ) async {
+        let plan = await configuredTimecodePlan(
+            preset: preset, inputURL: inputURL, timecodeConfig: timecodeConfig,
+            sourceMetadata: knownSourceMetadata, trimStart: trimStart
+        )
+        plan.apply(to: &ffmpegArgs)
+    }
+
+    static func configuredTimecodePlan(
+        preset: ExportPreset,
+        inputURL: URL,
+        timecodeConfig: TimecodeConfig?,
+        sourceMetadata knownSourceMetadata: VideoMetadata? = nil,
+        trimStart: Double?,
+        metadataProvider: @Sendable (URL) async -> VideoMetadata? = {
+            try? await BoundedVideoMetadataProbe.metadata(for: $0)
+        }
+    ) async -> TimecodeMetadataPlan {
         guard preset.outputsVideoTrack else {
-            return
+            return .unchanged
         }
 
         guard let timecodeConfig, timecodeConfig.isActive else {
-            replaceTimecodeMetadata(in: &ffmpegArgs, with: nil)
-            return
+            return .clear
         }
 
         let sourceMetadata: VideoMetadata?
@@ -1100,24 +1121,23 @@ extension FFMPEGCommandBuilder {
         case .preserveSource:
             if let knownSourceMetadata {
                 sourceMetadata = knownSourceMetadata
-            } else if let probedMetadata = try? await BoundedVideoMetadataProbe.metadata(for: inputURL) {
+            } else if let probedMetadata = await metadataProvider(inputURL) {
                 sourceMetadata = probedMetadata
             } else {
                 // Preserve FFmpeg's source metadata mapping when the in-process
                 // probe fails instead of interpreting a probe failure as an
                 // explicit request to remove timecode.
-                return
+                return .unchanged
             }
         case .manual:
             sourceMetadata = nil
         }
 
-        await applyTimecode(
-            &ffmpegArgs,
+        return TimecodeMetadataPlan(resolvedValue: resolvedTimecode(
             timecodeConfig: timecodeConfig,
             sourceMetadata: sourceMetadata,
             trimStart: trimStart
-        )
+        ))
     }
 
     /// Offsets a timecode string by a given number of seconds
@@ -1126,7 +1146,7 @@ extension FFMPEGCommandBuilder {
     ///   - seconds: Number of seconds to offset
     ///   - frameRate: Frame rate of the video
     /// - Returns: Offset timecode string, or original if parsing fails
-    private static func offsetTimecode(_ timecode: String, bySeconds seconds: Double, frameRate: Double) -> String {
+    static func offsetTimecode(_ timecode: String, bySeconds seconds: Double, frameRate: Double) -> String {
         // Parse timecode components
         let components = timecode.split(whereSeparator: { $0 == ":" || $0 == ";" })
 
@@ -1142,20 +1162,27 @@ extension FFMPEGCommandBuilder {
         // Timecode labels count at the nominal integer rate even when their media
         // timestamps use a fractional NTSC rate. Guard very-low/invalid rates so
         // the modulo operations below can never divide by zero.
-        let nominalFPS = Int(frameRate.rounded())
-        guard nominalFPS > 0 else {
+        guard frameRate.isFinite, frameRate.rounded() >= 1,
+              frameRate.rounded() < Double(Int.max / 86_400),
+              seconds.isFinite else {
             logger.warning("Cannot offset timecode at invalid frame rate: \(frameRate, privacy: .public)")
             return timecode
         }
+        let nominalFPS = Int(frameRate.rounded())
+        guard hours >= 0, (0..<60).contains(minutes), (0..<60).contains(secs),
+              (0..<nominalFPS).contains(frames) else { return timecode }
 
         let isDropFrame = timecode.contains(";") && isSupportedDropFrameRate(frameRate)
         let droppedFramesPerMinute = nominalFPS == 60 ? 4 : 2
 
         // Convert timecode to total frames
-        var totalFrames = hours * 3600 * nominalFPS
-        totalFrames += minutes * 60 * nominalFPS
-        totalFrames += secs * nominalFPS
-        totalFrames += frames
+        var totalFrames = hours
+        for (factor, component) in [(60, minutes), (60, secs), (nominalFPS, frames)] {
+            let product = totalFrames.multipliedReportingOverflow(by: factor)
+            let sum = product.partialValue.addingReportingOverflow(component)
+            guard !product.overflow, !sum.overflow else { return timecode }
+            totalFrames = sum.partialValue
+        }
 
         if isDropFrame {
             let totalMinutes = hours * 60 + minutes
@@ -1164,8 +1191,12 @@ extension FFMPEGCommandBuilder {
         }
 
         // Add offset in frames (round to nearest frame to avoid off-by-one errors)
-        let offsetFrames = Int(round(seconds * frameRate))
-        totalFrames += offsetFrames
+        let roundedOffset = round(seconds * frameRate)
+        guard roundedOffset.isFinite, roundedOffset >= Double(Int.min),
+              roundedOffset < Double(Int.max) else { return timecode }
+        let addition = totalFrames.addingReportingOverflow(Int(roundedOffset))
+        guard !addition.overflow else { return timecode }
+        totalFrames = addition.partialValue
 
         // Ensure non-negative
         totalFrames = max(0, totalFrames)

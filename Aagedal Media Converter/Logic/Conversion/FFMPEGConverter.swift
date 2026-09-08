@@ -96,7 +96,9 @@ private final class ConversionOutputReservations: @unchecked Sendable {
 }
 
 actor FFMPEGConverter {
+    @TaskLocal private static var runningSubprocessID: UUID?
     private var currentSubprocessTask: Task<Void, Never>?
+    private var joinableSubprocessID: UUID?
     private var currentDependencyPreflightTask: Task<String?, Error>?
     private var currentWaveformAnalysisTask: Task<FrequencyBandData, Error>?
     private var currentWaveformAnalysisID: UUID?
@@ -1920,7 +1922,7 @@ actor FFMPEGConverter {
 
         if let decoderRequest = av2DecodeRequest {
             let runner = subprocessRunner
-            currentSubprocessTask = Task {
+            currentSubprocessTask = makeJoinableSubprocessTask(conversionID: conversionID) {
                 do {
                     let pipelineResult = try await runner.runPipeline(
                         producer: decoderRequest,
@@ -1989,7 +1991,7 @@ actor FFMPEGConverter {
         }
 
         let runner = subprocessRunner
-        currentSubprocessTask = Task {
+        currentSubprocessTask = makeJoinableSubprocessTask(conversionID: conversionID) {
             do {
                 let result = try await runner.run(subprocessRequest) { chunk in
                     guard case .standardError = chunk.stream else { return }
@@ -3485,6 +3487,7 @@ actor FFMPEGConverter {
         }
 
         currentSubprocessTask?.cancel()
+        joinableSubprocessID = nil
         currentSubprocessTask = Task { [weak self] in
             defer {
                 Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
@@ -4231,7 +4234,25 @@ actor FFMPEGConverter {
         }
     }
 
+    /// Ordinary FFmpeg and decoder tasks only own bounded runner execution; their
+    /// post-processing is dispatched separately. Native waveform tasks still own
+    /// framework/probe post-processing and deliberately remain outside this join.
+    private func makeJoinableSubprocessTask(
+        conversionID: UUID,
+        operation: @escaping @Sendable () async -> Void
+    ) -> Task<Void, Never> {
+        joinableSubprocessID = conversionID
+        return Task {
+            await Self.$runningSubprocessID.withValue(conversionID) {
+                await operation()
+            }
+        }
+    }
+
     func cancelConversion() async {
+        let subprocessTask = currentSubprocessTask
+        let subprocessID = joinableSubprocessID
+        joinableSubprocessID = nil
         let bmxOperationID = activeBMXOperationID
         activeConversionID = nil
         postProcessingConversionID = nil
@@ -4268,6 +4289,12 @@ actor FFMPEGConverter {
         if let bmxOperationID {
             await BMXService.shared.cancel(operationID: bmxOperationID)
             _ = await BMXService.shared.finishCancellationTracking(operationID: bmxOperationID)
+        }
+        // Capture and detach before suspending: a replacement conversion may be
+        // installed while the old runner drains. Never join from inside that same
+        // runner (including injected runners that synchronously request cancellation).
+        if let subprocessID, Self.runningSubprocessID != subprocessID {
+            await subprocessTask?.value
         }
     }
 

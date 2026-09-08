@@ -209,7 +209,10 @@ struct VideoFileUtils: Sendable {
         let thumbnailData = generateImageSequenceThumbnail(from: config.firstFrameURL)
 
         let counter = FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
-        let outputURL = makeOutputURL(for: config.directory, outputFolder: outputFolder, preset: preset, counter: counter)
+        let outputURL = makeOutputURL(
+            for: config.directory, outputFolder: outputFolder, preset: preset, counter: counter,
+            imageSequenceFrameRate: config.frameRate
+        )
 
         var item = VideoItem(
             url: config.directory,
@@ -297,8 +300,6 @@ struct VideoFileUtils: Sendable {
         }
 
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-        let outputURL = makeOutputURL(for: url, outputFolder: outputFolder, preset: preset, counter: counter)
-
         // Run the full metadata probe in parallel with thumbnail generation. The metadata
         // service's `inFlightRawVideo` map dedups concurrent SwiftExif reads internally, so
         // even when several files import together we don't pay for redundant parses.
@@ -330,6 +331,10 @@ struct VideoFileUtils: Sendable {
             hasVideoStream = false
         }
 
+        let outputURL = makeOutputURL(
+            for: url, outputFolder: outputFolder, preset: preset, counter: counter,
+            imageSequenceFrameRate: metadata?.primaryVideoStream?.frameRate?.value
+        )
         return VideoItemDetails(
             size: size,
             duration: formatDuration(seconds: durationSec),
@@ -394,10 +399,16 @@ struct VideoFileUtils: Sendable {
         }
     }
 
-    private static func makeOutputURL(for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil) -> URL? {
+    private static func makeOutputURL(
+        for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil,
+        imageSequenceFrameRate: Double? = nil
+    ) -> URL? {
         let resolvedOutputFolder = resolveOutputFolder(for: url, defaultOutputFolder: outputFolder, preset: preset)
         guard let resolvedOutputFolder else { return nil }
-        let nameParts = FileNameProcessor.outputNameParts(inputURL: url, counter: counter, preset: preset)
+        let nameParts = FileNameProcessor.outputNameParts(
+            inputURL: url, counter: counter, preset: preset,
+            context: FileNameTemplateContext(preset: preset, imageSequenceFrameRate: imageSequenceFrameRate)
+        )
         let resolvedExtension = preset.outputExtension(for: url)
 
         // Use FileSafetyUtils to prevent overwriting the input file

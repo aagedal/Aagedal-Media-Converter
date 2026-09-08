@@ -86,7 +86,8 @@ struct FileNameTemplateContext: Sendable {
 
     init(
         preset: ExportPreset?, defaults: UserDefaults = .standard,
-        av2Settings: AV2Settings? = nil, dcpSettings: DCPSettings? = nil, imfSettings: IMFSettings? = nil
+        av2Settings: AV2Settings? = nil, dcpSettings: DCPSettings? = nil, imfSettings: IMFSettings? = nil,
+        imageSequenceFrameRate: Double? = nil
     ) {
         presetSuffix = preset?.fileSuffix(defaults: defaults) ?? ""
         if preset == .dcp, let dcpSettings {
@@ -101,7 +102,26 @@ struct FileNameTemplateContext: Sendable {
             } else {
                 resolution = preset?.resolutionLabel(defaults: defaults) ?? ""
             }
-            framerate = preset?.framerateLabel(defaults: defaults) ?? ""
+            framerate = preset == .imageSequence
+                ? Self.imageSequenceFramerateLabel(imageSequenceFrameRate)
+                : preset?.framerateLabel(defaults: defaults) ?? ""
         }
+    }
+
+    /// Image exports preserve the input or generated-video rate. The preference for
+    /// importing sequences is not an output frame-rate setting.
+    static func imageSequenceFrameRate(for item: VideoItem, waveformFrameRate: Double? = nil) -> Double? {
+        if item.requiresWaveformVideo, let waveformFrameRate {
+            if case .splitToMono = item.audioRoutingConfig?.channelOperation {
+                return nil
+            }
+            return waveformFrameRate
+        }
+        return item.imageSequenceConfig?.frameRate ?? item.metadata?.primaryVideoStream?.frameRate?.value
+    }
+
+    private static func imageSequenceFramerateLabel(_ rate: Double?) -> String {
+        guard let rate, rate.isFinite, rate > 0, rate < Double(Int.max) else { return "" }
+        return rate.rounded() == rate ? String(Int(rate)) : String(format: "%g", rate)
     }
 }

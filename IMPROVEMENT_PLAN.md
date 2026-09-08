@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 578 tests pass. The
+- The unit-test baseline is green: 597 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -19,11 +19,11 @@ issue link when it starts.
   policy, manual/preserved/drop-frame timecode, image-sequence inputs and JPEG
   output, DCP/IMF conformance arguments, and AV2 chunk planning now have direct
   coverage as well.
-- The app contains about 93,800 lines of Swift. Several core files are very large:
-  `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
-  `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
-  `ExportPreset.swift` (2,241).
-- There are 578 unit tests. The UI test target now has deterministic smoke
+- The app contains about 97,300 lines of Swift. Several core files are very large:
+  `FFMPEGConverter.swift` (4,879 lines), `ConversionManager.swift` (2,912),
+  `ContentView.swift` (2,891), `VideoFileListView.swift` (2,266), and
+  `ExportPreset.swift` (2,123).
+- There are 597 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -724,6 +724,14 @@ conversion had already completed. The handshake preserves the active-conversion
 split-record assertions and production suppression of late callbacks
 (Codex, 2026-09-08).
 
+Ordinary FFmpeg and AV2 source-decoder cancellation now waits for the captured
+runner task to drain before returning. Cancellation detaches task ownership before
+suspending, so cleanup cannot clear a replacement; task-local identity prevents a
+runner that requests its own cancellation from joining itself. Two injected-runner
+regressions cover delayed drain and self-cancellation. Native waveform tasks still
+include framework/MCA post-processing and are intentionally not joined here; full
+native waveform/helper/package drain semantics remain open (Codex, 2026-09-08).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -1229,6 +1237,15 @@ checks batch ownership before using that transition, so removal/cancellation can
 tested without encoding or launching the app. Broader conversion execution and view
 coordinator extractions remain open (Codex, 2026-09-08).
 
+Merge progress and completion now resolve rows by item/source identity and current
+status instead of retaining array indices across encoding. Batch callback ownership
+rejects queued updates after cancellation/restart, and old progress subscribers cannot
+clear a replacement. Cancellation serializes admission while stop requests are pending.
+Five regressions cover removed/reordered rows, replaced/cancelled/finished sources,
+restarted item identities, subscriber replacement, and overlapping item/whole-queue
+stops. Resource cleanup and new-batch admission wait for the final outstanding stop. Broader actor/UI binding and
+deferred upload/subtitle/analytics attempt ownership remain open (Codex, 2026-09-08).
+
 ### 3.2 Make conversion plans typed
 
 Status: in progress; typed audio routing introduced 2026-09-08 (Codex).
@@ -1274,6 +1291,16 @@ automatic audio maps while preserving the generated picture map. `FFMPEGCommand`
 can report a preparation error, and the converter rejects a silent synthesized source
 without a known positive duration before launching FFmpeg. General typed inputs,
 filters, codecs, metadata, and output plans remain open (Codex, 2026-09-08).
+
+Timecode now resolves into a typed `TimecodeMetadataPlan`: unchanged after a failed
+preservation probe, explicit clearing, or a resolved replacement value. Rendering owns
+both container and primary-video tags and removes a conflicting custom `-timecode`
+shortcut. Manual/disabled/nonvideo paths never probe. Offset calculations reject
+nonfinite values and integer overflow, retaining the original label rather than
+crashing. Four focused tests cover policy, metadata ownership, malformed values, and
+midnight/clamping boundaries; the generated MOV fixture also verifies clearing and
+replacement of the shortcut through actual tmcd output. General typed inputs, filters,
+codecs, comments, and output plans remain open (Codex, 2026-09-08).
 
 ### 3.3 Centralize settings access
 
@@ -1448,6 +1475,20 @@ out-of-integer-range values can no longer trap during filename formatting.
 Image-sequence filename frame-rate alignment with per-item/request rates,
 UI/request-generation preferences, and remaining migrations stay open
 (Codex, 2026-09-08).
+
+Image-sequence filename frame rates now come from the per-item sequence/source or
+captured generated-video request. The sequence import default no longer appears as an
+export rate. Import names, queue previews, and conversion naming use the same context;
+unknown/nonfinite rates omit the label. Five naming regressions replace one old
+preference-only test, covering source/request priority, immutable command/name
+agreement, malformed rates, and waveform/split compatibility. Merge names do not use
+frame-rate template tokens and retain their existing naming policy.
+
+`GeneratedVideoSettings` now captures appearance and preset-specific geometry through
+injectable defaults. Single-item and merge request selection share waveform precedence
+and split-to-mono compatibility checks. Four regressions cover retained appearance,
+six preset resolution overrides, request selection, and nonfinite frame-rate fallback.
+Broader UI/request preferences and schema migrations remain open (Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1762,7 +1803,38 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 578 unit tests pass
+Latest validation (2026-09-08, Codex): Debug compilation and all 597 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Nineteen additional
+tests cover source/request filename rates, generated-video settings, typed timecode
+policy and overflow, callback/subscriber ownership, ordinary runner draining,
+self-cancellation, and overlapping single-item/whole-queue stops. Generated MOV
+coverage verifies custom timecode shortcut clearing/replacement through actual tmcd
+output. All three conversion UI smoke tests pass together from a fresh locally signed
+build (success, failure details, start/cancel). All 43 release-script tests, manifest
+freshness, and localization checks pass (1,492 entries, 15 intentional omissions).
+The final unsigned Release build passes, and its bundle audit verifies all 44 Mach-O
+images and six packaged license notices. No binaries or license assignments changed.
+
+Initial validation caught a progress-timer actor-isolation compile error and an
+actor-isolated binding in the new overlap test; an actor-owned timer tick and
+synchronized nonisolated test fixture fixed them. Review caught the single-item/full
+stop overlap before the final green run. One initial UI run missed the toolbar's
+disabled state after closing error details; the isolated retry and final combined
+suite both pass. The error-details screenshot was visually reviewed. Independent
+reviews found no further introduced naming, timecode, request-policy, or cancellation
+regressions.
+
+Remaining implementation work: full typed conversion plans and broader orchestration
+extraction; remaining UI/request settings and schema migrations; native waveform,
+helper, and package draining; deferred upload/subtitle/analytics attempt ownership;
+broader actor/UI binding and filesystem audits; AV2 audio offsets, uncommon layouts,
+and generated video; and IMF descriptor conformance. Manual MPV playback, Shortcuts,
+sandbox reauthorization, VoiceOver, broader bilingual/scrolled UI, live capture/editor,
+runtime memory/dynamic dependency measurements, clean-machine install/update, complete
+dependency provenance (99 unresolved license entries), and credentialed release checks
+remain.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 578 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Twenty-six new tests
 cover Stream Copy/custom snapshots, MCA defaults, filename/package labels, malformed
 frame-rate preferences, queue preparation cancellation/removal, generated-video map

@@ -303,18 +303,118 @@ final class FileNameSettingsMigrationTests: XCTestCase {
         }
     }
 
-    func testMalformedImageSequenceFramerateLabelsFallBackWithoutTrapping() {
+    func testImageSequenceFilenameDoesNotUseImportPreferencesAsAnExportRate() {
         withSettings { defaults, _ in
-            let fallback = FileNameTemplateContext(preset: .imageSequence, defaults: defaults).framerate
-            for value in [Double.nan, .infinity, -.infinity, .greatestFiniteMagnitude, Double(Int.max), 0, -24] {
+            for value in [24.0, 60, .nan, .infinity, -.infinity, .greatestFiniteMagnitude, Double(Int.max), 0, -24] {
                 defaults.set(value, forKey: AppConstants.imageSequenceFrameRateKey)
-                XCTAssertEqual(FileNameTemplateContext(preset: .imageSequence, defaults: defaults).framerate, fallback)
-            }
-            for (value, expected) in [(24.0, "24"), (23.976, "23.976"), (59.94, "59.94")] {
-                defaults.set(value, forKey: AppConstants.imageSequenceFrameRateKey)
-                XCTAssertEqual(FileNameTemplateContext(preset: .imageSequence, defaults: defaults).framerate, expected)
+                XCTAssertNil(ExportPreset.imageSequence.framerateLabel(defaults: defaults))
+                XCTAssertEqual(FileNameTemplateContext(preset: .imageSequence, defaults: defaults).framerate, "")
             }
         }
+    }
+
+    func testImageSequenceFilenameOmitsUnknownAndInvalidRequestRatesWithoutTrapping() {
+        withSettings { defaults, _ in
+            for value in [Double.nan, .infinity, -.infinity, .greatestFiniteMagnitude, Double(Int.max), 0, -24] {
+                XCTAssertEqual(FileNameTemplateContext(
+                    preset: .imageSequence, defaults: defaults, imageSequenceFrameRate: value
+                ).framerate, "")
+            }
+            for (value, expected) in [(24.0, "24"), (23.976, "23.976"), (59.94, "59.94")] {
+                XCTAssertEqual(FileNameTemplateContext(
+                    preset: .imageSequence, defaults: defaults, imageSequenceFrameRate: value
+                ).framerate, expected)
+            }
+        }
+    }
+
+    func testImageSequenceFilenameKeepsTheCapturedPerItemInputRate() async throws {
+        let suite = "FileNameSettingsMigrationTests.sequence.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("{sourceName}_{framerate}{presetSuffix}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(60, forKey: AppConstants.imageSequenceFrameRateKey)
+        let config = ImageSequenceConfig(
+            pattern: "frame_%04d.png", directory: URL(fileURLWithPath: "/source/sequence"),
+            startNumber: 1, endNumber: 24, frameRate: 23.976, imageFormat: .png
+        )
+        var item = VideoItem(
+            url: config.directory, name: "sequence", size: 0, duration: "1", thumbnailData: nil,
+            status: .waiting, progress: 0, eta: nil, outputURL: nil
+        )
+        item.imageSequenceConfig = config
+        let context = FileNameTemplateContext(
+            preset: .imageSequence, defaults: defaults,
+            imageSequenceFrameRate: FileNameTemplateContext.imageSequenceFrameRate(for: item)
+        )
+        let preferences = FileNameSettings(defaults: defaults).snapshot
+        let settings = ImageSequenceSettings(defaults: defaults)
+        await Task.yield()
+        defaults.set(25, forKey: AppConstants.imageSequenceFrameRateKey)
+        item.imageSequenceConfig?.frameRate = 30
+        let name = FileNameProcessor.outputBaseName(
+            inputURL: config.directory, preset: .imageSequence, settings: preferences, context: context
+        )
+        XCTAssertEqual(name, "sequence_23.976_seq")
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: config.directory,
+            outputFileURL: URL(fileURLWithPath: "/output/\(settings.outputPattern(baseName: name))"),
+            preset: .imageSequence, imageSequenceSettings: settings,
+            comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+            customInputArguments: config.ffmpegInputArguments
+        )
+        let index = try XCTUnwrap(command.arguments.firstIndex(of: "-framerate"))
+        XCTAssertEqual(command.arguments[index + 1], context.framerate)
+        XCTAssertFalse(command.arguments.contains("-r"), "Image exports preserve their input rate")
+    }
+
+    func testImageSequenceFilenameUsesVideoMetadataUntilASequenceRateOverridesIt() {
+        var item = VideoItem(
+            url: URL(fileURLWithPath: "/source/video.mov"), name: "video", size: 0,
+            duration: "1", thumbnailData: nil, status: .waiting, progress: 0, eta: nil, outputURL: nil
+        )
+        item.metadata = VideoMetadata(
+            duration: 1, formatName: "mov", containerLongName: nil, sizeBytes: nil,
+            bitRate: nil, comment: nil, timecode: nil, timecodes: [], frameCount: nil,
+            containerCreationDate: nil, containerModificationDate: nil, title: nil, artist: nil,
+            gpsLatitude: nil, gpsLongitude: nil, gpsAltitude: nil, warnings: [],
+            videoStreams: [.init(
+                codec: "h264", codecLongName: nil, profile: nil, width: 1920, height: 1080,
+                pixelFormat: "yuv420p", hasAlpha: false, pixelAspectRatio: nil,
+                displayAspectRatio: nil, frameRate: .init(double: 25), bitDepth: 8, bitRate: nil,
+                duration: 1, chromaSubsampling: "4:2:0", colorPrimaries: nil, colorTransfer: nil,
+                colorSpace: nil, colorRange: nil, chromaLocation: nil, fieldOrder: nil,
+                isInterlaced: false, title: nil, isDefault: true, isForced: false
+            )], audioStreams: [], subtitleStreams: []
+        )
+        withSettings { defaults, _ in
+            defaults.set(60, forKey: AppConstants.imageSequenceFrameRateKey)
+            let context = FileNameTemplateContext(
+                preset: .imageSequence, defaults: defaults,
+                imageSequenceFrameRate: FileNameTemplateContext.imageSequenceFrameRate(for: item, waveformFrameRate: 30)
+            )
+            XCTAssertEqual(context.framerate, "25")
+        }
+        item.imageSequenceConfig = ImageSequenceConfig(
+            pattern: "frame_%04d.png", directory: URL(fileURLWithPath: "/source/sequence"),
+            startNumber: 1, endNumber: 24, frameRate: 24, imageFormat: .png
+        )
+        XCTAssertEqual(FileNameTemplateContext.imageSequenceFrameRate(for: item), 24)
+    }
+
+    func testImageSequenceQueuePreviewUsesWaveformRateOnlyWhenEnabled() {
+        var item = VideoItem(
+            url: URL(fileURLWithPath: "/source/audio.wav"), name: "audio", size: 0,
+            duration: "1", thumbnailData: nil, status: .waiting, progress: 0, eta: nil, outputURL: nil
+        )
+        item.hasVideoStream = false
+        XCTAssertNil(FileNameTemplateContext.imageSequenceFrameRate(for: item, waveformFrameRate: 30))
+        item.waveformVideoEnabled = true
+        XCTAssertEqual(FileNameTemplateContext.imageSequenceFrameRate(for: item, waveformFrameRate: 30), 30)
+        item.audioRoutingConfig = AudioRoutingConfig(inputTracks: [], outputTracks: [])
+        item.audioRoutingConfig?.channelOperation = .splitToMono(trackIndex: 0)
+        XCTAssertNil(FileNameTemplateContext.imageSequenceFrameRate(for: item, waveformFrameRate: 30))
     }
 
 }

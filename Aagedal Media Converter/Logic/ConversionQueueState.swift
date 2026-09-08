@@ -3,6 +3,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
+
+/// Captured by callbacks so invalidating a batch also invalidates work already
+/// dispatched to the main actor, without another suspension before UI mutation.
+final class ConversionCallbackOwnership: Sendable {
+    private let active = OSAllocatedUnfairLock(initialState: true)
+
+    var isActive: Bool { active.withLock { $0 } }
+
+    func invalidate() { active.withLock { $0 = false } }
+}
 
 /// Queue decisions and item mutations without process, binding, or actor dependencies.
 enum ConversionQueueState {
@@ -14,6 +25,40 @@ enum ConversionQueueState {
     static func nextItem(in items: [VideoItem], allowedItemIDs: Set<UUID>?) -> VideoItem? {
         items.first {
             $0.status == .waiting && (allowedItemIDs?.contains($0.id) ?? true)
+        }
+    }
+
+    /// Resolve callback targets by source identity and current state, never by
+    /// positions retained across asynchronous encoding or probing.
+    static func callbackIndices(
+        for selectedItems: [VideoItem],
+        in items: [VideoItem],
+        status: ConversionManager.ConversionStatus = .converting
+    ) -> [Int] {
+        selectedItems.compactMap { selected in
+            items.firstIndex {
+                $0.id == selected.id && $0.url == selected.url && $0.status == status
+            }
+        }
+    }
+
+    static func applyProgress(
+        _ progress: Double,
+        message: String?,
+        isDuration: Bool,
+        for selectedItems: [VideoItem],
+        ownership: ConversionCallbackOwnership,
+        in items: inout [VideoItem]
+    ) {
+        guard ownership.isActive else { return }
+        for index in callbackIndices(for: selectedItems, in: items) {
+            items[index].progress = progress
+            if isDuration {
+                items[index].eta = message
+                items[index].statusMessage = nil
+            } else {
+                items[index].statusMessage = message
+            }
         }
     }
 

@@ -1922,7 +1922,14 @@ struct ContentView: View {
     private func outputBaseName(for item: VideoItem, preset: ExportPreset) -> String {
         FileNameProcessor.outputBaseName(
             inputURL: item.url, override: item.outputFileNameOverride,
-            counter: item.customCounterValue, preset: preset
+            counter: item.customCounterValue, preset: preset,
+            context: FileNameTemplateContext(
+                preset: preset,
+                imageSequenceFrameRate: FileNameTemplateContext.imageSequenceFrameRate(
+                    for: item,
+                    waveformFrameRate: preset == .imageSequence ? AudioWaveformPreferences.loadConfig().frameRate : nil
+                )
+            )
         )
     }
 

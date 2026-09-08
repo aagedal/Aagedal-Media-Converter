@@ -6,6 +6,90 @@ import XCTest
 
 final class ConversionQueueStateTests: XCTestCase {
     @MainActor
+    func testTerminatingOldProgressSubscriptionPreservesReplacement() async {
+        let manager = ConversionManager()
+        let firstStream = await manager.progressUpdates()
+        let firstSubscriber = Task {
+            for await _ in firstStream { }
+        }
+        let replacementStream = await manager.progressUpdates()
+        firstSubscriber.cancel()
+        await firstSubscriber.value
+
+        let received = expectation(description: "Replacement receives cancellation progress")
+        let replacementSubscriber = Task {
+            for await value in replacementStream {
+                XCTAssertEqual(value, 0)
+                received.fulfill()
+                break
+            }
+        }
+        await manager.cancelAllConversions()
+        await fulfillment(of: [received], timeout: 2)
+        replacementSubscriber.cancel()
+        await replacementSubscriber.value
+    }
+
+    func testMergeCallbacksFollowSourcesAfterRowsAreRemovedAndReordered() {
+        let first = item(status: .converting)
+        let removed = item(status: .converting)
+        let last = item(status: .converting)
+        let unrelated = item(status: .converting)
+        var items = [last, unrelated, first]
+
+        ConversionQueueState.applyProgress(
+            0.75, message: "00:00:05", isDuration: true,
+            for: [first, removed, last], ownership: ConversionCallbackOwnership(), in: &items
+        )
+
+        XCTAssertEqual(ConversionQueueState.callbackIndices(for: [first, removed, last], in: items), [2, 0])
+        XCTAssertEqual(items[0].progress, 0.75)
+        XCTAssertEqual(items[2].eta, "00:00:05")
+        XCTAssertNil(items[0].statusMessage)
+        XCTAssertEqual(items[1], unrelated)
+    }
+
+    func testCallbacksDiscardReplacedCancelledAndFinishedSources() {
+        let selected = item(status: .converting)
+        var replaced = selected
+        replaced.url = URL(fileURLWithPath: "/fixture/replacement.mov")
+        var variants = [replaced]
+        for status in [ConversionManager.ConversionStatus.waiting, .cancelled, .done, .failed] {
+            var changed = selected
+            changed.status = status
+            variants.append(changed)
+        }
+        for variant in variants {
+            var items = [variant]
+            ConversionQueueState.applyProgress(
+                0.9, message: "Muxing", isDuration: false,
+                for: [selected], ownership: ConversionCallbackOwnership(), in: &items
+            )
+            XCTAssertEqual(items, [variant])
+            XCTAssertTrue(ConversionQueueState.callbackIndices(for: [selected], in: items).isEmpty)
+        }
+    }
+
+    func testOldBatchProgressCannotAffectRestartedItemWithSameIdentity() {
+        let selected = item(status: .converting)
+        let oldBatch = ConversionCallbackOwnership()
+        oldBatch.invalidate()
+        var items = [selected]
+        ConversionQueueState.applyProgress(
+            1, message: "Old completion", isDuration: false,
+            for: [selected], ownership: oldBatch, in: &items
+        )
+        XCTAssertEqual(items, [selected])
+
+        ConversionQueueState.applyProgress(
+            0.1, message: "New encode", isDuration: false,
+            for: [selected], ownership: ConversionCallbackOwnership(), in: &items
+        )
+        XCTAssertEqual(items[0].progress, 0.1)
+        XCTAssertEqual(items[0].statusMessage, "New encode")
+    }
+
+    @MainActor
     func testCancellingItemDuringManagerPreparationDoesNotStartEncoding() async {
         let gate = ConversionPreparationDetailsGate()
         let started = expectation(description: "Conversion details started")

@@ -237,6 +237,7 @@ actor ConversionManager: Sendable {
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        ffmpegConverter: FFMPEGConverter = FFMPEGConverter(),
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings(),
         ocrSettings: any OCRSettingsProviding = PostConversionSettings(),
@@ -248,6 +249,7 @@ actor ConversionManager: Sendable {
         }
     ) {
         self.mergePreparationSubprocess = MergePreparationSubprocess(subprocessRunner: subprocessRunner)
+        self.ffmpegConverter = ffmpegConverter
         self.subtitleEmbeddingSubprocess = SubtitleEmbeddingSubprocess(subprocessRunner: subprocessRunner)
         self.ffmpegPathProvider = ffmpegPathProvider
         self.transcriptionSettings = transcriptionSettings
@@ -266,14 +268,17 @@ actor ConversionManager: Sendable {
     
 
     private var isConverting = false
+    private var pendingCancellationCount = 0
+    private var batchCancellationNeedsCleanup = false
     private var currentProcess: Process?
-    private var ffmpegConverter = FFMPEGConverter()
+    private let ffmpegConverter: FFMPEGConverter
     private var conversionQueue: [VideoItem] = []
     private var currentDroppedFiles: Binding<[VideoItem]>?
     private var currentOutputFolder: String?
     private var currentPreset: ExportPreset = .videoLoop
     private var allowedItemIDs: Set<UUID>? = nil
     private var activeBatchID: UUID?
+    private var callbackOwnership = ConversionCallbackOwnership()
     private var batchCompletionContinuation: (
         batchID: UUID,
         continuation: CheckedContinuation<Void, Never>
@@ -288,6 +293,7 @@ actor ConversionManager: Sendable {
 
     // Progress tracking with Swift Concurrency
     private var progressContinuation: AsyncStream<Double>.Continuation?
+    private var progressSubscriberID: UUID?
     private var progressStream: AsyncStream<Double>?
     // Periodic task that yields overall progress every few seconds while converting
     private var progressTimerTask: Task<Void, Never>?
@@ -344,17 +350,14 @@ actor ConversionManager: Sendable {
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ConversionManager")
     
     func progressUpdates() -> AsyncStream<Double> {
+        let subscriberID = UUID()
         let stream = AsyncStream(Double.self) { continuation in
-            // Store the continuation directly without using a weak self capture
-            // since we're not mutating any actor state here
-            let task = Task {
-                self.setProgressContinuation(continuation)
-            }
+            progressSubscriberID = subscriberID
+            progressContinuation = continuation
             
             continuation.onTermination = { _ in
-                task.cancel()
                 Task {
-                    await self.clearProgressContinuation()
+                    await self.clearProgressContinuation(subscriberID: subscriberID)
                 }
             }
         }
@@ -362,26 +365,30 @@ actor ConversionManager: Sendable {
         return stream
     }
     
-    private func setProgressContinuation(_ continuation: AsyncStream<Double>.Continuation) {
-        progressContinuation = continuation
-    }
-    
-    private func clearProgressContinuation() {
+    private func clearProgressContinuation(subscriberID: UUID) {
+        guard progressSubscriberID == subscriberID else { return }
+        progressSubscriberID = nil
         progressContinuation = nil
     }
 
     // MARK: - Periodic Progress Timer
-        /// Starts a periodic task that emits overall progress every 3 s
+    /// Starts a periodic task that emits overall progress every 3 s
     private func startProgressTimer(droppedFiles: Binding<[VideoItem]>) {
         progressTimerTask?.cancel()
+        guard let batchID = activeBatchID else { return }
         
-                progressTimerTask = Task { [weak self] in
+        progressTimerTask = Task { [weak self] in
             guard let self else { return }
-            while await self.isConverting {
-                await self.updateOverallProgress(droppedFiles: droppedFiles)
+            while !Task.isCancelled, await self.updateBatchProgress(droppedFiles: droppedFiles, batchID: batchID) {
                 try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
             }
         }
+    }
+
+    private func updateBatchProgress(droppedFiles: Binding<[VideoItem]>, batchID: UUID) -> Bool {
+        guard isBatchActive(batchID) else { return false }
+        updateOverallProgress(droppedFiles: droppedFiles)
+        return true
     }
 
     private func buildMergePlan(
@@ -456,70 +463,9 @@ actor ConversionManager: Sendable {
         let baseOutputURL = URL(fileURLWithPath: resolvedOutputFolder)
             .appendingPathComponent(mergeBaseName)
 
-        let waveformPreferences = AudioWaveformPreferences.loadConfig()
-        let resolvedWaveformResolution = preset.resolvedWaveformResolution(defaultResolution: waveformPreferences.resolution)
-
-        // Check if waveform generation is compatible with audio routing
-        let canGenerateWaveform = {
-            guard preset != .streamCopy else { return false }
-            guard orderedWaitingItems.contains(where: { $0.requiresWaveformVideo }) else { return false }
-            // splitToMono is incompatible with waveform video (needs 2 separate audio outputs)
-            // If any audio-only item uses splitToMono, disable waveform for all
-            if orderedWaitingItems.contains(where: { item in
-                guard item.requiresWaveformVideo else { return false }
-                if case .splitToMono = item.audioRoutingConfig?.channelOperation {
-                    return true
-                }
-                return false
-            }) {
-                return false
-            }
-            return true
-        }()
-
-        let waveformRequest: WaveformVideoRequest? = canGenerateWaveform ? {
-            return WaveformVideoRequest(
-                width: Int(resolvedWaveformResolution.width),
-                height: Int(resolvedWaveformResolution.height),
-                backgroundHex: waveformPreferences.backgroundHex,
-                foregroundHex: waveformPreferences.foregroundHex,
-                normalizeAudio: waveformPreferences.normalizeAudio,
-                style: waveformPreferences.style,
-                frameRate: waveformPreferences.frameRate,
-                renderingEngine: waveformPreferences.renderingEngine,
-                swiftStyle: waveformPreferences.swiftStyle,
-                bandCount: waveformPreferences.bandCount,
-                frequencyDistribution: waveformPreferences.frequencyDistribution,
-                foregroundGradientEnabled: waveformPreferences.foregroundGradientEnabled,
-                foregroundGradientEndHex: waveformPreferences.foregroundGradientEndHex,
-                backgroundGradientEnabled: waveformPreferences.backgroundGradientEnabled,
-                backgroundGradientEndHex: waveformPreferences.backgroundGradientEndHex,
-                waveformOpacity: waveformPreferences.waveformOpacity
-            )
-        }() : nil
-
-        let synthesizedVideoRequest: SynthesizedVideoRequest? = {
-            guard waveformRequest == nil else { return nil }
-            guard preset.outputsVideoTrack else { return nil }
-            guard orderedWaitingItems.contains(where: { !$0.hasVideoStream }) else { return nil }
-            // splitToMono is incompatible with video generation (needs 2 separate audio outputs)
-            if orderedWaitingItems.contains(where: { item in
-                guard !item.hasVideoStream else { return false }
-                if case .splitToMono = item.audioRoutingConfig?.channelOperation {
-                    return true
-                }
-                return false
-            }) {
-                return nil
-            }
-            return SynthesizedVideoRequest(
-                width: Int(resolvedWaveformResolution.width),
-                height: Int(resolvedWaveformResolution.height),
-                backgroundHex: waveformPreferences.backgroundHex,
-                frameRate: waveformPreferences.frameRate,
-                includeAudio: true
-            )
-        }()
+        let generatedVideoRequests = GeneratedVideoSettings(preset: preset).requests(for: orderedWaitingItems)
+        let waveformRequest = generatedVideoRequests.waveform
+        let synthesizedVideoRequest = generatedVideoRequests.synthesized
 
         // Check if any source clip has audio (for post-export verification)
         let sourceHasAudio = orderedWaitingItems.contains { item in
@@ -765,11 +711,12 @@ actor ConversionManager: Sendable {
     private func executeMergePlan(droppedFiles: Binding<[VideoItem]>, batchID: UUID) async {
         guard activeBatchID == batchID, let plan = mergePlan else { return }
 
-        let indices: [Int] = plan.itemIDs.compactMap { id in
-            droppedFiles.wrappedValue.firstIndex(where: { $0.id == id })
+        let callbackOwnership = self.callbackOwnership
+        let inputItems = plan.itemIDs.compactMap { id in
+            droppedFiles.wrappedValue.first(where: { $0.id == id && $0.status == .waiting })
         }
 
-        guard indices.count == plan.itemIDs.count else {
+        guard inputItems.count == plan.itemIDs.count else {
             cleanupMergeArtifacts(for: plan)
             mergePlan = nil
             await convertNextFile(
@@ -781,18 +728,29 @@ actor ConversionManager: Sendable {
             return
         }
 
-        await MainActor.run {
+        let didBegin = await MainActor.run {
+            guard callbackOwnership.isActive else { return false }
+            let indices = ConversionQueueState.callbackIndices(
+                for: inputItems, in: droppedFiles.wrappedValue, status: .waiting
+            )
+            guard indices.count == inputItems.count else { return false }
             for index in indices {
                 droppedFiles.wrappedValue[index].status = .converting
                 droppedFiles.wrappedValue[index].progress = 0
                 droppedFiles.wrappedValue[index].eta = nil
             }
+            return true
         }
-
-        let inputItems = indices.compactMap { droppedFiles.wrappedValue[$0] }
-        guard let primaryInput = inputItems.first else {
+        guard isBatchActive(batchID) else { return }
+        guard didBegin, let primaryInput = inputItems.first else {
             cleanupMergeArtifacts(for: plan)
             mergePlan = nil
+            await convertNextFile(
+                droppedFiles: droppedFiles,
+                outputFolder: plan.outputFolder,
+                preset: plan.preset,
+                batchID: batchID
+            )
             return
         }
 
@@ -871,15 +829,11 @@ actor ConversionManager: Sendable {
                 guard shouldUpdate else { return }
                 let isDuration = progressIsDuration(status)
                 Task { @MainActor in
-                    for index in indices {
-                        droppedFiles.wrappedValue[index].progress = progress
-                        if isDuration {
-                            droppedFiles.wrappedValue[index].eta = status
-                            droppedFiles.wrappedValue[index].statusMessage = nil
-                        } else {
-                            droppedFiles.wrappedValue[index].statusMessage = status
-                        }
-                    }
+                    ConversionQueueState.applyProgress(
+                        progress, message: status, isDuration: isDuration,
+                        for: inputItems, ownership: callbackOwnership,
+                        in: &droppedFiles.wrappedValue
+                    )
                 }
             },
             completion: { success, errorReason in
@@ -888,7 +842,8 @@ actor ConversionManager: Sendable {
                     await self.handleMergeCompletion(
                         plan: plan,
                         outputExtension: outputExtension,
-                        indices: indices,
+                        inputItems: inputItems,
+                        callbackOwnership: callbackOwnership,
                         success: success,
                         errorReason: errorReason,
                         droppedFiles: droppedFiles,
@@ -1145,7 +1100,8 @@ actor ConversionManager: Sendable {
     private func handleMergeCompletion(
         plan: MergePlan,
         outputExtension: String,
-        indices: [Int],
+        inputItems: [VideoItem],
+        callbackOwnership: ConversionCallbackOwnership,
         success: Bool,
         errorReason: String?,
         droppedFiles: Binding<[VideoItem]>,
@@ -1168,9 +1124,9 @@ actor ConversionManager: Sendable {
         }
 
         await MainActor.run {
-            for index in indices {
-                guard droppedFiles.wrappedValue.indices.contains(index) else { continue }
-                if droppedFiles.wrappedValue[index].status != .cancelled {
+            guard callbackOwnership.isActive else { return }
+            for index in ConversionQueueState.callbackIndices(for: inputItems, in: droppedFiles.wrappedValue) {
+                if droppedFiles.wrappedValue[index].status == .converting {
                     droppedFiles.wrappedValue[index].status = success ? .done : .failed
                     droppedFiles.wrappedValue[index].progress = success ? 1.0 : 0.0
                     droppedFiles.wrappedValue[index].outputURL = success ? finalURL : nil
@@ -1182,6 +1138,12 @@ actor ConversionManager: Sendable {
             }
         }
 
+        guard isBatchActive(batchID) else { return }
+        let indices = ConversionQueueState.callbackIndices(
+            for: inputItems, in: droppedFiles.wrappedValue, status: .done
+        ).filter { droppedFiles.wrappedValue[$0].outputURL == finalURL }
+        let completedItems = indices.map { droppedFiles.wrappedValue[$0] }
+
         // Post-export verification: check output has expected streams
         if success, plan.sourceHasAudio {
             Task {
@@ -1189,7 +1151,9 @@ actor ConversionManager: Sendable {
                     if result.audioStreamCount == 0 {
                         mergeLogger.error("POST-EXPORT WARNING: Source clips had audio but output '\(finalURL.lastPathComponent, privacy: .public)' has no audio streams")
                         await MainActor.run {
-                            if let firstIdx = indices.first, droppedFiles.wrappedValue.indices.contains(firstIdx) {
+                            if let firstIdx = ConversionQueueState.callbackIndices(
+                                for: completedItems, in: droppedFiles.wrappedValue, status: .done
+                            ).first, droppedFiles.wrappedValue[firstIdx].outputURL == finalURL {
                                 droppedFiles.wrappedValue[firstIdx].conversionError =
                                     "Warning: Audio missing in output. Source clips had audio but the merged file has none."
                             }
@@ -1234,6 +1198,7 @@ actor ConversionManager: Sendable {
             }
         }
 
+        guard isBatchActive(batchID) else { return }
         cleanupMergeArtifacts(for: plan)
         mergePlan = nil
 
@@ -1469,8 +1434,11 @@ actor ConversionManager: Sendable {
         conformanceReferenceItemID: UUID? = nil,
         conformanceMetadata: [UUID: VideoMetadata]? = nil
     ) async {
+        guard !isConverting, pendingCancellationCount == 0 else { return }
+        allowedItemIDs = nil
         let batchID = UUID()
         activeBatchID = batchID
+        callbackOwnership = ConversionCallbackOwnership()
         self.isConverting = true
         self.currentDroppedFiles = items
         self.currentOutputFolder = outputFolder
@@ -1570,9 +1538,10 @@ actor ConversionManager: Sendable {
         mergeClipsEnabled: Bool = false,
         limitToIDs: Set<UUID>? = nil
     ) async {
-        guard !self.isConverting else { return }
+        guard !self.isConverting, pendingCancellationCount == 0 else { return }
         let batchID = UUID()
         activeBatchID = batchID
+        callbackOwnership = ConversionCallbackOwnership()
         self.isConverting = true
         self.allowedItemIDs = limitToIDs
         self.currentDroppedFiles = droppedFiles
@@ -1627,7 +1596,7 @@ actor ConversionManager: Sendable {
         guard isConverting, activeBatchID == batchID else { return }
 
         // Update overall progress before starting next file
-        await updateOverallProgress(droppedFiles: droppedFiles)
+        updateOverallProgress(droppedFiles: droppedFiles)
         guard isConverting, activeBatchID == batchID else { return }
 
         if let plan = mergePlan, !plan.hasExecuted {
@@ -1642,6 +1611,7 @@ actor ConversionManager: Sendable {
         ) else {
             self.isConverting = false
             self.activeBatchID = nil
+            callbackOwnership.invalidate()
             self.allowedItemIDs = nil
             progressContinuation?.yield(1.0)
             stopProgressTimer()
@@ -1683,11 +1653,16 @@ actor ConversionManager: Sendable {
 
         let currentItem = droppedFiles.wrappedValue[idx]
         let inputURL = currentItem.url
+        let callbackOwnership = self.callbackOwnership
 
         // Ensure input file is accessible with security-scoped access
         if !ensureInputFileAccessible(at: inputURL) {
             logger.error("Failed to access input file: \(inputURL.path, privacy: .public)")
             await MainActor.run {
+                guard callbackOwnership.isActive,
+                      let idx = ConversionQueueState.callbackIndices(
+                          for: [currentItem], in: droppedFiles.wrappedValue
+                      ).first else { return }
                 droppedFiles.wrappedValue[idx].status = .failed
                 droppedFiles.wrappedValue[idx].progress = 0
                 droppedFiles.wrappedValue[idx].conversionError = "Cannot access input file"
@@ -1704,6 +1679,10 @@ actor ConversionManager: Sendable {
             return
         }
 
+        let generatedVideoRequests = GeneratedVideoSettings(preset: preset).requests(for: [currentItem])
+        let waveformRequest = generatedVideoRequests.waveform
+        let synthesizedVideoRequest = generatedVideoRequests.synthesized
+
         // Naming and command preparation share the same export preferences, including
         // labels such as resolution and the animated-still/custom preset suffix.
         let av2Settings = preset == .av2 ? AV2Settings() : nil
@@ -1714,7 +1693,9 @@ actor ConversionManager: Sendable {
         let fileNameSettings = FileNameSettings().snapshot
         let fileNameContext = codecSettings?.fileNameContext
             ?? FileNameTemplateContext(
-                preset: preset, av2Settings: av2Settings, dcpSettings: dcpSettings, imfSettings: imfSettings
+                preset: preset, av2Settings: av2Settings, dcpSettings: dcpSettings, imfSettings: imfSettings,
+                imageSequenceFrameRate: waveformRequest?.frameRate ?? synthesizedVideoRequest?.frameRate
+                    ?? FileNameTemplateContext.imageSequenceFrameRate(for: currentItem)
             )
         let outputFileName = outputBaseName(
             for: currentItem, inputURL: inputURL, preset: preset,
@@ -1727,6 +1708,10 @@ actor ConversionManager: Sendable {
         guard ensureDirectoryAccessible(at: resolvedOutputFolderURL) else {
             logger.error("Failed to access output directory: \(resolvedOutputFolder, privacy: .public)")
             await MainActor.run {
+                guard callbackOwnership.isActive,
+                      let idx = ConversionQueueState.callbackIndices(
+                          for: [currentItem], in: droppedFiles.wrappedValue
+                      ).first else { return }
                 droppedFiles.wrappedValue[idx].status = .failed
                 droppedFiles.wrappedValue[idx].progress = 0
                 droppedFiles.wrappedValue[idx].conversionError = "Cannot access output directory"
@@ -1744,57 +1729,6 @@ actor ConversionManager: Sendable {
         }
 
         let outputURL = URL(fileURLWithPath: resolvedOutputFolder).appendingPathComponent(outputFileName)
-
-        let waveformPreferences = AudioWaveformPreferences.loadConfig()
-        let resolvedWaveformResolution = preset.resolvedWaveformResolution(defaultResolution: waveformPreferences.resolution)
-
-        // Check if waveform generation is compatible with audio routing
-        let canGenerateWaveform = {
-            guard preset != .streamCopy && currentItem.requiresWaveformVideo else { return false }
-            // splitToMono is incompatible with waveform video (needs 2 separate audio outputs)
-            if case .splitToMono = currentItem.audioRoutingConfig?.channelOperation {
-                return false
-            }
-            return true
-        }()
-
-        let waveformRequest: WaveformVideoRequest? = canGenerateWaveform ? {
-            return WaveformVideoRequest(
-                width: Int(resolvedWaveformResolution.width),
-                height: Int(resolvedWaveformResolution.height),
-                backgroundHex: waveformPreferences.backgroundHex,
-                foregroundHex: waveformPreferences.foregroundHex,
-                normalizeAudio: waveformPreferences.normalizeAudio,
-                style: waveformPreferences.style,
-                frameRate: waveformPreferences.frameRate,
-                renderingEngine: waveformPreferences.renderingEngine,
-                swiftStyle: waveformPreferences.swiftStyle,
-                bandCount: waveformPreferences.bandCount,
-                frequencyDistribution: waveformPreferences.frequencyDistribution,
-                foregroundGradientEnabled: waveformPreferences.foregroundGradientEnabled,
-                foregroundGradientEndHex: waveformPreferences.foregroundGradientEndHex,
-                backgroundGradientEnabled: waveformPreferences.backgroundGradientEnabled,
-                backgroundGradientEndHex: waveformPreferences.backgroundGradientEndHex,
-                waveformOpacity: waveformPreferences.waveformOpacity
-            )
-        }() : nil
-
-        let synthesizedVideoRequest: SynthesizedVideoRequest? = {
-            guard waveformRequest == nil else { return nil }
-            guard preset.outputsVideoTrack else { return nil }
-            guard !currentItem.hasVideoStream else { return nil }
-            // splitToMono is incompatible with video generation (needs 2 separate audio outputs)
-            if case .splitToMono = currentItem.audioRoutingConfig?.channelOperation {
-                return nil
-            }
-            return SynthesizedVideoRequest(
-                width: Int(resolvedWaveformResolution.width),
-                height: Int(resolvedWaveformResolution.height),
-                backgroundHex: waveformPreferences.backgroundHex,
-                frameRate: waveformPreferences.frameRate,
-                includeAudio: true
-            )
-        }()
 
         // For image sequence input, pass the FFMPEG input arguments and expected duration
         var customInputArguments = currentItem.imageSequenceConfig?.ffmpegInputArguments
@@ -1829,7 +1763,7 @@ actor ConversionManager: Sendable {
             trimStart: currentItem.trimStart,
             trimEnd: currentItem.trimEnd,
             expectedDuration: imageSeqExpectedDuration,
-            videoFrameRate: currentItem.metadata?.primaryVideoStream?.frameRate?.value,
+            videoFrameRate: FileNameTemplateContext.imageSequenceFrameRate(for: currentItem),
             audioRoutingConfig: currentItem.audioRoutingConfig,
             cropConfig: currentItem.cropConfig,
             timecodeConfig: currentItem.timecodeConfig,
@@ -1865,24 +1799,22 @@ actor ConversionManager: Sendable {
                 guard shouldUpdate else { return }
                 let isDuration = progressIsDuration(status)
                 Task { @MainActor in
-                    if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {
-                        droppedFiles.wrappedValue[idx].progress = progress
-                        if isDuration {
-                            droppedFiles.wrappedValue[idx].eta = status
-                            droppedFiles.wrappedValue[idx].statusMessage = nil
-                        } else {
-                            droppedFiles.wrappedValue[idx].statusMessage = status
-                        }
-                    }
+                    ConversionQueueState.applyProgress(
+                        progress, message: status, isDuration: isDuration,
+                        for: [currentItem], ownership: callbackOwnership,
+                        in: &droppedFiles.wrappedValue
+                    )
                 }
             }
         ) { success, errorReason in
             Task { @MainActor in
                 // A cancelled batch may finish after the user has reset and started
                 // another one. Never let that stale callback mutate the new batch.
-                guard await self.isBatchActive(batchID) else { return }
+                guard await self.isBatchActive(batchID), callbackOwnership.isActive else { return }
 
-                if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) {
+                if let idx = ConversionQueueState.callbackIndices(
+                    for: [currentItem], in: droppedFiles.wrappedValue
+                ).first {
                     // Capture file size FIRST (before setting status to .done)
                     // This ensures all data is ready before SwiftUI re-renders
                     var capturedSize: Int64?
@@ -2068,33 +2000,47 @@ actor ConversionManager: Sendable {
     }
 
     func cancelConversion() async {
-        let cancelledBatchID = activeBatchID
-        self.isConverting = false
-        self.activeBatchID = nil
+        await cancelConversions(scope: .converting)
+    }
+
+    private func cancelConversions(scope: ConversionQueueState.CancellationScope) async {
+        pendingCancellationCount += 1
+        batchCancellationNeedsCleanup = true
+        isConverting = false
+        activeBatchID = nil
+        callbackOwnership.invalidate()
         cancelMergePreparation()
         cancelAllSubtitleEmbeddings()
-        await ffmpegConverter.cancelConversion()
-        currentProcess = nil
+        stopProgressTimer()
 
-        // Clean up merge temp files if a merge was in progress
+        // Publish cancellation before suspending so queued callbacks cannot revive rows.
+        if let droppedFiles = currentDroppedFiles {
+            ConversionQueueState.cancel(&droppedFiles.wrappedValue, scope: scope)
+        }
+        if scope == .waitingAndConverting {
+            conversionQueue.removeAll()
+            progressContinuation?.yield(0.0)
+        } else {
+            ConversionQueueState.cancel(&conversionQueue, scope: .converting)
+        }
+
+        await ffmpegConverter.cancelConversion()
+        pendingCancellationCount -= 1
+        finishPendingBatchCancellation()
+    }
+
+    private func finishPendingBatchCancellation() {
+        guard pendingCancellationCount == 0, batchCancellationNeedsCleanup else { return }
+        batchCancellationNeedsCleanup = false
+        // Admission remains closed until every outstanding stop has acknowledged it.
+        // Only then release resources the old process may still have been reading.
+        currentProcess = nil
         if let plan = mergePlan {
             cleanupMergeArtifacts(for: plan)
             mergePlan = nil
         }
-
-        // Update UI-bound items to cancelled
-        if let droppedFiles = currentDroppedFiles {
-            ConversionQueueState.cancel(&droppedFiles.wrappedValue, scope: .converting)
-        }
-
-        // Update internal queue
-        for idx in conversionQueue.indices where conversionQueue[idx].status == .converting {
-            conversionQueue[idx].status = .cancelled
-        }
-        stopProgressTimer()
         releaseAllSecurityScopedAccess()
-        // Signal batch completion so the caller's await returns
-        finishBatch(cancelledBatchID)
+        finishBatch(batchCompletionContinuation?.batchID)
     }
 
     /// Cancels a single video item without aborting the entire queue
@@ -2109,7 +2055,6 @@ actor ConversionManager: Sendable {
         
         // If the item is currently converting
         if let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == id && $0.status == .converting }) {
-            await ffmpegConverter.cancelConversion()
             currentProcess = nil
             droppedFiles.wrappedValue[idx].status = .cancelled
         #if DEBUG
@@ -2122,7 +2067,11 @@ actor ConversionManager: Sendable {
             // Re-compute overall progress; the existing convertNextFile call in the
             // original conversion's completion handler will continue the queue, so
             // we must NOT start a new one here to avoid parallel encodes.
-            await updateOverallProgress(droppedFiles: droppedFiles)
+            updateOverallProgress(droppedFiles: droppedFiles)
+            pendingCancellationCount += 1
+            await ffmpegConverter.cancelConversion()
+            pendingCancellationCount -= 1
+            finishPendingBatchCancellation()
             return
         }
         
@@ -2132,34 +2081,11 @@ actor ConversionManager: Sendable {
             #if DEBUG
             logger.debug("Item \(droppedFiles.wrappedValue[waitingIdx].name, privacy: .public) cancelled (was waiting)")
             #endif
-            await updateOverallProgress(droppedFiles: droppedFiles)
+            updateOverallProgress(droppedFiles: droppedFiles)
         }
     }
     func cancelAllConversions() async {
-        let cancelledBatchID = activeBatchID
-        self.isConverting = false
-        self.activeBatchID = nil
-        cancelMergePreparation()
-        cancelAllSubtitleEmbeddings()
-        await ffmpegConverter.cancelConversion()
-
-        // Clean up merge temp files if a merge was in progress
-        if let plan = mergePlan {
-            cleanupMergeArtifacts(for: plan)
-            mergePlan = nil
-        }
-
-        // Update UI-bound items to cancelled
-        if let droppedFiles = currentDroppedFiles {
-            ConversionQueueState.cancel(&droppedFiles.wrappedValue, scope: .waitingAndConverting)
-        }
-
-        // Clear internal queue
-        conversionQueue.removeAll()
-        progressContinuation?.yield(0.0)
-        stopProgressTimer()
-        releaseAllSecurityScopedAccess()
-        finishBatch(cancelledBatchID)
+        await cancelConversions(scope: .waitingAndConverting)
     }
 
     private func isBatchActive(_ batchID: UUID) -> Bool {
@@ -2189,7 +2115,7 @@ actor ConversionManager: Sendable {
         }
     }
     
-    private func updateOverallProgress(droppedFiles: Binding<[VideoItem]>) async {
+    private func updateOverallProgress(droppedFiles: Binding<[VideoItem]>) {
         #if DEBUG
         logger.debug("updateOverallProgress called")
         #endif

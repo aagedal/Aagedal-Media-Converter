@@ -8,6 +8,7 @@
 import Darwin
 import AVFoundation
 import os
+import SwiftUI
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -7845,6 +7846,111 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
     }
 
+    @MainActor
+    func testWholeQueueStopWaitsForOverlappingItemDrainBeforeAdmittingRestart() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ManagerOverlappingStop-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let inputURL = directory.appendingPathComponent("input.mov")
+        try Data("fixture input".utf8).write(to: inputURL)
+        var item = VideoItem(
+            url: inputURL, name: "input.mov", size: 13,
+            duration: "00:00:01", durationSeconds: 1, status: .waiting,
+            progress: 0, eta: nil, outputURL: nil
+        )
+        item.detailsLoaded = true
+        item.metadata = videoMetadata(timecode: nil, frameRate: 24, duration: 1)
+        let queue = ConversionCancellationQueue(items: [item])
+        let binding = queue.binding
+        let started = expectation(description: "Manager encode started")
+        let cancelled = expectation(description: "Item runner cancellation began")
+        let runner = DeferredCancellationDrainRunner(started: started, cancelled: cancelled)
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let manager = ConversionManager(ffmpegConverter: converter)
+        let batchFinished = expectation(description: "Original batch completes after drain")
+        let batchTask = Task {
+            await manager.startConversion(droppedFiles: binding, outputFolder: directory.path, preset: .h264)
+            batchFinished.fulfill()
+        }
+        await fulfillment(of: [started], timeout: 2)
+        let itemID = item.id
+        let itemStop = Task { await manager.cancelItem(with: itemID) }
+        await fulfillment(of: [cancelled], timeout: 2)
+        await manager.cancelAllConversions()
+
+        var replacement = item
+        replacement.url = directory.appendingPathComponent("missing.mov")
+        let replacementQueue = ConversionCancellationQueue(items: [replacement])
+        let replacementBinding = replacementQueue.binding
+        // The whole-queue stop has returned, but the earlier item stop still owns
+        // a draining process. This attempted batch must not enter preparation.
+        await manager.startConversion(droppedFiles: replacementBinding, outputFolder: directory.path, preset: .h264)
+        XCTAssertEqual(replacementQueue.items[0].status, .waiting)
+
+        await runner.finishDraining()
+        await itemStop.value
+        await fulfillment(of: [batchFinished], timeout: 2)
+        batchTask.cancel()
+        await manager.startConversion(droppedFiles: replacementBinding, outputFolder: directory.path, preset: .h264)
+        XCTAssertEqual(replacementQueue.items[0].status, .failed)
+    }
+
+    func testCoreConverterCancellationWaitsForRunnerDrain() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FFmpegDrain-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let started = expectation(description: "Runner started")
+        let cancelled = expectation(description: "Runner received cancellation")
+        let runner = DeferredCancellationDrainRunner(started: started, cancelled: cancelled)
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let resultTask = Task {
+            await conversionResult(converter: converter, request: ConversionRequest(
+                inputURL: directory.appendingPathComponent("input.mov"),
+                outputURL: directory.appendingPathComponent("output"),
+                preset: .h264, includeDateTag: false
+            ))
+        }
+        await fulfillment(of: [started], timeout: 2)
+        let returned = expectation(description: "Cancellation does not return before runner exits")
+        returned.isInverted = true
+        let cancellationTask = Task {
+            await converter.cancelConversion()
+            returned.fulfill()
+        }
+        await fulfillment(of: [cancelled], timeout: 2)
+        await fulfillment(of: [returned], timeout: 0.05)
+        await runner.finishDraining()
+        await cancellationTask.value
+        let result = await resultTask.value
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+    }
+
+    func testCoreConverterCanBeCancelledFromInsideItsRunnerWithoutSelfJoin() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FFmpegSelfCancellation-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let runner = SelfCancellingFFmpegRunner()
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        await runner.setCancellation { await converter.cancelConversion() }
+        let finished = expectation(description: "Self cancellation completes")
+        let resultTask = Task {
+            let result = await conversionResult(converter: converter, request: ConversionRequest(
+                inputURL: directory.appendingPathComponent("input.mov"),
+                outputURL: directory.appendingPathComponent("output"),
+                preset: .h264, includeDateTag: false
+            ))
+            XCTAssertFalse(result.success)
+            XCTAssertEqual(result.errorReason, "Conversion cancelled")
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 2)
+        resultTask.cancel()
+    }
+
     func testCoreConverterCancellationCancelsSharedRunner() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("FFmpegRunnerCancellation-\(UUID().uuidString)")
@@ -8750,6 +8856,22 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             let disabledInspection = try inspectMedia(at: disabledURL)
             XCTAssertFalse(disabledInspection.contains("tmcd"), disabledInspection)
             XCTAssertFalse(disabledInspection.contains(sourceTimecode), disabledInspection)
+
+            // A custom preset's -timecode shortcut must not recreate a track after
+            // the item's policy replaces or clears the ordinary metadata tags.
+            for (name, plan) in [("shortcut-cleared", TimecodeMetadataPlan.clear),
+                                 ("shortcut-replaced", .set(manualTimecode))] {
+                let output = temporaryDirectory.appendingPathComponent("\(name).mov")
+                var arguments = ["-y", "-i", sourceURL.path, "-c:v", "copy", "-an",
+                                 "-timecode", sourceTimecode]
+                plan.apply(to: &arguments)
+                arguments.append(output.path)
+                try runFFmpeg(arguments)
+                let inspection = try inspectMedia(at: output)
+                XCTAssertFalse(inspection.contains(sourceTimecode), inspection)
+                XCTAssertEqual(inspection.contains("tmcd"), plan != .clear, inspection)
+                XCTAssertEqual(inspection.contains(manualTimecode), plan != .clear, inspection)
+            }
         }
     }
 
@@ -12855,6 +12977,75 @@ private final class ControllableBMXSubprocessRunner: SubprocessRunning, @uncheck
                 continuation.resume()
             }
         }
+    }
+}
+
+/// Keep binding accessors off MainActor: ConversionManager reads them on its executor.
+private final class ConversionCancellationQueue: Sendable {
+    private let storage: OSAllocatedUnfairLock<[VideoItem]>
+
+    init(items: [VideoItem]) {
+        storage = OSAllocatedUnfairLock(initialState: items)
+    }
+
+    var items: [VideoItem] {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
+    }
+
+    var binding: Binding<[VideoItem]> {
+        Binding(get: { self.items }, set: { self.items = $0 })
+    }
+}
+
+private actor DeferredCancellationDrainRunner: SubprocessRunning {
+    let started: XCTestExpectation
+    let cancelled: XCTestExpectation
+    private var drainContinuation: CheckedContinuation<Void, Never>?
+
+    init(started: XCTestExpectation, cancelled: XCTestExpectation) {
+        self.started = started
+        self.cancelled = cancelled
+    }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        started.fulfill()
+        do {
+            try await Task.sleep(for: .seconds(30))
+        } catch is CancellationError {
+            await withCheckedContinuation { continuation in
+                drainContinuation = continuation
+                cancelled.fulfill()
+            }
+            throw CancellationError()
+        }
+        return successfulSubprocessResult()
+    }
+
+    func finishDraining() {
+        drainContinuation?.resume()
+        drainContinuation = nil
+    }
+}
+
+private actor SelfCancellingFFmpegRunner: SubprocessRunning {
+    private var cancellation: (@Sendable () async -> Void)?
+
+    func setCancellation(_ operation: @escaping @Sendable () async -> Void) {
+        cancellation = operation
+    }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        let operation = cancellation
+        cancellation = nil
+        await operation?()
+        throw CancellationError()
     }
 }
 

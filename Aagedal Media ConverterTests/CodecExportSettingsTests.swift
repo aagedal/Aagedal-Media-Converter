@@ -7,6 +7,106 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class CodecExportSettingsTests: XCTestCase {
+    func testGeneratedVideoSnapshotRetainsAppearanceAndPresetResolutionAfterSettingsChange() throws {
+        let suite = "GeneratedVideoSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(TVResolutionLimit.r720.rawValue, forKey: AppConstants.tvResolutionLimitKey)
+        defaults.set(24.0, forKey: AppConstants.audioWaveformFrameRateKey)
+        defaults.set("#123456", forKey: AppConstants.audioWaveformBackgroundColorKey)
+        defaults.set("abcdef", forKey: AppConstants.audioWaveformForegroundColorKey)
+        defaults.set(true, forKey: AppConstants.audioWaveformNormalizeKey)
+        let settings = GeneratedVideoSettings(preset: .tvHEVC, defaults: defaults)
+        defaults.set(TVResolutionLimit.r2160.rawValue, forKey: AppConstants.tvResolutionLimitKey)
+        defaults.set(60.0, forKey: AppConstants.audioWaveformFrameRateKey)
+        defaults.set("000000", forKey: AppConstants.audioWaveformBackgroundColorKey)
+
+        var audio = generatedVideoItem(hasVideo: false, waveform: true)
+        let waveform = try XCTUnwrap(settings.requests(for: [audio]).waveform)
+        XCTAssertEqual(waveform.width, 1280)
+        XCTAssertEqual(waveform.height, 720)
+        XCTAssertEqual(waveform.frameRate, 24)
+        XCTAssertEqual(waveform.backgroundHex, "123456")
+        XCTAssertEqual(waveform.foregroundHex, "ABCDEF")
+        XCTAssertTrue(waveform.normalizeAudio)
+        audio.waveformVideoEnabled = false
+        let synthesized = try XCTUnwrap(settings.requests(for: [audio]).synthesized)
+        XCTAssertEqual(synthesized.width, waveform.width)
+        XCTAssertEqual(synthesized.height, waveform.height)
+        XCTAssertEqual(synthesized.frameRate, waveform.frameRate)
+        XCTAssertEqual(synthesized.backgroundHex, waveform.backgroundHex)
+    }
+
+    func testGeneratedVideoSettingsUseInjectedPresetResolutionOverrides() throws {
+        let suite = "GeneratedVideoSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(TVResolutionLimit.r2160.rawValue, forKey: AppConstants.tvResolutionLimitKey)
+        defaults.set(ProxyResolutionLimit.r480.rawValue, forKey: AppConstants.proxyResolutionLimitKey)
+        defaults.set(DCPResolution.twoKFull.rawValue, forKey: AppConstants.dcpResolutionKey)
+        defaults.set(IMFResolution.hd1080.rawValue, forKey: AppConstants.imfResolutionKey)
+        let cases: [(ExportPreset, Int, Int)] = [
+            (.tvHEVC, 3840, 2160), (.tvAVCIntra, 3840, 2160), (.proxy, 854, 480),
+            (.dcp, 2048, 1080), (.imfJ2K, 1920, 1080), (.imfProRes, 1920, 1080)
+        ]
+        for (preset, width, height) in cases {
+            let request = try XCTUnwrap(GeneratedVideoSettings(preset: preset, defaults: defaults)
+                .requests(for: [generatedVideoItem(hasVideo: false, waveform: true)]).waveform)
+            XCTAssertEqual(request.width, width, "\(preset)")
+            XCTAssertEqual(request.height, height, "\(preset)")
+        }
+    }
+
+    func testGeneratedVideoRequestSelectionSharesSingleAndMergeRoutingPolicy() throws {
+        let suite = "GeneratedVideoSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = GeneratedVideoSettings(preset: .h264, defaults: defaults)
+        let audio = generatedVideoItem(hasVideo: false, waveform: true)
+        let video = generatedVideoItem(hasVideo: true, waveform: false)
+        XCTAssertNil(settings.requests(for: []).waveform)
+        XCTAssertNil(settings.requests(for: []).synthesized)
+        XCTAssertNil(settings.requests(for: [video]).waveform)
+        XCTAssertNil(settings.requests(for: [video]).synthesized)
+        XCTAssertNotNil(settings.requests(for: [audio]).waveform)
+        XCTAssertNotNil(settings.requests(for: [video, audio]).waveform)
+        XCTAssertNil(settings.requests(for: [video, audio]).synthesized)
+
+        var split = audio
+        split.audioRoutingConfig = AudioRoutingConfig(inputTracks: [
+            AudioTrackInfo(streamIndex: 0, channels: 2, channelLayout: "stereo", codec: "aac",
+                           codecLongName: nil, sampleRate: 48000)
+        ])
+        split.audioRoutingConfig?.channelOperation = .splitToMono(trackIndex: 0)
+        for items in [[split], [audio, split], [video, split]] {
+            XCTAssertNil(settings.requests(for: items).waveform)
+            XCTAssertNil(settings.requests(for: items).synthesized)
+        }
+        let audioOnly = GeneratedVideoSettings(preset: .audioOnly, defaults: defaults)
+        XCTAssertNil(audioOnly.requests(for: [generatedVideoItem(hasVideo: false, waveform: false)]).synthesized)
+        let streamCopy = GeneratedVideoSettings(preset: .streamCopy, defaults: defaults)
+        XCTAssertNil(streamCopy.requests(for: [audio]).waveform)
+    }
+
+    func testWaveformFrameRateRejectsNonfinitePreferences() {
+        for value in [Double.nan, Double.infinity, -Double.infinity, 0] {
+            XCTAssertEqual(AudioWaveformPreferences.sanitizeFrameRate(value), AppConstants.defaultAudioWaveformFrameRate)
+        }
+        XCTAssertEqual(AudioWaveformPreferences.sanitizeFrameRate(5), 10)
+        XCTAssertEqual(AudioWaveformPreferences.sanitizeFrameRate(200), 120)
+        XCTAssertEqual(AudioWaveformPreferences.sanitizeFrameRate(23.976), 23.976)
+    }
+
+    private func generatedVideoItem(hasVideo: Bool, waveform: Bool) -> VideoItem {
+        var item = VideoItem(
+            url: URL(fileURLWithPath: "/source/audio.wav"), name: "audio", size: 0,
+            duration: "1", thumbnailData: nil, status: .waiting, progress: 0, eta: nil, outputURL: nil
+        )
+        item.hasVideoStream = hasVideo
+        item.waveformVideoEnabled = waveform
+        return item
+    }
+
     func testGeneratedVideoRoutingOwnsAudioMapsAndPreservesDuplicateOrder() async throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

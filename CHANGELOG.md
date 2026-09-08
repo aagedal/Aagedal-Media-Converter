@@ -1,5 +1,11 @@
 # v.4.3.0
 
+- **Merged conversion updates follow the correct queue rows after removal or reordering.** Cancelled batches reject late progress, and replacing progress observers preserves the new subscription.
+- **Cancelling ordinary FFmpeg conversions waits for the encoder runner to drain**, keeping cancellation from returning while that tracked process is still stopping.
+- **Image-sequence filename frame rates match the source or generated-video request**, including queue previews, instead of using the default import rate.
+- **Timecode settings override conflicting custom timecode arguments.** Extreme or malformed timing values retain the original label without crashing.
+- **Single and merged generated-video exports share captured appearance and resolution settings.** Invalid nonfinite waveform frame rates fall back to the default.
+
 - **Generated video honors selected audio tracks without adding unwanted copies**, preserves intentional duplicates, and respects removed tracks and mute settings. Silent synthetic video has a finite duration; unknown duration shows guidance before encoding.
 
 - **Cancelling or removing queued media during inspection prevents it from starting an encode.** Reordered rows receive the correct metadata, and completed import details are preserved.

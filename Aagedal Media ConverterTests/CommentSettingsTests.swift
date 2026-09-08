@@ -7,6 +7,78 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class CommentSettingsTests: XCTestCase {
+    func testConfiguredTimecodePlanSeparatesProbeFailureFromExplicitRemoval() async {
+        let url = URL(fileURLWithPath: "/missing/source.mov")
+        let failedPreservation = await FFMPEGCommandBuilder.configuredTimecodePlan(
+            preset: .streamCopy, inputURL: url, timecodeConfig: TimecodeConfig(mode: .preserveSource),
+            trimStart: nil, metadataProvider: { _ in nil }
+        )
+        XCTAssertEqual(failedPreservation, .unchanged)
+        for (preset, config, expected) in [
+            (ExportPreset.streamCopy, nil, TimecodeMetadataPlan.clear),
+            (.streamCopy, TimecodeConfig(mode: .manual("")), .clear),
+            (.streamCopy, TimecodeConfig(mode: .manual("10:20:30:12")), .set("10:20:30:12")),
+            (.audioOnly, TimecodeConfig(mode: .preserveSource), .unchanged)
+        ] {
+            let plan = await FFMPEGCommandBuilder.configuredTimecodePlan(
+                preset: preset, inputURL: url, timecodeConfig: config, trimStart: nil,
+                metadataProvider: { _ in
+                    XCTFail("This timecode policy must not probe its input")
+                    return nil
+                }
+            )
+            XCTAssertEqual(plan, expected)
+        }
+    }
+
+    func testTimecodePlanOwnsBothTagsAndRemovesConflictingShortcut() {
+        let original = [
+            "-c:v", "copy", "-timecode", "01:00:00:00",
+            "-metadata", "timecode=02:00:00:00",
+            "-metadata:s:v:0", "timecode=03:00:00:00",
+            "-metadata", "title=Keep", "-metadata:s:a:0", "language=nor"
+        ]
+        var arguments = original
+        TimecodeMetadataPlan.unchanged.apply(to: &arguments)
+        XCTAssertEqual(arguments, original)
+        for plan in [TimecodeMetadataPlan.set("10:20:30:12"), .clear] {
+            arguments = original
+            plan.apply(to: &arguments)
+            let value = plan == .clear ? "" : "10:20:30:12"
+            XCTAssertEqual(arguments, [
+                "-c:v", "copy", "-metadata", "title=Keep", "-metadata:s:a:0", "language=nor",
+                "-metadata", "timecode=\(value)", "-metadata:s:v:0", "timecode=\(value)"
+            ])
+            let once = arguments
+            plan.apply(to: &arguments)
+            XCTAssertEqual(arguments, once)
+        }
+        XCTAssertEqual(TimecodeMetadataPlan(resolvedValue: nil), .clear)
+        XCTAssertEqual(TimecodeMetadataPlan(resolvedValue: ""), .clear)
+    }
+
+    func testTimecodeOffsetsRejectNonfiniteAndOverflowingValues() {
+        let original = "01:02:03:04"
+        for rate in [Double.nan, .infinity, -.infinity, Double(Int.max), 0, -24, 0.25] {
+            XCTAssertEqual(FFMPEGCommandBuilder.offsetTimecode(original, bySeconds: 1, frameRate: rate), original)
+        }
+        for offset in [Double.nan, .infinity, -.infinity, Double(Int.max), Double.greatestFiniteMagnitude] {
+            XCTAssertEqual(FFMPEGCommandBuilder.offsetTimecode(original, bySeconds: offset, frameRate: 24), original)
+        }
+        for label in ["\(Int.max):00:00:00", "01:60:00:00", "01:00:60:00", "01:00:00:24", "-1:00:00:00"] {
+            XCTAssertEqual(FFMPEGCommandBuilder.offsetTimecode(label, bySeconds: 1, frameRate: 24), label)
+        }
+        // Individually representable operands must also be safe when added together.
+        let largeLabel = "100000000000000:00:00:00"
+        XCTAssertEqual(FFMPEGCommandBuilder.offsetTimecode(largeLabel, bySeconds: 1e17, frameRate: 24), largeLabel)
+    }
+
+    func testTimecodeOffsetsWrapAtMidnightAndClampBeforeZero() {
+        XCTAssertEqual(FFMPEGCommandBuilder.offsetTimecode("23:59:59:23", bySeconds: 1.0 / 24, frameRate: 24), "00:00:00:00")
+        XCTAssertEqual(FFMPEGCommandBuilder.offsetTimecode("00:00:00:01", bySeconds: -1, frameRate: 24), "00:00:00:00")
+        XCTAssertEqual(FFMPEGCommandBuilder.offsetTimecode("23:59:59;29", bySeconds: 1001.0 / 30000, frameRate: 30000.0 / 1001), "00:00:00;00")
+    }
+
     func testDefaultsAndEmptyDatePrefixPreserveFormattingPolicy() throws {
         let suite = "CommentSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
