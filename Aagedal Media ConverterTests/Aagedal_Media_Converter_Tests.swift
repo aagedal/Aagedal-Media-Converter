@@ -14353,3 +14353,99 @@ extension ImageSequencePlaybackLifetimeTests {
         controller.teardown()
     }
 }
+
+@MainActor
+final class DownloadAuxiliaryTaskTests: XCTestCase {
+    func testPublishesSuccessfulResult() async {
+        let store = DownloadAuxiliaryTaskStore()
+        var values: [Int] = []
+        let task = store.start(itemID: UUID(), timeout: .seconds(10)) {
+            42
+        } completion: { result in
+            if case .success(let value) = result { values.append(value) }
+        }
+        await task.value
+        XCTAssertEqual(values, [42])
+    }
+
+    func testCancellationReturnsBeforeNonCooperativeOperationAndDiscardsLateResult() async {
+        let store = DownloadAuxiliaryTaskStore()
+        let itemID = UUID()
+        let gate = DownloadAuxiliaryProbeGate()
+        let started = expectation(description: "Operation started")
+        var completions = 0
+        let task = store.start(itemID: itemID, timeout: .seconds(10)) {
+            await gate.wait(started: started)
+        } completion: { _ in completions += 1 }
+        await fulfillment(of: [started], timeout: 2)
+        store.cancel(itemID: itemID)
+        await task.value
+        XCTAssertEqual(completions, 0)
+        await gate.finish(1)
+        XCTAssertEqual(completions, 0)
+    }
+
+    func testReplacementSurvivesRetiredTaskCompletion() async {
+        let store = DownloadAuxiliaryTaskStore()
+        let itemID = UUID()
+        let oldGate = DownloadAuxiliaryProbeGate()
+        let newGate = DownloadAuxiliaryProbeGate()
+        let oldStarted = expectation(description: "Old operation started")
+        let newStarted = expectation(description: "New operation started")
+        var values: [Int] = []
+        let oldTask = store.start(itemID: itemID, timeout: .seconds(10)) {
+            await oldGate.wait(started: oldStarted)
+        } completion: { result in
+            if case .success(let value) = result { values.append(value) }
+        }
+        await fulfillment(of: [oldStarted], timeout: 2)
+        let newTask = store.start(itemID: itemID, timeout: .seconds(10)) {
+            await newGate.wait(started: newStarted)
+        } completion: { result in
+            if case .success(let value) = result { values.append(value) }
+        }
+        await fulfillment(of: [newStarted], timeout: 2)
+        await oldTask.value
+        await oldGate.finish(1)
+        await newGate.finish(2)
+        await newTask.value
+        XCTAssertEqual(values, [2])
+    }
+
+    func testDeadlineReturnsAndPublishesOnlyTimeoutForStalledOperation() async {
+        let store = DownloadAuxiliaryTaskStore()
+        let gate = DownloadAuxiliaryProbeGate()
+        let started = expectation(description: "Operation started")
+        var timedOut = false
+        var completions = 0
+        let task = store.start(itemID: UUID(), timeout: .milliseconds(100)) {
+            await gate.wait(started: started)
+        } completion: { result in
+            completions += 1
+            if case .failure(NonJoiningTaskDeadlineError.timedOut) = result {
+                timedOut = true
+            }
+        }
+        await fulfillment(of: [started], timeout: 2)
+        await task.value
+        XCTAssertTrue(timedOut)
+        await gate.finish(1)
+        XCTAssertEqual(completions, 1)
+    }
+}
+
+private actor DownloadAuxiliaryProbeGate {
+    private var continuation: CheckedContinuation<Int, Never>?
+
+    func wait(started: XCTestExpectation) async -> Int {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            started.fulfill()
+        }
+    }
+
+    func finish(_ value: Int) {
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
+}

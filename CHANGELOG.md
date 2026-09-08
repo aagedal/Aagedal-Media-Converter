@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **ProRes and video-loop exports keep their captured settings**, including ProRes profile and metadata handling, throughout preparation and encoding.
+- **Subtitle preservation stays consistent during conversion preparation**, even if the preference changes while media is being inspected.
+- **Cancelled downloads discard late thumbnails and recording statistics**, and retries retain ownership of their new thumbnail request.
+
 - **H.264, H.265, and AV1 exports retain their codec and container settings throughout a job**, including output naming and waveform encoding.
 - **Delayed preview seeks respect pause and later playback actions**, and old image-sequence timer callbacks cannot advance a restarted preview.
 - **Saved folder access survives bookmark renewal without losing write access**, and temporary output-folder checks release their access correctly.

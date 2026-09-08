@@ -7,6 +7,58 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class CodecExportSettingsTests: XCTestCase {
+    func testProResAndVideoLoopCommandsRetainCapturedPreferences() async throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for preset in [ExportPreset.prores, .videoLoop, .videoLoopWithSound] {
+            defaults.set(ProResProfile.hq.rawValue, forKey: AppConstants.proResProfileKey)
+            defaults.set(false, forKey: AppConstants.preserveMetadataPreferenceKey)
+            let captured = try XCTUnwrap(CodecExportSettings(preset: preset, defaults: defaults))
+            await Task.yield()
+            defaults.set(ProResProfile.proxy.rawValue, forKey: AppConstants.proResProfileKey)
+            defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
+            let output = URL(fileURLWithPath: "/output/video.\(captured.container.fileExtension)")
+            let standard = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/source/video.mov"), outputFileURL: output,
+                preset: preset, codecSettings: captured, comment: "", includeDateTag: false,
+                trimStart: nil, trimEnd: nil,
+                customInputArguments: ["-framerate", "24", "-i", "/source/video.mov", "-i", "/source/audio.wav"]
+            )
+            let native = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
+                audioInputURL: URL(fileURLWithPath: "/source/audio.wav"), outputFileURL: output,
+                preset: preset, codecSettings: captured, width: 1280, height: 720,
+                frameRate: 24, trimStart: nil, trimEnd: nil, includeDateTag: false
+            )
+            for command in [standard, native] {
+                let metadataIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-map_metadata"))
+                XCTAssertEqual(command.arguments[metadataIndex + 1], "-1")
+                XCTAssertEqual(command.arguments.last, output.path)
+                if preset == .prores {
+                    let profileIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-profile:v"))
+                    XCTAssertEqual(command.arguments[profileIndex + 1], "hq")
+                    XCTAssertTrue(command.arguments.contains("prores_videotoolbox"))
+                } else {
+                    XCTAssertTrue(command.arguments.contains("libx264"))
+                    XCTAssertEqual(captured.resolutionLimit, .r1080)
+                }
+            }
+        }
+    }
+
+    func testInvalidProResProfileFallsBackWithoutRewritingPreferences() throws {
+        let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("Unknown profile", forKey: AppConstants.proResProfileKey)
+        let captured = try XCTUnwrap(CodecExportSettings(preset: .prores, defaults: defaults))
+        XCTAssertEqual(captured.container, .mov)
+        XCTAssertEqual(captured.resolutionLimit, .unlimited)
+        let index = try XCTUnwrap(captured.ffmpegArguments.firstIndex(of: "-profile:v"))
+        XCTAssertEqual(captured.ffmpegArguments[index + 1], "standard")
+        XCTAssertEqual(defaults.string(forKey: AppConstants.proResProfileKey), "Unknown profile")
+    }
+
     func testAllCodecCommandsRetainCapturedContainerEncoderAndAudio() async throws {
         let suite = "CodecExportSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

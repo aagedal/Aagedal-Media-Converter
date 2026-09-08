@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// Immutable H.264, HEVC or AV1 export preferences, resolved before asynchronous work.
+/// Immutable codec and video-loop export preferences, resolved before asynchronous work.
 /// Derived command arguments intentionally retain the existing preset codec policy.
 struct CodecExportSettings: Sendable {
     let container: CodecContainer
@@ -17,6 +17,11 @@ struct CodecExportSettings: Sendable {
         let resolutionKey: String
         let defaultResolution: String
         switch preset {
+        case .prores, .videoLoop, .videoLoopWithSound:
+            container = preset == .prores ? .mov : .mp4
+            resolutionLimit = preset == .prores ? .unlimited : .r1080
+            ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
+            return
         case .h264:
             containerKey = AppConstants.h264ContainerKey
             defaultContainer = AppConstants.defaultH264Container

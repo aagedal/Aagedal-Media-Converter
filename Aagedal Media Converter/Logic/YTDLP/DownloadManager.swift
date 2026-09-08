@@ -25,6 +25,7 @@ class DownloadManager {
 
     /// Live recording stat update tasks keyed by VideoItem ID
     private var liveRecordingStatTasks: [UUID: Task<Void, Never>] = [:]
+    private let thumbnailTasks = DownloadAuxiliaryTaskStore()
 
     /// Queue of video items (bound from ContentView)
     var videoItems: Binding<[VideoItem]>?
@@ -78,14 +79,13 @@ class DownloadManager {
 
                     // Get duration from the partial file
                     let duration = await getDurationUsingFFprobe(for: partialFile)
+                    guard !Task.isCancelled else { break }
                     if let duration = duration {
                         if updateCount % 10 == 1 {
                             logger.info("[LiveStats] Update #\(updateCount): duration = \(String(format: "%.1f", duration))s")
                         }
-                        await MainActor.run {
-                            self.updateItem(itemID) { item in
-                                item.liveRecordingDuration = duration
-                            }
+                        self.updateItem(itemID) { item in
+                            item.liveRecordingDuration = duration
                         }
                     }
                 } else if updateCount == 1 {
@@ -109,45 +109,39 @@ class DownloadManager {
 
     /// Fetches thumbnail from yt-dlp metadata in parallel with download
     private func fetchThumbnailInBackground(itemID: UUID, urlString: String) {
-        Task.detached { [weak self] in
-            guard let self = self else { return }
-
-            do {
-                // Fetch metadata to get thumbnail URL
-                let metadata = try await self.ytdlpService.fetchMetadata(url: urlString)
-
-                // Update title if we got one
-                if !metadata.title.isEmpty {
-                    await MainActor.run {
-                        self.updateItem(itemID) { item in
-                            if item.name == "Fetching info..." || item.name.isEmpty {
-                                item.name = metadata.title
-                            }
-                        }
-                    }
-                }
-
-                // Download thumbnail if URL is available
-                if let thumbnailURL = metadata.thumbnailURL {
+        let service = ytdlpService
+        thumbnailTasks.start(itemID: itemID, timeout: .seconds(30)) {
+            let metadata = try await service.fetchMetadata(url: urlString)
+            try Task.checkCancellation()
+            var thumbnailData: Data?
+            if let thumbnailURL = metadata.thumbnailURL {
+                do {
                     let (data, response) = try await URLSession.shared.data(from: thumbnailURL)
-
-                    // Verify it's an image
-                    if let httpResponse = response as? HTTPURLResponse,
-                       httpResponse.statusCode == 200,
-                       !data.isEmpty {
-                        await MainActor.run {
-                            self.updateItem(itemID) { item in
-                                item.thumbnailData = data
-                            }
-                            self.logger.info("Fetched thumbnail for download: \(metadata.title)")
-                        }
+                    if let response = response as? HTTPURLResponse,
+                       response.statusCode == 200, !data.isEmpty {
+                        thumbnailData = data
+                    }
+                } catch {
+                    try Task.checkCancellation()
+                    // A failed optional image request still leaves a useful title.
+                }
+            }
+            return DownloadThumbnailResult(title: metadata.title, data: thumbnailData)
+        } completion: { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let thumbnail):
+                self.updateItem(itemID) { item in
+                    if !thumbnail.title.isEmpty,
+                       item.name == "Fetching info..." || item.name.isEmpty {
+                        item.name = thumbnail.title
+                    }
+                    if let data = thumbnail.data {
+                        item.thumbnailData = data
                     }
                 }
-            } catch {
-                // Silently fail - thumbnail is not critical
-                await MainActor.run {
-                    self.logger.info("Could not fetch thumbnail: \(error.localizedDescription)")
-                }
+            case .failure(let error):
+                self.logger.info("Could not fetch thumbnail: \(error.localizedDescription)")
             }
         }
     }
@@ -833,6 +827,8 @@ class DownloadManager {
     func cancelDownload(itemID: UUID) {
         logger.info("Cancel download requested for item: \(itemID)")
 
+        thumbnailTasks.cancel(itemID: itemID)
+
         // Stop live recording stat updates immediately
         stopLiveRecordingStatUpdates(itemID: itemID)
 
@@ -1352,5 +1348,48 @@ class DownloadManager {
         } else {
             return String(format: "%02d:%02d", minutes, secs)
         }
+    }
+}
+
+private struct DownloadThumbnailResult: Sendable {
+    let title: String
+    let data: Data?
+}
+
+/// Owns optional per-download work independently of the transfer. A replaced or
+/// cancelled operation cannot publish results or remove its replacement's task.
+@MainActor
+final class DownloadAuxiliaryTaskStore {
+    private var tasks: [UUID: (generation: UUID, task: Task<Void, Never>)] = [:]
+
+    @discardableResult
+    func start<Output: Sendable>(
+        itemID: UUID,
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> Output,
+        completion: @escaping @MainActor (Result<Output, Error>) -> Void
+    ) -> Task<Void, Never> {
+        cancel(itemID: itemID)
+        let generation = UUID()
+        let task = Task { [weak self] in
+            let result: Result<Output, Error>
+            do {
+                result = .success(try await NonJoiningTaskDeadline.run(
+                    timeout: timeout, operation: operation
+                ))
+            } catch {
+                result = .failure(error)
+            }
+            guard let self, !Task.isCancelled,
+                  self.tasks[itemID]?.generation == generation else { return }
+            self.tasks.removeValue(forKey: itemID)
+            completion(result)
+        }
+        tasks[itemID] = (generation, task)
+        return task
+    }
+
+    func cancel(itemID: UUID) {
+        tasks.removeValue(forKey: itemID)?.task.cancel()
     }
 }

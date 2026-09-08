@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 504 tests pass. The
+- The unit-test baseline is green: 513 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 504 unit tests. The UI test target now has deterministic smoke
+- There are 513 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -1022,6 +1022,14 @@ Four regressions cover successful/failed seeks, timeout, pause/restart, and an a
 controller pause during a delayed trim seek. Live preview/audio interaction and the
 wider callback audit remain open (Codex, 2026-09-08).
 
+Download thumbnail metadata/image work now has a thirty-second non-joining deadline
+and per-item task ownership. Cancellation stops optional work; retries replace its
+generation so delayed results cannot update the row or clear a newer task. Live
+recording duration publication also rejects cancellation after probing. Four
+regressions cover success, cancellation with a non-cooperative worker, replacement,
+and timeout. Real download cancellation/retry and the wider callback audit remain
+open (Codex, 2026-09-08).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1186,6 +1194,14 @@ routing tests continue to validate actual encoded outputs. Full typed inputs,
 video filters, codecs, metadata, output ownership, and incompatible-option preflight
 remain open.
 
+Subtitle preservation now resolves into a typed `SubtitleMappingPlan`, keeping
+optional source mapping and its container-compatible codec together. The existing
+compatibility helper delegates to it, preserving Matroska copy, MOV/MP4 text encoding,
+unsupported-container omission, and Stream Copy exclusion. Three regressions cover
+these policies, captured settings after edits, and converter propagation. Full typed
+inputs, video filters, codecs, metadata, and output ownership remain open
+(Codex, 2026-09-08).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1293,6 +1309,15 @@ arguments. Three regressions cover all three families, AAC/Opus container policy
 hardware settings, native waveform arguments, and converter-level source protection.
 Other preset families, generic filename-template labels, subtitle/comment preferences,
 UI request settings, and remaining migrations stay open (Codex, 2026-09-08).
+
+ProRes and both video-loop presets now reuse the immutable codec snapshot, including
+ProRes profile and metadata policy, through ordinary and native waveform command
+construction. Two regressions cover command stability after isolated preference edits
+and invalid ProRes profile fallback without rewriting preferences. Subtitle preservation
+is also captured at conversion entry before suspension and passed to command generation;
+changes during preparation affect the next conversion. TV/AVC-Intra, proxy, animated
+stills, Stream Copy, custom presets, generic filename-template labels, comment and UI
+request settings, and remaining migrations still need review (Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1607,7 +1632,20 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 504 unit tests
+Latest validation (2026-09-08, Codex): Debug compilation and all 513 unit tests
+pass with zero failures or skips using the shared unit-only scheme. Nine new
+regressions cover ProRes/video-loop settings, typed subtitle mapping and preference
+capture, and optional download-task lifetime. All 43 release-script tests, manifest
+freshness, and localization checks pass (1,484 entries, 15 intentional omissions).
+The unsigned Release build passes; its bundle audit verifies all 44 Mach-O images
+and six packaged license notices. Independent review found no change to preset
+encoding or subtitle container policy. The running app exposed its empty queue;
+that inspection does not validate the newly built export/download flows.
+Live download cancellation/retry, preview/conversion UI, sandbox reauthorization,
+VoiceOver, bilingual UI, capture/editor, clean-machine installation/update, and
+credentialed release checks were not run.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 504 unit tests
 pass with zero failures or skips using the shared unit-only scheme. Seventeen new
 regressions cover codec settings and source-collision naming, preview seek ownership,
 and bookmark persistence/access lifetime. The unsigned Release build passes; its

@@ -468,6 +468,7 @@ actor FFMPEGConverter {
         audioOnlySettings: AudioOnlySettings? = nil,
         imageSequenceSettings: ImageSequenceSettings? = nil,
         codecSettings: CodecExportSettings? = nil,
+        subtitleSettings: SubtitleExportSettings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -482,6 +483,7 @@ actor FFMPEGConverter {
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
+        let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -992,6 +994,7 @@ actor FFMPEGConverter {
             audioOnlySettings: capturedAudioOnlySettings,
             imageSequenceSettings: capturedImageSequenceSettings,
             codecSettings: capturedCodecSettings,
+            subtitleSettings: capturedSubtitleSettings,
             comment: request.comment,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing

@@ -1353,19 +1353,6 @@ enum ExportPreset: String, CaseIterable, Identifiable {
 
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
-        default:
-            return []
-        }
-    }
-
-    var ffmpegArguments: [String] {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd"
-
-        let commonArgs = ["-hide_banner"]
-        let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
-
-        switch self {
         case .videoLoop:
             var args = commonArgs + [
                 "-bitexact",
@@ -1407,6 +1394,36 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
+        case .prores:
+            let profileRaw = defaults.string(forKey: AppConstants.proResProfileKey) ?? ProResProfile.standard.rawValue
+            let profile = ProResProfile(rawValue: profileRaw) ?? .standard
+
+            var args = commonArgs + [
+                "-pix_fmt", "yuv422p10le",
+                "-vcodec", "prores_videotoolbox",
+                "-profile:v", profile.ffmpegProfileName,
+                "-vf", Self.desqueezeFilter,
+                "-c:a", "pcm_s24le",
+                "-map", "0:v:0",
+                "-map", "0:a"
+            ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
+        default:
+            return []
+        }
+    }
+
+    var ffmpegArguments: [String] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyyMMdd"
+
+        let commonArgs = ["-hide_banner"]
+        let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+
+        switch self {
+        case .videoLoop, .videoLoopWithSound:
+            return codecFFmpegArguments(defaults: .standard)
         case .h264, .h265:
             return codecFFmpegArguments(defaults: .standard)
         case .av2:
@@ -1584,20 +1601,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
         case .prores:
-            let profileRaw = UserDefaults.standard.string(forKey: AppConstants.proResProfileKey) ?? ProResProfile.standard.rawValue
-            let profile = ProResProfile(rawValue: profileRaw) ?? .standard
-
-            var args = commonArgs + [
-                "-pix_fmt", "yuv422p10le",
-                "-vcodec", "prores_videotoolbox",
-                "-profile:v", profile.ffmpegProfileName,
-                "-vf", Self.desqueezeFilter,
-                "-c:a", "pcm_s24le",
-                "-map", "0:v:0",
-                "-map", "0:a"
-            ]
-            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
-            return args
+            return codecFFmpegArguments(defaults: .standard)
         case .streamCopy:
             var args = commonArgs + [
                 "-map", "0",

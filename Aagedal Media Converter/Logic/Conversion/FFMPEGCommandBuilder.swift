@@ -79,6 +79,7 @@ enum FFMPEGCommandBuilder {
         audioOnlySettings: AudioOnlySettings? = nil,
         imageSequenceSettings: ImageSequenceSettings? = nil,
         codecSettings: CodecExportSettings? = nil,
+        subtitleSettings: SubtitleExportSettings? = nil,
         comment: String,
         includeDateTag: Bool,
         trimStart: Double?,
@@ -99,6 +100,7 @@ enum FFMPEGCommandBuilder {
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
+        let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
         let normalizedTrimStart = normalizedTrimPoint(trimStart)
@@ -399,9 +401,8 @@ enum FFMPEGCommandBuilder {
         // Unsupported outputs (image sequences, DCP/IMF MXF, animated stills, etc.)
         // must not receive subtitle codec arguments because FFmpeg rejects them.
         if preset != .streamCopy && preset.outputsVideoTrack {
-            let keepSubtitles = UserDefaults.standard.bool(forKey: AppConstants.keepSubtitlesKey)
             arguments.append(contentsOf: subtitleArguments(
-                keepSubtitles: keepSubtitles,
+                keepSubtitles: capturedSubtitleSettings.keepSubtitles,
                 outputExtension: outputFileURL.pathExtension
             ))
         }
@@ -511,16 +512,10 @@ extension FFMPEGCommandBuilder {
     /// preservation setting. Matroska can copy subtitle streams verbatim, while
     /// MP4 and MOV require text subtitles to be encoded as `mov_text`.
     static func subtitleArguments(keepSubtitles: Bool, outputExtension: String) -> [String] {
-        guard keepSubtitles else { return [] }
-
-        switch outputExtension.lowercased() {
-        case "mkv":
-            return ["-map", "0:s?", "-c:s", "copy"]
-        case "mp4", "mov":
-            return ["-map", "0:s?", "-c:s", "mov_text"]
-        default:
-            return []
-        }
+        SubtitleMappingPlan(
+            keepSubtitles: keepSubtitles,
+            outputExtension: outputExtension
+        ).arguments
     }
 
     static func normalizedTrimPoint(_ value: Double?) -> Double? {

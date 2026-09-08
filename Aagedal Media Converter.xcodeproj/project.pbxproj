@@ -23,6 +23,7 @@
 		70E58F2C131E4EBFB095D626 /* AudioOnlySettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50C1AEBD980A485FBE74B23A /* AudioOnlySettingsTests.swift */; };
 		DEC6FD831DDD41368CAD7C46 /* SecurityScopedBookmarkManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A88601F8E6F4305B5C042CC /* SecurityScopedBookmarkManagerTests.swift */; };
 		550B38605304491DB16F9879 /* CodecExportSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FD0FB88746A404DB8BB3AF6 /* CodecExportSettingsTests.swift */; };
+		6A8F1890F8004362BBE6461C /* SubtitleExportSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */; };
 		B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */; };
 		D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */; };
 		5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */; };
@@ -35,6 +36,7 @@
 		C9C0A673908A4105B116FEDB /* IMFSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F96374D9F9450B93232C46 /* IMFSettings.swift */; };
 		D2C68A8AFFE2425D993E231E /* AudioOnlySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52C02E1A35246D6A0CBE187 /* AudioOnlySettings.swift */; };
 		E30950B6AEDF449BA17C59D7 /* CodecExportSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD5417879E5419D97AE3672 /* CodecExportSettings.swift */; };
+		9F8D99DD5029416DA4559EF2 /* SubtitleExportSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */; };
 		BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */; };
 		35D23935EC554B1B97085056 /* AV2ScratchDirectoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */; };
 		042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */; };
@@ -320,6 +322,7 @@
 		50C1AEBD980A485FBE74B23A /* AudioOnlySettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOnlySettingsTests.swift; sourceTree = "<group>"; };
 		5A88601F8E6F4305B5C042CC /* SecurityScopedBookmarkManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityScopedBookmarkManagerTests.swift; sourceTree = "<group>"; };
 		2FD0FB88746A404DB8BB3AF6 /* CodecExportSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecExportSettingsTests.swift; sourceTree = "<group>"; };
+		3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleExportSettingsTests.swift; sourceTree = "<group>"; };
 		3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRoutingPlanTests.swift; sourceTree = "<group>"; };
 		F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettingsTests.swift; sourceTree = "<group>"; };
 		575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupSettingsMigrationTests.swift; sourceTree = "<group>"; };
@@ -332,6 +335,7 @@
 		94F96374D9F9450B93232C46 /* IMFSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMFSettings.swift; sourceTree = "<group>"; };
 		C52C02E1A35246D6A0CBE187 /* AudioOnlySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOnlySettings.swift; sourceTree = "<group>"; };
 		CDD5417879E5419D97AE3672 /* CodecExportSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodecExportSettings.swift; sourceTree = "<group>"; };
+		4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleExportSettings.swift; sourceTree = "<group>"; };
 		045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettings.swift; sourceTree = "<group>"; };
 		A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ScratchDirectoryTests.swift; sourceTree = "<group>"; };
 		E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicyTests.swift; sourceTree = "<group>"; };
@@ -723,6 +727,7 @@
 				94F96374D9F9450B93232C46 /* IMFSettings.swift */,
 				C52C02E1A35246D6A0CBE187 /* AudioOnlySettings.swift */,
 				CDD5417879E5419D97AE3672 /* CodecExportSettings.swift */,
+				4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */,
 				045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */,
 				596BC21F86AEFDA304EF948F /* MetadataWindowState.swift */,
 				8EEE45382EC13B670049F017 /* Previews */,
@@ -933,6 +938,7 @@
 				50C1AEBD980A485FBE74B23A /* AudioOnlySettingsTests.swift */,
 				5A88601F8E6F4305B5C042CC /* SecurityScopedBookmarkManagerTests.swift */,
 				2FD0FB88746A404DB8BB3AF6 /* CodecExportSettingsTests.swift */,
+				3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
 				F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */,
 				575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */,
@@ -1359,6 +1365,7 @@
 				C9C0A673908A4105B116FEDB /* IMFSettings.swift in Sources */,
 				D2C68A8AFFE2425D993E231E /* AudioOnlySettings.swift in Sources */,
 				E30950B6AEDF449BA17C59D7 /* CodecExportSettings.swift in Sources */,
+				9F8D99DD5029416DA4559EF2 /* SubtitleExportSettings.swift in Sources */,
 				BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */,
 				CC01A1C0PY00010000000002 /* CopyableCommandRow.swift in Sources */,
 				RSEL000000000001000BUILD /* RegionSelectionOverlayView.swift in Sources */,
@@ -1571,6 +1578,7 @@
 				70E58F2C131E4EBFB095D626 /* AudioOnlySettingsTests.swift in Sources */,
 				DEC6FD831DDD41368CAD7C46 /* SecurityScopedBookmarkManagerTests.swift in Sources */,
 				550B38605304491DB16F9879 /* CodecExportSettingsTests.swift in Sources */,
+				6A8F1890F8004362BBE6461C /* SubtitleExportSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
 				D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */,
 				5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */,
