@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **H.264, H.265, and AV1 exports retain their codec and container settings throughout a job**, including output naming and waveform encoding.
+- **Delayed preview seeks respect pause and later playback actions**, and old image-sequence timer callbacks cannot advance a restarted preview.
+- **Saved folder access survives bookmark renewal without losing write access**, and temporary output-folder checks release their access correctly.
+
 - **Image-sequence exports keep frame and sidecar settings consistent throughout a job**, including format, JPEG quality, numbering width, and metadata sidecar choice.
 - **Closing capture discards pending virtual displays**, including creation that finishes after teardown or cancellation during startup.
 

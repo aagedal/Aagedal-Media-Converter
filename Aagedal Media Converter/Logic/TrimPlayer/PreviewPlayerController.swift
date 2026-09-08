@@ -149,6 +149,8 @@ final class PreviewPlayerController: ObservableObject {
     @Published var isImageSequencePlaying = false
     private var imageSequenceConfig: ImageSequenceConfig?
     private var imageSequencePlaybackTimer: Timer?
+    private let imageSequencePlayback = PreviewPlaybackLifetime()
+    let trimPlayback = PreviewPlaybackLifetime()
     private var imageSequenceAudioPlayer: AVPlayer?
 
     // MARK: - Initialization
@@ -479,14 +481,18 @@ final class PreviewPlayerController: ObservableObject {
     func startImageSequencePlayback() {
         guard let config = imageSequenceConfig, !isImageSequencePlaying else { return }
         isImageSequencePlaying = true
+        let playbackID = imageSequencePlayback.begin()
         currentPlaybackSpeed = 1.0
 
         // Start associated audio playback in sync
         if let audioPlayer = imageSequenceAudioPlayer {
             let seekTime = CMTime(seconds: currentPlaybackTime, preferredTimescale: 600)
-            audioPlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak audioPlayer] _ in
+            imageSequencePlayback.seekThenResume(for: playbackID, seek: {
+                try Task.checkCancellation()
+                return await audioPlayer.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            }, resume: { [weak audioPlayer] in
                 audioPlayer?.play()
-            }
+            })
         }
 
         let interval = 1.0 / config.frameRate
@@ -494,7 +500,8 @@ final class PreviewPlayerController: ObservableObject {
 
         imageSequencePlaybackTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.isImageSequencePlaying else { return }
+                guard let self, self.isImageSequencePlaying,
+                      self.imageSequencePlayback.isCurrent(playbackID) else { return }
                 let nextTime = self.currentPlaybackTime + interval
                 if nextTime >= trimEnd {
                     // Reached the end
@@ -519,6 +526,8 @@ final class PreviewPlayerController: ObservableObject {
 
     /// Stops image sequence playback timer.
     func stopImageSequencePlayback() {
+        imageSequencePlayback.invalidate()
+        imageSequenceAudioPlayer?.currentItem?.cancelPendingSeeks()
         imageSequencePlaybackTimer?.invalidate()
         imageSequencePlaybackTimer = nil
         isImageSequencePlaying = false
@@ -530,6 +539,7 @@ final class PreviewPlayerController: ObservableObject {
     private func updateImageSequenceSpeed(_ speed: Float) {
         guard let config = imageSequenceConfig, isImageSequencePlaying else { return }
         currentPlaybackSpeed = speed
+        let playbackID = imageSequencePlayback.begin()
 
         // Restart timer with adjusted interval
         imageSequencePlaybackTimer?.invalidate()
@@ -538,7 +548,8 @@ final class PreviewPlayerController: ObservableObject {
 
         imageSequencePlaybackTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.isImageSequencePlaying else { return }
+                guard let self, self.isImageSequencePlaying,
+                      self.imageSequencePlayback.isCurrent(playbackID) else { return }
                 let step = 1.0 / config.frameRate  // Always advance by one frame
                 let nextTime = self.currentPlaybackTime + step
                 if nextTime >= trimEnd {
@@ -589,6 +600,7 @@ final class PreviewPlayerController: ObservableObject {
     // MARK: - Unified Playback Control
 
     func togglePlayback() {
+        trimPlayback.invalidate()
         // Ignore if player is not ready yet
         guard isReady else { return }
 
@@ -633,6 +645,7 @@ final class PreviewPlayerController: ObservableObject {
     }
     
     func pause() {
+        trimPlayback.invalidate()
         stopReverseSimulation()
 
         if useImageSequence {
@@ -652,6 +665,7 @@ final class PreviewPlayerController: ObservableObject {
     }
     
     func stepRate(forward: Bool) {
+        trimPlayback.invalidate()
         let step: Float = 0.5
         if useMPV, let mpv = mpvPlayer {
             let current = mpv.rate
@@ -715,6 +729,7 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func fastForward() {
+        trimPlayback.invalidate()
         guard isReady else { return }
 
         // If reversing, L stops reverse
@@ -757,6 +772,7 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func slowForward() {
+        trimPlayback.invalidate()
         guard isReady else { return }
 
         if isReverseSimulating {
@@ -1338,6 +1354,7 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func teardown(resetAudioSelection: Bool = true) {
+        trimPlayback.invalidate()
         audioSelectionOperationID = nil
         audioSelectionTask?.cancel()
         audioSelectionTask = nil
@@ -1426,7 +1443,11 @@ final class PreviewPlayerController: ObservableObject {
     
     // MARK: - Playback Control
     
-    func refreshPreviewForTrim() {
+    func refreshPreviewForTrim(
+        timeout: Duration = .seconds(10),
+        seek: (@Sendable () async throws -> Bool)? = nil
+    ) {
+        let operationID = trimPlayback.begin()
         if useImageSequence {
             seekTo(videoItem.effectiveTrimStart)
             return
@@ -1447,16 +1468,18 @@ final class PreviewPlayerController: ObservableObject {
         
         // Seek to the new trim start position
         let seekTime = CMTime(seconds: videoItem.effectiveTrimStart, preferredTimescale: 600)
-        player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
-            Task { @MainActor [weak self] in
-                guard finished, let self = self, self.player === player, isPlaying else { return }
-                // Only resume playback if it was playing before
-                self.player?.play()
-            }
-        }
+        trimPlayback.seekThenResume(for: operationID, timeout: timeout, seek: {
+            try Task.checkCancellation()
+            if let seek { return try await seek() }
+            return await player.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        }, resume: { [weak self, weak player] in
+            guard let self, let player, self.player === player, isPlaying else { return }
+            player.play()
+        })
     }
     
     func seekTo(_ time: Double) {
+        trimPlayback.invalidate()
         // Allow seeking even before player is fully ready - seeks will queue up
         // This enables scrubbing the timeline while player is still loading
 
@@ -1668,6 +1691,47 @@ final class PreviewPlayerController: ObservableObject {
             } else {
                 await universalAudioMeter.stopMonitoring()
             }
+        }
+    }
+}
+
+/// Owns delayed playback seeks and queued timer deliveries for one playback intent.
+/// Timer invalidation alone cannot retract a callback already queued on MainActor.
+@MainActor
+final class PreviewPlaybackLifetime {
+    private var operationID: UUID?
+    private(set) var seekTask: Task<Void, Never>?
+
+    func begin() -> UUID {
+        invalidate()
+        let id = UUID()
+        operationID = id
+        return id
+    }
+
+    func isCurrent(_ id: UUID) -> Bool {
+        operationID == id
+    }
+
+    func invalidate() {
+        operationID = nil
+        seekTask?.cancel()
+        seekTask = nil
+    }
+
+    func seekThenResume(
+        for id: UUID,
+        timeout: Duration = .seconds(10),
+        seek: @escaping @Sendable () async throws -> Bool,
+        resume: @escaping @MainActor () -> Void
+    ) {
+        guard isCurrent(id) else { return }
+        seekTask?.cancel()
+        seekTask = Task { [weak self] in
+            let finished = try? await NonJoiningTaskDeadline.run(timeout: timeout, operation: seek)
+            guard !Task.isCancelled, let self, self.isCurrent(id) else { return }
+            self.seekTask = nil
+            if finished == true { resume() }
         }
     }
 }

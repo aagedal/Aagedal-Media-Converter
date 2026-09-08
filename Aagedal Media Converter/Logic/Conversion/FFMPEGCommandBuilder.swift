@@ -78,6 +78,7 @@ enum FFMPEGCommandBuilder {
         imfSettings: IMFSettings? = nil,
         audioOnlySettings: AudioOnlySettings? = nil,
         imageSequenceSettings: ImageSequenceSettings? = nil,
+        codecSettings: CodecExportSettings? = nil,
         comment: String,
         includeDateTag: Bool,
         trimStart: Double?,
@@ -97,6 +98,7 @@ enum FFMPEGCommandBuilder {
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
+        let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
         let normalizedTrimStart = normalizedTrimPoint(trimStart)
@@ -134,6 +136,7 @@ enum FFMPEGCommandBuilder {
                 ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
                 ?? capturedImageSequenceSettings?.ffmpegArguments
                 ?? capturedAudioOnlySettings?.ffmpegArguments
+                ?? capturedCodecSettings?.ffmpegArguments
                 ?? preset.ffmpegArguments
             await adjustArgumentsForInput(
                 preset: preset,
@@ -196,6 +199,7 @@ enum FFMPEGCommandBuilder {
                 ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
                 ?? capturedImageSequenceSettings?.ffmpegArguments
                 ?? capturedAudioOnlySettings?.ffmpegArguments
+                ?? capturedCodecSettings?.ffmpegArguments
                 ?? preset.ffmpegArguments
             await adjustArgumentsForInput(
                 preset: preset,
@@ -259,6 +263,7 @@ enum FFMPEGCommandBuilder {
             ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
             ?? capturedImageSequenceSettings?.ffmpegArguments
             ?? capturedAudioOnlySettings?.ffmpegArguments
+            ?? capturedCodecSettings?.ffmpegArguments
             ?? preset.ffmpegArguments
 
         // Image sequence inputs (via customInputArguments): the inputURL is a directory
@@ -723,6 +728,7 @@ extension FFMPEGCommandBuilder {
         imfSettings: IMFSettings? = nil,
         audioOnlySettings: AudioOnlySettings? = nil,
         imageSequenceSettings: ImageSequenceSettings? = nil,
+        codecSettings: CodecExportSettings? = nil,
         width: Int,
         height: Int,
         frameRate: Double,
@@ -738,6 +744,7 @@ extension FFMPEGCommandBuilder {
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
+        let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let finalWidth = evenDimension(max(width, 2))
         let finalHeight = evenDimension(max(height, 2))
         let resolution = "\(finalWidth)x\(finalHeight)"
@@ -776,6 +783,7 @@ extension FFMPEGCommandBuilder {
             ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
             ?? capturedImageSequenceSettings?.ffmpegArguments
             ?? capturedAudioOnlySettings?.ffmpegArguments
+            ?? capturedCodecSettings?.ffmpegArguments
             ?? preset.ffmpegArguments
         await adjustArgumentsForInput(preset: preset, audioOnlySettings: capturedAudioOnlySettings, inputURL: audioInputURL, ffmpegArgs: &ffmpegArgs, trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
         sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)

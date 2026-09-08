@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 487 tests pass. The
+- The unit-test baseline is green: 504 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 487 unit tests. The UI test target now has deterministic smoke
+- There are 504 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -1014,6 +1014,14 @@ teardown during both phases, cancellation, apply failure, and retry. Live virtua
 display/capture validation and the broader callback audit remain open
 (Codex, 2026-09-08).
 
+Image-sequence audio startup and trim-refresh playback now use cancellable,
+ten-second seek deadlines with operation ownership. Pause, replacement, teardown,
+and later playback intent prevent late successful seeks from restarting audio/video;
+queued image-sequence timer callbacks also reject retired playback generations.
+Four regressions cover successful/failed seeks, timeout, pause/restart, and an actual
+controller pause during a delayed trim seek. Live preview/audio interaction and the
+wider callback audit remain open (Codex, 2026-09-08).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1093,6 +1101,18 @@ files/directories, missing parents, zero worker launches on preparation failure,
 cleanup after worker failure. Test settings use the process's volatile argument
 domain so this new coverage does not persist changes to user preferences (Codex,
 2026-09-05).
+
+Bookmark persistence now creates data while temporary scoped access is held, even
+when the selected URL is already accessible. Renewal writes back under the original
+lookup URL, retains known read-only/write permissions, and avoids restricting legacy
+bookmarks whose mode was not recorded. Reimport cannot downgrade a saved writable
+folder. Overlapping bookmark borrowers share the exact resolved URL until their last
+release, so changed or removed saved data cannot cause cleanup to stop another scope.
+Output-folder preflight now balances directory and parent access on success as well
+as failure, and logs directory-creation errors. Ten isolated-store regressions
+cover persistence, failure preservation, renewal, legacy modes, overlapping access,
+and rejected acquisition. Live sandbox/bookmark validation and the broader
+filesystem error audit remain open (Codex, 2026-09-08).
 
 ## Priority 3 — Reduce change risk in architecture
 
@@ -1264,6 +1284,15 @@ A generated red-video fixture drives the actual converter after settings mutatio
 verifying JPEG filenames, decoded dimensions/pixels, and a JSON metadata sidecar.
 Other codec families, UI/request-generation settings, and remaining schema migrations
 stay open (Codex, 2026-09-08).
+
+H.264, H.265, and AV1 exports now capture container, resolution, and resolved codec
+arguments before suspension. Queue naming/completion, source-collision protection,
+ordinary and synthesized-video command paths, and native waveform encoding reuse
+that snapshot. Container and resolution are resolved once for both naming and
+arguments. Three regressions cover all three families, AAC/Opus container policy,
+hardware settings, native waveform arguments, and converter-level source protection.
+Other preset families, generic filename-template labels, subtitle/comment preferences,
+UI request settings, and remaining migrations stay open (Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1578,7 +1607,21 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 487 unit tests
+Latest validation (2026-09-08, Codex): Debug compilation and all 504 unit tests
+pass with zero failures or skips using the shared unit-only scheme. Seventeen new
+regressions cover codec settings and source-collision naming, preview seek ownership,
+and bookmark persistence/access lifetime. The unsigned Release build passes; its
+bundle audit verifies all 44 Mach-O images and six packaged license notices.
+All 43 release-script tests, manifest freshness, and localization checks pass
+(1,484 entries, 15 intentional omissions).
+An initial build caught a test cleanup closure's non-Sendable capture; the corrected
+suite then exposed a new fixture missing its companion audio input. Both test issues
+were corrected before the final green run. Independent reviews verified unchanged
+codec argument policy and balanced bookmark acquisition/release. Live preview/audio,
+sandbox reauthorization, VoiceOver, bilingual UI, capture/editor, clean-machine
+installation/update, and credentialed release checks were not run.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 487 unit tests
 pass with zero failures or skips using the shared unit-only scheme. Eleven new
 regressions cover typed audio routing, image-sequence settings (including actual
 JPEG pixels and JSON sidecar output), and virtual-display creation lifetime.

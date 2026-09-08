@@ -1109,76 +1109,38 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         return String(format: "%g", value)
     }
 
-    var ffmpegArguments: [String] {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd"
-        
+    /// Resolves the codec family preferences synchronously from an injectable store.
+    func codecFFmpegArguments(
+        defaults: UserDefaults,
+        capturedContainer: CodecContainer? = nil,
+        capturedResolution: CodecResolutionLimit? = nil
+    ) -> [String] {
         let commonArgs = ["-hide_banner"]
-        let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
-        
+        let preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
         switch self {
-        case .videoLoop:
-            var args = commonArgs + [
-                "-bitexact",
-                "-bsf:v", "filter_units=remove_types=6",
-                "-pix_fmt", "yuv420p",
-                "-vcodec", "libx264",
-                "-movflags", "+faststart",
-                "-preset", "veryslow",
-                "-crf", "23",
-                "-minrate", "3000k",
-                "-maxrate", "9000k",
-                "-bufsize", "18000k",
-                "-profile:v", "main",
-                "-level:v", "4.0",
-                "-an",
-                "-vf", Self.desqueezeFilter(maxShortEdge: 1080)
-            ]
-            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
-            return args
-        case .videoLoopWithSound:
-            var args = commonArgs + [
-                "-bitexact",
-                "-bsf:v", "filter_units=remove_types=6",
-                "-pix_fmt", "yuv420p",
-                "-vcodec", "libx264",
-                "-movflags", "+faststart",
-                "-preset", "veryslow",
-                "-crf", "23",
-                "-minrate", "3000k",
-                "-maxrate", "9000k",
-                "-bufsize", "18000k",
-                "-profile:v", "main",
-                "-level:v", "4.0",
-                "-c:a", "aac",
-                "-b:a", "128k",
-                "-map", "0:v:0",
-                "-map", "0:a",
-                "-vf", Self.desqueezeFilter(maxShortEdge: 1080)
-            ]
-            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
-            return args
         case .h264:
             // Get encoder setting
-            let encoderRaw = UserDefaults.standard.string(forKey: AppConstants.h264EncoderKey) ?? AppConstants.defaultH264Encoder
+            let encoderRaw = defaults.string(forKey: AppConstants.h264EncoderKey) ?? AppConstants.defaultH264Encoder
             let encoder = H264Encoder(rawValue: encoderRaw) ?? .software
 
             // Get container setting
-            let containerRaw = UserDefaults.standard.string(forKey: AppConstants.h264ContainerKey) ?? AppConstants.defaultH264Container
-            let container = CodecContainer(rawValue: containerRaw) ?? .mp4
+            let container = capturedContainer ?? CodecContainer(
+                rawValue: defaults.string(forKey: AppConstants.h264ContainerKey) ?? AppConstants.defaultH264Container
+            ) ?? .mp4
 
             // Get resolution limit
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.h264ResolutionLimitKey) ?? AppConstants.defaultH264ResolutionLimit
-            let resolution = CodecResolutionLimit(rawValue: resolutionRaw) ?? .unlimited
+            let resolution = capturedResolution ?? CodecResolutionLimit(
+                rawValue: defaults.string(forKey: AppConstants.h264ResolutionLimitKey) ?? AppConstants.defaultH264ResolutionLimit
+            ) ?? .unlimited
 
             // Get audio settings
-            let audioFormatRaw = UserDefaults.standard.string(forKey: AppConstants.h264AudioFormatKey) ?? AppConstants.defaultH264AudioFormat
+            let audioFormatRaw = defaults.string(forKey: AppConstants.h264AudioFormatKey) ?? AppConstants.defaultH264AudioFormat
             var audioFormat = CodecAudioFormat(rawValue: audioFormatRaw) ?? .aac
             // Fallback if Opus selected but container doesn't support it
             if audioFormat == .opus && container != .mkv {
                 audioFormat = .aac
             }
-            let audioBitrateRaw = UserDefaults.standard.string(forKey: AppConstants.h264AudioBitrateKey) ?? AppConstants.defaultH264AudioBitrate
+            let audioBitrateRaw = defaults.string(forKey: AppConstants.h264AudioBitrateKey) ?? AppConstants.defaultH264AudioBitrate
             let audioBitrate = AudioBitrate(rawValue: audioBitrateRaw) ?? .k192
 
             // Build scale filter
@@ -1188,7 +1150,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
 
             switch encoder {
             case .hardware:
-                let bitrate = UserDefaults.standard.string(forKey: AppConstants.h264BitrateKey) ?? AppConstants.defaultH264Bitrate
+                let bitrate = defaults.string(forKey: AppConstants.h264BitrateKey) ?? AppConstants.defaultH264Bitrate
                 args += [
                     "-c:v", "h264_videotoolbox",
                     "-b:v", bitrate,
@@ -1196,9 +1158,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                     "-pix_fmt", "yuv420p"
                 ]
             case .software:
-                let qualityRaw = UserDefaults.standard.string(forKey: AppConstants.h264QualityKey) ?? AppConstants.defaultH264Quality
+                let qualityRaw = defaults.string(forKey: AppConstants.h264QualityKey) ?? AppConstants.defaultH264Quality
                 let quality = CodecQualityLevel(rawValue: qualityRaw) ?? .good
-                let speedRaw = UserDefaults.standard.string(forKey: AppConstants.h264SpeedKey) ?? AppConstants.defaultH264Speed
+                let speedRaw = defaults.string(forKey: AppConstants.h264SpeedKey) ?? AppConstants.defaultH264Speed
                 let speed = EncodingSpeed(rawValue: speedRaw) ?? .medium
 
                 args += [
@@ -1226,25 +1188,27 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return args
         case .h265:
             // Get encoder setting
-            let encoderRaw = UserDefaults.standard.string(forKey: AppConstants.h265EncoderKey) ?? AppConstants.defaultH265Encoder
+            let encoderRaw = defaults.string(forKey: AppConstants.h265EncoderKey) ?? AppConstants.defaultH265Encoder
             let encoder = H265Encoder(rawValue: encoderRaw) ?? .software
 
             // Get container setting
-            let containerRaw = UserDefaults.standard.string(forKey: AppConstants.h265ContainerKey) ?? AppConstants.defaultH265Container
-            let container = CodecContainer(rawValue: containerRaw) ?? .mp4
+            let container = capturedContainer ?? CodecContainer(
+                rawValue: defaults.string(forKey: AppConstants.h265ContainerKey) ?? AppConstants.defaultH265Container
+            ) ?? .mp4
 
             // Get resolution limit
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.h265ResolutionLimitKey) ?? AppConstants.defaultH265ResolutionLimit
-            let resolution = CodecResolutionLimit(rawValue: resolutionRaw) ?? .unlimited
+            let resolution = capturedResolution ?? CodecResolutionLimit(
+                rawValue: defaults.string(forKey: AppConstants.h265ResolutionLimitKey) ?? AppConstants.defaultH265ResolutionLimit
+            ) ?? .unlimited
 
             // Get audio settings
-            let audioFormatRaw = UserDefaults.standard.string(forKey: AppConstants.h265AudioFormatKey) ?? AppConstants.defaultH265AudioFormat
+            let audioFormatRaw = defaults.string(forKey: AppConstants.h265AudioFormatKey) ?? AppConstants.defaultH265AudioFormat
             var audioFormat = CodecAudioFormat(rawValue: audioFormatRaw) ?? .aac
             // Fallback if Opus selected but container doesn't support it
             if audioFormat == .opus && container != .mkv {
                 audioFormat = .aac
             }
-            let audioBitrateRaw = UserDefaults.standard.string(forKey: AppConstants.h265AudioBitrateKey) ?? AppConstants.defaultH265AudioBitrate
+            let audioBitrateRaw = defaults.string(forKey: AppConstants.h265AudioBitrateKey) ?? AppConstants.defaultH265AudioBitrate
             let audioBitrate = AudioBitrate(rawValue: audioBitrateRaw) ?? .k192
 
             // Build scale filter
@@ -1254,7 +1218,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
 
             switch encoder {
             case .hardware:
-                let bitrate = UserDefaults.standard.string(forKey: AppConstants.h265BitrateKey) ?? AppConstants.defaultH265Bitrate
+                let bitrate = defaults.string(forKey: AppConstants.h265BitrateKey) ?? AppConstants.defaultH265Bitrate
                 args += [
                     "-c:v", "hevc_videotoolbox",
                     "-b:v", bitrate,
@@ -1262,9 +1226,9 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                     "-pix_fmt", "p010le"
                 ]
             case .software:
-                let qualityRaw = UserDefaults.standard.string(forKey: AppConstants.h265QualityKey) ?? AppConstants.defaultH265Quality
+                let qualityRaw = defaults.string(forKey: AppConstants.h265QualityKey) ?? AppConstants.defaultH265Quality
                 let quality = CodecQualityLevel(rawValue: qualityRaw) ?? .balanced
-                let speedRaw = UserDefaults.standard.string(forKey: AppConstants.h265SpeedKey) ?? AppConstants.defaultH265Speed
+                let speedRaw = defaults.string(forKey: AppConstants.h265SpeedKey) ?? AppConstants.defaultH265Speed
                 let speed = EncodingSpeed(rawValue: speedRaw) ?? .medium
 
                 args += [
@@ -1290,59 +1254,56 @@ enum ExportPreset: String, CaseIterable, Identifiable {
 
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
-        case .av2:
-            // AV2 does NOT use ffmpegArguments — it is encoded by the external `avmenc`
-            // binary via a dedicated two-process pipe built in `AV2CommandBuilder`.
-            // This branch only exists to satisfy the exhaustive switch.
-            return commonArgs
         case .av1:
             // Get container setting
-            let containerRaw = UserDefaults.standard.string(forKey: AppConstants.av1ContainerKey) ?? AppConstants.defaultAV1Container
-            let container = CodecContainer(rawValue: containerRaw) ?? .mp4
+            let container = capturedContainer ?? CodecContainer(
+                rawValue: defaults.string(forKey: AppConstants.av1ContainerKey) ?? AppConstants.defaultAV1Container
+            ) ?? .mp4
 
             // Get quality setting
-            let qualityRaw = UserDefaults.standard.string(forKey: AppConstants.av1QualityKey) ?? AppConstants.defaultAV1Quality
+            let qualityRaw = defaults.string(forKey: AppConstants.av1QualityKey) ?? AppConstants.defaultAV1Quality
             let quality = AV1QualityLevel(rawValue: qualityRaw) ?? .good
 
             // Get speed setting
-            let speed = UserDefaults.standard.integer(forKey: AppConstants.av1SpeedKey)
+            let speed = defaults.integer(forKey: AppConstants.av1SpeedKey)
             let presetValue = speed > 0 ? speed : AppConstants.defaultAV1Speed
 
             // Get tune setting
-            let tuneRaw = UserDefaults.standard.string(forKey: AppConstants.av1TuneKey) ?? AppConstants.defaultAV1Tune
+            let tuneRaw = defaults.string(forKey: AppConstants.av1TuneKey) ?? AppConstants.defaultAV1Tune
             let tune = AV1TuneMode(rawValue: tuneRaw) ?? .vq
 
             // Get film grain settings
-            let filmGrainRaw = UserDefaults.standard.string(forKey: AppConstants.av1FilmGrainKey) ?? AppConstants.defaultAV1FilmGrain
+            let filmGrainRaw = defaults.string(forKey: AppConstants.av1FilmGrainKey) ?? AppConstants.defaultAV1FilmGrain
             let filmGrain = AV1FilmGrainLevel(rawValue: filmGrainRaw) ?? .off
-            let filmGrainDenoise = UserDefaults.standard.object(forKey: AppConstants.av1FilmGrainDenoiseKey) == nil
-                ? true : UserDefaults.standard.bool(forKey: AppConstants.av1FilmGrainDenoiseKey)
+            let filmGrainDenoise = defaults.object(forKey: AppConstants.av1FilmGrainDenoiseKey) == nil
+                ? true : defaults.bool(forKey: AppConstants.av1FilmGrainDenoiseKey)
 
             // Get sharpness setting (PSY)
-            let sharpnessRaw = UserDefaults.standard.string(forKey: AppConstants.av1SharpnessKey) ?? AppConstants.defaultAV1Sharpness
+            let sharpnessRaw = defaults.string(forKey: AppConstants.av1SharpnessKey) ?? AppConstants.defaultAV1Sharpness
             let sharpness = AV1Sharpness(rawValue: sharpnessRaw) ?? .off
 
             // Get fast decode setting
-            let fastDecode = UserDefaults.standard.bool(forKey: AppConstants.av1FastDecodeKey)
+            let fastDecode = defaults.bool(forKey: AppConstants.av1FastDecodeKey)
 
             // Get variance boost settings (PSY)
-            let varianceBoostRaw = UserDefaults.standard.string(forKey: AppConstants.av1VarianceBoostKey) ?? AppConstants.defaultAV1VarianceBoost
+            let varianceBoostRaw = defaults.string(forKey: AppConstants.av1VarianceBoostKey) ?? AppConstants.defaultAV1VarianceBoost
             let varianceBoost = AV1VarianceBoost(rawValue: varianceBoostRaw) ?? .off
-            let varianceBoostCurveRaw = UserDefaults.standard.string(forKey: AppConstants.av1VarianceBoostCurveKey) ?? AppConstants.defaultAV1VarianceBoostCurve
+            let varianceBoostCurveRaw = defaults.string(forKey: AppConstants.av1VarianceBoostCurveKey) ?? AppConstants.defaultAV1VarianceBoostCurve
             let varianceBoostCurve = AV1VarianceBoostCurve(rawValue: varianceBoostCurveRaw) ?? .linear
 
             // Get resolution limit
-            let resolutionRaw = UserDefaults.standard.string(forKey: AppConstants.av1ResolutionLimitKey) ?? AppConstants.defaultAV1ResolutionLimit
-            let resolution = CodecResolutionLimit(rawValue: resolutionRaw) ?? .unlimited
+            let resolution = capturedResolution ?? CodecResolutionLimit(
+                rawValue: defaults.string(forKey: AppConstants.av1ResolutionLimitKey) ?? AppConstants.defaultAV1ResolutionLimit
+            ) ?? .unlimited
 
             // Get audio settings
-            let audioFormatRaw = UserDefaults.standard.string(forKey: AppConstants.av1AudioFormatKey) ?? AppConstants.defaultAV1AudioFormat
+            let audioFormatRaw = defaults.string(forKey: AppConstants.av1AudioFormatKey) ?? AppConstants.defaultAV1AudioFormat
             var audioFormat = CodecAudioFormat(rawValue: audioFormatRaw) ?? .aac
             // Fallback if Opus selected but container doesn't support it
             if audioFormat == .opus && container != .mkv {
                 audioFormat = .aac
             }
-            let audioBitrateRaw = UserDefaults.standard.string(forKey: AppConstants.av1AudioBitrateKey) ?? AppConstants.defaultAV1AudioBitrate
+            let audioBitrateRaw = defaults.string(forKey: AppConstants.av1AudioBitrateKey) ?? AppConstants.defaultAV1AudioBitrate
             let audioBitrate = AudioBitrate(rawValue: audioBitrateRaw) ?? .k192
 
             // Build scale filter
@@ -1392,6 +1353,69 @@ enum ExportPreset: String, CaseIterable, Identifiable {
 
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
+        default:
+            return []
+        }
+    }
+
+    var ffmpegArguments: [String] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyyMMdd"
+
+        let commonArgs = ["-hide_banner"]
+        let preserveMetadata = UserDefaults.standard.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+
+        switch self {
+        case .videoLoop:
+            var args = commonArgs + [
+                "-bitexact",
+                "-bsf:v", "filter_units=remove_types=6",
+                "-pix_fmt", "yuv420p",
+                "-vcodec", "libx264",
+                "-movflags", "+faststart",
+                "-preset", "veryslow",
+                "-crf", "23",
+                "-minrate", "3000k",
+                "-maxrate", "9000k",
+                "-bufsize", "18000k",
+                "-profile:v", "main",
+                "-level:v", "4.0",
+                "-an",
+                "-vf", Self.desqueezeFilter(maxShortEdge: 1080)
+            ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+            return args
+        case .videoLoopWithSound:
+            var args = commonArgs + [
+                "-bitexact",
+                "-bsf:v", "filter_units=remove_types=6",
+                "-pix_fmt", "yuv420p",
+                "-vcodec", "libx264",
+                "-movflags", "+faststart",
+                "-preset", "veryslow",
+                "-crf", "23",
+                "-minrate", "3000k",
+                "-maxrate", "9000k",
+                "-bufsize", "18000k",
+                "-profile:v", "main",
+                "-level:v", "4.0",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-map", "0:v:0",
+                "-map", "0:a",
+                "-vf", Self.desqueezeFilter(maxShortEdge: 1080)
+            ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
+        case .h264, .h265:
+            return codecFFmpegArguments(defaults: .standard)
+        case .av2:
+            // AV2 does NOT use ffmpegArguments — it is encoded by the external `avmenc`
+            // binary via a dedicated two-process pipe built in `AV2CommandBuilder`.
+            // This branch only exists to satisfy the exhaustive switch.
+            return commonArgs
+        case .av1:
+            return codecFFmpegArguments(defaults: .standard)
         case .tvHEVC:
             // Get framerate and resolution settings
             let framerateRaw = UserDefaults.standard.string(forKey: AppConstants.tvFramerateModeKey) ?? AppConstants.defaultTVFramerateMode

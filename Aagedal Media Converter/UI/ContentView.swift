@@ -2179,24 +2179,28 @@ struct ContentView: View {
 
             // Second try: try to access via existing bookmark
             if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: directory) {
+                defer { SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: directory) }
                 if isOutputFolderWritable(directory) {
-                    // Keep the bookmark active - ConversionManager will stop accessing later
+                    // Conversion acquires its own scope after this preflight returns.
                     continue
                 }
-                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: directory)
             }
 
             // Third try: try parent directory bookmark (for new subdirectories)
             let parentDirectory = directory.deletingLastPathComponent()
             if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: parentDirectory) {
-                // Try to create the directory now that we have parent access
-                try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                defer { SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: parentDirectory) }
+                // Try to create the directory now that we have parent access.
+                do {
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                } catch {
+                    Self.logger.error("Unable to prepare output directory: \(error.localizedDescription, privacy: .public)")
+                }
                 if isOutputFolderWritable(directory) {
                     // Save a bookmark for this directory too
                     _ = SecurityScopedBookmarkManager.shared.saveWritableBookmark(for: directory)
                     continue
                 }
-                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: parentDirectory)
             }
 
             // Directory needs user access

@@ -14257,3 +14257,99 @@ extension Aagedal_Media_Converter_Tests {
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
     }
 }
+
+final class ImageSequencePlaybackLifetimeTests: XCTestCase {
+    @MainActor
+    func testPauseAndRestartRejectQueuedTimerAndLateAudioSeek() async throws {
+        let lifetime = PreviewPlaybackLifetime()
+        let first = lifetime.begin()
+        let entered = expectation(description: "Seek entered")
+        let callback = OSAllocatedUnfairLock<CheckedContinuation<Bool, Never>?>(initialState: nil)
+        var resumeCount = 0
+        lifetime.seekThenResume(for: first, seek: {
+            await withCheckedContinuation { continuation in
+                callback.withLock { $0 = continuation }
+                entered.fulfill()
+            }
+        }, resume: { resumeCount += 1 })
+        let firstTask = try XCTUnwrap(lifetime.seekTask)
+        await fulfillment(of: [entered], timeout: 1)
+        lifetime.invalidate()
+        let second = lifetime.begin()
+        XCTAssertFalse(lifetime.isCurrent(first))
+        XCTAssertTrue(lifetime.isCurrent(second))
+        callback.withLock { value in value?.resume(returning: true); value = nil }
+        await firstTask.value
+        XCTAssertEqual(resumeCount, 0)
+        lifetime.invalidate()
+        XCTAssertFalse(lifetime.isCurrent(second))
+    }
+
+    @MainActor
+    func testStalledAudioSeekReturnsAtDeadlineAndCannotResumeLater() async throws {
+        let lifetime = PreviewPlaybackLifetime()
+        let id = lifetime.begin()
+        let callback = OSAllocatedUnfairLock<CheckedContinuation<Bool, Never>?>(initialState: nil)
+        let entered = expectation(description: "Seek entered")
+        var resumed = false
+        lifetime.seekThenResume(for: id, timeout: .milliseconds(30), seek: {
+            await withCheckedContinuation { continuation in
+                callback.withLock { $0 = continuation }
+                entered.fulfill()
+            }
+        }, resume: { resumed = true })
+        let task = try XCTUnwrap(lifetime.seekTask)
+        await fulfillment(of: [entered], timeout: 1)
+        await task.value
+        XCTAssertNil(lifetime.seekTask)
+        XCTAssertFalse(resumed)
+        callback.withLock { value in value?.resume(returning: true); value = nil }
+        await Task.yield()
+        XCTAssertFalse(resumed)
+    }
+
+    @MainActor
+    func testAudioStartsOnlyAfterSuccessfulCurrentSeek() async throws {
+        let lifetime = PreviewPlaybackLifetime()
+        var resumeCount = 0
+        let first = lifetime.begin()
+        lifetime.seekThenResume(for: first, seek: { false }, resume: { resumeCount += 1 })
+        await lifetime.seekTask?.value
+        XCTAssertEqual(resumeCount, 0)
+        let second = lifetime.begin()
+        lifetime.seekThenResume(for: second, seek: { true }, resume: { resumeCount += 1 })
+        await lifetime.seekTask?.value
+        XCTAssertEqual(resumeCount, 1)
+        XCTAssertFalse(lifetime.isCurrent(first))
+    }
+}
+
+extension ImageSequencePlaybackLifetimeTests {
+    @MainActor
+    func testTrimSeekCannotResumeAfterExplicitPause() async throws {
+        let video = VideoItem(url: URL(fileURLWithPath: "/private/trim-preview.mov"),
+                              name: "Preview", size: 0, duration: "00:00:01",
+                              status: .waiting, progress: 0, eta: nil, outputURL: nil)
+        let controller = PreviewPlayerController(videoItem: video)
+        let player = AVPlayer()
+        controller.player = player
+        player.rate = 1
+        XCTAssertEqual(player.rate, 1)
+        let entered = expectation(description: "Trim seek entered")
+        let callback = OSAllocatedUnfairLock<CheckedContinuation<Bool, Never>?>(initialState: nil)
+        controller.refreshPreviewForTrim(seek: {
+            await withCheckedContinuation { continuation in
+                callback.withLock { $0 = continuation }
+                entered.fulfill()
+            }
+        })
+        let task = try XCTUnwrap(controller.trimPlayback.seekTask)
+        await fulfillment(of: [entered], timeout: 1)
+        controller.pause()
+        XCTAssertEqual(player.rate, 0)
+        callback.withLock { value in value?.resume(returning: true); value = nil }
+        await task.value
+        XCTAssertEqual(player.rate, 0)
+        controller.teardown()
+    }
+}
