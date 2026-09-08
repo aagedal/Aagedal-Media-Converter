@@ -885,6 +885,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var analyticsStatus: AnalyticsStatus = .notQueued
     /// Analytics progress (0.0 to 1.0)
     var analyticsProgress: Double = 0.0
+    /// Per-attempt identity shared by manual and post-conversion analytics.
+    var analyticsOperationID: UUID? = nil
     /// Computed analytics results
     var analyticsResults: AnalyticsResults? = nil
 
@@ -941,6 +943,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         analyticsResults = nil
         analyticsStatus = .notQueued
         analyticsProgress = 0.0
+        analyticsOperationID = nil
         analyticsEnabled = false
     }
 

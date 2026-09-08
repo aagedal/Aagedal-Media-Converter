@@ -8186,6 +8186,178 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
     }
 
+    func testNativeWaveformCancellationWaitsForAnalysisDecoderDrain() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WaveformAnalysisDrain-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let started = expectation(description: "Analysis decoder started")
+        let cancelled = expectation(description: "Analysis decoder cancelled")
+        let runner = DeferredCancellationDrainRunner(started: started, cancelled: cancelled)
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let resultTask = Task {
+            await conversionResult(converter: converter, request: makeNativeWaveformConversionRequest(
+                inputURL: directory.appendingPathComponent("input.wav"),
+                outputBaseURL: directory.appendingPathComponent("output")
+            ))
+        }
+        await fulfillment(of: [started], timeout: 2)
+        let returned = expectation(description: "Stop waits for analysis decoder to exit")
+        returned.isInverted = true
+        let stop = Task {
+            await converter.cancelConversion()
+            returned.fulfill()
+        }
+        await fulfillment(of: [cancelled], timeout: 2)
+        await fulfillment(of: [returned], timeout: 0.05)
+        await runner.finishDraining()
+        await stop.value
+        let result = await resultTask.value
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+    }
+
+    func testNativeWaveformAnalysisCanCancelItselfWithoutJoining() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WaveformAnalysisSelfCancellation-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let runner = SelfCancellingFFmpegRunner()
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        await runner.setCancellation { await converter.cancelConversion() }
+        let finished = expectation(description: "Analysis self cancellation completes")
+        let resultTask = Task {
+            let result = await conversionResult(converter: converter, request: makeNativeWaveformConversionRequest(
+                inputURL: directory.appendingPathComponent("input.wav"),
+                outputBaseURL: directory.appendingPathComponent("output")
+            ))
+            XCTAssertFalse(result.success)
+            XCTAssertEqual(result.errorReason, "Conversion cancelled")
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 2)
+        resultTask.cancel()
+    }
+
+    func testNativeWaveformCancellationWaitsForEncoderDrain() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WaveformDrain-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let started = expectation(description: "Native encoder started")
+        let cancelled = expectation(description: "Native encoder cancellation received")
+        let encoder = DeferredCancellationDrainRunner(started: started, cancelled: cancelled)
+        let runner = SequencedRecordingSubprocessRunner { index, request, handler in
+            if index == 0 {
+                let output = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+                try Data(count: MemoryLayout<Float>.size).write(to: output)
+                return successfulSubprocessResult()
+            }
+            return try await encoder.run(request, outputHandler: handler)
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let resultTask = Task {
+            await conversionResult(converter: converter, request: makeNativeWaveformConversionRequest(
+                inputURL: directory.appendingPathComponent("input.wav"),
+                outputBaseURL: directory.appendingPathComponent("output")
+            ))
+        }
+        await fulfillment(of: [started], timeout: 2)
+        let returned = expectation(description: "Stop waits for native encoder to exit")
+        returned.isInverted = true
+        let cancellationTask = Task {
+            await converter.cancelConversion()
+            returned.fulfill()
+        }
+        await fulfillment(of: [cancelled], timeout: 2)
+        await fulfillment(of: [returned], timeout: 0.05)
+        await encoder.finishDraining()
+        await cancellationTask.value
+        let result = await resultTask.value
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+        XCTAssertFalse(FileSafetyUtils.isCreatedByApp(directory.appendingPathComponent("output.mp4")))
+    }
+
+    func testNativeWaveformOldDrainCannotClearReplacementEncoder() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WaveformReplacementDrain-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let firstStarted = expectation(description: "First encoder started")
+        let firstCancelled = expectation(description: "First encoder cancelled")
+        let secondStarted = expectation(description: "Replacement encoder started")
+        let secondCancelled = expectation(description: "Replacement encoder remains cancellable")
+        let first = DeferredCancellationDrainRunner(started: firstStarted, cancelled: firstCancelled)
+        let second = DeferredCancellationDrainRunner(started: secondStarted, cancelled: secondCancelled)
+        let runner = SequencedRecordingSubprocessRunner { index, request, handler in
+            if index == 0 || index == 2 {
+                let output = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+                try Data(count: MemoryLayout<Float>.size).write(to: output)
+                return successfulSubprocessResult()
+            }
+            return try await (index == 1 ? first : second).run(request, outputHandler: handler)
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let firstResult = Task {
+            await conversionResult(converter: converter, request: makeNativeWaveformConversionRequest(
+                inputURL: directory.appendingPathComponent("input.wav"),
+                outputBaseURL: directory.appendingPathComponent("first")
+            ))
+        }
+        await fulfillment(of: [firstStarted], timeout: 2)
+        let firstStop = Task { await converter.cancelConversion() }
+        await fulfillment(of: [firstCancelled], timeout: 2)
+        let secondResult = Task {
+            await conversionResult(converter: converter, request: makeNativeWaveformConversionRequest(
+                inputURL: directory.appendingPathComponent("input.wav"),
+                outputBaseURL: directory.appendingPathComponent("second")
+            ))
+        }
+        await fulfillment(of: [secondStarted], timeout: 2)
+        await first.finishDraining()
+        await firstStop.value
+        let oldResult = await firstResult.value
+        XCTAssertFalse(oldResult.success)
+        let secondStop = Task { await converter.cancelConversion() }
+        await fulfillment(of: [secondCancelled], timeout: 2)
+        await second.finishDraining()
+        await secondStop.value
+        let replacementResult = await secondResult.value
+        XCTAssertFalse(replacementResult.success)
+        XCTAssertEqual(replacementResult.errorReason, "Conversion cancelled")
+    }
+
+    func testNativeWaveformEncoderCanCancelItselfWithoutJoining() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WaveformSelfCancellation-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let encoder = SelfCancellingFFmpegRunner()
+        let runner = SequencedRecordingSubprocessRunner { index, request, handler in
+            if index == 0 {
+                let output = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+                try Data(count: MemoryLayout<Float>.size).write(to: output)
+                return successfulSubprocessResult()
+            }
+            return try await encoder.run(request, outputHandler: handler)
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        await encoder.setCancellation { await converter.cancelConversion() }
+        let finished = expectation(description: "Native encoder self cancellation completes")
+        let resultTask = Task {
+            let result = await conversionResult(converter: converter, request: makeNativeWaveformConversionRequest(
+                inputURL: directory.appendingPathComponent("input.wav"),
+                outputBaseURL: directory.appendingPathComponent("output")
+            ))
+            XCTAssertFalse(result.success)
+            XCTAssertEqual(result.errorReason, "Conversion cancelled")
+            finished.fulfill()
+        }
+        await fulfillment(of: [finished], timeout: 2)
+        resultTask.cancel()
+    }
+
     func testNativeWaveformEncoderCancellationReachesStreamingRunner() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("WaveformStreamingCancellation-\(UUID().uuidString)")

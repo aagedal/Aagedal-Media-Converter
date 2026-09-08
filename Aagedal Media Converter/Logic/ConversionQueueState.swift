@@ -8,6 +8,7 @@ import os
 /// Captured by callbacks so invalidating a batch also invalidates work already
 /// dispatched to the main actor, without another suspension before UI mutation.
 final class ConversionCallbackOwnership: Sendable {
+    let id = UUID()
     private let active = OSAllocatedUnfairLock(initialState: true)
 
     var isActive: Bool { active.withLock { $0 } }

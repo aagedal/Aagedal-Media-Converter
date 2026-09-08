@@ -181,6 +181,7 @@ private struct ConversionPlayButton: View {
             hasFiles: hasFiles,
             onToggleConversion: onToggleConversion
         )
+        .disabled(!hasFiles || (!canStartConversion && !isConverting))
         .padding(.leading, 8)
         .padding(.trailing, 4)
     }

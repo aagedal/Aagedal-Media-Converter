@@ -75,12 +75,13 @@ actor AnalyticsService {
         enabledMetrics: [QualityMetric],
         vmafModel: VMAFModel,
         ssimulacra2MaxFrames: Int = AppConstants.defaultSSIMULACRA2MaxFrames,
+        operationID: UUID = UUID(),
         progress: @escaping @Sendable (QualityMetric, Double) -> Void
     ) async throws -> [MetricResult] {
         guard !Task.isCancelled else { throw AnalyticsError.cancelled }
 
         currentMetricTask?.cancel()
-        let analysisID = UUID()
+        let analysisID = operationID
         activeAnalysisID = analysisID
         defer {
             if activeAnalysisID == analysisID {
@@ -155,7 +156,8 @@ actor AnalyticsService {
     }
 
     /// Cancels the current analysis
-    func cancelAnalysis() {
+    func cancelAnalysis(operationID: UUID? = nil) {
+        guard operationID == nil || activeAnalysisID == operationID else { return }
         activeAnalysisID = nil
         currentMetricTask?.cancel()
         currentMetricTask = nil

@@ -94,18 +94,9 @@ struct IMFMetadataView: View {
         .padding(24)
         .frame(width: 640, height: 340)
         .onAppear {
-            let stored = item.imfMetadata
-            let meta = stored ?? IMFItemMetadata()
-            contentTitleText = meta.contentTitleText.isEmpty
-                ? (item.url.deletingPathExtension().lastPathComponent)
-                : meta.contentTitleText
-            if stored == nil,
-               let raw = UserDefaults.standard.string(forKey: AppConstants.lastIMFContentKindKey),
-               let remembered = IMFContentKind(rawValue: raw) {
-                contentKind = remembered
-            } else {
-                contentKind = meta.contentKind
-            }
+            let meta = PackageMetadataSettings().resolveIMFMetadata(item.imfMetadata, inputURL: item.url)
+            contentTitleText = meta.contentTitleText
+            contentKind = meta.contentKind
             annotationText = meta.annotationText
             audioLanguage = meta.audioLanguage
         }

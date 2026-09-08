@@ -1,5 +1,12 @@
 # v.4.3.0
 
+- **The conversion toolbar stays disabled when no files are waiting**, keeping SwiftUI and AppKit enabled states consistent after success or failure.
+
+- **AV2 Matroska audio preserves delayed tracks and packet timing**, including reordered/duplicated routes, trims, AAC preroll, and Opus codec delay.
+- **Native waveform cancellation waits for audio analysis and video encoding to drain**, while old encoder completion cannot clear its replacement.
+- **Conversion follow-ups and manual analytics keep their attempt identity.** Cancelled, removed, and retried items reject stale progress, results, subtitle embedding, upload dispatch, and analytics exports; delayed analytics cancellation preserves a newer run.
+- **DCP/IMF remembered content kinds stay stable during single-item preparation**, and metadata editors share the same title and content-kind defaults.
+
 - **Merged conversion updates follow the correct queue rows after removal or reordering.** Cancelled batches reject late progress, and replacing progress observers preserves the new subscription.
 - **Cancelling ordinary FFmpeg conversions waits for the encoder runner to drain**, keeping cancellation from returning while that tracked process is still stopping.
 - **Image-sequence filename frame rates match the source or generated-video request**, including queue previews, instead of using the default import rate.

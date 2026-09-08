@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FF177DE1EC9B44B5A401A49D /* AnalyticsAttemptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B605ED7FEDF34BA59ECB33BB /* AnalyticsAttemptTests.swift */; };
+		45F558E3D9034661AEE5F90D /* AnalyticsAttempt.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC6C7287376844AF919CCFE0 /* AnalyticsAttempt.swift */; };
+		CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 204052BD416D4C0D98872778 /* ConversionFollowUp.swift */; };
+		F922F223B1AA49FB90CBC548 /* ConversionFollowUpTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 156D40489BEF44E88D6942DD /* ConversionFollowUpTests.swift */; };
+		010A25E4BFF94166AD0C8126 /* AV2AudioTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */; };
+		52CAB26DCE164053A5589E32 /* AV2AudioPacketTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7011C648F17F49E8BE84BB2D /* AV2AudioPacketTiming.swift */; };
+		D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */; };
+		7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */; };
 		8CE9A054BDF34BD5974C74DE /* ConversionDependencyPreflightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A04DD0F426B484387C18EE8 /* ConversionDependencyPreflightTests.swift */; };
 		3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */; };
 		AAD060010000000000000001 /* KeychainCredentialManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */; };
@@ -314,6 +322,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B605ED7FEDF34BA59ECB33BB /* AnalyticsAttemptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsAttemptTests.swift; sourceTree = "<group>"; };
+		FC6C7287376844AF919CCFE0 /* AnalyticsAttempt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsAttempt.swift; sourceTree = "<group>"; };
+		204052BD416D4C0D98872778 /* ConversionFollowUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionFollowUp.swift; sourceTree = "<group>"; };
+		156D40489BEF44E88D6942DD /* ConversionFollowUpTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionFollowUpTests.swift; sourceTree = "<group>"; };
+		3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AudioTimingTests.swift; sourceTree = "<group>"; };
+		7011C648F17F49E8BE84BB2D /* AV2AudioPacketTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AudioPacketTiming.swift; sourceTree = "<group>"; };
+		D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageMetadataSettingsTests.swift; sourceTree = "<group>"; };
+		4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageMetadataSettings.swift; sourceTree = "<group>"; };
 		8A04DD0F426B484387C18EE8 /* ConversionDependencyPreflightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionDependencyPreflightTests.swift; sourceTree = "<group>"; };
 		63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionDependencyPreflight.swift; sourceTree = "<group>"; };
 		AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialManagerTests.swift; sourceTree = "<group>"; };
@@ -746,6 +762,8 @@
 				4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */,
 				AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */,
 				EE7542FB9D7445F09123B467 /* CommentSettings.swift */,
+				204052BD416D4C0D98872778 /* ConversionFollowUp.swift */,
+				4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */,
 				045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */,
 				596BC21F86AEFDA304EF948F /* MetadataWindowState.swift */,
 				8EEE45382EC13B670049F017 /* Previews */,
@@ -962,6 +980,10 @@
 				1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */,
 				8C054964A86C4E138E4DC9AF /* OutputFolderSelectionServiceTests.swift */,
 				427AD30186974A2CAF5EFC5D /* CommentSettingsTests.swift */,
+				B605ED7FEDF34BA59ECB33BB /* AnalyticsAttemptTests.swift */,
+				156D40489BEF44E88D6942DD /* ConversionFollowUpTests.swift */,
+				3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */,
+				D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
 				F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */,
 				575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */,
@@ -1000,6 +1022,7 @@
 				AF26AF26AF26AF26AF26AF26 /* IVFHeaderParser.swift */,
 				AF28AF28AF28AF28AF28AF28 /* IVFConcatenator.swift */,
 				AF2AAF2AAF2AAF2AAF2AAF2A /* MatroskaMuxer.swift */,
+				7011C648F17F49E8BE84BB2D /* AV2AudioPacketTiming.swift */,
 				8EEE452A2EC138FA0049F017 /* ExportPreset.swift */,
 				8E545D8A2C3404040088C274 /* FFMPEGConverter.swift */,
 				63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */,
@@ -1149,6 +1172,7 @@
 				ANALYTICSEXP00000001 /* AnalyticsExporter.swift */,
 				ANALYTICSMOD00000001 /* AnalyticsModels.swift */,
 				ANALYTICSSRV00000001 /* AnalyticsService.swift */,
+				FC6C7287376844AF919CCFE0 /* AnalyticsAttempt.swift */,
 			);
 			path = Analytics;
 			sourceTree = "<group>";
@@ -1392,6 +1416,8 @@
 				9F8D99DD5029416DA4559EF2 /* SubtitleExportSettings.swift in Sources */,
 				12B0864F27DD4CD6BADB329A /* OutputFolderSelectionService.swift in Sources */,
 				1122330BD4DA4103ACF80E38 /* CommentSettings.swift in Sources */,
+				CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */,
+				7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */,
 				BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */,
 				CC01A1C0PY00010000000002 /* CopyableCommandRow.swift in Sources */,
 				RSEL000000000001000BUILD /* RegionSelectionOverlayView.swift in Sources */,
@@ -1501,6 +1527,7 @@
 				AF27AF27AF27AF27AF27AF27 /* IVFHeaderParser.swift in Sources */,
 				AF29AF29AF29AF29AF29AF29 /* IVFConcatenator.swift in Sources */,
 				AF2BAF2BAF2BAF2BAF2BAF2B /* MatroskaMuxer.swift in Sources */,
+				52CAB26DCE164053A5589E32 /* AV2AudioPacketTiming.swift in Sources */,
 				8EC9A6F72EC149010082C67F /* PreviewTrimControls.swift in Sources */,
 				8EC9A6F82EC149010082C67F /* PreviewPlayerFooter.swift in Sources */,
 				8E4DF2712ECBAD4B007B6277 /* WaveformSettingsView.swift in Sources */,
@@ -1578,6 +1605,7 @@
 				5DA60AEC78445845148F3FFA /* VideoQueueTableView.swift in Sources */,
 				ANALYTICSMOD00000002 /* AnalyticsModels.swift in Sources */,
 				ANALYTICSSRV00000002 /* AnalyticsService.swift in Sources */,
+				45F558E3D9034661AEE5F90D /* AnalyticsAttempt.swift in Sources */,
 				ANALYTICSEXP00000002 /* AnalyticsExporter.swift in Sources */,
 				ANALYTICSSETV0000002 /* AnalyticsSettingsView.swift in Sources */,
 				ANALYTICSRESV0000002 /* AnalyticsResultsView.swift in Sources */,
@@ -1611,6 +1639,10 @@
 				8742E2B3B67147A68FB45282 /* OutputFolderCleanupServiceTests.swift in Sources */,
 				EFCEC47F414C44D586CF7F5D /* OutputFolderSelectionServiceTests.swift in Sources */,
 				77B54981696C4441A4B5AA25 /* CommentSettingsTests.swift in Sources */,
+				FF177DE1EC9B44B5A401A49D /* AnalyticsAttemptTests.swift in Sources */,
+				F922F223B1AA49FB90CBC548 /* ConversionFollowUpTests.swift in Sources */,
+				010A25E4BFF94166AD0C8126 /* AV2AudioTimingTests.swift in Sources */,
+				D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
 				D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */,
 				5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */,

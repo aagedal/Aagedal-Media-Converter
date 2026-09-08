@@ -352,8 +352,13 @@ struct ContentView: View {
                 // progress callback fires into an items array that no longer
                 // contains the uploading item (caused index-out-of-range crash).
                 if let group = encodingGroups.first(where: { $0.id == groupID }) {
-                    for item in group.items where item.uploadStatus.isActive {
-                        Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
+                    for item in group.items {
+                        if item.uploadStatus.isActive {
+                            Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
+                        }
+                        if let operationID = item.analyticsOperationID {
+                            Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                        }
                     }
                 }
                 encodingGroups.removeAll { $0.id == groupID }
@@ -372,6 +377,9 @@ struct ContentView: View {
                 guard !isConverting else { return }
                 if let gi = encodingGroups.firstIndex(where: { $0.id == groupID }) {
                     for ii in encodingGroups[gi].items.indices where encodingGroups[gi].items[ii].status != .waiting {
+                        if let operationID = encodingGroups[gi].items[ii].analyticsOperationID {
+                            Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                        }
                         encodingGroups[gi].items[ii].resetConversionState()
                     }
                 }
@@ -459,8 +467,8 @@ struct ContentView: View {
             }
             // Cancel in-progress preview generation (thumbnails/waveforms) to free CPU
             Task { await PreviewAssetGenerator.shared.cancelGeneration(for: item.url) }
-            if item.analyticsStatus.isInProgress {
-                Task { await AnalyticsService.shared.cancelAnalysis() }
+            if let operationID = item.analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
             }
             if item.uploadStatus == .uploading {
                 Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
@@ -476,6 +484,9 @@ struct ContentView: View {
 
     private func handleFileReset(_ index: Int, optionKeyPressed: Bool = false) {
         if index < droppedFiles.count {
+            if let operationID = droppedFiles[index].analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+            }
             droppedFiles[index].resetConversionState()
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
 
@@ -2306,8 +2317,8 @@ struct ContentView: View {
             }
             // Cancel in-progress preview generation (thumbnails/waveforms) to free CPU
             Task { await PreviewAssetGenerator.shared.cancelGeneration(for: item.url) }
-            if item.analyticsStatus.isInProgress {
-                Task { await AnalyticsService.shared.cancelAnalysis() }
+            if let operationID = item.analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
             }
             if item.uploadStatus == .uploading {
                 Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
@@ -2349,6 +2360,9 @@ struct ContentView: View {
 
         var didReset = false
         for index in droppedFiles.indices where droppedFiles[index].status != .waiting {
+            if let operationID = droppedFiles[index].analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+            }
             droppedFiles[index].resetConversionState()
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
             if shouldClearSettings {
@@ -2360,6 +2374,9 @@ struct ContentView: View {
         // Reset group items too
         for gi in encodingGroups.indices {
             for ii in encodingGroups[gi].items.indices where encodingGroups[gi].items[ii].status != .waiting {
+                if let operationID = encodingGroups[gi].items[ii].analyticsOperationID {
+                    Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                }
                 encodingGroups[gi].items[ii].resetConversionState()
                 didReset = true
             }

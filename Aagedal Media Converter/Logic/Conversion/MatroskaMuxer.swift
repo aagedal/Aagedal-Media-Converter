@@ -57,11 +57,14 @@ enum MatroskaMuxer {
         let isKeyframe: Bool
     }
 
-    /// One audio access unit plus its duration in samples at the track's sample rate. AAC frames
-    /// are a constant 1024 samples; Opus packets vary (derived from the packet's TOC byte).
+    /// One audio access unit plus its duration and optional source timestamp. AAC frames are a
+    /// constant 1024 samples; Opus packets vary (derived from the packet's TOC byte).
     struct AudioFrame: Sendable {
         let data: Data
         let durationSamples: Int
+        /// Container block timestamp, including codec delay for Opus. Nil retains the legacy
+        /// continuous sample clock for callers without source packet timing.
+        var presentationTimestampMilliseconds: Int64? = nil
     }
 
     /// One complete encoded audio track ready to mux. Keeping the track description and frames
@@ -87,8 +90,8 @@ enum MatroskaMuxer {
     /// Writes a `.mkv` containing the given video frames and (optionally) audio frames.
     /// - Parameters:
     ///   - videoFrames: in presentation order; timestamps are derived from the video frame rate.
-    ///   - audioFrames: in presentation order; each is one access unit. For AAC every unit is
-    ///     1024 samples, so timestamps are derived from `audio.sampleRate`.
+    ///   - audioFrames: in presentation order; each is one access unit. Missing timestamps are
+    ///     reconstructed from frame durations and `audio.sampleRate`.
     static func write(
         to url: URL,
         video: VideoTrackInfo,
@@ -135,12 +138,13 @@ enum MatroskaMuxer {
             let trackNumber = audioIndex + 2
             var sampleOffset = 0
             for frame in audioTrack.frames {
-                let pts = Int64((Double(sampleOffset) * 1000.0 / audioTrack.info.sampleRate).rounded())
+                let pts = frame.presentationTimestampMilliseconds
+                    ?? Int64((Double(sampleOffset) * 1000.0 / audioTrack.info.sampleRate).rounded())
                 blocks.append(Block(track: trackNumber, pts: pts, data: frame.data, key: true))
+                let frameDurationMs = Int64((Double(max(0, frame.durationSamples)) * 1000.0 / audioTrack.info.sampleRate).rounded())
+                lastAudioEndMs = max(lastAudioEndMs, pts + frameDurationMs)
                 sampleOffset += max(0, frame.durationSamples)
             }
-            let trackEndMs = Int64((Double(sampleOffset) * 1000.0 / audioTrack.info.sampleRate).rounded())
-            lastAudioEndMs = max(lastAudioEndMs, trackEndMs)
         }
 
         // Stable order: by timestamp, video before audio on ties (keeps each cluster opening on the
@@ -201,7 +205,9 @@ enum MatroskaMuxer {
         clusterElements.reserveCapacity(groups.count)
         var cuePoints: [(time: Int64, clusterIndex: Int)] = []
         for (gi, group) in groups.enumerated() {
-            let base = group[0].pts
+            // Encoder preroll can precede time zero. Cluster timestamps are unsigned, but a
+            // SimpleBlock's signed relative timestamp can represent those initial packets.
+            let base = max(0, group[0].pts)
             var body = Data()
             body += element(0xE7, uintData(UInt64(base)))    // cluster Timestamp
             for b in group {

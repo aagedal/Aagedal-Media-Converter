@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 597 tests pass. The
+- The unit-test baseline is green: 621 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -20,10 +20,10 @@ issue link when it starts.
   output, DCP/IMF conformance arguments, and AV2 chunk planning now have direct
   coverage as well.
 - The app contains about 97,300 lines of Swift. Several core files are very large:
-  `FFMPEGConverter.swift` (4,879 lines), `ConversionManager.swift` (2,912),
-  `ContentView.swift` (2,891), `VideoFileListView.swift` (2,266), and
+  `FFMPEGConverter.swift` (4,934 lines), `ConversionManager.swift` (2,967),
+  `ContentView.swift` (2,908), `VideoFileListView.swift` (2,163), and
   `ExportPreset.swift` (2,123).
-- There are 597 unit tests. The UI test target now has deterministic smoke
+- There are 621 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -241,12 +241,20 @@ verifies a start-trimmed 0.75-second video with no audio. Four duration/failure 
 also cover no double trimming and a retry after rejection. Broader generated-video
 AV2 support remains open (Codex, 2026-09-08).
 
+AV2 routed-audio extraction now retains FFmpeg packet timestamps alongside elementary
+packets. The Matroska muxer preserves track offsets, internal gaps, trim alignment,
+negative AAC encoder preroll, and Opus codec delay at millisecond precision. Generated
+AAC/Opus coverage exercises reordered and duplicated delayed tracks before and after
+trim and reads every packet back from the final mux. A separate parser regression
+rejects malformed timing, count mismatches, and nonfinite timestamps. Generated AV2
+video, AAC PCE layouts, and sample-exact Opus end padding remain open
+(Codex, 2026-09-08).
+
 The audit identified these remaining high-risk follow-ups:
 
 - generated waveform/synthesized-video AV2 output remains unsupported;
-- routed AV2 audio tracks are currently reconstructed from time zero, so differing
-  source-track start offsets are not preserved; uncommon AAC program-config-element
-  layouts also remain unsupported by the elementary-stream parser;
+- uncommon AAC program-config-element layouts remain unsupported by the AV2
+  elementary-stream parser; Opus end discard padding still needs sample-exact handling;
 - generated IMF CPL `SourceEncoding` references need full MXF descriptor and
   subdescriptor coverage plus conformance validation.
 
@@ -731,6 +739,14 @@ runner that requests its own cancellation from joining itself. Two injected-runn
 regressions cover delayed drain and self-cancellation. Native waveform tasks still
 include framework/MCA post-processing and are intentionally not joined here; full
 native waveform/helper/package drain semantics remain open (Codex, 2026-09-08).
+
+Native waveform cancellation now drains both its analysis decoder and streaming
+encoder. The encoder task is separate from later framework/MCA/BMX post-processing;
+analysis owns the bounded subprocess and cancellation-aware FFT work. Both tasks
+retain task-local identity to avoid joining themselves. Five regressions cover delayed
+drain in both phases, self-cancellation in both phases, and an old encoder finishing
+after its replacement starts. Later framework/post-processing, other helpers, and
+package drain semantics remain open (Codex, 2026-09-08).
 
 ### 2.2 Remove sync-over-async waits
 
@@ -1246,6 +1262,25 @@ restarted item identities, subscriber replacement, and overlapping item/whole-qu
 stops. Resource cleanup and new-batch admission wait for the final outstanding stop. Broader actor/UI binding and
 deferred upload/subtitle/analytics attempt ownership remain open (Codex, 2026-09-08).
 
+`ConversionFollowUp` now owns deferred work for a specific completed item, source,
+output, and conversion attempt. Unrelated batches preserve valid follow-ups; retries,
+removal, and changed outputs reject old upload dispatch, subtitle publication and
+embedding, merge verification, and analytics callbacks. Weak ownership records avoid
+retaining finished queue entries indefinitely. Subtitle reservations are established
+with conversion completion so an immediate cancellation cannot restart deferred work.
+Automatic subtitle service IDs derive from the retained conversion identity; retries
+cancel prior automatic/manual generation and embedding before replacement encoding,
+even if the row token was already cleared. Row removal without successful service
+cancellation can still leave a generated SRT sidecar on disk.
+
+Manual analytics now share an extracted `AnalyticsAttempt` policy and one UI execution
+path. Every attempt owns a model token through progress, terminal results, metric
+merging, and automatic export. Targeted cancellation cannot stop a replacement;
+reset and removal invalidate publication. Generated-subtitle and manual analytics UI
+validation beyond the ordinary conversion smoke flows remains open. Broader execution,
+view coordination, actor/UI bindings, filesystem publication, and upload service
+lifetime audits remain open (Codex, 2026-09-08).
+
 ### 3.2 Make conversion plans typed
 
 Status: in progress; typed audio routing introduced 2026-09-08 (Codex).
@@ -1490,6 +1525,13 @@ and split-to-mono compatibility checks. Four regressions cover retained appearan
 six preset resolution overrides, request selection, and nonfinite frame-rate fallback.
 Broader UI/request preferences and schema migrations remain open (Codex, 2026-09-08).
 
+`PackageMetadataSettings` now captures remembered DCP/IMF content kinds before
+single-item metadata preparation suspends. The two metadata editors share its title
+and content-kind resolver, preserving explicit item metadata and leaving malformed
+preferences unchanged. Three regressions cover defaults, invalid values, snapshot
+stability, and explicit metadata/title precedence. Broader request preferences and
+schema migrations remain open (Codex, 2026-09-08).
+
 ## Priority 4 — Accessibility, localization, and product polish
 
 Target: parallelizable once stable identifiers are introduced.
@@ -1539,6 +1581,12 @@ selection are real keyboard-focusable buttons. Crop reset/centering, track selec
 image-sequence frame rate, and preview toggles have explicit names, values, or stable
 identifiers. New strings are translated into Norwegian. The combined Debug build
 passes; manual VoiceOver and keyboard interaction validation remains (Codex, 2026-09-05).
+
+The conversion toolbar now declares its disabled state in SwiftUI as well as AppKit.
+The conversion UI smoke suite had reproduced an enabled accessibility state after
+success and failure despite a finished queue; the shared condition fixes those
+assertions while keeping active cancellation available. All three smoke flows pass
+with the existing assertions (Codex, 2026-09-08).
 
 ### 4.2 Close the localization gap
 
@@ -1803,7 +1851,38 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 597 unit tests pass
+Latest validation (2026-09-08, Codex): Debug compilation and all 621 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Twenty-four new
+regressions cover AV2 packet timing and generated mux readback, native waveform
+analysis/encoder draining and self-cancellation, conversion follow-up ownership,
+subtitle retry identity, manual analytics publication and targeted cancellation,
+and package metadata settings. The three conversion UI smoke tests pass together
+(success, failure details, start/cancel), including toolbar disabled-state assertions.
+The final error-details screenshot was visually reviewed. All 43 release-script tests,
+manifest freshness, and localization checks pass (1,492 entries, 15 intentional
+omissions). The final unsigned Release build passes; its bundle audit verifies all
+44 Mach-O images and six packaged license notices. No binaries or license assignments
+changed.
+
+Initial verification found Opus codec-delay rounding amplification; ties-to-even
+restores the source millisecond timeline, verified through real packet readback.
+The first UI run reproduced the toolbar enabled-state issue after both success and
+failure; matching SwiftUI/AppKit disabled conditions fixed the complete suite without
+weakening its assertions. Independent review expanded subtitle retry fencing to retain
+service identity after row-token clearing and added analytics IDs through manual retry,
+reset, and deletion.
+
+Remaining implementation work: full typed conversion plans and broader orchestration
+extraction; other UI/request settings and schema migrations; framework/MCA/BMX,
+helper, and package draining; broader actor/UI bindings, upload service lifetime and
+filesystem publication (including generated SRT cleanup after removal); AV2 generated
+video, uncommon AAC layouts and sample-exact Opus end padding; and IMF descriptor
+conformance. Manual MPV playback, Shortcuts, sandbox reauthorization, VoiceOver,
+broader bilingual/scrolled UI, live capture/editor, runtime memory/dynamic dependency
+measurements, clean-machine install/update, complete dependency provenance (99
+unresolved license entries), and credentialed release checks remain.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 597 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Nineteen additional
 tests cover source/request filename rates, generated-video settings, typed timecode
 policy and overflow, callback/subscriber ownership, ordinary runner draining,

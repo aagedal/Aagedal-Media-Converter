@@ -1440,187 +1440,84 @@ struct VideoFileListView: View {
 
     // MARK: - Analyze Only (run analytics on already-encoded item)
 
-    /// Runs quality analytics on a completed item using source and output files
+    /// Runs quality analytics on a completed item using source and output files.
+    @MainActor
     private func analyzeOnly(itemID: UUID) async {
-        guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }) else {
-            return
-        }
-
-        let sourceURL = droppedFiles[index].url
-        guard let encodedURL = droppedFiles[index].outputURL else {
-            await MainActor.run {
-                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                    droppedFiles[idx].analyticsStatus = .failed("No encoded output file available")
-                }
-            }
-            return
-        }
-
-        let settings = analyticsSettings.analyticsSnapshot()
-        let enabledMetrics = settings.enabledMetrics
-        let vmafModel = settings.vmafModel
-
-        guard !enabledMetrics.isEmpty else {
-            await MainActor.run {
-                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                    droppedFiles[idx].analyticsStatus = .failed("No metrics enabled in Settings > Analytics")
-                }
-            }
-            return
-        }
-
-        // Update status to pending
-        await MainActor.run {
-            if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                droppedFiles[idx].analyticsStatus = .pending
-            }
-        }
-
-        do {
-            let results = try await AnalyticsService.shared.runAnalytics(
-                sourceFile: sourceURL,
-                encodedFile: encodedURL,
-                enabledMetrics: enabledMetrics,
-                vmafModel: vmafModel,
-                ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames
-            ) { metric, progressValue in
-                Task { @MainActor in
-                    if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                        // Drop in-flight progress updates that arrive after cancellation.
-                        guard self.droppedFiles[idx].analyticsStatus.isInProgress else { return }
-                        self.droppedFiles[idx].analyticsStatus = .running(metric: metric, progress: progressValue)
-                        self.droppedFiles[idx].analyticsProgress = progressValue
-                    }
-                }
-            }
-
-            let durationSeconds = droppedFiles.first(where: { $0.id == itemID })?.durationSeconds ?? 0
-
-            let analyticsResults = AnalyticsResults(
-                sourceFileName: sourceURL.lastPathComponent,
-                encodedFileName: encodedURL.lastPathComponent,
-                metrics: results,
-                timestamp: Date(),
-                durationSeconds: durationSeconds
-            )
-
-            await MainActor.run {
-                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                    droppedFiles[idx].analyticsStatus = .completed
-                    droppedFiles[idx].analyticsResults = analyticsResults
-                    droppedFiles[idx].analyticsProgress = 1.0
-                }
-                AnalyticsExporter.autoExportIfEnabled(results: analyticsResults, encodedFileURL: encodedURL, settings: settings.autoExport)
-            }
-
-            Self.logger.info("Analyze-only completed for \(encodedURL.lastPathComponent, privacy: .public)")
-
-        } catch {
-            await MainActor.run {
-                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                    if case AnalyticsError.cancelled = error {
-                        // User-initiated cancel already set status to .notQueued; don't overwrite.
-                        return
-                    }
-                    droppedFiles[idx].analyticsStatus = .failed(error.localizedDescription)
-                }
-            }
-            Self.logger.error("Analyze-only failed: \(error.localizedDescription, privacy: .public)")
-        }
+        await runManualAnalytics(itemID: itemID, requestedMetrics: nil)
     }
 
-    /// Runs specific quality metrics and merges results with existing analytics
+    /// Runs specific metrics and merges them with previously completed results.
+    @MainActor
     func analyzeMetrics(itemID: UUID, metrics: [QualityMetric]) async {
-        guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }) else {
-            return
-        }
+        await runManualAnalytics(itemID: itemID, requestedMetrics: metrics)
+    }
 
-        let sourceURL = droppedFiles[index].url
-        guard let encodedURL = droppedFiles[index].outputURL else {
-            await MainActor.run {
-                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                    droppedFiles[idx].analyticsStatus = .failed("No encoded output file available")
-                }
-            }
-            return
-        }
-
+    @MainActor
+    private func runManualAnalytics(itemID: UUID, requestedMetrics: [QualityMetric]?) async {
+        guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }) else { return }
         let settings = analyticsSettings.analyticsSnapshot()
-        let vmafModel = settings.vmafModel
-
-        await MainActor.run {
-            if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                droppedFiles[idx].analyticsStatus = .pending
-            }
+        let metrics = requestedMetrics ?? settings.enabledMetrics
+        guard let encodedURL = droppedFiles[index].outputURL else {
+            droppedFiles[index].analyticsOperationID = nil
+            droppedFiles[index].analyticsStatus = .failed("No encoded output file available")
+            return
         }
-
+        guard !metrics.isEmpty else {
+            droppedFiles[index].analyticsOperationID = nil
+            droppedFiles[index].analyticsStatus = .failed("No metrics enabled in Settings > Analytics")
+            return
+        }
+        // Claim the row before the first suspension so old completion/progress cannot
+        // publish into this attempt, even when cancellation and retry happen together.
+        let attempt = AnalyticsAttempt(item: &droppedFiles[index], encodedURL: encodedURL)
         do {
-            let newResults = try await AnalyticsService.shared.runAnalytics(
-                sourceFile: sourceURL,
+            let results = try await AnalyticsService.shared.runAnalytics(
+                sourceFile: attempt.sourceURL,
                 encodedFile: encodedURL,
                 enabledMetrics: metrics,
-                vmafModel: vmafModel,
-                ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames
+                vmafModel: settings.vmafModel,
+                ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames,
+                operationID: attempt.operationID
             ) { metric, progressValue in
                 Task { @MainActor in
-                    if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                        // Drop in-flight progress updates that arrive after cancellation.
-                        guard self.droppedFiles[idx].analyticsStatus.isInProgress else { return }
-                        self.droppedFiles[idx].analyticsStatus = .running(metric: metric, progress: progressValue)
-                        self.droppedFiles[idx].analyticsProgress = progressValue
+                    attempt.apply(to: &self.droppedFiles) { item in
+                        item.analyticsStatus = .running(metric: metric, progress: progressValue)
+                        item.analyticsProgress = progressValue
                     }
                 }
             }
-
-            let durationSeconds = droppedFiles.first(where: { $0.id == itemID })?.durationSeconds ?? 0
-
-            await MainActor.run {
-                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                    // Merge new results with existing
-                    var existingMetrics = droppedFiles[idx].analyticsResults?.metrics ?? []
-                    let newMetricTypes = Set(newResults.map(\.metric))
-                    existingMetrics.removeAll { newMetricTypes.contains($0.metric) }
-                    existingMetrics.append(contentsOf: newResults)
-
-                    droppedFiles[idx].analyticsResults = AnalyticsResults(
-                        sourceFileName: sourceURL.lastPathComponent,
-                        encodedFileName: encodedURL.lastPathComponent,
-                        metrics: existingMetrics,
-                        timestamp: Date(),
-                        durationSeconds: durationSeconds
-                    )
-                    droppedFiles[idx].analyticsStatus = .completed
-                    droppedFiles[idx].analyticsProgress = 1.0
-
-                    if let updatedResults = droppedFiles[idx].analyticsResults {
-                        AnalyticsExporter.autoExportIfEnabled(results: updatedResults, encodedFileURL: encodedURL, settings: settings.autoExport)
-                    }
-                }
+            attempt.apply(to: &droppedFiles) { item in
+                var combinedMetrics = requestedMetrics == nil ? [] : (item.analyticsResults?.metrics ?? [])
+                let replacedMetrics = Set(results.map(\.metric))
+                combinedMetrics.removeAll { replacedMetrics.contains($0.metric) }
+                combinedMetrics.append(contentsOf: results)
+                let completed = AnalyticsResults(
+                    sourceFileName: attempt.sourceURL.lastPathComponent,
+                    encodedFileName: encodedURL.lastPathComponent,
+                    metrics: combinedMetrics,
+                    timestamp: Date(),
+                    durationSeconds: attempt.durationSeconds
+                )
+                item.analyticsStatus = .completed
+                item.analyticsResults = completed
+                item.analyticsProgress = 1
+                item.analyticsOperationID = nil
+                AnalyticsExporter.autoExportIfEnabled(results: completed, encodedFileURL: encodedURL, settings: settings.autoExport)
             }
-
-            Self.logger.info("Additional metrics completed for \(encodedURL.lastPathComponent, privacy: .public)")
-
         } catch {
-            await MainActor.run {
-                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
-                    if case AnalyticsError.cancelled = error {
-                        // User-initiated cancel already set status to .notQueued. If the
-                        // item has prior completed results, restore that state so the
-                        // results badge stays visible.
-                        if droppedFiles[idx].analyticsResults != nil {
-                            droppedFiles[idx].analyticsStatus = .completed
-                        }
-                        return
-                    }
-                    // Restore to completed if we had prior results
-                    if droppedFiles[idx].analyticsResults != nil {
-                        droppedFiles[idx].analyticsStatus = .completed
-                    } else {
-                        droppedFiles[idx].analyticsStatus = .failed(error.localizedDescription)
-                    }
+            attempt.apply(to: &droppedFiles) { item in
+                item.analyticsOperationID = nil
+                if item.analyticsResults != nil {
+                    item.analyticsStatus = .completed
+                } else if error is CancellationError {
+                    item.analyticsStatus = .notQueued
+                } else if case AnalyticsError.cancelled = error {
+                    item.analyticsStatus = .notQueued
+                } else {
+                    item.analyticsStatus = .failed(error.localizedDescription)
                 }
             }
-            Self.logger.error("Additional metrics failed: \(error.localizedDescription, privacy: .public)")
+            Self.logger.error("Manual analytics failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

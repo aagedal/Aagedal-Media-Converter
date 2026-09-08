@@ -99,6 +99,8 @@ actor FFMPEGConverter {
     @TaskLocal private static var runningSubprocessID: UUID?
     private var currentSubprocessTask: Task<Void, Never>?
     private var joinableSubprocessID: UUID?
+    private var currentWaveformEncodingTask: Task<SubprocessResult, Error>?
+    private var currentWaveformEncodingID: UUID?
     private var currentDependencyPreflightTask: Task<String?, Error>?
     private var currentWaveformAnalysisTask: Task<FrequencyBandData, Error>?
     private var currentWaveformAnalysisID: UUID?
@@ -525,6 +527,9 @@ actor FFMPEGConverter {
         currentDependencyPreflightTask = nil
         currentProgressGate?.invalidate()
         currentSubprocessTask?.cancel()
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
         currentWaveformAnalysisTask?.cancel()
         currentWaveformAnalysisTask = nil
         currentWaveformAnalysisID = nil
@@ -2946,7 +2951,9 @@ actor FFMPEGConverter {
         args += trim.outputArguments
         args += ["-vn"]
         args += routingArguments
-        args += ["-c:a", codec.ffmpegEncoder, "-b:a", bitrate, "-f", "matroska", routedAudioURL.path]
+        // Keep the source timeline relative to the picture/trim origin. Otherwise the audio-only
+        // muxer shifts every stream to hide encoder preroll, changing audio/video synchronization.
+        args += ["-c:a", codec.ffmpegEncoder, "-b:a", bitrate, "-avoid_negative_ts", "disabled", "-f", "matroska", routedAudioURL.path]
         switch await runTrackedAV2Helper(
             ffmpegPath,
             args,
@@ -2979,12 +2986,20 @@ actor FFMPEGConverter {
             let elementaryURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("av2audio_\(UUID().uuidString).\(codec.intermediateExtension)")
             defer { Self.cleanupTempFile(at: elementaryURL, label: "AV2 mux audio track") }
+            let timingURL = elementaryURL.appendingPathExtension("framecrc")
+            defer { Self.cleanupTempFile(at: timingURL, label: "AV2 mux audio timing") }
             var extractionArguments = [
-                "-y", "-nostdin", "-hide_banner", "-i", routedAudioURL.path,
+                "-y", "-nostdin", "-hide_banner", "-copyts", "-i", routedAudioURL.path,
                 "-map", "0:a:\(trackIndex)", "-vn", "-c:a", "copy"
             ]
             extractionArguments += codec == .opus ? ["-f", "ogg"] : ["-f", "adts"]
             extractionArguments += [elementaryURL.path]
+            // A second copy output records packet PTS in the same extraction pass. Elementary
+            // AAC/Ogg files alone cannot carry the source-track offset or internal timestamp gaps.
+            extractionArguments += [
+                "-map", "0:a:\(trackIndex)", "-vn", "-c:a", "copy",
+                "-avoid_negative_ts", "disabled", "-f", "framecrc", timingURL.path
+            ]
             let extractionResult = await runTrackedAV2Helper(
                 ffmpegPath,
                 extractionArguments,
@@ -2996,7 +3011,9 @@ actor FFMPEGConverter {
             }
             guard case .success = extractionResult,
                   Self.fileHasContent(at: elementaryURL),
-                  let track = Self.parseAV2MuxAudioTrack(elementaryURL, codec: codec) else {
+                  let parsedTrack = Self.parseAV2MuxAudioTrack(elementaryURL, codec: codec),
+                  let manifest = try? String(contentsOf: timingURL, encoding: .utf8),
+                  let track = AV2AudioPacketTiming.applying(manifest: manifest, to: parsedTrack) else {
                 if case .failed(let reason) = extractionResult {
                     return .failed("Could not packetize routed audio track \(trackIndex + 1): \(reason)")
                 }
@@ -3384,20 +3401,25 @@ actor FFMPEGConverter {
         let analysisID = UUID()
         let runner = subprocessRunner
         let analysisTask = Task {
-            try await WaveformPCMDecoder.decode(
-                url: inputURL,
-                ffmpegPath: ffmpegPath,
-                frameRate: waveformRequest.frameRate,
-                duration: effectiveDuration,
-                bandCount: waveformRequest.bandCount,
-                frequencyDistribution: waveformRequest.frequencyDistribution,
-                normalizeAudio: waveformRequest.normalizeAudio,
-                audioRoutingConfig: audioRoutingConfig,
-                trimStart: trimStart,
-                trimEnd: trimEnd,
-                subprocessRunner: runner
-            )
+            try await Self.$runningSubprocessID.withValue(analysisID) {
+                try await WaveformPCMDecoder.decode(
+                    url: inputURL,
+                    ffmpegPath: ffmpegPath,
+                    frameRate: waveformRequest.frameRate,
+                    duration: effectiveDuration,
+                    bandCount: waveformRequest.bandCount,
+                    frequencyDistribution: waveformRequest.frequencyDistribution,
+                    normalizeAudio: waveformRequest.normalizeAudio,
+                    audioRoutingConfig: audioRoutingConfig,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd,
+                    subprocessRunner: runner
+                )
+            }
         }
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
         currentWaveformAnalysisTask?.cancel()
         currentWaveformAnalysisTask = analysisTask
         currentWaveformAnalysisID = analysisID
@@ -3486,15 +3508,10 @@ actor FFMPEGConverter {
             nil
         }
 
-        currentSubprocessTask?.cancel()
-        joinableSubprocessID = nil
-        currentSubprocessTask = Task { [weak self] in
-            defer {
-                Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
-            }
-            let result: SubprocessResult
-            do {
-                result = try await runner.runWithStreamingStandardInput(
+        let encodingID = UUID()
+        let encodingTask = Task {
+            try await Self.$runningSubprocessID.withValue(encodingID) {
+                try await runner.runWithStreamingStandardInput(
                     subprocessRequest,
                     inputProducer: { standardInput in
                         await WaveformFramePipeWriter.writeFrames(
@@ -3519,6 +3536,23 @@ actor FFMPEGConverter {
                     },
                     outputHandler: nil
                 )
+            }
+        }
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = encodingTask
+        currentWaveformEncodingID = encodingID
+
+        currentSubprocessTask?.cancel()
+        joinableSubprocessID = nil
+        currentSubprocessTask = Task { [weak self] in
+            defer {
+                Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
+            }
+            let result: SubprocessResult
+            do {
+                let encodingResult = await encodingTask.result
+                await self?.clearWaveformEncoding(if: encodingID)
+                result = try encodingResult.get()
             } catch is CancellationError {
                 Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
                 await complete(false, "Conversion cancelled")
@@ -4250,6 +4284,10 @@ actor FFMPEGConverter {
     }
 
     func cancelConversion() async {
+        let waveformAnalysisTask = currentWaveformAnalysisTask
+        let waveformAnalysisID = currentWaveformAnalysisID
+        let waveformEncodingTask = currentWaveformEncodingTask
+        let waveformEncodingID = currentWaveformEncodingID
         let subprocessTask = currentSubprocessTask
         let subprocessID = joinableSubprocessID
         joinableSubprocessID = nil
@@ -4263,6 +4301,9 @@ actor FFMPEGConverter {
         currentProgressGate = nil
         currentSubprocessTask?.cancel()
         currentSubprocessTask = nil
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
         currentWaveformAnalysisTask?.cancel()
         currentWaveformAnalysisTask = nil
         currentWaveformAnalysisID = nil
@@ -4296,6 +4337,20 @@ actor FFMPEGConverter {
         if let subprocessID, Self.runningSubprocessID != subprocessID {
             await subprocessTask?.value
         }
+        // Native analysis owns a bounded decoder plus cancellation-aware FFT work.
+        if let waveformAnalysisID, Self.runningSubprocessID != waveformAnalysisID {
+            _ = await waveformAnalysisTask?.result
+        }
+        // Join only the native encoder, not its later framework/MCA post-processing.
+        if let waveformEncodingID, Self.runningSubprocessID != waveformEncodingID {
+            _ = await waveformEncodingTask?.result
+        }
+    }
+
+    private func clearWaveformEncoding(if encodingID: UUID) {
+        guard currentWaveformEncodingID == encodingID else { return }
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
     }
 
     @discardableResult
