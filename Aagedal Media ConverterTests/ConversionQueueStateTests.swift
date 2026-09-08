@@ -1,8 +1,121 @@
 import Foundation
+import SwiftUI
+import os
 import XCTest
 @testable import Aagedal_Media_Converter
 
 final class ConversionQueueStateTests: XCTestCase {
+    @MainActor
+    func testCancellingItemDuringManagerPreparationDoesNotStartEncoding() async {
+        let gate = ConversionPreparationDetailsGate()
+        let started = expectation(description: "Conversion details started")
+        let manager = ConversionManager(conversionDetailsLoader: { _, _, _ in
+            await gate.wait(started: started)
+        })
+        let queue = ConversionPreparationQueue(items: [item(status: .waiting)])
+        let selectedID = queue.items[0].id
+        let binding = queue.binding
+        let task = Task {
+            await manager.startConversion(droppedFiles: binding, outputFolder: "/fixture", preset: .h264)
+        }
+        await fulfillment(of: [started], timeout: 2)
+        await manager.cancelItem(with: selectedID)
+        let cancelled = queue.items
+        await gate.finish()
+        await task.value
+
+        XCTAssertEqual(queue.items, cancelled)
+        XCTAssertEqual(queue.items[0].status, .cancelled)
+        XCTAssertFalse(queue.items[0].detailsLoaded)
+    }
+
+    @MainActor
+    func testRemovingItemDuringManagerPreparationFinishesEmptyQueue() async {
+        let gate = ConversionPreparationDetailsGate()
+        let started = expectation(description: "Conversion details started")
+        let manager = ConversionManager(conversionDetailsLoader: { _, _, _ in
+            await gate.wait(started: started)
+        })
+        let queue = ConversionPreparationQueue(items: [item(status: .waiting)])
+        let binding = queue.binding
+        let task = Task {
+            await manager.startConversion(droppedFiles: binding, outputFolder: "/fixture", preset: .h264)
+        }
+        await fulfillment(of: [started], timeout: 2)
+        queue.items = []
+        await gate.finish()
+        await task.value
+
+        XCTAssertTrue(queue.items.isEmpty)
+    }
+
+    func testPreparedItemFollowsIdentityAfterQueueReordering() throws {
+        let selected = item(status: .waiting)
+        let other = item(status: .waiting)
+        var items = [other, selected]
+
+        let index = try XCTUnwrap(ConversionQueueState.beginPreparedItem(
+            selected, details: preparedDetails(), in: &items
+        ))
+
+        XCTAssertEqual(index, 1)
+        XCTAssertEqual(items[0], other)
+        XCTAssertEqual(items[1].id, selected.id)
+        XCTAssertEqual(items[1].status, .converting)
+        XCTAssertEqual(items[1].size, 1234)
+        XCTAssertEqual(items[1].durationSeconds, 7)
+        XCTAssertTrue(items[1].detailsLoaded)
+        XCTAssertEqual(items[1].comment, selected.comment)
+    }
+
+    func testPreparedItemDiscardsResultsForRemovedOrReplacedSources() {
+        let selected = item(status: .waiting)
+        var replacement = selected
+        replacement.url = URL(fileURLWithPath: "/fixture/replacement.mov")
+        for initial in [[], [item(status: .waiting)], [replacement]] {
+            var items = initial
+            XCTAssertNil(ConversionQueueState.beginPreparedItem(
+                selected, details: preparedDetails(), in: &items
+            ))
+            XCTAssertEqual(items, initial)
+        }
+    }
+
+    func testPreparedItemCannotReviveCancelledOrFinishedWork() {
+        let selected = item(status: .waiting)
+        for status in [ConversionManager.ConversionStatus.cancelled, .done, .failed, .converting] {
+            var changed = selected
+            changed.status = status
+            var items = [changed]
+            XCTAssertNil(ConversionQueueState.beginPreparedItem(
+                selected, details: preparedDetails(), in: &items
+            ))
+            XCTAssertEqual(items, [changed])
+        }
+    }
+
+    func testPreparedItemPreservesDetailsCompletedByConcurrentImport() throws {
+        let selected = item(status: .waiting)
+        var updated = selected
+        updated.detailsLoaded = true
+        updated.size = 9999
+        updated.outputFileNameOverride = "chosen-name.mov"
+        var items = [updated]
+
+        XCTAssertNotNil(ConversionQueueState.beginPreparedItem(
+            selected, details: preparedDetails(), in: &items
+        ))
+        updated.status = .converting
+        XCTAssertEqual(items, [updated])
+    }
+
+    private func preparedDetails() -> VideoFileUtils.VideoItemDetails {
+        VideoFileUtils.VideoItemDetails(
+            size: 1234, duration: "00:00:07", durationSeconds: 7,
+            thumbnailData: nil, outputURL: nil, hasVideoStream: true, metadata: nil
+        )
+    }
+
     func testNextItemPreservesQueueOrderAndRespectsBatchSelection() {
         let done = item(status: .done)
         let first = item(status: .waiting)
@@ -103,5 +216,43 @@ final class ConversionQueueStateTests: XCTestCase {
         XCTAssertNil(item.statusMessage, file: file, line: line)
         XCTAssertEqual(item.comment, original.comment, file: file, line: line)
         XCTAssertEqual(item.conversionError, original.conversionError, file: file, line: line)
+    }
+}
+
+/// The manager is an actor and accesses queue bindings from its own executor.
+/// Test bindings therefore use synchronized storage instead of MainActor closures.
+private final class ConversionPreparationQueue: Sendable {
+    private let storage: OSAllocatedUnfairLock<[VideoItem]>
+
+    init(items: [VideoItem]) {
+        storage = OSAllocatedUnfairLock(initialState: items)
+    }
+
+    var items: [VideoItem] {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
+    }
+
+    var binding: Binding<[VideoItem]> {
+        Binding(get: { self.items }, set: { self.items = $0 })
+    }
+}
+
+private actor ConversionPreparationDetailsGate {
+    private var continuation: CheckedContinuation<VideoFileUtils.VideoItemDetails, Never>?
+
+    func wait(started: XCTestExpectation) async -> VideoFileUtils.VideoItemDetails {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            started.fulfill()
+        }
+    }
+
+    func finish() {
+        continuation?.resume(returning: VideoFileUtils.VideoItemDetails(
+            size: 1234, duration: "00:00:07", durationSeconds: 7,
+            thumbnailData: nil, outputURL: nil, hasVideoStream: true, metadata: nil
+        ))
+        continuation = nil
     }
 }

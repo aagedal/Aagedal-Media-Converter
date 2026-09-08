@@ -8,8 +8,8 @@ issue link when it starts.
 
 ## Audit snapshot
 
-- The project builds successfully with Xcode 17 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 552 tests pass. The
+- The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
+- The unit-test baseline is green: 578 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,591 lines), `ConversionManager.swift` (3,371),
   `ContentView.swift` (3,017), `VideoFileListView.swift` (2,280), and
   `ExportPreset.swift` (2,241).
-- There are 552 unit tests. The UI test target now has deterministic smoke
+- There are 578 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -228,6 +228,18 @@ DCP and IMF package audio extraction now treats an empty customized audio route 
 an intentional silent package. This prevents the post-processing path from indexing
 an empty stream selection when the user removes every audio track; generated WAV
 coverage verifies that the package stays silent without launching FFmpeg.
+
+Generated native-waveform and synthesized-video commands now let routed audio own
+its maps, replacing the automatic all-audio map instead of retaining unwanted tracks
+or duplicate maps. Synthesized routing also preserves the generated video map without
+adding a nonexistent source-video map. Selected order/duplicates, intentional silence,
+default routing, disabled opt-ins, and mute/include-audio controls have direct matrix
+coverage. Silent synthesized sources now require a finite trim, captured output
+duration, or bounded source-duration result; unknown/exhausted sources fail before
+encoder launch and release their output reservation. A real one-second audio fixture
+verifies a start-trimmed 0.75-second video with no audio. Four duration/failure tests
+also cover no double trimming and a retry after rejection. Broader generated-video
+AV2 support remains open (Codex, 2026-09-08).
 
 The audit identified these remaining high-risk follow-ups:
 
@@ -1045,6 +1057,15 @@ cover current delivery, replacement, teardown, and release with never-completing
 publishers. Live MPV playback and the wider callback audit remain open
 (Codex, 2026-09-08).
 
+Conversion queue preparation now resolves the selected item by UUID, source URL,
+and waiting state after asynchronous details discovery. Removed or replaced rows
+cannot receive another source's metadata, reordered rows retain their identity, and
+cancelling a waiting item during probing cannot revive it as an encode. The batch
+ownership check now precedes publication, and a concurrent import's completed details
+remain authoritative. Six regressions cover the pure transition plus real manager
+cancellation/removal during an injected delayed probe. Later merge/progress callback
+ownership and broader actor/UI binding access remain audit work (Codex, 2026-09-08).
+
 ### 2.3 Standardize user-visible errors
 
 Status: in progress; queue failure details and redacted diagnostic copying added 2026-09-05 (Codex).
@@ -1202,6 +1223,12 @@ the complete rendered filename, preventing unnecessary `_encoded` additions when
 template has already changed the name. Broader import/presentation coordinators and
 conversion execution remain open (Codex, 2026-09-08).
 
+The metadata-preparation-to-encoding transition now lives in
+`ConversionQueueState.beginPreparedItem`. The manager injects its details loader and
+checks batch ownership before using that transition, so removal/cancellation can be
+tested without encoding or launching the app. Broader conversion execution and view
+coordinator extractions remain open (Codex, 2026-09-08).
+
 ### 3.2 Make conversion plans typed
 
 Status: in progress; typed audio routing introduced 2026-09-08 (Codex).
@@ -1241,6 +1268,12 @@ planning. Frame counts outside the integer range fall back before conversion to
 `Int`. Four regressions cover trim arguments/duration, single/chunk agreement,
 overflow fallback, and captured-container frame-lag policy. General typed inputs,
 video filters, codecs, metadata, and output ownership remain open (Codex, 2026-09-08).
+
+Generated video and audio routing now have explicit map ownership: routing replaces
+automatic audio maps while preserving the generated picture map. `FFMPEGCommand`
+can report a preparation error, and the converter rejects a silent synthesized source
+without a known positive duration before launching FFmpeg. General typed inputs,
+filters, codecs, metadata, and output plans remain open (Codex, 2026-09-08).
 
 ### 3.3 Centralize settings access
 
@@ -1387,6 +1420,34 @@ Eight regressions cover snapshots, overrides/suffixes, same-folder source protec
 large counters, integer limits, concurrent reservations, and dates. Template labels
 across asynchronous conversion preparation and remaining request settings still need
 review (Codex, 2026-09-08).
+
+Stream Copy and all ten custom preset slots now join `CodecExportSettings`.
+Stream Copy captures container and metadata policy, retaining source-dependent Keep
+Current extensions through naming, converter output, and queue completion. Custom
+presets capture command tokens, extension, crop, and audio-routing opt-ins for ordinary
+and native waveform commands. Five isolated regressions cover slot defaults, command
+stability, routing/crop policy, and source-collision protection.
+
+AVC-Intra default MCA soundfields now use an immutable opt-in snapshot for mono,
+stereo, 5.1, and 7.1 tracks. Standard and native waveform label generation receive it
+through probing and encoding; explicit overrides and input MCA labels keep precedence.
+Three isolated regressions cover preference changes during probing, invalid/default
+values without rewriting preferences, and label precedence.
+
+Codec snapshots now retain filename template labels from the same settings capture,
+and AV2 filename resolution comes from its encoding snapshot. Single-item naming and
+encoding share these snapshots; ordinary merge plans retain their codec/audio/AV2
+settings from naming through execution, and conformance merges retain their Stream
+Copy snapshot. Three regressions cover broadcast name/command agreement, animated and
+custom suffixes, and AV2 resolution after preference changes. DCP and IMF now also
+capture their package settings during naming and retain them through single/merged
+conversion; their labels derive from the captured resolution and frame rate. Three
+more regressions cover DCP, both IMF applications with fractional rate tags, and
+safe fallback for malformed image-sequence frame-rate preferences. Nonfinite and
+out-of-integer-range values can no longer trap during filename formatting.
+Image-sequence filename frame-rate alignment with per-item/request rates,
+UI/request-generation preferences, and remaining migrations stay open
+(Codex, 2026-09-08).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1701,7 +1762,37 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 552 unit tests pass
+Latest validation (2026-09-08, Codex): Debug compilation and all 578 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Twenty-six new tests
+cover Stream Copy/custom snapshots, MCA defaults, filename/package labels, malformed
+frame-rate preferences, queue preparation cancellation/removal, generated-video map
+ownership, and finite silent output. The generated silent-video regression verifies
+actual duration and absent audio. Three conversion UI smoke tests pass (success,
+failure details, and start/cancel) from fresh locally signed build output. All 43
+release-script tests, manifest freshness, and localization checks pass (1,492 entries,
+15 intentional omissions). The unsigned Release build passes; its final bundle audit
+verifies all 44 Mach-O images and six packaged license notices.
+
+Initial validation found two actor-isolated test-binding crashes and a routing fixture
+that expected mute from unchanged/default routing. Synchronized fixture storage and
+explicit track-selection assertions resolved them. Independent review then found and
+fixed duplicate generated-video audio maps, unwanted source-video mapping, and the
+infinite-color-source risk when generated output is silent. Source metadata remains
+available for timecode after audio preprocessing; duration resolution separately uses
+the prepared source. Cached UI-runner relinking failed with the known permission error;
+the fresh build passed all three smoke tests.
+
+Remaining implementation work: full typed conversion plans and broader orchestration
+extraction; image-sequence filename frame-rate alignment with per-item requests;
+UI/request settings and schema migrations; later merge/progress callback identity and
+broader actor/UI binding and filesystem audits; AV2 audio offsets, uncommon layouts,
+and generated video; and IMF descriptor conformance. Manual MPV playback, Shortcuts,
+sandbox reauthorization, VoiceOver, broader bilingual/scrolled UI, live capture/editor,
+runtime memory/dynamic dependency measurements, clean-machine install/update, complete
+dependency provenance (99 unresolved license entries), and credentialed release checks
+remain. No binaries or license assignments changed.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 552 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Thirty new regressions
 cover broadcast/proxy/animated settings, AVC-Intra channel labels, filename snapshots
 and counters, MPV observation lifetime, and cleanup/output-folder failures. Settings

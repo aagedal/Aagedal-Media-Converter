@@ -233,13 +233,19 @@ actor ConversionManager: Sendable {
     private let transcriptionSettings: any TranscriptionSettingsProviding
     private let ocrSettings: any OCRSettingsProviding
     private let analyticsSettings: any AnalyticsSettingsProviding
+    private let conversionDetailsLoader: @Sendable (URL, String, ExportPreset) async -> VideoFileUtils.VideoItemDetails
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings(),
         ocrSettings: any OCRSettingsProviding = PostConversionSettings(),
-        analyticsSettings: any AnalyticsSettingsProviding = PostConversionSettings()
+        analyticsSettings: any AnalyticsSettingsProviding = PostConversionSettings(),
+        conversionDetailsLoader: @escaping @Sendable (URL, String, ExportPreset) async -> VideoFileUtils.VideoItemDetails = { url, folder, preset in
+            await VideoFileUtils.loadDetails(
+                for: url, outputFolder: folder, preset: preset, generateRowThumbnailIfMissing: false
+            )
+        }
     ) {
         self.mergePreparationSubprocess = MergePreparationSubprocess(subprocessRunner: subprocessRunner)
         self.subtitleEmbeddingSubprocess = SubtitleEmbeddingSubprocess(subprocessRunner: subprocessRunner)
@@ -247,6 +253,7 @@ actor ConversionManager: Sendable {
         self.transcriptionSettings = transcriptionSettings
         self.ocrSettings = ocrSettings
         self.analyticsSettings = analyticsSettings
+        self.conversionDetailsLoader = conversionDetailsLoader
     }
 
     enum ConversionStatus {
@@ -292,6 +299,11 @@ actor ConversionManager: Sendable {
         let outputBaseURL: URL
         let outputFolder: String
         let preset: ExportPreset
+        let av2Settings: AV2Settings?
+        let dcpSettings: DCPSettings?
+        let imfSettings: IMFSettings?
+        let audioOnlySettings: AudioOnlySettings?
+        let codecSettings: CodecExportSettings?
         let comment: String
         let includeDateTag: Bool
         let waveformRequest: WaveformVideoRequest?
@@ -418,16 +430,26 @@ actor ConversionManager: Sendable {
             return nil
         }
 
+        let av2Settings = preset == .av2 ? AV2Settings() : nil
+        let dcpSettings = preset == .dcp ? DCPSettings() : nil
+        let imfSettings = (preset == .imfJ2K || preset == .imfProRes) ? IMFSettings() : nil
+        let audioOnlySettings = preset == .audioOnly ? AudioOnlySettings() : nil
+        let codecSettings = CodecExportSettings(preset: preset)
+        let fileNameSettings = FileNameSettings().snapshot
+        let fileNameContext = codecSettings?.fileNameContext
+            ?? FileNameTemplateContext(
+                preset: preset, av2Settings: av2Settings, dcpSettings: dcpSettings, imfSettings: imfSettings
+            )
         let mergeBaseName: String
         if let name = groupName?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !name.isEmpty {
-            mergeBaseName = FileNameProcessor.processFileName(name)
+            mergeBaseName = FileNameProcessor.processFileName(name, settings: fileNameSettings)
         } else if let override = firstItem.outputFileNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
            !override.isEmpty {
-            mergeBaseName = FileNameProcessor.processFileName((override as NSString).deletingPathExtension)
+            mergeBaseName = FileNameProcessor.processFileName((override as NSString).deletingPathExtension, settings: fileNameSettings)
         } else {
-            let suffixPart = FileNameProcessor.includePresetSuffix ? preset.fileSuffix : ""
-            mergeBaseName = FileNameProcessor.processFileName(firstItem.url.deletingPathExtension().lastPathComponent)
+            let suffixPart = fileNameSettings.includePresetSuffix ? fileNameContext.presetSuffix : ""
+            mergeBaseName = FileNameProcessor.processFileName(firstItem.url.deletingPathExtension().lastPathComponent, settings: fileNameSettings)
                 + suffixPart
                 + "_merge"
         }
@@ -513,6 +535,11 @@ actor ConversionManager: Sendable {
             outputBaseURL: baseOutputURL,
             outputFolder: outputFolder,
             preset: preset,
+            av2Settings: av2Settings,
+            dcpSettings: dcpSettings,
+            imfSettings: imfSettings,
+            audioOnlySettings: audioOnlySettings,
+            codecSettings: codecSettings,
             comment: firstItem.comment,
             includeDateTag: firstItem.includeDateTag,
             waveformRequest: waveformRequest,
@@ -817,16 +844,20 @@ actor ConversionManager: Sendable {
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let mergeUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
-        let av2Settings = plan.preset == .av2 ? AV2Settings() : nil
-        let audioOnlySettings = plan.preset == .audioOnly ? AudioOnlySettings() : nil
-        let codecSettings = CodecExportSettings(preset: plan.preset)
+        let av2Settings = plan.av2Settings
+        let dcpSettings = plan.dcpSettings
+        let imfSettings = plan.imfSettings
+        let audioOnlySettings = plan.audioOnlySettings
+        let codecSettings = plan.codecSettings
         let outputExtension = av2Settings?.container.fileExtension
             ?? audioOnlySettings?.format.fileExtension
-            ?? codecSettings?.fileExtension
+            ?? codecSettings?.outputExtension(for: plan.segments.first?.originalURL)
             ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
         await ffmpegConverter.convert(
             request: mergeRequest,
             av2Settings: av2Settings,
+            dcpSettings: dcpSettings,
+            imfSettings: imfSettings,
             audioOnlySettings: audioOnlySettings,
             codecSettings: codecSettings,
             progressUpdate: { progress, status in
@@ -1093,6 +1124,11 @@ actor ConversionManager: Sendable {
             outputBaseURL: baseOutputURL,
             outputFolder: outputFolder,
             preset: .streamCopy, // Concat pass always uses stream copy
+            av2Settings: nil,
+            dcpSettings: nil,
+            imfSettings: nil,
+            audioOnlySettings: nil,
+            codecSettings: CodecExportSettings(preset: .streamCopy),
             comment: firstItem.comment,
             includeDateTag: firstItem.includeDateTag,
             waveformRequest: nil,
@@ -1616,15 +1652,6 @@ actor ConversionManager: Sendable {
         }
         
         let fileId = nextFile.id
-        guard let idx = droppedFiles.wrappedValue.firstIndex(where: { $0.id == fileId }) else {
-            await convertNextFile(
-                droppedFiles: droppedFiles,
-                outputFolder: outputFolder,
-                preset: preset,
-                batchID: batchID
-            )
-            return
-        }
         
         // Ensure the metadata an encode actually needs (duration, video-stream presence,
         // output URL, full metadata) is loaded before conversion. We deliberately pass
@@ -1634,20 +1661,25 @@ actor ConversionManager: Sendable {
         // encoding. The row thumbnail is populated independently on the import background task
         // (`loadGroupItemDetails` / the per-item detail load). A thumbnail already cached on disk
         // is still picked up cheaply here.
-        if !droppedFiles.wrappedValue[idx].detailsLoaded {
-            let details = await VideoFileUtils.loadDetails(
-                for: droppedFiles.wrappedValue[idx].url,
-                outputFolder: outputFolder,
-                preset: preset,
-                generateRowThumbnailIfMissing: false
-            )
-            droppedFiles.wrappedValue[idx].apply(details: details)
-            droppedFiles.wrappedValue[idx].detailsLoaded = true
+        let preparedDetails: VideoFileUtils.VideoItemDetails?
+        if !nextFile.detailsLoaded {
+            preparedDetails = await conversionDetailsLoader(nextFile.url, outputFolder, preset)
+        } else {
+            preparedDetails = nil
         }
         guard isConverting, activeBatchID == batchID else { return }
-        
-        // Update status to converting
-        droppedFiles.wrappedValue[idx].status = .converting
+
+        guard let idx = ConversionQueueState.beginPreparedItem(
+            nextFile, details: preparedDetails, in: &droppedFiles.wrappedValue
+        ) else {
+            await convertNextFile(
+                droppedFiles: droppedFiles,
+                outputFolder: outputFolder,
+                preset: preset,
+                batchID: batchID
+            )
+            return
+        }
 
         let currentItem = droppedFiles.wrappedValue[idx]
         let inputURL = currentItem.url
@@ -1672,7 +1704,22 @@ actor ConversionManager: Sendable {
             return
         }
 
-        let outputFileName = outputBaseName(for: currentItem, inputURL: inputURL, preset: preset)
+        // Naming and command preparation share the same export preferences, including
+        // labels such as resolution and the animated-still/custom preset suffix.
+        let av2Settings = preset == .av2 ? AV2Settings() : nil
+        let dcpSettings = preset == .dcp ? DCPSettings() : nil
+        let imfSettings = (preset == .imfJ2K || preset == .imfProRes) ? IMFSettings() : nil
+        let audioOnlySettings = preset == .audioOnly ? AudioOnlySettings() : nil
+        let codecSettings = CodecExportSettings(preset: preset)
+        let fileNameSettings = FileNameSettings().snapshot
+        let fileNameContext = codecSettings?.fileNameContext
+            ?? FileNameTemplateContext(
+                preset: preset, av2Settings: av2Settings, dcpSettings: dcpSettings, imfSettings: imfSettings
+            )
+        let outputFileName = outputBaseName(
+            for: currentItem, inputURL: inputURL, preset: preset,
+            settings: fileNameSettings, context: fileNameContext
+        )
         let resolvedOutputFolder = VideoFileUtils.resolveOutputFolder(for: inputURL, defaultOutputFolder: outputFolder, preset: preset) ?? outputFolder
 
         // Ensure the output directory exists with proper security-scoped access
@@ -1796,16 +1843,15 @@ actor ConversionManager: Sendable {
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let singleUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
-        let av2Settings = preset == .av2 ? AV2Settings() : nil
-        let audioOnlySettings = preset == .audioOnly ? AudioOnlySettings() : nil
-        let codecSettings = CodecExportSettings(preset: preset)
         let outputExtension = av2Settings?.container.fileExtension
             ?? audioOnlySettings?.format.fileExtension
-            ?? codecSettings?.fileExtension
+            ?? codecSettings?.outputExtension(for: inputURL)
             ?? preset.outputExtension(for: inputURL)
         await ffmpegConverter.convert(
             request: conversionRequest,
             av2Settings: av2Settings,
+            dcpSettings: dcpSettings,
+            imfSettings: imfSettings,
             audioOnlySettings: audioOnlySettings,
             codecSettings: codecSettings,
             progressUpdate: { progress, status in
@@ -2927,10 +2973,14 @@ actor ConversionManager: Sendable {
         }
     }
 
-    private func outputBaseName(for item: VideoItem, inputURL: URL, preset: ExportPreset) -> String {
+    private func outputBaseName(
+        for item: VideoItem, inputURL: URL, preset: ExportPreset,
+        settings: FileNamePreferences, context: FileNameTemplateContext
+    ) -> String {
         FileNameProcessor.outputBaseName(
             inputURL: inputURL, override: item.outputFileNameOverride,
-            counter: item.customCounterValue, preset: preset
+            counter: item.customCounterValue, preset: preset,
+            settings: settings, context: context
         )
     }
 }

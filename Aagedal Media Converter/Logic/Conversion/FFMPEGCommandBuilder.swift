@@ -23,6 +23,7 @@ struct FFMPEGCommand {
     let normalizedTrimStart: Double?
     let normalizedTrimEnd: Double?
     let effectiveDuration: Double?
+    var preparationError: String? = nil
 }
 
 struct WaveformVideoRequest: Sendable {
@@ -91,10 +92,15 @@ enum FFMPEGCommandBuilder {
         sourceMetadata: VideoMetadata? = nil,
         waveformRequest: WaveformVideoRequest? = nil,
         synthesizedVideoRequest: SynthesizedVideoRequest? = nil,
+        synthesizedVideoDuration: Double? = nil,
+        synthesizedVideoUsesSourceMetadataDuration: Bool = true,
         visualSourceURL: URL? = nil,
         customInputArguments: [String]? = nil,
         additionalOutputArguments: [String]? = nil,
-        isMuted: Bool = false
+        isMuted: Bool = false,
+        durationProvider: @Sendable (URL) async -> Double? = { url in
+            await FFMPEGProbeService.getVideoDuration(for: url)
+        }
     ) async -> FFMPEGCommand {
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
@@ -223,13 +229,50 @@ enum FFMPEGCommandBuilder {
                 sourceMetadata: sourceMetadata
             )
             sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
-            if synthesizedVideoRequest.includeAudio {
+            if !synthesizedVideoRequest.includeAudio || isMuted {
+                removeArgumentPair("-map", value: "0:a?", from: &arguments)
+                applyMute(to: &ffmpegArgs)
+            } else {
                 removeArgumentPair("-an", value: nil, from: &ffmpegArgs)
+                if let audioRoutingConfig, preset.outputsAudioTrack,
+                   (capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting),
+                   audioRoutingConfig.isCustomized || !audioRoutingConfig.outputTracks.isEmpty {
+                    // The generated video already owns its map; routed audio replaces the
+                    // automatic source-audio map instead of adding another copy of it.
+                    removeArgumentPair("-map", value: "0:a?", from: &arguments)
+                    applyAudioRouting(config: audioRoutingConfig, to: &ffmpegArgs, addVideoMap: false)
+                    if AudioRoutingService.makePlan(config: audioRoutingConfig).outputStreamCount == 0 {
+                        applyMute(to: &ffmpegArgs)
+                    }
+                }
             }
-            
-            // Apply audio routing configuration if provided and preset supports audio and audio routing
-            if let audioRoutingConfig, preset.outputsAudioTrack, preset.appliesAudioRouting {
-                applyAudioRouting(config: audioRoutingConfig, to: &ffmpegArgs)
+
+            // A silent color source has no finite mapped stream for -shortest to follow.
+            // Resolve an explicit output duration before allowing the encoder to launch.
+            var effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+            if ffmpegArgs.contains("-an") {
+                if effectiveDuration == nil {
+                    if let synthesizedVideoDuration, synthesizedVideoDuration.isFinite, synthesizedVideoDuration > 0 {
+                        // The caller's hint describes the already prepared/trimmed output.
+                        effectiveDuration = synthesizedVideoDuration
+                    } else {
+                        let sourceDuration: Double?
+                        if synthesizedVideoUsesSourceMetadataDuration,
+                           let duration = sourceMetadata?.duration, duration.isFinite, duration > 0 {
+                            sourceDuration = duration
+                        } else {
+                            sourceDuration = await durationProvider(inputURL)
+                        }
+                        effectiveDuration = sourceDuration.map { $0 - (normalizedTrimStart ?? 0) }
+                    }
+                }
+                guard let duration = effectiveDuration, duration.isFinite, duration > 0 else {
+                    return FFMPEGCommand(
+                        arguments: [], normalizedTrimStart: normalizedTrimStart,
+                        normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                        preparationError: "Cannot determine a positive duration for silent generated video. Set an end trim and try again."
+                    )
+                }
             }
 
             await applyConfiguredTimecode(
@@ -254,10 +297,11 @@ enum FFMPEGCommandBuilder {
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
             }
+            if ffmpegArgs.contains("-an"), let effectiveDuration {
+                arguments.append(contentsOf: ["-t", ffmpegTimeString(from: effectiveDuration)])
+            }
             logger.debug("Synthesized video ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
-
-            let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
 
             return FFMPEGCommand(
                 arguments: arguments,
@@ -307,7 +351,7 @@ enum FFMPEGCommandBuilder {
 
             // Filter out unsupported audio codecs (e.g., APAC spatial audio from iPhone)
             // Skip for stream copy (which doesn't decode) and when audio routing is applied (has its own mapping)
-            if preset != .streamCopy && (audioRoutingConfig == nil || !preset.appliesAudioRouting) {
+            if preset != .streamCopy && (audioRoutingConfig == nil || !(capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting)) {
                 await filterUnsupportedAudioStreams(inputURL: inputURL, ffmpegArgs: &ffmpegArgs)
             }
         }
@@ -316,7 +360,7 @@ enum FFMPEGCommandBuilder {
         if let cropConfig = cropConfig,
            cropConfig.isActive,
            preset.outputsVisualFrames,
-           preset.appliesCrop {
+           (capturedCodecSettings?.appliesCrop ?? preset.appliesCrop) {
             if let geometry = await sourceGeometry(
                 for: visualSourceURL ?? inputURL,
                 sourceMetadata: visualSourceURL == nil ? sourceMetadata : nil
@@ -373,7 +417,7 @@ enum FFMPEGCommandBuilder {
         
         // Apply audio routing configuration if provided and preset supports audio and audio routing
         // Skip for image sequence inputs (no audio streams)
-        if !isImageSequenceInput, let audioRoutingConfig, preset.outputsAudioTrack, preset.appliesAudioRouting {
+        if !isImageSequenceInput, let audioRoutingConfig, preset.outputsAudioTrack, (capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting) {
             applyAudioRouting(config: audioRoutingConfig, to: &ffmpegArgs)
         }
 
@@ -794,8 +838,14 @@ extension FFMPEGCommandBuilder {
         sanitizeArgumentsForCustomVideoPipeline(&ffmpegArgs)
 
         // Audio routing uses input index 1 (the audio file)
-        if let audioRoutingConfig, preset.outputsAudioTrack, preset.appliesAudioRouting {
+        if !isMuted, let audioRoutingConfig, preset.outputsAudioTrack,
+           (capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting),
+           audioRoutingConfig.isCustomized || !audioRoutingConfig.outputTracks.isEmpty {
+            removeArgumentPair("-map", value: "1:a", from: &arguments)
             applyAudioRoutingForNativePipeline(config: audioRoutingConfig, to: &ffmpegArgs)
+            if AudioRoutingService.makePlan(config: audioRoutingConfig).outputStreamCount == 0 {
+                applyMute(to: &ffmpegArgs)
+            }
         }
 
         if isMuted {
@@ -1808,7 +1858,11 @@ extension FFMPEGCommandBuilder {
 
     /// Applies audio routing configuration by replacing preset's audio map arguments
     /// with custom track selection, ordering, or channel-level operations
-    static func applyAudioRouting(config: AudioRoutingConfig, to ffmpegArgs: inout [String]) {
+    static func applyAudioRouting(
+        config: AudioRoutingConfig,
+        to ffmpegArgs: inout [String],
+        addVideoMap: Bool = true
+    ) {
         // Check if there's already a video map - if not, we need to add one
         let hasVideoMap = ffmpegArgs.indices.contains { index in
             ffmpegArgs[index] == "-map"
@@ -1834,7 +1888,7 @@ extension FFMPEGCommandBuilder {
         }
 
         // Ensure video is mapped if not already present
-        if !hasVideoMap {
+        if addVideoMap && !hasVideoMap {
             // Insert -map 0:v:0 at the beginning (first video stream only to avoid cover art issues)
             ffmpegArgs.insert(contentsOf: ["-map", "0:v:0"], at: 0)
             logger.debug("Added video mapping for audio routing")

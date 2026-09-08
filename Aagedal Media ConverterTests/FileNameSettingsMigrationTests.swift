@@ -202,4 +202,119 @@ final class FileNameSettingsMigrationTests: XCTestCase {
         }
     }
 
+    func testBroadcastFilenameAndCommandKeepTheSameCapturedLabels() async throws {
+        let suite = "FileNameSettingsMigrationTests.broadcast.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("{sourceName}_{resolution}_{framerate}{presetSuffix}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(TVResolutionLimit.r720.rawValue, forKey: AppConstants.tvResolutionLimitKey)
+        defaults.set(TVFramerateMode.p25.rawValue, forKey: AppConstants.tvFramerateModeKey)
+        let preferences = FileNameSettings(defaults: defaults).snapshot
+        let codec = try XCTUnwrap(CodecExportSettings(preset: .tvHEVC, defaults: defaults))
+        await Task.yield()
+        defaults.set("changed", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(TVResolutionLimit.r2160.rawValue, forKey: AppConstants.tvResolutionLimitKey)
+        defaults.set(TVFramerateMode.p50.rawValue, forKey: AppConstants.tvFramerateModeKey)
+        let input = URL(fileURLWithPath: "/source/video.mov")
+        let outputName = FileNameProcessor.outputBaseName(
+            inputURL: input, preset: .tvHEVC, settings: preferences, context: codec.fileNameContext
+        )
+        XCTAssertEqual(outputName, "video_720p_25p_tv")
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: input, outputFileURL: URL(fileURLWithPath: "/output/\(outputName).mov"),
+            preset: .tvHEVC, codecSettings: codec, comment: "", includeDateTag: false,
+            trimStart: nil, trimEnd: nil,
+            customInputArguments: ["-framerate", "24", "-i", input.path]
+        )
+        let rateIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-r"))
+        XCTAssertEqual(command.arguments[rateIndex + 1], "25")
+        let filterIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-vf"))
+        XCTAssertTrue(command.arguments[filterIndex + 1].contains("720"))
+    }
+
+    func testCapturedAnimatedStillAndCustomSuffixesUseInjectedDefaults() throws {
+        let suite = "FileNameSettingsMigrationTests.suffix.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(AnimatedStillFormat.gif.rawValue, forKey: AppConstants.animatedStillFormatKey)
+        defaults.set(" delivery ", forKey: AppConstants.customPresetSuffixKey(for: 0))
+        let animated = try XCTUnwrap(CodecExportSettings(preset: .animatedStill, defaults: defaults))
+        let custom = try XCTUnwrap(CodecExportSettings(preset: .custom1, defaults: defaults))
+        defaults.set(AnimatedStillFormat.avif.rawValue, forKey: AppConstants.animatedStillFormatKey)
+        defaults.set("changed", forKey: AppConstants.customPresetSuffixKey(for: 0))
+        XCTAssertEqual(animated.fileNameContext.presetSuffix, "_gif")
+        XCTAssertEqual(animated.fileExtension, "gif")
+        XCTAssertEqual(custom.fileNameContext.presetSuffix, "_delivery")
+        XCTAssertEqual(FileNameTemplateContext(preset: .custom1, defaults: defaults).presetSuffix, "_changed")
+    }
+
+    func testAV2FilenameResolutionUsesTheEncodingSnapshot() {
+        withSettings { defaults, _ in
+            defaults.set(CodecResolutionLimit.r1080.rawValue, forKey: AppConstants.av2ResolutionLimitKey)
+            let captured = AV2Settings(defaults: defaults)
+            defaults.set(CodecResolutionLimit.r2160.rawValue, forKey: AppConstants.av2ResolutionLimitKey)
+            let context = FileNameTemplateContext(preset: .av2, defaults: defaults, av2Settings: captured)
+            XCTAssertEqual(context.resolution, "1080p")
+            XCTAssertEqual(context.presetSuffix, "_av2")
+            XCTAssertEqual(FileNameTemplateContext(preset: .av2, defaults: defaults).resolution, "2160p")
+        }
+    }
+
+    func testDCPFilenameUsesCapturedPackagingResolutionAndRate() throws {
+        let suite = "FileNameSettingsMigrationTests.dcp.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("{sourceName}_{resolution}_{framerate}{presetSuffix}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(DCPResolution.fourKScope.rawValue, forKey: AppConstants.dcpResolutionKey)
+        defaults.set(DCPFrameRate.fps48.rawValue, forKey: AppConstants.dcpFrameRateKey)
+        let captured = DCPSettings(defaults: defaults)
+        defaults.set(DCPResolution.twoKFull.rawValue, forKey: AppConstants.dcpResolutionKey)
+        defaults.set(DCPFrameRate.fps24.rawValue, forKey: AppConstants.dcpFrameRateKey)
+        let context = FileNameTemplateContext(preset: .dcp, defaults: defaults, dcpSettings: captured)
+        XCTAssertEqual(FileNameProcessor.outputBaseName(
+            inputURL: URL(fileURLWithPath: "/source/video.mov"), preset: .dcp,
+            settings: FileNameSettings(defaults: defaults).snapshot, context: context
+        ), "video_4K_48_dcp")
+        let rateIndex = try XCTUnwrap(captured.ffmpegArguments.firstIndex(of: "-r"))
+        XCTAssertEqual(captured.ffmpegArguments[rateIndex + 1], context.framerate)
+        XCTAssertEqual(FileNameTemplateContext(preset: .dcp, defaults: defaults).resolution, "2K")
+    }
+
+    func testIMFFilenameUsesCapturedPackagingResolutionAndFractionalRateTag() throws {
+        let suite = "FileNameSettingsMigrationTests.imf.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for preset in [ExportPreset.imfJ2K, .imfProRes] {
+            defaults.set(IMFResolution.uhd2160.rawValue, forKey: AppConstants.imfResolutionKey)
+            defaults.set(IMFFrameRate.fps59_94.rawValue, forKey: AppConstants.imfFrameRateKey)
+            let captured = IMFSettings(defaults: defaults)
+            defaults.set(IMFResolution.hd1080.rawValue, forKey: AppConstants.imfResolutionKey)
+            defaults.set(IMFFrameRate.fps24.rawValue, forKey: AppConstants.imfFrameRateKey)
+            let context = FileNameTemplateContext(preset: preset, defaults: defaults, imfSettings: captured)
+            XCTAssertEqual(context.resolution, "4K")
+            XCTAssertEqual(context.framerate, "60")
+            XCTAssertEqual(context.presetSuffix, preset == .imfJ2K ? "_imf2e" : "_imf5")
+            let arguments = captured.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            let rateIndex = try XCTUnwrap(arguments.firstIndex(of: "-r"))
+            XCTAssertEqual(arguments[rateIndex + 1], "60000/1001")
+            XCTAssertEqual(FileNameTemplateContext(preset: preset, defaults: defaults).resolution, "2K")
+        }
+    }
+
+    func testMalformedImageSequenceFramerateLabelsFallBackWithoutTrapping() {
+        withSettings { defaults, _ in
+            let fallback = FileNameTemplateContext(preset: .imageSequence, defaults: defaults).framerate
+            for value in [Double.nan, .infinity, -.infinity, .greatestFiniteMagnitude, Double(Int.max), 0, -24] {
+                defaults.set(value, forKey: AppConstants.imageSequenceFrameRateKey)
+                XCTAssertEqual(FileNameTemplateContext(preset: .imageSequence, defaults: defaults).framerate, fallback)
+            }
+            for (value, expected) in [(24.0, "24"), (23.976, "23.976"), (59.94, "59.94")] {
+                defaults.set(value, forKey: AppConstants.imageSequenceFrameRateKey)
+                XCTAssertEqual(FileNameTemplateContext(preset: .imageSequence, defaults: defaults).framerate, expected)
+            }
+        }
+    }
+
 }

@@ -205,6 +205,7 @@ actor FFMPEGConverter {
         inputURL: URL,
         audioRoutingConfig: AudioRoutingConfig?,
         targetChannelCount: Int,
+        mcaDefaults: AVCIntraMCADefaults,
         audioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = { url in
             await FFMPEGProbeService.fetchAudioStreams(for: url)
         }
@@ -249,7 +250,8 @@ actor FFMPEGConverter {
             inputStreams: inputInfos,
             inputMCALabels: mcaLabels,
             overrides: overrides,
-            outputTrackCount: targetChannelCount
+            outputTrackCount: targetChannelCount,
+            mcaDefaults: mcaDefaults
         ) else {
             return nil
         }
@@ -699,7 +701,7 @@ actor FFMPEGConverter {
             // Use the captured container for naming and encoding.
             let outputExtension = capturedAV2Settings?.container.fileExtension
                 ?? capturedAudioOnlySettings?.format.fileExtension
-                ?? capturedCodecSettings?.fileExtension
+                ?? capturedCodecSettings?.outputExtension(for: inputURL)
                 ?? preset.outputExtension(for: inputURL)
             outputFileURL = outputURL.appendingPathExtension(outputExtension)
 
@@ -1011,11 +1013,28 @@ actor FFMPEGConverter {
             sourceMetadata: request.sourceMetadata,
             waveformRequest: request.waveformRequest,
             synthesizedVideoRequest: request.synthesizedVideoRequest,
+            synthesizedVideoDuration: tempAudioURL != nil
+                ? FFMPEGCommandBuilder.calculateEffectiveDuration(trimStart: request.trimStart, trimEnd: request.trimEnd)
+                : (request.trimStart == nil && request.trimEnd == nil ? request.expectedDuration : nil),
+            synthesizedVideoUsesSourceMetadataDuration: tempAudioURL == nil,
             visualSourceURL: request.visualSourceURL,
             customInputArguments: effectiveCustomInputArguments,
             additionalOutputArguments: request.additionalOutputArguments,
             isMuted: request.isMuted
         )
+
+        if let preparationError = command.preparationError {
+            if let tempAudioURL { Self.cleanupTempFile(at: tempAudioURL, label: "Preprocessed audio") }
+            if let tempMXFURL { Self.cleanupTempFile(at: tempMXFURL, label: "Intermediate MXF") }
+            if let dcpSubfolderURL { Self.cleanupTempFile(at: dcpSubfolderURL, label: "Unstarted DCP package") }
+            if let imfSubfolderURL { Self.cleanupTempFile(at: imfSubfolderURL, label: "Unstarted IMF package") }
+            if isImageSequenceExport {
+                Self.cleanupTempFile(at: outputFileURL.deletingLastPathComponent(), label: "Unstarted image sequence")
+            }
+            _ = await finishTrackedConversion(conversionID)
+            finish(false, preparationError)
+            return
+        }
 
         // For an AV2 Matroska source the decoded video arrives on input 0 (the avmdec pipe) and the
         // audio lives on input 1 (the original file). Redirect the preset's audio/subtitle maps,
@@ -1154,7 +1173,8 @@ actor FFMPEGConverter {
                     let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
                         inputURL: capturedInputURL,
                         audioRoutingConfig: capturedRequest.audioRoutingConfig,
-                        targetChannelCount: capturedCodecSettings?.avcIntraAudioChannels?.count ?? 8
+                        targetChannelCount: capturedCodecSettings?.avcIntraAudioChannels?.count ?? 8,
+                        mcaDefaults: capturedCodecSettings?.avcIntraMCADefaults ?? .none
                     )
                     let bmxResult = await BMXService.shared.rewrapToOP1a(
                         inputURL: tempMXF,
@@ -3556,7 +3576,8 @@ actor FFMPEGConverter {
                 let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
                     inputURL: capturedInputURL,
                     audioRoutingConfig: capturedAudioRoutingConfig,
-                    targetChannelCount: codecSettings?.avcIntraAudioChannels?.count ?? 8
+                    targetChannelCount: codecSettings?.avcIntraAudioChannels?.count ?? 8,
+                    mcaDefaults: codecSettings?.avcIntraMCADefaults ?? .none
                 )
                 if await self?.activateBMXOperationIfActiveConversion(conversionID) == true {
                     let bmxResult = await BMXService.shared.rewrapToOP1a(

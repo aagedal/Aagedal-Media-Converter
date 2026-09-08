@@ -1,5 +1,12 @@
 # v.4.3.0
 
+- **Generated video honors selected audio tracks without adding unwanted copies**, preserves intentional duplicates, and respects removed tracks and mute settings. Silent synthetic video has a finite duration; unknown duration shows guidance before encoding.
+
+- **Cancelling or removing queued media during inspection prevents it from starting an encode.** Reordered rows receive the correct metadata, and completed import details are preserved.
+- **Stream Copy and custom presets retain their selected settings throughout conversion**, including containers, custom commands, crop and audio-routing options, and source-file protection.
+- **AVC-Intra default audio labels stay consistent during encoding**, while manual overrides and labels from the source retain precedence.
+- **Filename labels stay aligned with captured codec settings**, including broadcast formats, animated/custom suffixes, AV2 and DCP/IMF formats, and retained merge settings. Invalid saved image-sequence frame rates no longer crash filename formatting.
+
 - **TV/AVC-Intra, proxy, and animated-still exports retain their selected settings**, including output format and AVC-Intra audio channel labels.
 - **Import, queue, and Settings filename previews share template formatting**, with accurate large counters and no unnecessary source-protection suffix for already-renamed outputs.
 - **MPV preview cleanup cancels pending observations and track refreshes**, preventing closed or replaced players from publishing stale playback events.

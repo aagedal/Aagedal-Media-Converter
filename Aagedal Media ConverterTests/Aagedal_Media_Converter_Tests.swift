@@ -11881,7 +11881,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 overrides: [
                     0: MCALabelOverride(soundfield: .stereo, audioElement: .mainProgram)
                 ],
-                outputTrackCount: 4
+                outputTrackCount: 4,
+                mcaDefaults: .none
             ))
 
             XCTAssertTrue(content.contains("0\nchL\nsgST, id=sg1\nggMPg, id=gosg1"), content)
@@ -11906,7 +11907,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                         channelLabels: ["M1", "M2"]
                     )
                 ],
-                outputTrackCount: 2
+                outputTrackCount: 2,
+                mcaDefaults: .none
             ))
 
             XCTAssertTrue(content.contains("chM1"), content)
@@ -11923,7 +11925,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                     .init(audioRelativeIndex: 0, channelCount: 3, channelLayout: "3.0", sampleRate: 48_000)
                 ],
                 inputMCALabels: [],
-                outputTrackCount: 4
+                outputTrackCount: 4,
+                mcaDefaults: .none
             ))
         }
     }
@@ -14447,5 +14450,94 @@ private actor DownloadAuxiliaryProbeGate {
     func finish(_ value: Int) {
         continuation?.resume(returning: value)
         continuation = nil
+    }
+}
+
+final class AVCIntraMCADefaultsTests: XCTestCase {
+    func testLabelsRetainCapturedDefaultsAcrossAsynchronousStreamProbe() async throws {
+        let suite = "AVCIntraMCADefaultsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(MCAStandardSoundfield.mono.rawValue, forKey: AppConstants.avcIntraDefaultMCASoundfield1ChKey)
+        defaults.set(MCAStandardSoundfield.dualMono.rawValue, forKey: AppConstants.avcIntraDefaultMCASoundfield2ChKey)
+        defaults.set(MCAStandardSoundfield.surround51.rawValue, forKey: AppConstants.avcIntraDefaultMCASoundfield6ChKey)
+        defaults.set(MCAStandardSoundfield.surround71.rawValue, forKey: AppConstants.avcIntraDefaultMCASoundfield8ChKey)
+        let captured = try XCTUnwrap(CodecExportSettings(preset: .tvAVCIntra, defaults: defaults))
+        let labelsURL = await FFMPEGConverter.prepareAVCIntraMCALabelsFile(
+            inputURL: URL(fileURLWithPath: "/source/audio.mov"),
+            audioRoutingConfig: nil,
+            targetChannelCount: 20,
+            mcaDefaults: try XCTUnwrap(captured.avcIntraMCADefaults),
+            audioStreamProvider: { _ in
+                let changedDefaults = UserDefaults(suiteName: suite)
+                changedDefaults?.removePersistentDomain(forName: suite)
+                changedDefaults?.set(MCAStandardSoundfield.stereo.rawValue, forKey: AppConstants.avcIntraDefaultMCASoundfield2ChKey)
+                await Task.yield()
+                return [1, 2, 6, 8].enumerated().map {
+                    .init(index: $0.offset, channels: $0.element, channelLayout: nil, codecName: "pcm_s24le")
+                }
+            }
+        )
+        let url = try XCTUnwrap(labelsURL)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let labels = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(labels.split(separator: "\n").compactMap { Int($0) }, Array(0..<17))
+        for symbol in ["sgM,", "sgDM,", "sg51,", "sg71,"] {
+            XCTAssertTrue(labels.contains(symbol), labels)
+        }
+        XCTAssertFalse(labels.contains("sgST,"), labels)
+        XCTAssertEqual(AVCIntraMCADefaults(defaults: defaults).soundfield(for: 2), .stereo)
+        XCTAssertNil(AVCIntraMCADefaults(defaults: defaults).soundfield(for: 6))
+    }
+
+    func testMissingInvalidAndMismatchedDefaultsOmitLabelsWithoutRewritingPreferences() throws {
+        let suite = "AVCIntraMCADefaultsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("", forKey: AppConstants.avcIntraDefaultMCASoundfield1ChKey)
+        defaults.set("future soundfield", forKey: AppConstants.avcIntraDefaultMCASoundfield2ChKey)
+        defaults.set(MCAStandardSoundfield.stereo.rawValue, forKey: AppConstants.avcIntraDefaultMCASoundfield6ChKey)
+        let captured = AVCIntraMCADefaults(defaults: defaults)
+        XCTAssertNil(MCALabelsBuilder.buildAVCIntraLabelsFile(
+            inputStreams: [1, 2, 3, 6, 8].enumerated().map {
+                .init(audioRelativeIndex: $0.offset, channelCount: $0.element, channelLayout: nil, sampleRate: 48_000)
+            },
+            inputMCALabels: [],
+            outputTrackCount: 24,
+            mcaDefaults: captured
+        ))
+        XCTAssertEqual(defaults.string(forKey: AppConstants.avcIntraDefaultMCASoundfield1ChKey), "")
+        XCTAssertEqual(defaults.string(forKey: AppConstants.avcIntraDefaultMCASoundfield2ChKey), "future soundfield")
+        XCTAssertEqual(defaults.string(forKey: AppConstants.avcIntraDefaultMCASoundfield6ChKey), "stereo")
+        XCTAssertNil(defaults.string(forKey: AppConstants.avcIntraDefaultMCASoundfield8ChKey))
+    }
+
+    func testManualAndSourceLabelsTakePrecedenceOverCapturedDefaults() throws {
+        let suite = "AVCIntraMCADefaultsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(MCAStandardSoundfield.stereo.rawValue, forKey: AppConstants.avcIntraDefaultMCASoundfield2ChKey)
+        let captured = AVCIntraMCADefaults(defaults: defaults)
+        let streams = [MCALabelsBuilder.InputStreamInfo(
+            audioRelativeIndex: 0, channelCount: 2, channelLayout: "stereo", sampleRate: 48_000
+        )]
+        let sourceLabels = [AudioTrackMCALabels(
+            trackNumber: 1, channelCount: 2, sampleRate: 48_000,
+            soundfieldGroup: "Dual Mono", audioElement: nil, channelLabels: ["M1", "M2"]
+        )]
+        let sourceContent = try XCTUnwrap(MCALabelsBuilder.buildAVCIntraLabelsFile(
+            inputStreams: streams, inputMCALabels: sourceLabels,
+            outputTrackCount: 2, mcaDefaults: captured
+        ))
+        XCTAssertTrue(sourceContent.contains("sgDM,"), sourceContent)
+        XCTAssertFalse(sourceContent.contains("sgST,"), sourceContent)
+        let overrideContent = try XCTUnwrap(MCALabelsBuilder.buildAVCIntraLabelsFile(
+            inputStreams: streams, inputMCALabels: sourceLabels,
+            overrides: [0: MCALabelOverride(soundfield: .ltRt)],
+            outputTrackCount: 2, mcaDefaults: captured
+        ))
+        XCTAssertTrue(overrideContent.contains("sgLtRt,"), overrideContent)
+        XCTAssertFalse(overrideContent.contains("sgDM,"), overrideContent)
+        XCTAssertFalse(overrideContent.contains("sgST,"), overrideContent)
     }
 }

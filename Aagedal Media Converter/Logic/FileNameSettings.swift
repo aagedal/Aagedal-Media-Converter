@@ -84,9 +84,24 @@ struct FileNameTemplateContext: Sendable {
         self.framerate = framerate
     }
 
-    init(preset: ExportPreset?) {
-        presetSuffix = preset?.fileSuffix ?? ""
-        resolution = preset?.resolutionLabel ?? ""
-        framerate = preset?.framerateLabel ?? ""
+    init(
+        preset: ExportPreset?, defaults: UserDefaults = .standard,
+        av2Settings: AV2Settings? = nil, dcpSettings: DCPSettings? = nil, imfSettings: IMFSettings? = nil
+    ) {
+        presetSuffix = preset?.fileSuffix(defaults: defaults) ?? ""
+        if preset == .dcp, let dcpSettings {
+            resolution = ExportPreset.dcpResolutionLabel(from: dcpSettings.resolution.rawValue) ?? ""
+            framerate = dcpSettings.frameRate.ffmpegValue
+        } else if preset == .imfJ2K || preset == .imfProRes, let imfSettings {
+            resolution = imfSettings.resolution.shortTier
+            framerate = imfSettings.frameRate.folderTag
+        } else {
+            if preset == .av2, let av2Settings {
+                resolution = ExportPreset.label(for: av2Settings.resolutionLimit) ?? ""
+            } else {
+                resolution = preset?.resolutionLabel(defaults: defaults) ?? ""
+            }
+            framerate = preset?.framerateLabel(defaults: defaults) ?? ""
+        }
     }
 }

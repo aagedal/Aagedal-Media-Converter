@@ -4,16 +4,34 @@
 
 import Foundation
 
-/// Immutable codec, broadcast, proxy, and animated-still export preferences, resolved before asynchronous work.
+/// Immutable codec, broadcast, proxy, animated-still, Stream Copy, and custom export preferences, resolved before asynchronous work.
 /// Derived command arguments intentionally retain the existing preset codec policy.
 struct CodecExportSettings: Sendable {
+    let fileNameContext: FileNameTemplateContext
     let container: CodecContainer?
     let fileExtension: String
+    let avcIntraMCADefaults: AVCIntraMCADefaults?
+    let streamCopyContainer: StreamCopyContainer?
+    let appliesCrop: Bool
+    let appliesAudioRouting: Bool
     let avcIntraAudioChannels: AVCIntraAudioChannels?
     let resolutionLimit: CodecResolutionLimit?
     let ffmpegArguments: [String]
 
     init?(preset: ExportPreset, defaults: UserDefaults = .standard) {
+        fileNameContext = FileNameTemplateContext(preset: preset, defaults: defaults)
+        avcIntraMCADefaults = preset == .tvAVCIntra ? AVCIntraMCADefaults(defaults: defaults) : nil
+        streamCopyContainer = preset == .streamCopy ? StreamCopyContainer(
+            rawValue: defaults.string(forKey: AppConstants.streamCopyContainerKey)
+                ?? AppConstants.defaultStreamCopyContainer
+        ) ?? .keepCurrent : nil
+        if let slot = preset.customSlotIndex {
+            appliesCrop = defaults.bool(forKey: AppConstants.customPresetApplyCropKey(for: slot))
+            appliesAudioRouting = defaults.bool(forKey: AppConstants.customPresetApplyAudioRoutingKey(for: slot))
+        } else {
+            appliesCrop = preset.appliesCrop
+            appliesAudioRouting = preset.appliesAudioRouting
+        }
         avcIntraAudioChannels = preset == .tvAVCIntra ? AVCIntraAudioChannels(
             rawValue: defaults.string(forKey: AppConstants.avcIntraAudioChannelsKey)
                 ?? AppConstants.defaultAVCIntraAudioChannels
@@ -23,6 +41,19 @@ struct CodecExportSettings: Sendable {
         let resolutionKey: String
         let defaultResolution: String
         switch preset {
+        case .streamCopy:
+            fileExtension = streamCopyContainer?.fileExtension ?? "mp4"
+            container = streamCopyContainer?.fileExtension.flatMap { CodecContainer(rawValue: $0.uppercased()) }
+            resolutionLimit = nil
+            ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
+            return
+        case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
+            guard let slot = preset.customSlotIndex else { return nil }
+            fileExtension = ExportPreset.customFileExtension(for: slot, defaults: defaults)
+            container = CodecContainer(rawValue: fileExtension.uppercased())
+            resolutionLimit = nil
+            ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
+            return
         case .prores, .videoLoop, .videoLoopWithSound:
             container = preset == .prores ? .mov : .mp4
             fileExtension = preset == .prores ? "mov" : "mp4"
@@ -74,5 +105,14 @@ struct CodecExportSettings: Sendable {
         ffmpegArguments = preset.codecFFmpegArguments(
             defaults: defaults, capturedContainer: container, capturedResolution: resolutionLimit
         )
+    }
+
+    /// Stream Copy's Keep Current policy is source-dependent; all other extensions are fixed.
+    func outputExtension(for sourceURL: URL?) -> String {
+        if streamCopyContainer == .keepCurrent, let sourceExtension = sourceURL?.pathExtension,
+           !sourceExtension.isEmpty {
+            return sourceExtension.lowercased()
+        }
+        return fileExtension
     }
 }

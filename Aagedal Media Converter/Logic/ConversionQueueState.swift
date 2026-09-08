@@ -17,6 +17,26 @@ enum ConversionQueueState {
         }
     }
 
+    /// Resolve the selected item again after asynchronous metadata preparation.
+    /// Queue positions can change while probing; cancelled, removed, or replaced
+    /// sources must never receive the delayed result or start encoding.
+    static func beginPreparedItem(
+        _ selectedItem: VideoItem,
+        details: VideoFileUtils.VideoItemDetails?,
+        in items: inout [VideoItem]
+    ) -> Int? {
+        guard let index = items.firstIndex(where: {
+            $0.id == selectedItem.id && $0.url == selectedItem.url && $0.status == .waiting
+        }) else { return nil }
+        // A concurrent import can have completed a newer details load meanwhile.
+        if !items[index].detailsLoaded, let details {
+            items[index].apply(details: details)
+            items[index].detailsLoaded = true
+        }
+        items[index].status = .converting
+        return index
+    }
+
     /// Failed and cancelled items contribute neither work nor duration. Waiting items
     /// still contribute duration, and completed items contribute their full trimmed range.
     static func overallProgress(for items: [VideoItem]) -> Double {
