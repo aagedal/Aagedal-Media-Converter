@@ -183,6 +183,34 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testWatchFolderStartupFailureRemainsVisibleAfterModeDisablesInBothLanguages() throws {
+        for (language, locale, unavailablePrefix) in [
+            ("en", "en_US", "The watch folder is unavailable"),
+            ("nb", "nb_NO", "Overvåkingsmappen er utilgjengelig")
+        ] {
+            let missingFolder = "/private/tmp/AMC-UITest-Missing-Watch-\(UUID().uuidString)"
+            launchApp(language: language, locale: locale, additionalArguments: [
+                "-watchFolderPath", missingFolder,
+                "-watchFolderAutoActivateOnLaunch", "YES"
+            ])
+            defer { app.terminate() }
+            let alert = app.sheets.firstMatch
+            XCTAssertTrue(alert.waitForExistence(timeout: 10))
+            XCTAssertTrue(alert.staticTexts.containing(NSPredicate(
+                format: "label BEGINSWITH %@ OR value BEGINSWITH %@", unavailablePrefix, unavailablePrefix
+            )).firstMatch.exists)
+            attachWindowScreenshot(named: "Watch folder startup error - \(language)")
+            alert.buttons["OK"].click()
+            XCTAssertTrue(alert.waitForNonExistence(timeout: 5))
+            element("toolbar.settings").click()
+            XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+            element("settings.tab.watchFolder").click()
+            XCTAssertTrue(app.staticTexts[missingFolder].waitForExistence(timeout: 5))
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testMainWindowAndEverySettingsPaneInBothLanguages() throws {
         let panes = [
             ("general", "General", "Generelt"),

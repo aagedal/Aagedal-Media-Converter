@@ -3,6 +3,131 @@ import os
 @testable import Aagedal_Media_Converter
 
 final class WatchFolderPollingTests: XCTestCase {
+    func testMissingDirectoryReportsOnceAndReportsAgainAfterRecovery() async throws {
+        enum PollingFinished: Error { case finished }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let folder = root.appendingPathComponent("watch")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let completed = expectation(description: "Missing, repeated, recovered, and missing scans completed")
+        let scanCount = OSAllocatedUnfairLock(initialState: 0)
+        let errors = OSAllocatedUnfairLock(initialState: [String]())
+        let manager = WatchFolderManager(pollingWait: {
+            let count = scanCount.withLock { value in
+                value += 1
+                return value
+            }
+            switch count {
+            case 2:
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            case 3:
+                try FileManager.default.removeItem(at: folder)
+            case 4:
+                completed.fulfill()
+                throw PollingFinished.finished
+            default:
+                break
+            }
+        })
+        await manager.startMonitoring(folderPath: folder.path, generation: 1, onNewFiles: { _ in
+            XCTFail("An empty or missing folder must not import files")
+        }, onError: { message in
+            errors.withLock { $0.append(message) }
+        })
+        await fulfillment(of: [completed], timeout: 3)
+        await manager.stopMonitoring(generation: 2)
+        let messages = errors.withLock { $0 }
+        XCTAssertEqual(messages.count, 2)
+        XCTAssertTrue(messages.allSatisfy { !$0.isEmpty })
+    }
+
+    func testScanFailureIsReportedOnceUntilRecovery() {
+        var failures = WatchFolderFailureTracker()
+        XCTAssertTrue(failures.shouldReportScanFailure())
+        XCTAssertFalse(failures.shouldReportScanFailure())
+        failures.scanSucceeded(currentFiles: [])
+        XCTAssertTrue(failures.shouldReportScanFailure())
+    }
+
+    func testCleanupFailuresAreDeduplicatedIndependentlyAndResetAfterRecovery() {
+        let first = URL(fileURLWithPath: "/watch/first.mov")
+        let second = URL(fileURLWithPath: "/watch/second.mov")
+        var failures = WatchFolderFailureTracker()
+        XCTAssertTrue(failures.shouldReportCleanupFailure(for: first))
+        XCTAssertFalse(failures.shouldReportCleanupFailure(for: first))
+        XCTAssertTrue(failures.shouldReportCleanupFailure(for: second))
+        failures.scanSucceeded(currentFiles: [first, second])
+        XCTAssertFalse(failures.shouldReportCleanupFailure(for: first))
+        failures.cleanupSucceeded(for: first)
+        XCTAssertTrue(failures.shouldReportCleanupFailure(for: first))
+        failures.scanSucceeded(currentFiles: [first])
+        XCTAssertTrue(failures.shouldReportCleanupFailure(for: second))
+    }
+
+    @MainActor
+    func testFailedReplacementStopsPriorMonitorAndPreservesErrorWhenDisabled() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let scanned = expectation(description: "Initial watch session scanned")
+        let manager = WatchFolderManager(pollingWait: {
+            scanned.fulfill()
+            try await Task.sleep(for: .seconds(30))
+        })
+        let coordinator = WatchFolderCoordinator(manager: manager)
+        let started = await coordinator.enableWatchMode(currentPath: folder.path, promptForFolder: { nil }, updatePath: { _ in }, onNewFiles: { _ in })
+        XCTAssertTrue(started)
+        await fulfillment(of: [scanned], timeout: 3)
+        let replacement = await coordinator.enableWatchMode(currentPath: folder.appendingPathComponent("missing").path, promptForFolder: { nil }, updatePath: { _ in }, onNewFiles: { _ in })
+        XCTAssertFalse(replacement)
+        let stillMonitoring = await manager.isCurrentlyMonitoring()
+        XCTAssertFalse(stillMonitoring)
+        let error = coordinator.errorMessage
+        XCTAssertNotNil(error)
+        // ContentView turns the toggle off after a failed enable. That cleanup
+        // must preserve the error long enough for the alert to be presented.
+        await coordinator.disableWatchMode()
+        XCTAssertEqual(coordinator.errorMessage, error)
+    }
+
+    @MainActor
+    func testDisableWhileChoosingFolderDiscardsSelection() async {
+        let coordinator = WatchFolderCoordinator()
+        let choosing = expectation(description: "Folder picker open")
+        let gate = OSAllocatedUnfairLock<CheckedContinuation<URL?, Never>?>(initialState: nil)
+        let enabling = Task { @MainActor in
+            await coordinator.enableWatchMode(currentPath: "", promptForFolder: {
+                await withCheckedContinuation { continuation in
+                    gate.withLock { $0 = continuation }
+                    choosing.fulfill()
+                }
+            }, updatePath: { _ in
+                XCTFail("A disabled watch session must not save a late selection")
+            }, onNewFiles: { _ in
+                XCTFail("A disabled watch session must not import files")
+            })
+        }
+        await fulfillment(of: [choosing], timeout: 2)
+        await coordinator.disableWatchMode()
+        gate.withLock { $0?.resume(returning: URL(fileURLWithPath: "/late-selection")); $0 = nil }
+        let enabled = await enabling.value
+        XCTAssertFalse(enabled)
+        XCTAssertNil(coordinator.errorMessage)
+    }
+
+    func testSupersededManagerCommandsCannotRestartOrStopReplacement() async {
+        let manager = WatchFolderManager()
+        await manager.stopMonitoring(generation: 2)
+        await manager.startMonitoring(folderPath: "/missing", generation: 1, onNewFiles: { _ in })
+        let stopped = await manager.isCurrentlyMonitoring()
+        XCTAssertFalse(stopped)
+        await manager.startMonitoring(folderPath: "/missing", generation: 3, onNewFiles: { _ in })
+        await manager.stopMonitoring(generation: 2)
+        let monitoring = await manager.isCurrentlyMonitoring()
+        XCTAssertTrue(monitoring)
+        await manager.stopMonitoring(generation: 4)
+    }
+
     func testCancelledMonitorCannotResumeWhenReplacementStarts() async {
         let oldWaiting = expectation(description: "Old monitor suspended")
         let replacementWaiting = expectation(description: "Replacement monitor suspended")

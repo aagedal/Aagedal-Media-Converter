@@ -2017,7 +2017,8 @@ extension FFMPEGCommandBuilder {
         pixelAspectRatio: Double?
     ) {
         // Don't apply crop to stream copy preset
-        guard !ffmpegArgs.contains("-c:v") || !ffmpegArgs.contains("copy") else {
+        if let codecIndex = ffmpegArgs.lastIndex(of: "-c:v"),
+           codecIndex + 1 < ffmpegArgs.count, ffmpegArgs[codecIndex + 1] == "copy" {
             logger.debug("Skipping crop for stream copy preset")
             return
         }
@@ -2117,28 +2118,15 @@ extension FFMPEGCommandBuilder {
             let beforeScale = filterChain[..<scaleRange.lowerBound]
             let afterSetsar = filterChain[scaleRange.lowerBound...]
             filterChain = "\(beforeScale),\(cropFilter)\(afterSetsar)"
-        } else if filterChain.contains("setsar") {
-            // Fallback: append after setsar
-            if let setsarRange = filterChain.range(of: "setsar=1/1") {
-                // Check if there's content after setsar
-                if setsarRange.upperBound < filterChain.endIndex {
-                    // There's more filter chain after setsar
-                    let beforeCrop = filterChain[...setsarRange.upperBound]
-                    let afterCrop = filterChain[setsarRange.upperBound...]
-
-                    // Insert crop with proper separator
-                    if afterCrop.starts(with: ",") {
-                        // Already has comma separator
-                        filterChain = "\(beforeCrop),\(cropFilter)\(afterCrop)"
-                    } else {
-                        // No comma, add one
-                        filterChain = "\(beforeCrop),\(cropFilter),\(afterCrop)"
-                    }
-                } else {
-                    // setsar is at the end, just append
-                    filterChain = "\(filterChain),\(cropFilter)"
-                }
-            }
+        } else if let setsarRange = filterChain.range(of: "setsar=1/1"),
+                  setsarRange.upperBound == filterChain.endIndex || filterChain[setsarRange.upperBound] == "," {
+            // String range upper bounds are exclusive. Keeping the separator in
+            // both slices would introduce an empty filter before the crop.
+            filterChain = joinedFilterSegments([
+                String(filterChain[..<setsarRange.upperBound]),
+                cropFilter,
+                String(filterChain[setsarRange.upperBound...])
+            ])
         } else {
             // Last resort: prepend to filter chain
             filterChain = "\(cropFilter),\(filterChain)"

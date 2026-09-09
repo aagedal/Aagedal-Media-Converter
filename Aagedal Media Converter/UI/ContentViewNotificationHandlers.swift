@@ -68,13 +68,18 @@ struct ContentViewNotificationHandlers: ViewModifier {
             notification: notification, selectedPreset: selectedPreset
         ) else { return }
 
+        let importPreset = selectedPreset
+        let importFolder = outputFolder
+        let importSettings = VideoImportSettings()
+        let naming = VideoImportNamingSettings(preset: importPreset)
+
         for url in urls {
             guard !droppedFiles.contains(where: { $0.url == url }) else { continue }
 
             guard let placeholder = VideoFileUtils.makePlaceholderItem(
                 from: url,
-                outputFolder: outputFolder,
-                preset: selectedPreset
+                outputFolder: importFolder,
+                preset: importPreset, settings: importSettings, namingSettings: naming
             ) else {
                 Self.logger.info("Skipping unsupported file from AppIntent: \(url.lastPathComponent, privacy: .public)")
                 continue
@@ -90,9 +95,10 @@ struct ContentViewNotificationHandlers: ViewModifier {
             Task(priority: .utility) {
                 let details = await VideoFileUtils.loadDetails(
                     for: url,
-                    outputFolder: outputFolder,
-                    preset: selectedPreset,
-                    generateRowThumbnailIfMissing: false
+                    outputFolder: importFolder,
+                    preset: importPreset,
+                    generateRowThumbnailIfMissing: false,
+                    counter: placeholder.customCounterValue, namingSettings: naming
                 )
 
                 await MainActor.run {

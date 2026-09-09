@@ -139,20 +139,22 @@ struct VideoFileUtils: Sendable {
     static func createVideoItem(
         from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "",
         settings: VideoImportSettings = VideoImportSettings(),
+        namingSettings: VideoImportNamingSettings? = nil,
         reserveCounter: @MainActor @Sendable () -> Int? = {
-            FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+            FileNameProcessor.nextCounterValue()
         },
-        detailsLoader: @Sendable (URL, String?, ExportPreset, Int?) async -> VideoItemDetails = { url, folder, preset, counter in
-            await loadDetails(for: url, outputFolder: folder, preset: preset, counter: counter)
+        detailsLoader: @Sendable (URL, String?, ExportPreset, Int?, VideoImportNamingSettings) async -> VideoItemDetails = { url, folder, preset, counter, naming in
+            await loadDetails(for: url, outputFolder: folder, preset: preset, counter: counter, namingSettings: naming)
         }
     ) async -> VideoItem? {
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
         guard var placeholder = await makePlaceholderItem(
-            from: url, outputFolder: outputFolder, preset: preset, comment: comment, settings: settings, reserveCounter: reserveCounter
+            from: url, outputFolder: outputFolder, preset: preset, comment: comment, settings: settings, namingSettings: namingSettings, reserveCounter: reserveCounter
         ) else {
             return nil
         }
 
-        let details = await detailsLoader(url, outputFolder, preset, placeholder.customCounterValue)
+        let details = await detailsLoader(url, outputFolder, preset, placeholder.customCounterValue, namingSettings)
         placeholder.apply(details: details)
         placeholder.detailsLoaded = true
         logger.debug("[createVideoItem] VideoItem created successfully: \(placeholder.name, privacy: .public)")
@@ -163,8 +165,9 @@ struct VideoFileUtils: Sendable {
     static func makePlaceholderItem(
         from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "",
         settings: VideoImportSettings = VideoImportSettings(),
+        namingSettings: VideoImportNamingSettings? = nil,
         reserveCounter: @MainActor @Sendable () -> Int? = {
-            FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+            FileNameProcessor.nextCounterValue()
         }
     ) -> VideoItem? {
         guard isVideoFile(url: url) else { return nil }
@@ -173,7 +176,8 @@ struct VideoFileUtils: Sendable {
         // virtual-track name (e.g. "Main Audio 1") over the UUID-based MXF filename.
         let name = IMFNameOverrides.consume(for: url) ?? url.lastPathComponent
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-        let counter = reserveCounter()
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
+        let counter = namingSettings.fileName.customTemplateUsesCounter ? reserveCounter() : nil
 
         var placeholder = VideoItem(
             url: url,
@@ -185,7 +189,7 @@ struct VideoFileUtils: Sendable {
             status: .waiting,
             progress: 0.0,
             eta: nil,
-            outputURL: makeOutputURL(for: url, outputFolder: outputFolder, preset: preset, counter: counter),
+            outputURL: makeOutputURL(for: url, outputFolder: outputFolder, preset: preset, counter: counter, namingSettings: namingSettings),
             comment: comment,
             includeDateTag: settings.includeDateTag,
             metadata: nil,
@@ -206,8 +210,9 @@ struct VideoFileUtils: Sendable {
         outputFolder: String? = nil,
         preset: ExportPreset = .videoLoop,
         settings: VideoImportSettings = VideoImportSettings(),
+        namingSettings: VideoImportNamingSettings? = nil,
         reserveCounter: @MainActor @Sendable () -> Int? = {
-            FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+            FileNameProcessor.nextCounterValue()
         }
     ) -> VideoItem {
         let frameCountStr = config.frameCount == 1 ? "1 frame" : "\(config.frameCount) frames"
@@ -219,10 +224,11 @@ struct VideoFileUtils: Sendable {
         // Generate thumbnail from the first frame
         let thumbnailData = generateImageSequenceThumbnail(from: config.firstFrameURL)
 
-        let counter = reserveCounter()
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
+        let counter = namingSettings.fileName.customTemplateUsesCounter ? reserveCounter() : nil
         let outputURL = makeOutputURL(
             for: config.directory, outputFolder: outputFolder, preset: preset, counter: counter,
-            imageSequenceFrameRate: config.frameRate
+            imageSequenceFrameRate: config.frameRate, namingSettings: namingSettings
         )
 
         var item = VideoItem(
@@ -285,8 +291,10 @@ struct VideoFileUtils: Sendable {
         outputFolder: String? = nil,
         preset: ExportPreset = .videoLoop,
         generateRowThumbnailIfMissing: Bool = true,
-        counter: Int? = nil
+        counter: Int? = nil,
+        namingSettings: VideoImportNamingSettings? = nil
     ) async -> VideoItemDetails {
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
         // Skip if file doesn't exist (e.g., scheduled downloads)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return VideoItemDetails(
@@ -334,7 +342,7 @@ struct VideoFileUtils: Sendable {
 
         let outputURL = makeOutputURL(
             for: url, outputFolder: outputFolder, preset: preset, counter: counter,
-            imageSequenceFrameRate: metadata?.primaryVideoStream?.frameRate?.value
+            imageSequenceFrameRate: metadata?.primaryVideoStream?.frameRate?.value, namingSettings: namingSettings
         )
         return VideoItemDetails(
             size: size,
@@ -394,23 +402,27 @@ struct VideoFileUtils: Sendable {
         preset: ExportPreset = .videoLoop,
         completion: @MainActor @escaping (VideoItemDetails) -> Void
     ) {
+        let namingSettings = VideoImportNamingSettings(preset: preset)
         Task.detached(priority: .utility) {
-            let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset, namingSettings: namingSettings)
             await completion(details)
         }
     }
 
-    private static func makeOutputURL(
+    static func makeOutputURL(
         for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil,
-        imageSequenceFrameRate: Double? = nil
+        imageSequenceFrameRate: Double? = nil, namingSettings: VideoImportNamingSettings
     ) -> URL? {
-        let resolvedOutputFolder = resolveOutputFolder(for: url, defaultOutputFolder: outputFolder, preset: preset)
+        let resolvedOutputFolder = namingSettings.destination.resolveFolder(
+            for: url, defaultOutputFolder: outputFolder, presetSuffix: namingSettings.context.presetSuffix
+        )
         guard let resolvedOutputFolder else { return nil }
         let nameParts = FileNameProcessor.outputNameParts(
-            inputURL: url, counter: counter, preset: preset,
-            context: FileNameTemplateContext(preset: preset, imageSequenceFrameRate: imageSequenceFrameRate)
+            inputURL: url, counter: counter, preset: preset, settings: namingSettings.fileName,
+            context: namingSettings.namingContext(preset: preset, imageSequenceFrameRate: imageSequenceFrameRate),
+            date: namingSettings.date
         )
-        let resolvedExtension = preset.outputExtension(for: url)
+        let resolvedExtension = namingSettings.outputExtension(for: url)
 
         // Use FileSafetyUtils to prevent overwriting the input file
         let outputFolderURL = URL(fileURLWithPath: resolvedOutputFolder)

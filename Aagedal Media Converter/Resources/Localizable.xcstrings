@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "The watch folder could not be scanned. Reconnect its drive or select the folder again in Settings. Monitoring will retry automatically. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Overvåkingsmappen kunne ikke leses. Koble til stasjonen igjen eller velg mappen på nytt i Innstillinger. Overvåkingen prøver igjen automatisk. %@"
+        }
+      }
+    }
+  },
+  "Some old watch-folder files could not be moved to Trash. Check folder permissions or select the folder again in Settings. Cleanup will retry automatically. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Noen gamle filer i overvåkingsmappen kunne ikke flyttes til papirkurven. Kontroller mappetillatelsene eller velg mappen på nytt i Innstillinger. Oppryddingen prøver igjen automatisk. %@"
+        }
+      }
+    }
+  },
   "The watch folder is unavailable. Reconnect its drive or select the folder again in Settings. Your saved watch folder is unchanged. %@": {
     "localizations": {
       "nb": {

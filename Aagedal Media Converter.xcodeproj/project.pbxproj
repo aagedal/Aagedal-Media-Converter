@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */; };
 		24CB417957434AF98E564C83 /* UploadLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */; };
 		368FA5664CC4494EA5ED2D8A /* SubtitleSRTPublicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C8D0547D524C448BA478BB /* SubtitleSRTPublicationTests.swift */; };
 		A3209450F7A948BBB7B75086 /* SubtitleSRTPublication.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0E4F5D3986436B9AEF6194 /* SubtitleSRTPublication.swift */; };
@@ -332,6 +333,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BMXProbeLifecycleTests.swift; sourceTree = "<group>"; };
 		06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLifecycleTests.swift; sourceTree = "<group>"; };
 		56C8D0547D524C448BA478BB /* SubtitleSRTPublicationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSRTPublicationTests.swift; sourceTree = "<group>"; };
 		BC0E4F5D3986436B9AEF6194 /* SubtitleSRTPublication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSRTPublication.swift; sourceTree = "<group>"; };
@@ -1011,6 +1013,7 @@
 				204DA9E2FCAE49CE950DF5F7 /* AnalyticsCancellationDrainTests.swift */,
 				7748A92962A74E189CB18CD7 /* AV2AACParserTests.swift */,
 				D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */,
+				1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */,
 				42E08E9AD75145B68E1C049D /* ConversionPreparationSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
 				F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */,
@@ -1682,6 +1685,7 @@
 				7C8FED84939945209B1B6012 /* AnalyticsCancellationDrainTests.swift in Sources */,
 				EC4CE91691E24FB19B6E1838 /* AV2AACParserTests.swift in Sources */,
 				D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */,
+				A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */,
 				6333450EF06E41EF9B17CB73 /* ConversionPreparationSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
 				D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */,

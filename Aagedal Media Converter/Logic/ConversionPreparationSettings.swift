@@ -29,6 +29,43 @@ struct VideoImportSettings: Sendable {
     }
 }
 
+/// Naming preferences captured before import metadata work suspends.
+struct VideoImportNamingSettings: Sendable {
+    let fileName: FileNamePreferences
+    let destination: OutputDestinationSettings
+    let context: FileNameTemplateContext
+    let date: Date
+    private let codec: CodecExportSettings?
+    private let fileExtension: String
+
+    init(preset: ExportPreset, defaults: UserDefaults = .standard, date: Date = Date()) {
+        fileName = FileNameSettings(defaults: defaults).snapshot
+        destination = OutputDestinationSettings(defaults: defaults)
+        context = FileNameTemplateContext(preset: preset, defaults: defaults)
+        self.date = date
+        codec = CodecExportSettings(preset: preset, defaults: defaults)
+        switch preset {
+        case .av2: fileExtension = AV2Settings(defaults: defaults).container.fileExtension
+        case .audioOnly: fileExtension = AudioOnlySettings(defaults: defaults).format.fileExtension
+        case .imageSequence: fileExtension = ImageSequenceSettings(defaults: defaults).format.primaryExtension
+        case .dcp, .imfJ2K, .imfProRes: fileExtension = "mxf"
+        default: fileExtension = codec?.fileExtension ?? "mp4"
+        }
+    }
+
+    func outputExtension(for sourceURL: URL) -> String {
+        codec?.outputExtension(for: sourceURL) ?? fileExtension
+    }
+
+    func namingContext(preset: ExportPreset, imageSequenceFrameRate: Double?) -> FileNameTemplateContext {
+        guard preset == .imageSequence else { return context }
+        return FileNameTemplateContext(
+            presetSuffix: context.presetSuffix, resolution: context.resolution,
+            framerate: FileNameTemplateContext.imageSequenceFramerateLabel(imageSequenceFrameRate)
+        )
+    }
+}
+
 /// Preferences shared by request preparation, output naming, and execution.
 /// Capture before metadata or merge preparation suspends; item metadata can then
 /// select a generated-video request without consulting preferences again.

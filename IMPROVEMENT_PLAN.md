@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 735 tests pass. The
+- The unit-test baseline is green: 750 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 735 unit tests. The UI test target now has deterministic smoke
+- There are 750 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,494 entries. All 59 previously missing App Intent
+- The string catalog has 1,500 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -282,6 +282,13 @@ The audit identified these remaining high-risk follow-ups:
   reading AAC/Opus layout descriptors;
 - generated IMF CPL `SourceEncoding` references need full MXF descriptor and
   subdescriptor coverage plus conformance validation.
+
+Custom crop handling now checks the video encoder's own value before skipping a
+Stream Copy path, so `-c:a copy` no longer suppresses picture cropping. Crop insertion
+after `setsar=1/1` uses exclusive string bounds and normalized separators; other SAR
+values retain the crop through the fallback rather than silently omitting it. Two
+command regressions and a generated color-band RGB readback verify the crop, output
+dimensions, and valid filter syntax (Codex, 2026-09-09).
 
 ### 1.2 Add small media-fixture integration tests
 
@@ -808,6 +815,13 @@ the gate without a lock cycle or self-join. Three additional regressions exercis
 paths; already admitted progress can finish after invalidation, while queue attempt
 checks continue to reject stale UI updates (Codex, 2026-09-09).
 
+BMX info and MCA probes now reject cancellation-ignoring late success. Per-URL probe
+identities prevent invalidated or superseded MCA results from returning stale labels
+or repopulating the cache, while old cleanup preserves its replacement's ownership.
+Four bounded fake-runner tests cover cancellation, cache poisoning, invalidation, and
+replacement completion. Converter-owned framework/MCA draining remains open
+(Codex, 2026-09-09).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -1268,6 +1282,16 @@ reauthorization remain audit work (Codex, 2026-09-09).
 
 Target: continuous work after Priority 1 tests exist.
 
+Ongoing watch-folder enumeration and Trash failures now reach the existing recovery
+alert. Continuous scan failures and per-file cleanup failures are deduplicated until
+recovery; cleanup detail is bounded to five files per poll. Generation checks fence
+manager commands, folder-picker results, queued callbacks, and UI toggle responses.
+Replacement attempts stop prior monitor/auto-encode/power work before validation;
+failed startup errors survive the automatic disable. Six regressions include actual
+missing-directory scans, recovery, failed replacement, and delayed picker completion.
+Legacy read-only bookmark renewal and per-file metadata-read diagnostics remain open
+(Codex, 2026-09-09).
+
 ### 3.1 Split orchestration from state and views
 
 Status: in progress; queue decisions and bulk state transitions extracted 2026-09-05 (Codex).
@@ -1709,6 +1733,15 @@ metadata load. Import preview naming still uses current filename/destination pre
 final conversion naming uses the operation snapshot. Wider feature settings and schema
 migrations remain open (Codex, 2026-09-09).
 
+`VideoImportNamingSettings` now captures filename templates, sanitization, date,
+container, suffix/context, and destination preferences before import metadata work
+suspends. Placeholder and detail loading share captured settings and reserved counters
+for file-picker, watch-folder, Finder-drop, and App Intent imports. Group detail batches
+capture a stable snapshot before their first await. Two regressions cover a suspended
+import with preference edits and image-sequence frame-rate naming. Camera-group
+placeholder creation and later detail batches still capture separate snapshots; broader
+feature settings and migrations remain open (Codex, 2026-09-09).
+
 ## Priority 4 — Accessibility, localization, and product polish
 
 Target: parallelizable once stable identifiers are introduced.
@@ -2028,7 +2061,42 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-09, Codex): Debug compilation and all 735 unit tests pass
+Latest validation (2026-09-09, Codex): Debug compilation and all 750 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Fifteen new regressions
+cover custom crop filters and generated RGB pixels, BMX probe cancellation/cache
+ownership, import naming snapshots, and watch-folder error recovery/session lifetime.
+All 43 release-script tests, manifest freshness, and localization checks pass (1,500
+catalog entries, 15 intentional omissions). The unsigned Release build passes; its
+bundle audit verifies all 44 Mach-O images and six packaged license notices. No bundled
+binaries or license assignments changed.
+
+UI conversion success, failure details, start/cancel, and bilingual watcher startup
+recovery all pass across two runs. The first failure-details click was obstructed by
+a foreground Helium window; its isolated retry passed. The initial new watcher test
+forced watch mode off through a launch argument, preventing startup activation;
+removing that override fixed the test setup. English/Norwegian startup-error dialogs
+and the conversion error-details screenshot were visually reviewed. The new test
+also verifies dismissal and preservation of the saved folder in Settings.
+
+Independent review verified crop behavior and exposed failed watch-session replacement
+and error-dismissal races; both are fixed with regression coverage. UI toggle identities
+also prevent a stale enable response from disabling a newer session. The initial sandboxed
+build could not write Xcode caches; the normal authorized Xcode run passed.
+
+Remaining implementation work: typed filters, codecs, outputs, additional input forms,
+and broader preflight; wider orchestration, feature settings and schema migrations;
+camera-group placeholder-to-detail naming snapshots; full package orchestration and
+converter-owned framework/MCA cancellation draining; wider actor/UI binding and filesystem
+audits, per-file watcher metadata errors and legacy read-only grant renewal; multi-process
+subtitle coordination and remote destination alias/cross-protocol coordination; generated
+AV2 video; accurate Matroska channel-layout labels; and IMF descriptor conformance.
+Manual MPV playback, Shortcuts, sandbox relaunch/reauthorization, real OCR and external-volume
+subtitles, configured remote uploads, VoiceOver, broader bilingual/scrolled UI, live
+capture/editor checks, runtime memory/dynamic dependency measurements, clean-machine
+installation/update, complete dependency provenance (99 unresolved license entries),
+and credentialed release validation remain.
+
+Previous validation (2026-09-09, Codex): Debug compilation and all 735 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Twenty-one new tests
 cover typed source boundaries and generated image-sequence picture/audio trim alignment;
 conversion/import settings across suspended preparation; and watch-folder validation,

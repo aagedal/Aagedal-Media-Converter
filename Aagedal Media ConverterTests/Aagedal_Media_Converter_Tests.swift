@@ -7401,6 +7401,57 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(args, originalArgs)
     }
 
+    func testAudioCopyDoesNotSuppressVideoCrop() throws {
+        var args = ["-c:v", "libx264", "-c:a", "copy"]
+        FFMPEGCommandBuilder.applyCropToVideoFilter(
+            &args,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+            sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+        )
+        XCTAssertEqual(try videoFilter(in: args), "crop=32:48:32:0")
+    }
+
+    func testCustomSARFiltersRetainCropAndValidSeparators() throws {
+        for (original, expected) in [
+            ("setsar=1/1,format=yuv420p", "setsar=1/1,crop=32:48:32:0,format=yuv420p"),
+            ("setsar=1/1", "setsar=1/1,crop=32:48:32:0"),
+            ("setsar=2/1,format=yuv420p", "crop=32:48:32:0,setsar=2/1,format=yuv420p"),
+            ("setsar=1/10,format=yuv420p", "crop=32:48:32:0,setsar=1/10,format=yuv420p")
+        ] {
+            var args = ["-c:v", "ffv1", "-vf", original]
+            FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &args,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+                sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+            )
+            XCTAssertEqual(try videoFilter(in: args), expected)
+        }
+    }
+
+    func testGeneratedCustomFilterCropWithCopiedAudioProducesExpectedPixels() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("crop.rgb")
+        var args = ["-c:v", "rawvideo", "-c:a", "copy", "-vf", "setsar=1/1,format=rgb24"]
+        FFMPEGCommandBuilder.applyCropToVideoFilter(
+            &args,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+            sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+        )
+        try runFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+            "color=c=red:s=64x48:r=1,drawbox=x=32:y=0:w=32:h=48:c=lime:t=fill"
+        ] + args + ["-frames:v", "1", "-f", "rawvideo", output.path])
+        let pixels = try Data(contentsOf: output)
+        XCTAssertEqual(pixels.count, 32 * 48 * 3)
+        for offset in stride(from: 0, to: pixels.count, by: 3) {
+            XCTAssertLessThan(pixels[offset], 30)
+            XCTAssertGreaterThan(pixels[offset + 1], 140)
+            XCTAssertLessThan(pixels[offset + 2], 30)
+        }
+    }
+
     func testOddCropDimensionsAreRoundedToCodecSafeEvenValues() throws {
         var args: [String] = []
         let crop = CropConfig(normalizedRect: CropRect(x: 0.1, y: 0.1, width: 0.501, height: 0.501))

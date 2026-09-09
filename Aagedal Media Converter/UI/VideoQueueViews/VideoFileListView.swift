@@ -540,7 +540,8 @@ struct VideoFileListView: View {
         let outputFolder = UserDefaults.standard.string(forKey: "outputFolder")
             ?? AppConstants.defaultOutputDirectory.path
 
-        guard let placeholder = VideoFileUtils.makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset) else {
+        let naming = VideoImportNamingSettings(preset: preset)
+        guard let placeholder = VideoFileUtils.makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset, namingSettings: naming) else {
             Self.logger.error("Failed to create placeholder video item")
             return
         }
@@ -563,7 +564,7 @@ struct VideoFileListView: View {
 
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
 
-            let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset, counter: placeholder.customCounterValue, namingSettings: naming)
             await MainActor.run {
                 if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
                     self.droppedFiles[index].apply(details: details)

@@ -108,6 +108,7 @@ struct ContentView: View {
     @AppStorage(AppConstants.watchFolderAutoActivateOnLaunchKey) private var watchFolderAutoActivateOnLaunch = false
     @State private var hasAppliedWatchFolderLaunchActivation = false
     @StateObject private var watchFolderCoordinator = WatchFolderCoordinator()
+    @State private var watchFolderToggleID = UUID()
     @State private var mergeClipsEnabled = false
     @State private var mergeClipsAvailable = false
     @State private var mergeClipsTooltip = "Add at least two compatible clips to enable merging."
@@ -1501,12 +1502,17 @@ struct ContentView: View {
 
     @MainActor
     private func loadGroupItemDetails(groupID: UUID, itemIDs: [UUID], preset: ExportPreset) async {
+        let naming = VideoImportNamingSettings(preset: preset)
+        let importFolder = outputFolder
         for itemID in itemIDs {
             guard let gi = encodingGroups.firstIndex(where: { $0.id == groupID }),
                   let ii = encodingGroups[gi].items.firstIndex(where: { $0.id == itemID }) else { continue }
 
             let url = encodingGroups[gi].items[ii].url
-            let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            let counter = encodingGroups[gi].items[ii].customCounterValue
+            let details = await VideoFileUtils.loadDetails(
+                for: url, outputFolder: importFolder, preset: preset, counter: counter, namingSettings: naming
+            )
             if let gi2 = encodingGroups.firstIndex(where: { $0.id == groupID }),
                let ii2 = encodingGroups[gi2].items.firstIndex(where: { $0.id == itemID }) {
                 encodingGroups[gi2].items[ii2].apply(details: details)
@@ -1519,6 +1525,10 @@ struct ContentView: View {
     private func handleFileSelection(result: Result<[URL], Error>) async {
         switch result {
         case .success(let urls):
+            let importPreset = selectedPreset
+            let importFolder = outputFolder
+            let importSettings = VideoImportSettings()
+            let naming = VideoImportNamingSettings(preset: importPreset)
             for url in urls {
                 // Check for duplicates before creating placeholder
                 guard !droppedFiles.contains(where: { $0.url == url }) else {
@@ -1540,8 +1550,8 @@ struct ContentView: View {
                         guard !containsImageSequence(config) else { continue }
                         let item = VideoFileUtils.makePlaceholderItem(
                             fromImageSequence: config,
-                            outputFolder: outputFolder,
-                            preset: selectedPreset
+                            outputFolder: importFolder,
+                            preset: importPreset, settings: importSettings, namingSettings: naming
                         )
                         droppedFiles.append(item)
                         queueOrder.append(item.id)
@@ -1576,8 +1586,8 @@ struct ContentView: View {
                         guard !containsImageSequence(config) else { continue }
                         let item = VideoFileUtils.makePlaceholderItem(
                             fromImageSequence: config,
-                            outputFolder: outputFolder,
-                            preset: selectedPreset
+                            outputFolder: importFolder,
+                            preset: importPreset, settings: importSettings, namingSettings: naming
                         )
                         droppedFiles.append(item)
                         queueOrder.append(item.id)
@@ -1588,8 +1598,8 @@ struct ContentView: View {
 
                 guard let placeholder = VideoFileUtils.makePlaceholderItem(
                     from: url,
-                    outputFolder: outputFolder,
-                    preset: selectedPreset
+                    outputFolder: importFolder,
+                    preset: importPreset, settings: importSettings, namingSettings: naming
                 ) else {
                     Self.logger.info("Skipping unsupported file: \(url.lastPathComponent, privacy: .public)")
                     continue
@@ -1605,7 +1615,7 @@ struct ContentView: View {
 
                 // Load details asynchronously in background
                 Task(priority: .utility) {
-                    let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: selectedPreset)
+                    let details = await VideoFileUtils.loadDetails(for: url, outputFolder: importFolder, preset: importPreset, counter: placeholder.customCounterValue, namingSettings: naming)
                     await MainActor.run {
                         if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
                             self.droppedFiles[index].apply(details: details)
@@ -2016,6 +2026,10 @@ struct ContentView: View {
 
     @MainActor
     private func addFilesFromWatchFolder(_ urls: [URL]) async {
+        let importPreset = selectedPreset
+        let importFolder = outputFolder
+        let importSettings = VideoImportSettings()
+        let naming = VideoImportNamingSettings(preset: importPreset)
         for url in urls {
             // Check if file already exists in the list
             guard !droppedFiles.contains(where: { $0.url == url }) else {
@@ -2024,8 +2038,8 @@ struct ContentView: View {
 
             guard let placeholder = VideoFileUtils.makePlaceholderItem(
                 from: url,
-                outputFolder: outputFolder,
-                preset: selectedPreset
+                outputFolder: importFolder,
+                preset: importPreset, settings: importSettings, namingSettings: naming
             ) else {
                 Self.logger.info("Skipping unsupported file from watch folder: \(url.lastPathComponent, privacy: .public)")
                 continue
@@ -2041,7 +2055,7 @@ struct ContentView: View {
 
             // Load details asynchronously in background
             Task(priority: .utility) {
-                let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: selectedPreset)
+                let details = await VideoFileUtils.loadDetails(for: url, outputFolder: importFolder, preset: importPreset, counter: placeholder.customCounterValue, namingSettings: naming)
                 await MainActor.run {
                     if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
                         self.droppedFiles[index].apply(details: details)
@@ -2424,20 +2438,23 @@ struct ContentView: View {
     }
 
     private func handleWatchFolderToggle(_ enabled: Bool) {
+        let toggleID = UUID()
+        watchFolderToggleID = toggleID
         Task { @MainActor in
+            guard watchFolderToggleID == toggleID else { return }
             if enabled {
                 let success = await watchFolderCoordinator.enableWatchMode(
                     currentPath: watchFolderPath,
                     promptForFolder: { await promptForWatchFolderSelection() },
                     updatePath: { newPath in
-                        Task { @MainActor in
+                        await MainActor.run {
                             watchFolderPath = newPath
                         }
                     },
                     onNewFiles: { urls in await addFilesFromWatchFolder(urls) }
                 )
 
-                if !success {
+                if watchFolderToggleID == toggleID, !success {
                     watchFolderModeEnabled = false
                 }
             } else {

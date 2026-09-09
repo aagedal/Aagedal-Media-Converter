@@ -76,6 +76,7 @@ actor BMXService {
         let labels: [AudioTrackMCALabels]
     }
     private var mcaCache: [URL: MCACacheEntry] = [:]
+    private var activeMCAProbeIDs: [URL: UUID] = [:]
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
@@ -489,6 +490,7 @@ actor BMXService {
     /// - Parameter url: The MXF file to analyze
     /// - Returns: MXF info string, or nil if failed
     func getMXFInfo(url: URL) async -> String? {
+        guard !Task.isCancelled else { return nil }
         guard let mxf2rawPath = mxf2rawPathProvider() else {
             logger.error("mxf2raw binary not found")
             return nil
@@ -507,6 +509,7 @@ actor BMXService {
         )
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             guard result.succeeded else {
                 let diagnostic = request.redactedDiagnostic(result.standardErrorText)
                 logger.warning("mxf2raw exited \(result.terminationStatus): \(diagnostic, privacy: .private(mask: .hash))")
@@ -544,6 +547,7 @@ actor BMXService {
     /// - Returns: Per-track MCA labels in the order mxf2raw emits Sound tracks, or nil if mxf2raw fails.
     ///           Tracks without MCA descriptors yield entries with nil/empty label fields.
     func getAudioTrackLabels(url: URL) async -> [AudioTrackMCALabels]? {
+        guard !Task.isCancelled else { return nil }
         logger.info("getAudioTrackLabels: starting for \(url.lastPathComponent, privacy: .public)")
 
         // Open security-scoped access so the mxf2raw subprocess can read user-imported
@@ -589,9 +593,19 @@ actor BMXService {
             sourceURL: url,
             outputCaptureLimit: Self.mcaXMLCaptureLimit
         )
+        // Identity survives suspension so an invalidated or replaced probe cannot
+        // publish stale labels or repopulate the cache after invalidation.
+        let probeID = UUID()
+        activeMCAProbeIDs[url] = probeID
+        defer {
+            if activeMCAProbeIDs[url] == probeID {
+                activeMCAProbeIDs.removeValue(forKey: url)
+            }
+        }
         let result: SubprocessResult
         do {
             result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
         } catch is CancellationError {
             return nil
         } catch {
@@ -609,6 +623,7 @@ actor BMXService {
             return nil
         }
 
+        guard activeMCAProbeIDs[url] == probeID else { return nil }
         let xmlData = result.standardOutput
         let labels = MXFInfoMCAParser.parse(xmlData: xmlData)
         mcaCache[url] = MCACacheEntry(modificationDate: mtime, labels: labels)
@@ -639,6 +654,7 @@ actor BMXService {
     /// Invalidates the cached MCA labels for a URL (e.g. when the file is replaced on disk).
     func invalidateMCACache(for url: URL) {
         mcaCache.removeValue(forKey: url)
+        activeMCAProbeIDs.removeValue(forKey: url)
     }
 }
 

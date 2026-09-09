@@ -1,5 +1,10 @@
 # v.4.3.0
 
+- **Custom video crops work when audio is copied**, and filters following pixel-aspect normalization retain valid crop ordering.
+- **Import filename previews retain their naming rules, counters, output folders, and containers while metadata loads.**
+- **Watch-folder scan and Trash failures show recovery guidance without repeating every poll.** Replaced or disabled sessions reject late updates, and startup errors stay visible until acknowledged.
+- **Cancelled or invalidated MXF label probes cannot publish stale results or refill cleared caches.**
+
 - **Image-sequence start trims keep companion audio aligned with the picture.**
 - **Export settings stay consistent while media details load**, including output names, destination subfolders, codecs, subtitles, comments, and generated video.
 - **New imports retain their date-tag, waveform, and timecode defaults while metadata loads.**

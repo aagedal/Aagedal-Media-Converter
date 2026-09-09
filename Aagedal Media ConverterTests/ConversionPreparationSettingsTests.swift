@@ -192,7 +192,7 @@ final class ConversionPreparationSettingsTests: XCTestCase {
         let task = Task {
             await VideoFileUtils.createVideoItem(
                 from: URL(fileURLWithPath: "/fixture/audio.wav"), settings: settings,
-                reserveCounter: { nil }, detailsLoader: { _, _, _, _ in await gate.wait(started: started) }
+                reserveCounter: { nil }, detailsLoader: { _, _, _, _, _ in await gate.wait(started: started) }
             )
         }
         await fulfillment(of: [started], timeout: 3)
@@ -208,6 +208,67 @@ final class ConversionPreparationSettingsTests: XCTestCase {
         XCTAssertEqual(imported.timecodeConfig, TimecodeConfig(mode: .manual("10:00:00:00")))
         XCTAssertEqual(imported.size, 15)
         XCTAssertFalse(VideoImportSettings(defaults: defaults).includeDateTag)
+    }
+
+    @MainActor
+    func testImportPreviewKeepsNamingDestinationAndContainerSnapshot() async throws {
+        let suite = "ImportPreviewSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("before_{sourceName}_{counter}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(2, forKey: AppConstants.customFileNameCounterPaddingKey)
+        defaults.set(false, forKey: AppConstants.fileNameIncludePresetSuffixKey)
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalSubfolderKey)
+        defaults.set("custom", forKey: AppConstants.saveNextToOriginalSubfolderModeKey)
+        defaults.set("captured", forKey: AppConstants.saveNextToOriginalSubfolderNameKey)
+        defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
+        let naming = VideoImportNamingSettings(preset: .h264, defaults: defaults)
+        let gate = SettingsPreparationDetailsGate()
+        let started = expectation(description: "Naming suspended")
+        let task = Task {
+            await VideoFileUtils.createVideoItem(
+                from: URL(fileURLWithPath: "/fixture/clip.mp4"), preset: .h264,
+                namingSettings: naming, reserveCounter: { 7 },
+                detailsLoader: { url, folder, preset, counter, captured in
+                    let details = await gate.wait(started: started)
+                    return VideoFileUtils.VideoItemDetails(
+                        size: details.size, duration: details.duration, durationSeconds: details.durationSeconds,
+                        thumbnailData: nil,
+                        outputURL: VideoFileUtils.makeOutputURL(
+                            for: url, outputFolder: folder, preset: preset, counter: counter, namingSettings: captured
+                        ), hasVideoStream: true, metadata: nil
+                    )
+                }
+            )
+        }
+        await fulfillment(of: [started], timeout: 3)
+        defaults.set("after", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(CodecContainer.mp4.rawValue, forKey: AppConstants.h264ContainerKey)
+        await gate.finish()
+        let imported = await task.value
+        XCTAssertEqual(imported?.outputURL?.path, "/fixture/captured/before_clip_07.mov")
+        XCTAssertEqual(imported?.customCounterValue, 7)
+    }
+
+    func testImportImageSequenceFrameRateUsesMetadataWithCapturedTemplate() throws {
+        let suite = "ImportPreviewSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("{sourceName}_{framerate}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(false, forKey: AppConstants.fileNameIncludePresetSuffixKey)
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(ImageSequenceFormat.png.rawValue, forKey: AppConstants.imageSequenceExportFormatKey)
+        let naming = VideoImportNamingSettings(preset: .imageSequence, defaults: defaults)
+        defaults.set("after", forKey: AppConstants.customFileNameTemplateKey)
+        let output = VideoFileUtils.makeOutputURL(
+            for: URL(fileURLWithPath: "/fixture/clip.mov"), outputFolder: "/output", preset: .imageSequence,
+            imageSequenceFrameRate: 24, namingSettings: naming
+        )
+        XCTAssertEqual(output?.path, "/output/clip_24.png")
     }
 
     private func item(url: URL) -> VideoItem {
