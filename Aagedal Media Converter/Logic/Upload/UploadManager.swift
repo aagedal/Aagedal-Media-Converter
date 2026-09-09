@@ -20,6 +20,10 @@ class UploadManager {
     @ObservationIgnored private var uploadAttempts: [UUID: UploadAttempt] = [:]
     @ObservationIgnored private var outputUploadTasks: [UUID: (id: UUID, task: Task<Void, Never>)] = [:]
 
+    /// Register at the synchronous enqueue boundary to preserve row order across
+    /// managers. A cancelled tail still owns its predecessor until it has drained.
+    private static var destinationUploadTasks: [UploadDestinationIdentity: (id: UUID, task: Task<Void, Never>)] = [:]
+
     /// Reference to video items for updating status
     var videoItems: Binding<[VideoItem]>?
 
@@ -100,12 +104,20 @@ class UploadManager {
         videoItems?.wrappedValue[index].uploadOperationID = attempt.id
         videoItems?.wrappedValue[index].uploadStatus = .pending
         uploadAttempts[itemID] = attempt
+        let destination = UploadDestinationIdentity(config: config, localFile: fileURL)
+        let destinationPredecessor = Self.destinationUploadTasks[destination]?.task
 
         // Keep only weak UI ownership across service awaits. The task still owns its
-        // service and predecessor until cancellation has finished draining them.
+        // service and predecessors until cancellation has finished draining them.
         let task = Task { [weak self, rcloneService] in
-            defer { self?.finish(attempt) }
+            defer {
+                if Self.destinationUploadTasks[destination]?.id == attempt.id {
+                    Self.destinationUploadTasks.removeValue(forKey: destination)
+                }
+                self?.finish(attempt)
+            }
             await previousTask?.value
+            await destinationPredecessor?.value
             guard !Task.isCancelled, self?.begin(attempt) == true else { return }
 
             do {
@@ -135,6 +147,7 @@ class UploadManager {
             }
         }
         uploadTasks[itemID] = task
+        Self.destinationUploadTasks[destination] = (attempt.id, task)
         if !attempt.isSourceUpload {
             outputUploadTasks[itemID] = (attempt.id, task)
         }

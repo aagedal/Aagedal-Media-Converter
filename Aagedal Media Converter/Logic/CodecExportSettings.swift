@@ -17,9 +17,18 @@ struct CodecExportSettings: Sendable {
     let avcIntraAudioChannels: AVCIntraAudioChannels?
     let resolutionLimit: CodecResolutionLimit?
     let ffmpegArguments: [String]
+    let sourceMetadataPlan: SourceMetadataPlan
 
     init?(preset: ExportPreset, defaults: UserDefaults = .standard) {
         fileNameContext = FileNameTemplateContext(preset: preset, defaults: defaults)
+        if preset.customSlotIndex != nil {
+            sourceMetadataPlan = .unchanged
+        } else {
+            sourceMetadataPlan = SourceMetadataPlan(
+                preserveMetadata: defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey),
+                defaultInput: [.videoLoop, .animatedStill].contains(preset) ? nil : 0
+            )
+        }
         avcIntraMCADefaults = preset == .tvAVCIntra ? AVCIntraMCADefaults(defaults: defaults) : nil
         streamCopyContainer = preset == .streamCopy ? StreamCopyContainer(
             rawValue: defaults.string(forKey: AppConstants.streamCopyContainerKey)

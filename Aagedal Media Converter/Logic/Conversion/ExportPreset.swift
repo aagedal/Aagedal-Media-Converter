@@ -1848,96 +1848,12 @@ extension ExportPreset {
 
 extension ExportPreset {
     static func applyMetadataStrategy(to args: inout [String], preserveMetadata: Bool, defaultMap: String = "-1") {
-        removeArgumentPair("-map_metadata", from: &args)
-        removeArgumentPair("-map_chapters", from: &args)
-        removeFflagsArgument("+bitexact", from: &args)
-        removeArgumentPair("-metadata:s:v:0", value: "encoder=", from: &args)
-        removeArgumentPair("-metadata:s:a:0", value: "encoder=", from: &args)
-        
-        if preserveMetadata {
-            if defaultMap != "-1" {
-                appendArgumentPair("-map_metadata", value: defaultMap, to: &args)
-                appendArgumentPair("-map_chapters", value: defaultMap, to: &args)
-            }
-        } else {
-            appendArgumentPair("-map_metadata", value: "-1", to: &args)
-            appendArgumentPair("-map_chapters", value: "-1", to: &args)
-            // Use -fflags +bitexact to prevent muxer from writing encoder/writing_application metadata
-            appendFflagsArgument("+bitexact", to: &args)
-            // Clear stream-level encoder tags (writing_library) for video and audio streams
-            appendArgumentPair("-metadata:s:v:0", value: "encoder=", to: &args)
-            appendArgumentPair("-metadata:s:a:0", value: "encoder=", to: &args)
-        }
+        SourceMetadataPlan(
+            preserveMetadata: preserveMetadata,
+            defaultInput: defaultMap == "-1" ? nil : Int(defaultMap)
+        ).apply(to: &args)
     }
-    
-    /// Removes a specific flag from an existing -fflags argument, or removes the entire -fflags argument if it only contains that flag.
-    private static func removeFflagsArgument(_ flag: String, from args: inout [String]) {
-        var index = 0
-        while index < args.count {
-            if args[index] == "-fflags" && index + 1 < args.count {
-                var value = args[index + 1]
-                if value == flag {
-                    // Remove both -fflags and its value
-                    args.remove(at: index)
-                    args.remove(at: index)
-                    continue
-                } else if value.contains(flag) {
-                    // Remove the specific flag from the value
-                    value = value.replacingOccurrences(of: flag, with: "")
-                    if value.isEmpty || value == "+" {
-                        args.remove(at: index)
-                        args.remove(at: index)
-                    } else {
-                        args[index + 1] = value
-                        index += 2
-                    }
-                    continue
-                }
-            }
-            index += 1
-        }
-    }
-    
-    /// Appends a flag to an existing -fflags argument, or adds a new -fflags argument if none exists.
-    private static func appendFflagsArgument(_ flag: String, to args: inout [String]) {
-        // Check if -fflags already exists
-        for i in 0..<args.count {
-            if args[i] == "-fflags" && i + 1 < args.count {
-                // Check if the flag is already present
-                if args[i + 1].contains(flag) {
-                    return
-                }
-                // Append to existing fflags
-                args[i + 1] = args[i + 1] + flag
-                return
-            }
-        }
-        // No -fflags found, add new one
-        args.append(contentsOf: ["-fflags", flag])
-    }
-    
-    private static func removeArgumentPair(_ key: String, value: String? = nil, from args: inout [String]) {
-        var index = 0
-        while index < args.count {
-            if args[index] == key {
-                if let value {
-                    if index + 1 < args.count, args[index + 1] == value {
-                        args.remove(at: index)
-                        args.remove(at: index)
-                        continue
-                    }
-                } else {
-                    args.remove(at: index)
-                    if index < args.count {
-                        args.remove(at: index)
-                    }
-                    continue
-                }
-            }
-            index += 1
-        }
-    }
-    
+
     // MARK: - Scale Filter Builders
 
     /// Base desqueeze filter: normalizes anamorphic (non-square pixel) content to square pixels.
@@ -1997,17 +1913,6 @@ extension ExportPreset {
         }
     }
 
-    private static func appendArgumentPair(_ key: String, value: String, to args: inout [String]) {
-        var index = 0
-        while index < args.count - 1 {
-            if args[index] == key && args[index + 1] == value {
-                return
-            }
-            index += 1
-        }
-        args.append(contentsOf: [key, value])
-    }
-    
     private static func customDisplayName(for slot: Int) -> String {
         let prefixes = AppConstants.customPresetPrefixes
         let fallbackSuffixes = AppConstants.defaultCustomPresetNameSuffixes

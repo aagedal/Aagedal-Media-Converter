@@ -1,5 +1,11 @@
 # v.4.3.0
 
+- **Uploads targeting the same remote file run in queue order**, including retries and separate queue rows, while other destinations can upload concurrently.
+- **Cancelling from conversion progress no longer deadlocks**, including ordinary FFmpeg, AV2 decoding, and native waveform rendering.
+- **Package and AV2 cancellation waits for active helpers to stop**, rejects late success, and prevents old chunk failures from cancelling replacement exports.
+- **Trimmed Stream Copy preserves each track's own title and language**, and metadata stripping stays effective through final output options.
+- **Native waveform exports preserve metadata from the original audio source.**
+
 - **AV2 AAC exports support additional multichannel layouts**, including 2.1, quad, and 6.1, while preserving routed tracks and their channel data.
 - **Subtitle engines reserve independent filenames**, preserve unrelated or edited SRT files, and reuse only their own unchanged outputs on retry.
 - **SSH keys selected with Browse retain sandbox access across launches**, including moved files, with guidance when access must be granted again.

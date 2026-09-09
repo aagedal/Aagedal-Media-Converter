@@ -27,6 +27,10 @@ struct AudioOnlySettings: Sendable {
         preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
     }
 
+    var sourceMetadataPlan: SourceMetadataPlan {
+        SourceMetadataPlan(preserveMetadata: preserveMetadata)
+    }
+
     var ffmpegArguments: [String] {
         var args = ["-hide_banner", "-vn", "-map", "0:a"]
         switch format {
@@ -43,7 +47,7 @@ struct AudioOnlySettings: Sendable {
         case .flac:
             args += ["-c:a", "flac"]
         }
-        ExportPreset.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata)
+        sourceMetadataPlan.apply(to: &args)
         return args
     }
 }

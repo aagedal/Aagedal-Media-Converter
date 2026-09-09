@@ -225,7 +225,187 @@ final class UploadLifecycleTests: XCTestCase {
         await task.value
     }
 
-    private func makeManager(service: ControlledUploadService) -> UploadManager {
+    func testSeparateRowsWithSameRemoteFilenameRunInEnqueueOrder() async throws {
+        let starts = (0..<4).map { expectation(description: "Upload \($0) started") }
+        let service = ControlledUploadService(started: starts)
+        let manager = makeManager(service: service)
+        var items = (0..<4).map { index in
+            var item = makeItem()
+            item.outputURL = URL(fileURLWithPath: "/fixture/\(index)/output.mov")
+            return item
+        }
+        manager.videoItems = Binding(get: { items }, set: { items = $0 })
+        var tasks = try items.prefix(3).map { try XCTUnwrap(manager.startUpload(itemID: $0.id)) }
+
+        for index in 0..<4 {
+            await fulfillment(of: [starts[index]], timeout: 2)
+            XCTAssertEqual(items[index].uploadStatus, .uploading)
+            for waiting in (index + 1)..<tasks.count {
+                XCTAssertEqual(items[waiting].uploadStatus, .pending)
+            }
+            let files = await service.localFiles
+            XCTAssertEqual(files.last, items[index].outputURL)
+            await service.finish(run: index)
+            await tasks[index].value
+            if index == 0 {
+                // Finishing an old task must not release a newer tail's ownership.
+                tasks.append(try XCTUnwrap(manager.startUpload(itemID: items[3].id)))
+            }
+        }
+        let maximumConcurrent = await service.maximumConcurrentRuns
+        XCTAssertEqual(maximumConcurrent, 1)
+        XCTAssertTrue(items.allSatisfy { $0.uploadStatus == .uploaded })
+    }
+
+    func testCancellingWaitingRowKeepsItsDestinationPredecessorUntilDrained() async throws {
+        let firstStarted = expectation(description: "First upload started")
+        let thirdStarted = expectation(description: "Third upload follows cancelled waiter")
+        let service = ControlledUploadService(started: [firstStarted, thirdStarted])
+        let manager = makeManager(service: service)
+        var items = [makeItem(), makeItem(), makeItem()]
+        manager.videoItems = Binding(get: { items }, set: { items = $0 })
+        let first = try XCTUnwrap(manager.startUpload(itemID: items[0].id))
+        await fulfillment(of: [firstStarted], timeout: 2)
+        let second = try XCTUnwrap(manager.startUpload(itemID: items[1].id))
+        let cancellationStarted = expectation(description: "Waiting row cancellation requested")
+        let cancellation = Task {
+            cancellationStarted.fulfill()
+            await manager.cancelUpload(itemID: items[1].id)
+        }
+        await fulfillment(of: [cancellationStarted], timeout: 2)
+        let third = try XCTUnwrap(manager.startUpload(itemID: items[2].id))
+        await Task.yield()
+        XCTAssertEqual(items[1].uploadStatus, .cancelled)
+        XCTAssertEqual(items[2].uploadStatus, .pending)
+
+        await service.finish(run: 0)
+        await first.value
+        await second.value
+        await cancellation.value
+        await fulfillment(of: [thirdStarted], timeout: 2)
+        await service.finish(run: 1)
+        await third.value
+        let starts = await service.startCount
+        let maximumConcurrent = await service.maximumConcurrentRuns
+        XCTAssertEqual(starts, 2)
+        XCTAssertEqual(maximumConcurrent, 1)
+        XCTAssertEqual(items[1].uploadStatus, .cancelled)
+        XCTAssertEqual(items[2].uploadStatus, .uploaded)
+    }
+
+    func testRetryGoesBehindAlreadyQueuedRowForSameDestination() async throws {
+        let firstStarted = expectation(description: "First upload started")
+        let secondStarted = expectation(description: "Other row starts before retry")
+        let retryStarted = expectation(description: "Retry starts last")
+        let firstCancelled = expectation(description: "First upload cancellation requested")
+        let service = ControlledUploadService(
+            started: [firstStarted, secondStarted, retryStarted], cancelled: [firstCancelled]
+        )
+        let manager = makeManager(service: service)
+        var items = [makeItem(), makeItem()]
+        items[1].outputURL = URL(fileURLWithPath: "/other/output.mov")
+        manager.videoItems = Binding(get: { items }, set: { items = $0 })
+        let first = try XCTUnwrap(manager.startUpload(itemID: items[0].id))
+        await fulfillment(of: [firstStarted], timeout: 2)
+        let second = try XCTUnwrap(manager.startUpload(itemID: items[1].id))
+        let retry = try XCTUnwrap(manager.startUpload(itemID: items[0].id))
+        await fulfillment(of: [firstCancelled], timeout: 2)
+        await service.finish(run: 0)
+        await first.value
+        await fulfillment(of: [secondStarted], timeout: 2)
+        XCTAssertEqual(items[0].uploadStatus, .pending)
+        XCTAssertEqual(items[1].uploadStatus, .uploading)
+        await service.finish(run: 1)
+        await second.value
+        await fulfillment(of: [retryStarted], timeout: 2)
+        await service.finish(run: 2)
+        await retry.value
+        let files = await service.localFiles
+        let maximumConcurrent = await service.maximumConcurrentRuns
+        XCTAssertEqual(files.map(\.path), ["/fixture/output.mov", "/other/output.mov", "/fixture/output.mov"])
+        XCTAssertEqual(maximumConcurrent, 1)
+        XCTAssertTrue(items.allSatisfy { $0.uploadStatus == .uploaded })
+    }
+
+    func testDifferentRemoteFilenamesCanUploadConcurrently() async throws {
+        let starts = (0..<2).map { expectation(description: "Independent upload \($0) started") }
+        let service = ControlledUploadService(started: starts)
+        let manager = makeManager(service: service)
+        var items = [makeItem(), makeItem()]
+        items[1].outputURL = URL(fileURLWithPath: "/fixture/another.mov")
+        manager.videoItems = Binding(get: { items }, set: { items = $0 })
+        let tasks = try items.map { try XCTUnwrap(manager.startUpload(itemID: $0.id)) }
+        await fulfillment(of: starts, timeout: 2)
+        let maximumConcurrent = await service.maximumConcurrentRuns
+        XCTAssertEqual(maximumConcurrent, 2)
+        await service.finish(run: 0)
+        await service.finish(run: 1)
+        for task in tasks { await task.value }
+    }
+
+    func testFailedUploadReleasesDestinationForNextRow() async throws {
+        let firstStarted = expectation(description: "First upload started")
+        let secondStarted = expectation(description: "Second upload follows failure")
+        let service = ControlledUploadService(started: [firstStarted, secondStarted])
+        let manager = makeManager(service: service)
+        var items = [makeItem(), makeItem()]
+        manager.videoItems = Binding(get: { items }, set: { items = $0 })
+        let first = try XCTUnwrap(manager.startUpload(itemID: items[0].id))
+        let second = try XCTUnwrap(manager.startUpload(itemID: items[1].id))
+        await fulfillment(of: [firstStarted], timeout: 2)
+        await service.finish(run: 0, failure: "Fixture upload failed")
+        await first.value
+        await fulfillment(of: [secondStarted], timeout: 2)
+        XCTAssertEqual(items[0].uploadStatus, .failed("Fixture upload failed"))
+        await service.finish(run: 1)
+        await second.value
+        XCTAssertEqual(items[1].uploadStatus, .uploaded)
+    }
+
+    func testSeparateManagersWaitForCancelledRunnerAndScopesToDrain() async throws {
+        let firstStarted = expectation(description: "First manager runner started")
+        let secondStarted = expectation(description: "Second manager runner started after scopes released")
+        let firstRunner = CancellationIgnoringRcloneRunner(started: firstStarted)
+        let secondRunner = CancellationIgnoringRcloneRunner(started: secondStarted)
+        let file = URL(fileURLWithPath: "/fixture/output.mov")
+        let key = URL(fileURLWithPath: "/fixture/key")
+        let scopes = UploadScopeRecorder(available: [file, key])
+        func service(_ runner: CancellationIgnoringRcloneRunner) -> RcloneService {
+            RcloneService(
+                updateService: ImmediateRcloneResolver(), subprocessRunner: runner,
+                startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) },
+                resolveBookmark: { _ in nil }, isFileReadable: { _ in true }
+            )
+        }
+        var firstManager: UploadManager? = makeManager(service: service(firstRunner))
+        let secondManager = makeManager(service: service(secondRunner))
+        var firstItems = [makeItem()]
+        var secondItems = [makeItem()]
+        firstManager?.videoItems = Binding(get: { firstItems }, set: { firstItems = $0 })
+        secondManager.videoItems = Binding(get: { secondItems }, set: { secondItems = $0 })
+        let first = try XCTUnwrap(firstManager?.startUpload(itemID: firstItems[0].id))
+        await fulfillment(of: [firstStarted], timeout: 2)
+        let second = try XCTUnwrap(secondManager.startUpload(itemID: secondItems[0].id))
+        weak var releasedManager = firstManager
+        firstManager = nil
+        await Task.yield()
+        XCTAssertNil(releasedManager)
+        XCTAssertEqual(secondItems[0].uploadStatus, .pending)
+        XCTAssertEqual(scopes.requested, [file, key])
+        XCTAssertTrue(scopes.released.isEmpty)
+
+        await firstRunner.finish()
+        await first.value
+        await fulfillment(of: [secondStarted], timeout: 2)
+        XCTAssertEqual(scopes.released, [key, file])
+        XCTAssertEqual(scopes.activeCount, 2)
+        await secondRunner.finish()
+        await second.value
+        XCTAssertEqual(scopes.activeCount, 0)
+        XCTAssertEqual(secondItems[0].uploadStatus, .uploaded)
+    }
+
+    private func makeManager(service: any RcloneUploading) -> UploadManager {
         UploadManager(
             rcloneService: service,
             configurationProvider: { Self.config },
@@ -259,6 +439,7 @@ private actor ControlledUploadService: RcloneUploading {
     private var runs: [Run] = []
     private var activeRuns: Set<Int> = []
     private(set) var maximumConcurrentRuns = 0
+    private(set) var localFiles: [URL] = []
     var startCount: Int { runs.count }
 
     init(started: [XCTestExpectation] = [], cancelled: [XCTestExpectation] = []) {
@@ -272,6 +453,7 @@ private actor ControlledUploadService: RcloneUploading {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 runs.append(Run(continuation: continuation, progress: progress))
+                localFiles.append(localFile)
                 activeRuns.insert(index)
                 maximumConcurrentRuns = max(maximumConcurrentRuns, activeRuns.count)
                 if started.indices.contains(index) { started[index].fulfill() }
@@ -287,9 +469,73 @@ private actor ControlledUploadService: RcloneUploading {
         runs[run].progress(value, speed)
     }
 
-    func finish(run: Int, remotePath: String = "/fixture/upload.mov") {
+    func finish(run: Int, remotePath: String = "/fixture/upload.mov", failure: String? = nil) {
         guard activeRuns.remove(run) != nil else { return }
-        runs[run].continuation.resume(returning: .success(remotePath: remotePath, bytes: 100, duration: 1))
+        runs[run].continuation.resume(returning: failure.map { .failure(error: $0) }
+            ?? .success(remotePath: remotePath, bytes: 100, duration: 1))
+    }
+}
+
+final class UploadDestinationIdentityTests: XCTestCase {
+    func testFilesystemAliasesAndCredentialsShareIdentity() {
+        let first = UploadConfig(
+            server: "FILES.Example.", port: 22, username: "editor", remotePath: "/deliveries/./final/../", backendType: .sftp
+        )
+        var second = first
+        second.server = "files.example"
+        second.username = "another-editor"
+        second.sftpKeyFilePath = "/different/key"
+        second.remotePath = "deliveries//"
+        XCTAssertEqual(
+            UploadDestinationIdentity(config: first, localFile: URL(fileURLWithPath: "/first/Output.MOV")),
+            UploadDestinationIdentity(config: second, localFile: URL(fileURLWithPath: "/second/output.mov"))
+        )
+    }
+
+    func testDifferentFilesystemDestinationsHaveIndependentIdentities() {
+        let first = UploadConfig(server: "files.example", port: 445, username: "editor", remotePath: "/deliveries", backendType: .smb, smbShare: "media")
+        let file = URL(fileURLWithPath: "/fixture/output.mov")
+        let identity = UploadDestinationIdentity(config: first, localFile: file)
+        var variants: [UploadConfig] = []
+        var changed = first
+        changed.server = "another.example"
+        variants.append(changed)
+        changed = first
+        changed.port = 1445
+        variants.append(changed)
+        changed = first
+        changed.smbShare = "other"
+        variants.append(changed)
+        changed = first
+        changed.remotePath = "/other"
+        variants.append(changed)
+        for config in variants {
+            XCTAssertNotEqual(identity, UploadDestinationIdentity(config: config, localFile: file))
+        }
+        XCTAssertNotEqual(identity, UploadDestinationIdentity(config: first, localFile: URL(fileURLWithPath: "/fixture/other.mov")))
+    }
+
+    func testS3IdentityNormalizesEndpointAndIgnoresCredentialsAndRegion() {
+        let file = URL(fileURLWithPath: "/fixture/output.mov")
+        let first = UploadConfig(remotePath: "/deliveries/", backendType: .s3, s3Bucket: "media", s3Region: "region-a", s3Endpoint: "HTTPS://S3.Example.:443/", s3AccessKeyID: "first")
+        var second = first
+        second.s3Endpoint = "https://s3.example"
+        second.s3AccessKeyID = "second"
+        second.s3Region = "region-b"
+        XCTAssertEqual(UploadDestinationIdentity(config: first, localFile: file), UploadDestinationIdentity(config: second, localFile: file))
+        second.s3Bucket = "other"
+        XCTAssertNotEqual(UploadDestinationIdentity(config: first, localFile: file), UploadDestinationIdentity(config: second, localFile: file))
+        second = first
+        second.s3Endpoint = "https://other.example"
+        XCTAssertNotEqual(UploadDestinationIdentity(config: first, localFile: file), UploadDestinationIdentity(config: second, localFile: file))
+    }
+
+    func testS3ObjectFilenameCaseRemainsDistinct() {
+        let config = UploadConfig(backendType: .s3, s3Bucket: "media", s3AccessKeyID: "fixture")
+        XCTAssertNotEqual(
+            UploadDestinationIdentity(config: config, localFile: URL(fileURLWithPath: "/fixture/output.mov")),
+            UploadDestinationIdentity(config: config, localFile: URL(fileURLWithPath: "/fixture/Output.mov"))
+        )
     }
 }
 

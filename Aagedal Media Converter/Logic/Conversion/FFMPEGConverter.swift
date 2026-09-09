@@ -31,17 +31,17 @@ private final class ConversionCompletionGate: @unchecked Sendable {
     }
 }
 
-/// Prevents progress callbacks already queued on another executor from mutating a
-/// cancelled or superseded conversion.
+/// Rejects progress callbacks admitted after cancellation or supersession. An already
+/// admitted callback may finish after invalidation; the manager's attempt ownership
+/// checks still govern UI publication. Invoke callers outside the lock so callbacks
+/// can synchronously request cancellation without blocking gate invalidation.
 private final class ConversionProgressGate: @unchecked Sendable {
     private let lock = NSLock()
     private var active = true
 
     func run(_ action: @Sendable () -> Void) {
-        lock.withLock {
-            guard active else { return }
-            action()
-        }
+        guard lock.withLock({ active }) else { return }
+        action()
     }
 
     func invalidate() {
@@ -328,6 +328,7 @@ actor FFMPEGConverter {
 
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             let output = diagnostic(for: result)
             guard result.succeeded else {
                 cleanupPartialOutput()
@@ -375,12 +376,14 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.runPackageWrapper(
-                executablePath: executablePath,
-                arguments: arguments,
-                outputURL: outputURL,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.runPackageWrapper(
+                    executablePath: executablePath,
+                    arguments: arguments,
+                    outputURL: outputURL,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentPackageWrapperTask?.cancel()
         currentPackageWrapperTask = task
@@ -413,16 +416,18 @@ actor FFMPEGConverter {
         guard postProcessingConversionID == conversionID else { throw CancellationError() }
         let taskID = UUID()
         let task = Task.detached {
-            var lastEmit = Date.distantPast
-            return try Self.preparePackageCodestreams(
-                sourceDirectory: sourceDirectory,
-                frameNames: frameNames,
-                destinationDirectory: destinationDirectory
-            ) { completed, total in
-                let now = Date()
-                if now.timeIntervalSince(lastEmit) >= 0.25 || completed == total {
-                    lastEmit = now
-                    progress(completed, total)
+            try Self.$runningSubprocessID.withValue(taskID) {
+                var lastEmit = Date.distantPast
+                return try Self.preparePackageCodestreams(
+                    sourceDirectory: sourceDirectory,
+                    frameNames: frameNames,
+                    destinationDirectory: destinationDirectory
+                ) { completed, total in
+                    let now = Date()
+                    if now.timeIntervalSince(lastEmit) >= 0.25 || completed == total {
+                        lastEmit = now
+                        progress(completed, total)
+                    }
                 }
             }
         }
@@ -1933,8 +1938,10 @@ actor FFMPEGConverter {
                         producer: decoderRequest,
                         consumer: subprocessRequest,
                         consumerOutputHandler: { chunk in
-                            guard case .standardError = chunk.stream else { return }
-                            progressStreamParser.consume(chunk.data)
+                            Self.$runningSubprocessID.withValue(conversionID) {
+                                guard case .standardError = chunk.stream else { return }
+                                progressStreamParser.consume(chunk.data)
+                            }
                         }
                     )
                     progressStreamParser.finish()
@@ -1999,8 +2006,10 @@ actor FFMPEGConverter {
         currentSubprocessTask = makeJoinableSubprocessTask(conversionID: conversionID) {
             do {
                 let result = try await runner.run(subprocessRequest) { chunk in
-                    guard case .standardError = chunk.stream else { return }
-                    progressStreamParser.consume(chunk.data)
+                    Self.$runningSubprocessID.withValue(conversionID) {
+                        guard case .standardError = chunk.stream else { return }
+                        progressStreamParser.consume(chunk.data)
+                    }
                 }
                 progressStreamParser.finish()
                 handleFFmpegTermination(result.terminationStatus, result.standardError, nil)
@@ -2273,24 +2282,36 @@ actor FFMPEGConverter {
         let pipelineID = UUID()
         let runner = subprocessRunner
         let pipelineTask = Task {
-            try await runner.runPipeline(
-                producer: ffmpegRequest,
-                consumer: avmencRequest,
-                producerOutputHandler: { chunk in
-                    guard totalFrames == 0, case .standardError = chunk.stream else { return }
-                    ffmpegProgressParser.consume(chunk.data)
-                },
-                consumerOutputHandler: { chunk in
-                    guard case .standardOutput = chunk.stream else { return }
-                    avmencProgressParser.consume(chunk.data)
-                }
-            )
+            try await Self.$runningSubprocessID.withValue(pipelineID) {
+                let result = try await runner.runPipeline(
+                    producer: ffmpegRequest,
+                    consumer: avmencRequest,
+                    producerOutputHandler: { chunk in
+                        Self.$runningSubprocessID.withValue(pipelineID) {
+                            guard totalFrames == 0, case .standardError = chunk.stream else { return }
+                            ffmpegProgressParser.consume(chunk.data)
+                        }
+                    },
+                    consumerOutputHandler: { chunk in
+                        Self.$runningSubprocessID.withValue(pipelineID) {
+                            guard case .standardOutput = chunk.stream else { return }
+                            avmencProgressParser.consume(chunk.data)
+                        }
+                    }
+                )
+                try Task.checkCancellation()
+                return result
+            }
         }
         currentAV2PipelineTasks[pipelineID] = pipelineTask
 
         let pipelineResult: SubprocessPipelineResult
         do {
-            pipelineResult = try await pipelineTask.value
+            pipelineResult = try await withTaskCancellationHandler {
+                try await pipelineTask.value
+            } onCancel: {
+                pipelineTask.cancel()
+            }
         } catch is CancellationError {
             currentAV2PipelineTasks.removeValue(forKey: pipelineID)
             if FileManager.default.fileExists(atPath: outputFileURL.path) {
@@ -2478,7 +2499,6 @@ actor FFMPEGConverter {
                 if !outcome.success, firstFailure == nil {
                     firstFailure = outcome
                     group.cancelAll()
-                    self.cancelAV2PipelineTasks()
                 }
             }
         }
@@ -2545,20 +2565,30 @@ actor FFMPEGConverter {
         let pipelineID = UUID()
         let runner = subprocessRunner
         let pipelineTask = Task {
-            try await runner.runPipeline(
-                producer: ffmpegRequest,
-                consumer: avmencRequest,
-                consumerOutputHandler: { chunk in
-                    guard case .standardOutput = chunk.stream else { return }
-                    progressParser.consume(chunk.data)
-                }
-            )
+            try await Self.$runningSubprocessID.withValue(pipelineID) {
+                let result = try await runner.runPipeline(
+                    producer: ffmpegRequest,
+                    consumer: avmencRequest,
+                    consumerOutputHandler: { chunk in
+                        Self.$runningSubprocessID.withValue(pipelineID) {
+                            guard case .standardOutput = chunk.stream else { return }
+                            progressParser.consume(chunk.data)
+                        }
+                    }
+                )
+                try Task.checkCancellation()
+                return result
+            }
         }
         currentAV2PipelineTasks[pipelineID] = pipelineTask
 
         let pipelineResult: SubprocessPipelineResult
         do {
-            pipelineResult = try await pipelineTask.value
+            pipelineResult = try await withTaskCancellationHandler {
+                try await pipelineTask.value
+            } onCancel: {
+                pipelineTask.cancel()
+            }
         } catch is CancellationError {
             currentAV2PipelineTasks.removeValue(forKey: pipelineID)
             Self.cleanupAV2SegmentIfPresent(seg.outputURL, label: "cancelled AV2 chunk")
@@ -2633,12 +2663,6 @@ actor FFMPEGConverter {
         }
         Self.cleanupAV2SegmentIfPresent(seg.outputURL, label: "partial AV2 chunk")
         return AV2SegmentOutcome(index: seg.index, success: false, errorReason: failureReason)
-    }
-
-    private func cancelAV2PipelineTasks() {
-        for task in currentAV2PipelineTasks.values {
-            task.cancel()
-        }
     }
 
     private static func fileHasContent(at url: URL) -> Bool {
@@ -3159,13 +3183,15 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.runAV2Helper(
-                executablePath: path,
-                arguments: arguments,
-                timeout: timeout,
-                additionalSensitiveValues: additionalSensitiveValues,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.runAV2Helper(
+                    executablePath: path,
+                    arguments: arguments,
+                    timeout: timeout,
+                    additionalSensitiveValues: additionalSensitiveValues,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = task
@@ -3503,8 +3529,10 @@ actor FFMPEGConverter {
                             backgroundImage: backgroundCGImage,
                             waveformOpacity: waveformRequest.waveformOpacity,
                             progressUpdate: { renderProgress in
-                                let overall = 0.10 + renderProgress * 0.85
-                                gatedProgressUpdate(overall, "Rendering waveform…")
+                                Self.$runningSubprocessID.withValue(encodingID) {
+                                    let overall = 0.10 + renderProgress * 0.85
+                                    gatedProgressUpdate(overall, "Rendering waveform…")
+                                }
                             }
                         )
                     },
@@ -3656,15 +3684,17 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.stageAudioAsWAV(
-                inputURL: inputURL,
-                outputFolder: outputFolder,
-                baseName: baseName,
-                ffmpegPath: ffmpegPath,
-                trimStart: trimStart,
-                trimEnd: trimEnd,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.stageAudioAsWAV(
+                    inputURL: inputURL,
+                    outputFolder: outputFolder,
+                    baseName: baseName,
+                    ffmpegPath: ffmpegPath,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentImageSequenceAudioTask?.cancel()
         currentImageSequenceAudioTask = task
@@ -4035,16 +4065,18 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.extractAudioAsPCMWAV(
-                inputURL: inputURL,
-                customInputArguments: customInputArguments,
-                outputFolder: outputFolder,
-                ffmpegPath: ffmpegPath,
-                trimStart: trimStart,
-                trimEnd: trimEnd,
-                audioRoutingConfig: audioRoutingConfig,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.extractAudioAsPCMWAV(
+                    inputURL: inputURL,
+                    customInputArguments: customInputArguments,
+                    outputFolder: outputFolder,
+                    ffmpegPath: ffmpegPath,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd,
+                    audioRoutingConfig: audioRoutingConfig,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentPackageAudioTask?.cancel()
         currentPackageAudioTask = task
@@ -4210,6 +4242,7 @@ actor FFMPEGConverter {
 
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             guard result.succeeded else {
                 let diagnostic = request.redactedDiagnostic(result.standardErrorText)
                 let reason = Self.dcpIMFErrorReason(
@@ -4258,6 +4291,19 @@ actor FFMPEGConverter {
     }
 
     func cancelConversion() async {
+        let imageSequenceAudioTask = currentImageSequenceAudioTask
+        let imageSequenceAudioID = currentImageSequenceAudioTaskID
+        let packageAudioTask = currentPackageAudioTask
+        let packageAudioID = currentPackageAudioTaskID
+        let packagePreparationTask = currentPackagePreparationTask
+        let packagePreparationID = currentPackagePreparationTaskID
+        let packageWrapperTask = currentPackageWrapperTask
+        let packageWrapperID = currentPackageWrapperTaskID
+        let avcIntraPreprocessingTask = currentAVCIntraPreprocessingTask
+        let avcIntraPreprocessingID = currentAVCIntraPreprocessingTaskID
+        let av2HelperTask = currentAV2HelperTask
+        let av2HelperID = currentAV2HelperTaskID
+        let av2PipelineTasks = currentAV2PipelineTasks
         let waveformAnalysisTask = currentWaveformAnalysisTask
         let waveformAnalysisID = currentWaveformAnalysisID
         let waveformEncodingTask = currentWaveformEncodingTask
@@ -4318,6 +4364,30 @@ actor FFMPEGConverter {
         // Join only the native encoder, not its later framework/MCA post-processing.
         if let waveformEncodingID, Self.runningSubprocessID != waveformEncodingID {
             _ = await waveformEncodingTask?.result
+        }
+        // Helper probes use non-joining deadlines; the task still owns its runner
+        // and bounded file work. Detach every handle before waiting so late completion
+        // cannot clear a replacement conversion.
+        if let imageSequenceAudioID, Self.runningSubprocessID != imageSequenceAudioID {
+            _ = await imageSequenceAudioTask?.result
+        }
+        if let packageAudioID, Self.runningSubprocessID != packageAudioID {
+            _ = await packageAudioTask?.result
+        }
+        if let packagePreparationID, Self.runningSubprocessID != packagePreparationID {
+            _ = await packagePreparationTask?.result
+        }
+        if let packageWrapperID, Self.runningSubprocessID != packageWrapperID {
+            _ = await packageWrapperTask?.result
+        }
+        if let avcIntraPreprocessingID, Self.runningSubprocessID != avcIntraPreprocessingID {
+            _ = await avcIntraPreprocessingTask?.result
+        }
+        if let av2HelperID, Self.runningSubprocessID != av2HelperID {
+            _ = await av2HelperTask?.result
+        }
+        for (pipelineID, task) in av2PipelineTasks where Self.runningSubprocessID != pipelineID {
+            _ = await task.result
         }
     }
 
@@ -4643,6 +4713,7 @@ actor FFMPEGConverter {
 
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             let output = diagnostic(for: result)
             guard result.succeeded else {
                 cleanupPartialOutput()
@@ -4841,12 +4912,14 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.runAVCIntraAudioPreprocessing(
-                executablePath: ffmpegPath,
-                arguments: args,
-                outputURL: tempURL,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.runAVCIntraAudioPreprocessing(
+                    executablePath: ffmpegPath,
+                    arguments: args,
+                    outputURL: tempURL,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentAVCIntraPreprocessingTask?.cancel()
         currentAVCIntraPreprocessingTask = task

@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 685 tests pass. The
+- The unit-test baseline is green: 714 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -19,11 +19,11 @@ issue link when it starts.
   policy, manual/preserved/drop-frame timecode, image-sequence inputs and JPEG
   output, DCP/IMF conformance arguments, and AV2 chunk planning now have direct
   coverage as well.
-- The app contains about 98,200 lines of Swift. Several core files are very large:
-  `FFMPEGConverter.swift` (4,908 lines), `ConversionManager.swift` (2,986),
+- The app contains about 98,300 lines of Swift. Several core files are very large:
+  `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
-  `ExportPreset.swift` (2,123).
-- There are 685 unit tests. The UI test target now has deterministic smoke
+  `ExportPreset.swift` (2,028).
+- There are 714 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -790,6 +790,24 @@ cover delayed drain, old/current cancellation, replacement ownership, self-cance
 and SSIMULACRA cleanup. Non-joining framework discovery and the broader package/helper
 lifetime audit remain open (Codex, 2026-09-09).
 
+Package wrappers, image-sequence and DCP/IMF audio extraction, frame preparation,
+AVC-Intra audio preprocessing, and AV2 helpers/pipelines now retain their task identity
+through cancellation draining. Captured handles detach before waiting so a replacement
+keeps its ownership, and late successful helper exits are rejected with partial-output
+cleanup. AV2 pipeline callbacks restore their identity even on detached I/O threads;
+parent cancellation reaches only that worker's pipeline, so an old chunk failure cannot
+cancel a replacement conversion. Regression coverage exercises delayed helper drain,
+self-cancellation, detached AV2 callbacks, parent cancellation, and overlapping chunk
+groups. Full package orchestration, framework/MCA probes, and superseded helper lifetime
+outside captured cancellation handles remain open (Codex, 2026-09-09).
+
+Conversion progress callbacks now execute outside the admission gate's lock and carry
+their runner identity across detached callback threads. Synchronous cancellation from
+ordinary FFmpeg, AV2 source-decoder, and native waveform progress can therefore invalidate
+the gate without a lock cycle or self-join. Three additional regressions exercise those
+paths; already admitted progress can finish after invalidation, while queue attempt
+checks continue to reject stale UI updates (Codex, 2026-09-09).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -1368,6 +1386,17 @@ moved-key/cancellation lifetime, connection/upload failure cleanup, and legacy p
 access. Live sandbox relaunch/reauthorization and separate uploads targeting the same
 remote filename remain open (Codex, 2026-09-09).
 
+Uploads now coordinate identical remote destinations across queue rows and manager
+instances. Synchronous enqueue order establishes a shared destination tail; each transfer
+waits for its row and destination predecessors before starting or acquiring file/key
+access. Cancelled waiters preserve predecessor drain ownership, and old completion cannot
+release a newer destination reservation. Ten regressions cover ordering, retries,
+cancellation, independent destinations, failure recovery, cross-manager scopes, and
+normalization. Matching deliberately allows extra serialization for filesystem case or
+credential variants. Server aliases, symlinks, cross-protocol shared storage, external
+writers, and live configured remote validation remain outside this in-process guarantee
+(Codex, 2026-09-09).
+
 ### 3.2 Make conversion plans typed
 
 Status: in progress; typed audio routing introduced 2026-09-08 (Codex).
@@ -1432,6 +1461,17 @@ all image-sequence branches omit injected container comments. Command matrix tes
 cover ordinary, waveform, synthesized and native rendering; the generated MOV test
 also verifies actual tmcd clearing/replacement against conflicting additional options.
 General typed inputs, video filters, codecs, source-metadata mapping, and output plans
+remain open (Codex, 2026-09-09).
+
+Source metadata now resolves through immutable `SourceMetadataPlan` values: preserve
+from a known or automatic input, strip source tags/chapters, or retain custom-preset
+ownership. Final output rendering overrides conflicting additional mapping/flag options
+without changing input flags. Native waveform preservation uses the actual audio source
+at input 1. Trimmed Stream Copy no longer copies the first stream's tags onto every
+track; bundled FFmpeg retains each track's title/language with its normal mapping. Five
+regressions include generated media readback for distinct track metadata, chapter and tag
+stripping, authored comments, deterministic muxer tags, and native waveform metadata.
+General typed inputs, filters, codecs, output ownership, and incompatible-option preflight
 remain open (Codex, 2026-09-09).
 
 ### 3.3 Centralize settings access
@@ -1948,7 +1988,43 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-09, Codex): Debug compilation and all 685 unit tests pass
+Latest validation (2026-09-09, Codex): Debug compilation and all 714 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Twenty-nine new tests
+cover source-metadata policy and generated track/native-waveform readback; shared remote
+upload destinations and scope draining; package/image audio, wrapper and AVC-Intra helper
+cancellation; AV2 pipeline ownership and replacement; and detached progress callback
+reentrancy. All 43 release-script tests, manifest freshness, and localization checks pass
+(1,494 entries, 15 intentional omissions). The final unsigned Release build passes;
+its bundle audit verifies all 44 Mach-O images and six packaged license notices. No
+bundled binaries or license assignments changed.
+
+The first focused run exposed test fixture issues: unused expectations on the
+self-cancellation branch, WAV stream-probe limitations in the image-sequence fixture,
+a zero-based custom-preset slot, and Matroska's deterministic unversioned `Lavf` tag.
+Those fixtures were corrected before the final green run. Independent review additionally
+found the broad trimmed Stream Copy map copying video tags over audio track labels,
+old AV2 chunk failures cancelling replacement pipelines, and progress callbacks holding
+the cancellation gate lock. Generated media and detached-callback tests verify the fixes.
+
+All three final-source conversion UI smoke tests pass together: success, failure
+details, and start/cancel. The saved error-details screenshot was visually reviewed.
+The first UI run could not activate the app from the background and failed at launch
+before conversion assertions; desktop inspection subsequently opened the empty queue,
+and the rebuilt retry passed.
+
+Remaining implementation work: full typed inputs, filters, codecs, and output plans;
+broader orchestration and UI/request settings/schema migrations; full package orchestration,
+framework/MCA probes and superseded helper lifetime beyond captured drain handles;
+wider actor/UI binding and filesystem audits; multi-process/external-writer subtitle
+coordination and remote destination alias/cross-protocol coordination; generated AV2
+video; accurate Matroska channel-layout metadata; and IMF descriptor conformance.
+Manual MPV playback, Shortcuts, sandbox relaunch/reauthorization, real OCR and external-volume
+subtitles, configured remote uploads, VoiceOver, broader bilingual/scrolled UI, live
+capture/editor checks, runtime memory/dynamic dependency measurements, clean-machine
+installation/update, complete dependency provenance (99 unresolved license entries),
+and credentialed release validation remain.
+
+Previous validation (2026-09-09, Codex): Debug compilation and all 685 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Thirty-two new tests
 cover AAC PCE layouts and generated mux decoding, shared SRT reservations and durable
 ownership, persistent SSH-key access, and analytics helper draining. All three

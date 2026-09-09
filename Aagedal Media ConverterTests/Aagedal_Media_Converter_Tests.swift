@@ -8020,6 +8020,75 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         resultTask.cancel()
     }
 
+    func testCoreConverterDetachedProgressCallbackCanCancelSynchronously() async throws {
+        try await assertDetachedFFmpegProgressCancellation(decodesAV2Source: false)
+    }
+
+    func testAV2SourceDecoderDetachedProgressCallbackCanCancelSynchronously() async throws {
+        try await assertDetachedFFmpegProgressCancellation(decodesAV2Source: true)
+    }
+
+    private func assertDetachedFFmpegProgressCancellation(decodesAV2Source: Bool) async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FFmpegDetachedProgress-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let inputURL = root.appendingPathComponent(decodesAV2Source ? "input.ivf" : "input.mov")
+        let decoderURL = root.appendingPathComponent("avmdec")
+        if decodesAV2Source {
+            try makeTestIVFData().write(to: inputURL)
+            try Data("#!/bin/sh\nexit 0\n".utf8).write(to: decoderURL)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: decoderURL.path)
+        }
+        let runner = SequencedRecordingSubprocessRunner { _, request, outputHandler in
+            guard request.executableURL != decoderURL else { return successfulSubprocessResult() }
+            let outputURL = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+            try Data("encoded fixture".utf8).write(to: outputURL)
+            await Task.detached {
+                outputHandler?(SubprocessOutputChunk(
+                    stream: .standardError,
+                    data: Data("frame= 12 fps=24 time=00:00:00.50 speed=1.0x\r".utf8)
+                ))
+            }.value
+            return successfulSubprocessResult()
+        }
+        let converter = FFMPEGConverter(
+            subprocessRunner: runner,
+            ffmpegPathProvider: { "/fixture/ffmpeg" },
+            avmdecPathProvider: { decoderURL.path }
+        )
+        let callbackCount = LockedInvocationCounter()
+        let result = await runConversion(
+            ConversionRequest(
+                inputURL: inputURL,
+                outputURL: root.appendingPathComponent("output"),
+                preset: .h264,
+                includeDateTag: false,
+                sourceMetadata: videoMetadata(timecode: nil, frameRate: 24, duration: 1),
+                expectedDuration: 1,
+                videoFrameRate: 24
+            ),
+            using: converter
+        ) { progress, _ in
+            guard progress > 0, callbackCount.incrementAndIsFirst() else { return }
+            let cancelled = DispatchSemaphore(value: 0)
+            Task {
+                await converter.cancelConversion()
+                cancelled.signal()
+            }
+            XCTAssertEqual(cancelled.wait(timeout: .now() + 5), .success,
+                           "Progress must release the gate and preserve runner identity during cancellation")
+        }
+
+        XCTAssertEqual(callbackCount.value, 1)
+        XCTAssertEqual(runner.requests.count, decodesAV2Source ? 2 : 1)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+        let outputURL = root.appendingPathComponent("output.mp4")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
+        XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
+    }
+
     func testCoreConverterCancellationCancelsSharedRunner() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("FFmpegRunnerCancellation-\(UUID().uuidString)")
@@ -8425,6 +8494,46 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
         await fulfillment(of: [finished], timeout: 2)
         resultTask.cancel()
+    }
+
+    func testNativeWaveformDetachedProgressCallbackCanCancelSynchronously() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WaveformDetachedProgress-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let recordingRunner = SequencedRecordingSubprocessRunner { index, request, _ in
+            XCTAssertEqual(index, 0, "Cancelled waveform input must not reach encoding success")
+            let outputURL = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+            try Data(count: MemoryLayout<Float>.size).write(to: outputURL)
+            return successfulSubprocessResult()
+        }
+        let runner = DetachedStreamingInputSubprocessRunner(wrapped: recordingRunner)
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let callbackCount = LockedInvocationCounter()
+        let result = await runConversion(
+            makeNativeWaveformConversionRequest(
+                inputURL: root.appendingPathComponent("input.wav"),
+                outputBaseURL: root.appendingPathComponent("output")
+            ),
+            using: converter
+        ) { progress, _ in
+            guard progress > 0.10, callbackCount.incrementAndIsFirst() else { return }
+            let cancelled = DispatchSemaphore(value: 0)
+            Task {
+                await converter.cancelConversion()
+                cancelled.signal()
+            }
+            XCTAssertEqual(cancelled.wait(timeout: .now() + 5), .success,
+                           "Detached frame progress must not block gate invalidation or join its encoder")
+        }
+
+        XCTAssertEqual(callbackCount.value, 1)
+        XCTAssertEqual(recordingRunner.requests.count, 1)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+        let outputURL = root.appendingPathComponent("output.mp4")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
+        XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
     }
 
     func testNativeWaveformEncoderCancellationReachesStreamingRunner() async throws {
@@ -10237,6 +10346,146 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
     }
 
+    func testPackageWrapperCancellationWaitsForDrainAndRejectsLateSuccess() async throws {
+        try await verifyConversionHelperCancellation(phase: .packageWrapper)
+    }
+
+    func testPackageAudioCancellationWaitsForDrainAndRejectsLateSuccess() async throws {
+        try await verifyConversionHelperCancellation(phase: .packageAudio)
+    }
+
+    func testImageSequenceAudioCancellationWaitsForDrainAndRejectsLateSuccess() async throws {
+        try await verifyConversionHelperCancellation(phase: .imageSequenceAudio)
+    }
+
+    func testAVCIntraPreprocessingCancellationWaitsForDrainAndRejectsLateSuccess() async throws {
+        try await verifyConversionHelperCancellation(phase: .avcPreprocessing)
+    }
+
+    func testPackageWrapperCanCancelItsOwnConversion() async throws {
+        try await verifyConversionHelperCancellation(phase: .packageWrapper, cancelsItself: true)
+    }
+
+    func testPackageAudioCanCancelItsOwnConversion() async throws {
+        try await verifyConversionHelperCancellation(phase: .packageAudio, cancelsItself: true)
+    }
+
+    func testImageSequenceAudioCanCancelItsOwnConversion() async throws {
+        try await verifyConversionHelperCancellation(phase: .imageSequenceAudio, cancelsItself: true)
+    }
+
+    func testAVCIntraPreprocessingCanCancelItsOwnConversion() async throws {
+        try await verifyConversionHelperCancellation(phase: .avcPreprocessing, cancelsItself: true)
+    }
+
+    private enum HelperCancellationPhase: Sendable {
+        case packageWrapper, packageAudio, imageSequenceAudio, avcPreprocessing
+
+        var preset: ExportPreset {
+            switch self {
+            case .packageWrapper, .packageAudio: .dcp
+            case .imageSequenceAudio: .imageSequence
+            case .avcPreprocessing: .tvAVCIntra
+            }
+        }
+
+        func matches(_ request: SubprocessRequest) -> Bool {
+            switch self {
+            case .packageWrapper: request.executableURL.lastPathComponent == "asdcp-wrap"
+            case .packageAudio: request.arguments.last?.contains("audio_temp_") == true
+            case .imageSequenceAudio: request.arguments.contains("-rf64")
+            case .avcPreprocessing: request.arguments.last?.contains("avc_audio_") == true
+            }
+        }
+    }
+
+    private func verifyConversionHelperCancellation(
+        phase: HelperCancellationPhase,
+        cancelsItself: Bool = false
+    ) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let inputURL = root.appendingPathComponent(phase == .imageSequenceAudio ? "source.mkv" : "source.wav")
+        var fixtureArguments = ["-hide_banner", "-loglevel", "error", "-y"]
+        if phase == .imageSequenceAudio {
+            fixtureArguments += ["-f", "lavfi", "-i", "color=c=blue:s=32x32:r=24:d=0.1"]
+        }
+        fixtureArguments += ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=0.1",
+                             "-c:a", "pcm_s16le", inputURL.path]
+        if phase == .imageSequenceAudio {
+            fixtureArguments.insert(contentsOf: ["-c:v", "ffv1"], at: fixtureArguments.count - 1)
+        }
+        try runFFmpeg(fixtureArguments)
+        let started = XCTestExpectation(description: "Selected helper started")
+        let cancelled = XCTestExpectation(description: "Selected helper is draining")
+        let delayed = DeferredCancellationDrainRunner(started: started, cancelled: cancelled)
+        let selfCancelling = SelfCancellingFFmpegRunner()
+        let partialOutput = OSAllocatedUnfairLock<URL?>(initialState: nil)
+        let runner = RecordingSubprocessRunner { request, handler in
+            let outputPath: String
+            if let index = request.arguments.firstIndex(of: "-o") {
+                outputPath = request.arguments[index + 1]
+            } else {
+                outputPath = try XCTUnwrap(request.arguments.last)
+            }
+            let outputURL = URL(fileURLWithPath: outputPath.replacingOccurrences(of: "%06d", with: "000001"))
+            // A tiny raw codestream also exercises real package frame preparation.
+            try Data([0xFF, 0x4F, 1]).write(to: outputURL)
+            if phase.matches(request) {
+                partialOutput.withLock { $0 = outputURL }
+                if cancelsItself {
+                    _ = try? await selfCancelling.run(request, outputHandler: handler)
+                } else {
+                    _ = try? await delayed.run(request, outputHandler: handler)
+                }
+            }
+            // Deliberately ignore cancellation and report a successful helper exit.
+            return successfulSubprocessResult()
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
+        await selfCancelling.setCancellation { await converter.cancelConversion() }
+        var request = ConversionRequest(
+            inputURL: inputURL, outputURL: root.appendingPathComponent("output"),
+            preset: phase.preset, includeDateTag: false,
+            sourceMetadata: videoMetadata(timecode: nil, frameRate: 24, duration: 0.1),
+            expectedDuration: 0.1, videoFrameRate: 24
+        )
+        if phase == .avcPreprocessing {
+            request.synthesizedVideoRequest = SynthesizedVideoRequest(
+                width: 64, height: 48, backgroundHex: "000000", frameRate: 24, includeAudio: true
+            )
+        }
+        let capturedRequest = request
+        let finished = expectation(description: "Cancelled conversion completed")
+        let resultTask = Task {
+            let result = await conversionResult(converter: converter, request: capturedRequest)
+            finished.fulfill()
+            return result
+        }
+        if !cancelsItself {
+            await fulfillment(of: [started], timeout: 5)
+            let returned = OSAllocatedUnfairLock(initialState: false)
+            let cancellationTask = Task {
+                await converter.cancelConversion()
+                returned.withLock { $0 = true }
+            }
+            await fulfillment(of: [cancelled], timeout: 2)
+            try await Task.sleep(for: .milliseconds(50))
+            XCTAssertFalse(returned.withLock { $0 }, "Cancellation must wait for the selected helper")
+            await delayed.finishDraining()
+            await cancellationTask.value
+            if let partial = partialOutput.withLock({ $0 }) {
+                XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path), "Late success must clean partial output")
+            }
+        }
+        await fulfillment(of: [finished], timeout: 5)
+        let result = await resultTask.value
+        XCTAssertNotNil(partialOutput.withLock { $0 }, "The requested helper stage must be reached")
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+    }
+
     func testPackageWrapperCancellationCancelsRunnerAndRemovesPartialOutput() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("cancelled package wrapper \(UUID().uuidString)", isDirectory: true)
@@ -10989,6 +11238,72 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
     }
 
+    func testAV2DetachedProgressCallbackCancellationDoesNotJoinItsPipeline() async throws {
+        for chunkCount in [1, 2] {
+            let root = FileManager.default.temporaryDirectory
+                .appendingPathComponent("AV2DetachedCallback-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+
+            let ffmpegPath = "/fixture/ffmpeg"
+            let runner = SequencedRecordingSubprocessRunner { _, request, outputHandler in
+                guard request.executableURL.path != ffmpegPath else {
+                    return successfulSubprocessResult()
+                }
+                let outputIndex = try XCTUnwrap(request.arguments.firstIndex(of: "-o"))
+                try makeTestIVFData().write(to: URL(fileURLWithPath: request.arguments[outputIndex + 1]))
+                // FileHandle invokes real output callbacks outside the runner task's context.
+                await Task.detached {
+                    outputHandler?(SubprocessOutputChunk(
+                        stream: .standardOutput, data: Data("POC: 0\n".utf8)
+                    ))
+                }.value
+                // Deliberately ignore cancellation to exercise the pipeline's success check.
+                return successfulSubprocessResult()
+            }
+            let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { ffmpegPath })
+            let didCancel = OSAllocatedUnfairLock(initialState: false)
+            let outputURL = root.appendingPathComponent("output.ivf")
+            let result = try await withPresetSettingsAsync([
+                AppConstants.av2ParallelChunksKey: chunkCount,
+                AppConstants.av2RateControlModeKey: AV2RateControlMode.constantQuality.rawValue,
+                AppConstants.av2ContainerKey: AV2Container.ivf.rawValue
+            ]) {
+                await runConversion(
+                    ConversionRequest(
+                        inputURL: root.appendingPathComponent("input.mov"),
+                        outputURL: root.appendingPathComponent("output"),
+                        preset: .av2,
+                        includeDateTag: false,
+                        sourceMetadata: videoMetadata(timecode: nil, frameRate: 24, duration: 2),
+                        expectedDuration: 2,
+                        videoFrameRate: 24
+                    ),
+                    using: converter
+                ) { fraction, _ in
+                    guard fraction > 0, didCancel.withLock({ state in
+                        guard !state else { return false }
+                        state = true
+                        return true
+                    }) else { return }
+                    let cancelled = DispatchSemaphore(value: 0)
+                    Task {
+                        await converter.cancelConversion()
+                        cancelled.signal()
+                    }
+                    XCTAssertEqual(cancelled.wait(timeout: .now() + 5), .success,
+                                   "Progress cancellation must not join the callback's own pipeline")
+                }
+            }
+
+            XCTAssertTrue(didCancel.withLock { $0 })
+            XCTAssertFalse(result.success)
+            XCTAssertEqual(result.errorReason, "Conversion cancelled")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
+            XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
+        }
+    }
+
     func testSingleAV2PipelineCancellationStopsTrackedProducer() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("AV2PipelineCancellation-\(UUID().uuidString)", isDirectory: true)
@@ -11237,6 +11552,126 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(cancelledConsumerCount, 2)
         XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
         XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
+    }
+
+    func testAV2ChunkTaskCancellationReachesItsPipeline() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AV2ChunkTaskCancellation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let consumerStarted = expectation(description: "Chunk consumer started")
+        let consumerCancelled = expectation(description: "Chunk consumer cancelled with its parent task")
+        let ffmpegPath = "/fixture/ffmpeg"
+        let runner = SequencedRecordingSubprocessRunner { _, request, _ in
+            guard request.executableURL.path != ffmpegPath else {
+                return successfulSubprocessResult()
+            }
+            consumerStarted.fulfill()
+            do {
+                try await Task.sleep(for: .seconds(30))
+            } catch is CancellationError {
+                consumerCancelled.fulfill()
+                throw CancellationError()
+            }
+            return successfulSubprocessResult()
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner)
+        let directory = root.appendingPathComponent("chunks", isDirectory: true)
+        let segmentOutput = directory.appendingPathComponent("segment.ivf")
+        let plan = AV2CommandBuilder.AV2SegmentPlan(
+            segments: [AV2CommandBuilder.AV2SegmentCommand(
+                index: 0, ffmpegArguments: [], avmencArguments: ["-o", segmentOutput.path],
+                outputURL: segmentOutput, frameCount: 1
+            )],
+            segmentDirectory: directory,
+            outputWidth: 1920, outputHeight: 1080, bitDepth: 8,
+            totalFrames: 1, effectiveDuration: 1.0 / 24.0, frameRate: 24
+        )
+        let task = Task {
+            await converter.runAV2ChunkedConversion(
+                plan: plan, outputFileURL: root.appendingPathComponent("output.ivf"),
+                ffmpegPath: ffmpegPath, avmencPath: "/fixture/avmenc", progressUpdate: { _, _ in }
+            )
+        }
+        await fulfillment(of: [consumerStarted], timeout: 5)
+        task.cancel()
+        await fulfillment(of: [consumerCancelled], timeout: 5)
+        // Also clean up a still-running runner if parent cancellation regresses.
+        await converter.cancelConversion()
+        let result = await task.value
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorReason, "Conversion cancelled")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    func testOldAV2ChunkFailureDoesNotCancelReplacementPipelines() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AV2ChunkReplacement-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let oldStarted = expectation(description: "Old chunk consumer started")
+        let replacementStarted = expectation(description: "Replacement chunk consumer started")
+        let releaseOld = AsyncTestGate()
+        let releaseReplacement = AsyncTestGate()
+        let ffmpegPath = "/fixture/ffmpeg"
+        let runner = SequencedRecordingSubprocessRunner { _, request, _ in
+            guard request.executableURL.path != ffmpegPath else {
+                return successfulSubprocessResult()
+            }
+            let outputIndex = try XCTUnwrap(request.arguments.firstIndex(of: "-o"))
+            let outputURL = URL(fileURLWithPath: request.arguments[outputIndex + 1])
+            if outputURL.deletingLastPathComponent().lastPathComponent == "old" {
+                oldStarted.fulfill()
+                await releaseOld.wait()
+                return successfulSubprocessResult(standardError: "Old chunk failed", terminationStatus: 7)
+            }
+            replacementStarted.fulfill()
+            await releaseReplacement.wait()
+            try makeTestIVFData().write(to: outputURL)
+            return successfulSubprocessResult()
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner)
+        func plan(named name: String) -> AV2CommandBuilder.AV2SegmentPlan {
+            let directory = root.appendingPathComponent(name, isDirectory: true)
+            let output = directory.appendingPathComponent("segment.ivf")
+            return AV2CommandBuilder.AV2SegmentPlan(
+                segments: [AV2CommandBuilder.AV2SegmentCommand(
+                    index: 0, ffmpegArguments: [], avmencArguments: ["-o", output.path],
+                    outputURL: output, frameCount: 1
+                )],
+                segmentDirectory: directory,
+                outputWidth: 1920, outputHeight: 1080, bitDepth: 8,
+                totalFrames: 1, effectiveDuration: 1.0 / 24.0, frameRate: 24
+            )
+        }
+        let oldPlan = plan(named: "old")
+        let replacementPlan = plan(named: "replacement")
+        let oldTask = Task {
+            await converter.runAV2ChunkedConversion(
+                plan: oldPlan, outputFileURL: root.appendingPathComponent("old.ivf"),
+                ffmpegPath: ffmpegPath, avmencPath: "/fixture/avmenc", progressUpdate: { _, _ in }
+            )
+        }
+        await fulfillment(of: [oldStarted], timeout: 5)
+        let replacementOutputURL = root.appendingPathComponent("replacement.ivf")
+        let replacementTask = Task {
+            await converter.runAV2ChunkedConversion(
+                plan: replacementPlan, outputFileURL: replacementOutputURL,
+                ffmpegPath: ffmpegPath, avmencPath: "/fixture/avmenc", progressUpdate: { _, _ in }
+            )
+        }
+        await fulfillment(of: [replacementStarted], timeout: 5)
+        releaseOld.open()
+        let oldResult = await oldTask.value
+        releaseReplacement.open()
+        let replacementResult = await replacementTask.value
+
+        XCTAssertFalse(oldResult.success)
+        XCTAssertTrue(replacementResult.success, replacementResult.errorReason ?? "Replacement failed")
+        XCTAssertNotNil(IVFHeaderParser.parse(url: replacementOutputURL))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldPlan.segmentDirectory.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: replacementPlan.segmentDirectory.path))
     }
 
     func testGeneratedAV2StartOnlyTrimPlansOnlyRemainingFrames() async throws {
@@ -13449,6 +13884,30 @@ private final class CountingBlockingSubprocessRunner: SubprocessRunning, @unchec
         for waiter in waiters {
             waiter.resume()
         }
+    }
+}
+
+/// Invokes the producer outside the encoding task's inherited context while awaiting
+/// its return, exposing progress callbacks that accidentally join their own encoder.
+private struct DetachedStreamingInputSubprocessRunner: SubprocessRunning {
+    let wrapped: any SubprocessRunning
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        try await wrapped.run(request, outputHandler: outputHandler)
+    }
+
+    func runWithStreamingStandardInput(
+        _ request: SubprocessRequest,
+        inputProducer: @escaping SubprocessStandardInputProducer,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        let writer = SubprocessStandardInputWriter(write: { _ in }, finish: {})
+        await Task.detached { await inputProducer(writer) }.value
+        try Task.checkCancellation()
+        return try await wrapped.run(request, outputHandler: outputHandler)
     }
 }
 

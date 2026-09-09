@@ -99,12 +99,73 @@ enum CommentMetadataPlan: Equatable, Sendable {
     }
 }
 
+/// Source tags and chapters are distinct from item-authored comment/timecode values.
+/// A nil input retains FFmpeg's automatic mapping for presets that historically used it.
+/// Custom presets keep ownership of their own mapping and muxer flags.
+enum SourceMetadataPlan: Equatable, Sendable {
+    case unchanged
+    case preserve(input: Int?)
+    case strip
+
+    init(preserveMetadata: Bool, defaultInput: Int? = nil) {
+        self = preserveMetadata ? .preserve(input: defaultInput) : .strip
+    }
+
+    /// Generated native video is input 0; its actual metadata source is the audio input.
+    func usingSourceInput(_ input: Int) -> Self {
+        if case .preserve = self { return .preserve(input: input) }
+        return self
+    }
+
+    func apply(to arguments: inout [String], outputArgumentsStart: Int = 0) {
+        guard self != .unchanged else { return }
+        var index = outputArgumentsStart
+        while index + 1 < arguments.count {
+            let option = arguments[index]
+            let value = arguments[index + 1]
+            let ownsMapping = option == "-map_metadata" || option == "-map_metadata:g" || option == "-map_chapters"
+                || (self == .strip && option.hasPrefix("-map_metadata:"))
+            let ownsEncoderClear = ["-metadata:s:v:0", "-metadata:s:a:0"].contains(option) && value == "encoder="
+            if ownsMapping || ownsEncoderClear {
+                arguments.removeSubrange(index...index + 1)
+            } else if option == "-fflags", value.contains("+bitexact") {
+                // Remove only the flag this policy injects, preserving unrelated flags
+                // and the order of separate flag operations supplied by the caller.
+                let remaining = value.replacingOccurrences(of: "+bitexact", with: "")
+                if remaining.isEmpty {
+                    arguments.removeSubrange(index...index + 1)
+                } else {
+                    arguments[index + 1] = remaining
+                    index += 2
+                }
+            } else {
+                index += 1
+            }
+        }
+        switch self {
+        case .preserve(let input):
+            if let input {
+                arguments += ["-map_metadata", String(input), "-map_chapters", String(input)]
+            }
+        case .strip:
+            arguments += ["-map_metadata", "-1", "-map_chapters", "-1"]
+            // Append after every caller-supplied -fflags operation: an earlier
+            // +bitexact can otherwise be reset by a later absolute flag value.
+            arguments += ["-fflags", "+bitexact", "-metadata:s:v:0", "encoder=", "-metadata:s:a:0", "encoder="]
+        case .unchanged:
+            break
+        }
+    }
+}
+
 /// Renders item metadata after preset and additional output arguments are assembled.
 struct OutputMetadataPlan: Equatable, Sendable {
+    let source: SourceMetadataPlan
     let comment: CommentMetadataPlan
     let timecode: TimecodeMetadataPlan
 
-    func apply(to arguments: inout [String]) {
+    func apply(to arguments: inout [String], outputArgumentsStart: Int = 0) {
+        source.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
         comment.apply(to: &arguments)
         timecode.apply(to: &arguments)
     }
@@ -202,6 +263,7 @@ enum FFMPEGCommandBuilder {
             comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings
         )
         let metadataPlan = OutputMetadataPlan(
+            source: capturedAudioOnlySettings?.sourceMetadataPlan ?? capturedCodecSettings?.sourceMetadataPlan ?? .unchanged,
             comment: commentPlan,
             timecode: await configuredTimecodePlan(
                 preset: preset, inputURL: inputURL, timecodeConfig: timecodeConfig,
@@ -227,6 +289,8 @@ enum FFMPEGCommandBuilder {
         } else {
             arguments.append(contentsOf: ["-i", inputURL.path])
         }
+
+        let outputArgumentsStart = arguments.count
 
         if let waveformRequest {
             let includeAudioOutput = preset.outputsAudioTrack
@@ -267,7 +331,7 @@ enum FFMPEGCommandBuilder {
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
             }
-            metadataPlan.apply(to: &arguments)
+            metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
             logger.debug("Waveform ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
@@ -364,7 +428,7 @@ enum FFMPEGCommandBuilder {
             if ffmpegArgs.contains("-an"), let effectiveDuration {
                 arguments.append(contentsOf: ["-t", ffmpegTimeString(from: effectiveDuration)])
             }
-            metadataPlan.apply(to: &arguments)
+            metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
             logger.debug("Synthesized video ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
@@ -525,18 +589,15 @@ enum FFMPEGCommandBuilder {
                 arguments.append(contentsOf: ["-movflags", "use_metadata_tags"])
             }
 
-            // When trimming with stream copy, input seeking (-ss before -i) can cause
-            // stream-level metadata (like language tags) to be lost. Explicitly map
-            // stream metadata from input to preserve audio/subtitle track languages.
-            if normalizedTrimStart != nil || normalizedTrimEnd != nil {
-                arguments.append(contentsOf: ["-map_metadata:s", "0:s"])
-            }
+            // FFmpeg automatically follows each copied stream's metadata through
+            // seeking. A broad -map_metadata:s 0:s would copy the first stream's
+            // tags onto every output stream, replacing track titles and languages.
         }
 
         if let additionalOutputArguments {
             arguments.append(contentsOf: additionalOutputArguments)
         }
-        metadataPlan.apply(to: &arguments)
+        metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
@@ -844,6 +905,11 @@ extension FFMPEGCommandBuilder {
         let commentPlan: CommentMetadataPlan = preset == .imageSequence ? .unchanged : CommentMetadataPlan(
             comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings
         )
+        let metadataPlan = OutputMetadataPlan(
+            source: (capturedAudioOnlySettings?.sourceMetadataPlan ?? capturedCodecSettings?.sourceMetadataPlan ?? .unchanged)
+                .usingSourceInput(1),
+            comment: commentPlan, timecode: .unchanged
+        )
         let finalWidth = evenDimension(max(width, 2))
         let finalHeight = evenDimension(max(height, 2))
         let resolution = "\(finalWidth)x\(finalHeight)"
@@ -868,6 +934,7 @@ extension FFMPEGCommandBuilder {
             arguments.append(contentsOf: ["-ss", ffmpegTimeString(from: normalizedTrimStart)])
         }
         arguments.append(contentsOf: ["-i", audioInputURL.path])
+        let outputArgumentsStart = arguments.count
 
         // Duration limit
         if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
@@ -913,7 +980,7 @@ extension FFMPEGCommandBuilder {
         // Use -shortest so video stops when audio ends (or vice versa)
         arguments.append("-shortest")
 
-        commentPlan.apply(to: &arguments)
+        metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)

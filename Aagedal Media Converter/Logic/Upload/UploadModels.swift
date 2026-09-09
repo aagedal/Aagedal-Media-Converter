@@ -103,6 +103,72 @@ struct UploadConfig: Codable, Sendable, Equatable {
     }
 }
 
+/// A conservative identity for one remote file written by an in-app upload.
+/// Credentials do not separate destinations: different accounts can share files.
+/// Filesystem backends also fold case, since the remote filesystem may do so.
+/// This cannot identify server aliases, symlinks, or writers outside this process.
+struct UploadDestinationIdentity: Hashable, Sendable {
+    private let backend: UploadBackendType
+    private let endpoint: String
+    private let port: Int
+    private let filePath: [String]
+
+    init(config: UploadConfig, localFile: URL) {
+        backend = config.backendType
+        switch config.backendType {
+        case .s3:
+            // Region and access keys can change without changing the bucket.
+            endpoint = Self.normalizedS3Endpoint(config.s3Endpoint)
+            port = 0
+            filePath = Self.normalizedPath(
+                "\(config.s3Bucket ?? "")/\(config.remotePath)/\(localFile.lastPathComponent)"
+            )
+        case .ftp, .sftp, .smb, .gdrive:
+            endpoint = Self.normalizedHost(config.server)
+            port = config.port > 0 ? config.port : config.backendType.defaultPort
+            let share = config.backendType == .smb ? config.smbShare ?? "" : ""
+            filePath = Self.normalizedPath("\(share)/\(config.remotePath)/\(localFile.lastPathComponent)")
+                .map { $0.lowercased() }
+        }
+    }
+
+    private static func normalizedHost(_ host: String) -> String {
+        host.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".[]"))
+            .lowercased()
+    }
+
+    private static func normalizedS3Endpoint(_ endpoint: String?) -> String {
+        let endpoint = (endpoint ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !endpoint.isEmpty else { return "aws" }
+        let url = endpoint.contains("://") ? endpoint : "https://\(endpoint)"
+        guard var components = URLComponents(string: url), let host = components.host else {
+            return endpoint.lowercased()
+        }
+        components.host = normalizedHost(host)
+        components.scheme = components.scheme?.lowercased()
+        if (components.scheme == "https" && components.port == 443)
+            || (components.scheme == "http" && components.port == 80) {
+            components.port = nil
+        }
+        components.path = "/" + normalizedPath(components.path).joined(separator: "/")
+        return components.string ?? endpoint.lowercased()
+    }
+
+    private static func normalizedPath(_ path: String) -> [String] {
+        var components: [String] = []
+        for component in path.split(separator: "/") {
+            switch component {
+            case ".": break
+            case "..":
+                if !components.isEmpty { components.removeLast() }
+            default: components.append(String(component))
+            }
+        }
+        return components
+    }
+}
+
 // MARK: - Upload Profiles
 
 /// A single upload destination. The `backend` property determines which of the

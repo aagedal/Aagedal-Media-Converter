@@ -7,6 +7,211 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class CommentSettingsTests: XCTestCase {
+    func testSourceMetadataPlanOwnsOutputMappingAndKeepsInputFlags() {
+        let inputArguments = ["-fflags", "+bitexact+genpts", "-i", "source.mov"]
+        let outputArguments = [
+            "-map_metadata:g", "0", "-map_metadata:s:a:0", "0:s:a:0", "-map_chapters", "0",
+            "-fflags", "+genpts+bitexact", "-fflags", "-bitexact", "-metadata", "title=Authored",
+            "-metadata:s:a:0", "language=nor"
+        ]
+        var arguments = inputArguments + outputArguments
+        SourceMetadataPlan.strip.apply(to: &arguments, outputArgumentsStart: inputArguments.count)
+        XCTAssertEqual(Array(arguments.prefix(inputArguments.count)), inputArguments)
+        XCTAssertEqual(Self.values(for: "-map_metadata", in: arguments), ["-1"])
+        XCTAssertEqual(Self.values(for: "-map_chapters", in: arguments), ["-1"])
+        XCTAssertFalse(arguments.contains("-map_metadata:g"))
+        XCTAssertFalse(arguments.contains("-map_metadata:s:a:0"))
+        XCTAssertEqual(Self.values(for: "-fflags", in: arguments), ["+bitexact+genpts", "+genpts", "-bitexact", "+bitexact"])
+        XCTAssertTrue(arguments.contains("title=Authored"))
+        XCTAssertTrue(arguments.contains("language=nor"))
+        let once = arguments
+        SourceMetadataPlan.strip.apply(to: &arguments, outputArgumentsStart: inputArguments.count)
+        XCTAssertEqual(arguments, once)
+
+        arguments = outputArguments
+        SourceMetadataPlan.unchanged.apply(to: &arguments)
+        XCTAssertEqual(arguments, outputArguments)
+        SourceMetadataPlan.preserve(input: nil).apply(to: &arguments)
+        XCTAssertFalse(arguments.contains("-map_metadata:g"))
+        XCTAssertFalse(arguments.contains("-map_metadata"))
+        XCTAssertFalse(arguments.contains("-map_chapters"))
+        // Stream-specific mappings remain available when preserving metadata.
+        XCTAssertEqual(Self.values(for: "-map_metadata:s:a:0", in: arguments), ["0:s:a:0"])
+    }
+
+    func testCapturedSourceMetadataPolicyOwnsFinalArgumentsAcrossBranches() async throws {
+        let suite = "CommentSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let input = URL(fileURLWithPath: "/source/input.wav")
+        for preserve in [false, true] {
+            defaults.set(preserve, forKey: AppConstants.preserveMetadataPreferenceKey)
+            let codec = try XCTUnwrap(CodecExportSettings(preset: .h264, defaults: defaults))
+            let audio = AudioOnlySettings(defaults: defaults)
+            defaults.set(!preserve, forKey: AppConstants.preserveMetadataPreferenceKey)
+            let extra = ["-map_metadata:g", preserve ? "-1" : "0", "-map_chapters", preserve ? "-1" : "0",
+                         "-fflags", "-bitexact", "-metadata", "title=Authored"]
+            for branch in 0..<3 {
+                let command = await FFMPEGCommandBuilder.buildCommand(
+                    inputURL: input, outputFileURL: URL(fileURLWithPath: "/output/result.mp4"), preset: .h264,
+                    codecSettings: codec, comment: "", includeDateTag: false, trimStart: nil, trimEnd: 1,
+                    waveformRequest: branch == 1 ? Self.waveformRequest : nil,
+                    synthesizedVideoRequest: branch == 2 ? SynthesizedVideoRequest(
+                        width: 32, height: 32, backgroundHex: "000000", frameRate: 24, includeAudio: true
+                    ) : nil,
+                    additionalOutputArguments: extra
+                )
+                XCTAssertEqual(Self.values(for: "-map_metadata", in: command.arguments), [preserve ? "0" : "-1"])
+                XCTAssertEqual(Self.values(for: "-map_chapters", in: command.arguments), [preserve ? "0" : "-1"])
+                XCTAssertFalse(command.arguments.contains("-map_metadata:g"))
+                XCTAssertTrue(command.arguments.contains("title=Authored"))
+            }
+            let native = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
+                audioInputURL: input, outputFileURL: URL(fileURLWithPath: "/output/result.mp4"), preset: .h264,
+                codecSettings: codec, width: 32, height: 32, frameRate: 24, trimStart: nil, trimEnd: 1,
+                includeDateTag: false, additionalOutputArguments: extra
+            )
+            XCTAssertEqual(Self.values(for: "-map_metadata", in: native.arguments), [preserve ? "1" : "-1"])
+            XCTAssertEqual(Self.values(for: "-map_chapters", in: native.arguments), [preserve ? "1" : "-1"])
+            let audioCommand = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: input, outputFileURL: URL(fileURLWithPath: "/output/result.wav"), preset: .audioOnly,
+                audioOnlySettings: audio, comment: "", includeDateTag: false, trimStart: nil, trimEnd: 1,
+                additionalOutputArguments: extra
+            )
+            XCTAssertEqual(Self.values(for: "-map_metadata", in: audioCommand.arguments), preserve ? [] : ["-1"])
+        }
+    }
+
+    func testCustomPresetsKeepCapturedSourceMetadataMapping() async throws {
+        let suite = "CommentSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: AppConstants.preserveMetadataPreferenceKey)
+        let slot = try XCTUnwrap(ExportPreset.custom1.customSlotIndex)
+        defaults.set("-c:v libx264 -map_metadata 0 -map_chapters 0 -fflags +genpts", forKey: AppConstants.customPresetCommandKey(for: slot))
+        let settings = try XCTUnwrap(CodecExportSettings(preset: .custom1, defaults: defaults))
+        XCTAssertEqual(settings.sourceMetadataPlan, .unchanged)
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: URL(fileURLWithPath: "/source/input.mov"),
+            outputFileURL: URL(fileURLWithPath: "/output/result.mov"), preset: .custom1,
+            codecSettings: settings, comment: "", includeDateTag: false, trimStart: nil, trimEnd: 1,
+            additionalOutputArguments: ["-map_metadata:s:a:0", "0:s:a:0", "-fflags", "-bitexact"]
+        )
+        XCTAssertEqual(Self.values(for: "-map_metadata", in: command.arguments), ["0"])
+        XCTAssertEqual(Self.values(for: "-map_chapters", in: command.arguments), ["0"])
+        XCTAssertEqual(Self.values(for: "-map_metadata:s:a:0", in: command.arguments), ["0:s:a:0"])
+        XCTAssertEqual(Self.values(for: "-fflags", in: command.arguments), ["+genpts", "-bitexact"])
+    }
+
+    func testGeneratedTrimmedStreamCopyStripsSourceTagsAndChaptersAfterAdditionalOptions() async throws {
+        let suite = "CommentSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = try await makeTaggedSource(in: directory)
+        for preserve in [true, false] {
+            defaults.set(preserve, forKey: AppConstants.preserveMetadataPreferenceKey)
+            let settings = try XCTUnwrap(CodecExportSettings(preset: .streamCopy, defaults: defaults))
+            let output = directory.appendingPathComponent(preserve ? "preserved.mkv" : "stripped.mkv")
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: source, outputFileURL: output, preset: .streamCopy, codecSettings: settings,
+                comment: "Authored comment", includeDateTag: false, trimStart: 0.1, trimEnd: 0.8,
+                additionalOutputArguments: preserve
+                    ? ["-map_metadata:g", "-1", "-map_chapters", "-1"]
+                    : ["-map_metadata", "0", "-map_metadata:s", "0:s", "-map_chapters", "0", "-fflags", "-bitexact"]
+            )
+            try await runMetadataFFmpeg(command.arguments)
+            let inspection = try await inspectMetadata(at: output)
+            XCTAssertEqual(inspection.contains("Source title sentinel"), preserve, inspection)
+            XCTAssertEqual(inspection.contains("Source video sentinel"), preserve, inspection)
+            XCTAssertEqual(inspection.contains("Source audio sentinel"), preserve, inspection)
+            XCTAssertEqual(inspection.contains("(nor)"), preserve, inspection)
+            XCTAssertEqual(inspection.contains("Source chapter sentinel"), preserve, inspection)
+            XCTAssertTrue(inspection.contains("Authored comment"), inspection)
+            if !preserve {
+                // Matroska keeps the deterministic "Lavf" writing-application
+                // placeholder under bitexact, but omits versioned encoder tags.
+                XCTAssertNil(inspection.range(of: "Lavf[0-9]", options: .regularExpression), inspection)
+                XCTAssertFalse(inspection.contains("Lavc"), inspection)
+            }
+        }
+    }
+
+    func testGeneratedNativeWaveformPreservesMetadataFromAudioInput() async throws {
+        let suite = "CommentSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
+        defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
+        let settings = try XCTUnwrap(CodecExportSettings(preset: .h264, defaults: defaults))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = try await makeTaggedSource(in: directory)
+        let output = directory.appendingPathComponent("native.mkv")
+        let command = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
+            audioInputURL: source, outputFileURL: output, preset: .h264, codecSettings: settings,
+            width: 32, height: 32, frameRate: 24, trimStart: nil, trimEnd: 1, includeDateTag: false
+        )
+        try await runMetadataFFmpeg(command.arguments, standardInput: Data(repeating: 0, count: 32 * 32 * 4 * 24))
+        let inspection = try await inspectMetadata(at: output)
+        XCTAssertTrue(inspection.contains("Source title sentinel"), inspection)
+        XCTAssertTrue(inspection.contains("Source chapter sentinel"), inspection)
+    }
+
+    private static func values(for option: String, in arguments: [String]) -> [String] {
+        arguments.indices.dropLast().compactMap { arguments[$0] == option ? arguments[$0 + 1] : nil }
+    }
+
+    private func makeTaggedSource(in directory: URL) async throws -> URL {
+        let metadata = directory.appendingPathComponent("chapters.ffmetadata")
+        try """
+        ;FFMETADATA1
+        title=Source title sentinel
+        [CHAPTER]
+        TIMEBASE=1/1000
+        START=0
+        END=1000
+        title=Source chapter sentinel
+        """.write(to: metadata, atomically: true, encoding: .utf8)
+        let source = directory.appendingPathComponent("source.mkv")
+        try await runMetadataFFmpeg([
+            "-f", "lavfi", "-i", "color=c=black:s=32x32:r=24:d=1",
+            "-f", "lavfi", "-i", "sine=frequency=1000:duration=1", "-i", metadata.path,
+            "-map", "0:v", "-map", "1:a", "-map_metadata", "2", "-map_chapters", "2",
+            "-metadata:s:v:0", "title=Source video sentinel", "-metadata:s:a:0", "title=Source audio sentinel",
+            "-metadata:s:a:0", "language=nor", "-c:v", "libx264", "-c:a", "pcm_s16le", source.path
+        ])
+        return source
+    }
+
+    private var metadataFFmpegURL: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Aagedal Media Converter/Binaries/ffmpeg")
+    }
+
+    private func runMetadataFFmpeg(_ arguments: [String], standardInput: Data? = nil) async throws {
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: metadataFFmpegURL, arguments: ["-hide_banner", "-loglevel", "error", "-y"] + arguments,
+            standardInput: standardInput, timeout: .seconds(30), standardErrorCaptureLimit: 16_384
+        ))
+        guard result.succeeded else {
+            throw NSError(domain: "CommentSettingsTests", code: Int(result.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: result.standardErrorText])
+        }
+    }
+
+    private func inspectMetadata(at url: URL) async throws -> String {
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: metadataFFmpegURL, arguments: ["-hide_banner", "-i", url.path],
+            timeout: .seconds(30), standardErrorCaptureLimit: 16_384
+        ))
+        // An inspection with no destination reports the tags, then exits with status 1.
+        return result.standardErrorText
+    }
+
     func testCommentPlanResolvesOnceAndPreservesUnownedMetadata() throws {
         let suite = "CommentSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
