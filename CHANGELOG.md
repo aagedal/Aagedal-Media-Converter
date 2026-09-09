@@ -1,5 +1,10 @@
 # v.4.3.0
 
+- **AV2 AAC exports support additional multichannel layouts**, including 2.1, quad, and 6.1, while preserving routed tracks and their channel data.
+- **Subtitle engines reserve independent filenames**, preserve unrelated or edited SRT files, and reuse only their own unchanged outputs on retry.
+- **SSH keys selected with Browse retain sandbox access across launches**, including moved files, with guidance when access must be granted again.
+- **Analytics cancellation waits for helper processes and temporary-file cleanup**, including superseded runs.
+
 - **AV2 Opus audio retains exact end padding**, preserving decoded sample counts after trims and track routing.
 - **Upload retries wait for cancelled transfers to stop**, reject stale callbacks, and release output-file readers before re-encoding. Source uploads remain independent, and file/key access stays open until each transfer finishes.
 - **Removed or retried subtitle jobs cannot publish stale SRT files.** Whisper, Parakeet, and OCR verify queue ownership before replacing the final subtitle.

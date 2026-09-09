@@ -149,6 +149,18 @@ struct UploadProfile: Codable, Identifiable, Equatable, Sendable {
             port: backend.defaultPort > 0 ? backend.defaultPort : AppConstants.defaultUploadPort
         )
     }
+
+    /// Keep the original lookup path in the profile; the bookmark resolves moves
+    /// and renews stale data without changing an upload's saved configuration.
+    mutating func selectSSHKeyFile(
+        _ url: URL,
+        bookmarkManager: SecurityScopedBookmarkManager = .shared
+    ) throws {
+        guard bookmarkManager.saveBookmark(for: url) else {
+            throw UploadError.sshKeyBookmarkFailed
+        }
+        keyFilePath = url.path
+    }
 }
 
 enum UploadProfileStore {
@@ -460,6 +472,8 @@ enum UploadError: Error, LocalizedError {
     case uploadFailed(String)
     case cancelled
     case passwordNotFound
+    case sshKeyAccessDenied
+    case sshKeyBookmarkFailed
 
     var errorDescription: String? {
         switch self {
@@ -477,6 +491,10 @@ enum UploadError: Error, LocalizedError {
             return "Upload was cancelled"
         case .passwordNotFound:
             return "Password not found in Keychain. Please re-enter your password in Settings."
+        case .sshKeyAccessDenied:
+            return String(localized: "The SSH key file cannot be read. In Settings > Upload, use Browse to select the key again and grant access.")
+        case .sshKeyBookmarkFailed:
+            return String(localized: "Access to the SSH key could not be saved. Use Browse to select the key again. The previous selection has been kept.")
         }
     }
 }

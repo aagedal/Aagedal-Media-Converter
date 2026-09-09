@@ -338,7 +338,10 @@ final class RcloneCancellationBoundaryTests: XCTestCase {
         for operation in 0..<3 {
             let started = expectation(description: "Runner started operation \(operation)")
             let runner = CancellationIgnoringRcloneRunner(started: started)
-            let service = RcloneService(updateService: ImmediateRcloneResolver(), subprocessRunner: runner)
+            let service = RcloneService(
+                updateService: ImmediateRcloneResolver(), subprocessRunner: runner,
+                isFileReadable: { _ in true }
+            )
             let progress = BoundaryProgressRecorder()
             let task = Task {
                 switch operation {
@@ -397,12 +400,14 @@ private struct ImmediateRcloneResolver: RcloneUpdating {
 private actor CancellationIgnoringRcloneRunner: SubprocessRunning {
     let started: XCTestExpectation?
     private(set) var startCount = 0
+    private(set) var lastRequest: SubprocessRequest?
     private var continuation: CheckedContinuation<Void, Never>?
 
     init(started: XCTestExpectation? = nil) { self.started = started }
 
     func run(_ request: SubprocessRequest, outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?) async throws -> SubprocessResult {
         startCount += 1
+        lastRequest = request
         // Unexpected calls in resolution tests fail promptly instead of hanging.
         if let started {
             await withCheckedContinuation { continuation in
@@ -466,7 +471,8 @@ final class RcloneScopeLifetimeTests: XCTestCase {
         let service = RcloneService(
             updateService: ImmediateRcloneResolver(),
             subprocessRunner: FailingScopeRunner(),
-            startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) }
+            startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) },
+            resolveBookmark: { _ in nil }, isFileReadable: { _ in true }
         )
         do {
             _ = try await service.upload(localFile: localFile, config: config) { _, _ in }
@@ -508,10 +514,96 @@ final class RcloneScopeLifetimeTests: XCTestCase {
         XCTAssertTrue(scopes.released.isEmpty)
     }
 
+    func testMovedBookmarkedKeyUsesResolvedPathAndKeepsScopeUntilCancellationDrains() async throws {
+        let started = expectation(description: "Upload reads the moved key")
+        let runner = CancellationIgnoringRcloneRunner(started: started)
+        let localFile = URL(fileURLWithPath: "/fixture/source.mov")
+        let originalKey = URL(fileURLWithPath: "/fixture/key")
+        let movedKey = URL(fileURLWithPath: "/moved/key")
+        let scopes = UploadScopeRecorder(available: [localFile, movedKey])
+        let service = RcloneService(
+            updateService: ImmediateRcloneResolver(), subprocessRunner: runner,
+            startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) },
+            resolveBookmark: { url in
+                XCTAssertEqual(url, originalKey)
+                return movedKey
+            },
+            isFileReadable: { url in
+                XCTAssertEqual(url, movedKey)
+                XCTAssertEqual(scopes.activeCount, 2)
+                return true
+            }
+        )
+        let task = Task { try await service.upload(localFile: localFile, config: config) { _, _ in } }
+        await fulfillment(of: [started], timeout: 2)
+        let request = await runner.lastRequest
+        XCTAssertEqual(request?.environment?["RCLONE_CONFIG_UPLOAD_KEY_FILE"], movedKey.path)
+        XCTAssertFalse(request?.redactedDiagnostic("Key: \(movedKey.path)").contains(movedKey.path) ?? true)
+        XCTAssertEqual(scopes.requested, [localFile, movedKey])
+        task.cancel()
+        XCTAssertTrue(scopes.released.isEmpty)
+        await runner.finish()
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch is CancellationError {}
+        XCTAssertEqual(scopes.released, [movedKey, localFile])
+        XCTAssertEqual(scopes.activeCount, 0)
+    }
+
+    func testUnreadableKeyFailsBeforeLaunchAndReleasesAcquiredScopes() async throws {
+        for isConnectionTest in [false, true] {
+            let runner = CancellationIgnoringRcloneRunner()
+            let localFile = URL(fileURLWithPath: "/fixture/source.mov")
+            let keyFile = URL(fileURLWithPath: "/fixture/key")
+            let scopes = UploadScopeRecorder(available: [localFile, keyFile])
+            let service = RcloneService(
+                updateService: ImmediateRcloneResolver(), subprocessRunner: runner,
+                startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) },
+                resolveBookmark: { _ in nil }, isFileReadable: { _ in false }
+            )
+            do {
+                if isConnectionTest {
+                    _ = try await service.testConnection(config: config)
+                } else {
+                    _ = try await service.upload(localFile: localFile, config: config) { _, _ in }
+                }
+                XCTFail("Expected an actionable key-access failure")
+            } catch let error as UploadError {
+                guard case .sshKeyAccessDenied = error else { return XCTFail("Unexpected error: \(error)") }
+                XCTAssertFalse(error.localizedDescription.contains(keyFile.path))
+            }
+            let starts = await runner.startCount
+            XCTAssertEqual(starts, 0)
+            XCTAssertEqual(scopes.released, isConnectionTest ? [keyFile] : [keyFile, localFile])
+            XCTAssertEqual(scopes.activeCount, 0)
+        }
+    }
+
+    func testLegacyKeyCanUseExistingParentFolderAccess() async throws {
+        let keyFile = URL(fileURLWithPath: "/fixture/key")
+        let parent = keyFile.deletingLastPathComponent()
+        let scopes = UploadScopeRecorder(available: [parent])
+        let runner = CancellationIgnoringRcloneRunner()
+        let service = RcloneService(
+            updateService: ImmediateRcloneResolver(), subprocessRunner: runner,
+            startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) },
+            resolveBookmark: { _ in nil },
+            isFileReadable: { _ in scopes.activeCount == 1 }
+        )
+        let succeeded = try await service.testConnection(config: config)
+        XCTAssertTrue(succeeded)
+        XCTAssertEqual(scopes.requested, [keyFile, parent])
+        XCTAssertEqual(scopes.released, [parent])
+        let request = await runner.lastRequest
+        XCTAssertEqual(request?.environment?["RCLONE_CONFIG_UPLOAD_KEY_FILE"], keyFile.path)
+    }
+
     private func makeService(runner: CancellationIgnoringRcloneRunner, scopes: UploadScopeRecorder) -> RcloneService {
         RcloneService(
             updateService: ImmediateRcloneResolver(), subprocessRunner: runner,
-            startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) }
+            startAccess: { scopes.start($0) }, stopAccess: { scopes.stop($0) },
+            resolveBookmark: { _ in nil }, isFileReadable: { _ in true }
         )
     }
 }

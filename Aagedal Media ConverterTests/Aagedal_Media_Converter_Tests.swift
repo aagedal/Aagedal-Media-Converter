@@ -6068,7 +6068,6 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let input = temporaryDirectory.appendingPathComponent("clip.mov")
         let existingSubtitle = temporaryDirectory.appendingPathComponent("clip.srt")
-        try "existing subtitle".write(to: existingSubtitle, atomically: true, encoding: .utf8)
         let runner = RecordingSubprocessRunner { request, _ in
             let stagedURL = try XCTUnwrap(whisperDestinationURL(in: request))
             try "1\n00:00:00,000 --> 00:00:01,000\nNew text\n".write(
@@ -6093,6 +6092,16 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             subprocessRunner: runner,
             ffmpegPathProvider: { "/fixture/ffmpeg" }
         )
+
+        // Establish explicit ownership through a successful generation first.
+        let previous = try await service.generateSubtitles(
+            inputFile: input,
+            outputDirectory: temporaryDirectory,
+            model: .base,
+            language: "auto",
+            operationID: UUID()
+        ) { _ in }
+        XCTAssertEqual(previous, existingSubtitle)
 
         let result = try await service.generateSubtitles(
             inputFile: input,
@@ -6872,7 +6881,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
         let service = RcloneService(
             updateService: StubRcloneUpdateService(path: "/usr/bin/rclone-fixture"),
-            subprocessRunner: runner
+            subprocessRunner: runner,
+            isFileReadable: { _ in true }
         )
         let callbacks = RcloneCallbackRecorder()
         let localURL = URL(fileURLWithPath: "/private/tmp/Secret Clip.mov")
@@ -6929,7 +6939,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
         let service = RcloneService(
             updateService: StubRcloneUpdateService(path: "/usr/bin/rclone-fixture"),
-            subprocessRunner: runner
+            subprocessRunner: runner,
+            isFileReadable: { _ in true }
         )
         let config = UploadConfig(
             server: "media.example",
@@ -6970,7 +6981,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
         let service = RcloneService(
             updateService: StubRcloneUpdateService(path: "/usr/bin/rclone-fixture"),
-            subprocessRunner: runner
+            subprocessRunner: runner,
+            isFileReadable: { _ in true }
         )
 
         let obscured = try await service.obscurePassword(password, rclonePath: "/usr/bin/rclone-fixture")
@@ -7002,7 +7014,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
         let service = RcloneService(
             updateService: StubRcloneUpdateService(path: "/usr/bin/rclone-fixture"),
-            subprocessRunner: runner
+            subprocessRunner: runner,
+            isFileReadable: { _ in true }
         )
 
         do {
@@ -7031,7 +7044,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
         let service = RcloneService(
             updateService: StubRcloneUpdateService(path: "/usr/bin/rclone-fixture"),
-            subprocessRunner: runner
+            subprocessRunner: runner,
+            isFileReadable: { _ in true }
         )
         let config = UploadConfig(
             server: "media.example",
@@ -7061,7 +7075,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let runner = SelectiveRcloneRunner()
         let service = RcloneService(
             updateService: StubRcloneUpdateService(path: "/usr/bin/rclone-fixture"),
-            subprocessRunner: runner
+            subprocessRunner: runner,
+            isFileReadable: { _ in true }
         )
         let config = UploadConfig(
             server: "media.example",

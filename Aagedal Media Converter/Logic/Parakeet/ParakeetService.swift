@@ -23,7 +23,6 @@ actor ParakeetService {
     private var cancelledOperationIDs: Set<UUID> = []
     private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
     private var currentGenerationTasks: [UUID: Task<Void, Error>] = [:]
-    private var reservedOutputPaths: Set<String> = []
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
@@ -72,9 +71,11 @@ actor ParakeetService {
             ffmpegPath = ffmpegPathProvider()
         }
 
-        let baseName = inputFile.deletingPathExtension().lastPathComponent
-        let finalSRT = reserveOutputURL(directory: outputDirectory, baseName: baseName)
-        defer { reservedOutputPaths.remove(finalSRT.path) }
+        let reservation = SubtitleSRTNaming.shared.reserve(
+            directory: outputDirectory, sourceFile: inputFile, method: .parakeet
+        )
+        defer { reservation.release() }
+        let finalSRT = reservation.url
 
         let stagingDirectory = outputDirectory.appendingPathComponent(
             ".parakeet-\(runID.uuidString)", isDirectory: true
@@ -157,7 +158,7 @@ actor ParakeetService {
         do {
             try await publication.publish(
                 stagedURL: stagedSRT,
-                destinationURL: finalSRT,
+                reservation: reservation,
                 isCurrent: publicationIsCurrent
             )
         } catch is CancellationError {
@@ -239,39 +240,7 @@ actor ParakeetService {
         }
     }
 
-    private func reserveOutputURL(directory: URL, baseName: String) -> URL {
-        let preferred = SubtitleSRTNaming.outputURL(directory: directory, baseName: baseName, method: .parakeet)
-        if !reservedOutputPaths.contains(preferred.path) {
-            reservedOutputPaths.insert(preferred.path)
-            return preferred
-        }
 
-        let methodSpecific = outputCandidate(directory: directory, baseName: baseName, suffix: ".parakeet")
-        if !reservedOutputPaths.contains(methodSpecific.path),
-           !FileManager.default.fileExists(atPath: methodSpecific.path) {
-            reservedOutputPaths.insert(methodSpecific.path)
-            return methodSpecific
-        }
-
-        var suffix = 2
-        while true {
-            let candidate = outputCandidate(directory: directory, baseName: baseName, suffix: ".parakeet-\(suffix)")
-            if !reservedOutputPaths.contains(candidate.path),
-               !FileManager.default.fileExists(atPath: candidate.path) {
-                reservedOutputPaths.insert(candidate.path)
-                return candidate
-            }
-            suffix += 1
-        }
-    }
-
-    private func outputCandidate(directory: URL, baseName: String, suffix: String) -> URL {
-        let ending = suffix + ".srt"
-        let maximumBaseBytes = max(255 - ending.utf8.count, 1)
-        var shortenedBase = baseName
-        while shortenedBase.utf8.count > maximumBaseBytes { shortenedBase.removeLast() }
-        return directory.appendingPathComponent(shortenedBase + ending)
-    }
 }
 
 /// FFmpeg boundary used when one specific audio stream must be handed to Parakeet.

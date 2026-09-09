@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 653 tests pass. The
+- The unit-test baseline is green: 685 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -19,11 +19,11 @@ issue link when it starts.
   policy, manual/preserved/drop-frame timecode, image-sequence inputs and JPEG
   output, DCP/IMF conformance arguments, and AV2 chunk planning now have direct
   coverage as well.
-- The app contains about 97,300 lines of Swift. Several core files are very large:
-  `FFMPEGConverter.swift` (4,948 lines), `ConversionManager.swift` (2,986),
+- The app contains about 98,200 lines of Swift. Several core files are very large:
+  `FFMPEGConverter.swift` (4,908 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,123).
-- There are 653 unit tests. The UI test target now has deterministic smoke
+- There are 685 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,492 entries. All 59 previously missing App Intent
+- The string catalog has 1,494 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -262,11 +262,24 @@ own original Matroska. That decoder limitation remains; decoded sample-count tes
 cover 648, 649, 1,607 and 48,001 samples. AAC PCE layouts and generated AV2 video
 remain open (Codex, 2026-09-09).
 
+AV2 AAC staging now supports Program Config Element layouts instead of rejecting
+channel configuration zero. A bounded ADTS parser moves the leading PCE into
+AudioSpecificConfig with the correct byte alignment, retains channel elements and
+comments, and rejects truncated streams, invalid rates, changing configurations,
+and multiple raw data blocks. Seven regressions include generated 2.1, quad, and
+6.1 audio, final Matroska decode equality, and trimmed/duplicated/downmixed routing.
+FFmpeg describes the encoded 6.1 fixture as 6.1(back) in both its original ADTS and
+final mux. The internal staging boundary requires a leading PCE and one access unit
+per ADTS frame, matching the native AAC encoder. SwiftMediaMetadata still infers
+some Matroska layout labels from channel count (quad appears as 4.0); decoder layout
+and sample readback verify that the actual audio retains its layout
+(Codex, 2026-09-09).
+
 The audit identified these remaining high-risk follow-ups:
 
 - generated waveform/synthesized-video AV2 output remains unsupported;
-- uncommon AAC program-config-element layouts remain unsupported by the AV2
-  elementary-stream parser;
+- Matroska metadata layout labels can still use channel-count inference instead of
+  reading AAC/Opus layout descriptors;
 - generated IMF CPL `SourceEncoding` references need full MXF descriptor and
   subdescriptor coverage plus conformance validation.
 
@@ -766,6 +779,16 @@ queued rewraps still cancel independently, and the rewrap owns output validation
 slot release. Delayed-drain and self-cancellation regressions cover both entry points.
 The later framework/MCA probes, remaining helpers, and full package drain remain open
 (Codex, 2026-09-09).
+
+Analytics cancellation now retains and drains each owned metric helper, including
+superseded runs. Distinct run identities preserve replacements even when operation
+IDs are reused, and task-local identity prevents helper self-cancellation from
+joining itself. SSIMULACRA extraction checks cancellation after runner completion,
+so late successful exits cannot start the next extraction/comparison stage; scratch
+cleanup completes before external cancellation returns. Six injected regressions
+cover delayed drain, old/current cancellation, replacement ownership, self-cancellation,
+and SSIMULACRA cleanup. Non-joining framework discovery and the broader package/helper
+lifetime audit remain open (Codex, 2026-09-09).
 
 ### 2.2 Remove sync-over-async waits
 
@@ -1322,6 +1345,28 @@ Sixteen injected-service regressions cover these races and scope balancing witho
 remote writes. Persistent SSH-key bookmarks, coordination of separate rows targeting
 the same remote filename, live configured upload/retry and broader view/actor
 orchestration audits remain open (Codex, 2026-09-09).
+
+All subtitle engines and service instances now share explicit SRT filename
+reservations through publication. Hidden ownership metadata identifies the source
+with a digest, engine, destination, generation, and content digest; retries replace
+only unchanged owned outputs. Existing unmarked/edited subtitles and independent
+sources keep their files. Reservations normalize directory aliases and filename
+lengths, release on all terminal paths, and revalidate the destination immediately
+before publication. Filesystems without ownership metadata safely receive a fresh
+filename on retry. Fourteen new regressions cover concurrent engines/instances,
+durable ownership, edited files, changed destinations, release, aliases, and metadata
+fallback. Arbitrary external filesystem writes still cannot be excluded atomically
+between validation and replacement; multi-process coordination remains a separate
+follow-up (Codex, 2026-09-09).
+
+SSH-key Browse selection now persists read-only security-scoped bookmarks before
+changing the selected path. Rclone resolves moved keys and holds their access until
+the runner drains; legacy direct/parent-folder access remains supported. Unreadable
+keys offer Browse reauthorization guidance, and failed bookmark saves preserve the
+previous selection. Five regressions cover persistence/reload, failure preservation,
+moved-key/cancellation lifetime, connection/upload failure cleanup, and legacy parent
+access. Live sandbox relaunch/reauthorization and separate uploads targeting the same
+remote filename remain open (Codex, 2026-09-09).
 
 ### 3.2 Make conversion plans typed
 
@@ -1903,7 +1948,36 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-09, Codex): Debug compilation and all 653 unit tests pass
+Latest validation (2026-09-09, Codex): Debug compilation and all 685 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Thirty-two new tests
+cover AAC PCE layouts and generated mux decoding, shared SRT reservations and durable
+ownership, persistent SSH-key access, and analytics helper draining. All three
+conversion UI smoke tests pass together (success, failure details, start/cancel);
+the saved error-details screenshot was visually reviewed. All 43 release-script tests,
+manifest freshness, and localization checks pass (1,494 entries, 15 intentional
+omissions). The unsigned Release build passes; its audit verifies all 44 Mach-O
+images and six packaged license notices. No binaries or license assignments changed.
+
+Initial verification caught an invalid XCTest expectation mutation and metadata-label
+assumptions in the AAC fixture. The final tests use a controlled cancellation latch,
+check FFmpeg's original ADTS and final mux layout descriptions, and compare decoded
+samples exactly. Native AAC describes the 6.1 fixture as 6.1(back), while the metadata
+library's channel-count fallback labels quad as 4.0. Independent review also moved
+subtitle destination validation after staged metadata preparation and replaced raw
+source paths in ownership xattrs with digests. The final rebuilt suite is green.
+
+Remaining implementation work: full typed conversion plans and broader orchestration
+extraction; other UI/request settings and schema migrations; framework/MCA probes,
+remaining helpers, and full package drain; wider actor/UI binding and filesystem
+audits; multi-process/external-writer subtitle coordination; separate uploads targeting
+the same remote filename; generated AV2 video; accurate Matroska channel-layout metadata;
+and IMF descriptor conformance. Manual MPV playback, Shortcuts, sandbox relaunch and
+reauthorization, real OCR/external-volume subtitle output, configured remote uploads,
+VoiceOver, broader bilingual/scrolled UI, live capture/editor, runtime memory/dynamic
+dependency measurements, clean-machine install/update, complete dependency provenance
+(99 unresolved license entries), and credentialed release checks remain.
+
+Previous validation (2026-09-09, Codex): Debug compilation and all 653 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Thirty-two new tests
 cover exact Opus padding and generated mux readback, BMX runner draining/self-cancellation,
 final metadata policy, guarded SRT publication, upload retry/callback ownership, and

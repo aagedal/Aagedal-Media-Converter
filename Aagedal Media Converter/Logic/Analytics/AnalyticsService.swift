@@ -44,7 +44,9 @@ actor AnalyticsService {
     private let mediaInfoProvider: any AnalyticsMediaInfoProviding
     private let mediaInfoTimeout: Duration
     private var activeAnalysisID: UUID?
-    private var currentMetricTask: Task<MetricResult, Error>?
+    private var activeAnalysisRunID: UUID?
+    private var metricTasks: [UUID: (operationID: UUID, task: Task<MetricResult, Error>)] = [:]
+    @TaskLocal private static var runningAnalysisRunID: UUID?
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
@@ -80,13 +82,16 @@ actor AnalyticsService {
     ) async throws -> [MetricResult] {
         guard !Task.isCancelled else { throw AnalyticsError.cancelled }
 
-        currentMetricTask?.cancel()
+        for metricTask in metricTasks.values { metricTask.task.cancel() }
         let analysisID = operationID
+        let runID = UUID()
         activeAnalysisID = analysisID
+        activeAnalysisRunID = runID
         defer {
-            if activeAnalysisID == analysisID {
+            metricTasks.removeValue(forKey: runID)
+            if activeAnalysisRunID == runID {
                 activeAnalysisID = nil
-                currentMetricTask = nil
+                activeAnalysisRunID = nil
             }
         }
 
@@ -109,23 +114,25 @@ actor AnalyticsService {
         var results: [MetricResult] = []
 
         for metric in enabledMetrics {
-            guard activeAnalysisID == analysisID, !Task.isCancelled else {
+            guard activeAnalysisRunID == runID, !Task.isCancelled else {
                 throw AnalyticsError.cancelled
             }
 
             let metricTask = Task {
-                try await self.runMetric(
-                    metric,
-                    ffmpegPath: ffmpegPath,
-                    sourceFile: sourceFile,
-                    encodedFile: encodedFile,
-                    vmafModel: vmafModel,
-                    ssimulacra2MaxFrames: ssimulacra2MaxFrames
-                ) { metricProgress in
-                    progress(metric, metricProgress)
+                try await Self.$runningAnalysisRunID.withValue(runID) {
+                    try await self.runMetric(
+                        metric,
+                        ffmpegPath: ffmpegPath,
+                        sourceFile: sourceFile,
+                        encodedFile: encodedFile,
+                        vmafModel: vmafModel,
+                        ssimulacra2MaxFrames: ssimulacra2MaxFrames
+                    ) { metricProgress in
+                        progress(metric, metricProgress)
+                    }
                 }
             }
-            currentMetricTask = metricTask
+            metricTasks[runID] = (analysisID, metricTask)
 
             do {
                 let result = try await withTaskCancellationHandler {
@@ -133,10 +140,10 @@ actor AnalyticsService {
                 } onCancel: {
                     metricTask.cancel()
                 }
-                guard activeAnalysisID == analysisID, !Task.isCancelled else {
+                guard activeAnalysisRunID == runID, !Task.isCancelled else {
                     throw AnalyticsError.cancelled
                 }
-                currentMetricTask = nil
+                metricTasks.removeValue(forKey: runID)
                 results.append(result)
             } catch is CancellationError {
                 throw AnalyticsError.cancelled
@@ -155,12 +162,22 @@ actor AnalyticsService {
         return results
     }
 
-    /// Cancels the current analysis
-    func cancelAnalysis(operationID: UUID? = nil) {
-        guard operationID == nil || activeAnalysisID == operationID else { return }
-        activeAnalysisID = nil
-        currentMetricTask?.cancel()
-        currentMetricTask = nil
+    /// Cancels the captured analyses and waits for their helpers and scratch cleanup to drain.
+    func cancelAnalysis(operationID: UUID? = nil) async {
+        let tasks = metricTasks.filter { operationID == nil || $0.value.operationID == operationID }
+        if operationID == nil || activeAnalysisID == operationID {
+            activeAnalysisID = nil
+            activeAnalysisRunID = nil
+        }
+        for metricTask in tasks.values { metricTask.task.cancel() }
+        // Superseded tasks stay registered until their own run unwinds. A targeted
+        // cancellation can still join an old reader without touching a replacement.
+        // A helper that requests cancellation must not join helpers from inside
+        // their execution, where a callback can otherwise introduce a wait cycle.
+        guard Self.runningAnalysisRunID == nil else { return }
+        for metricTask in tasks.values {
+            _ = await metricTask.task.result
+        }
     }
 
     // MARK: - Single Metric Execution
@@ -450,6 +467,7 @@ actor AnalyticsService {
 
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             guard result.succeeded else {
                 let diagnostic = request.redactedDiagnostic(
                     result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -486,6 +504,7 @@ actor AnalyticsService {
         let result: SubprocessResult
         do {
             result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
         } catch is CancellationError {
             throw AnalyticsError.cancelled
         } catch let error as SubprocessRunnerError {

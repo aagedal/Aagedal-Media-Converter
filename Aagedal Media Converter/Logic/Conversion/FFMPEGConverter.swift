@@ -3266,53 +3266,13 @@ actor FFMPEGConverter {
         return data.subdata(in: payloadStart..<(payloadStart + Int(value)))
     }
 
-    /// Parses an ADTS AAC stream into raw AAC access units plus the derived AudioSpecificConfig,
-    /// sample rate and channel count (read from the first frame's header).
     static func adtsChannelCount(forConfiguration configuration: UInt8) -> Int? {
-        switch configuration {
-        case 1...6: Int(configuration)
-        case 7: 8
-        default: nil
-        }
+        AV2AACParser.channelCount(forConfiguration: configuration)
     }
 
     private static func parseADTS(_ url: URL) -> (frames: [Data], asc: Data, sampleRate: Double, channels: Int)? {
-        guard let data = try? Data(contentsOf: url), data.count > 7 else { return nil }
-        let bytes = [UInt8](data)
-        let rateTable: [Double] = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
-        var frames: [Data] = []
-        var asc: Data? = nil
-        var sampleRate: Double = 48000
-        var channels = 2
-        var i = 0
-        while i + 7 <= bytes.count {
-            guard bytes[i] == 0xFF, (bytes[i + 1] & 0xF0) == 0xF0 else { break } // syncword
-            let protectionAbsent = bytes[i + 1] & 0x01
-            let headerLen = protectionAbsent == 1 ? 7 : 9
-            let profile = (bytes[i + 2] >> 6) & 0x03
-            let freqIdx = (bytes[i + 2] >> 2) & 0x0F
-            let chanCfg = ((bytes[i + 2] & 0x01) << 2) | ((bytes[i + 3] >> 6) & 0x03)
-            let frameLen = (Int(bytes[i + 3] & 0x03) << 11) | (Int(bytes[i + 4]) << 3) | (Int(bytes[i + 5] >> 5) & 0x07)
-            guard frameLen >= headerLen, i + frameLen <= bytes.count else { break }
-            if asc == nil {
-                guard let parsedChannels = adtsChannelCount(forConfiguration: chanCfg) else {
-                    // Configuration zero requires parsing the AAC Program Config Element. Reject it
-                    // until that is supported rather than silently describing multichannel audio as stereo.
-                    return nil
-                }
-                let aot = UInt8(profile + 1) // ADTS profile = audioObjectType − 1
-                let b0 = (aot << 3) | (freqIdx >> 1)
-                let b1 = ((freqIdx & 0x01) << 7) | (chanCfg << 3)
-                asc = Data([b0, b1])
-                if Int(freqIdx) < rateTable.count { sampleRate = rateTable[Int(freqIdx)] }
-                channels = parsedChannels
-            }
-            let payloadStart = i + headerLen
-            frames.append(data.subdata(in: payloadStart..<(i + frameLen)))
-            i += frameLen
-        }
-        guard let asc, !frames.isEmpty else { return nil }
-        return (frames, asc, sampleRate, channels)
+        guard let data = try? Data(contentsOf: url), let track = AV2AACParser.parse(data) else { return nil }
+        return (track.frames, track.audioSpecificConfig, track.sampleRate, track.channels)
     }
 
     /// Returns true if a Matroska/WebM file carries an AV2 video track (CodecID `V_AV2`). Scans the

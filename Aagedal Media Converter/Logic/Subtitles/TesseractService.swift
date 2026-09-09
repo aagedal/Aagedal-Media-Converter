@@ -133,11 +133,13 @@ actor TesseractService {
         guard !cancelledRunIDs.contains(runID) else {
             throw TesseractServiceError.cancelled
         }
-        let baseName = sourceFile.deletingPathExtension().lastPathComponent
-        let srtURL = SubtitleSRTNaming.outputURL(directory: outputDirectory, baseName: baseName, method: .ocr)
+        let reservation = SubtitleSRTNaming.shared.reserve(
+            directory: outputDirectory, sourceFile: sourceFile, method: .ocr
+        )
+        defer { reservation.release() }
         return try await runPipeline(
             sourceFile: sourceFile,
-            srtURL: srtURL,
+            reservation: reservation,
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
@@ -168,11 +170,13 @@ actor TesseractService {
             throw TesseractServiceError.cancelled
         }
         let outputDirectory = sourceFile.deletingLastPathComponent()
-        let baseName = sourceFile.deletingPathExtension().lastPathComponent
-        let srtURL = SubtitleSRTNaming.outputURL(directory: outputDirectory, baseName: baseName, method: .ocr)
+        let reservation = SubtitleSRTNaming.shared.reserve(
+            directory: outputDirectory, sourceFile: sourceFile, method: .ocr
+        )
+        defer { reservation.release() }
         return try await runPipeline(
             sourceFile: sourceFile,
-            srtURL: srtURL,
+            reservation: reservation,
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
@@ -208,7 +212,7 @@ actor TesseractService {
 
     private func runPipeline(
         sourceFile: URL,
-        srtURL: URL,
+        reservation: SubtitleSRTReservation,
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
@@ -218,6 +222,7 @@ actor TesseractService {
         publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
+        let srtURL = reservation.url
         // Sandboxed FFmpeg subprocess can't open user-imported files on external volumes
         // unless we hold security scope on the source URL for the duration of the run.
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: sourceFile)
@@ -331,7 +336,7 @@ actor TesseractService {
             try srtContent.write(to: stagedSRT, atomically: true, encoding: .utf8)
             try await publication.publish(
                 stagedURL: stagedSRT,
-                destinationURL: srtURL,
+                reservation: reservation,
                 isCurrent: publicationIsCurrent
             )
         } catch is CancellationError {

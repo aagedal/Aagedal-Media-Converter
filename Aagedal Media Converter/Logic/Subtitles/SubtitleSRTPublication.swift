@@ -18,7 +18,7 @@ final class SubtitleSRTPublication: @unchecked Sendable {
     @MainActor
     func publish(
         stagedURL: URL,
-        destinationURL: URL,
+        reservation: SubtitleSRTReservation,
         isCurrent: @MainActor @Sendable () -> Bool
     ) throws {
         try Task.checkCancellation()
@@ -26,12 +26,7 @@ final class SubtitleSRTPublication: @unchecked Sendable {
         try active.withLock { isActive in
             guard isActive else { throw CancellationError() }
             try Task.checkCancellation()
-            let fileManager = FileManager.default
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                _ = try fileManager.replaceItemAt(destinationURL, withItemAt: stagedURL)
-            } else {
-                try fileManager.moveItem(at: stagedURL, to: destinationURL)
-            }
+            try reservation.publish(stagedURL: stagedURL)
         }
     }
 }

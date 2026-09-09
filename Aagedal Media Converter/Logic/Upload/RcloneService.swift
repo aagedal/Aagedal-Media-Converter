@@ -27,6 +27,8 @@ actor RcloneService: RcloneUploading {
     private let subprocessRunner: any SubprocessRunning
     private let startAccess: @Sendable (URL) -> SecurityScopedAccess
     private let stopAccess: @Sendable (SecurityScopedAccess) -> Void
+    private let resolveBookmark: @Sendable (URL) -> URL?
+    private let isFileReadable: @Sendable (URL) -> Bool
 
     /// In-memory remote name used to define the upload destination via env vars.
     /// rclone reads RCLONE_CONFIG_<NAME>_* from the environment, so the secret never appears on argv.
@@ -45,12 +47,20 @@ actor RcloneService: RcloneUploading {
         },
         stopAccess: @escaping @Sendable (SecurityScopedAccess) -> Void = {
             SecurityScopedBookmarkManager.shared.stopAccessing($0)
+        },
+        resolveBookmark: @escaping @Sendable (URL) -> URL? = {
+            SecurityScopedBookmarkManager.shared.resolveBookmark(for: $0)
+        },
+        isFileReadable: @escaping @Sendable (URL) -> Bool = {
+            FileManager.default.isReadableFile(atPath: $0.path)
         }
     ) {
         self.updateService = updateService
         self.subprocessRunner = subprocessRunner
         self.startAccess = startAccess
         self.stopAccess = stopAccess
+        self.resolveBookmark = resolveBookmark
+        self.isFileReadable = isFileReadable
     }
 
     /// Uploads a file to a remote server using rclone
@@ -75,7 +85,8 @@ actor RcloneService: RcloneUploading {
             throw UploadError.configurationMissing
         }
 
-        let accesses = beginFileAccess(localFile: localFile, config: config)
+        var config = config
+        let accesses = try beginFileAccess(localFile: localFile, config: &config)
         defer { for access in accesses.reversed() { stopAccess(access) } }
 
         let remoteEnv = try await buildRemoteEnvironment(config: config, rclonePath: rclonePath)
@@ -192,7 +203,8 @@ actor RcloneService: RcloneUploading {
             throw UploadError.configurationMissing
         }
 
-        let accesses = beginFileAccess(localFile: nil, config: config)
+        var config = config
+        let accesses = try beginFileAccess(localFile: nil, config: &config)
         defer { for access in accesses.reversed() { stopAccess(access) } }
 
         let remoteEnv = try await buildRemoteEnvironment(config: config, rclonePath: rclonePath)
@@ -251,21 +263,32 @@ actor RcloneService: RcloneUploading {
 
     /// Own file scopes independently of the conversion/UI that queued this work.
     /// Generated outputs commonly have a bookmark for their parent directory only.
-    /// A missing scope does not imply failure: app-created files can be readable
-    /// without one, so rclone remains responsible for reporting access failures.
-    private func beginFileAccess(localFile: URL?, config: UploadConfig) -> [SecurityScopedAccess] {
-        var urls = localFile.map { [$0] } ?? []
-        if config.backendType == .sftp, let keyPath = config.sftpKeyFilePath, !keyPath.isEmpty {
-            let keyURL = URL(fileURLWithPath: keyPath)
-            if !urls.contains(keyURL) { urls.append(keyURL) }
-        }
-        return urls.map { url in
+    /// Scope acquisition can return false for directly readable files. Keys also
+    /// get a readability check so legacy paths can request reauthorization before
+    /// launching rclone. All successful scopes are retained until the runner drains.
+    private func beginFileAccess(localFile: URL?, config: inout UploadConfig) throws -> [SecurityScopedAccess] {
+        func acquire(_ url: URL) -> SecurityScopedAccess {
             let access = startAccess(url)
             if case .none = access {
                 return startAccess(url.deletingLastPathComponent())
             }
             return access
         }
+
+        var accesses = localFile.map { [acquire($0)] } ?? []
+        if config.backendType == .sftp, let keyPath = config.sftpKeyFilePath, !keyPath.isEmpty {
+            let originalURL = URL(fileURLWithPath: (keyPath as NSString).expandingTildeInPath)
+            // Use the resolved URL for both access and rclone's KEY_FILE. Granting
+            // access to a moved key while passing the old path still fails.
+            let keyURL = resolveBookmark(originalURL) ?? originalURL
+            accesses.append(acquire(keyURL))
+            guard isFileReadable(keyURL) else {
+                for access in accesses.reversed() { stopAccess(access) }
+                throw UploadError.sshKeyAccessDenied
+            }
+            config.sftpKeyFilePath = keyURL.path
+        }
+        return accesses
     }
 
     /// Builds the destination path for an upload using the in-memory remote name.
