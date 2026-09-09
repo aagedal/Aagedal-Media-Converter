@@ -1,5 +1,11 @@
 # v.4.3.0
 
+- **AV2 Opus audio retains exact end padding**, preserving decoded sample counts after trims and track routing.
+- **Upload retries wait for cancelled transfers to stop**, reject stale callbacks, and release output-file readers before re-encoding. Source uploads remain independent, and file/key access stays open until each transfer finishes.
+- **Removed or retried subtitle jobs cannot publish stale SRT files.** Whisper, Parakeet, and OCR verify queue ownership before replacing the final subtitle.
+- **Comments and timecode follow the item’s settings through final command assembly**, including conflicting additional arguments; generated image sequences omit container comments.
+- **BMX cancellation waits for the wrapper process to stop**, including targeted cancellation during package post-processing.
+
 - **The conversion toolbar stays disabled when no files are waiting**, keeping SwiftUI and AppKit enabled states consistent after success or failure.
 
 - **AV2 Matroska audio preserves delayed tracks and packet timing**, including reordered/duplicated routes, trims, AAC preroll, and Opus codec delay.

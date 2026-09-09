@@ -853,6 +853,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var uploadSourceFile: Bool = false
     /// Current upload status
     var uploadStatus: UploadStatus = .notQueued
+    /// Identity of the upload attempt allowed to publish into this row.
+    var uploadOperationID: UUID? = nil
     /// Upload progress (0.0 to 1.0)
     var uploadProgress: Double = 0.0
     /// Upload speed (e.g., "5.2 MiB/s")
@@ -945,6 +947,15 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         analyticsProgress = 0.0
         analyticsOperationID = nil
         analyticsEnabled = false
+        // Re-encoding replaces the output, while an independent source-file upload
+        // can continue against the unchanged input.
+        if !uploadSourceFile {
+            uploadOperationID = nil
+            uploadStatus = .notQueued
+            uploadProgress = 0
+            uploadSpeed = nil
+            uploadedRemotePath = nil
+        }
     }
 
     /// Clears user-configured per-item settings (trim, crop, audio routing, mute, comment, etc.).

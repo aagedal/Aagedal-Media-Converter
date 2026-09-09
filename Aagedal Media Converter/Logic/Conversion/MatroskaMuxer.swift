@@ -65,6 +65,9 @@ enum MatroskaMuxer {
         /// Container block timestamp, including codec delay for Opus. Nil retains the legacy
         /// continuous sample clock for callers without source packet timing.
         var presentationTimestampMilliseconds: Int64? = nil
+        /// Exact trailing encoder padding, in nanoseconds. Padded packets use a BlockGroup
+        /// because SimpleBlock cannot carry Matroska's DiscardPadding element.
+        var discardPaddingNanoseconds: Int64 = 0
     }
 
     /// One complete encoded audio track ready to mux. Keeping the track description and frames
@@ -125,7 +128,13 @@ enum MatroskaMuxer {
         let fpsDen = max(1, video.fpsDenominator)
 
         // MARK: Build the block timeline (ms timestamps, TimestampScale = 1,000,000 ns).
-        struct Block { let track: Int; let pts: Int64; let data: Data; let key: Bool }
+        struct Block {
+            let track: Int
+            let pts: Int64
+            let data: Data
+            let key: Bool
+            var discardPaddingNanoseconds: Int64 = 0
+        }
         var blocks: [Block] = []
         blocks.reserveCapacity(videoFrames.count + activeAudioTracks.reduce(0) { $0 + $1.frames.count })
 
@@ -133,16 +142,21 @@ enum MatroskaMuxer {
             let pts = Int64((Double(i) * 1000.0 * Double(fpsDen) / Double(fpsNum)).rounded())
             blocks.append(Block(track: 1, pts: pts, data: frame.data, key: frame.isKeyframe))
         }
-        var lastAudioEndMs: Int64 = 0
+        var lastAudioEndMs: Double = 0
         for (audioIndex, audioTrack) in activeAudioTracks.enumerated() {
             let trackNumber = audioIndex + 2
             var sampleOffset = 0
             for frame in audioTrack.frames {
                 let pts = frame.presentationTimestampMilliseconds
                     ?? Int64((Double(sampleOffset) * 1000.0 / audioTrack.info.sampleRate).rounded())
-                blocks.append(Block(track: trackNumber, pts: pts, data: frame.data, key: true))
-                let frameDurationMs = Int64((Double(max(0, frame.durationSamples)) * 1000.0 / audioTrack.info.sampleRate).rounded())
-                lastAudioEndMs = max(lastAudioEndMs, pts + frameDurationMs)
+                blocks.append(Block(
+                    track: trackNumber, pts: pts, data: frame.data, key: true,
+                    discardPaddingNanoseconds: frame.discardPaddingNanoseconds
+                ))
+                let frameDurationMs = Double(max(0, frame.durationSamples)) * 1000.0 / audioTrack.info.sampleRate
+                let discardedMs = Double(frame.discardPaddingNanoseconds) / 1_000_000
+                let codecDelayMs = Double(audioTrack.info.codecDelayNs ?? 0) / 1_000_000
+                lastAudioEndMs = max(lastAudioEndMs, Double(pts) + frameDurationMs - discardedMs - codecDelayMs)
                 sampleOffset += max(0, frame.durationSamples)
             }
         }
@@ -152,7 +166,7 @@ enum MatroskaMuxer {
         blocks.sort { $0.pts != $1.pts ? $0.pts < $1.pts : $0.track < $1.track }
 
         let lastVideoEndMs = Int64((Double(videoFrames.count) * 1000.0 * Double(fpsDen) / Double(fpsNum)).rounded())
-        let durationMs = max(lastVideoEndMs, lastAudioEndMs)
+        let durationMs = max(Double(lastVideoEndMs), lastAudioEndMs)
 
         // MARK: EBML header
         var ebml = Data()
@@ -218,9 +232,17 @@ enum MatroskaMuxer {
                 let u = UInt16(bitPattern: clamped)
                 sb.append(UInt8((u >> 8) & 0xFF))
                 sb.append(UInt8(u & 0xFF))
-                sb.append(b.key ? 0x80 : 0x00)               // flags: bit7 = key frame
+                // Block reserves the SimpleBlock keyframe flag. No ReferenceBlock means that
+                // an audio BlockGroup is independently decodable.
+                sb.append(b.discardPaddingNanoseconds == 0 && b.key ? 0x80 : 0x00)
                 sb += b.data
-                body += element(0xA3, sb)                    // SimpleBlock
+                if b.discardPaddingNanoseconds > 0 {
+                    var blockGroup = element(0xA1, sb)      // Block
+                    blockGroup += element(0x75A2, signedIntData(b.discardPaddingNanoseconds))
+                    body += element(0xA0, blockGroup)       // BlockGroup + DiscardPadding
+                } else {
+                    body += element(0xA3, sb)               // SimpleBlock
+                }
             }
             clusterElements.append(element(0x1F43B675, body))
             if group.contains(where: { $0.track == 1 && $0.key }) {
@@ -403,6 +425,13 @@ enum MatroskaMuxer {
         var v = value
         while v > 0 { bytes.insert(UInt8(v & 0xFF), at: 0); v >>= 8 }
         return Data(bytes)
+    }
+
+    /// Eight-byte two's-complement signed integer. DiscardPadding is signed even for positive
+    /// end padding; unsigned minimal-width encoding can accidentally set its sign bit.
+    private static func signedIntData(_ value: Int64) -> Data {
+        var be = value.bigEndian
+        return withUnsafeBytes(of: &be) { Data($0) }
     }
 
     /// 8-byte IEEE-754 big-endian float (Matroska floats).

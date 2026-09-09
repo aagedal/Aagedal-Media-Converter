@@ -18,6 +18,7 @@ actor ParakeetService {
     private let overlapDurationProvider: @Sendable () -> Int
 
     private var activeRunIDs: Set<UUID> = []
+    private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
     private var cancelledRunIDs: Set<UUID> = []
     private var cancelledOperationIDs: Set<UUID> = []
     private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
@@ -50,10 +51,11 @@ actor ParakeetService {
         language: String?,
         operationID: UUID,
         audioStreamIndex: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
-        registerRun(runID, operationID: operationID)
+        let publication = registerRun(runID, operationID: operationID)
         defer { finishRun(runID, operationID: operationID) }
         guard !cancelledRunIDs.contains(runID) else { throw ParakeetServiceError.cancelled }
 
@@ -153,7 +155,13 @@ actor ParakeetService {
             throw ParakeetServiceError.srtGenerationFailed
         }
         do {
-            try publish(stagedSRT, to: finalSRT)
+            try await publication.publish(
+                stagedURL: stagedSRT,
+                destinationURL: finalSRT,
+                isCurrent: publicationIsCurrent
+            )
+        } catch is CancellationError {
+            throw ParakeetServiceError.cancelled
         } catch {
             throw ParakeetServiceError.transcriptionFailed("Could not publish subtitle output")
         }
@@ -169,6 +177,7 @@ actor ParakeetService {
         language: String?,
         operationID: UUID,
         audioStreamIndex: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws -> URL {
         try await generateSubtitles(
@@ -178,6 +187,7 @@ actor ParakeetService {
             language: language,
             operationID: operationID,
             audioStreamIndex: audioStreamIndex,
+            publicationIsCurrent: publicationIsCurrent,
             progress: progress
         )
     }
@@ -186,12 +196,14 @@ actor ParakeetService {
         cancelledOperationIDs.insert(operationID)
         let runIDs = runIDsByOperationID[operationID] ?? []
         cancelledRunIDs.formUnion(runIDs)
+        for runID in runIDs { publicationsByRunID[runID]?.cancel() }
         for runID in runIDs { currentGenerationTasks[runID]?.cancel() }
         logger.info("Parakeet subtitle generation cancelled")
     }
 
     func cancelAllGeneration() {
         cancelledRunIDs.formUnion(activeRunIDs)
+        for publication in publicationsByRunID.values { publication.cancel() }
         for task in currentGenerationTasks.values { task.cancel() }
         logger.info("All Parakeet subtitle generation cancelled")
     }
@@ -203,13 +215,20 @@ actor ParakeetService {
         return .installed(version: "parakeet-mlx")
     }
 
-    private func registerRun(_ runID: UUID, operationID: UUID) {
+    private func registerRun(_ runID: UUID, operationID: UUID) -> SubtitleSRTPublication {
+        let publication = SubtitleSRTPublication()
+        publicationsByRunID[runID] = publication
         activeRunIDs.insert(runID)
         runIDsByOperationID[operationID, default: []].insert(runID)
-        if cancelledOperationIDs.contains(operationID) { cancelledRunIDs.insert(runID) }
+        if cancelledOperationIDs.contains(operationID) {
+            cancelledRunIDs.insert(runID)
+            publication.cancel()
+        }
+        return publication
     }
 
     private func finishRun(_ runID: UUID, operationID: UUID) {
+        publicationsByRunID.removeValue(forKey: runID)
         currentGenerationTasks.removeValue(forKey: runID)?.cancel()
         activeRunIDs.remove(runID)
         cancelledRunIDs.remove(runID)
@@ -252,14 +271,6 @@ actor ParakeetService {
         var shortenedBase = baseName
         while shortenedBase.utf8.count > maximumBaseBytes { shortenedBase.removeLast() }
         return directory.appendingPathComponent(shortenedBase + ending)
-    }
-
-    private func publish(_ stagedURL: URL, to destinationURL: URL) throws {
-        if FileManager.default.fileExists(atPath: destinationURL.path) {
-            _ = try FileManager.default.replaceItemAt(destinationURL, withItemAt: stagedURL)
-        } else {
-            try FileManager.default.moveItem(at: stagedURL, to: destinationURL)
-        }
     }
 }
 

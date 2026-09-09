@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-08
+Last reviewed: 2026-09-09
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 621 tests pass. The
+- The unit-test baseline is green: 653 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -20,10 +20,10 @@ issue link when it starts.
   output, DCP/IMF conformance arguments, and AV2 chunk planning now have direct
   coverage as well.
 - The app contains about 97,300 lines of Swift. Several core files are very large:
-  `FFMPEGConverter.swift` (4,934 lines), `ConversionManager.swift` (2,967),
-  `ContentView.swift` (2,908), `VideoFileListView.swift` (2,163), and
+  `FFMPEGConverter.swift` (4,948 lines), `ConversionManager.swift` (2,986),
+  `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,123).
-- There are 621 unit tests. The UI test target now has deterministic smoke
+- There are 653 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -250,11 +250,23 @@ rejects malformed timing, count mismatches, and nonfinite timestamps. Generated 
 video, AAC PCE layouts, and sample-exact Opus end padding remain open
 (Codex, 2026-09-08).
 
+AV2 Opus end padding now survives elementary extraction through a bounded reader of
+`DiscardPadding` in the routed Matroska file. Final padded packets use BlockGroup
+metadata, preserving nanosecond precision independently of the millisecond timestamp
+clock. Generated coverage decodes final muxes to count samples, including submillisecond
+padding, trims, delayed tracks, reordered and duplicated routes. The reader rejects
+truncated elements, ambiguous lacing, negative end padding, and count/duration mismatches.
+The one-sample fixture retains exact padding bytes, but bundled FFmpeg ignores end
+discard when it also applies pre-skip in that same first packet, reproducing in its
+own original Matroska. That decoder limitation remains; decoded sample-count tests
+cover 648, 649, 1,607 and 48,001 samples. AAC PCE layouts and generated AV2 video
+remain open (Codex, 2026-09-09).
+
 The audit identified these remaining high-risk follow-ups:
 
 - generated waveform/synthesized-video AV2 output remains unsupported;
 - uncommon AAC program-config-element layouts remain unsupported by the AV2
-  elementary-stream parser; Opus end discard padding still needs sample-exact handling;
+  elementary-stream parser;
 - generated IMF CPL `SourceEncoding` references need full MXF descriptor and
   subdescriptor coverage plus conformance validation.
 
@@ -747,6 +759,13 @@ retain task-local identity to avoid joining themselves. Five regressions cover d
 drain in both phases, self-cancellation in both phases, and an old encoder finishing
 after its replacement starts. Later framework/post-processing, other helpers, and
 package drain semantics remain open (Codex, 2026-09-08).
+
+BMX cancellation now waits for the captured wrapper runner to drain. Both targeted
+and current-operation stops retain task-local identity to avoid joining themselves;
+queued rewraps still cancel independently, and the rewrap owns output validation and
+slot release. Delayed-drain and self-cancellation regressions cover both entry points.
+The later framework/MCA probes, remaining helpers, and full package drain remain open
+(Codex, 2026-09-09).
 
 ### 2.2 Remove sync-over-async waits
 
@@ -1281,6 +1300,29 @@ validation beyond the ordinary conversion smoke flows remains open. Broader exec
 view coordination, actor/UI bindings, filesystem publication, and upload service
 lifetime audits remain open (Codex, 2026-09-08).
 
+Subtitle output now has a final publication boundary shared by Whisper, Parakeet,
+and OCR. Unique staging files reach their final SRT path only while the queue row,
+source, and subtitle operation remain current. Service cancellation also invalidates
+the publication token under a lock. Rejected runs clean their own staging; existing
+and already completed subtitles remain intact. Nine regressions cover removal,
+supersession, cancellation at commit, and late engine success. Cross-engine naming
+still uses sibling-file heuristics and can select the same path for independent
+valid operations; explicit naming ownership remains open (Codex, 2026-09-09).
+
+Upload attempts now own their row token, source/output identity, service task and
+predecessor drain. Invalid retries cancel the previous attempt before reporting failure;
+late callbacks cannot overwrite retries, reset rows, or changed file selections.
+Re-encoding waits for old output readers, including those hidden behind a pending
+source-upload replacement; source uploads retain their valid independent lifetime.
+Rclone checks cancellation after binary resolution and runner completion. File access
+and SFTP key scopes remain owned until each runner drains, including parent-folder
+bookmark fallback for generated outputs; directly readable files still work without
+scope acquisition. Weak task ownership lets manager teardown cancel active work.
+Sixteen injected-service regressions cover these races and scope balancing without
+remote writes. Persistent SSH-key bookmarks, coordination of separate rows targeting
+the same remote filename, live configured upload/retry and broader view/actor
+orchestration audits remain open (Codex, 2026-09-09).
+
 ### 3.2 Make conversion plans typed
 
 Status: in progress; typed audio routing introduced 2026-09-08 (Codex).
@@ -1336,6 +1378,16 @@ crashing. Four focused tests cover policy, metadata ownership, malformed values,
 midnight/clamping boundaries; the generated MOV fixture also verifies clearing and
 replacement of the shortcut through actual tmcd output. General typed inputs, filters,
 codecs, comments, and output plans remain open (Codex, 2026-09-08).
+
+Comment composition now resolves into immutable `CommentMetadataPlan` values before
+asynchronous command preparation. `OutputMetadataPlan` renders comments and timecode
+at the final argument boundary, so additional arguments cannot restore cleared or
+replaced metadata. Empty comments preserve source mapping and unrelated stream tags;
+all image-sequence branches omit injected container comments. Command matrix tests
+cover ordinary, waveform, synthesized and native rendering; the generated MOV test
+also verifies actual tmcd clearing/replacement against conflicting additional options.
+General typed inputs, video filters, codecs, source-metadata mapping, and output plans
+remain open (Codex, 2026-09-09).
 
 ### 3.3 Centralize settings access
 
@@ -1851,7 +1903,38 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-08, Codex): Debug compilation and all 621 unit tests pass
+Latest validation (2026-09-09, Codex): Debug compilation and all 653 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Thirty-two new tests
+cover exact Opus padding and generated mux readback, BMX runner draining/self-cancellation,
+final metadata policy, guarded SRT publication, upload retry/callback ownership, and
+file/key scope lifetime. All 43 release-script tests, manifest freshness, and localization
+checks pass (1,492 entries, 15 intentional omissions). The unsigned Release build
+passes; the bundle audit verifies all 44 Mach-O images and six packaged license notices.
+Both fresh-build and test-without-building UI runs were blocked before assertions by
+macOS LocalAuthentication reporting “System authentication is running.” The three
+conversion UI smoke checks and live preview/sandbox validation remain unverified
+for this batch.
+
+The first full run passed 645 tests and failed one new Opus fixture because it bypassed
+the existing WAV audio-discovery fallback. The corrected fixture follows production
+source selection. A separate single-packet FFmpeg decoder limitation is documented
+in §1.1; the output retains its exact padding metadata. Independent reviews also fixed
+an output-upload predecessor hidden behind a source retry, stale upload status after
+path/mode changes, and task cancellation during final SRT publication. No binaries
+or license assignments changed.
+
+Remaining implementation work: full typed conversion plans and broader orchestration
+extraction; other UI/request settings and schema migrations; framework/MCA probes,
+remaining helpers, and full package drain; wider actor/UI binding and filesystem
+audits; explicit cross-engine SRT naming ownership; persistent SSH-key bookmarks and
+coordination of separate uploads to the same remote filename; generated AV2 video and
+uncommon AAC layouts; and IMF descriptor conformance. Manual MPV playback, Shortcuts,
+sandbox reauthorization and remote uploads, VoiceOver, broader bilingual/scrolled UI,
+live capture/editor, runtime memory/dynamic dependency measurements, clean-machine
+install/update, complete dependency provenance (99 unresolved license entries), and
+credentialed release checks remain.
+
+Previous validation (2026-09-08, Codex): Debug compilation and all 621 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Twenty-four new
 regressions cover AV2 packet timing and generated mux readback, native waveform
 analysis/encoder draining and self-cancellation, conversion follow-up ownership,

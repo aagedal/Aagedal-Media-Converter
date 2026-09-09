@@ -2980,6 +2980,18 @@ actor FFMPEGConverter {
             return .failed("Expected \(plannedTrackCount) routed audio tracks, but FFmpeg produced \(routedStreams.count)")
         }
 
+        let opusPadding: [[Int64]]?
+        if codec == .opus {
+            guard let routedData = try? Data(contentsOf: routedAudioURL, options: .mappedIfSafe),
+                  let padding = AV2AudioPacketTiming.discardPadding(inMatroska: routedData),
+                  padding.count == plannedTrackCount else {
+                return .failed("Could not preserve Opus encoder padding from the routed audio output")
+            }
+            opusPadding = padding
+        } else {
+            opusPadding = nil
+        }
+
         var tracks: [MatroskaMuxer.AudioTrack] = []
         for trackIndex in routedStreams.indices {
             guard operationIsCurrent() else { return .cancelled }
@@ -3013,7 +3025,9 @@ actor FFMPEGConverter {
                   Self.fileHasContent(at: elementaryURL),
                   let parsedTrack = Self.parseAV2MuxAudioTrack(elementaryURL, codec: codec),
                   let manifest = try? String(contentsOf: timingURL, encoding: .utf8),
-                  let track = AV2AudioPacketTiming.applying(manifest: manifest, to: parsedTrack) else {
+                  let track = AV2AudioPacketTiming.applying(
+                    manifest: manifest, to: parsedTrack, discardPaddingNanoseconds: opusPadding?[trackIndex]
+                  ) else {
                 if case .failed(let reason) = extractionResult {
                     return .failed("Could not packetize routed audio track \(trackIndex + 1): \(reason)")
                 }

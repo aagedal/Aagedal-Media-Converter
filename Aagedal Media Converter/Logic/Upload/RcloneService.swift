@@ -11,11 +11,22 @@ protocol RcloneUpdating: Sendable {
 
 extension RcloneUpdateService: RcloneUpdating {}
 
+protocol RcloneUploading: Sendable {
+    func upload(
+        localFile: URL,
+        config: UploadConfig,
+        progress: @escaping @Sendable (Double, String?) -> Void
+    ) async throws -> UploadResult
+    func testConnection(config: UploadConfig) async throws -> Bool
+}
+
 /// Service for executing rclone uploads
-actor RcloneService {
+actor RcloneService: RcloneUploading {
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "RcloneService")
     private let updateService: any RcloneUpdating
     private let subprocessRunner: any SubprocessRunning
+    private let startAccess: @Sendable (URL) -> SecurityScopedAccess
+    private let stopAccess: @Sendable (SecurityScopedAccess) -> Void
 
     /// In-memory remote name used to define the upload destination via env vars.
     /// rclone reads RCLONE_CONFIG_<NAME>_* from the environment, so the secret never appears on argv.
@@ -28,10 +39,18 @@ actor RcloneService {
 
     init(
         updateService: any RcloneUpdating = RcloneUpdateService.shared,
-        subprocessRunner: any SubprocessRunning = SubprocessRunner()
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        startAccess: @escaping @Sendable (URL) -> SecurityScopedAccess = {
+            SecurityScopedBookmarkManager.shared.startAccessing(url: $0)
+        },
+        stopAccess: @escaping @Sendable (SecurityScopedAccess) -> Void = {
+            SecurityScopedBookmarkManager.shared.stopAccessing($0)
+        }
     ) {
         self.updateService = updateService
         self.subprocessRunner = subprocessRunner
+        self.startAccess = startAccess
+        self.stopAccess = stopAccess
     }
 
     /// Uploads a file to a remote server using rclone
@@ -45,7 +64,10 @@ actor RcloneService {
         config: UploadConfig,
         progress: @escaping @Sendable (Double, String?) -> Void
     ) async throws -> UploadResult {
-        guard let rclonePath = await updateService.resolveRclonePath() else {
+        try Task.checkCancellation()
+        let resolvedPath = await updateService.resolveRclonePath()
+        try Task.checkCancellation()
+        guard let rclonePath = resolvedPath else {
             throw UploadError.rcloneNotFound
         }
 
@@ -53,7 +75,11 @@ actor RcloneService {
             throw UploadError.configurationMissing
         }
 
+        let accesses = beginFileAccess(localFile: localFile, config: config)
+        defer { for access in accesses.reversed() { stopAccess(access) } }
+
         let remoteEnv = try await buildRemoteEnvironment(config: config, rclonePath: rclonePath)
+        try Task.checkCancellation()
         let destination = uploadDestination(for: config)
 
         var args: [String] = ["copy", localFile.path, destination]
@@ -113,6 +139,7 @@ actor RcloneService {
             result = try await subprocessRunner.run(request) { chunk in
                 state.consume(chunk, handler: handleLine)
             }
+            try Task.checkCancellation()
             state.finish(handler: handleLine)
         } catch is CancellationError {
             throw CancellationError()
@@ -154,7 +181,10 @@ actor RcloneService {
 
     /// Tests connection to the remote server
     func testConnection(config: UploadConfig) async throws -> Bool {
-        guard let rclonePath = await updateService.resolveRclonePath() else {
+        try Task.checkCancellation()
+        let resolvedPath = await updateService.resolveRclonePath()
+        try Task.checkCancellation()
+        guard let rclonePath = resolvedPath else {
             throw UploadError.rcloneNotFound
         }
 
@@ -162,7 +192,11 @@ actor RcloneService {
             throw UploadError.configurationMissing
         }
 
+        let accesses = beginFileAccess(localFile: nil, config: config)
+        defer { for access in accesses.reversed() { stopAccess(access) } }
+
         let remoteEnv = try await buildRemoteEnvironment(config: config, rclonePath: rclonePath)
+        try Task.checkCancellation()
         let destination = uploadDestination(for: config)
 
         let args: [String] = [
@@ -188,6 +222,7 @@ actor RcloneService {
         let result: SubprocessResult
         do {
             result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as SubprocessRunnerError {
@@ -213,6 +248,25 @@ actor RcloneService {
         return true
     }
     // MARK: - Private Methods
+
+    /// Own file scopes independently of the conversion/UI that queued this work.
+    /// Generated outputs commonly have a bookmark for their parent directory only.
+    /// A missing scope does not imply failure: app-created files can be readable
+    /// without one, so rclone remains responsible for reporting access failures.
+    private func beginFileAccess(localFile: URL?, config: UploadConfig) -> [SecurityScopedAccess] {
+        var urls = localFile.map { [$0] } ?? []
+        if config.backendType == .sftp, let keyPath = config.sftpKeyFilePath, !keyPath.isEmpty {
+            let keyURL = URL(fileURLWithPath: keyPath)
+            if !urls.contains(keyURL) { urls.append(keyURL) }
+        }
+        return urls.map { url in
+            let access = startAccess(url)
+            if case .none = access {
+                return startAccess(url.deletingLastPathComponent())
+            }
+            return access
+        }
+    }
 
     /// Builds the destination path for an upload using the in-memory remote name.
     /// Returns e.g. "upload:/uploads/videos", "upload:share/path", "upload:bucket/path".
@@ -376,6 +430,7 @@ actor RcloneService {
     /// Obscures a password using rclone's `obscure` subcommand.
     /// Reads the password from stdin (`rclone obscure -`) so it never appears on argv / `ps` output.
     func obscurePassword(_ password: String, rclonePath: String) async throws -> String {
+        try Task.checkCancellation()
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: rclonePath),
             arguments: ["obscure", "-"],
@@ -392,6 +447,7 @@ actor RcloneService {
         let result: SubprocessResult
         do {
             result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as SubprocessRunnerError {

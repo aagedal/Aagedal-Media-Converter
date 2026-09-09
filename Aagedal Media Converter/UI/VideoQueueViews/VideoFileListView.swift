@@ -1180,7 +1180,12 @@ struct VideoFileListView: View {
                 model: model,
                 language: language,
                 operationID: operationID,
-                audioStreamIndex: audioStreamIndex
+                audioStreamIndex: audioStreamIndex,
+                publicationIsCurrent: {
+                    droppedFiles.contains {
+                        $0.id == itemID && $0.url == inputURL && $0.subtitleOperationID == operationID
+                    }
+                }
             ) { whisperProgress in
                 Task { @MainActor in
                     if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }),
@@ -1270,7 +1275,12 @@ struct VideoFileListView: View {
                 model: model,
                 language: language,
                 operationID: operationID,
-                audioStreamIndex: audioStreamIndex
+                audioStreamIndex: audioStreamIndex,
+                publicationIsCurrent: {
+                    droppedFiles.contains {
+                        $0.id == itemID && $0.url == inputURL && $0.subtitleOperationID == operationID
+                    }
+                }
             ) { parakeetProgress in
                 Task { @MainActor in
                     if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }),
@@ -1384,7 +1394,12 @@ struct VideoFileListView: View {
                 operationID: operationID,
                 subtitleStreamIndex: streamIndex,
                 codec: codec,
-                language: language
+                language: language,
+                publicationIsCurrent: {
+                    droppedFiles.contains {
+                        $0.id == itemID && $0.url == sourceURL && $0.subtitleOperationID == operationID
+                    }
+                }
             ) { ocrProgress in
                 Task { @MainActor in
                     if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }),

@@ -759,6 +759,10 @@ actor ConversionManager: Sendable {
         let mergeFollowUpOwnership = Dictionary(uniqueKeysWithValues: inputItems.map {
             ($0.id, beginFollowUpOwnership(for: $0.id))
         })
+        for item in inputItems {
+            await UploadManager.shared.cancelUploadBeforeConversion(itemID: item.id)
+            guard isBatchActive(batchID) else { return }
+        }
         for (itemID, operationID) in previousSubtitleOperations {
             await cancelPreviousSubtitleOperation(itemID: itemID, operationID: operationID)
             guard isBatchActive(batchID) else { return }
@@ -1711,6 +1715,12 @@ actor ConversionManager: Sendable {
         let itemFollowUpOwnership = beginFollowUpOwnership(for: currentItem.id)
         let inputURL = currentItem.url
         let callbackOwnership = self.callbackOwnership
+        await UploadManager.shared.cancelUploadBeforeConversion(itemID: currentItem.id)
+        guard isBatchActive(batchID) else { return }
+        guard !ConversionQueueState.callbackIndices(for: [currentItem], in: droppedFiles.wrappedValue).isEmpty else {
+            await convertNextFile(droppedFiles: droppedFiles, outputFolder: outputFolder, preset: preset, batchID: batchID)
+            return
+        }
         for previousSubtitleOperationID in previousSubtitleOperationIDs {
             await cancelPreviousSubtitleOperation(itemID: currentItem.id, operationID: previousSubtitleOperationID)
             guard isBatchActive(batchID) else { return }
@@ -2245,7 +2255,10 @@ actor ConversionManager: Sendable {
                 model: model,
                 language: language,
                 operationID: operationID,
-                audioStreamIndex: audioStreamIndex
+                audioStreamIndex: audioStreamIndex,
+                publicationIsCurrent: {
+                    followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
+                }
             ) { [weak self] whisperProgress in
                 Task { @MainActor in
                     guard let _ = self else { return }
@@ -2352,7 +2365,10 @@ actor ConversionManager: Sendable {
                 model: model,
                 language: language,
                 operationID: operationID,
-                audioStreamIndex: audioStreamIndex
+                audioStreamIndex: audioStreamIndex,
+                publicationIsCurrent: {
+                    followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
+                }
             ) { [weak self] parakeetProgress in
                 Task { @MainActor in
                     guard let _ = self else { return }
@@ -2481,7 +2497,10 @@ actor ConversionManager: Sendable {
                 subtitleStreamIndex: streamIndex,
                 codec: codec,
                 language: language,
-                engineKind: settings.engine
+                engineKind: settings.engine,
+                publicationIsCurrent: {
+                    followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
+                }
             ) { [weak self] ocrProgress in
                 Task { @MainActor in
                     guard let _ = self else { return }

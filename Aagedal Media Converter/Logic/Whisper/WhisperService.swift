@@ -22,6 +22,7 @@ actor WhisperService {
     private let ffmpegPathProvider: @Sendable () -> String?
 
     private var activeRunIDs: Set<UUID> = []
+    private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
     private var cancelledRunIDs: Set<UUID> = []
     private var cancelledOperationIDs: Set<UUID> = []
     private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
@@ -55,10 +56,11 @@ actor WhisperService {
         operationID: UUID,
         audioStreamIndex: Int? = nil,
         maxLineLength: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
-        registerRun(runID, operationID: operationID)
+        let publication = registerRun(runID, operationID: operationID)
         defer { finishRun(runID, operationID: operationID) }
         guard !cancelledRunIDs.contains(runID) else {
             throw WhisperServiceError.cancelled
@@ -139,7 +141,13 @@ actor WhisperService {
             throw WhisperServiceError.srtGenerationFailed
         }
         do {
-            try publish(stagedSRTFile, to: srtFile)
+            try await publication.publish(
+                stagedURL: stagedSRTFile,
+                destinationURL: srtFile,
+                isCurrent: publicationIsCurrent
+            )
+        } catch is CancellationError {
+            throw WhisperServiceError.cancelled
         } catch {
             throw WhisperServiceError.transcriptionFailed(
                 "Could not publish subtitle output"
@@ -164,6 +172,7 @@ actor WhisperService {
         operationID: UUID,
         audioStreamIndex: Int? = nil,
         maxLineLength: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws -> URL {
         let outputDirectory = inputFile.deletingLastPathComponent()
@@ -175,6 +184,7 @@ actor WhisperService {
             operationID: operationID,
             audioStreamIndex: audioStreamIndex,
             maxLineLength: maxLineLength,
+            publicationIsCurrent: publicationIsCurrent,
             progress: progress
         )
     }
@@ -184,6 +194,7 @@ actor WhisperService {
         cancelledOperationIDs.insert(operationID)
         let runIDs = runIDsByOperationID[operationID] ?? []
         cancelledRunIDs.formUnion(runIDs)
+        for runID in runIDs { publicationsByRunID[runID]?.cancel() }
         for runID in runIDs {
             currentTranscriptionTasks[runID]?.cancel()
         }
@@ -193,6 +204,7 @@ actor WhisperService {
     /// Stops every active run during an explicit batch shutdown.
     func cancelAllGeneration() {
         cancelledRunIDs.formUnion(activeRunIDs)
+        for publication in publicationsByRunID.values { publication.cancel() }
         for task in currentTranscriptionTasks.values {
             task.cancel()
         }
@@ -218,15 +230,20 @@ actor WhisperService {
         return count
     }
 
-    private func registerRun(_ runID: UUID, operationID: UUID) {
+    private func registerRun(_ runID: UUID, operationID: UUID) -> SubtitleSRTPublication {
+        let publication = SubtitleSRTPublication()
+        publicationsByRunID[runID] = publication
         activeRunIDs.insert(runID)
         runIDsByOperationID[operationID, default: []].insert(runID)
         if cancelledOperationIDs.contains(operationID) {
             cancelledRunIDs.insert(runID)
+            publication.cancel()
         }
+        return publication
     }
 
     private func finishRun(_ runID: UUID, operationID: UUID) {
+        publicationsByRunID.removeValue(forKey: runID)
         currentTranscriptionTasks.removeValue(forKey: runID)?.cancel()
         activeRunIDs.remove(runID)
         cancelledRunIDs.remove(runID)
@@ -284,15 +301,6 @@ actor WhisperService {
             shortenedBase.removeLast()
         }
         return directory.appendingPathComponent(shortenedBase + ending)
-    }
-
-    private func publish(_ stagedURL: URL, to destinationURL: URL) throws {
-        let fileManager = FileManager.default
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            _ = try fileManager.replaceItemAt(destinationURL, withItemAt: stagedURL)
-        } else {
-            try fileManager.moveItem(at: stagedURL, to: destinationURL)
-        }
     }
 }
 
