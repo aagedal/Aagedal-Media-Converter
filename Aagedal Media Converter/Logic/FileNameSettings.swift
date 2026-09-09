@@ -120,7 +120,7 @@ struct FileNameTemplateContext: Sendable {
         return item.imageSequenceConfig?.frameRate ?? item.metadata?.primaryVideoStream?.frameRate?.value
     }
 
-    private static func imageSequenceFramerateLabel(_ rate: Double?) -> String {
+    static func imageSequenceFramerateLabel(_ rate: Double?) -> String {
         guard let rate, rate.isFinite, rate > 0, rate < Double(Int.max) else { return "" }
         return rate.rounded() == rate ? String(Int(rate)) : String(format: "%g", rate)
     }

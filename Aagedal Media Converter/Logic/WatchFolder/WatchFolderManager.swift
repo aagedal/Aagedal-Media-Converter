@@ -59,6 +59,11 @@ actor WatchFolderManager {
         onNewFiles: @escaping @Sendable ([URL]) -> Void
     ) {
         let folderURL = URL(fileURLWithPath: folderPath)
+
+        // Restore the selected folder grant before checking existence: a sandbox
+        // denial may otherwise look like a missing folder and skip every scan.
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: folderURL)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         
         // Check if folder exists
         guard FileManager.default.fileExists(atPath: folderURL.path) else {
@@ -66,20 +71,11 @@ actor WatchFolderManager {
             return
         }
         
-        // Access security-scoped resource
-        let hasAccess = SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: folderURL)
-        defer {
-            if hasAccess {
-                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: folderURL)
-            }
-        }
-        
-        guard let enumerator = FileManager.default.enumerator(
-            at: folderURL,
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey],
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-        ) else {
-            Self.logger.error("Failed to create file enumerator for: \(folderPath, privacy: .public)")
+        let fileURLs: [URL]
+        do {
+            fileURLs = try WatchFolderDirectoryContents.list(in: folderURL)
+        } catch {
+            Self.logger.error("Failed to enumerate watch folder \(folderPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return
         }
 
@@ -87,9 +83,6 @@ actor WatchFolderManager {
         let now = Date()
         var currentFiles: [URL: Int64] = [:]
         var stableFiles: [URL] = []
-        
-        // Convert enumerator to array for async iteration
-        let fileURLs = enumerator.allObjects.compactMap { $0 as? URL }
         
         for fileURL in fileURLs {
             guard AppConstants.supportedVideoExtensions.contains(fileURL.pathExtension.lowercased()) else {
@@ -162,6 +155,19 @@ actor WatchFolderManager {
     
     func isCurrentlyMonitoring() -> Bool {
         return isMonitoring
+    }
+}
+
+/// Enumerates a directory symlink's target while keeping child URLs beneath the
+/// selected folder, so later import operations can find its saved bookmark.
+enum WatchFolderDirectoryContents {
+    static func list(in folder: URL, fileManager: FileManager = .default) throws -> [URL] {
+        let entries = try fileManager.contentsOfDirectory(
+            at: folder.resolvingSymlinksInPath(),
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        return entries.map { folder.appendingPathComponent($0.lastPathComponent) }
     }
 }
 

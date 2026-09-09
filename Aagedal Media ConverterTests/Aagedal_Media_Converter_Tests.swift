@@ -9286,6 +9286,99 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertTrue(arguments.containsAdjacent("-metadata", "timecode=00:00:00:00"))
     }
 
+    func testInputPlanKeepsFileAndConcatOptionsAtTheirInputBoundary() {
+        let source = URL(fileURLWithPath: "/tmp/source.mov")
+        let seek = ["-ss", "1.250"]
+        let hints = ["-colorspace", "bt709"]
+        XCTAssertEqual(FFMPEGInputPlan(inputURL: source, customArguments: nil).arguments(seek: seek, fileOptions: hints),
+                       seek + hints + ["-i", source.path])
+        let concat = ["-f", "concat", "-safe", "0", "-i", "/tmp/list.ffconcat"]
+        let plan = FFMPEGInputPlan(inputURL: source, customArguments: concat)
+        XCTAssertEqual(plan, .concat(path: "/tmp/list.ffconcat", safe: "0"))
+        XCTAssertEqual(plan.arguments(seek: seek, fileOptions: hints), seek + concat)
+    }
+
+    func testInputPlanSeeksEachImageSequenceTimelineAndRoundTripsOptionalInputs() {
+        let source = URL(fileURLWithPath: "/tmp/frames")
+        for start in [nil, "1001"] as [String?] {
+            for audio in [nil, "/tmp/guide.wav"] as [String?] {
+                let plan = FFMPEGInputPlan.imageSequence(pattern: "/tmp/frame_%04d.png", frameRate: "24.000",
+                                                       startNumber: start, audioPath: audio)
+                XCTAssertEqual(FFMPEGInputPlan(inputURL: source, customArguments: plan.arguments()), plan)
+                let arguments = plan.arguments(seek: ["-ss", "1.250"])
+                XCTAssertEqual(arguments.filter { $0 == "-ss" }.count, audio == nil ? 1 : 2)
+                if let audio { XCTAssertEqual(Array(arguments.suffix(4)), ["-ss", "1.250", "-i", audio]) }
+            }
+        }
+    }
+
+    func testInputPlanPreservesUnknownAndIncompleteCustomFormsWithoutMisclassification() {
+        let source = URL(fileURLWithPath: "/tmp/source.wav")
+        let forms = [
+            ["-f", "lavfi", "-i", "concat"],
+            ["-i", "-framerate", "-i", "/tmp/guide.wav"],
+            ["-framerate", "24", "-start_number", "1"],
+            ["-framerate", "24", "-i", "/tmp/frame.png", "-thread_queue_size", "64"],
+            ["-re", "-i", source.path], []
+        ]
+        for arguments in forms {
+            let plan = FFMPEGInputPlan(inputURL: source, customArguments: arguments)
+            XCTAssertEqual(plan, .custom(arguments))
+            XCTAssertEqual(plan.arguments(), arguments)
+            let audio = FFMPEGConverter.packageAudioInput(inputURL: source, customInputArguments: arguments)
+            XCTAssertEqual(audio.arguments, arguments)
+            XCTAssertEqual(audio.probeURL, source)
+            XCTAssertFalse(audio.assumesSingleAudioStreamIfProbeUnavailable)
+        }
+    }
+
+    func testGeneratedImageSequenceStartTrimKeepsCompanionAudioAligned() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for (number, color) in [(1, "red"), (2, "lime")] {
+            try runFFmpeg(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                           "-i", "color=c=\(color):s=32x32:r=1", "-frames:v", "1",
+                           directory.appendingPathComponent("frame_\(number).png").path])
+        }
+        let audio = directory.appendingPathComponent("guide.wav")
+        try runFFmpeg(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                       "-i", "aevalsrc=if(lt(t\\,1)\\,0.25\\,-0.25):s=8000:d=2", "-c:a", "pcm_s16le", audio.path])
+        let config = ImageSequenceConfig(pattern: "frame_%d.png", directory: directory,
+                                        startNumber: 1, endNumber: 2, frameRate: 1,
+                                        imageFormat: .png, associatedAudioURL: audio)
+        try await withPresetSettingsAsync(defaultPresetSettings) {
+            for start in [0.0, 1.0] {
+                let output = directory.appendingPathComponent("output-\(Int(start)).mkv")
+                let command = await FFMPEGCommandBuilder.buildCommand(
+                    inputURL: directory, outputFileURL: output, preset: .h264,
+                    comment: "", includeDateTag: false, trimStart: start, trimEnd: start + 1,
+                    timecodeConfig: TimecodeConfig(mode: .manual("")),
+                    visualSourceURL: config.firstFrameURL, customInputArguments: config.ffmpegInputArguments,
+                    additionalOutputArguments: ["-c:a", "pcm_s16le"]
+                )
+                XCTAssertNil(command.preparationError)
+                try runFFmpeg(command.arguments)
+                let pcm = directory.appendingPathComponent("audio-\(Int(start)).pcm")
+                try runFFmpeg(["-hide_banner", "-loglevel", "error", "-y", "-i", output.path,
+                               "-map", "0:a:0", "-c:a", "pcm_s16le", "-f", "s16le", pcm.path])
+                let samples = try Data(contentsOf: pcm)
+                XCTAssertEqual(samples.count, 8000 * 2)
+                guard samples.count >= 2 else { continue }
+                let first = Int16(bitPattern: UInt16(samples[0]) | UInt16(samples[1]) << 8)
+                XCTAssertEqual(Int(first), start == 0 ? 8192 : -8192)
+                let rgb = directory.appendingPathComponent("picture-\(Int(start)).rgb")
+                try runFFmpeg(["-hide_banner", "-loglevel", "error", "-y", "-i", output.path,
+                               "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", rgb.path])
+                let pixels = try Data(contentsOf: rgb)
+                XCTAssertEqual(pixels.count, 32 * 32 * 3)
+                guard pixels.count >= 3 else { continue }
+                XCTAssertGreaterThan(pixels[start == 0 ? 0 : 1], 200)
+                XCTAssertLessThan(pixels[start == 0 ? 1 : 0], 30)
+            }
+        }
+    }
+
     func testImageSequenceInputArgumentsIncludeFrameRangeAndOptionalAudio() {
         let directory = URL(fileURLWithPath: "/tmp/frames", isDirectory: true)
         let audioURL = URL(fileURLWithPath: "/tmp/guide.wav")

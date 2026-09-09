@@ -20,6 +20,7 @@ import SwiftUI
 /// Coordinates watch-folder monitoring and automatic encoding scheduling for the ContentView.
 @MainActor
 final class WatchFolderCoordinator: ObservableObject {
+    @Published var errorMessage: String?
     private let manager = WatchFolderManager()
     private var monitoringTask: Task<Void, Never>?
     private var autoEncodeTask: Task<Void, Never>?
@@ -31,7 +32,7 @@ final class WatchFolderCoordinator: ObservableObject {
     ///   - promptForFolder: Closure returning a user-selected folder URL.
     ///   - updatePath: Closure invoked when a new folder path is chosen.
     ///   - onNewFiles: Callback invoked when stable files are detected.
-    /// - Returns: `true` when monitoring started, `false` if the user cancelled folder selection.
+    /// - Returns: `true` when monitoring started, `false` on cancellation or inaccessible folders.
     func enableWatchMode(
         currentPath: String,
         promptForFolder: @escaping @Sendable () async -> URL?,
@@ -39,14 +40,23 @@ final class WatchFolderCoordinator: ObservableObject {
         onNewFiles: @escaping @Sendable ([URL]) async -> Void
     ) async -> Bool {
         var folderPath = currentPath
+        errorMessage = nil
+        let selection = WatchFolderSelectionService()
 
-        if folderPath.isEmpty {
-            guard let folderURL = await promptForFolder() else {
-                return false
+        do {
+            if folderPath.isEmpty {
+                guard let folderURL = await promptForFolder() else {
+                    return false
+                }
+                try selection.select(folderURL)
+                folderPath = folderURL.path
+                await updatePath(folderPath)
+            } else {
+                try selection.validate(URL(fileURLWithPath: folderPath))
             }
-            folderPath = folderURL.path
-            await updatePath(folderPath)
-            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: folderURL)
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
 
         monitoringTask?.cancel()

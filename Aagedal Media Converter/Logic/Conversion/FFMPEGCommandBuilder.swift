@@ -271,24 +271,13 @@ enum FFMPEGCommandBuilder {
             )
         )
 
-        if let normalizedTrimStart {
-            arguments.append(contentsOf: ["-ss", ffmpegTimeString(from: normalizedTrimStart)])
-        }
-
-        // For DCP, add input color space hints to ensure correct BT.709 → XYZ conversion
-        if preset == .dcp && customInputArguments == nil {
-            arguments.append(contentsOf: [
-                "-colorspace", "bt709",
-                "-color_primaries", "bt709",
-                "-color_trc", "bt709"
-            ])
-        }
-
-        if let customInputArguments {
-            arguments.append(contentsOf: customInputArguments)
-        } else {
-            arguments.append(contentsOf: ["-i", inputURL.path])
-        }
+        let inputPlan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
+        let seekArguments = normalizedTrimStart.map { ["-ss", ffmpegTimeString(from: $0)] } ?? []
+        // DCP hints apply only to the ordinary file source, before its input boundary.
+        let fileInputOptions = preset == .dcp ? [
+            "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"
+        ] : []
+        arguments += inputPlan.arguments(seek: seekArguments, fileOptions: fileInputOptions)
 
         let outputArgumentsStart = arguments.count
 
@@ -450,10 +439,9 @@ enum FFMPEGCommandBuilder {
         // Image sequence inputs (via customInputArguments): the inputURL is a directory
         // so skip audio probing. If no associated audio, strip audio args entirely.
         // If associated audio exists (two -i flags), remap audio from the second input.
-        let isImageSequenceInput = customInputArguments?.contains("-framerate") == true
+        let isImageSequenceInput = inputPlan.isImageSequence
         if isImageSequenceInput {
-            let inputCount = customInputArguments?.filter({ $0 == "-i" }).count ?? 0
-            if inputCount >= 2 {
+            if inputPlan.companionAudioPath != nil {
                 // Has associated audio as second input - remap audio from input 1
                 remapAudioForImageSequence(from: &ffmpegArgs)
             } else {

@@ -3986,66 +3986,25 @@ actor FFMPEGConverter {
         inputURL: URL,
         customInputArguments: [String]?
     ) -> PackageAudioInput {
-        guard let customInputArguments else {
-            return PackageAudioInput(
-                arguments: ["-i", inputURL.path],
-                probeURL: inputURL,
-                ffmpegInputIndex: 0,
-                assumesSingleAudioStreamIfProbeUnavailable: packageAudioOnlyExtensions.contains(
-                    inputURL.pathExtension.lowercased()
-                )
-            )
-        }
-
-        let inputPaths = customInputArguments.indices.compactMap { index -> String? in
-            guard customInputArguments[index] == "-i",
-                  customInputArguments.indices.contains(index + 1) else {
-                return nil
+        let plan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
+        let isAudioFile = packageAudioOnlyExtensions.contains(inputURL.pathExtension.lowercased())
+        switch plan {
+        case .imageSequence:
+            guard let audioPath = plan.companionAudioPath else {
+                return PackageAudioInput(arguments: [], probeURL: nil, ffmpegInputIndex: 0,
+                                         assumesSingleAudioStreamIfProbeUnavailable: false)
             }
-            return customInputArguments[index + 1]
+            let audioURL = URL(fileURLWithPath: audioPath)
+            return PackageAudioInput(arguments: FFMPEGInputPlan.file(audioURL).arguments(),
+                                     probeURL: audioURL, ffmpegInputIndex: 0,
+                                     assumesSingleAudioStreamIfProbeUnavailable: true)
+        case .file, .concat:
+            return PackageAudioInput(arguments: plan.arguments(), probeURL: inputURL, ffmpegInputIndex: 0,
+                                     assumesSingleAudioStreamIfProbeUnavailable: isAudioFile)
+        case .custom:
+            return PackageAudioInput(arguments: plan.arguments(), probeURL: inputURL, ffmpegInputIndex: 0,
+                                     assumesSingleAudioStreamIfProbeUnavailable: false)
         }
-
-        if customInputArguments.contains("-framerate") {
-            // Image sequences carry audio as their second input. The frames are unnecessary for
-            // PCM extraction, so open the associated audio directly and keep map indices simple.
-            guard inputPaths.count >= 2 else {
-                return PackageAudioInput(
-                    arguments: [],
-                    probeURL: nil,
-                    ffmpegInputIndex: 0,
-                    assumesSingleAudioStreamIfProbeUnavailable: false
-                )
-            }
-            let audioURL = URL(fileURLWithPath: inputPaths[1])
-            return PackageAudioInput(
-                arguments: ["-i", audioURL.path],
-                probeURL: audioURL,
-                ffmpegInputIndex: 0,
-                assumesSingleAudioStreamIfProbeUnavailable: true
-            )
-        }
-
-        if customInputArguments.contains("concat") {
-            // The concat demuxer exposes the merged stream as input 0. Probe the representative
-            // first clip for its stream layout, but extract from the full concat list.
-            return PackageAudioInput(
-                arguments: customInputArguments,
-                probeURL: inputURL,
-                ffmpegInputIndex: 0,
-                assumesSingleAudioStreamIfProbeUnavailable: packageAudioOnlyExtensions.contains(
-                    inputURL.pathExtension.lowercased()
-                )
-            )
-        }
-
-        // Preserve future custom input forms. `inputURL` remains the best available source for
-        // stream-layout probing; the custom arguments still control what FFmpeg actually reads.
-        return PackageAudioInput(
-            arguments: customInputArguments,
-            probeURL: inputURL,
-            ffmpegInputIndex: 0,
-            assumesSingleAudioStreamIfProbeUnavailable: false
-        )
     }
 
     private func extractPackageAudioAsPCMWAV(

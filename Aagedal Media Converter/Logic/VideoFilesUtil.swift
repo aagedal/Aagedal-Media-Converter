@@ -136,12 +136,23 @@ struct VideoFileUtils: Sendable {
         return AppConstants.supportedVideoExtensions.contains(fileExtension)
     }
 
-    static func createVideoItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") async -> VideoItem? {
-        guard var placeholder = await makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset, comment: comment) else {
+    static func createVideoItem(
+        from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "",
+        settings: VideoImportSettings = VideoImportSettings(),
+        reserveCounter: @MainActor @Sendable () -> Int? = {
+            FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+        },
+        detailsLoader: @Sendable (URL, String?, ExportPreset, Int?) async -> VideoItemDetails = { url, folder, preset, counter in
+            await loadDetails(for: url, outputFolder: folder, preset: preset, counter: counter)
+        }
+    ) async -> VideoItem? {
+        guard var placeholder = await makePlaceholderItem(
+            from: url, outputFolder: outputFolder, preset: preset, comment: comment, settings: settings, reserveCounter: reserveCounter
+        ) else {
             return nil
         }
 
-        let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset, counter: placeholder.customCounterValue)
+        let details = await detailsLoader(url, outputFolder, preset, placeholder.customCounterValue)
         placeholder.apply(details: details)
         placeholder.detailsLoaded = true
         logger.debug("[createVideoItem] VideoItem created successfully: \(placeholder.name, privacy: .public)")
@@ -149,21 +160,20 @@ struct VideoFileUtils: Sendable {
     }
 
     @MainActor
-    static func makePlaceholderItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") -> VideoItem? {
+    static func makePlaceholderItem(
+        from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "",
+        settings: VideoImportSettings = VideoImportSettings(),
+        reserveCounter: @MainActor @Sendable () -> Int? = {
+            FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+        }
+    ) -> VideoItem? {
         guard isVideoFile(url: url) else { return nil }
 
         // If this URL was just enumerated from an IMF package, prefer the CPL-derived
         // virtual-track name (e.g. "Main Audio 1") over the UUID-based MXF filename.
         let name = IMFNameOverrides.consume(for: url) ?? url.lastPathComponent
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-        let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
-
-        let waveformEnabledDefault = UserDefaults.standard.bool(forKey: AppConstants.audioWaveformVideoDefaultEnabledKey)
-
-        // Initialize timecode config based on user defaults
-        let defaultTimecodeConfig = getDefaultTimecodeConfig()
-
-        let counter = FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+        let counter = reserveCounter()
 
         var placeholder = VideoItem(
             url: url,
@@ -177,11 +187,11 @@ struct VideoFileUtils: Sendable {
             eta: nil,
             outputURL: makeOutputURL(for: url, outputFolder: outputFolder, preset: preset, counter: counter),
             comment: comment,
-            includeDateTag: includeDateTagByDefault,
+            includeDateTag: settings.includeDateTag,
             metadata: nil,
             detailsLoaded: false,
-            waveformVideoEnabled: waveformEnabledDefault,
-            timecodeConfig: defaultTimecodeConfig
+            waveformVideoEnabled: settings.waveformVideoEnabled,
+            timecodeConfig: settings.timecode
         )
         placeholder.customCounterValue = counter
         placeholder.refreshOutputFileCache()
@@ -194,7 +204,11 @@ struct VideoFileUtils: Sendable {
     static func makePlaceholderItem(
         fromImageSequence config: ImageSequenceConfig,
         outputFolder: String? = nil,
-        preset: ExportPreset = .videoLoop
+        preset: ExportPreset = .videoLoop,
+        settings: VideoImportSettings = VideoImportSettings(),
+        reserveCounter: @MainActor @Sendable () -> Int? = {
+            FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+        }
     ) -> VideoItem {
         let frameCountStr = config.frameCount == 1 ? "1 frame" : "\(config.frameCount) frames"
         let name = "\(config.pattern) (\(config.imageFormat.rawValue), \(frameCountStr))"
@@ -202,13 +216,10 @@ struct VideoFileUtils: Sendable {
         let durationSeconds = config.durationSeconds
         let duration = formatDuration(seconds: durationSeconds)
 
-        let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
-        let defaultTimecodeConfig = getDefaultTimecodeConfig()
-
         // Generate thumbnail from the first frame
         let thumbnailData = generateImageSequenceThumbnail(from: config.firstFrameURL)
 
-        let counter = FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+        let counter = reserveCounter()
         let outputURL = makeOutputURL(
             for: config.directory, outputFolder: outputFolder, preset: preset, counter: counter,
             imageSequenceFrameRate: config.frameRate
@@ -225,10 +236,10 @@ struct VideoFileUtils: Sendable {
             progress: 0.0,
             eta: nil,
             outputURL: outputURL,
-            includeDateTag: includeDateTagByDefault,
+            includeDateTag: settings.includeDateTag,
             metadata: nil,
             detailsLoaded: true,
-            timecodeConfig: defaultTimecodeConfig,
+            timecodeConfig: settings.timecode,
             imageSequenceConfig: config
         )
         item.customCounterValue = counter
@@ -265,18 +276,8 @@ struct VideoFileUtils: Sendable {
     }
 
     /// Get the default timecode configuration from user preferences
-    static func getDefaultTimecodeConfig() -> TimecodeConfig? {
-        let defaultModeRaw = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeModeKey) ?? AppConstants.defaultTimecodeModeRaw
-        let defaultValue = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeValueKey) ?? AppConstants.defaultTimecodeValue
-
-        switch defaultModeRaw {
-        case "preserveSource":
-            return TimecodeConfig(mode: .preserveSource)
-        case "manual":
-            return TimecodeConfig(mode: .manual(defaultValue))
-        default: // "disabled"
-            return nil
-        }
+    static func getDefaultTimecodeConfig(settings: VideoImportSettings = VideoImportSettings()) -> TimecodeConfig? {
+        settings.timecode
     }
 
     static func loadDetails(
@@ -426,35 +427,9 @@ struct VideoFileUtils: Sendable {
     /// If "save next to original" is enabled, returns the source file's directory (with optional subfolder).
     /// Otherwise, returns the default output folder.
     static func resolveOutputFolder(for sourceURL: URL, defaultOutputFolder: String?, preset: ExportPreset) -> String? {
-        let saveNextToOriginal = UserDefaults.standard.bool(forKey: AppConstants.saveNextToOriginalKey)
-
-        if saveNextToOriginal {
-            var outputDirectory = sourceURL.deletingLastPathComponent()
-
-            let useSubfolder = UserDefaults.standard.bool(forKey: AppConstants.saveNextToOriginalSubfolderKey)
-            if useSubfolder {
-                let subfolderMode = UserDefaults.standard.string(forKey: AppConstants.saveNextToOriginalSubfolderModeKey)
-                    ?? AppConstants.defaultSaveNextToOriginalSubfolderMode
-
-                let subfolderName: String
-                if subfolderMode == "presetSuffix" {
-                    // Use the preset's file suffix without the leading underscore
-                    subfolderName = String(preset.fileSuffix.dropFirst(preset.fileSuffix.hasPrefix("_") ? 1 : 0))
-                } else {
-                    // Use custom folder name
-                    subfolderName = UserDefaults.standard.string(forKey: AppConstants.saveNextToOriginalSubfolderNameKey)
-                        ?? AppConstants.defaultSaveNextToOriginalSubfolderName
-                }
-
-                if !subfolderName.isEmpty {
-                    outputDirectory = outputDirectory.appendingPathComponent(subfolderName)
-                }
-            }
-
-            return outputDirectory.path
-        } else {
-            return defaultOutputFolder
-        }
+        OutputDestinationSettings().resolveFolder(
+            for: sourceURL, defaultOutputFolder: defaultOutputFolder, presetSuffix: preset.fileSuffix
+        )
     }
     
     /// Fetches metadata for a video item in the background
@@ -960,7 +935,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
 
     /// Clears user-configured per-item settings (trim, crop, audio routing, mute, comment, etc.).
     /// Pass `resetNameOverride: true` to also clear the output filename override and waveform background.
-    mutating func clearUserSettings(resetNameOverride: Bool = false) {
+    mutating func clearUserSettings(resetNameOverride: Bool = false, settings: VideoImportSettings = VideoImportSettings()) {
         audioRoutingConfig = nil
         cropConfig = nil
         timecodeConfig = nil
@@ -968,7 +943,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         trimEnd = nil
         isMuted = false
         comment = ""
-        includeDateTag = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
+        includeDateTag = settings.includeDateTag
         if resetNameOverride {
             outputFileNameOverride = nil
             waveformBackgroundImageURL = nil

@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 714 tests pass. The
+- The unit-test baseline is green: 735 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 714 unit tests. The UI test target now has deterministic smoke
+- There are 735 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -1252,6 +1252,18 @@ regressions cover scope lifetime, saved-bookmark fallback, filtering, failure/re
 selection commit ordering, and Finder outcomes. Actual Finder and sandbox
 reauthorization still need manual validation (Codex, 2026-09-08).
 
+Watch-folder selection now validates directory access before saving its bookmark and
+path, and saves a writable grant for the optional Trash cleanup feature. Startup rejects
+unavailable saved folders; Finder failures preserve the configured location and present
+recovery guidance. Polling restores scoped access before checking existence. Focused
+regressions cover missing and non-directory paths, enumeration and bookmark failures,
+access balancing, Finder retry, symlinks, and coordinator rejection. Recovery messages
+and the corrected Trash help text are translated into Norwegian. The bilingual UI test
+passes across two unavailable-folder reveal attempts, retains the saved path, and has
+visually reviewed English/Norwegian screenshots. Ongoing watcher scan
+and deletion failures, old read-only grants requiring reselection, and live sandbox
+reauthorization remain audit work (Codex, 2026-09-09).
+
 ## Priority 3 — Reduce change risk in architecture
 
 Target: continuous work after Priority 1 tests exist.
@@ -1474,6 +1486,17 @@ stripping, authored comments, deterministic muxer tags, and native waveform meta
 General typed inputs, filters, codecs, output ownership, and incompatible-option preflight
 remain open (Codex, 2026-09-09).
 
+The app-generated file, concat, and image-sequence inputs now resolve into immutable
+`FFMPEGInputPlan` cases before rendering. Generic exports, AV2 decoding, and package
+audio extraction share those source boundaries; unknown custom forms retain their
+original argument order without guessing source type from isolated tokens. Each image
+sequence input owns its seek, so a start trim advances companion audio alongside the
+picture. Generated two-frame/two-second media verifies both trimmed and untrimmed
+picture colors, PCM samples, and output duration. Three additional regressions cover
+option boundaries, optional companion inputs, round trips, and unknown/incomplete
+custom forms. Typed filters, codecs, outputs, and wider incompatible-option preflight
+remain open (Codex, 2026-09-09).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1668,6 +1691,23 @@ and content-kind resolver, preserving explicit item metadata and leaving malform
 preferences unchanged. Three regressions cover defaults, invalid values, snapshot
 stability, and explicit metadata/title precedence. Broader request preferences and
 schema migrations remain open (Codex, 2026-09-08).
+
+`ConversionPreparationSettings` now captures the complete naming/request preference
+set before single-item metadata loading or merge preparation suspends. Codec, generated
+video, package, image-sequence, subtitle, and comment settings remain attached through
+execution; destination subfolders use the same captured suffix as filenames. Four
+regressions include a suspended real manager preparation with preference edits, followed
+by command and destination capture. Broader feature preferences and schema migrations
+remain open (Codex, 2026-09-09).
+
+`VideoImportSettings` now captures date-tag, waveform, and timecode defaults before
+asynchronous import crosses actors. Ordinary and image-sequence placeholders share its
+policy; resetting item settings reuses the date preference while retaining the existing
+explicit-timecode clearing behavior. Three regressions cover all timecode modes,
+malformed preferences, sequence/reset behavior, and defaults retained through a suspended
+metadata load. Import preview naming still uses current filename/destination preferences;
+final conversion naming uses the operation snapshot. Wider feature settings and schema
+migrations remain open (Codex, 2026-09-09).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -1988,7 +2028,45 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-09, Codex): Debug compilation and all 714 unit tests pass
+Latest validation (2026-09-09, Codex): Debug compilation and all 735 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Twenty-one new tests
+cover typed source boundaries and generated image-sequence picture/audio trim alignment;
+conversion/import settings across suspended preparation; and watch-folder validation,
+bookmark failures, scope lifetime, symlink scanning, Finder retry, and coordinator
+rejection. All 43 release-script tests, manifest freshness, and localization checks pass
+(1,498 entries, 15 intentional omissions). The unsigned Release build passes; its bundle
+audit verifies all 44 Mach-O images and six packaged license notices. No bundled binaries
+or license assignments changed.
+
+All four final-source UI tests pass together from a fresh locally signed build: conversion
+success, failure details, start/cancel, and bilingual watch-folder recovery. The new UI
+regression verifies saved-path preservation across two failed Finder attempts in both
+English and Norwegian. Both recovery-dialog screenshots and the conversion error-details
+screenshot were visually reviewed.
+
+The focused run exposed Foundation's refusal to enumerate unresolved directory symlinks.
+Both watch-folder preflight and scanning now enumerate the resolved target while retaining
+selected-alias URLs for bookmark lookup and Finder. The first full run exposed a test
+fixture assumption about waveform defaults: named preference suites inherit the app's
+registration domain. Explicit fixture preferences fixed the test; the final rebuilt suite
+is green. The initial image-sequence test used a nonexistent disabled-timecode enum case;
+it now uses the existing empty-manual configuration. Independent reviews found no further
+introduced input, snapshot, or bookmark-lifetime regressions.
+
+Remaining implementation work: typed filters, codecs, outputs, additional input forms,
+and broader preflight; wider orchestration, feature settings, import preview naming,
+and schema migrations; full package orchestration, framework/MCA probes and superseded
+helper lifetime; wider actor/UI binding and filesystem audits, ongoing watcher scan/
+deletion error presentation and legacy watch-folder grant renewal; multi-process subtitle
+coordination and remote destination alias/cross-protocol coordination; generated AV2
+video; accurate Matroska channel-layout labels; and IMF descriptor conformance.
+Manual MPV playback, Shortcuts, sandbox relaunch/reauthorization, real OCR and external-volume
+subtitles, configured remote uploads, VoiceOver, broader bilingual/scrolled UI, live
+capture/editor checks, runtime memory/dynamic dependency measurements, clean-machine
+installation/update, complete dependency provenance (99 unresolved license entries),
+and credentialed release validation remain.
+
+Previous validation (2026-09-09, Codex): Debug compilation and all 714 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Twenty-nine new tests
 cover source-metadata policy and generated track/native-waveform readback; shared remote
 upload destinations and scope draining; package/image audio, wrapper and AVC-Intra helper

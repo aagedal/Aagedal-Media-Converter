@@ -1,6 +1,46 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "The watch folder is unavailable. Reconnect its drive or select the folder again in Settings. Your saved watch folder is unchanged. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Overvåkingsmappen er utilgjengelig. Koble til stasjonen igjen eller velg mappen på nytt i Innstillinger. Den lagrede overvåkingsmappen din er uendret. %@"
+        }
+      }
+    }
+  },
+  "The watch location is not a folder. Select another watch folder in Settings.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Overvåkingsplasseringen er ikke en mappe. Velg en annen overvåkingsmappe i Innstillinger."
+        }
+      }
+    }
+  },
+  "Access to the selected watch folder could not be saved. Select the folder again or choose another location. Your previous watch folder is unchanged.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Tilgangen til den valgte overvåkingsmappen kunne ikke lagres. Velg mappen på nytt eller velg en annen plassering. Den forrige overvåkingsmappen din er uendret."
+        }
+      }
+    }
+  },
+  "Finder could not open the watch folder. Try again or open the folder manually.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Finder kunne ikke åpne overvåkingsmappen. Prøv igjen eller åpne mappen manuelt."
+        }
+      }
+    }
+  },
   "The output folder could not be prepared. Choose a writable folder and try again. %@": {
     "localizations": {
       "nb": {
@@ -11647,12 +11687,12 @@
         }
       }
     },
-    "Permanently remove files that have stayed in the watch folder longer than the selected duration" : {
+    "Move files that have stayed in the watch folder longer than the selected duration to Trash" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fjern permanent filer som har ligget i overvåkingsmappen lenger enn den valgte varigheten"
+            "value" : "Flytt filer som har ligget i overvåkingsmappen lenger enn den valgte varigheten, til papirkurven"
           }
         }
       }

@@ -618,6 +618,14 @@ struct ContentView: View {
             } message: {
                 Text(settingsImportAlertMessage ?? "")
             }
+            .alert("Watch Folder", isPresented: Binding(
+                get: { watchFolderCoordinator.errorMessage != nil },
+                set: { if !$0 { watchFolderCoordinator.errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { watchFolderCoordinator.errorMessage = nil }
+            } message: {
+                Text(watchFolderCoordinator.errorMessage ?? "")
+            }
             .sheet(item: $cameraCardImportState) { state in
                 CameraCardImportView(
                     clipCount: state.videoURLs.count,

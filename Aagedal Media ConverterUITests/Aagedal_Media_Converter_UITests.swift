@@ -143,6 +143,46 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testWatchFolderUnavailableRevealPreservesLocationInBothLanguages() throws {
+        for (language, locale, unavailablePrefix) in [
+            ("en", "en_US", "The watch folder is unavailable"),
+            ("nb", "nb_NO", "Overvåkingsmappen er utilgjengelig")
+        ] {
+            let missingFolder = "/private/tmp/AMC-UITest-Missing-Watch-\(UUID().uuidString)"
+            launchApp(language: language, locale: locale, additionalArguments: [
+                "-watchFolderPath", missingFolder,
+                "-watchFolderModeEnabled", "NO", "-watchFolderAutoActivateOnLaunch", "NO"
+            ])
+            defer { app.terminate() }
+            XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+            app.activate()
+            element("toolbar.settings").click()
+            XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+            element("settings.tab.watchFolder").click()
+            let reveal = element("settings.watchFolder.reveal")
+            XCTAssertTrue(reveal.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts[missingFolder].exists)
+            // Retry after dismissal: a missing volume must retain its saved path
+            // and continue to offer reauthorization/reconnection guidance.
+            for attempt in 1...2 {
+                reveal.click()
+                let alert = app.sheets.firstMatch
+                XCTAssertTrue(alert.waitForExistence(timeout: 5))
+                XCTAssertTrue(alert.staticTexts.containing(NSPredicate(
+                    format: "label BEGINSWITH %@ OR value BEGINSWITH %@", unavailablePrefix, unavailablePrefix
+                )).firstMatch.exists)
+                if attempt == 1 {
+                    attachWindowScreenshot(named: "Watch folder location error - \(language)")
+                }
+                alert.buttons["OK"].click()
+                XCTAssertTrue(app.staticTexts[missingFolder].exists)
+                XCTAssertTrue(reveal.exists)
+            }
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testMainWindowAndEverySettingsPaneInBothLanguages() throws {
         let panes = [
             ("general", "General", "Generelt"),

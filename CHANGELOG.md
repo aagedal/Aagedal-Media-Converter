@@ -1,5 +1,10 @@
 # v.4.3.0
 
+- **Image-sequence start trims keep companion audio aligned with the picture.**
+- **Export settings stay consistent while media details load**, including output names, destination subfolders, codecs, subtitles, comments, and generated video.
+- **New imports retain their date-tag, waveform, and timecode defaults while metadata loads.**
+- **Watch-folder errors preserve your saved location** and explain how to reconnect or reselect it. New selections retain access for optional Trash cleanup.
+
 - **Uploads targeting the same remote file run in queue order**, including retries and separate queue rows, while other destinations can upload concurrently.
 - **Cancelling from conversion progress no longer deadlocks**, including ordinary FFmpeg, AV2 decoding, and native waveform rendering.
 - **Package and AV2 cancellation waits for active helpers to stop**, rejects late success, and prevents old chunk failures from cancelling replacement exports.

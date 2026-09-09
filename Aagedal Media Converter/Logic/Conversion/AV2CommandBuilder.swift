@@ -130,8 +130,8 @@ enum AV2CommandBuilder {
         // MARK: ffmpeg decode → y4m
         var ffmpeg: [String] = ["-y", "-nostdin", "-progress", "pipe:2", "-hide_banner"]
         let trim = AV2TrimPlan(start: trimStart, end: trimEnd)
-        ffmpeg += trim.inputArguments
-        appendInputArguments(customInputArguments, inputURL: inputURL, to: &ffmpeg)
+        ffmpeg += FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
+            .arguments(seek: trim.inputArguments)
         ffmpeg += trim.outputArguments
         ffmpeg += ["-map", "0:v:0", "-an", "-sn", "-dn"]
         ffmpeg += ["-vf", r.videoFilter]
@@ -239,8 +239,8 @@ enum AV2CommandBuilder {
             // `count` frames with -frames:v (the most reliable boundary). Each chunk's avmenc forces
             // a key frame at its first input frame, so the chunks stay independently decodable.
             var ff: [String] = ["-y", "-nostdin", "-progress", "pipe:2", "-hide_banner"]
-            if startSec > 0 { ff += ["-ss", String(format: "%.6f", startSec)] }
-            appendInputArguments(customInputArguments, inputURL: inputURL, to: &ff)
+            let seek = startSec > 0 ? ["-ss", String(format: "%.6f", startSec)] : []
+            ff += FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments).arguments(seek: seek)
             ff += ["-frames:v", "\(count)"]
             ff += ["-map", "0:v:0", "-an", "-sn", "-dn"]
             ff += ["-vf", r.videoFilter]
@@ -482,25 +482,10 @@ enum AV2CommandBuilder {
 
     // MARK: - Helpers
 
-    private static func appendInputArguments(
-        _ customInputArguments: [String]?,
-        inputURL: URL,
-        to arguments: inout [String]
-    ) {
-        if let customInputArguments {
-            arguments.append(contentsOf: customInputArguments)
-        } else {
-            arguments.append(contentsOf: ["-i", inputURL.path])
-        }
-    }
-
     private static func frameRateArgument(in arguments: [String]?) -> VideoMetadata.FrameRate? {
-        guard let arguments,
-              let index = arguments.firstIndex(of: "-framerate"),
-              arguments.indices.contains(index + 1) else {
-            return nil
-        }
-        return VideoMetadata.FrameRate(frameRateString: arguments[index + 1])
+        let plan = FFMPEGInputPlan(inputURL: URL(fileURLWithPath: "/"), customArguments: arguments)
+        guard let frameRate = plan.imageSequenceFrameRate else { return nil }
+        return VideoMetadata.FrameRate(frameRateString: frameRate)
     }
 
     /// Mirrors FFmpeg's trim arguments while keeping progress and chunk planning inside the

@@ -20,7 +20,9 @@
 		52CAB26DCE164053A5589E32 /* AV2AudioPacketTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7011C648F17F49E8BE84BB2D /* AV2AudioPacketTiming.swift */; };
 		4AB8F48E8154472F9FB88F6F /* AV2AACParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67C434261D841BD82FD8EEC /* AV2AACParser.swift */; };
 		D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */; };
+		6333450EF06E41EF9B17CB73 /* ConversionPreparationSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E08E9AD75145B68E1C049D /* ConversionPreparationSettingsTests.swift */; };
 		7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */; };
+		14303B1061214301B2A3C30F /* ConversionPreparationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2A7FD698474D319CF8046A /* ConversionPreparationSettings.swift */; };
 		8CE9A054BDF34BD5974C74DE /* ConversionDependencyPreflightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A04DD0F426B484387C18EE8 /* ConversionDependencyPreflightTests.swift */; };
 		3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */; };
 		AAD060010000000000000001 /* KeychainCredentialManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */; };
@@ -98,6 +100,7 @@
 		8E04BE1B2ED38DD5005AD3D8 /* UniversalAudioMeterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E04BE1A2ED38DD5005AD3D8 /* UniversalAudioMeterService.swift */; };
 		8E0556A82F2774B200BCFB49 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 8EE0BBBB2E0980560096171D /* Localizable.xcstrings */; };
 		8E08B2822EAA2871000148A8 /* WatchFolderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E08B2812EAA2871000148A8 /* WatchFolderManager.swift */; };
+		51996FCA45B14312A3E5D975 /* WatchFolderSelectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D639A2FE984963B2B59AF0 /* WatchFolderSelectionService.swift */; };
 		8E08B2842EAA3BFD000148A8 /* WatchFolderDurationUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E08B2832EAA3BFD000148A8 /* WatchFolderDurationUnit.swift */; };
 		8E09F7422EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E09F7412EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift */; };
 		8E09F7442EC762C200E129CD /* AudioWaveformPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E09F7432EC762C200E129CD /* AudioWaveformPreferences.swift */; };
@@ -286,6 +289,7 @@
 		8742E2B3B67147A68FB45282 /* OutputFolderCleanupServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */; };
 		12B0864F27DD4CD6BADB329A /* OutputFolderSelectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */; };
 		EFCEC47F414C44D586CF7F5D /* OutputFolderSelectionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C054964A86C4E138E4DC9AF /* OutputFolderSelectionServiceTests.swift */; };
+		306C6161F506493D979C6420 /* WatchFolderSelectionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D34ECA0E63C471788FE1831 /* WatchFolderSelectionServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -341,7 +345,9 @@
 		7011C648F17F49E8BE84BB2D /* AV2AudioPacketTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AudioPacketTiming.swift; sourceTree = "<group>"; };
 		C67C434261D841BD82FD8EEC /* AV2AACParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2AACParser.swift; sourceTree = "<group>"; };
 		D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageMetadataSettingsTests.swift; sourceTree = "<group>"; };
+		42E08E9AD75145B68E1C049D /* ConversionPreparationSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionPreparationSettingsTests.swift; sourceTree = "<group>"; };
 		4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageMetadataSettings.swift; sourceTree = "<group>"; };
+		CF2A7FD698474D319CF8046A /* ConversionPreparationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionPreparationSettings.swift; sourceTree = "<group>"; };
 		8A04DD0F426B484387C18EE8 /* ConversionDependencyPreflightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionDependencyPreflightTests.swift; sourceTree = "<group>"; };
 		63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionDependencyPreflight.swift; sourceTree = "<group>"; };
 		AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialManagerTests.swift; sourceTree = "<group>"; };
@@ -419,6 +425,7 @@
 		8E0556A72F27725100BCFB49 /* KeyboardShortcuts.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = KeyboardShortcuts.md; sourceTree = "<group>"; };
 		8E08B27E2EAA284A000148A8 /* WATCH_FOLDER_FEATURE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = WATCH_FOLDER_FEATURE.md; sourceTree = "<group>"; };
 		8E08B2812EAA2871000148A8 /* WatchFolderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderManager.swift; sourceTree = "<group>"; };
+		C9D639A2FE984963B2B59AF0 /* WatchFolderSelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderSelectionService.swift; sourceTree = "<group>"; };
 		8E08B2832EAA3BFD000148A8 /* WatchFolderDurationUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderDurationUnit.swift; sourceTree = "<group>"; };
 		8E09F7412EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewCacheCleanupPolicy.swift; sourceTree = "<group>"; };
 		8E09F7432EC762C200E129CD /* AudioWaveformPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioWaveformPreferences.swift; sourceTree = "<group>"; };
@@ -616,6 +623,7 @@
 		1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputFolderCleanupServiceTests.swift; sourceTree = "<group>"; };
 		AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputFolderSelectionService.swift; sourceTree = "<group>"; };
 		8C054964A86C4E138E4DC9AF /* OutputFolderSelectionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputFolderSelectionServiceTests.swift; sourceTree = "<group>"; };
+		9D34ECA0E63C471788FE1831 /* WatchFolderSelectionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderSelectionServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -776,6 +784,7 @@
 				EE7542FB9D7445F09123B467 /* CommentSettings.swift */,
 				204052BD416D4C0D98872778 /* ConversionFollowUp.swift */,
 				4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */,
+				CF2A7FD698474D319CF8046A /* ConversionPreparationSettings.swift */,
 				045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */,
 				596BC21F86AEFDA304EF948F /* MetadataWindowState.swift */,
 				8EEE45382EC13B670049F017 /* Previews */,
@@ -994,6 +1003,7 @@
 				3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */,
 				1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */,
 				8C054964A86C4E138E4DC9AF /* OutputFolderSelectionServiceTests.swift */,
+				9D34ECA0E63C471788FE1831 /* WatchFolderSelectionServiceTests.swift */,
 				427AD30186974A2CAF5EFC5D /* CommentSettingsTests.swift */,
 				B605ED7FEDF34BA59ECB33BB /* AnalyticsAttemptTests.swift */,
 				156D40489BEF44E88D6942DD /* ConversionFollowUpTests.swift */,
@@ -1001,6 +1011,7 @@
 				204DA9E2FCAE49CE950DF5F7 /* AnalyticsCancellationDrainTests.swift */,
 				7748A92962A74E189CB18CD7 /* AV2AACParserTests.swift */,
 				D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */,
+				42E08E9AD75145B68E1C049D /* ConversionPreparationSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
 				F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */,
 				575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */,
@@ -1066,6 +1077,7 @@
 			isa = PBXGroup;
 			children = (
 				8E08B2812EAA2871000148A8 /* WatchFolderManager.swift */,
+				C9D639A2FE984963B2B59AF0 /* WatchFolderSelectionService.swift */,
 				8E08B2832EAA3BFD000148A8 /* WatchFolderDurationUnit.swift */,
 			);
 			path = WatchFolder;
@@ -1437,6 +1449,7 @@
 				1122330BD4DA4103ACF80E38 /* CommentSettings.swift in Sources */,
 				CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */,
 				7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */,
+				14303B1061214301B2A3C30F /* ConversionPreparationSettings.swift in Sources */,
 				BCDC7685DC8A43E4BC04CE65 /* ImageSequenceSettings.swift in Sources */,
 				CC01A1C0PY00010000000002 /* CopyableCommandRow.swift in Sources */,
 				RSEL000000000001000BUILD /* RegionSelectionOverlayView.swift in Sources */,
@@ -1539,6 +1552,7 @@
 				11255751B6534433ACCE197E /* TesseractOCREngine.swift in Sources */,
 				A872D919C52C4AC59BD31CA6 /* VisionOCREngine.swift in Sources */,
 				8E08B2822EAA2871000148A8 /* WatchFolderManager.swift in Sources */,
+				51996FCA45B14312A3E5D975 /* WatchFolderSelectionService.swift in Sources */,
 				8E545D832C33FD4A0088C274 /* DragAndDropView.swift in Sources */,
 				8EEE452D2EC1390F0049F017 /* FFMPEGCommandBuilder.swift in Sources */,
 				AF23AF23AF23AF23AF23AF23 /* AV2CommandBuilder.swift in Sources */,
@@ -1660,6 +1674,7 @@
 				7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */,
 				8742E2B3B67147A68FB45282 /* OutputFolderCleanupServiceTests.swift in Sources */,
 				EFCEC47F414C44D586CF7F5D /* OutputFolderSelectionServiceTests.swift in Sources */,
+				306C6161F506493D979C6420 /* WatchFolderSelectionServiceTests.swift in Sources */,
 				77B54981696C4441A4B5AA25 /* CommentSettingsTests.swift in Sources */,
 				FF177DE1EC9B44B5A401A49D /* AnalyticsAttemptTests.swift in Sources */,
 				F922F223B1AA49FB90CBC548 /* ConversionFollowUpTests.swift in Sources */,
@@ -1667,6 +1682,7 @@
 				7C8FED84939945209B1B6012 /* AnalyticsCancellationDrainTests.swift in Sources */,
 				EC4CE91691E24FB19B6E1838 /* AV2AACParserTests.swift in Sources */,
 				D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */,
+				6333450EF06E41EF9B17CB73 /* ConversionPreparationSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
 				D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */,
 				5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */,
