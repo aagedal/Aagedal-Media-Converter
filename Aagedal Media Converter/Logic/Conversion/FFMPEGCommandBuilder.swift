@@ -59,6 +59,57 @@ enum TimecodeMetadataPlan: Equatable, Sendable {
     }
 }
 
+/// Empty comments retain mapped source metadata; an explicit composed comment owns the
+/// global comment option. Image outputs leave container metadata untouched.
+enum CommentMetadataPlan: Equatable, Sendable {
+    case unchanged
+    case source
+    case set(String)
+
+    init(comment: String, includeDateTag: Bool, date: Date = Date(), settings: CommentSettings) {
+        var parts: [String] = []
+        if includeDateTag {
+            let formatter = DateFormatter()
+            formatter.dateFormat = settings.dateFormat
+            parts.append("\(settings.dateTagPrefix): \(formatter.string(from: date))")
+        }
+        let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        parts += [settings.prefix, trimmedComment, settings.suffix].filter { !$0.isEmpty }
+        self = parts.isEmpty ? .source : .set(parts.joined(separator: settings.separator))
+    }
+
+    var value: String? {
+        if case .set(let value) = self { return value }
+        return nil
+    }
+
+    func apply(to arguments: inout [String]) {
+        guard self != .unchanged else { return }
+        var index = 0
+        while index + 1 < arguments.count {
+            if arguments[index] == "-metadata", arguments[index + 1].hasPrefix("comment=") {
+                arguments.removeSubrange(index...index + 1)
+            } else {
+                index += 1
+            }
+        }
+        if let value {
+            arguments += ["-metadata", "comment=\(value)"]
+        }
+    }
+}
+
+/// Renders item metadata after preset and additional output arguments are assembled.
+struct OutputMetadataPlan: Equatable, Sendable {
+    let comment: CommentMetadataPlan
+    let timecode: TimecodeMetadataPlan
+
+    func apply(to arguments: inout [String]) {
+        comment.apply(to: &arguments)
+        timecode.apply(to: &arguments)
+    }
+}
+
 struct WaveformVideoRequest: Sendable {
     let width: Int
     let height: Int
@@ -147,6 +198,17 @@ enum FFMPEGCommandBuilder {
         let normalizedTrimStart = normalizedTrimPoint(trimStart)
         let normalizedTrimEnd = normalizedTrimPoint(trimEnd)
 
+        let commentPlan: CommentMetadataPlan = preset == .imageSequence ? .unchanged : CommentMetadataPlan(
+            comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings
+        )
+        let metadataPlan = OutputMetadataPlan(
+            comment: commentPlan,
+            timecode: await configuredTimecodePlan(
+                preset: preset, inputURL: inputURL, timecodeConfig: timecodeConfig,
+                sourceMetadata: sourceMetadata, trimStart: normalizedTrimStart
+            )
+        )
+
         if let normalizedTrimStart {
             arguments.append(contentsOf: ["-ss", ffmpegTimeString(from: normalizedTrimStart)])
         }
@@ -200,27 +262,12 @@ enum FFMPEGCommandBuilder {
             if !includeAudioOutput {
                 removeArgumentPair("-map", value: "[audout]", from: &arguments)
             }
-            await applyConfiguredTimecode(
-                &ffmpegArgs,
-                preset: preset,
-                inputURL: inputURL,
-                timecodeConfig: timecodeConfig,
-                sourceMetadata: sourceMetadata,
-                trimStart: normalizedTrimStart
-            )
             arguments.append(contentsOf: ffmpegArgs)
-            
-            // Apply comment metadata AFTER all other arguments to ensure it's not stripped by -map_metadata -1
-            applyCommentMetadata(
-                to: &arguments,
-                comment: comment,
-                includeDateTag: includeDateTag,
-                settings: capturedCommentSettings
-            )
-            
+
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
             }
+            metadataPlan.apply(to: &arguments)
             logger.debug("Waveform ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
@@ -308,31 +355,16 @@ enum FFMPEGCommandBuilder {
                 }
             }
 
-            await applyConfiguredTimecode(
-                &ffmpegArgs,
-                preset: preset,
-                inputURL: inputURL,
-                timecodeConfig: timecodeConfig,
-                sourceMetadata: sourceMetadata,
-                trimStart: normalizedTrimStart
-            )
 
             arguments.append(contentsOf: ffmpegArgs)
-            
-            // Apply comment metadata AFTER all other arguments to ensure it's not stripped by -map_metadata -1
-            applyCommentMetadata(
-                to: &arguments,
-                comment: comment,
-                includeDateTag: includeDateTag,
-                settings: capturedCommentSettings
-            )
-            
+
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
             }
             if ffmpegArgs.contains("-an"), let effectiveDuration {
                 arguments.append(contentsOf: ["-t", ffmpegTimeString(from: effectiveDuration)])
             }
+            metadataPlan.apply(to: &arguments)
             logger.debug("Synthesized video ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
@@ -462,14 +494,6 @@ enum FFMPEGCommandBuilder {
             applyMute(to: &ffmpegArgs)
         }
 
-        await applyConfiguredTimecode(
-            &ffmpegArgs,
-            preset: preset,
-            inputURL: inputURL,
-            timecodeConfig: timecodeConfig,
-            sourceMetadata: sourceMetadata,
-            trimStart: normalizedTrimStart
-        )
 
         if preset == .streamCopy {
             adjustStreamCopyArguments(inputURL: inputURL, outputURL: outputFileURL, ffmpegArgs: &ffmpegArgs)
@@ -509,20 +533,10 @@ enum FFMPEGCommandBuilder {
             }
         }
 
-        // Apply comment metadata AFTER all other arguments to ensure it's not stripped by -map_metadata -1
-        // Skip for image sequences since individual image files don't support container metadata
-        if preset != .imageSequence {
-            applyCommentMetadata(
-                to: &arguments,
-                comment: comment,
-                includeDateTag: includeDateTag,
-                settings: capturedCommentSettings
-            )
-        }
-
         if let additionalOutputArguments {
             arguments.append(contentsOf: additionalOutputArguments)
         }
+        metadataPlan.apply(to: &arguments)
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
@@ -827,6 +841,9 @@ extension FFMPEGCommandBuilder {
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedCommentSettings = commentSettings ?? CommentSettings()
+        let commentPlan: CommentMetadataPlan = preset == .imageSequence ? .unchanged : CommentMetadataPlan(
+            comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings
+        )
         let finalWidth = evenDimension(max(width, 2))
         let finalHeight = evenDimension(max(height, 2))
         let resolution = "\(finalWidth)x\(finalHeight)"
@@ -889,14 +906,6 @@ extension FFMPEGCommandBuilder {
 
         arguments.append(contentsOf: ffmpegArgs)
 
-        // Comment metadata
-        applyCommentMetadata(
-            to: &arguments,
-            comment: comment,
-            includeDateTag: includeDateTag,
-            settings: capturedCommentSettings
-        )
-
         if let additionalOutputArguments {
             arguments.append(contentsOf: additionalOutputArguments)
         }
@@ -904,6 +913,7 @@ extension FFMPEGCommandBuilder {
         // Use -shortest so video stops when audio ends (or vice versa)
         arguments.append("-shortest")
 
+        commentPlan.apply(to: &arguments)
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
@@ -988,59 +998,14 @@ extension FFMPEGCommandBuilder {
         date: Date = Date(),
         settings: CommentSettings = CommentSettings()
     ) -> String? {
-        let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        let commentText: String? = {
-            var parts: [String] = []
-            
-            if includeDateTag {
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = settings.dateFormat
-                let currentDateString = dateFormatter.string(from: date)
-                parts.append("\(settings.dateTagPrefix): \(currentDateString)")
-            }
-            
-            if !settings.prefix.isEmpty {
-                parts.append(settings.prefix)
-            }
-            
-            if !trimmedComment.isEmpty {
-                parts.append(trimmedComment)
-            }
-            
-            if !settings.suffix.isEmpty {
-                parts.append(settings.suffix)
-            }
-            
-            guard !parts.isEmpty else { return nil }
-            return parts.joined(separator: settings.separator)
-        }()
-
-        return commentText
+        CommentMetadataPlan(comment: comment, includeDateTag: includeDateTag, date: date, settings: settings).value
     }
 
     static func applyCommentMetadata(
         to ffmpegArgs: inout [String], comment: String, includeDateTag: Bool,
         settings: CommentSettings = CommentSettings()
     ) {
-        let commentText = commentMetadataValue(comment: comment, includeDateTag: includeDateTag, settings: settings)
-
-        // First, remove any existing comment metadata from the arguments
-        var index = 0
-        while index < ffmpegArgs.count - 1 {
-            if ffmpegArgs[index] == "-metadata" && ffmpegArgs[index + 1].hasPrefix("comment=") {
-                ffmpegArgs.remove(at: index + 1)
-                ffmpegArgs.remove(at: index)
-                // Don't increment index since we removed elements
-                continue
-            }
-            index += 1
-        }
-        
-        // Add the new comment metadata if we have content
-        if let commentText {
-            ffmpegArgs.append(contentsOf: ["-metadata", "comment=\(commentText)"])
-        }
+        CommentMetadataPlan(comment: comment, includeDateTag: includeDateTag, settings: settings).apply(to: &ffmpegArgs)
     }
 
     static func applyTimecode(

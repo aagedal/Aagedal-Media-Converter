@@ -59,6 +59,7 @@ actor BMXService {
     private let mxf2rawPathProvider: @Sendable () -> String?
     private var activeTranswrapID: UUID?
     private var currentTranswrapTask: Task<SubprocessResult, Error>?
+    @TaskLocal private static var runningTranswrapID: UUID?
     private var pendingTranswrapIDs: Set<UUID> = []
     private var retainedCancellationTrackingIDs: Set<UUID> = []
     private var cancelledTranswrapIDs: Set<UUID> = []
@@ -224,23 +225,19 @@ actor BMXService {
         )
     }
 
-    /// Cancels the current bmxtranswrap operation
-    func cancel() {
-        if currentTranswrapTask != nil {
-            if let activeTranswrapID {
-                cancelledTranswrapIDs.insert(activeTranswrapID)
-            }
-            currentTranswrapTask?.cancel()
-            logger.info("bmxtranswrap cancelled")
-        }
+    /// Cancels the captured operation and waits for its subprocess to drain.
+    func cancel() async {
+        guard let activeTranswrapID else { return }
+        await cancel(operationID: activeTranswrapID)
     }
 
     /// Cancels one conversion's rewrap, retaining cancellation if it arrives before
     /// that operation reaches the subprocess registration point.
-    func cancel(operationID: UUID) {
+    func cancel(operationID: UUID) async {
+        let task = activeTranswrapID == operationID ? currentTranswrapTask : nil
         if activeTranswrapID == operationID {
             cancelledTranswrapIDs.insert(operationID)
-            currentTranswrapTask?.cancel()
+            task?.cancel()
         } else if let waiterIndex = transwrapSlotWaiters.firstIndex(where: { $0.operationID == operationID }) {
             let waiter = transwrapSlotWaiters.remove(at: waiterIndex)
             waiter.continuation.resume(returning: false)
@@ -249,6 +246,11 @@ actor BMXService {
             cancelledTranswrapIDs.insert(operationID)
         }
         logger.info("bmxtranswrap operation cancelled")
+        // The rewrap owns slot release and output validation. Joining only its runner
+        // keeps queued operations independent and never clears a newer operation.
+        if Self.runningTranswrapID != operationID {
+            _ = await task?.result
+        }
     }
 
     /// Retains targeted cancellation while a conversion prepares the inputs for BMX.
@@ -351,9 +353,11 @@ actor BMXService {
         let progressParser = BMXProgressParser(progress: progress)
         activeTranswrapID = operationID
         let task = Task {
-            try await subprocessRunner.run(request) { chunk in
-                guard case .standardOutput = chunk.stream else { return }
-                progressParser.consume(chunk.data)
+            try await Self.$runningTranswrapID.withValue(operationID) {
+                try await subprocessRunner.run(request) { chunk in
+                    guard case .standardOutput = chunk.stream else { return }
+                    progressParser.consume(chunk.data)
+                }
             }
         }
         currentTranswrapTask = task

@@ -3936,7 +3936,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(cancelledResult.stderr, "bmxtranswrap cancelled")
         XCTAssertEqual(blockingRunner.cancelledCount, 1)
 
-        let stubbornRunner = ControllableBMXSubprocessRunner()
+        let stubbornCancelled = expectation(description: "Stubborn runner received cancellation")
+        let stubbornRunner = ControllableBMXSubprocessRunner(cancelled: stubbornCancelled)
         let stubbornService = BMXService(
             subprocessRunner: stubbornRunner,
             bmxtranswrapPathProvider: { "/private/tools/bmxtranswrap" }
@@ -3949,12 +3950,65 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             ) { _ in }
         }
         await stubbornRunner.waitUntilStarted(count: 1)
-        await stubbornService.cancel(operationID: stubbornRunner.firstOperationID)
-        _ = await stubbornService.finishCancellationTracking(operationID: stubbornRunner.firstOperationID)
+        let stubbornCancellation = Task { await stubbornService.cancel(operationID: stubbornRunner.firstOperationID) }
+        await fulfillment(of: [stubbornCancelled], timeout: 2)
         stubbornRunner.releaseFirst()
+        await stubbornCancellation.value
+        _ = await stubbornService.finishCancellationTracking(operationID: stubbornRunner.firstOperationID)
         let stubbornResult = await stubbornTask.value
         XCTAssertTrue(stubbornResult.cancelled)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.output.path))
+    }
+
+    func testBMXCancellationWaitsForCapturedRunnerDrain() async throws {
+        for targeted in [false, true] {
+            let fixture = try makeBMXFixture()
+            defer { try? FileManager.default.removeItem(at: fixture.directory) }
+            let started = expectation(description: "BMX runner started")
+            let cancelled = expectation(description: "BMX runner received cancellation")
+            let runner = DeferredCancellationDrainRunner(started: started, cancelled: cancelled)
+            let service = BMXService(subprocessRunner: runner, bmxtranswrapPathProvider: { "/fixture/bmxtranswrap" })
+            let operationID = UUID()
+            let resultTask = Task {
+                await service.rewrapToOP1a(inputURL: fixture.input, outputURL: fixture.output, operationID: operationID) { _ in }
+            }
+            await fulfillment(of: [started], timeout: 2)
+            let returned = expectation(description: "BMX stop waits for runner exit")
+            returned.isInverted = true
+            let cancellation = Task {
+                if targeted { await service.cancel(operationID: operationID) }
+                else { await service.cancel() }
+                returned.fulfill()
+            }
+            await fulfillment(of: [cancelled], timeout: 2)
+            await fulfillment(of: [returned], timeout: 0.05)
+            await runner.finishDraining()
+            await cancellation.value
+            let result = await resultTask.value
+            XCTAssertTrue(result.cancelled)
+        }
+    }
+
+    func testBMXCanCancelFromInsideRunnerWithoutJoiningItself() async throws {
+        for targeted in [false, true] {
+            let fixture = try makeBMXFixture()
+            defer { try? FileManager.default.removeItem(at: fixture.directory) }
+            let runner = SelfCancellingFFmpegRunner()
+            let service = BMXService(subprocessRunner: runner, bmxtranswrapPathProvider: { "/fixture/bmxtranswrap" })
+            let operationID = UUID()
+            await runner.setCancellation {
+                if targeted { await service.cancel(operationID: operationID) }
+                else { await service.cancel() }
+            }
+            let finished = expectation(description: "BMX self cancellation returns")
+            let resultTask = Task {
+                let result = await service.rewrapToOP1a(inputURL: fixture.input, outputURL: fixture.output, operationID: operationID) { _ in }
+                XCTAssertTrue(result.cancelled)
+                finished.fulfill()
+            }
+            await fulfillment(of: [finished], timeout: 2)
+            resultTask.cancel()
+        }
     }
 
     func testBMXRemembersTargetedCancellationBeforeRunnerRegistration() async throws {
@@ -9003,7 +9057,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 includeDateTag: false,
                 trimStart: nil,
                 trimEnd: nil,
-                timecodeConfig: TimecodeConfig(mode: .manual(manualTimecode))
+                timecodeConfig: TimecodeConfig(mode: .manual(manualTimecode)),
+                additionalOutputArguments: ["-timecode", sourceTimecode, "-metadata", "timecode=\(sourceTimecode)"]
             )
             try runFFmpeg(manualCommand.arguments)
 
@@ -9021,7 +9076,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 includeDateTag: false,
                 trimStart: nil,
                 trimEnd: nil,
-                timecodeConfig: nil
+                timecodeConfig: nil,
+                additionalOutputArguments: ["-timecode", sourceTimecode, "-metadata:s:v:0", "timecode=\(sourceTimecode)"]
             )
             try runFFmpeg(disabledCommand.arguments)
 
@@ -13070,6 +13126,12 @@ private actor SupersedingSubtitleSubprocessRunner: SubprocessRunning {
 }
 
 private final class ControllableBMXSubprocessRunner: SubprocessRunning, @unchecked Sendable {
+    private let cancelled: XCTestExpectation?
+
+    init(cancelled: XCTestExpectation? = nil) {
+        self.cancelled = cancelled
+    }
+
     let firstOperationID = UUID()
     let secondOperationID = UUID()
 
@@ -13089,7 +13151,11 @@ private final class ControllableBMXSubprocessRunner: SubprocessRunning, @uncheck
     ) async throws -> SubprocessResult {
         let invocation = signalStarted()
         if invocation == 1 {
-            await waitForFirstRelease()
+            await withTaskCancellationHandler {
+                await waitForFirstRelease()
+            } onCancel: {
+                cancelled?.fulfill()
+            }
         }
         let outputURL = try XCTUnwrap(bmxOutputURL(in: request))
         try Data("rewrapped-\(invocation)".utf8).write(to: outputURL)

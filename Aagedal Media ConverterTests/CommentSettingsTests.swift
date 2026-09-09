@@ -7,6 +7,111 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class CommentSettingsTests: XCTestCase {
+    func testCommentPlanResolvesOnceAndPreservesUnownedMetadata() throws {
+        let suite = "CommentSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("'captured date'", forKey: AppConstants.commentDateFormatKey)
+        defaults.set("Created", forKey: AppConstants.dateTagPrefixKey)
+        defaults.set(" - ", forKey: AppConstants.commentSeparatorKey)
+        let plan = CommentMetadataPlan(comment: " Body ", includeDateTag: true, settings: CommentSettings(defaults: defaults))
+        defaults.set("changed", forKey: AppConstants.commentDateFormatKey)
+        let original = ["-map_metadata", "0", "-metadata", "comment=old", "-metadata", "title=Keep",
+                        "-metadata:s:a:0", "comment=Track note", "-metadata", "comment=duplicate"]
+        var arguments = original
+        plan.apply(to: &arguments)
+        XCTAssertEqual(arguments.filter { $0.hasPrefix("comment=") }, ["comment=Track note", "comment=Created: captured date - Body"])
+        XCTAssertTrue(arguments.contains("title=Keep"))
+        let once = arguments
+        plan.apply(to: &arguments)
+        XCTAssertEqual(arguments, once)
+        CommentMetadataPlan.source.apply(to: &arguments)
+        XCTAssertEqual(arguments, ["-map_metadata", "0", "-metadata", "title=Keep", "-metadata:s:a:0", "comment=Track note"])
+        arguments = original
+        CommentMetadataPlan.unchanged.apply(to: &arguments)
+        XCTAssertEqual(arguments, original)
+    }
+
+    func testFinalMetadataPolicyOwnsAdditionalArgumentsAcrossVideoBranches() async throws {
+        let suite = "CommentSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = CommentSettings(defaults: defaults)
+        let codec = try XCTUnwrap(CodecExportSettings(preset: .prores, defaults: defaults))
+        let input = URL(fileURLWithPath: "/source/input.wav")
+        let output = URL(fileURLWithPath: "/output/result.mov")
+        let extra = ["-metadata", "comment=stale", "-timecode", "01:00:00:00",
+                     "-metadata", "timecode=02:00:00:00", "-metadata:s:v:0", "timecode=03:00:00:00",
+                     "-metadata", "title=Keep"]
+        for branch in 0..<3 {
+            for config in [TimecodeConfig?.none, TimecodeConfig(mode: .manual("10:20:30:12"))] {
+                let command = await FFMPEGCommandBuilder.buildCommand(
+                    inputURL: input, outputFileURL: output, preset: .prores,
+                    codecSettings: codec, commentSettings: settings,
+                    comment: "Chosen", includeDateTag: false, trimStart: nil, trimEnd: 1,
+                    timecodeConfig: config,
+                    waveformRequest: branch == 1 ? Self.waveformRequest : nil,
+                    synthesizedVideoRequest: branch == 2 ? SynthesizedVideoRequest(
+                        width: 32, height: 32, backgroundHex: "000000", frameRate: 24, includeAudio: true
+                    ) : nil,
+                    additionalOutputArguments: extra
+                )
+                XCTAssertNil(command.preparationError)
+                XCTAssertEqual(command.arguments.filter { $0.hasPrefix("comment=") }, ["comment=Chosen"])
+                XCTAssertEqual(command.arguments.filter { $0.hasPrefix("timecode=") },
+                               Array(repeating: config == nil ? "timecode=" : "timecode=10:20:30:12", count: 2))
+                XCTAssertFalse(command.arguments.contains("-timecode"))
+                XCTAssertTrue(command.arguments.contains("title=Keep"))
+                XCTAssertEqual(command.arguments.last, output.path)
+            }
+        }
+        let native = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
+            audioInputURL: input, outputFileURL: output, preset: .prores,
+            codecSettings: codec, commentSettings: settings, width: 32, height: 32, frameRate: 24,
+            trimStart: nil, trimEnd: 1, comment: "Chosen", includeDateTag: false,
+            additionalOutputArguments: ["-metadata", "comment=stale", "-metadata", "title=Keep"]
+        )
+        XCTAssertEqual(native.arguments.filter { $0.hasPrefix("comment=") }, ["comment=Chosen"])
+        XCTAssertTrue(native.arguments.contains("title=Keep"))
+    }
+
+    func testGeneratedImageSequencesOmitContainerCommentMetadata() async throws {
+        let suite = "CommentSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = ImageSequenceSettings(defaults: defaults)
+        for branch in 0..<3 {
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/source/input.wav"),
+                outputFileURL: URL(fileURLWithPath: "/output/frame_%04d.png"), preset: .imageSequence,
+                imageSequenceSettings: settings, comment: "Not a container", includeDateTag: true,
+                trimStart: nil, trimEnd: 1,
+                waveformRequest: branch == 1 ? Self.waveformRequest : nil,
+                synthesizedVideoRequest: branch == 2 ? SynthesizedVideoRequest(
+                    width: 32, height: 32, backgroundHex: "000000", frameRate: 24, includeAudio: false
+                ) : nil
+            )
+            XCTAssertFalse(command.arguments.contains { $0.hasPrefix("comment=") })
+        }
+        let native = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
+            audioInputURL: URL(fileURLWithPath: "/source/input.wav"),
+            outputFileURL: URL(fileURLWithPath: "/output/frame_%04d.png"), preset: .imageSequence,
+            imageSequenceSettings: settings, width: 32, height: 32, frameRate: 24,
+            trimStart: nil, trimEnd: 1, comment: "Not a container", includeDateTag: true
+        )
+        XCTAssertFalse(native.arguments.contains { $0.hasPrefix("comment=") })
+    }
+
+    private static var waveformRequest: WaveformVideoRequest {
+        WaveformVideoRequest(
+            width: 32, height: 32, backgroundHex: "000000", foregroundHex: "FFFFFF",
+            normalizeAudio: false, style: .linear, frameRate: 24, renderingEngine: .swift,
+            swiftStyle: .capsules, bandCount: 16, frequencyDistribution: .logarithmic,
+            foregroundGradientEnabled: false, foregroundGradientEndHex: "FFFFFF",
+            backgroundGradientEnabled: false, backgroundGradientEndHex: "000000", waveformOpacity: 1
+        )
+    }
+
     func testConfiguredTimecodePlanSeparatesProbeFailureFromExplicitRemoval() async {
         let url = URL(fileURLWithPath: "/missing/source.mov")
         let failedPreservation = await FFMPEGCommandBuilder.configuredTimecodePlan(
