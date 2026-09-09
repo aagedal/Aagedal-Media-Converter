@@ -1,5 +1,10 @@
 # v.4.3.0
 
+- **Camera-card and group imports retain filename rules and destinations through compatibility checks and metadata loading**, including master-name overrides.
+- **Watch-folder file inspection failures show recovery guidance and retry automatically.** Failed file or directory observations restart the stability check before import.
+- **Custom crop filters preserve quoted expressions and intervening operations**, with explicit ordering around built-in geometry filters.
+- **Malformed saved audio routes are rejected instead of silently restoring tracks.** Valid legacy selections, duplicates, and intentional silence remain supported.
+
 - **Custom video crops work when audio is copied**, and filters following pixel-aspect normalization retain valid crop ordering.
 - **Import filename previews retain their naming rules, counters, output folders, and containers while metadata loads.**
 - **Watch-folder scan and Trash failures show recovery guidance without repeating every poll.** Replaced or disabled sessions reject late updates, and startup errors stay visible until acknowledged.

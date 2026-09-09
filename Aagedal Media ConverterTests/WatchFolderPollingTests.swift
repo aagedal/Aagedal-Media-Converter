@@ -41,6 +41,140 @@ final class WatchFolderPollingTests: XCTestCase {
         XCTAssertTrue(messages.allSatisfy { !$0.isEmpty })
     }
 
+    func testDirectoryFailureRequiresTwoSuccessfulScansAfterRecovery() async throws {
+        enum PollingFinished: Error { case finished }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let folder = root.appendingPathComponent("watch")
+        let disconnected = root.appendingPathComponent("disconnected")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = folder.appendingPathComponent("clip.mov")
+        try Data([1]).write(to: file)
+        let completed = expectation(description: "Directory failure and recovery scanned")
+        let scan = OSAllocatedUnfairLock(initialState: 1)
+        let imports = OSAllocatedUnfairLock(initialState: [(Int, [URL])]())
+        let errors = OSAllocatedUnfairLock(initialState: [String]())
+        let manager = WatchFolderManager(pollingWait: {
+            let count = scan.withLock { value in
+                defer { value += 1 }
+                return value
+            }
+            switch count {
+            case 1:
+                try FileManager.default.moveItem(at: folder, to: disconnected)
+            case 2:
+                try FileManager.default.moveItem(at: disconnected, to: folder)
+            case 4:
+                completed.fulfill()
+                throw PollingFinished.finished
+            default:
+                break
+            }
+        })
+        await manager.startMonitoring(folderPath: folder.path, generation: 1, onNewFiles: { urls in
+            let count = scan.withLock { $0 }
+            imports.withLock { $0.append((count, urls)) }
+        }, onError: { message in
+            errors.withLock { $0.append(message) }
+        })
+        await fulfillment(of: [completed], timeout: 3)
+        await manager.stopMonitoring(generation: 2)
+        XCTAssertEqual(errors.withLock { $0.count }, 1)
+        let imported = imports.withLock { $0 }
+        XCTAssertEqual(imported.map { $0.0 }, [4])
+        XCTAssertEqual(imported.flatMap { $0.1 }, [file])
+    }
+
+    func testMetadataFailuresRetryWithoutBlockingHealthyFilesAndResetStability() async throws {
+        enum PollingFinished: Error { case finished }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let affected = folder.appendingPathComponent("affected.mov")
+        let healthy = folder.appendingPathComponent("healthy.mov")
+        try Data([1]).write(to: affected)
+        try Data([1]).write(to: healthy)
+        let completed = expectation(description: "Metadata failures and recovery scanned")
+        let scan = OSAllocatedUnfairLock(initialState: 1)
+        let errors = OSAllocatedUnfairLock(initialState: [String]())
+        let imports = OSAllocatedUnfairLock(initialState: [(Int, [URL])]())
+        let manager = WatchFolderManager(pollingWait: {
+            let count = scan.withLock { value in
+                defer { value += 1 }
+                return value
+            }
+            if count == 7 {
+                completed.fulfill()
+                throw PollingFinished.finished
+            }
+        }, readResourceValues: { url in
+            let count = scan.withLock { $0 }
+            if url == affected, [2, 3, 5].contains(count) {
+                throw CocoaError(.fileReadNoPermission)
+            }
+            return try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        })
+        await manager.startMonitoring(folderPath: folder.path, generation: 1, onNewFiles: { urls in
+            let count = scan.withLock { $0 }
+            imports.withLock { $0.append((count, urls)) }
+        }, onError: { message in
+            errors.withLock { $0.append(message) }
+        })
+        await fulfillment(of: [completed], timeout: 3)
+        await manager.stopMonitoring(generation: 2)
+        XCTAssertEqual(errors.withLock { $0.count }, 2)
+        XCTAssertTrue(errors.withLock { $0.allSatisfy { $0.contains("affected.mov") } })
+        let imported = imports.withLock { $0 }
+        XCTAssertEqual(imported.filter { $0.1.contains(affected) }.map { $0.0 }, [7])
+        XCTAssertTrue(imported.contains { $0.0 == 2 && $0.1.contains(healthy) })
+    }
+
+    func testMissingMetadataIsReportedOnceWithBoundedDetails() async throws {
+        enum PollingFinished: Error { case finished }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for index in 0..<7 {
+            try Data([1]).write(to: folder.appendingPathComponent("clip-\(index).mov"))
+        }
+        let completed = expectation(description: "Incomplete metadata retried")
+        let scans = OSAllocatedUnfairLock(initialState: 0)
+        let errors = OSAllocatedUnfairLock(initialState: [String]())
+        let manager = WatchFolderManager(pollingWait: {
+            let count = scans.withLock { value in value += 1; return value }
+            if count == 2 {
+                completed.fulfill()
+                throw PollingFinished.finished
+            }
+        }, readResourceValues: { _ in
+            URLResourceValues()
+        })
+        await manager.startMonitoring(folderPath: folder.path, generation: 1, onNewFiles: { _ in
+            XCTFail("Files without a known size must not be imported")
+        }, onError: { message in
+            errors.withLock { $0.append(message) }
+        })
+        await fulfillment(of: [completed], timeout: 3)
+        await manager.stopMonitoring(generation: 2)
+        let messages = errors.withLock { $0 }
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages.first?.components(separatedBy: ".mov:").count, 6)
+    }
+
+    func testMetadataFailureStateIsIndependentAndClearedForRemovedFiles() {
+        let url = URL(fileURLWithPath: "/watch/affected.mov")
+        var failures = WatchFolderFailureTracker()
+        XCTAssertTrue(failures.shouldReportMetadataFailure(for: url))
+        XCTAssertFalse(failures.shouldReportMetadataFailure(for: url))
+        XCTAssertTrue(failures.shouldReportCleanupFailure(for: url))
+        failures.scanSucceeded(currentFiles: [url])
+        XCTAssertFalse(failures.shouldReportMetadataFailure(for: url))
+        failures.metadataSucceeded(for: url)
+        XCTAssertTrue(failures.shouldReportMetadataFailure(for: url))
+        failures.scanSucceeded(currentFiles: [])
+        XCTAssertTrue(failures.shouldReportMetadataFailure(for: url))
+    }
+
     func testScanFailureIsReportedOnceUntilRecovery() {
         var failures = WatchFolderFailureTracker()
         XCTAssertTrue(failures.shouldReportScanFailure())

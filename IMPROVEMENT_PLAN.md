@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-09
+Last reviewed: 2026-09-10
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 750 tests pass. The
+- The unit-test baseline is green: 762 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 750 unit tests. The UI test target now has deterministic smoke
+- There are 762 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,500 entries. All 59 previously missing App Intent
+- The string catalog has 1,502 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -1292,6 +1292,14 @@ missing-directory scans, recovery, failed replacement, and delayed picker comple
 Legacy read-only bookmark renewal and per-file metadata-read diagnostics remain open
 (Codex, 2026-09-09).
 
+Watch-folder per-file resource inspection now reports deduplicated recovery guidance
+while healthy files continue importing. Alerts show at most five file details plus an
+overflow count, with Norwegian translations. A failed file or directory observation
+resets stability so recovery requires two successful scans. Four regressions cover
+deduplication, recovery/removal, incomplete values, bounded details, healthy-file
+progress, and directory failure recovery. Legacy read-only grant renewal and the wider
+filesystem audit remain open (Codex, 2026-09-10).
+
 ### 3.1 Split orchestration from state and views
 
 Status: in progress; queue decisions and bulk state transitions extracted 2026-09-05 (Codex).
@@ -1521,6 +1529,14 @@ option boundaries, optional companion inputs, round trips, and unknown/incomplet
 custom forms. Typed filters, codecs, outputs, and wider incompatible-option preflight
 remain open (Codex, 2026-09-09).
 
+Crop ordering now resolves through a typed stage plan that preserves raw custom
+expressions and recognizes exact built-in geometry stages. Quote/escape-aware
+boundaries prevent filter-like text inside expressions from becoming insertion points;
+only an adjacent built-in DAR/SAR pair can be replaced, preserving intervening custom
+operations. Three regressions cover quoted and escaped text, intervening operations,
+and output scales containing commas. Full typed codec/output plans and broader
+filter ownership/preflight remain open (Codex, 2026-09-10).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1741,6 +1757,16 @@ capture a stable snapshot before their first await. Two regressions cover a susp
 import with preference edits and image-sequence frame-rate naming. Camera-group
 placeholder creation and later detail batches still capture separate snapshots; broader
 feature settings and migrations remain open (Codex, 2026-09-09).
+
+Camera-card imports, compatibility checks, auto-split/force-merge, and group additions
+now retain one `VideoGroupImportContext` through placeholder and detail preparation.
+Master-name overrides use the same captured destination/container and filename rules.
+Two regressions cover edits before/between suspended detail batches and master-name
+preservation. Audio-routing schema decoding now migrates only absent keys: malformed
+modern or legacy routes throw instead of silently restoring source tracks. Three
+regressions preserve valid legacy ordering, duplicates, intentional silence, modern
+precedence, and round trips. Broader feature settings and migrations remain open
+(Codex, 2026-09-10).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -2061,7 +2087,38 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-09, Codex): Debug compilation and all 750 unit tests pass
+Latest validation (2026-09-10, Codex): Debug compilation and all 762 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Twelve new regressions
+cover typed crop ordering, quoted/escaped custom expressions, camera/group import
+naming snapshots, strict audio-routing schema migration, and watcher file/directory
+inspection recovery. All 43 release-script tests, manifest freshness, and localization
+checks pass (1,502 catalog entries, 15 intentional omissions). The unsigned Release
+build passes; its bundle audit verifies all 44 Mach-O images and six packaged license
+notices. No bundled binaries or license assignments changed.
+
+Independent review found no further introduced naming, filter, routing, or watcher
+regressions. Directory scan failure stability was corrected during review and included
+in the final rebuilt suite. The initial sandboxed build could not write Xcode caches;
+the authorized Xcode run passed.
+
+UI smoke validation remains unverified for this batch: the locally signed runner
+timed out enabling macOS automation before any assertions. A retry with normal
+development signing stalled after runner signing and was stopped without test results.
+No manual preview, sandbox reauthorization, or screenshot review was completed.
+
+Remaining implementation work: broader typed filters, codecs, outputs, additional input
+forms, and preflight; orchestration extraction, feature settings and schema migrations;
+full package orchestration and converter-owned framework/MCA cancellation draining;
+wider actor/UI binding and filesystem audits, including legacy read-only watcher grant
+renewal; multi-process subtitle coordination and remote destination alias/cross-protocol
+coordination; generated AV2 video; accurate Matroska channel-layout labels; and IMF
+descriptor conformance. Manual MPV playback, Shortcuts, sandbox relaunch/reauthorization,
+real OCR and external-volume subtitles, configured remote uploads, VoiceOver, broader
+bilingual/scrolled UI, live capture/editor checks, runtime memory/dynamic dependency
+measurements, clean-machine installation/update, complete dependency provenance
+(99 unresolved license entries), and credentialed release validation remain.
+
+Previous validation (2026-09-09, Codex): Debug compilation and all 750 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Fifteen new regressions
 cover custom crop filters and generated RGB pixels, BMX probe cancellation/cache
 ownership, import naming snapshots, and watch-folder error recovery/session lifetime.

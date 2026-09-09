@@ -7428,6 +7428,46 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testCropDoesNotInterpretQuotedOrEscapedCustomFilterText() throws {
+        let chains = [
+            "drawtext=text='label,setsar=1/1,scale=w=100:100',format=yuv420p",
+            "drawtext=text='scale=trunc(ih*dar/2)*2:trunc(ih/2)*2,setsar=1/1',format=yuv420p",
+            #"drawtext=text=label\,setsar=1/1,format=yuv420p"#,
+            #"drawtext=text='label'\''value,setsar=1/1',format=yuv420p"#
+        ]
+        for chain in chains {
+            var args = ["-vf", chain]
+            FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &args,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+                sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+            )
+            XCTAssertEqual(try videoFilter(in: args), "crop=32:48:32:0,\(chain)")
+        }
+    }
+
+    func testCropPreservesCustomStagesBetweenDisplayNormalizationAndSAR() throws {
+        let chain = "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',hflip,setsar=1/1"
+        var args = ["-vf", chain]
+        FFMPEGCommandBuilder.applyCropToVideoFilter(
+            &args,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+            sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+        )
+        XCTAssertEqual(try videoFilter(in: args), "crop=32:48:32:0,\(chain)")
+    }
+
+    func testCropPrecedesFirstOutputScaleWithQuotedCommaExpressions() throws {
+        let scale = "scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'"
+        var args = ["-vf", scale]
+        FFMPEGCommandBuilder.applyCropToVideoFilter(
+            &args,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+            sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+        )
+        XCTAssertEqual(try videoFilter(in: args), "crop=32:48:32:0,\(scale)")
+    }
+
     func testGeneratedCustomFilterCropWithCopiedAudioProducesExpectedPixels() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

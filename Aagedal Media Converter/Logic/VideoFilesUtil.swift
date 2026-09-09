@@ -411,14 +411,15 @@ struct VideoFileUtils: Sendable {
 
     static func makeOutputURL(
         for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil,
-        imageSequenceFrameRate: Double? = nil, namingSettings: VideoImportNamingSettings
+        imageSequenceFrameRate: Double? = nil, namingSettings: VideoImportNamingSettings,
+        override: String? = nil
     ) -> URL? {
         let resolvedOutputFolder = namingSettings.destination.resolveFolder(
             for: url, defaultOutputFolder: outputFolder, presetSuffix: namingSettings.context.presetSuffix
         )
         guard let resolvedOutputFolder else { return nil }
         let nameParts = FileNameProcessor.outputNameParts(
-            inputURL: url, counter: counter, preset: preset, settings: namingSettings.fileName,
+            inputURL: url, override: override, counter: counter, preset: preset, settings: namingSettings.fileName,
             context: namingSettings.namingContext(preset: preset, imageSequenceFrameRate: imageSequenceFrameRate),
             date: namingSettings.date
         )

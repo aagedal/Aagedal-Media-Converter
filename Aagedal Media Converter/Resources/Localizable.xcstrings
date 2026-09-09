@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Additional files affected: %lld": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Flere berørte filer: %lld"
+        }
+      }
+    }
+  },
+  "Some watch-folder files could not be inspected. Check their permissions or reconnect the drive. Monitoring will retry automatically. %@": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Noen filer i overvåkingsmappen kunne ikke undersøkes. Kontroller filtillatelsene eller koble til stasjonen igjen. Overvåkingen prøver igjen automatisk. %@"
+        }
+      }
+    }
+  },
   "The watch folder could not be scanned. Reconnect its drive or select the folder again in Settings. Monitoring will retry automatically. %@": {
     "localizations": {
       "nb": {

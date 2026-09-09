@@ -253,6 +253,87 @@ final class ConversionPreparationSettingsTests: XCTestCase {
         XCTAssertEqual(imported?.customCounterValue, 7)
     }
 
+    @MainActor
+    func testCameraGroupNamingSurvivesCompatibilityAndDetailBatchSuspensions() async throws {
+        let suite = "CameraGroupNamingTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("card_{sourceName}_{counter}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(2, forKey: AppConstants.customFileNameCounterPaddingKey)
+        defaults.set(false, forKey: AppConstants.fileNameIncludePresetSuffixKey)
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
+        let context = VideoGroupImportContext(preset: .h264, outputFolder: "/captured", defaults: defaults)
+        var first = try XCTUnwrap(context.makePlaceholder(
+            from: URL(fileURLWithPath: "/card/first.mp4"), reserveCounter: { 7 }
+        ))
+        var second = try XCTUnwrap(context.makePlaceholder(
+            from: URL(fileURLWithPath: "/card/second.mp4"), reserveCounter: { 8 }
+        ))
+        let initialURLs = [first.outputURL, second.outputURL]
+
+        // Compatibility probing can suspend before the first detail batch starts.
+        defaults.set("changed", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(CodecContainer.mp4.rawValue, forKey: AppConstants.h264ContainerKey)
+        let gate = SettingsPreparationDetailsGate()
+        let started = expectation(description: "First group detail suspended")
+        let capturedFirst = first
+        let task = Task {
+            await context.loadDetails(for: capturedFirst) { url, folder, preset, counter, naming in
+                let details = await gate.wait(started: started)
+                return VideoFileUtils.VideoItemDetails(
+                    size: details.size, duration: details.duration, durationSeconds: details.durationSeconds,
+                    thumbnailData: nil,
+                    outputURL: VideoFileUtils.makeOutputURL(
+                        for: url, outputFolder: folder, preset: preset, counter: counter, namingSettings: naming
+                    ), hasVideoStream: true, metadata: nil
+                )
+            }
+        }
+        await fulfillment(of: [started], timeout: 3)
+        defaults.set("changed_again", forKey: AppConstants.customFileNameTemplateKey)
+        await gate.finish()
+        first.apply(details: await task.value)
+        let secondDetails = await context.loadDetails(for: second) { url, folder, preset, counter, naming in
+            VideoFileUtils.VideoItemDetails(
+                size: 42, duration: "00:01", durationSeconds: 1, thumbnailData: nil,
+                outputURL: VideoFileUtils.makeOutputURL(
+                    for: url, outputFolder: folder, preset: preset, counter: counter, namingSettings: naming
+                ), hasVideoStream: true, metadata: nil
+            )
+        }
+        second.apply(details: secondDetails)
+        XCTAssertEqual([first.outputURL, second.outputURL], initialURLs)
+        XCTAssertEqual(first.outputURL?.path, "/captured/card_first_07.mov")
+        XCTAssertEqual(second.outputURL?.path, "/captured/card_second_08.mov")
+        XCTAssertEqual(second.size, 42)
+    }
+
+    @MainActor
+    func testCameraMasterNameUsesCapturedDestinationAndContainerAfterCompatibilityProbe() throws {
+        let suite = "CameraGroupNamingTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalSubfolderKey)
+        defaults.set("custom", forKey: AppConstants.saveNextToOriginalSubfolderModeKey)
+        defaults.set("masters", forKey: AppConstants.saveNextToOriginalSubfolderNameKey)
+        defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
+        let context = VideoGroupImportContext(preset: .h264, outputFolder: "/fallback", defaults: defaults)
+        var item = try XCTUnwrap(context.makePlaceholder(from: URL(fileURLWithPath: "/card/clip.mp4")))
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(CodecContainer.mp4.rawValue, forKey: AppConstants.h264ContainerKey)
+        item.outputFileNameOverride = "Master"
+        item.outputURL = context.outputURL(for: item)
+        item.apply(details: VideoFileUtils.VideoItemDetails(
+            size: 42, duration: "00:01", durationSeconds: 1, thumbnailData: nil,
+            outputURL: URL(fileURLWithPath: "/different/clip.mp4"), hasVideoStream: true, metadata: nil
+        ))
+        XCTAssertEqual(item.outputURL?.path, "/card/masters/Master.mov")
+    }
+
     func testImportImageSequenceFrameRateUsesMetadataWithCapturedTemplate() throws {
         let suite = "ImportPreviewSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

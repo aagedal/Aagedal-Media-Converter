@@ -66,6 +66,52 @@ struct VideoImportNamingSettings: Sendable {
     }
 }
 
+/// One camera/group import keeps its preview policy through compatibility probes and
+/// delayed detail batches, including the output folder selected when it began.
+struct VideoGroupImportContext: Sendable {
+    let preset: ExportPreset
+    let outputFolder: String?
+    let settings: VideoImportSettings
+    let naming: VideoImportNamingSettings
+
+    init(preset: ExportPreset, outputFolder: String?, defaults: UserDefaults = .standard) {
+        self.preset = preset
+        self.outputFolder = outputFolder
+        settings = VideoImportSettings(defaults: defaults)
+        naming = VideoImportNamingSettings(preset: preset, defaults: defaults)
+    }
+
+    @MainActor
+    func makePlaceholder(
+        from url: URL,
+        reserveCounter: @MainActor @Sendable () -> Int? = { FileNameProcessor.nextCounterValue() }
+    ) -> VideoItem? {
+        VideoFileUtils.makePlaceholderItem(
+            from: url, outputFolder: outputFolder, preset: preset,
+            settings: settings, namingSettings: naming, reserveCounter: reserveCounter
+        )
+    }
+
+    func outputURL(for item: VideoItem) -> URL? {
+        VideoFileUtils.makeOutputURL(
+            for: item.url, outputFolder: outputFolder, preset: preset,
+            counter: item.customCounterValue, namingSettings: naming,
+            override: item.outputFileNameOverride
+        )
+    }
+
+    func loadDetails(
+        for item: VideoItem,
+        loader: @Sendable (URL, String?, ExportPreset, Int?, VideoImportNamingSettings) async -> VideoFileUtils.VideoItemDetails = { url, folder, preset, counter, naming in
+            await VideoFileUtils.loadDetails(
+                for: url, outputFolder: folder, preset: preset, counter: counter, namingSettings: naming
+            )
+        }
+    ) async -> VideoFileUtils.VideoItemDetails {
+        await loader(item.url, outputFolder, preset, item.customCounterValue, naming)
+    }
+}
+
 /// Preferences shared by request preparation, output naming, and execution.
 /// Capture before metadata or merge preparation suspends; item metadata can then
 /// select a generated-video request without consulting preferences again.

@@ -21,8 +21,16 @@ actor WatchFolderManager {
     private var reportedFailures = WatchFolderFailureTracker()
     private let pollingWait: @Sendable () async throws -> Void
 
-    init(pollingWait: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(5)) }) {
+    private let readResourceValues: @Sendable (URL) throws -> URLResourceValues
+
+    init(
+        pollingWait: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(5)) },
+        readResourceValues: @escaping @Sendable (URL) throws -> URLResourceValues = {
+            try $0.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey])
+        }
+    ) {
         self.pollingWait = pollingWait
+        self.readResourceValues = readResourceValues
     }
 
     /// Replaces monitoring atomically; late commands from older sessions are ignored.
@@ -83,6 +91,9 @@ actor WatchFolderManager {
         do {
             fileURLs = try WatchFolderDirectoryContents.list(in: folderURL)
         } catch {
+            // Lost visibility breaks every stability streak. After recovery,
+            // require two successful observations before importing any file.
+            trackedFiles.removeAll()
             Self.logger.error("Failed to enumerate watch folder \(folderPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             if reportedFailures.shouldReportScanFailure() {
                 onError(String(localized: "The watch folder could not be scanned. Reconnect its drive or select the folder again in Settings. Monitoring will retry automatically. \(error.localizedDescription)"))
@@ -91,7 +102,16 @@ actor WatchFolderManager {
         }
         reportedFailures.scanSucceeded(currentFiles: Set(fileURLs))
         var cleanupFailures: [String] = []
+        var metadataFailures: [String] = []
+        var metadataFailureCount = 0
         defer {
+            if metadataFailureCount > 0 {
+                var detail = metadataFailures.joined(separator: "\n")
+                if metadataFailureCount > metadataFailures.count {
+                    detail += "\n" + String(localized: "Additional files affected: \(metadataFailureCount - metadataFailures.count)")
+                }
+                onError(String(localized: "Some watch-folder files could not be inspected. Check their permissions or reconnect the drive. Monitoring will retry automatically. \(detail)"))
+            }
             if !cleanupFailures.isEmpty {
                 let detail = cleanupFailures.joined(separator: "\n")
                 onError(String(localized: "Some old watch-folder files could not be moved to Trash. Check folder permissions or select the folder again in Settings. Cleanup will retry automatically. \(detail)"))
@@ -108,9 +128,31 @@ actor WatchFolderManager {
                 continue
             }
             
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey]),
-                  resourceValues.isRegularFile == true,
-                  let fileSize = resourceValues.fileSize else {
+            let resourceValues: URLResourceValues
+            let fileSize: Int
+            do {
+                resourceValues = try readResourceValues(fileURL)
+                // Directories and other non-regular entries are intentionally skipped.
+                if resourceValues.isRegularFile == false {
+                    reportedFailures.metadataSucceeded(for: fileURL)
+                    continue
+                }
+                guard resourceValues.isRegularFile == true,
+                      let size = resourceValues.fileSize, size >= 0 else {
+                    throw CocoaError(.fileReadUnknown)
+                }
+                fileSize = size
+                reportedFailures.metadataSucceeded(for: fileURL)
+            } catch {
+                if reportedFailures.shouldReportMetadataFailure(for: fileURL) {
+                    Self.logger.error("Failed to inspect watch folder file \(fileURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    metadataFailureCount += 1
+                    if metadataFailures.count < 5 {
+                        metadataFailures.append("\(fileURL.lastPathComponent): \(error.localizedDescription)")
+                    }
+                }
+                // Failed observations must break the stability streak. A recovered
+                // file needs two successful scans before it can be imported.
                 continue
             }
 
@@ -269,6 +311,7 @@ private extension WatchFolderManager {
 struct WatchFolderFailureTracker {
     private var scanFailed = false
     private var cleanupFailures: Set<URL> = []
+    private var metadataFailures: Set<URL> = []
 
     mutating func shouldReportScanFailure() -> Bool {
         defer { scanFailed = true }
@@ -278,6 +321,15 @@ struct WatchFolderFailureTracker {
     mutating func scanSucceeded(currentFiles: Set<URL>) {
         scanFailed = false
         cleanupFailures.formIntersection(currentFiles)
+        metadataFailures.formIntersection(currentFiles)
+    }
+
+    mutating func shouldReportMetadataFailure(for url: URL) -> Bool {
+        metadataFailures.insert(url).inserted
+    }
+
+    mutating func metadataSucceeded(for url: URL) {
+        metadataFailures.remove(url)
     }
 
     mutating func shouldReportCleanupFailure(for url: URL) -> Bool {

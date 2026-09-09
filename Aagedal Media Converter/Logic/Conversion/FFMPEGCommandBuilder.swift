@@ -2088,60 +2088,111 @@ extension FFMPEGCommandBuilder {
             logger.info("Added anamorphic scaling to crop filter: PAR \(par) -> \(finalWidth)x\(finalHeight)")
         }
 
-        // Insert crop into filter chain
-        if filterChain.isEmpty {
-            // No existing filters, just use crop
-            filterChain = cropFilter
-        } else if let desqueezeRange = (filterChain.range(of: "scale='trunc(ih*dar") ?? filterChain.range(of: "scale=trunc(ih*dar")) {
-            // Built-in presets start by normalizing display aspect ratio (DAR) into square pixels.
-            // The crop rect is stored in source-pixel coordinates, so crop must happen before any
-            // normalization. When metadata supplied an effective PAR, replace the metadata-driven
-            // desqueeze with the explicit normalization above. If PAR is unavailable, preserve the
-            // DAR-based filter and insert crop before it so FFmpeg can derive the display geometry.
-            let beforeDesqueeze = String(filterChain[..<desqueezeRange.lowerBound])
-            let afterDesqueezeStart = String(filterChain[desqueezeRange.lowerBound...])
-
-            if !hasKnownPixelAspectRatio {
-                filterChain = joinedFilterSegments([beforeDesqueeze, cropFilter, afterDesqueezeStart])
-            } else if let setsarRange = afterDesqueezeStart.range(of: ",setsar=1/1") {
-                let afterSetsar = String(afterDesqueezeStart[setsarRange.upperBound...])
-                let normalizedCropFilter = needsAnamorphicNormalization
-                    ? cropFilter
-                    : "\(cropFilter),setsar=1/1"
-                filterChain = joinedFilterSegments([beforeDesqueeze, normalizedCropFilter, afterSetsar])
-            } else {
-                // An unfamiliar DAR filter is safer to preserve than partially remove.
-                filterChain = joinedFilterSegments([beforeDesqueeze, cropFilter, afterDesqueezeStart])
-            }
-        } else if let scaleRange = filterChain.range(of: ",scale=w=") {
-            // Insert crop AFTER setsar, BEFORE final scale
-            let beforeScale = filterChain[..<scaleRange.lowerBound]
-            let afterSetsar = filterChain[scaleRange.lowerBound...]
-            filterChain = "\(beforeScale),\(cropFilter)\(afterSetsar)"
-        } else if let setsarRange = filterChain.range(of: "setsar=1/1"),
-                  setsarRange.upperBound == filterChain.endIndex || filterChain[setsarRange.upperBound] == "," {
-            // String range upper bounds are exclusive. Keeping the separator in
-            // both slices would introduce an empty filter before the crop.
-            filterChain = joinedFilterSegments([
-                String(filterChain[..<setsarRange.upperBound]),
-                cropFilter,
-                String(filterChain[setsarRange.upperBound...])
-            ])
-        } else {
-            // Last resort: prepend to filter chain
-            filterChain = "\(cropFilter),\(filterChain)"
-        }
-
-        // Update args
+        var plan = CropVideoFilterPlan(filterChain)
+        plan.insertCrop(
+            cropFilter,
+            hasKnownPixelAspectRatio: hasKnownPixelAspectRatio,
+            includesSquarePixelNormalization: needsAnamorphicNormalization && hasKnownPixelAspectRatio
+        )
+        filterChain = plan.rendered
         ffmpegArgs[vfIndex + 1] = filterChain
         logger.info("Applied crop to video filter chain: \(filterChain, privacy: .public)")
     }
 
-    private static func joinedFilterSegments(_ segments: [String]) -> String {
-        segments
-            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ",")) }
-            .filter { !$0.isEmpty }
-            .joined(separator: ",")
+    /// Orders crop relative to the app's geometry stages without interpreting custom filter values.
+    /// Keep raw stage text: commas and stage-like strings inside quotes or escapes belong to the
+    /// custom filter, and must never become insertion points or replacement boundaries.
+    private struct CropVideoFilterPlan {
+        private enum Stage {
+            case displayNormalization(String)
+            case squarePixelAspect(String)
+            case outputScale(String)
+            case custom(String)
+
+            init(_ raw: String) {
+                switch raw {
+                case "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2'",
+                     "scale=trunc(ih*dar/2)*2:trunc(ih/2)*2":
+                    self = .displayNormalization(raw)
+                case "setsar=1/1":
+                    self = .squarePixelAspect(raw)
+                default:
+                    self = raw.hasPrefix("scale=w=") ? .outputScale(raw) : .custom(raw)
+                }
+            }
+
+            var raw: String {
+                switch self {
+                case .displayNormalization(let raw), .squarePixelAspect(let raw),
+                     .outputScale(let raw), .custom(let raw):
+                    return raw
+                }
+            }
+        }
+
+        private var stages: [Stage]
+
+        init(_ chain: String) {
+            var segments: [String] = []
+            var start = chain.startIndex
+            var quoted = false
+            var escaped = false
+            for index in chain.indices {
+                let character = chain[index]
+                if escaped {
+                    escaped = false
+                } else if character == "'" {
+                    quoted.toggle()
+                } else if character == "\\" && !quoted {
+                    escaped = true
+                } else if character == "," && !quoted {
+                    segments.append(String(chain[start..<index]))
+                    start = chain.index(after: index)
+                }
+            }
+            // An incomplete custom expression is opaque; do not partially rewrite its contents.
+            if quoted || escaped {
+                stages = [.custom(chain)]
+            } else {
+                if !chain.isEmpty { segments.append(String(chain[start...])) }
+                stages = segments.map(Stage.init)
+            }
+        }
+
+        mutating func insertCrop(
+            _ crop: String,
+            hasKnownPixelAspectRatio: Bool,
+            includesSquarePixelNormalization: Bool
+        ) {
+            if let index = stages.firstIndex(where: {
+                if case .displayNormalization = $0 { return true }
+                return false
+            }) {
+                // Only replace the exact adjacent pair emitted by built-in presets. Searching
+                // forward for SAR could otherwise delete intervening custom filters.
+                if hasKnownPixelAspectRatio, index + 1 < stages.count,
+                   case .squarePixelAspect = stages[index + 1] {
+                    let replacement = includesSquarePixelNormalization ? crop : "\(crop),setsar=1/1"
+                    stages.replaceSubrange(index...index + 1, with: [.custom(replacement)])
+                } else {
+                    stages.insert(.custom(crop), at: index)
+                }
+            } else if let index = stages.firstIndex(where: {
+                if case .outputScale = $0 { return true }
+                return false
+            }) {
+                stages.insert(.custom(crop), at: index)
+            } else if let index = stages.firstIndex(where: {
+                if case .squarePixelAspect = $0 { return true }
+                return false
+            }) {
+                stages.insert(.custom(crop), at: index + 1)
+            } else {
+                stages.insert(.custom(crop), at: 0)
+            }
+        }
+
+        var rendered: String { stages.map(\.raw).joined(separator: ",") }
     }
 
     // MARK: - Conformance Merge Encoding

@@ -67,6 +67,48 @@ final class AudioRoutingPlanTests: XCTestCase {
         }
     }
 
+    func testLegacyRoutingMigrationRetainsOrderDuplicatesAndIntentionalSilence() throws {
+        for indices in [[1, 0, 1], []] {
+            let decoded = try decodeRoute(["outputTrackIndices": indices])
+            XCTAssertEqual(decoded.outputTracks.map(\.streamIndex), indices)
+            let encoded = try JSONEncoder().encode(decoded)
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            XCTAssertNil(object["outputTrackIndices"])
+            let restored = try JSONDecoder().decode(AudioRoutingConfig.self, from: encoded)
+            XCTAssertEqual(restored.outputTracks, decoded.outputTracks)
+        }
+        XCTAssertEqual(try decodeRoute([:]).outputTracks.map(\.streamIndex), [0, 1])
+    }
+
+    func testModernRoutingTakesPrecedenceOverLegacySelectionIncludingSilence() throws {
+        let config = AudioRoutingConfig(inputTracks: tracks, outputTracks: [
+            OutputTrack(streamIndex: 1, downmixToStereo: true), OutputTrack(streamIndex: 1)
+        ])
+        let encoded = try JSONEncoder().encode(config)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object["outputTrackIndices"] = [0]
+        let restored = try decodeRoute(object)
+        XCTAssertEqual(restored.outputTracks, config.outputTracks)
+        object["outputTracks"] = []
+        XCTAssertTrue(try decodeRoute(object).outputTracks.isEmpty)
+    }
+
+    func testCorruptRoutingDoesNotSilentlyRestoreTracks() throws {
+        for value: Any in [NSNull(), "invalid", [["streamIndex": "invalid"]]] {
+            XCTAssertThrowsError(try decodeRoute(["outputTracks": value, "outputTrackIndices": [0]]))
+            XCTAssertThrowsError(try decodeRoute(["outputTracks": value]))
+        }
+        for value: Any in [NSNull(), "invalid", ["invalid"]] {
+            XCTAssertThrowsError(try decodeRoute(["outputTrackIndices": value]))
+        }
+    }
+
+    private func decodeRoute(_ fields: [String: Any]) throws -> AudioRoutingConfig {
+        var object = fields
+        object["inputTracks"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(tracks))
+        return try JSONDecoder().decode(AudioRoutingConfig.self, from: JSONSerialization.data(withJSONObject: object))
+    }
+
     private var tracks: [AudioTrackInfo] {
         [
             AudioTrackInfo(streamIndex: 0, channels: 2, channelLayout: "stereo", codec: "pcm_s16le", codecLongName: nil, sampleRate: 48000),

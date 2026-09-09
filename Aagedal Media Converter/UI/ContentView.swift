@@ -1031,6 +1031,7 @@ struct ContentView: View {
     @State private var cardCompatibilityCheckID: UUID?
     @State private var showCardConformanceMergeDialog = false
     @State private var cardConformanceItems: [VideoItem] = []
+    @State private var cardConformanceImportContext: VideoGroupImportContext?
     @State private var cardConformanceMetadata: [UUID: VideoMetadata] = [:]
 
     private struct CameraCardImportState: Identifiable {
@@ -1084,6 +1085,7 @@ struct ContentView: View {
         let uploadEnabled = cameraCardUploadEnabled
         let masterName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cardPreset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let importContext = VideoGroupImportContext(preset: cardPreset, outputFolder: outputFolder)
 
         let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
         defer {
@@ -1097,26 +1099,22 @@ struct ContentView: View {
         // Build VideoItems for the group
         var groupItems: [VideoItem] = []
         for url in state.videoURLs {
-            if var item = VideoFileUtils.makePlaceholderItem(
-                from: url,
-                outputFolder: outputFolder,
-                preset: cardPreset
-            ) {
+            if var item = importContext.makePlaceholder(from: url) {
                 if uploadEnabled {
                     item.uploadEnabled = true
                 }
                 if !masterName.isEmpty {
-                    let processedName = FileNameProcessor.processFileName(masterName)
+                    let processedName = FileNameProcessor.processFileName(masterName, settings: importContext.naming.fileName)
                     if concatEnabled {
                         // For concat, only the first item needs the master name override
                         if groupItems.isEmpty {
                             item.outputFileNameOverride = processedName
-                            item.outputURL = expectedOutputURL(for: item, preset: cardPreset)
+                            item.outputURL = importContext.outputURL(for: item)
                         }
                     } else {
                         let sequenceName = String(format: "%@_%03d", processedName, groupItems.count + 1)
                         item.outputFileNameOverride = sequenceName
-                        item.outputURL = expectedOutputURL(for: item, preset: cardPreset)
+                        item.outputURL = importContext.outputURL(for: item)
                     }
                 }
                 groupItems.append(item)
@@ -1141,7 +1139,7 @@ struct ContentView: View {
         // Load details (thumbnails, duration, metadata) in background
         let itemIDs = groupItems.map { $0.id }
         Task {
-            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, preset: cardPreset)
+            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, context: importContext)
         }
 
         if cameraCardAutoEncodeEnabled {
@@ -1164,6 +1162,7 @@ struct ContentView: View {
         let urls = state.videoURLs
         let folderURL = state.folderURL
         let preset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let importContext = VideoGroupImportContext(preset: preset, outputFolder: outputFolder)
         let checkID = UUID()
         cardCompatibilityCheckID = checkID
 
@@ -1172,7 +1171,7 @@ struct ContentView: View {
             defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
 
             var tempItems = urls.compactMap {
-                VideoFileUtils.makePlaceholderItem(from: $0, outputFolder: outputFolder, preset: preset)
+                importContext.makePlaceholder(from: $0)
             }
             var metadataMap: [UUID: VideoMetadata] = [:]
 
@@ -1201,6 +1200,7 @@ struct ContentView: View {
                 cardCompatibilityCheckID = nil
                 // Store for conformance merge dialog
                 cardConformanceItems = tempItems
+                cardConformanceImportContext = importContext
                 cardConformanceMetadata = metadataMap
             }
         }
@@ -1221,6 +1221,7 @@ struct ContentView: View {
         let uploadEnabled = cameraCardUploadEnabled
         let masterName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cardPreset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let importContext = VideoGroupImportContext(preset: cardPreset, outputFolder: outputFolder)
 
         let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { state.folderURL.stopAccessingSecurityScopedResource() } }
@@ -1232,7 +1233,7 @@ struct ContentView: View {
         // Build items and gather their independent metadata probes concurrently so the
         // operation has one 15-second probe window regardless of card size.
         var allItems = state.videoURLs.compactMap {
-            VideoFileUtils.makePlaceholderItem(from: $0, outputFolder: outputFolder, preset: cardPreset)
+            importContext.makePlaceholder(from: $0)
         }
         if uploadEnabled {
             for index in allItems.indices {
@@ -1309,16 +1310,16 @@ struct ContentView: View {
             var namedItems = groupItems
             for i in namedItems.indices {
                 if !masterName.isEmpty {
-                    let processedName = FileNameProcessor.processFileName(groupName)
+                    let processedName = FileNameProcessor.processFileName(groupName, settings: importContext.naming.fileName)
                     if namedItems.count > 1 {
                         // Concat group — only first item gets the name override
                         if i == 0 {
                             namedItems[i].outputFileNameOverride = processedName
-                            namedItems[i].outputURL = expectedOutputURL(for: namedItems[i], preset: cardPreset)
+                            namedItems[i].outputURL = importContext.outputURL(for: namedItems[i])
                         }
                     } else {
                         namedItems[i].outputFileNameOverride = processedName
-                        namedItems[i].outputURL = expectedOutputURL(for: namedItems[i], preset: cardPreset)
+                        namedItems[i].outputURL = importContext.outputURL(for: namedItems[i])
                     }
                 }
             }
@@ -1337,7 +1338,7 @@ struct ContentView: View {
 
             let itemIDs = namedItems.map { $0.id }
             Task {
-                await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, preset: cardPreset)
+                await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, context: importContext)
             }
         }
 
@@ -1352,12 +1353,13 @@ struct ContentView: View {
 
     @MainActor
     private func performCameraCardForceMerge(referenceItemID: UUID) async {
-        guard let state = cameraCardImportState else { return }
+        guard let state = cameraCardImportState,
+              let importContext = cardConformanceImportContext else { return }
         cameraCardImportState = nil
 
         let uploadEnabled = cameraCardUploadEnabled
         let masterName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cardPreset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let cardPreset = importContext.preset
 
         let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { state.folderURL.stopAccessingSecurityScopedResource() } }
@@ -1371,10 +1373,10 @@ struct ContentView: View {
         for i in groupItems.indices {
             if uploadEnabled { groupItems[i].uploadEnabled = true }
             if !masterName.isEmpty {
-                let processedName = FileNameProcessor.processFileName(masterName)
+                let processedName = FileNameProcessor.processFileName(masterName, settings: importContext.naming.fileName)
                 if i == 0 {
                     groupItems[i].outputFileNameOverride = processedName
-                    groupItems[i].outputURL = expectedOutputURL(for: groupItems[i], preset: cardPreset)
+                    groupItems[i].outputURL = importContext.outputURL(for: groupItems[i])
                 }
             }
         }
@@ -1399,7 +1401,7 @@ struct ContentView: View {
 
         let itemIDs = groupItems.map { $0.id }
         Task {
-            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, preset: cardPreset)
+            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, context: importContext)
         }
 
         if cameraCardAutoEncodeEnabled {
@@ -1428,6 +1430,7 @@ struct ContentView: View {
         guard response == .OK, !panel.urls.isEmpty else { return }
 
         let groupPreset = encodingGroups[groupIndex].preset ?? selectedPreset
+        let importContext = VideoGroupImportContext(preset: groupPreset, outputFolder: outputFolder)
         var newItemIDs: [UUID] = []
 
         for url in panel.urls {
@@ -1435,18 +1438,14 @@ struct ContentView: View {
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
             if hasAccess { url.stopAccessingSecurityScopedResource() }
 
-            if let item = VideoFileUtils.makePlaceholderItem(
-                from: url,
-                outputFolder: outputFolder,
-                preset: groupPreset
-            ) {
+            if let item = importContext.makePlaceholder(from: url) {
                 newItemIDs.append(item.id)
                 encodingGroups[groupIndex].items.append(item)
             }
         }
 
         // Load details asynchronously for added items
-        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, preset: groupPreset)
+        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, context: importContext)
     }
 
     /// Appends files dropped from Finder directly onto a group header.
@@ -1459,6 +1458,7 @@ struct ContentView: View {
 
         let supported = AppConstants.supportedVideoExtensions
         let groupPreset = encodingGroups[groupIndex].preset ?? selectedPreset
+        let importContext = VideoGroupImportContext(preset: groupPreset, outputFolder: outputFolder)
         var newItemIDs: [UUID] = []
 
         // Union of everything already in the queue — drag-drop should be idempotent.
@@ -1478,11 +1478,7 @@ struct ContentView: View {
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
             if hadAccess { url.stopAccessingSecurityScopedResource() }
 
-            if let item = VideoFileUtils.makePlaceholderItem(
-                from: url,
-                outputFolder: outputFolder,
-                preset: groupPreset
-            ) {
+            if let item = importContext.makePlaceholder(from: url) {
                 newItemIDs.append(item.id)
                 // Re-lookup each iteration: earlier loads above are awaited but the
                 // array is only mutated on the main actor, so the index stays valid
@@ -1497,22 +1493,16 @@ struct ContentView: View {
             encodingGroups[groupIndex].normalizeSequentialNaming()
         }
 
-        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, preset: groupPreset)
+        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, context: importContext)
     }
 
     @MainActor
-    private func loadGroupItemDetails(groupID: UUID, itemIDs: [UUID], preset: ExportPreset) async {
-        let naming = VideoImportNamingSettings(preset: preset)
-        let importFolder = outputFolder
+    private func loadGroupItemDetails(groupID: UUID, itemIDs: [UUID], context: VideoGroupImportContext) async {
         for itemID in itemIDs {
             guard let gi = encodingGroups.firstIndex(where: { $0.id == groupID }),
                   let ii = encodingGroups[gi].items.firstIndex(where: { $0.id == itemID }) else { continue }
 
-            let url = encodingGroups[gi].items[ii].url
-            let counter = encodingGroups[gi].items[ii].customCounterValue
-            let details = await VideoFileUtils.loadDetails(
-                for: url, outputFolder: importFolder, preset: preset, counter: counter, namingSettings: naming
-            )
+            let details = await context.loadDetails(for: encodingGroups[gi].items[ii])
             if let gi2 = encodingGroups.firstIndex(where: { $0.id == groupID }),
                let ii2 = encodingGroups[gi2].items.firstIndex(where: { $0.id == itemID }) {
                 encodingGroups[gi2].items[ii2].apply(details: details)
