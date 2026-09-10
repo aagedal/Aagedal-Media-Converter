@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 804 tests pass. The
+- The unit-test baseline is green: 817 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 804 unit tests. The UI test target now has deterministic smoke
+- There are 817 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -848,6 +848,13 @@ ownership changes. An injected isolated BMX service extends the MCA queue-stop r
 to verify both late-handoff rejection and eventual tracking cleanup. Broader package,
 framework, and superseded-helper draining remain open (Codex, 2026-09-10).
 
+Whisper capability refresh now waits for both cancelled FFmpeg probes to drain before
+launching their replacement. Repeated refreshes retain the drain chain and skip queued
+probes that have already been superseded; cancelled callers cannot invalidate a cached
+snapshot. Two injected-runner regressions verify delayed cleanup, latest-only publication,
+and cache retention. Broader package/framework and superseded-helper draining remain
+open (Codex, 2026-09-10).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -1604,6 +1611,15 @@ zero helper launches, and preservation of existing output files on rejection. Ze
 negative, and nonfinite endpoints retain their existing open-ended normalization
 (Codex, 2026-09-10).
 
+Crop and deinterlace planning now resolve the last matching primary-video filter
+option, including repeated `-vf` and `-filter`, `-filter:v`, and `-filter:v:0` aliases.
+A shared quote/escape-aware stage parser keeps custom expressions intact. Deinterlacing
+rewrites only built-in `yadif` stages, preserves explicitly configured deinterlacers,
+and retains a pass-through stage when removing the only automatic filter so earlier
+options cannot become active again. Generated color-band readback verifies effective
+crop dimensions/pixels. Numeric output-stream mappings and broader typed codec/output
+ownership remain open (Codex, 2026-09-10).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1868,6 +1884,13 @@ warning and a confirmed reset even when no history can be displayed; downloads r
 available, and recording new history resumes after reset. Four isolated store tests cover
 ordering, deduplication, limits, corruption preservation, and recovery. A bilingual UI
 regression covers cancelling and confirming reset (Codex, 2026-09-10).
+
+Screenshot preferences now use an immutable, injectable `ScreenshotSettings` snapshot
+for bit-depth formats and alpha handling. Malformed alpha policy defaults to Auto so
+opaque format selections preserve source transparency through PNG. Five regressions
+cover captured preferences, missing/malformed storage without rewriting it, explicit
+alpha discard, and controller-level codec/pixel-format selection. Wider feature settings
+and migrations remain open (Codex, 2026-09-10).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -2195,7 +2218,29 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-10, Codex): Debug compilation and all 804 unit tests pass
+Latest validation (2026-09-10, Codex): Debug compilation and all 817 unit tests pass
+with zero failures. Thirteen new regressions cover effective filter aliases, quoted and
+explicit deinterlacers, valid progressive filter removal, screenshot settings and
+controller pixel formats, and Whisper capability helper draining/cache retention.
+Generated media verifies crop pixels/dimensions and pass-through output after automatic
+deinterlacing is removed. All 43 release-script tests, manifest freshness, and localization
+checks pass (1,528 entries, 15 intentional omissions). Three conversion UI smoke tests
+pass from a fresh locally signed build: success, failure details, and start/cancel.
+Independent reviews found no further introduced filter, screenshot, or helper-lifecycle
+regressions. The unsigned Release build and bundle audit pass, verifying all 44 Mach-O
+images and six packaged license notices.
+
+Remaining implementation work: broader typed filters/codecs/output plans, including
+numeric output-stream mapping; orchestration extraction; remaining feature settings and
+schema migrations; full package/framework and superseded-helper draining; wider actor,
+UI, and filesystem audits; multi-process subtitle/remote coordination; generated AV2
+waveform/synthesized video, accurate Matroska layout labels, and IMF descriptors.
+Manual playback, Shortcuts, sandbox renewal, remote upload, capture/editor, VoiceOver,
+and broader UI checks remain. Runtime measurements, clean-machine installation/update,
+complete dependency provenance (99 unresolved license entries), and credentialed release
+validation remain open. No bundled binaries or license assignments changed.
+
+Previous validation (2026-09-10, Codex): Debug compilation and all 804 unit tests pass
 with zero failures. Ten new regressions cover AV2 interval preflight, strict IVF assembly,
 and download-history persistence/recovery. A production-code harness joined actual
 bundled-avmenc output into 80 frames with exact payload preservation, monotonic timestamps,

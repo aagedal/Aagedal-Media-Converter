@@ -26,6 +26,24 @@ struct FFMPEGCommand {
     var preparationError: String? = nil
 }
 
+/// Resolves the common filter spellings for the primary video stream.
+/// FFmpeg uses the last matching option, including when an alias follows -vf.
+/// Other indexed streams retain ownership of their own filters.
+struct PrimaryVideoFilterPlan: Equatable, Sendable {
+    let filterOptionIndex: Int?
+
+    init(arguments: [String]) {
+        var filterOptionIndex: Int?
+        let filterOptions: Set<String> = ["-vf", "-filter", "-filter:v", "-filter:v:0"]
+        for index in arguments.indices where index + 1 < arguments.count {
+            if filterOptions.contains(arguments[index]) {
+                filterOptionIndex = index
+            }
+        }
+        self.filterOptionIndex = filterOptionIndex
+    }
+}
+
 /// Resolves the requested interval before probes or generated-video preparation.
 /// Invalid endpoints retain the existing normalization policy; a finite, positive
 /// end at or before the start is an incompatible interval, not an open-ended export.
@@ -1784,7 +1802,7 @@ extension FFMPEGCommandBuilder {
         }
     ) async {
         // Only proceed if a video filter graph exists
-        guard let vfIndex = ffmpegArgs.firstIndex(of: "-vf"), vfIndex + 1 < ffmpegArgs.count else {
+        guard let vfIndex = PrimaryVideoFilterPlan(arguments: ffmpegArgs).filterOptionIndex else {
             return
         }
 
@@ -1806,43 +1824,28 @@ extension FFMPEGCommandBuilder {
             isInterlaced = false
         }
 
-        var filters = ffmpegArgs[vfIndex + 1]
-
+        // Only rewrite whole stages owned by built-in presets. User expressions and
+        // explicitly configured deinterlacers retain their original text and behavior.
+        guard var stages = splitVideoFilterStages(ffmpegArgs[vfIndex + 1]) else { return }
+        let isBuiltIn: (String) -> Bool = { $0 == "yadif" || $0 == "yadif=0" }
         if isInterlaced {
             let bwdifFilter = "bwdif=mode=send_field:parity=auto:deint=all"
-            // Replace yadif with bwdif, or insert bwdif at the start if yadif is absent
-            if filters.contains("yadif") {
-                // Replace common forms of yadif invocation
-                filters = filters.replacingOccurrences(of: "yadif=0", with: bwdifFilter)
-                filters = filters.replacingOccurrences(of: "yadif", with: bwdifFilter)
-            } else {
-                // Prepend bwdif to existing chain
-                if filters.isEmpty {
-                    filters = bwdifFilter
-                } else {
-                    filters = bwdifFilter + "," + filters
-                }
+            if stages.contains(where: isBuiltIn) {
+                stages = stages.map { isBuiltIn($0) ? bwdifFilter : $0 }
+            } else if !stages.contains(where: { stage in
+                let name = stage.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .split(separator: "=", maxSplits: 1).first?
+                    .split(separator: "@", maxSplits: 1).first
+                return name == "yadif" || name == "bwdif"
+            }) {
+                stages.insert(bwdifFilter, at: 0)
             }
         } else {
-            // Progressive source: remove any yadif occurrences entirely
-            let patterns = [
-                "yadif=0,",
-                ",yadif=0",
-                "yadif=0",
-                "yadif,",
-                ",yadif",
-                "yadif"
-            ]
-            for p in patterns {
-                filters = filters.replacingOccurrences(of: p, with: "")
-            }
-            // Clean up any accidental leading/trailing commas and whitespace
-            filters = filters.trimmingCharacters(in: .whitespacesAndNewlines)
-            while filters.hasPrefix(",") { filters.removeFirst() }
-            while filters.hasSuffix(",") { filters.removeLast() }
+            stages.removeAll(where: isBuiltIn)
         }
-
-        ffmpegArgs[vfIndex + 1] = filters
+        // Keep an explicit no-op when removal empties the effective chain; dropping
+        // the option would reactivate an earlier filter override.
+        ffmpegArgs[vfIndex + 1] = stages.isEmpty ? "null" : stages.joined(separator: ",")
     }
 
     private static func adjustStreamCopyArguments(
@@ -2091,7 +2094,7 @@ extension FFMPEGCommandBuilder {
             ) else { return false }
             cropFilter += ",scale=\(dimensions.width):\(dimensions.height),setsar=1/1"
         }
-        let vfIndex = ffmpegArgs.firstIndex(of: "-vf")
+        let vfIndex = PrimaryVideoFilterPlan(arguments: ffmpegArgs).filterOptionIndex
         let filterChain = vfIndex.flatMap { $0 + 1 < ffmpegArgs.count ? ffmpegArgs[$0 + 1] : nil } ?? ""
         var plan = CropVideoFilterPlan(filterChain)
         plan.insertCrop(
@@ -2108,6 +2111,31 @@ extension FFMPEGCommandBuilder {
         }
         logger.info("Applied crop to video filter chain: \(plan.rendered, privacy: .public)")
         return true
+    }
+
+    /// Splits a linear FFmpeg filter chain without treating quoted or escaped commas
+    /// as stage boundaries. Incomplete expressions remain opaque to automatic edits.
+    private static func splitVideoFilterStages(_ chain: String) -> [String]? {
+        var segments: [String] = []
+        var start = chain.startIndex
+        var quoted = false
+        var escaped = false
+        for index in chain.indices {
+            let character = chain[index]
+            if escaped {
+                escaped = false
+            } else if character == "'" {
+                quoted.toggle()
+            } else if character == "\\" && !quoted {
+                escaped = true
+            } else if character == "," && !quoted {
+                segments.append(String(chain[start..<index]))
+                start = chain.index(after: index)
+            }
+        }
+        guard !quoted && !escaped else { return nil }
+        if !chain.isEmpty { segments.append(String(chain[start...])) }
+        return segments
     }
 
     /// Orders crop relative to the app's geometry stages without interpreting custom filter values.
@@ -2144,29 +2172,10 @@ extension FFMPEGCommandBuilder {
         private var stages: [Stage]
 
         init(_ chain: String) {
-            var segments: [String] = []
-            var start = chain.startIndex
-            var quoted = false
-            var escaped = false
-            for index in chain.indices {
-                let character = chain[index]
-                if escaped {
-                    escaped = false
-                } else if character == "'" {
-                    quoted.toggle()
-                } else if character == "\\" && !quoted {
-                    escaped = true
-                } else if character == "," && !quoted {
-                    segments.append(String(chain[start..<index]))
-                    start = chain.index(after: index)
-                }
-            }
-            // An incomplete custom expression is opaque; do not partially rewrite its contents.
-            if quoted || escaped {
-                stages = [.custom(chain)]
-            } else {
-                if !chain.isEmpty { segments.append(String(chain[start...])) }
+            if let segments = FFMPEGCommandBuilder.splitVideoFilterStages(chain) {
                 stages = segments.map(Stage.init)
+            } else {
+                stages = [.custom(chain)]
             }
         }
 

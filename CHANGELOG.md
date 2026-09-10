@@ -1,5 +1,10 @@
 # v.4.3.0
 
+- **Custom crop filters follow the last matching video-filter option**, including repeated `-vf` and video-filter aliases.
+- **Automatic deinterlacing preserves quoted custom expressions and explicit filter settings**, and progressive video retains a valid filter when automatic deinterlacing is removed.
+- **Whisper capability refresh waits for cancelled probes to finish**, preventing overlapping helper processes during repeated refreshes.
+- **Screenshot settings preserve transparency when the saved alpha preference is invalid**, and capture uses a consistent snapshot of format preferences.
+
 - **Download option labels and tooltips now follow the selected language**, including recording from start, audio-only downloads, playlist downloads, and automatic conversion.
 
 - **Damaged download history is preserved and shows a confirmed reset action**, so automatic history updates cannot erase unreadable saved entries.

@@ -2669,6 +2669,83 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertLessThan(start.duration(to: .now), .seconds(1))
     }
 
+    func testDeinterlacePlanningEditsOnlyEffectiveFilterAndBuiltInStages() async {
+        let bwdif = "bwdif=mode=send_field:parity=auto:deint=all"
+        for interlaced in [false, true] {
+            for option in ["-vf", "-filter", "-filter:v", "-filter:v:0"] {
+                var args = ["-vf", "yadif=0,hflip", option, "yadif,scale=64:48,yadif=0",
+                            "-filter:v:1", "yadif=0,vflip"]
+                await FFMPEGCommandBuilder.adjustDeinterlaceFilter(
+                    inputURL: URL(fileURLWithPath: "/private/source.mov"), ffmpegArgs: &args,
+                    sourceMetadata: videoMetadata(timecode: nil, frameRate: 25, isInterlaced: interlaced)
+                )
+                let expected = interlaced ? "\(bwdif),scale=64:48,\(bwdif)" : "scale=64:48"
+                XCTAssertEqual(args, ["-vf", "yadif=0,hflip", option, expected,
+                                      "-filter:v:1", "yadif=0,vflip"])
+            }
+        }
+    }
+
+    func testProgressiveDeinterlaceRemovalRetainsValidNoOpOverride() async throws {
+        for builtIn in ["yadif", "yadif=0", "yadif,yadif=0"] {
+            var args = ["-vf", "crop=32:48:32:0", "-filter:v:0", builtIn]
+            await FFMPEGCommandBuilder.adjustDeinterlaceFilter(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"), ffmpegArgs: &args,
+                sourceMetadata: videoMetadata(timecode: nil, frameRate: 25)
+            )
+            XCTAssertEqual(args, ["-vf", "crop=32:48:32:0", "-filter:v:0", "null"])
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let output = directory.appendingPathComponent("progressive.rgb")
+            try runFFmpeg([
+                "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x48:r=1"
+            ] + args + ["-c:v", "rawvideo", "-pix_fmt", "rgb24", "-frames:v", "1", "-f", "rawvideo", output.path])
+            XCTAssertEqual(try Data(contentsOf: output).count, 64 * 48 * 3)
+        }
+    }
+
+    func testDeinterlacePlanningPreservesExplicitDeinterlacers() async {
+        for interlaced in [false, true] {
+            for filter in ["yadif=1", "yadif=0:-1:1", "yadif=mode=send_frame:deint=interlaced",
+                           "yadif@custom=mode=send_field", "bwdif=mode=send_frame"] {
+                let chain = "\(filter),scale=64:48"
+                var args = ["-vf", chain]
+                await FFMPEGCommandBuilder.adjustDeinterlaceFilter(
+                    inputURL: URL(fileURLWithPath: "/private/source.mov"), ffmpegArgs: &args,
+                    sourceMetadata: videoMetadata(timecode: nil, frameRate: 25, isInterlaced: interlaced)
+                )
+                XCTAssertEqual(args, ["-vf", chain])
+            }
+        }
+    }
+
+    func testDeinterlacePlanningPreservesQuotedEscapedAndIncompleteFilterText() async {
+        let bwdif = "bwdif=mode=send_field:parity=auto:deint=all"
+        let chains = [
+            "drawtext=text='label,yadif=0,yadif',scale=64:48",
+            #"drawtext=text=label\,yadif=0,scale=64:48"#,
+            #"drawtext=text='label'\''value,yadif=0',scale=64:48"#
+        ]
+        for interlaced in [false, true] {
+            for chain in chains {
+                var args = ["-vf", chain]
+                await FFMPEGCommandBuilder.adjustDeinterlaceFilter(
+                    inputURL: URL(fileURLWithPath: "/private/source.mov"), ffmpegArgs: &args,
+                    sourceMetadata: videoMetadata(timecode: nil, frameRate: 25, isInterlaced: interlaced)
+                )
+                XCTAssertEqual(args, ["-vf", interlaced ? "\(bwdif),\(chain)" : chain])
+            }
+            let incomplete = "yadif=0,drawtext=text='unfinished,yadif"
+            var args = ["-vf", incomplete]
+            await FFMPEGCommandBuilder.adjustDeinterlaceFilter(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"), ffmpegArgs: &args,
+                sourceMetadata: videoMetadata(timecode: nil, frameRate: 25, isInterlaced: interlaced)
+            )
+            XCTAssertEqual(args, ["-vf", incomplete])
+        }
+    }
+
     func testFFMPEGProbeFacadeDoesNotJoinTimedOutRawMetadataReads() async {
         let probeStarted = DispatchSemaphore(value: 0)
         let releaseProbe = DispatchSemaphore(value: 0)
@@ -7485,6 +7562,45 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
             )
             XCTAssertEqual(try videoFilter(in: args), expected)
+        }
+    }
+
+    func testCropEditsLastMatchingFilterAliasAndPreservesOtherStreams() {
+        for option in ["-vf", "-filter", "-filter:v", "-filter:v:0"] {
+            var args = ["-vf", "hflip", option, "format=rgb24", "-filter:v:1", "vflip", "-af", "volume=0.5"]
+            XCTAssertTrue(FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &args,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+                sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+            ))
+            XCTAssertEqual(args, ["-vf", "hflip", option, "crop=32:48:32:0,format=rgb24",
+                                  "-filter:v:1", "vflip", "-af", "volume=0.5"])
+        }
+    }
+
+    func testGeneratedCropUsesEffectiveFilterForRepeatedOptionsAndAliases() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for (index, option) in ["-vf", "-filter", "-filter:v", "-filter:v:0"].enumerated() {
+            let output = directory.appendingPathComponent("crop-\(index).rgb")
+            var args = ["-c", "copy", "-vcodec", "rawvideo", "-vf", "hflip", option, "format=rgb24"]
+            XCTAssertTrue(FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &args,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+                sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+            ))
+            try runFFmpeg([
+                "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                "color=c=red:s=64x48:r=1,drawbox=x=32:y=0:w=32:h=48:c=lime:t=fill"
+            ] + args + ["-frames:v", "1", "-f", "rawvideo", output.path])
+            let pixels = try Data(contentsOf: output)
+            XCTAssertEqual(pixels.count, 32 * 48 * 3, option)
+            for offset in stride(from: 0, to: pixels.count, by: 3) {
+                XCTAssertLessThan(pixels[offset], 30, option)
+                XCTAssertGreaterThan(pixels[offset + 1], 140, option)
+                XCTAssertLessThan(pixels[offset + 2], 30, option)
+            }
         }
     }
 
@@ -13203,7 +13319,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
     private func videoMetadata(
         timecode: String?,
         frameRate: Double,
-        duration: Double? = 60
+        duration: Double? = 60,
+        isInterlaced: Bool = false
     ) -> VideoMetadata {
         VideoMetadata(
             duration: duration,
@@ -13245,7 +13362,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                     colorRange: nil,
                     chromaLocation: nil,
                     fieldOrder: nil,
-                    isInterlaced: false,
+                    isInterlaced: isInterlaced,
                     title: nil,
                     isDefault: true,
                     isForced: false
@@ -15881,5 +15998,109 @@ final class AVCIntraMCADefaultsTests: XCTestCase {
         XCTAssertTrue(overrideContent.contains("sgLtRt,"), overrideContent)
         XCTAssertFalse(overrideContent.contains("sgDM,"), overrideContent)
         XCTAssertFalse(overrideContent.contains("sgST,"), overrideContent)
+    }
+}
+
+extension Aagedal_Media_Converter_Tests {
+    func testWhisperCapabilityRepeatedRefreshDrainsSupersededProbeBeforeReplacement() async throws {
+        let started = expectation(description: "Original probe pair started")
+        started.expectedFulfillmentCount = 2
+        let cancelled = expectation(description: "Original probe pair cancelled")
+        cancelled.expectedFulfillmentCount = 2
+        let runner = DeferredWhisperCapabilityRunner(started: started, cancelled: cancelled)
+        let service = WhisperUpdateService(
+            subprocessRunner: runner,
+            ffmpegPathProvider: { "/private/tools/ffmpeg" }
+        )
+        var updates = await service.stateUpdates().makeAsyncIterator()
+        let initial = await updates.next()
+        XCTAssertEqual(initial, .loading)
+        await fulfillment(of: [started], timeout: 2)
+        let originalWaiter = Task { try await service.capabilitySnapshot() }
+        let firstRefresh = Task { try await service.refreshCapabilitySnapshot() }
+        let firstLoading = await updates.next()
+        XCTAssertEqual(firstLoading, .loading)
+        await fulfillment(of: [cancelled], timeout: 2)
+
+        let secondRefresh = Task { try await service.refreshCapabilitySnapshot() }
+        let secondLoading = await updates.next()
+        XCTAssertEqual(secondLoading, .loading)
+        let requestsBeforeDrain = await runner.requestCount
+        XCTAssertEqual(requestsBeforeDrain, 2, "Refresh must not overlap old helper draining")
+
+        await runner.finishDraining()
+        let expected = WhisperCapabilitySnapshot(isAvailable: true, ffmpegVersion: "new")
+        let original = try await originalWaiter.value
+        let first = try await firstRefresh.value
+        let second = try await secondRefresh.value
+        XCTAssertEqual(original, expected)
+        XCTAssertEqual(first, expected)
+        XCTAssertEqual(second, expected)
+        let ready = await updates.next()
+        XCTAssertEqual(ready, .ready(expected), "Superseded results must never publish")
+        let finalRequestCount = await runner.requestCount
+        XCTAssertEqual(finalRequestCount, 4, "The cancelled queued refresh must not start helpers")
+    }
+
+    func testWhisperCapabilityCancelledRefreshPreservesCachedSnapshot() async throws {
+        let runner = SequencedRecordingSubprocessRunner { _, request, _ in
+            successfulSubprocessResult(standardOutput: request.arguments.contains("-filters")
+                ? "whisper\n" : "ffmpeg version cached\n")
+        }
+        let service = WhisperUpdateService(
+            subprocessRunner: runner,
+            ffmpegPathProvider: { "/private/tools/ffmpeg" }
+        )
+        let initial = try await service.capabilitySnapshot()
+        let cancelledRefresh = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await service.refreshCapabilitySnapshot()
+        }
+        do {
+            _ = try await cancelledRefresh.value
+            XCTFail("Expected cancellation")
+        } catch is CancellationError { }
+        let cached = try await service.capabilitySnapshot()
+        XCTAssertEqual(cached, initial)
+        XCTAssertEqual(runner.requests.count, 2, "A pre-cancelled refresh must not invalidate the cache")
+    }
+}
+
+private actor DeferredWhisperCapabilityRunner: SubprocessRunning {
+    let started: XCTestExpectation
+    let cancelled: XCTestExpectation
+    private(set) var requestCount = 0
+    private var drains: [CheckedContinuation<Void, Never>] = []
+
+    init(started: XCTestExpectation, cancelled: XCTestExpectation) {
+        self.started = started
+        self.cancelled = cancelled
+    }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        requestCount += 1
+        if requestCount <= 2 {
+            started.fulfill()
+            do {
+                try await Task.sleep(for: .seconds(30))
+            } catch {
+                await withCheckedContinuation { continuation in
+                    drains.append(continuation)
+                    cancelled.fulfill()
+                }
+            }
+            // Model a helper that completes successfully while cancellation drains.
+            return successfulSubprocessResult(standardOutput: "ffmpeg version stale\n")
+        }
+        return successfulSubprocessResult(standardOutput: request.arguments.contains("-filters")
+            ? "whisper\n" : "ffmpeg version new\n")
+    }
+
+    func finishDraining() {
+        for continuation in drains { continuation.resume() }
+        drains.removeAll()
     }
 }
