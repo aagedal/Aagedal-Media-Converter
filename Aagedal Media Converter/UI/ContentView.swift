@@ -66,6 +66,7 @@ struct ContentView: View {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ContentView")
     @Environment(\.openSettings) private var openSettings
     @State private var droppedFiles: [VideoItem] = []
+    @State private var showScheduleStorageResetConfirmation = false
     @AppStorage("outputFolder") private var outputFolder = AppConstants.defaultOutputDirectory.path {
         didSet {
             // Update the currentOutputFolder when outputFolder changes
@@ -689,8 +690,41 @@ struct ContentView: View {
 
     // MARK: - Body Subviews
 
+    private var scheduledDownloadStorageWarning: some View {
+        HStack(alignment: .top) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Saved download schedules could not be read.")
+                    .font(.headline)
+                    .accessibilityIdentifier("scheduledDownloadStorageWarning")
+                Text("The saved data has been kept. New schedules work while the app stays open, but cannot be saved until you reset schedule storage.")
+                    .font(.caption)
+            }
+            Spacer()
+            Button("Reset Saved Schedules…") {
+                showScheduleStorageResetConfirmation = true
+            }
+            .accessibilityIdentifier("scheduledDownloadStorageResetButton")
+        }
+        .padding()
+        .background(.orange.opacity(0.1))
+        .alert("Reset saved download schedules?", isPresented: $showScheduleStorageResetConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset Saved Schedules", role: .destructive) {
+                DownloadManager.shared.resetScheduledDownloadStorage()
+            }
+            .accessibilityIdentifier("scheduledDownloadStorageResetConfirmButton")
+        } message: {
+            Text("This permanently replaces the unreadable saved data with the schedules currently in your queue. Previously saved schedules that could not be loaded will be lost.")
+        }
+    }
+
     private var mainContentView: some View {
         VStack {
+            if DownloadManager.shared.hasScheduledDownloadStorageError {
+                scheduledDownloadStorageWarning
+            }
             fileListView
                 .fileImporter(
                     isPresented: $isFileImporterPresented,

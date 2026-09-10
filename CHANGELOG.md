@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **Damaged saved download schedules show recovery guidance and a confirmed reset action**, preserving schedules added during the current session.
+- **Invalid trim ranges fail before conversion preparation**, including native waveform and AVC-Intra audio preprocessing, instead of exporting beyond the selected interval.
+- **Cancelled BMX wrapping stays cancelled across helper registration**, preventing late handoffs from starting a retired operation.
+
 - **Crop filters and AV2 output dimensions share the same bounded crop area**, including even dimensions at odd-sized source edges. Invalid or unreadable crop geometry fails preparation instead of silently dropping the crop.
 - **Cancelling AVC-Intra conversions stops and drains audio-label preparation**, including native waveform exports, and rejects late probe results.
 - **Malformed saved download schedules are preserved** when restoring, adding, or removing schedules. Valid legacy schedules still load.

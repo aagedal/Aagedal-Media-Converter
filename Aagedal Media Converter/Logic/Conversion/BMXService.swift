@@ -270,6 +270,11 @@ actor BMXService {
         return wasCancelled
     }
 
+    /// Snapshot of operation-owned tracking, used to inspect lifecycle handoffs.
+    func cancellationTrackingOperationIDs() -> Set<UUID> {
+        retainedCancellationTrackingIDs
+    }
+
     /// Internal state probe used by deterministic cancellation tests.
     func isWaitingForTranswrapSlot(operationID: UUID) -> Bool {
         transwrapSlotWaiters.contains { $0.operationID == operationID }

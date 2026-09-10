@@ -28,6 +28,37 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testDamagedScheduleRecoveryInBothLanguages() throws {
+        for (language, locale, warningText, cancelTitle) in [
+            ("en", "en_US", "Saved download schedules could not be read.", "Cancel"),
+            ("nb", "nb_NO", "Lagrede nedlastingsplaner kunne ikke leses.", "Avbryt")
+        ] {
+            launchApp(language: language, locale: locale, damagedSchedules: true)
+            defer { app.terminate() }
+            app.activate()
+            let warning = element("scheduledDownloadStorageWarning")
+            XCTAssertTrue(warning.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(
+                format: "label == %@ OR value == %@", warningText, warningText
+            )).firstMatch.exists)
+            attachWindowScreenshot(named: "Schedule storage warning - \(language)")
+            element("scheduledDownloadStorageResetButton").click()
+            let confirmation = element("scheduledDownloadStorageResetConfirmButton")
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            attachWindowScreenshot(named: "Schedule storage reset confirmation - \(language)")
+            app.sheets.firstMatch.buttons[cancelTitle].click()
+            XCTAssertTrue(warning.exists)
+            element("scheduledDownloadStorageResetButton").click()
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            confirmation.click()
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: warning)
+            XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed)
+            XCTAssertTrue(element("queue.empty").exists)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testHiddenDefaultPresetStillDisplaysItsSelectionInBothLanguages() throws {
         for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
             launchApp(language: language, locale: locale, additionalArguments: ["-videoLoopVisible", "NO"])
@@ -467,12 +498,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         removeFixtureAfterImport: Bool = false,
         language: String = "en",
         locale: String = "en_US",
-        additionalArguments: [String] = []
+        additionalArguments: [String] = [],
+        damagedSchedules: Bool = false
     ) {
         app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-ffmpegBinarySource", "app", "-defaultExportPreset", defaultPreset]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        if damagedSchedules {
+            app.launchEnvironment["AMC_UI_TEST_DAMAGED_SCHEDULES"] = "1"
+        }
         if generatedFixture {
             app.launchArguments += [
                 "-saveNextToOriginal", "NO",

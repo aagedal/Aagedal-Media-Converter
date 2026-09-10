@@ -26,6 +26,38 @@ struct FFMPEGCommand {
     var preparationError: String? = nil
 }
 
+/// Resolves the requested interval before probes or generated-video preparation.
+/// Invalid endpoints retain the existing normalization policy; a finite, positive
+/// end at or before the start is an incompatible interval, not an open-ended export.
+struct FFMPEGTrimPlan: Equatable, Sendable {
+    let start: Double?
+    let end: Double?
+
+    init(start: Double?, end: Double?) {
+        self.start = FFMPEGCommandBuilder.normalizedTrimPoint(start)
+        self.end = FFMPEGCommandBuilder.normalizedTrimPoint(end)
+    }
+
+    var preparationError: String? {
+        guard let start, let end, end <= start else { return nil }
+        return String(localized: "The end trim must be after the start trim. Adjust the trim range and try again.")
+    }
+
+    var seekArguments: [String] {
+        start.map { ["-ss", FFMPEGCommandBuilder.ffmpegTimeString(from: $0)] } ?? []
+    }
+
+    var durationArguments: [String] {
+        guard preparationError == nil else { return [] }
+        return FFMPEGCommandBuilder.trimDurationArgument(start: start, end: end) ?? []
+    }
+
+    var effectiveDuration: Double? {
+        guard preparationError == nil else { return nil }
+        return FFMPEGCommandBuilder.calculateEffectiveDuration(trimStart: start, trimEnd: end)
+    }
+}
+
 /// Keeps probe failure distinct from an explicit request to clear source timecode.
 /// Both QuickTime tag locations belong to this plan because either can recreate tmcd.
 enum TimecodeMetadataPlan: Equatable, Sendable {
@@ -247,6 +279,17 @@ enum FFMPEGCommandBuilder {
             await FFMPEGProbeService.getVideoDuration(for: url)
         }
     ) async -> FFMPEGCommand {
+        let trimPlan = FFMPEGTrimPlan(start: trimStart, end: trimEnd)
+        let normalizedTrimStart = trimPlan.start
+        let normalizedTrimEnd = trimPlan.end
+        if let preparationError = trimPlan.preparationError {
+            return FFMPEGCommand(
+                arguments: [], normalizedTrimStart: normalizedTrimStart,
+                normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                preparationError: preparationError
+            )
+        }
+
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
@@ -255,9 +298,6 @@ enum FFMPEGCommandBuilder {
         let capturedCommentSettings = commentSettings ?? CommentSettings()
         let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
-
-        let normalizedTrimStart = normalizedTrimPoint(trimStart)
-        let normalizedTrimEnd = normalizedTrimPoint(trimEnd)
 
         let commentPlan: CommentMetadataPlan = preset == .imageSequence ? .unchanged : CommentMetadataPlan(
             comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings
@@ -272,21 +312,18 @@ enum FFMPEGCommandBuilder {
         )
 
         let inputPlan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
-        let seekArguments = normalizedTrimStart.map { ["-ss", ffmpegTimeString(from: $0)] } ?? []
         // DCP hints apply only to the ordinary file source, before its input boundary.
         let fileInputOptions = preset == .dcp ? [
             "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"
         ] : []
-        arguments += inputPlan.arguments(seek: seekArguments, fileOptions: fileInputOptions)
+        arguments += inputPlan.arguments(seek: trimPlan.seekArguments, fileOptions: fileInputOptions)
 
         let outputArgumentsStart = arguments.count
 
         if let waveformRequest {
             let includeAudioOutput = preset.outputsAudioTrack
             logger.debug("Building waveform command with request: width=\(waveformRequest.width), height=\(waveformRequest.height), background=\(waveformRequest.backgroundHex, privacy: .public), foreground=\(waveformRequest.foregroundHex, privacy: .public), normalize=\(waveformRequest.normalizeAudio), style=\(waveformRequest.style.rawValue, privacy: .public)")
-            if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
-                arguments.append(contentsOf: durationArgument)
-            }
+            arguments.append(contentsOf: trimPlan.durationArguments)
 
             arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest, includeAudioOutput: includeAudioOutput, audioRoutingConfig: audioRoutingConfig))
 
@@ -324,7 +361,7 @@ enum FFMPEGCommandBuilder {
             logger.debug("Waveform ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
-            let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+            let effectiveDuration = trimPlan.effectiveDuration
 
             return FFMPEGCommand(
                 arguments: arguments,
@@ -334,9 +371,7 @@ enum FFMPEGCommandBuilder {
             )
         } else if let synthesizedVideoRequest {
             logger.debug("Building synthesized video command with request: width=\(synthesizedVideoRequest.width), height=\(synthesizedVideoRequest.height), background=\(synthesizedVideoRequest.backgroundHex, privacy: .public), frameRate=\(synthesizedVideoRequest.frameRate)")
-            if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
-                arguments.append(contentsOf: durationArgument)
-            }
+            arguments.append(contentsOf: trimPlan.durationArguments)
 
             arguments.append(contentsOf: synthesizedVideoCommandArguments(for: synthesizedVideoRequest))
 
@@ -382,7 +417,7 @@ enum FFMPEGCommandBuilder {
 
             // A silent color source has no finite mapped stream for -shortest to follow.
             // Resolve an explicit output duration before allowing the encoder to launch.
-            var effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+            var effectiveDuration = trimPlan.effectiveDuration
             if ffmpegArgs.contains("-an") {
                 if effectiveDuration == nil {
                     if let synthesizedVideoDuration, synthesizedVideoDuration.isFinite, synthesizedVideoDuration > 0 {
@@ -562,9 +597,7 @@ enum FFMPEGCommandBuilder {
             adjustStreamCopyArguments(inputURL: inputURL, outputURL: outputFileURL, ffmpegArgs: &ffmpegArgs)
         }
 
-        if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
-            arguments.append(contentsOf: durationArgument)
-        }
+        arguments.append(contentsOf: trimPlan.durationArguments)
 
         arguments.append(contentsOf: ffmpegArgs)
 
@@ -599,7 +632,7 @@ enum FFMPEGCommandBuilder {
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
         arguments.append(outputFileURL.path)
 
-        let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+        let effectiveDuration = trimPlan.effectiveDuration
 
         return FFMPEGCommand(
             arguments: arguments,
@@ -895,6 +928,17 @@ extension FFMPEGCommandBuilder {
         includeDateTag: Bool = true,
         additionalOutputArguments: [String]? = nil
     ) async -> FFMPEGCommand {
+        let trimPlan = FFMPEGTrimPlan(start: trimStart, end: trimEnd)
+        let normalizedTrimStart = trimPlan.start
+        let normalizedTrimEnd = trimPlan.end
+        if let preparationError = trimPlan.preparationError {
+            return FFMPEGCommand(
+                arguments: [], normalizedTrimStart: normalizedTrimStart,
+                normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                preparationError: preparationError
+            )
+        }
+
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
         let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
@@ -914,9 +958,6 @@ extension FFMPEGCommandBuilder {
         let resolution = "\(finalWidth)x\(finalHeight)"
         let fpsString = formattedFrameRateString(from: frameRate)
 
-        let normalizedTrimStart = normalizedTrimPoint(trimStart)
-        let normalizedTrimEnd = normalizedTrimPoint(trimEnd)
-
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
         // Input 0: raw BGRA video from stdin pipe
@@ -929,16 +970,12 @@ extension FFMPEGCommandBuilder {
         ])
 
         // Input 1: original audio file (with optional seek)
-        if let normalizedTrimStart {
-            arguments.append(contentsOf: ["-ss", ffmpegTimeString(from: normalizedTrimStart)])
-        }
+        arguments.append(contentsOf: trimPlan.seekArguments)
         arguments.append(contentsOf: ["-i", audioInputURL.path])
         let outputArgumentsStart = arguments.count
 
         // Duration limit
-        if let durationArgument = trimDurationArgument(start: normalizedTrimStart, end: normalizedTrimEnd) {
-            arguments.append(contentsOf: durationArgument)
-        }
+        arguments.append(contentsOf: trimPlan.durationArguments)
 
         // Map video from pipe, audio from file
         arguments.append(contentsOf: ["-map", "0:v", "-map", "1:a"])
@@ -982,7 +1019,7 @@ extension FFMPEGCommandBuilder {
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
         arguments.append(outputFileURL.path)
 
-        let effectiveDuration = calculateEffectiveDuration(trimStart: normalizedTrimStart, trimEnd: normalizedTrimEnd)
+        let effectiveDuration = trimPlan.effectiveDuration
 
         return FFMPEGCommand(
             arguments: arguments,

@@ -9526,6 +9526,112 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertTrue(arguments.containsAdjacent("-metadata", "timecode=00:00:00:00"))
     }
 
+    func testFFMPEGTrimPlanOwnsSeekDurationAndEndpointNormalization() {
+        let bounded = FFMPEGTrimPlan(start: 1.25, end: 3.75)
+        XCTAssertNil(bounded.preparationError)
+        XCTAssertEqual(bounded.seekArguments, ["-ss", "1.250"])
+        XCTAssertEqual(bounded.durationArguments, ["-t", "2.500"])
+        XCTAssertEqual(bounded.effectiveDuration, 2.5)
+
+        let fromBeginning = FFMPEGTrimPlan(start: 0, end: 3.75)
+        XCTAssertEqual(fromBeginning.seekArguments, [])
+        XCTAssertEqual(fromBeginning.durationArguments, ["-to", "3.750"])
+        XCTAssertEqual(fromBeginning.effectiveDuration, 3.75)
+
+        for invalid in [0, -1, Double.nan, .infinity, -.infinity] {
+            let openEnded = FFMPEGTrimPlan(start: 1.25, end: invalid)
+            XCTAssertNil(openEnded.preparationError)
+            XCTAssertNil(openEnded.end)
+            XCTAssertNil(openEnded.effectiveDuration)
+            XCTAssertTrue(openEnded.durationArguments.isEmpty)
+            let fromZero = FFMPEGTrimPlan(start: invalid, end: 3.75)
+            XCTAssertNil(fromZero.start)
+            XCTAssertEqual(fromZero.durationArguments, ["-to", "3.750"])
+        }
+        for end in [1.25, 1.0] {
+            let invalid = FFMPEGTrimPlan(start: 1.25, end: end)
+            XCTAssertNotNil(invalid.preparationError)
+            XCTAssertNil(invalid.effectiveDuration)
+            XCTAssertTrue(invalid.durationArguments.isEmpty)
+        }
+    }
+
+    func testInvalidTrimRangeRejectsOrdinaryAndGeneratedCommandsBeforePreparation() async {
+        let waveform = WaveformVideoRequest(
+            width: 2, height: 2, backgroundHex: "000000", foregroundHex: "FFFFFF",
+            normalizeAudio: false, style: .linear, frameRate: 1, renderingEngine: .ffmpeg,
+            swiftStyle: .capsules, bandCount: 1, frequencyDistribution: .linear,
+            foregroundGradientEnabled: false, foregroundGradientEndHex: "FFFFFF",
+            backgroundGradientEnabled: false, backgroundGradientEndHex: "000000", waveformOpacity: 1
+        )
+        for end in [5.0, 4.0] {
+            for pipeline in 0..<3 {
+                let command = await FFMPEGCommandBuilder.buildCommand(
+                    inputURL: URL(fileURLWithPath: "/missing/source.mov"),
+                    outputFileURL: URL(fileURLWithPath: "/tmp/invalid-range.mp4"),
+                    preset: .h264, comment: "", includeDateTag: false,
+                    trimStart: 5, trimEnd: end,
+                    waveformRequest: pipeline == 1 ? waveform : nil,
+                    synthesizedVideoRequest: pipeline == 2 ? SynthesizedVideoRequest(
+                        width: 2, height: 2, backgroundHex: "000000", frameRate: 1, includeAudio: false
+                    ) : nil,
+                    durationProvider: { _ in
+                        XCTFail("Invalid trim must fail before probing generated-video duration")
+                        return 60
+                    }
+                )
+                XCTAssertEqual(command.preparationError, FFMPEGTrimPlan(start: 5, end: end).preparationError)
+                XCTAssertTrue(command.arguments.isEmpty)
+                XCTAssertNil(command.effectiveDuration)
+                XCTAssertEqual(command.normalizedTrimStart, 5)
+                XCTAssertEqual(command.normalizedTrimEnd, end)
+            }
+        }
+    }
+
+    func testInvalidNativeAVCIntraTrimRejectsBeforeToolLookupOrOutputReservation() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let runner = SequencedRecordingSubprocessRunner { _, _, _ in
+            XCTFail("Invalid trim must not launch a helper or encoder")
+            return successfulSubprocessResult()
+        }
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: {
+            XCTFail("Invalid trim must fail before FFmpeg lookup")
+            return nil
+        })
+        let input = directory.appendingPathComponent("missing.wav")
+        let output = directory.appendingPathComponent("output")
+        let native = makeNativeWaveformConversionRequest(inputURL: input, outputBaseURL: output)
+        for end in [5.0, 4.0] {
+            let request = ConversionRequest(
+                inputURL: input, outputURL: output, preset: .tvAVCIntra,
+                includeDateTag: false, trimStart: 5, trimEnd: end, expectedDuration: 1,
+                waveformRequest: native.waveformRequest
+            )
+            let result = await conversionResult(converter: converter, request: request)
+            XCTAssertFalse(result.success)
+            XCTAssertEqual(result.errorReason, FFMPEGTrimPlan(start: 5, end: end).preparationError)
+        }
+        XCTAssertTrue(runner.requests.isEmpty)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
+    func testInvalidTrimRangeRejectsNativeWaveformCommandBeforePreparation() async {
+        for end in [5.0, 4.0] {
+            let command = await FFMPEGCommandBuilder.nativeWaveformEncodingCommand(
+                audioInputURL: URL(fileURLWithPath: "/missing/source.wav"),
+                outputFileURL: URL(fileURLWithPath: "/tmp/invalid-native-range.mp4"),
+                preset: .h264, width: 2, height: 2, frameRate: 1,
+                trimStart: 5, trimEnd: end, includeDateTag: false
+            )
+            XCTAssertEqual(command.preparationError, FFMPEGTrimPlan(start: 5, end: end).preparationError)
+            XCTAssertTrue(command.arguments.isEmpty)
+            XCTAssertNil(command.effectiveDuration)
+        }
+    }
+
     func testInputPlanKeepsFileAndConcatOptionsAtTheirInputBoundary() {
         let source = URL(fileURLWithPath: "/tmp/source.mov")
         let seek = ["-ss", "1.250"]

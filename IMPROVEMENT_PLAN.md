@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 786 tests pass. The
+- The unit-test baseline is green: 794 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 786 unit tests. The UI test target now has deterministic smoke
+- There are 794 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,506 entries. All 59 previously missing App Intent
+- The string catalog has 1,513 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -830,6 +830,13 @@ between stages, and before publishing temporary labels. Broader framework callba
 package orchestration, superseded-helper draining, and cross-actor BMX handoff auditing
 remain open (Codex, 2026-09-10).
 
+BMX cancellation tracking now survives the cross-actor gap between conversion ownership
+checks and helper registration. Stop and supersession retain the cancellation marker
+until the callback's last possible handoff; terminal cleanup releases it even after
+ownership changes. An injected isolated BMX service extends the MCA queue-stop regression
+to verify both late-handoff rejection and eventual tracking cleanup. Broader package,
+framework, and superseded-helper draining remain open (Codex, 2026-09-10).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -1571,6 +1578,15 @@ odd-sized media verifies actual output dimensions; focused regressions cover cla
 AV2 geometry and malformed/missing source geometry. Broader typed filter/codec/output
 ownership and preflight remain open (Codex, 2026-09-10).
 
+Finite generic and generated-video trim intervals now resolve through `FFMPEGTrimPlan`.
+Equal or reversed positive endpoints fail before tool lookup, output reservation, audio
+preprocessing, and encoder launch instead of silently becoming open-ended exports.
+Ordinary, synthesized, FFmpeg waveform, and native waveform commands share the typed
+seek/duration policy; existing nonpositive/nonfinite endpoint normalization remains.
+Four regressions cover policy, each command branch, and native AVC-Intra early rejection.
+AV2-specific interval preflight and broader typed filters/codecs/outputs remain open
+(Codex, 2026-09-10).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1817,6 +1833,15 @@ reject the complete record set. Tests cover valid round trips, legacy migration,
 malformed sibling retention, and manager restore behavior. Persistence failures are
 logged; a user-facing recovery/reset flow remains open, and schedules added while
 storage is damaged remain session-only (Codex, 2026-09-10).
+
+Unreadable scheduled-download storage now shows a persistent queue warning and an
+explicit reset confirmation. Normal edits preserve the damaged value; confirmed recovery
+replaces it with schedules still queued in the current session. Encoding failure retains
+the original data. Four new store/manager regressions cover replacement, empty reset,
+failed encoding, session-only additions, and retained schedule flags. The warning and
+confirmation are translated into Norwegian and use stable accessibility identifiers;
+a DEBUG fixture uses an isolated preferences suite for bilingual UI verification
+(Codex, 2026-09-10).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -2137,7 +2162,34 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-10, Codex): Debug compilation and all 786 unit tests pass
+Latest validation (2026-09-10, Codex): Debug compilation and all 794 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Eight new regressions
+cover typed trim intervals, pre-helper native AVC-Intra rejection, and damaged-schedule
+recovery. The MCA queue-stop test additionally verifies cancellation across late BMX
+handoffs and final tracking cleanup. The bilingual schedule warning/reset UI test passes,
+including cancellation and explicit recovery; English/Norwegian layouts were visually
+reviewed. Three additional conversion UI smoke tests pass: success, failure details,
+and start/cancel transitions. All 43 release-script tests, manifest freshness, and
+localization checks pass (1,513 entries, 15 intentional omissions). The final unsigned
+Release build passes; its bundle audit verifies all 44 Mach-O images and six packaged
+license notices.
+
+Initial validation found a throwing test-fixture closure missing `try`, a warning container
+identifier overriding its reset button, and an ambiguous Cancel test query. Corrected
+fixtures and scoped accessibility queries pass. Independent review identified AVC-Intra
+preprocessing bypassing late trim validation; converter-level preflight and its no-launch
+regression close that gap. No bundled binaries or license assignments changed.
+
+Remaining implementation work: broader typed filters/codecs/output plans and AV2-specific
+interval preflight; orchestration extraction, feature settings and schema migrations;
+full package/framework and superseded-helper draining; wider actor/UI/filesystem audits;
+multi-process subtitle and remote destination coordination; generated AV2 video, accurate
+Matroska layout labels, and IMF descriptor conformance. Manual playback, Shortcuts,
+sandbox renewal, remote upload, capture/editor, VoiceOver and broader UI checks remain,
+along with runtime footprint measurements, clean-machine install/update, complete
+dependency provenance (99 unresolved license entries), and credentialed release checks.
+
+Previous validation (2026-09-10, Codex): Debug compilation and all 786 unit tests pass
 with zero failures or skips from a fresh dedicated Derived Data directory using the
 shared unit-only scheme. Fifteen new regressions cover resolved crop geometry and
 actual generated dimensions, invalid/missing source preflight, scheduled-download

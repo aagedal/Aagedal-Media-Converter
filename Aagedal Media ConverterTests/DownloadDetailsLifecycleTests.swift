@@ -175,9 +175,99 @@ final class ScheduledDownloadStoreTests: XCTestCase {
                 outputFolder: URL(fileURLWithPath: NSTemporaryDirectory())
             )
             XCTAssertTrue(items.isEmpty)
+            XCTAssertTrue(manager.hasScheduledDownloadStorageError)
             XCTAssertNil(manager.videoItems)
             XCTAssertNil(manager.outputFolder)
             XCTAssertEqual(defaults.data(forKey: ScheduledDownloadStore.key), data)
+        }
+    }
+
+    func testExplicitResetReplacesDamagedStorageAndEmptyResetClearsIt() throws {
+        try withStore { defaults, store in
+            for invalid: Any in [Data("broken".utf8), "wrong-type", Data("{}".utf8)] {
+                defaults.set(invalid, forKey: ScheduledDownloadStore.key)
+                let replacement = entry()
+                try store.reset(with: [replacement])
+                XCTAssertEqual(try store.load(), [replacement])
+                try store.reset(with: [])
+                XCTAssertNil(defaults.object(forKey: ScheduledDownloadStore.key))
+            }
+        }
+    }
+
+    func testResetEncodingFailureRetainsDamagedStorage() throws {
+        try withStore { defaults, store in
+            let damaged = Data("broken".utf8)
+            defaults.set(damaged, forKey: ScheduledDownloadStore.key)
+            let invalid = PersistedScheduledDownload(
+                itemID: UUID(), url: "https://example.com/video",
+                scheduledTime: Date(timeIntervalSinceReferenceDate: .infinity),
+                liveFromStart: false, autoEncode: false, uploadEnabled: false, audioOnly: false
+            )
+            XCTAssertThrowsError(try store.reset(with: [invalid]))
+            XCTAssertEqual(defaults.data(forKey: ScheduledDownloadStore.key), damaged)
+        }
+    }
+
+    @MainActor
+    func testNewScheduleRemainsSessionOnlyUntilExplicitRecovery() async throws {
+        let suite = "ScheduledDownloadRecoveryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let damaged = Data("broken".utf8)
+        defaults.set(damaged, forKey: ScheduledDownloadStore.key)
+        let manager = DownloadManager(defaults: defaults)
+        var items: [VideoItem] = []
+        let id = await manager.scheduleDownload(
+            url: "https://example.com/video", at: Date().addingTimeInterval(86_400),
+            items: Binding(get: { items }, set: { items = $0 }),
+            outputFolder: URL(fileURLWithPath: NSTemporaryDirectory()), audioOnly: true
+        )
+        let itemID = try XCTUnwrap(id)
+        defer { manager.cancelScheduledDownload(itemID: itemID) }
+        XCTAssertEqual(items.count, 1)
+        XCTAssertTrue(manager.hasScheduledDownloadStorageError)
+        XCTAssertEqual(defaults.data(forKey: ScheduledDownloadStore.key), damaged)
+        manager.resetScheduledDownloadStorage()
+        XCTAssertFalse(manager.hasScheduledDownloadStorageError)
+        let saved = try ScheduledDownloadStore(defaults: defaults).load()
+        XCTAssertEqual(saved.count, 1)
+        XCTAssertEqual(saved.first?.itemID, itemID)
+        XCTAssertEqual(saved.first?.audioOnly, true)
+    }
+
+    @MainActor
+    func testRecoverySavesOnlyCurrentlyScheduledQueueItemsAndClearsWarning() throws {
+        try withStore { defaults, store in
+            let damaged = Data("broken".utf8)
+            defaults.set(damaged, forKey: ScheduledDownloadStore.key)
+            let manager = DownloadManager(defaults: defaults)
+            var scheduled = VideoItem(
+                url: URL(fileURLWithPath: "/fixture/scheduled"), name: "Scheduled",
+                size: 0, duration: "", durationSeconds: 0, status: .waiting,
+                progress: 0, eta: "", outputURL: nil
+            )
+            scheduled.sourceURL = "https://example.com/video"
+            scheduled.scheduledDownloadTime = Date(timeIntervalSince1970: 2_000_000_000)
+            scheduled.downloadLiveFromStart = true
+            scheduled.downloadAudioOnly = true
+            scheduled.autoEncodeAfterDownload = true
+            scheduled.uploadEnabled = true
+            var completed = scheduled
+            completed.scheduledDownloadTime = nil
+            var items = [scheduled, completed]
+            let binding = Binding(get: { items }, set: { items = $0 })
+            manager.videoItems = binding
+            manager.restoreScheduledDownloads(items: binding, outputFolder: URL(fileURLWithPath: NSTemporaryDirectory()))
+            XCTAssertTrue(manager.hasScheduledDownloadStorageError)
+            XCTAssertEqual(defaults.data(forKey: ScheduledDownloadStore.key), damaged)
+            manager.resetScheduledDownloadStorage()
+            XCTAssertFalse(manager.hasScheduledDownloadStorageError)
+            XCTAssertEqual(try store.load(), [PersistedScheduledDownload(
+                itemID: scheduled.id, url: scheduled.sourceURL!, scheduledTime: scheduled.scheduledDownloadTime!,
+                liveFromStart: true, autoEncode: true, uploadEnabled: true, audioOnly: true
+            )])
+            XCTAssertEqual(items.count, 2)
         }
     }
 

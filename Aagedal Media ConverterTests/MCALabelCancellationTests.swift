@@ -15,8 +15,13 @@ final class MCALabelCancellationTests: XCTestCase {
         let cancelled = expectation(description: "MCA probe cancellation received")
         let completed = expectation(description: "Conversion completed as cancelled")
         let probe = MCACancellationDrainProbe(started: started, cancelled: cancelled)
+        let bmx = BMXService(
+            subprocessRunner: MCAForbiddenBMXRunner(),
+            bmxtranswrapPathProvider: { "/fixture/bmxtranswrap" }
+        )
         let converter = FFMPEGConverter(
             subprocessRunner: MCAOutputFixtureRunner(),
+            bmxService: bmx,
             ffmpegPathProvider: { "/fixture/ffmpeg" },
             mcaAudioStreamProvider: { _ in await probe.run() }
         )
@@ -32,6 +37,9 @@ final class MCALabelCancellationTests: XCTestCase {
             completed.fulfill()
         })
         await fulfillment(of: [started], timeout: 10)
+        let trackingIDs = await bmx.cancellationTrackingOperationIDs()
+        let operationID = try XCTUnwrap(trackingIDs.first)
+        XCTAssertEqual(trackingIDs.count, 1)
         let returned = expectation(description: "Queue stop must wait for probe drain")
         returned.isInverted = true
         let stop = Task.detached {
@@ -40,9 +48,19 @@ final class MCALabelCancellationTests: XCTestCase {
         }
         await fulfillment(of: [cancelled], timeout: 2)
         await fulfillment(of: [returned], timeout: 0.05)
+        // Model a callback that already passed its converter ownership check before
+        // cancellation, but reaches the other actor only after cancellation finishes.
+        let lateHandoff = await bmx.rewrapToOP1a(
+            inputURL: directory.appendingPathComponent("input.mov"),
+            outputURL: directory.appendingPathComponent("late-output.mxf"),
+            operationID: operationID
+        ) { _ in }
+        XCTAssertTrue(lateHandoff.cancelled, "The stop must retain cancellation through the actor handoff")
         await probe.finishDraining()
         await stop.value
         await fulfillment(of: [completed], timeout: 5)
+        let remainingTracking = await bmx.cancellationTrackingOperationIDs()
+        XCTAssertTrue(remainingTracking.isEmpty, "The finished callback releases its cancellation tracking")
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("output.mxf").path))
     }
 
@@ -172,5 +190,15 @@ private struct MCAOutputFixtureRunner: SubprocessRunning {
             discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0,
             duration: .zero
         )
+    }
+}
+
+private struct MCAForbiddenBMXRunner: SubprocessRunning {
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        XCTFail("A cancelled handoff must not launch BMX")
+        throw CancellationError()
     }
 }

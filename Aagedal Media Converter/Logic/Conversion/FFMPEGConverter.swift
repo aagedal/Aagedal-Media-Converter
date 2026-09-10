@@ -124,6 +124,7 @@ actor FFMPEGConverter {
     private var postProcessingConversionID: UUID?
     private var activeBMXOperationID: UUID?
     private let subprocessRunner: any SubprocessRunning
+    private let bmxService: BMXService
     private let ffmpegPathProvider: @Sendable () -> String?
     private let avmdecPathProvider: @Sendable () -> String?
     private let dependencyPreflight: ConversionDependencyPreflight
@@ -168,6 +169,7 @@ actor FFMPEGConverter {
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        bmxService: BMXService = .shared,
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath },
         dependencyPreflight: ConversionDependencyPreflight = ConversionDependencyPreflight(),
@@ -179,6 +181,7 @@ actor FFMPEGConverter {
         }
     ) {
         self.subprocessRunner = subprocessRunner
+        self.bmxService = bmxService
         self.ffmpegPathProvider = ffmpegPathProvider
         self.avmdecPathProvider = avmdecPathProvider
         self.dependencyPreflight = dependencyPreflight
@@ -548,6 +551,11 @@ actor FFMPEGConverter {
         let inputURL = request.inputURL
         let outputURL = request.outputURL
         let preset = request.preset
+        if preset != .av2,
+           let preparationError = FFMPEGTrimPlan(start: request.trimStart, end: request.trimEnd).preparationError {
+            completion(false, preparationError)
+            return
+        }
         // Capture encoding and packaging preferences before cancellation or metadata work can suspend.
         let capturedAV2Settings = preset == .av2 ? (av2Settings ?? AV2Settings()) : nil
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
@@ -626,8 +634,7 @@ actor FFMPEGConverter {
         postProcessingConversionID = nil
         activeBMXOperationID = nil
         if let supersededBMXOperationID {
-            await BMXService.shared.cancel(operationID: supersededBMXOperationID)
-            _ = await BMXService.shared.finishCancellationTracking(operationID: supersededBMXOperationID)
+            await bmxService.cancel(operationID: supersededBMXOperationID)
         }
         let conversionID = UUID()
         activeConversionID = conversionID
@@ -1186,6 +1193,7 @@ actor FFMPEGConverter {
         )
 
         // Capture values for the closure
+        let bmxService = self.bmxService
         let capturedRequest = request
         let capturedTempAudioURL = tempAudioURL
         let capturedTempMXFURL = tempMXFURL
@@ -1254,7 +1262,7 @@ actor FFMPEGConverter {
                     )
                     let bmxResult: BMXRewrapResult
                     if await self?.isPostProcessing(conversionID) == true {
-                        bmxResult = await BMXService.shared.rewrapToOP1a(
+                        bmxResult = await bmxService.rewrapToOP1a(
                             inputURL: tempMXF,
                             outputURL: capturedFinalOutputURL,
                             clipName: capturedInputBaseName,
@@ -1271,7 +1279,7 @@ actor FFMPEGConverter {
                     } else {
                         bmxResult = BMXRewrapResult(success: false, stderr: "", cancelled: true)
                     }
-                    let lateCancellation = await BMXService.shared.finishCancellationTracking(
+                    let lateCancellation = await bmxService.finishCancellationTracking(
                         operationID: conversionID
                     )
                     await self?.clearActiveBMXOperation(if: conversionID)
@@ -1720,7 +1728,7 @@ actor FFMPEGConverter {
 
                         let bmxFlags = color.bmxFlags
 
-                        let bmxResult = await BMXService.shared.rewrapToIMFOP1a(
+                        let bmxResult = await bmxService.rewrapToIMFOP1a(
                             inputURL: capturedFinalOutputURL,
                             outputURL: tmpVideoMXF,
                             colorPrimaries: bmxFlags.colorPrimaries,
@@ -1736,7 +1744,7 @@ actor FFMPEGConverter {
                                 progressUpdate(overall, "Wrapping ProRes → MXF \(pct)%")
                             }
                         )
-                        let lateCancellation = await BMXService.shared.finishCancellationTracking(
+                        let lateCancellation = await bmxService.finishCancellationTracking(
                             operationID: conversionID
                         )
                         await self?.clearActiveBMXOperation(if: conversionID)
@@ -1984,7 +1992,13 @@ actor FFMPEGConverter {
                     }
                 }
 
-                let stillOwned = await self?.finishPostProcessing(if: conversionID) ?? false
+                let stillOwned: Bool
+                if let self {
+                    stillOwned = await self.finishPostProcessing(if: conversionID)
+                } else {
+                    _ = await bmxService.finishCancellationTracking(operationID: conversionID)
+                    stillOwned = false
+                }
                 if !stillOwned {
                     success = false
                     errorReason = "Conversion cancelled"
@@ -3446,6 +3460,11 @@ actor FFMPEGConverter {
             completion(success && wasActive, wasActive ? errorReason : "Conversion cancelled")
         }
 
+        if let preparationError = FFMPEGTrimPlan(start: trimStart, end: trimEnd).preparationError {
+            await complete(false, preparationError)
+            return
+        }
+
         // Compute effective duration for the render
         let effectiveDuration: Double
         if let trimStart, let trimEnd, trimEnd > trimStart {
@@ -3539,6 +3558,11 @@ actor FFMPEGConverter {
             return
         }
 
+        if let preparationError = command.preparationError {
+            await complete(false, preparationError)
+            return
+        }
+
         // Phase 3: Stream rendered video frames into FFmpeg through the shared runner.
         let privateCommandValues = Set(
             command.arguments.filter { $0.hasPrefix("/") } + [
@@ -3558,6 +3582,7 @@ actor FFMPEGConverter {
         )
         Self.logger.info("FFmpeg native waveform command: \(subprocessRequest.redactedCommandDescription, privacy: .public)")
 
+        let bmxService = self.bmxService
         let capturedNeedsBMXRewrap = needsBMXRewrap
         let capturedTempMXFURL = tempMXFURL
         let capturedFinalOutputURL = outputFileURL
@@ -3689,7 +3714,7 @@ actor FFMPEGConverter {
                     mcaDefaults: codecSettings?.avcIntraMCADefaults ?? .none
                 )
                 if await self?.activateBMXOperationIfActiveConversion(conversionID) == true {
-                    let bmxResult = await BMXService.shared.rewrapToOP1a(
+                    let bmxResult = await bmxService.rewrapToOP1a(
                         inputURL: tempMXF,
                         outputURL: capturedFinalOutputURL,
                         clipName: capturedInputBaseName,
@@ -3702,7 +3727,7 @@ actor FFMPEGConverter {
                             }
                         }
                     )
-                    let lateCancellation = await BMXService.shared.finishCancellationTracking(
+                    let lateCancellation = await bmxService.finishCancellationTracking(
                         operationID: conversionID
                     )
                     await self?.clearActiveBMXOperation(if: conversionID)
@@ -4381,9 +4406,10 @@ actor FFMPEGConverter {
         currentMCALabelTaskID = nil
         for task in currentAV2PipelineTasks.values { task.cancel() }
         currentAV2PipelineTasks.removeAll()
+        // Tracking belongs to the post-processing callback, which may still be
+        // between its ownership check and entering the BMX actor.
         if let bmxOperationID {
-            await BMXService.shared.cancel(operationID: bmxOperationID)
-            _ = await BMXService.shared.finishCancellationTracking(operationID: bmxOperationID)
+            await bmxService.cancel(operationID: bmxOperationID)
         }
         // Capture and detach before suspending: a replacement conversion may be
         // installed while the old runner drains. Never join from inside that same
@@ -4455,9 +4481,9 @@ actor FFMPEGConverter {
     private func beginPostProcessing(_ conversionID: UUID, usesBMX: Bool) async -> Bool {
         guard activeConversionID == conversionID else { return false }
         if usesBMX {
-            await BMXService.shared.prepareCancellationTracking(operationID: conversionID)
+            await bmxService.prepareCancellationTracking(operationID: conversionID)
             guard activeConversionID == conversionID else {
-                _ = await BMXService.shared.finishCancellationTracking(operationID: conversionID)
+                _ = await bmxService.finishCancellationTracking(operationID: conversionID)
                 return false
             }
         }
@@ -4478,20 +4504,22 @@ actor FFMPEGConverter {
     }
 
     private func finishPostProcessing(if conversionID: UUID) async -> Bool {
+        // The callback owns tracking until its last possible BMX handoff. A stop
+        // must leave the cancellation tombstone intact across that actor hop.
+        _ = await bmxService.finishCancellationTracking(operationID: conversionID)
         guard postProcessingConversionID == conversionID else { return false }
         postProcessingConversionID = nil
         if activeBMXOperationID == conversionID {
             activeBMXOperationID = nil
-            _ = await BMXService.shared.finishCancellationTracking(operationID: conversionID)
         }
         return true
     }
 
     private func activateBMXOperationIfActiveConversion(_ conversionID: UUID) async -> Bool {
         guard activeConversionID == conversionID else { return false }
-        await BMXService.shared.prepareCancellationTracking(operationID: conversionID)
+        await bmxService.prepareCancellationTracking(operationID: conversionID)
         guard activeConversionID == conversionID else {
-            _ = await BMXService.shared.finishCancellationTracking(operationID: conversionID)
+            _ = await bmxService.finishCancellationTracking(operationID: conversionID)
             return false
         }
         activeBMXOperationID = conversionID

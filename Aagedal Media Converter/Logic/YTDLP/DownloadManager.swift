@@ -11,11 +11,26 @@ import SwiftUI
 @MainActor
 @Observable
 class DownloadManager {
-    static let shared = DownloadManager()
+    static let shared: DownloadManager = {
+#if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if environment["AMC_UI_TEST_SESSION"] == "1",
+           environment["AMC_UI_TEST_DAMAGED_SCHEDULES"] == "1",
+           let defaults = UserDefaults(suiteName: "com.aagedal.MediaConverter.UITestSchedules") {
+            defaults.removePersistentDomain(forName: "com.aagedal.MediaConverter.UITestSchedules")
+            defaults.set(Data("Damaged UI test schedules".utf8), forKey: ScheduledDownloadStore.key)
+            return DownloadManager(defaults: defaults)
+        }
+#endif
+        return DownloadManager()
+    }()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "DownloadManager")
     private let ytdlpService = YTDLPService()
     private let scheduleStore: ScheduledDownloadStore
+
+    /// Keep recovery visible until the user explicitly replaces unreadable saved schedules.
+    private(set) var hasScheduledDownloadStorageError = false
 
     /// Active download tasks keyed by VideoItem ID
     private var downloadTasks: [UUID: Task<Void, Never>] = [:]
@@ -278,6 +293,7 @@ class DownloadManager {
         do {
             persisted = try scheduleStore.load()
         } catch {
+            hasScheduledDownloadStorageError = true
             logger.error("Cannot restore scheduled downloads; saved data retained: \(error.localizedDescription)")
             return
         }
@@ -329,6 +345,7 @@ class DownloadManager {
         do {
             try scheduleStore.save(rewritten)
         } catch {
+            hasScheduledDownloadStorageError = true
             logger.error("Cannot save restored scheduled downloads: \(error.localizedDescription)")
         }
         logger.info("Restored \(rewritten.count) scheduled download(s) from persistence")
@@ -1282,10 +1299,32 @@ class DownloadManager {
 
     // MARK: - Scheduled Download Persistence
 
+    /// Called only after explicit confirmation: replaces unreadable saved data with
+    /// the schedules still present in this session's queue.
+    func resetScheduledDownloadStorage() {
+        let entries = (videoItems?.wrappedValue ?? []).compactMap { item -> PersistedScheduledDownload? in
+            guard let time = item.scheduledDownloadTime, let url = item.sourceURL else { return nil }
+            return PersistedScheduledDownload(
+                itemID: item.id, url: url, scheduledTime: time,
+                liveFromStart: item.downloadLiveFromStart,
+                autoEncode: item.autoEncodeAfterDownload,
+                uploadEnabled: item.uploadEnabled, audioOnly: item.downloadAudioOnly
+            )
+        }
+        do {
+            try scheduleStore.reset(with: entries)
+            hasScheduledDownloadStorageError = false
+        } catch {
+            hasScheduledDownloadStorageError = true
+            logger.error("Cannot reset scheduled downloads; saved data retained: \(error.localizedDescription)")
+        }
+    }
+
     private func appendPersistedSchedule(_ entry: PersistedScheduledDownload) {
         do {
             try scheduleStore.append(entry)
         } catch {
+            hasScheduledDownloadStorageError = true
             logger.error("Cannot persist scheduled download; saved data retained: \(error.localizedDescription)")
         }
     }
@@ -1294,6 +1333,7 @@ class DownloadManager {
         do {
             try scheduleStore.remove(itemID: itemID)
         } catch {
+            hasScheduledDownloadStorageError = true
             logger.error("Cannot remove persisted schedule; saved data retained: \(error.localizedDescription)")
         }
     }
@@ -1409,6 +1449,16 @@ struct ScheduledDownloadStore {
             defaults.removeObject(forKey: Self.key)
         } else {
             let data = try JSONEncoder().encode(entries)
+            defaults.set(data, forKey: Self.key)
+        }
+    }
+
+    /// Explicit recovery only. Encode first so a failure preserves the original value.
+    func reset(with entries: [PersistedScheduledDownload]) throws {
+        let data = try JSONEncoder().encode(entries)
+        if entries.isEmpty {
+            defaults.removeObject(forKey: Self.key)
+        } else {
             defaults.set(data, forKey: Self.key)
         }
     }
