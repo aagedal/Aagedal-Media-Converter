@@ -100,3 +100,98 @@ private actor DownloadDetailsGate {
         continuation = nil
     }
 }
+
+final class ScheduledDownloadStoreTests: XCTestCase {
+    private func withStore(_ body: (UserDefaults, ScheduledDownloadStore) throws -> Void) rethrows {
+        let suite = "ScheduledDownloadStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        try body(defaults, ScheduledDownloadStore(defaults: defaults))
+    }
+
+    private func entry(audioOnly: Bool = true) -> PersistedScheduledDownload {
+        PersistedScheduledDownload(
+            itemID: UUID(), url: "https://example.com/video",
+            scheduledTime: Date(timeIntervalSince1970: 2_000_000_000),
+            liveFromStart: true, autoEncode: false, uploadEnabled: true, audioOnly: audioOnly
+        )
+    }
+
+    func testLegacyScheduleMigratesOnlyAbsentAudioOnlyKey() throws {
+        let original = entry()
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+        json.removeValue(forKey: "audioOnly")
+        let decoded = try JSONDecoder().decode(PersistedScheduledDownload.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertFalse(decoded.audioOnly)
+        XCTAssertEqual(decoded.itemID, original.itemID)
+        XCTAssertEqual(decoded.scheduledTime, original.scheduledTime)
+        for invalid: Any in [NSNull(), "true", 1] {
+            json["audioOnly"] = invalid
+            XCTAssertThrowsError(try JSONDecoder().decode(PersistedScheduledDownload.self, from: JSONSerialization.data(withJSONObject: json)))
+        }
+    }
+
+    func testCorruptStorageIsRetainedThroughEveryMutation() throws {
+        try withStore { defaults, store in
+            for invalid: Any in [Data("broken".utf8), "wrong-type", Data("{}".utf8)] {
+                defaults.set(invalid, forKey: ScheduledDownloadStore.key)
+                let before = defaults.object(forKey: ScheduledDownloadStore.key) as? NSObject
+                XCTAssertThrowsError(try store.load())
+                XCTAssertThrowsError(try store.append(entry()))
+                XCTAssertThrowsError(try store.remove(itemID: UUID()))
+                XCTAssertThrowsError(try store.save([]))
+                XCTAssertEqual(defaults.object(forKey: ScheduledDownloadStore.key) as? NSObject, before)
+            }
+        }
+    }
+
+    func testRoundTripReplacementAndRemovalPreserveOtherSchedules() throws {
+        try withStore { defaults, store in
+            XCTAssertEqual(try store.load(), [])
+            let first = entry()
+            let second = entry(audioOnly: false)
+            try store.append(first)
+            try store.append(second)
+            try store.append(first)
+            XCTAssertEqual(try store.load(), [second, first])
+            try store.remove(itemID: first.itemID)
+            XCTAssertEqual(try store.load(), [second])
+            try store.remove(itemID: UUID())
+            XCTAssertEqual(try store.load(), [second])
+            try store.remove(itemID: second.itemID)
+            XCTAssertNil(defaults.object(forKey: ScheduledDownloadStore.key))
+        }
+    }
+
+    @MainActor
+    func testCorruptRestoreLeavesQueueAndPersistedDataUntouched() {
+        withStore { defaults, _ in
+            let data = Data("unreadable schedules".utf8)
+            defaults.set(data, forKey: ScheduledDownloadStore.key)
+            let manager = DownloadManager(defaults: defaults)
+            var items: [VideoItem] = []
+            manager.restoreScheduledDownloads(
+                items: Binding(get: { items }, set: { items = $0 }),
+                outputFolder: URL(fileURLWithPath: NSTemporaryDirectory())
+            )
+            XCTAssertTrue(items.isEmpty)
+            XCTAssertNil(manager.videoItems)
+            XCTAssertNil(manager.outputFolder)
+            XCTAssertEqual(defaults.data(forKey: ScheduledDownloadStore.key), data)
+        }
+    }
+
+    func testMalformedEntryDoesNotPartiallyRestoreOrOverwriteValidSibling() throws {
+        try withStore { defaults, store in
+            let good = entry()
+            var bad = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(entry())) as? [String: Any])
+            bad["audioOnly"] = NSNull()
+            let validJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(good))
+            let data = try JSONSerialization.data(withJSONObject: [validJSON, bad])
+            defaults.set(data, forKey: ScheduledDownloadStore.key)
+            XCTAssertThrowsError(try store.load())
+            XCTAssertThrowsError(try store.append(entry()))
+            XCTAssertEqual(defaults.data(forKey: ScheduledDownloadStore.key), data)
+        }
+    }
+}

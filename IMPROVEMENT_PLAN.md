@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 771 tests pass. The
+- The unit-test baseline is green: 786 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 771 unit tests. The UI test target now has deterministic smoke
+- There are 786 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,505 entries. All 59 previously missing App Intent
+- The string catalog has 1,506 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -822,6 +822,14 @@ Four bounded fake-runner tests cover cancellation, cache poisoning, invalidation
 replacement completion. Converter-owned framework/MCA draining remains open
 (Codex, 2026-09-09).
 
+Converter-owned MCA label preparation now covers both ordinary AVC-Intra and native
+waveform post-processing. Queue cancellation cancels its stream/label probes, rejects
+late results, and drains the captured preparation task; task identity prevents stale
+completion from clearing replacement work. Probes check cancellation before starting,
+between stages, and before publishing temporary labels. Broader framework callback,
+package orchestration, superseded-helper draining, and cross-actor BMX handoff auditing
+remain open (Codex, 2026-09-10).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -1553,6 +1561,16 @@ conflicting output values are still removed or replaced. A policy matrix covers
 source/comment/timecode combinations and repeated application. Broader typed command
 ownership and preflight remain open (Codex, 2026-09-10).
 
+Crop filters now resolve through immutable `CropGeometryPlan` values shared by generic
+FFmpeg and AV2 planning. Clamping happens before even-dimension normalization, and
+AV2 encoder dimensions use the exact resolved crop area. Nonfinite coordinates,
+invalid source dimensions, and unrepresentable anamorphic output sizes are rejected
+before integer conversion or argument mutation. Active crops with unavailable geometry
+now fail preparation instead of silently encoding without the requested crop. Generated
+odd-sized media verifies actual output dimensions; focused regressions cover clamped
+AV2 geometry and malformed/missing source geometry. Broader typed filter/codec/output
+ownership and preflight remain open (Codex, 2026-09-10).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1791,6 +1809,14 @@ omitted as a whole during capture rather than silently losing individual element
 nonfinite numbers are rejected. Four regressions cover invalid imports, valid nested
 values, removal, and capture behavior. Broader feature preferences and schema migrations
 remain open (Codex, 2026-09-10).
+
+Scheduled-download persistence now uses an injectable strict store. Unsupported or
+malformed saved data survives restoration, append, removal, and replacement attempts;
+missing legacy `audioOnly` migrates to false, while explicit null and malformed values
+reject the complete record set. Tests cover valid round trips, legacy migration,
+malformed sibling retention, and manager restore behavior. Persistence failures are
+logged; a user-facing recovery/reset flow remains open, and schedules added while
+storage is damaged remain session-only (Codex, 2026-09-10).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -2111,7 +2137,35 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-10, Codex): Debug compilation and all 771 unit tests pass
+Latest validation (2026-09-10, Codex): Debug compilation and all 786 unit tests pass
+with zero failures or skips from a fresh dedicated Derived Data directory using the
+shared unit-only scheme. Fifteen new regressions cover resolved crop geometry and
+actual generated dimensions, invalid/missing source preflight, scheduled-download
+migration and data preservation, and MCA probe cancellation/publication, including
+queue-stop draining. All 43 release-script tests, manifest freshness, and localization
+checks pass (1,506 entries, 15 intentional omissions). The unsigned Release build
+passes; its bundle audit verifies all 44 Mach-O images and six packaged license
+notices. No bundled binaries or license assignments changed.
+
+Initial compilation caught test-fixture concurrency-checker and throwing-closure errors;
+corrected fixtures pass the full suite. A shared build-directory lock was resolved by
+using a dedicated Converter directory. Independent review found no further introduced
+crop, persistence, or MCA ownership regressions. Computer-use inspection exposed an
+existing empty queue, but does not establish behavior of the newly built app. Manual
+playback, sandbox renewal, VoiceOver, and UI screenshot checks remain unverified.
+
+Remaining implementation work: broader typed filters/codecs/output plans and preflight;
+orchestration extraction, feature settings and schema migrations; full package/framework
+and superseded-helper draining; broader actor/UI and filesystem audits; cross-actor BMX
+handoff and multi-process subtitle/remote destination coordination; generated AV2 video,
+accurate Matroska layout labels, and IMF descriptor conformance. Damaged scheduled-download
+storage still needs user-facing error/recovery controls; new schedules remain session-only
+while it is damaged. Manual UI, playback, Shortcuts, sandbox renewal, remote upload,
+capture/editor, and accessibility checks remain, along with runtime footprint measurements,
+clean-machine install/update, complete dependency provenance (99 unresolved license entries),
+and credentialed release checks.
+
+Previous validation (2026-09-10, Codex): Debug compilation and all 771 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Nine new regressions
 cover metadata input/output boundaries, malformed settings snapshots, and legacy
 watch-folder cleanup grant renewal. The AV2 source progress fixture now waits for its

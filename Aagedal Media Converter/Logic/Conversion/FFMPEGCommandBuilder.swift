@@ -478,50 +478,61 @@ enum FFMPEGCommandBuilder {
            cropConfig.isActive,
            preset.outputsVisualFrames,
            (capturedCodecSettings?.appliesCrop ?? preset.appliesCrop) {
-            if let geometry = await sourceGeometry(
+            guard let geometry = await sourceGeometry(
                 for: visualSourceURL ?? inputURL,
                 sourceMetadata: visualSourceURL == nil ? sourceMetadata : nil
-            ) {
-                let width = geometry.width
-                let height = geometry.height
+            ) else {
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: "The crop geometry is invalid for this source."
+                )
+            }
+            let width = geometry.width
+            let height = geometry.height
 
-                // Calculate effective Pixel Aspect Ratio (PAR)
-                // We use a robust detection strategy:
-                // 1. Calculate PAR derived from DAR (Display Aspect Ratio). This is usually the ground truth for playback.
-                // 2. Check explicit PAR from metadata.
-                // 3. If explicit PAR exists and is 'close' to DAR-derived PAR (within 5%), use explicit PAR (it's likely more precise).
-                // 4. If explicit PAR contradicts DAR (e.g. PAR=1 vs DAR=16:9 for 1440 width), use DAR-derived PAR.
-                // 5. Default to 1.0.
-                let effectivePAR: Double
-                let darValues = geometry.displayAspectRatio
-                let parValues = geometry.pixelAspectRatio
-                
-                if let dar = darValues, dar > 0, height > 0 {
-                    let resolutionAspect = Double(width) / Double(height)
-                    let derivedPAR = dar / resolutionAspect
-                    
-                    if let par = parValues, par > 0 {
-                        // Check consistency
-                        if abs(derivedPAR - par) < 0.05 {
-                            effectivePAR = par // Consistent, use explicit
-                        } else {
-                            effectivePAR = derivedPAR // Contradiction, trust DAR (Container)
-                        }
+            // Calculate effective Pixel Aspect Ratio (PAR)
+            // We use a robust detection strategy:
+            // 1. Calculate PAR derived from DAR (Display Aspect Ratio). This is usually the ground truth for playback.
+            // 2. Check explicit PAR from metadata.
+            // 3. If explicit PAR exists and is 'close' to DAR-derived PAR (within 5%), use explicit PAR (it's likely more precise).
+            // 4. If explicit PAR contradicts DAR (e.g. PAR=1 vs DAR=16:9 for 1440 width), use DAR-derived PAR.
+            // 5. Default to 1.0.
+            let effectivePAR: Double
+            let darValues = geometry.displayAspectRatio
+            let parValues = geometry.pixelAspectRatio
+
+            if let dar = darValues, dar > 0, height > 0 {
+                let resolutionAspect = Double(width) / Double(height)
+                let derivedPAR = dar / resolutionAspect
+
+                if let par = parValues, par > 0 {
+                    // Check consistency
+                    if abs(derivedPAR - par) < 0.05 {
+                        effectivePAR = par // Consistent, use explicit
                     } else {
-                        effectivePAR = derivedPAR
+                        effectivePAR = derivedPAR // Contradiction, trust DAR (Container)
                     }
-                } else if let par = parValues, par > 0 {
-                    effectivePAR = par
                 } else {
-                    effectivePAR = 1.0
+                    effectivePAR = derivedPAR
                 }
-                
-                applyCropToVideoFilter(
-                    &ffmpegArgs,
-                    cropConfig: cropConfig,
-                    sourceWidth: width,
-                    sourceHeight: height,
-                    pixelAspectRatio: effectivePAR
+            } else if let par = parValues, par > 0 {
+                effectivePAR = par
+            } else {
+                effectivePAR = 1.0
+            }
+
+            guard applyCropToVideoFilter(
+                &ffmpegArgs,
+                cropConfig: cropConfig,
+                sourceWidth: width,
+                sourceHeight: height,
+                pixelAspectRatio: effectivePAR
+            ) else {
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: "The crop geometry is invalid for this source."
                 )
             }
         }
@@ -2009,94 +2020,57 @@ extension FFMPEGCommandBuilder {
     /// - If the chain contains a DAR-based desqueeze (e.g. scale='trunc(ih*dar...)',setsar=1/1),
     ///   it is replaced with crop plus explicit square-pixel normalization when PAR is known.
     /// - Otherwise, crop is inserted after setsar and before any final scale when possible.
+    @discardableResult
     static func applyCropToVideoFilter(
         _ ffmpegArgs: inout [String],
         cropConfig: CropConfig,
         sourceWidth: Int,
         sourceHeight: Int,
         pixelAspectRatio: Double?
-    ) {
+    ) -> Bool {
         // Don't apply crop to stream copy preset
         if let codecIndex = ffmpegArgs.lastIndex(of: "-c:v"),
            codecIndex + 1 < ffmpegArgs.count, ffmpegArgs[codecIndex + 1] == "copy" {
             logger.debug("Skipping crop for stream copy preset")
-            return
+            return true
         }
 
         guard cropConfig.isActive else {
             logger.debug("Skipping inactive crop config")
-            return
+            return true
         }
 
-        // Find -vf index, or add it if it doesn't exist
-        var vfIndex = ffmpegArgs.firstIndex(of: "-vf")
-        var filterChain = ""
-
-        if let existingIndex = vfIndex, existingIndex + 1 < ffmpegArgs.count {
-            // Use existing filter chain
-            filterChain = ffmpegArgs[existingIndex + 1]
-        } else {
-            // No -vf found, add it
-            // Insert before output file (which is last)
-            let insertIndex = ffmpegArgs.count
-            ffmpegArgs.insert("-vf", at: insertIndex)
-            ffmpegArgs.insert("", at: insertIndex + 1)  // Empty placeholder
-            vfIndex = insertIndex
-            logger.debug("Added -vf argument for crop")
-        }
-
-        guard let vfIndex else {
-            logger.debug("Failed to create -vf argument for crop")
-            return
-        }
-
-        // Generate crop filter
-        guard var cropFilter = CropService.buildCropFilter(
-            config: cropConfig,
-            sourceWidth: sourceWidth,
-            sourceHeight: sourceHeight
-        ) else {
-            logger.debug("Crop filter not generated (inactive or invalid)")
-            return
-        }
-
-        // Check for anamorphic content (non-square pixels)
-        // If PAR deviates significantly from 1.0, scale to square pixels
-        // Normalize the cropped frame explicitly when the effective PAR is known. This must happen
-        // after crop: a 1:1 display crop from 1440x1080 SAR 4:3 is 810x1080 stored pixels, which
-        // becomes 1080x1080 square pixels. Merely setting SAR to 1 would incorrectly produce 3:4.
+        // Resolve before mutating arguments: invalid crops must not leave an empty -vf.
+        guard let geometry = CropGeometryPlan(
+            config: cropConfig, sourceWidth: sourceWidth, sourceHeight: sourceHeight
+        ) else { return false }
+        var cropFilter = geometry.filter
         let hasKnownPixelAspectRatio = pixelAspectRatio.map { $0.isFinite && $0 > 0 } ?? false
         let needsAnamorphicNormalization = pixelAspectRatio.map { abs($0 - 1.0) > 0.01 } ?? false
         if let par = pixelAspectRatio, hasKnownPixelAspectRatio, needsAnamorphicNormalization {
-            // We need to scale the cropped output to square pixels using the effective PAR.
-            // We calculate the target dimensions explicitly in Swift rather than relying on ffmpeg's 'sar' variable,
-            // because the stream's internal SAR might be 1:1 even if the effective PAR is not (as detected by our DAR priority logic).
-
-            let pixelRect = cropConfig.pixelRect(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-                .evenDimensions()
-                .clamped(maxWidth: sourceWidth, maxHeight: sourceHeight)
-            let targetWidth = Double(pixelRect.width) * par
-            let targetHeight = Double(pixelRect.height)
-
-            // Ensure even dimensions for compatibility
-            let finalWidth = evenDimension(Int(round(targetWidth)))
-            let finalHeight = evenDimension(Int(round(targetHeight)))
-
-            // scale=FINAL_W:FINAL_H,setsar=1/1
-            let scaleFilter = "scale=\(finalWidth):\(finalHeight),setsar=1/1"
-            cropFilter = "\(cropFilter),\(scaleFilter)"
-            logger.info("Added anamorphic scaling to crop filter: PAR \(par) -> \(finalWidth)x\(finalHeight)")
+            guard let dimensions = CropGeometryPlan.squarePixelDimensions(
+                width: geometry.rect.width, height: geometry.rect.height, pixelAspectRatio: par,
+                roundWidthUp: true
+            ) else { return false }
+            cropFilter += ",scale=\(dimensions.width):\(dimensions.height),setsar=1/1"
         }
-
+        let vfIndex = ffmpegArgs.firstIndex(of: "-vf")
+        let filterChain = vfIndex.flatMap { $0 + 1 < ffmpegArgs.count ? ffmpegArgs[$0 + 1] : nil } ?? ""
         var plan = CropVideoFilterPlan(filterChain)
         plan.insertCrop(
             cropFilter,
             hasKnownPixelAspectRatio: hasKnownPixelAspectRatio,
             includesSquarePixelNormalization: needsAnamorphicNormalization && hasKnownPixelAspectRatio
         )
-        filterChain = plan.rendered
-        ffmpegArgs[vfIndex + 1] = filterChain
-        logger.info("Applied crop to video filter chain: \(filterChain, privacy: .public)")
+        if let vfIndex, vfIndex + 1 < ffmpegArgs.count {
+            ffmpegArgs[vfIndex + 1] = plan.rendered
+        } else if let vfIndex {
+            ffmpegArgs.insert(plan.rendered, at: vfIndex + 1)
+        } else {
+            ffmpegArgs += ["-vf", plan.rendered]
+        }
+        logger.info("Applied crop to video filter chain: \(plan.rendered, privacy: .public)")
+        return true
     }
 
     /// Orders crop relative to the app's geometry stages without interpreting custom filter values.

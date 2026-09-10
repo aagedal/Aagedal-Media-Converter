@@ -7552,6 +7552,87 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testCropGeometryClampsBeforeEnforcingEvenDimensions() throws {
+        let config = CropConfig(normalizedRect: CropRect(x: 0.75, y: 0, width: 0.5, height: 1))
+        let plan = try XCTUnwrap(CropGeometryPlan(config: config, sourceWidth: 67, sourceHeight: 33))
+        XCTAssertEqual(plan.rect, PixelCropRect(x: 50, y: 0, width: 16, height: 32))
+        XCTAssertEqual(CropService.buildCropFilter(config: config, sourceWidth: 67, sourceHeight: 33), plan.filter)
+
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("crop-bounds-\(UUID().uuidString).rgb")
+        defer { try? FileManager.default.removeItem(at: output) }
+        try runFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+            "-i", "testsrc=size=67x33:rate=1", "-vf", plan.filter,
+            "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", output.path
+        ])
+        XCTAssertEqual(try Data(contentsOf: output).count, 16 * 32 * 3)
+    }
+
+    func testInvalidCropGeometryDoesNotMutateVideoArguments() {
+        for invalid in [Double.nan, .infinity, -.infinity, -1, 0] {
+            let config = CropConfig(normalizedRect: CropRect(x: 0, y: 0, width: invalid, height: 1))
+            var args = ["-c:v", "libx264"]
+            XCTAssertFalse(FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &args, cropConfig: config, sourceWidth: 1920, sourceHeight: 1080, pixelAspectRatio: 1
+            ))
+            XCTAssertEqual(args, ["-c:v", "libx264"])
+        }
+        let config = CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1))
+        for dimension in [Int.min, 0, 1, Int.max] {
+            XCTAssertNil(CropGeometryPlan(config: config, sourceWidth: dimension, sourceHeight: 1080))
+        }
+        for par in [Double.greatestFiniteMagnitude, .leastNonzeroMagnitude] {
+            var args = ["-vf", "null"]
+            XCTAssertFalse(FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &args, cropConfig: config, sourceWidth: 1920, sourceHeight: 1080, pixelAspectRatio: par
+            ))
+            XCTAssertEqual(args, ["-vf", "null"])
+        }
+    }
+
+    func testInvalidCropFailsCommandPreparation() async {
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: URL(fileURLWithPath: "/unused/input.mov"),
+            outputFileURL: URL(fileURLWithPath: "/unused/output.mp4"),
+            preset: .h264, comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: .nan, y: 0, width: 0.5, height: 1)),
+            sourceMetadata: videoMetadata(timecode: nil, frameRate: 24)
+        )
+        XCTAssertEqual(command.preparationError, "The crop geometry is invalid for this source.")
+        XCTAssertTrue(command.arguments.isEmpty)
+    }
+
+    func testMissingSourceGeometryFailsActiveCropPreparation() async {
+        let command = await FFMPEGCommandBuilder.buildCommand(
+            inputURL: URL(fileURLWithPath: "/nonexistent-crop-source-\(UUID().uuidString).mov"),
+            outputFileURL: URL(fileURLWithPath: "/unused/output.mp4"),
+            preset: .h264, comment: "", includeDateTag: false, trimStart: nil, trimEnd: nil,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1))
+        )
+        XCTAssertEqual(command.preparationError, "The crop geometry is invalid for this source.")
+        XCTAssertTrue(command.arguments.isEmpty)
+    }
+
+    func testAV2CropDimensionsUseTheClampedPixelArea() async throws {
+        let command = await AV2CommandBuilder.build(
+            inputURL: URL(fileURLWithPath: "/unused/input.mov"),
+            outputURL: URL(fileURLWithPath: "/unused/output.ivf"), trimStart: nil, trimEnd: nil,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0.75, y: 0, width: 0.5, height: 1)),
+            metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24))
+        )
+        let resolved = try XCTUnwrap(command)
+        XCTAssertEqual(resolved.outputWidth, 480)
+        XCTAssertEqual(resolved.outputHeight, 1080)
+        XCTAssertTrue(resolved.ffmpegArguments.containsAdjacent("-vf", "crop=480:1080:1440:0,scale=480:1080,setsar=1"))
+        let invalid = await AV2CommandBuilder.build(
+            inputURL: URL(fileURLWithPath: "/unused/input.mov"),
+            outputURL: URL(fileURLWithPath: "/unused/output.ivf"), trimStart: nil, trimEnd: nil,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: .infinity, y: 0, width: 0.5, height: 1)),
+            metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24))
+        )
+        XCTAssertNil(invalid)
+    }
+
     func testOddCropDimensionsAreRoundedToCodecSafeEvenValues() throws {
         var args: [String] = []
         let crop = CropConfig(normalizedRect: CropRect(x: 0.1, y: 0.1, width: 0.501, height: 0.501))

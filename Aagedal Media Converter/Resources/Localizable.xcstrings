@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "The crop geometry is invalid for this source." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beskjæringsområdet er ugyldig for denne kilden."
+          }
+        }
+      }
+    },
   "Automatic cleanup needs renewed folder access. Select Renew Access in Watch Folder Settings and select the folder again. Monitoring continues; cleanup will resume after selection.": {
     "localizations": {
       "nb": {

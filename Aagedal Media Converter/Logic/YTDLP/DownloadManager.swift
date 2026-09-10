@@ -15,6 +15,7 @@ class DownloadManager {
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "DownloadManager")
     private let ytdlpService = YTDLPService()
+    private let scheduleStore: ScheduledDownloadStore
 
     /// Active download tasks keyed by VideoItem ID
     private var downloadTasks: [UUID: Task<Void, Never>] = [:]
@@ -38,10 +39,11 @@ class DownloadManager {
     /// Callback to trigger encoding for a specific item (set by ContentView)
     var onAutoEncode: ((UUID) -> Void)?
 
-    init(detailsLoader: @escaping @Sendable (URL) async -> VideoFileUtils.VideoItemDetails = {
+    init(defaults: UserDefaults = .standard, detailsLoader: @escaping @Sendable (URL) async -> VideoFileUtils.VideoItemDetails = {
         await VideoFileUtils.loadDetails(for: $0)
     }) {
         self.detailsLoader = detailsLoader
+        self.scheduleStore = ScheduledDownloadStore(defaults: defaults)
     }
 
     /// Own post-download probes separately: the subprocess has already completed,
@@ -272,7 +274,13 @@ class DownloadManager {
     /// Re-adds previously scheduled downloads to the queue on app launch.
     /// Must be called after `videoItems`/`outputFolder` have been wired up.
     func restoreScheduledDownloads(items: Binding<[VideoItem]>, outputFolder: URL) {
-        let persisted = Self.loadPersistedScheduledDownloads()
+        let persisted: [PersistedScheduledDownload]
+        do {
+            persisted = try scheduleStore.load()
+        } catch {
+            logger.error("Cannot restore scheduled downloads; saved data retained: \(error.localizedDescription)")
+            return
+        }
         guard !persisted.isEmpty else { return }
 
         self.videoItems = items
@@ -318,7 +326,11 @@ class DownloadManager {
         }
 
         // Rewrite persistence so the stored itemIDs match the freshly-created VideoItems.
-        Self.savePersistedScheduledDownloads(rewritten)
+        do {
+            try scheduleStore.save(rewritten)
+        } catch {
+            logger.error("Cannot save restored scheduled downloads: \(error.localizedDescription)")
+        }
         logger.info("Restored \(rewritten.count) scheduled download(s) from persistence")
     }
 
@@ -1270,71 +1282,20 @@ class DownloadManager {
 
     // MARK: - Scheduled Download Persistence
 
-    private static let persistedScheduledDownloadsKey = "persistedScheduledDownloads.v1"
-
-    private struct PersistedScheduledDownload: Codable {
-        var itemID: UUID
-        let url: String
-        let scheduledTime: Date
-        let liveFromStart: Bool
-        let autoEncode: Bool
-        let uploadEnabled: Bool
-        let audioOnly: Bool
-
-        init(itemID: UUID, url: String, scheduledTime: Date, liveFromStart: Bool, autoEncode: Bool, uploadEnabled: Bool, audioOnly: Bool) {
-            self.itemID = itemID
-            self.url = url
-            self.scheduledTime = scheduledTime
-            self.liveFromStart = liveFromStart
-            self.autoEncode = autoEncode
-            self.uploadEnabled = uploadEnabled
-            self.audioOnly = audioOnly
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            itemID = try container.decode(UUID.self, forKey: .itemID)
-            url = try container.decode(String.self, forKey: .url)
-            scheduledTime = try container.decode(Date.self, forKey: .scheduledTime)
-            liveFromStart = try container.decode(Bool.self, forKey: .liveFromStart)
-            autoEncode = try container.decode(Bool.self, forKey: .autoEncode)
-            uploadEnabled = try container.decode(Bool.self, forKey: .uploadEnabled)
-            // Back-compat: schedules persisted before audio-only existed have no key.
-            audioOnly = try container.decodeIfPresent(Bool.self, forKey: .audioOnly) ?? false
-        }
-    }
-
-    private static func loadPersistedScheduledDownloads() -> [PersistedScheduledDownload] {
-        guard let data = UserDefaults.standard.data(forKey: persistedScheduledDownloadsKey),
-              let entries = try? JSONDecoder().decode([PersistedScheduledDownload].self, from: data) else {
-            return []
-        }
-        return entries
-    }
-
-    private static func savePersistedScheduledDownloads(_ entries: [PersistedScheduledDownload]) {
-        if entries.isEmpty {
-            UserDefaults.standard.removeObject(forKey: persistedScheduledDownloadsKey)
-            return
-        }
-        if let data = try? JSONEncoder().encode(entries) {
-            UserDefaults.standard.set(data, forKey: persistedScheduledDownloadsKey)
-        }
-    }
-
     private func appendPersistedSchedule(_ entry: PersistedScheduledDownload) {
-        var list = Self.loadPersistedScheduledDownloads()
-        list.removeAll { $0.itemID == entry.itemID }
-        list.append(entry)
-        Self.savePersistedScheduledDownloads(list)
+        do {
+            try scheduleStore.append(entry)
+        } catch {
+            logger.error("Cannot persist scheduled download; saved data retained: \(error.localizedDescription)")
+        }
     }
 
     private func removePersistedSchedule(itemID: UUID) {
-        var list = Self.loadPersistedScheduledDownloads()
-        let before = list.count
-        list.removeAll { $0.itemID == itemID }
-        guard list.count != before else { return }
-        Self.savePersistedScheduledDownloads(list)
+        do {
+            try scheduleStore.remove(itemID: itemID)
+        } catch {
+            logger.error("Cannot remove persisted schedule; saved data retained: \(error.localizedDescription)")
+        }
     }
 
     private static func formatDuration(_ seconds: Double) -> String {
@@ -1391,5 +1352,79 @@ final class DownloadAuxiliaryTaskStore {
 
     func cancel(itemID: UUID) {
         tasks.removeValue(forKey: itemID)?.task.cancel()
+    }
+}
+
+struct PersistedScheduledDownload: Codable, Equatable {
+    var itemID: UUID
+    let url: String
+    let scheduledTime: Date
+    let liveFromStart: Bool
+    let autoEncode: Bool
+    let uploadEnabled: Bool
+    let audioOnly: Bool
+
+    init(itemID: UUID, url: String, scheduledTime: Date, liveFromStart: Bool, autoEncode: Bool, uploadEnabled: Bool, audioOnly: Bool) {
+        self.itemID = itemID
+        self.url = url
+        self.scheduledTime = scheduledTime
+        self.liveFromStart = liveFromStart
+        self.autoEncode = autoEncode
+        self.uploadEnabled = uploadEnabled
+        self.audioOnly = audioOnly
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        itemID = try container.decode(UUID.self, forKey: .itemID)
+        url = try container.decode(String.self, forKey: .url)
+        scheduledTime = try container.decode(Date.self, forKey: .scheduledTime)
+        liveFromStart = try container.decode(Bool.self, forKey: .liveFromStart)
+        autoEncode = try container.decode(Bool.self, forKey: .autoEncode)
+        uploadEnabled = try container.decode(Bool.self, forKey: .uploadEnabled)
+        // Back-compat: schedules persisted before audio-only existed have no key.
+        audioOnly = container.contains(.audioOnly)
+            ? try container.decode(Bool.self, forKey: .audioOnly)
+            : false
+    }
+}
+
+/// A failed decode must never turn into an empty queue that overwrites recoverable schedules.
+struct ScheduledDownloadStore {
+    static let key = "persistedScheduledDownloads.v1"
+    let defaults: UserDefaults
+
+    func load() throws -> [PersistedScheduledDownload] {
+        guard let stored = defaults.object(forKey: Self.key) else { return [] }
+        guard let data = stored as? Data else {
+            throw CocoaError(.coderReadCorrupt)
+        }
+        return try JSONDecoder().decode([PersistedScheduledDownload].self, from: data)
+    }
+
+    func save(_ entries: [PersistedScheduledDownload]) throws {
+        // Refuse to replace an unsupported or damaged existing schema.
+        _ = try load()
+        if entries.isEmpty {
+            defaults.removeObject(forKey: Self.key)
+        } else {
+            let data = try JSONEncoder().encode(entries)
+            defaults.set(data, forKey: Self.key)
+        }
+    }
+
+    func append(_ entry: PersistedScheduledDownload) throws {
+        var entries = try load()
+        entries.removeAll { $0.itemID == entry.itemID }
+        entries.append(entry)
+        try save(entries)
+    }
+
+    func remove(itemID: UUID) throws {
+        var entries = try load()
+        let count = entries.count
+        entries.removeAll { $0.itemID == itemID }
+        guard entries.count != count else { return }
+        try save(entries)
     }
 }

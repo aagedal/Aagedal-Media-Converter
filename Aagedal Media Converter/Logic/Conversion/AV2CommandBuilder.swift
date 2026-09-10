@@ -394,20 +394,22 @@ enum AV2CommandBuilder {
         }
 
         // Compute final (square-pixel) output dimensions.
-        let cropActive = (cropConfig?.isActive ?? false)
-        let basePxW: Int
-        let basePxH: Int
-        if cropActive, let cropConfig {
-            let rect = cropConfig.pixelRect(sourceWidth: srcW, sourceHeight: srcH).evenDimensions()
-            basePxW = rect.width
-            basePxH = rect.height
+        let cropGeometry: CropGeometryPlan?
+        if let cropConfig, cropConfig.isActive {
+            guard let resolvedCrop = CropGeometryPlan(
+                config: cropConfig, sourceWidth: srcW, sourceHeight: srcH
+            ) else { return nil }
+            cropGeometry = resolvedCrop
         } else {
-            basePxW = srcW
-            basePxH = srcH
+            cropGeometry = nil
         }
-
-        var finalW = evenDimension(Double(basePxW) * effectivePAR)
-        var finalH = evenDimension(Double(basePxH))
+        guard let dimensions = CropGeometryPlan.squarePixelDimensions(
+            width: cropGeometry?.rect.width ?? srcW,
+            height: cropGeometry?.rect.height ?? srcH,
+            pixelAspectRatio: effectivePAR
+        ) else { return nil }
+        var finalW = dimensions.width
+        var finalH = dimensions.height
 
         if let maxShortEdge = settings.resolutionLimit.maxHeight {
             let shortEdge = min(finalW, finalH)
@@ -455,9 +457,8 @@ enum AV2CommandBuilder {
         // Video filter chain: crop (optional) then an explicit forced scale so the emitted frame
         // size exactly equals avmenc's -w/-h.
         var videoFilter = "scale=\(finalW):\(finalH),setsar=1"
-        if cropActive, let cropConfig,
-           let cropFilter = CropService.buildCropFilter(config: cropConfig, sourceWidth: srcW, sourceHeight: srcH) {
-            videoFilter = "\(cropFilter),scale=\(finalW):\(finalH),setsar=1"
+        if let cropGeometry {
+            videoFilter = "\(cropGeometry.filter),scale=\(finalW):\(finalH),setsar=1"
         }
 
         return Resolved(

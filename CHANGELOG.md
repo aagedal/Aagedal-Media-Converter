@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **Crop filters and AV2 output dimensions share the same bounded crop area**, including even dimensions at odd-sized source edges. Invalid or unreadable crop geometry fails preparation instead of silently dropping the crop.
+- **Cancelling AVC-Intra conversions stops and drains audio-label preparation**, including native waveform exports, and rejects late probe results.
+- **Malformed saved download schedules are preserved** when restoring, adding, or removing schedules. Valid legacy schedules still load.
+
 - **Older watch-folder grants can be renewed from Settings.** Automatic cleanup pauses until access is renewed while monitoring continues.
 - **Malformed settings imports are rejected before preferences are changed**, including nested null values and invalid schema versions.
 - **Output comments and timecode preserve custom input options** while overriding conflicting output metadata.

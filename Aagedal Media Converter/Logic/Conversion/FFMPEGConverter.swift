@@ -116,6 +116,8 @@ actor FFMPEGConverter {
     private var currentAVCIntraPreprocessingTaskID: UUID?
     private var currentAV2HelperTask: Task<AV2HelperRunResult, Never>?
     private var currentAV2HelperTaskID: UUID?
+    private var currentMCALabelTask: Task<URL?, Never>?
+    private var currentMCALabelTaskID: UUID?
     private var currentAV2PipelineTasks: [UUID: Task<SubprocessPipelineResult, Error>] = [:]
     private var currentProgressGate: ConversionProgressGate?
     private var activeConversionID: UUID?
@@ -125,6 +127,7 @@ actor FFMPEGConverter {
     private let ffmpegPathProvider: @Sendable () -> String?
     private let avmdecPathProvider: @Sendable () -> String?
     private let dependencyPreflight: ConversionDependencyPreflight
+    private let mcaAudioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
     private let preflightAudioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "FFMPEGConverter")
@@ -168,6 +171,9 @@ actor FFMPEGConverter {
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath },
         dependencyPreflight: ConversionDependencyPreflight = ConversionDependencyPreflight(),
+        mcaAudioStreamProvider: @escaping @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = {
+            await FFMPEGProbeService.fetchAudioStreams(for: $0)
+        },
         preflightAudioStreamProvider: @escaping @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = {
             await FFMPEGProbeService.fetchAudioStreams(for: $0)
         }
@@ -177,6 +183,7 @@ actor FFMPEGConverter {
         self.avmdecPathProvider = avmdecPathProvider
         self.dependencyPreflight = dependencyPreflight
         self.preflightAudioStreamProvider = preflightAudioStreamProvider
+        self.mcaAudioStreamProvider = mcaAudioStreamProvider
     }
 
     // MARK: - Temp File Cleanup
@@ -212,9 +219,14 @@ actor FFMPEGConverter {
         mcaDefaults: AVCIntraMCADefaults,
         audioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = { url in
             await FFMPEGProbeService.fetchAudioStreams(for: url)
+        },
+        mcaLabelProvider: @Sendable (URL) async -> [AudioTrackMCALabels]? = { url in
+            await BMXService.shared.getAudioTrackLabels(url: url)
         }
     ) async -> URL? {
+        guard !Task.isCancelled else { return nil }
         let allStreams = await audioStreamProvider(inputURL) ?? []
+        guard !Task.isCancelled else { return nil }
         // Walk the unfiltered list so audio-relative indices match the routing UI
         // (which sees every audio stream, decodable or not). Only decodable streams
         // produce output tracks, but the override key must use the original index.
@@ -232,7 +244,8 @@ actor FFMPEGConverter {
         // Read input MCA labels via mxf2raw only when the input is itself MXF.
         let mcaLabels: [AudioTrackMCALabels]
         if inputURL.pathExtension.lowercased() == "mxf" {
-            mcaLabels = await BMXService.shared.getAudioTrackLabels(url: inputURL) ?? []
+            mcaLabels = await mcaLabelProvider(inputURL) ?? []
+            guard !Task.isCancelled else { return nil }
         } else {
             mcaLabels = []
         }
@@ -260,6 +273,7 @@ actor FFMPEGConverter {
             return nil
         }
 
+        guard !Task.isCancelled else { return nil }
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("mca-labels-\(UUID().uuidString).txt")
         do {
@@ -270,6 +284,52 @@ actor FFMPEGConverter {
             logger.error("Failed to write MCA labels file: \(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    /// Own both probes independently of the callback task that performs post-processing.
+    /// Queue cancellation can then stop and drain MCA work without joining that callback.
+    private func prepareTrackedAVCIntraMCALabelsFile(
+        conversionID: UUID,
+        inputURL: URL,
+        audioRoutingConfig: AudioRoutingConfig?,
+        targetChannelCount: Int,
+        mcaDefaults: AVCIntraMCADefaults
+    ) async -> URL? {
+        guard activeConversionID == conversionID || postProcessingConversionID == conversionID else {
+            return nil
+        }
+        let taskID = UUID()
+        let audioStreamProvider = mcaAudioStreamProvider
+        let task = Task {
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.prepareAVCIntraMCALabelsFile(
+                    inputURL: inputURL,
+                    audioRoutingConfig: audioRoutingConfig,
+                    targetChannelCount: targetChannelCount,
+                    mcaDefaults: mcaDefaults,
+                    audioStreamProvider: audioStreamProvider
+                )
+            }
+        }
+        currentMCALabelTask?.cancel()
+        currentMCALabelTask = task
+        currentMCALabelTaskID = taskID
+        let result = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        let ownsTask = currentMCALabelTaskID == taskID
+        if ownsTask {
+            currentMCALabelTask = nil
+            currentMCALabelTaskID = nil
+        }
+        guard ownsTask, !task.isCancelled, !Task.isCancelled,
+              activeConversionID == conversionID || postProcessingConversionID == conversionID else {
+            if let result { Self.cleanupTempFile(at: result, label: "cancelled MCA labels") }
+            return nil
+        }
+        return result
     }
 
     // MARK: - Output Validation
@@ -556,6 +616,9 @@ actor FFMPEGConverter {
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
+        currentMCALabelTask?.cancel()
+        currentMCALabelTask = nil
+        currentMCALabelTaskID = nil
         for task in currentAV2PipelineTasks.values { task.cancel() }
         currentAV2PipelineTasks.removeAll()
         let supersededBMXOperationID = activeBMXOperationID
@@ -1182,26 +1245,32 @@ actor FFMPEGConverter {
                     Self.logger.info("Running bmxtranswrap to rewrap MXF to OP1a format")
                     progressUpdate(0.95, "Rewrapping to OP1a...")
 
-                    let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
+                    let mcaLabelsFile = await self?.prepareTrackedAVCIntraMCALabelsFile(
+                        conversionID: conversionID,
                         inputURL: capturedInputURL,
                         audioRoutingConfig: capturedRequest.audioRoutingConfig,
                         targetChannelCount: capturedCodecSettings?.avcIntraAudioChannels?.count ?? 8,
                         mcaDefaults: capturedCodecSettings?.avcIntraMCADefaults ?? .none
                     )
-                    let bmxResult = await BMXService.shared.rewrapToOP1a(
-                        inputURL: tempMXF,
-                        outputURL: capturedFinalOutputURL,
-                        clipName: capturedInputBaseName,
-                        mcaLabelsFile: mcaLabelsFile,
-                        operationID: conversionID,
-                        progress: { bmxProgress in
-                            // Map bmx progress to 95-100% range
-                            let overallProgress = 0.95 + (bmxProgress * 0.05)
-                            Task { @MainActor in
-                                progressUpdate(overallProgress, "Rewrapping to OP1a...")
+                    let bmxResult: BMXRewrapResult
+                    if await self?.isPostProcessing(conversionID) == true {
+                        bmxResult = await BMXService.shared.rewrapToOP1a(
+                            inputURL: tempMXF,
+                            outputURL: capturedFinalOutputURL,
+                            clipName: capturedInputBaseName,
+                            mcaLabelsFile: mcaLabelsFile,
+                            operationID: conversionID,
+                            progress: { bmxProgress in
+                                // Map bmx progress to 95-100% range
+                                let overallProgress = 0.95 + (bmxProgress * 0.05)
+                                Task { @MainActor in
+                                    progressUpdate(overallProgress, "Rewrapping to OP1a...")
+                                }
                             }
-                        }
-                    )
+                        )
+                    } else {
+                        bmxResult = BMXRewrapResult(success: false, stderr: "", cancelled: true)
+                    }
                     let lateCancellation = await BMXService.shared.finishCancellationTracking(
                         operationID: conversionID
                     )
@@ -3612,7 +3681,8 @@ actor FFMPEGConverter {
                 Self.logger.info("Running bmxtranswrap for native waveform output")
                 gatedProgressUpdate(0.95, "Rewrapping to OP1a...")
 
-                let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
+                let mcaLabelsFile = await self?.prepareTrackedAVCIntraMCALabelsFile(
+                    conversionID: conversionID,
                     inputURL: capturedInputURL,
                     audioRoutingConfig: capturedAudioRoutingConfig,
                     targetChannelCount: codecSettings?.avcIntraAudioChannels?.count ?? 8,
@@ -4262,6 +4332,8 @@ actor FFMPEGConverter {
         let avcIntraPreprocessingID = currentAVCIntraPreprocessingTaskID
         let av2HelperTask = currentAV2HelperTask
         let av2HelperID = currentAV2HelperTaskID
+        let mcaLabelTask = currentMCALabelTask
+        let mcaLabelTaskID = currentMCALabelTaskID
         let av2PipelineTasks = currentAV2PipelineTasks
         let waveformAnalysisTask = currentWaveformAnalysisTask
         let waveformAnalysisID = currentWaveformAnalysisID
@@ -4304,6 +4376,9 @@ actor FFMPEGConverter {
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
+        currentMCALabelTask?.cancel()
+        currentMCALabelTask = nil
+        currentMCALabelTaskID = nil
         for task in currentAV2PipelineTasks.values { task.cancel() }
         currentAV2PipelineTasks.removeAll()
         if let bmxOperationID {
@@ -4344,6 +4419,9 @@ actor FFMPEGConverter {
         }
         if let av2HelperID, Self.runningSubprocessID != av2HelperID {
             _ = await av2HelperTask?.result
+        }
+        if let mcaLabelTaskID, Self.runningSubprocessID != mcaLabelTaskID {
+            _ = await mcaLabelTask?.result
         }
         for (pipelineID, task) in av2PipelineTasks where Self.runningSubprocessID != pipelineID {
             _ = await task.result
