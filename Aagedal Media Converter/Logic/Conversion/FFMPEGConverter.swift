@@ -551,8 +551,10 @@ actor FFMPEGConverter {
         let inputURL = request.inputURL
         let outputURL = request.outputURL
         let preset = request.preset
-        if preset != .av2,
-           let preparationError = FFMPEGTrimPlan(start: request.trimStart, end: request.trimEnd).preparationError {
+        let trimPreparationError = preset == .av2
+            ? AV2TrimPlan(start: request.trimStart, end: request.trimEnd).preparationError
+            : FFMPEGTrimPlan(start: request.trimStart, end: request.trimEnd).preparationError
+        if let preparationError = trimPreparationError {
             completion(false, preparationError)
             return
         }
@@ -3004,6 +3006,9 @@ actor FFMPEGConverter {
             await FFMPEGProbeService.fetchAudioStreams(for: $0)
         }
     ) async -> AV2MuxAudioExtractionResult {
+        let trim = AV2TrimPlan(start: trimStart, end: trimEnd)
+        if let preparationError = trim.preparationError { return .failed(preparationError) }
+
         func operationIsCurrent() -> Bool {
             guard !Task.isCancelled else { return false }
             guard let conversionID else { return true }
@@ -3052,7 +3057,6 @@ actor FFMPEGConverter {
         defer { Self.cleanupTempFile(at: routedAudioURL, label: "AV2 routed audio") }
 
         var args = ["-y", "-nostdin", "-hide_banner"]
-        let trim = AV2TrimPlan(start: trimStart, end: trimEnd)
         args += trim.inputArguments
         args += source.arguments
         args += trim.outputArguments

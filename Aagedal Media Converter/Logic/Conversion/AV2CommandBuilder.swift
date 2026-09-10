@@ -97,8 +97,8 @@ enum AV2CommandBuilder {
 
     // MARK: - Single-process build
 
-    /// Builds the single-process AV2 command pair. Returns nil if the source dimensions cannot be
-    /// determined (in which case avmenc cannot be configured and the caller should fail).
+    /// Builds the single-process AV2 command pair. Returns nil if the trim interval is invalid or
+    /// the source dimensions cannot be determined (the caller should fail).
     static func build(
         inputURL: URL,
         outputURL: URL,
@@ -350,6 +350,7 @@ enum AV2CommandBuilder {
         metadataSource: MetadataSource,
         settings: AV2Settings
     ) async -> Resolved? {
+        guard AV2TrimPlan(start: trimStart, end: trimEnd).preparationError == nil else { return nil }
         let metadataURL = visualSourceURL ?? inputURL
         let metadata: VideoMetadata? = switch metadataSource {
         case .probeIfNeeded:

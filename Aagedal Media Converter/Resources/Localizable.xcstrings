@@ -1,6 +1,156 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Add every video from the playlist or channel as separate queue items (downloads run sequentially)": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Legg til hver video fra spillelisten eller kanalen som egne køelementer (nedlastingene kjøres etter hverandre)"
+        }
+      }
+    }
+  },
+  "Audio only": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Kun lyd"
+        }
+      }
+    }
+  },
+  "Automatically start encoding after download completes": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Start konvertering automatisk når nedlastingen er fullført"
+        }
+      }
+    }
+  },
+  "Automatically upload after encoding completes": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Last opp automatisk når konverteringen er fullført"
+        }
+      }
+    }
+  },
+  "Download only the audio track (no video)": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Last ned bare lydsporet (uten video)"
+        }
+      }
+    }
+  },
+  "Encode": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Konverter"
+        }
+      }
+    }
+  },
+  "Record from start": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Ta opp fra starten"
+        }
+      }
+    }
+  },
+  "Reset Download History": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Tilbakestill nedlastingshistorikk"
+        }
+      }
+    }
+  },
+  "Reset Download History…": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Tilbakestill nedlastingshistorikk…"
+        }
+      }
+    }
+  },
+  "Reset saved download history?": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Tilbakestille lagret nedlastingshistorikk?"
+        }
+      }
+    }
+  },
+  "Saved download history could not be read.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Lagret nedlastingshistorikk kunne ikke leses."
+        }
+      }
+    }
+  },
+  "The saved data has been kept. Downloads still work, but new history cannot be saved until you reset it.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "De lagrede dataene er beholdt. Nedlastinger fungerer fortsatt, men ny historikk kan ikke lagres før du tilbakestiller den."
+        }
+      }
+    }
+  },
+  "This permanently deletes the unreadable download history. Downloaded files will be kept.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Dette sletter den uleselige nedlastingshistorikken permanent. Nedlastede filer beholdes."
+        }
+      }
+    }
+  },
+  "When enabled, yt-dlp will rewind live streams to the beginning before recording": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Når dette er aktivert, spoler yt-dlp direktesendinger tilbake til starten før opptak"
+        }
+      }
+    }
+  },
+  "Whole playlist": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Hele spillelisten"
+        }
+      }
+    }
+  },
   "The end trim must be after the start trim. Adjust the trim range and try again." : {
     "localizations" : {
       "nb" : {

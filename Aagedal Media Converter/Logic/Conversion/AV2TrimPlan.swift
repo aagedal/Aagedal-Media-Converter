@@ -12,7 +12,12 @@ struct AV2TrimPlan: Equatable, Sendable {
     init(start: Double?, end: Double?) {
         let normalizedStart = start.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 0
         self.start = normalizedStart
-        self.end = end.flatMap { $0.isFinite && $0 > normalizedStart ? $0 : nil }
+        self.end = end.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+    }
+
+    var preparationError: String? {
+        guard let end, end <= start else { return nil }
+        return String(localized: "The end trim must be after the start trim. Adjust the trim range and try again.")
     }
 
     var inputArguments: [String] {
@@ -20,10 +25,12 @@ struct AV2TrimPlan: Equatable, Sendable {
     }
 
     var outputArguments: [String] {
-        end.map { ["-t", String(format: "%.6f", $0 - start)] } ?? []
+        guard preparationError == nil else { return [] }
+        return end.map { ["-t", String(format: "%.6f", $0 - start)] } ?? []
     }
 
     func effectiveDuration(sourceDuration: Double?) -> Double? {
+        guard preparationError == nil else { return nil }
         let source = sourceDuration.flatMap { $0.isFinite ? max(0, $0) : nil }
         if let end {
             return max(0, (source.map { min(end, $0) } ?? end) - start)

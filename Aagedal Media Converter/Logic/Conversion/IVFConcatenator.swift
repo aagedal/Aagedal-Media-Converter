@@ -61,6 +61,7 @@ enum IVFConcatenator {
     /// - Throws: ``ConcatError`` when a segment is unreadable, not IVF, or geometry/codec mismatches.
     @discardableResult
     static func concatenate(segmentURLs: [URL], into outputURL: URL) throws -> ConcatResult {
+        try Task.checkCancellation()
         guard let first = segmentURLs.first else { throw ConcatError.noSegments }
 
         guard let firstHeader = IVFHeaderParser.parse(url: first) else { throw ConcatError.notIVF(first) }
@@ -69,6 +70,11 @@ enum IVFConcatenator {
         // or frame rate means the segmentation step diverged and the streams can't be joined.
         for url in segmentURLs {
             guard let h = IVFHeaderParser.parse(url: url) else { throw ConcatError.notIVF(url) }
+            guard h.fpsNumerator > 0, h.fpsDenominator > 0,
+                  h.fpsNumerator == firstHeader.fpsNumerator,
+                  h.fpsDenominator == firstHeader.fpsDenominator else {
+                throw ConcatError.mismatch("\(url.lastPathComponent): frame rate")
+            }
             if h.fourCC != firstHeader.fourCC || h.width != firstHeader.width || h.height != firstHeader.height {
                 throw ConcatError.mismatch("\(url.lastPathComponent): \(h.fourCC) \(h.width)x\(h.height) ≠ \(firstHeader.fourCC) \(firstHeader.width)x\(firstHeader.height)")
             }
@@ -76,16 +82,21 @@ enum IVFConcatenator {
 
         FileManager.default.createFile(atPath: outputURL.path, contents: nil)
         guard let out = try? FileHandle(forWritingTo: outputURL) else { throw ConcatError.unreadable(outputURL) }
-        defer { try? out.close() }
+        var completed = false
+        defer {
+            try? out.close()
+            if !completed { try? FileManager.default.removeItem(at: outputURL) }
+        }
 
         // Container header: copy the first segment's 32 bytes, then patch the frame-count field
         // (bytes 24..27) after we know the running total. Write a placeholder header now and
         // rewrite it at the end so we never have to buffer the whole bitstream.
-        var headerBytes = [UInt8](repeating: 0, count: 32)
-        if let hData = try? FileHandle(forReadingFrom: first).read(upToCount: 32), hData.count >= 32 {
-            headerBytes = [UInt8](hData)
+        let firstInput = try FileHandle(forReadingFrom: first)
+        defer { try? firstInput.close() }
+        guard let headerBytes = try firstInput.read(upToCount: 32), headerBytes.count == 32 else {
+            throw ConcatError.notIVF(first)
         }
-        out.write(Data(headerBytes))
+        try out.write(contentsOf: headerBytes)
 
         var totalFrames = 0
         var keyframeIndices: [Int] = []
@@ -93,6 +104,9 @@ enum IVFConcatenator {
         for url in segmentURLs {
             keyframeIndices.append(totalFrames) // first frame of each segment is a key frame
             try forEachFrame(in: url) { payload, _ in
+                guard totalFrames < Int(UInt32.max) else {
+                    throw ConcatError.mismatch("frame count exceeds IVF capacity")
+                }
                 var frameHeader = [UInt8](repeating: 0, count: 12)
                 let size = UInt32(payload.count)
                 frameHeader[0] = UInt8(size & 0xFF)
@@ -101,8 +115,8 @@ enum IVFConcatenator {
                 frameHeader[3] = UInt8((size >> 24) & 0xFF)
                 let ts = UInt64(totalFrames)
                 for i in 0..<8 { frameHeader[4 + i] = UInt8((ts >> (8 * i)) & 0xFF) }
-                out.write(Data(frameHeader))
-                out.write(payload)
+                try out.write(contentsOf: Data(frameHeader))
+                try out.write(contentsOf: payload)
                 totalFrames += 1
             }
         }
@@ -116,7 +130,9 @@ enum IVFConcatenator {
             UInt8((fc >> 24) & 0xFF),
         ])
         try out.seek(toOffset: 24)
-        out.write(countBytes)
+        try out.write(contentsOf: countBytes)
+        try out.close()
+        completed = true
 
         logger.info("Concatenated \(segmentURLs.count) AV2 segments → \(totalFrames) frames at \(firstHeader.width)x\(firstHeader.height)")
 
@@ -132,21 +148,38 @@ enum IVFConcatenator {
 
     /// Streams every frame of a single IVF file, invoking `body` with the raw payload and the
     /// frame's original (per-segment) timestamp. The 32-byte container header is skipped.
-    /// Reads the file in one shot — segments are bounded (≈ total size / worker count).
+    /// Reads one frame at a time, rejecting incomplete records instead of publishing a shortened video.
     static func forEachFrame(in url: URL, _ body: (_ payload: Data, _ timestamp: UInt64) throws -> Void) throws {
-        guard let data = try? Data(contentsOf: url) else { throw ConcatError.unreadable(url) }
-        guard data.count >= 32, IVFHeaderParser.parse(data: data) != nil else { throw ConcatError.notIVF(url) }
-
-        var offset = 32
-        while offset + 12 <= data.count {
-            let size = Int(data[offset]) | (Int(data[offset + 1]) << 8) | (Int(data[offset + 2]) << 16) | (Int(data[offset + 3]) << 24)
-            var ts: UInt64 = 0
-            for i in 0..<8 { ts |= UInt64(data[offset + 4 + i]) << (8 * i) }
-            let payloadStart = offset + 12
-            guard size >= 0, payloadStart + size <= data.count else { break } // truncated tail — stop cleanly
-            let payload = data.subdata(in: payloadStart..<(payloadStart + size))
-            try body(payload, ts)
-            offset = payloadStart + size
+        try Task.checkCancellation()
+        guard let input = try? FileHandle(forReadingFrom: url) else { throw ConcatError.unreadable(url) }
+        defer { try? input.close() }
+        let fileSize = try input.seekToEnd()
+        try input.seek(toOffset: 0)
+        guard let data = try input.read(upToCount: 32), data.count == 32,
+              let header = IVFHeaderParser.parse(data: data),
+              data[4] == 0, data[5] == 0, data[6] == 32, data[7] == 0 else {
+            throw ConcatError.notIVF(url)
         }
+
+        var frameCount = 0
+        while let record = try input.read(upToCount: 12), !record.isEmpty {
+            try Task.checkCancellation()
+            guard record.count == 12 else { throw ConcatError.notIVF(url) }
+            let size = Int(record[0]) | (Int(record[1]) << 8) | (Int(record[2]) << 16) | (Int(record[3]) << 24)
+            let position = try input.offset()
+            guard size > 0, position <= fileSize, UInt64(size) <= fileSize - position,
+                  let payload = try input.read(upToCount: size), payload.count == size else {
+                throw ConcatError.notIVF(url)
+            }
+            var timestamp: UInt64 = 0
+            for i in 0..<8 { timestamp |= UInt64(record[4 + i]) << (8 * i) }
+            try body(payload, timestamp)
+            frameCount += 1
+        }
+        // Zero is permitted for streams whose writer did not patch the optional count.
+        guard frameCount > 0, header.frameCount == 0 || header.frameCount == frameCount else {
+            throw ConcatError.notIVF(url)
+        }
+        try Task.checkCancellation()
     }
 }

@@ -1681,6 +1681,9 @@ struct ContentView: View {
             return
         }
         hasHandledUITestFixtureLaunch = true
+        if environment["AMC_UI_TEST_DAMAGED_HISTORY"] == "1" {
+            showURLInputOverlay = true
+        }
 
         do {
             let directory = UITestFixtureConfiguration.directory

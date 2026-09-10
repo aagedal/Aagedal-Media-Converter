@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 794 tests pass. The
+- The unit-test baseline is green: 804 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 794 unit tests. The UI test target now has deterministic smoke
+- There are 804 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,513 entries. All 59 previously missing App Intent
+- The string catalog has 1,528 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -289,6 +289,17 @@ after `setsar=1/1` uses exclusive string bounds and normalized separators; other
 values retain the crop through the fallback rather than silently omitting it. Two
 command regressions and a generated color-band RGB readback verify the crop, output
 dimensions, and valid filter syntax (Codex, 2026-09-09).
+
+AV2 IVF assembly now reads one frame at a time, rejects truncated records, unsupported
+header layouts, mismatched declared frame counts, empty streams, and incompatible
+segment frame rates. Output writes propagate filesystem errors and failed concatenations
+remove their partial output. Four regressions verify payload preservation, rewritten
+timestamps and segment boundaries, unknown-count inputs, malformed records, and
+pre-write rate rejection. A standalone harness also joined two actual bundled-avmenc
+40-frame streams and verified all 80 payloads, timestamps, and the segment boundary.
+Cancellation is checked between frames. The Matroska muxer
+still retains its collected frames, so this does not close the broader runtime-memory
+work (Codex, 2026-09-10).
 
 ### 1.2 Add small media-fixture integration tests
 
@@ -1584,7 +1595,13 @@ preprocessing, and encoder launch instead of silently becoming open-ended export
 Ordinary, synthesized, FFmpeg waveform, and native waveform commands share the typed
 seek/duration policy; existing nonpositive/nonfinite endpoint normalization remains.
 Four regressions cover policy, each command branch, and native AVC-Intra early rejection.
-AV2-specific interval preflight and broader typed filters/codecs/outputs remain open
+AV2-specific interval preflight was completed in the following slice; broader typed
+filters/codecs/outputs remain open (Codex, 2026-09-10).
+
+AV2 now rejects equal or reversed positive trim endpoints at converter entry and before
+picture/bit-depth or routed-audio probing. Tests cover single and segmented plans,
+zero helper launches, and preservation of existing output files on rejection. Zero,
+negative, and nonfinite endpoints retain their existing open-ended normalization
 (Codex, 2026-09-10).
 
 ### 3.3 Centralize settings access
@@ -1843,6 +1860,15 @@ confirmation are translated into Norwegian and use stable accessibility identifi
 a DEBUG fixture uses an isolated preferences suite for bilingual UI verification
 (Codex, 2026-09-10).
 
+Download-history persistence now serializes access on the main actor and distinguishes
+absent data from unreadable data before
+automatic additions or removals. Malformed JSON, wrong storage types, and damaged
+siblings retain the complete original value. The URL entry overlay exposes a translated
+warning and a confirmed reset even when no history can be displayed; downloads remain
+available, and recording new history resumes after reset. Four isolated store tests cover
+ordering, deduplication, limits, corruption preservation, and recovery. A bilingual UI
+regression covers cancelling and confirming reset (Codex, 2026-09-10).
+
 ## Priority 4 — Accessibility, localization, and product polish
 
 Target: parallelizable once stable identifiers are introduced.
@@ -1944,6 +1970,13 @@ screenshots. Five remaining
 descriptive preset names now localize without changing persisted raw values or custom
 names. Scrolled-off content, Shortcuts app integration, and VoiceOver remain.
 The established “Watch Folder” terminology is retained (Codex, 2026-09-06).
+
+Bilingual download-history review exposed automation option labels and tooltips passed
+through plain `String` parameters, bypassing catalog localization. The shared option
+button now accepts `LocalizedStringKey`; recording from start, audio-only, whole-playlist,
+encoding and upload help are translated, and the bilingual recovery test asserts the
+visible option labels. Broader/scrolled UI and Shortcuts review remain open
+(Codex, 2026-09-10).
 
 ### 4.3 Finish broadcast-grade screen-recording rates
 
@@ -2162,7 +2195,34 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-10, Codex): Debug compilation and all 794 unit tests pass
+Latest validation (2026-09-10, Codex): Debug compilation and all 804 unit tests pass
+with zero failures. Ten new regressions cover AV2 interval preflight, strict IVF assembly,
+and download-history persistence/recovery. A production-code harness joined actual
+bundled-avmenc output into 80 frames with exact payload preservation, monotonic timestamps,
+and the correct segment boundary. The bilingual history-recovery UI test passes, including
+cancel/reset and translated download options; English/Norwegian warning and confirmation
+screens were visually reviewed. Three conversion UI smoke tests also pass (success,
+failure details, and start/cancel). All 43 release-script tests, manifest freshness, and
+localization checks pass (1,528 entries, 15 intentional omissions). The final unsigned Release build and bundle audit pass, verifying all 44 Mach-O images
+and six packaged license notices.
+
+The recovery fixture initially exposed a non-Sendable static UserDefaults store. Main-actor
+service isolation and asynchronous main-actor XCTest methods resolved the compile error.
+Visual review then exposed untranslated download-option labels/tooltips, fixed through
+LocalizedStringKey parameters and nine additional catalog entries. Independent reviews
+found no further introduced AV2 assembly or history-recovery issues. No bundled binaries
+or license assignments changed.
+
+Remaining implementation work: broader typed filters/codecs/output plans, orchestration
+extraction, feature settings and schema migrations; full package/framework and superseded
+helper draining; wider actor/UI/filesystem audits; multi-process subtitle and remote
+coordination; generated waveform/synthesized AV2 video, accurate Matroska layout labels,
+and IMF descriptor conformance. Manual playback, Shortcuts, sandbox renewal, remote upload,
+capture/editor, VoiceOver and broader UI checks remain. Runtime footprint measurements,
+clean-machine installation/update, complete dependency provenance (99 unresolved license
+entries), and credentialed release validation remain open.
+
+Previous validation (2026-09-10, Codex): Debug compilation and all 794 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Eight new regressions
 cover typed trim intervals, pre-helper native AVC-Intra rejection, and damaged-schedule
 recovery. The MCA queue-stop test additionally verifies cancellation across late BMX

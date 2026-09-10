@@ -15,6 +15,8 @@ struct URLInputOverlay: View {
 
     @State private var urlText = ""
     @State private var history: [DownloadHistoryEntry] = []
+    @State private var hasUnreadableHistory = false
+    @State private var showHistoryResetConfirmation = false
     @State private var isScheduled = false
     @State private var scheduledDate = Self.defaultScheduleDate()
     @FocusState private var isTextFieldFocused: Bool
@@ -111,6 +113,7 @@ struct URLInputOverlay: View {
 
             // Load history
             history = DownloadHistoryService.getHistory()
+            hasUnreadableHistory = DownloadHistoryService.hasUnreadableHistory()
 
             // Check clipboard for URL (sanitize to first line only)
             if let clipboardString = NSPasteboard.general.string(forType: .string) {
@@ -354,7 +357,7 @@ struct URLInputOverlay: View {
         }
     }
 
-    private func toggleButton(isOn: Binding<Bool>, iconOn: String, iconOff: String, label: String, color: Color, help: String) -> some View {
+    private func toggleButton(isOn: Binding<Bool>, iconOn: String, iconOff: String, label: LocalizedStringKey, color: Color, help: LocalizedStringKey) -> some View {
         Button {
             isOn.wrappedValue.toggle()
         } label: {
@@ -378,6 +381,9 @@ struct URLInputOverlay: View {
 
     @ViewBuilder
     private var historySection: some View {
+        if hasUnreadableHistory {
+            historyStorageWarning
+        }
         if !history.isEmpty {
             Divider()
                 .padding(.top, 4)
@@ -386,6 +392,39 @@ struct URLInputOverlay: View {
                 historyHeader
                 historyList
             }
+        }
+    }
+
+    private var historyStorageWarning: some View {
+        HStack(alignment: .top) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Saved download history could not be read.")
+                    .font(.headline)
+                    .accessibilityIdentifier("downloadHistoryStorageWarning")
+                Text("The saved data has been kept. Downloads still work, but new history cannot be saved until you reset it.")
+                    .font(.caption)
+            }
+            Spacer()
+            Button("Reset Download History…") {
+                showHistoryResetConfirmation = true
+            }
+            .accessibilityIdentifier("downloadHistoryStorageResetButton")
+        }
+        .padding()
+        .background(.orange.opacity(0.1))
+        .alert("Reset saved download history?", isPresented: $showHistoryResetConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset Download History", role: .destructive) {
+                DownloadHistoryService.clearHistory()
+                history = DownloadHistoryService.getHistory()
+                hasUnreadableHistory = DownloadHistoryService.hasUnreadableHistory()
+                historyIndex = -1
+            }
+            .accessibilityIdentifier("downloadHistoryStorageResetConfirmButton")
+        } message: {
+            Text("This permanently deletes the unreadable download history. Downloaded files will be kept.")
         }
     }
 

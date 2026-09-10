@@ -1,5 +1,12 @@
 # v.4.3.0
 
+- **Download option labels and tooltips now follow the selected language**, including recording from start, audio-only downloads, playlist downloads, and automatic conversion.
+
+- **Damaged download history is preserved and shows a confirmed reset action**, so automatic history updates cannot erase unreadable saved entries.
+
+- **AV2 rejects invalid trim intervals before probing or launching helpers.**
+- **AV2 assembly rejects damaged or incompatible segments** instead of silently publishing a shortened video, and reads one frame at a time.
+
 - **Damaged saved download schedules show recovery guidance and a confirmed reset action**, preserving schedules added during the current session.
 - **Invalid trim ranges fail before conversion preparation**, including native waveform and AVC-Intra audio preprocessing, instead of exporting beyond the selected interval.
 - **Cancelled BMX wrapping stays cancelled across helper registration**, preventing late handoffs from starting a retired operation.

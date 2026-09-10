@@ -59,6 +59,42 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testDamagedHistoryRecoveryInBothLanguages() throws {
+        for (language, locale, warningText, cancelTitle) in [
+            ("en", "en_US", "Saved download history could not be read.", "Cancel"),
+            ("nb", "nb_NO", "Lagret nedlastingshistorikk kunne ikke leses.", "Avbryt")
+        ] {
+            launchApp(language: language, locale: locale, damagedHistory: true)
+            defer { app.terminate() }
+            app.activate()
+            let warning = element("downloadHistoryStorageWarning")
+            XCTAssertTrue(warning.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(
+                format: "label == %@ OR value == %@", warningText, warningText
+            )).firstMatch.exists)
+            let optionLabels = language == "nb"
+                ? ["Ta opp fra starten", "Kun lyd", "Konverter", "Opplasting"]
+                : ["Record from start", "Audio only", "Encode", "Upload"]
+            for label in optionLabels {
+                XCTAssertTrue(app.buttons[label].exists, "Missing localized download option: \(label)")
+            }
+            attachWindowScreenshot(named: "History storage warning - \(language)")
+            element("downloadHistoryStorageResetButton").click()
+            let confirmation = element("downloadHistoryStorageResetConfirmButton")
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            attachWindowScreenshot(named: "History storage reset confirmation - \(language)")
+            app.sheets.firstMatch.buttons[cancelTitle].click()
+            XCTAssertTrue(warning.exists)
+            element("downloadHistoryStorageResetButton").click()
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            confirmation.click()
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: warning)
+            XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testHiddenDefaultPresetStillDisplaysItsSelectionInBothLanguages() throws {
         for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
             launchApp(language: language, locale: locale, additionalArguments: ["-videoLoopVisible", "NO"])
@@ -499,12 +535,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         language: String = "en",
         locale: String = "en_US",
         additionalArguments: [String] = [],
-        damagedSchedules: Bool = false
+        damagedSchedules: Bool = false,
+        damagedHistory: Bool = false
     ) {
         app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-ffmpegBinarySource", "app", "-defaultExportPreset", defaultPreset]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        if damagedHistory {
+            app.launchEnvironment["AMC_UI_TEST_DAMAGED_HISTORY"] = "1"
+        }
         if damagedSchedules {
             app.launchEnvironment["AMC_UI_TEST_DAMAGED_SCHEDULES"] = "1"
         }
