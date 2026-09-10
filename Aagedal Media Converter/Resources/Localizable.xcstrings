@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Automatic cleanup needs renewed folder access. Select Renew Access in Watch Folder Settings and select the folder again. Monitoring continues; cleanup will resume after selection.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Automatisk opprydding trenger fornyet mappetilgang. Velg Forny tilgang i innstillingene for overvåkingsmappen, og velg mappen på nytt. Overvåkingen fortsetter; oppryddingen fortsetter etter valget."
+        }
+      }
+    }
+  },
+  "Select the watch folder again to allow automatic cleanup. Monitoring remains available until access is renewed.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Velg overvåkingsmappen på nytt for å tillate automatisk opprydding. Overvåking er fortsatt tilgjengelig til tilgangen er fornyet."
+        }
+      }
+    }
+  },
+  "Renew Access": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Forny tilgang"
+        }
+      }
+    }
+  },
   "Additional files affected: %lld": {
     "localizations": {
       "nb": {

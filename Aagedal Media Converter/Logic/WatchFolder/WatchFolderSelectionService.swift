@@ -9,6 +9,13 @@ import OSLog
 /// Validates folder access before committing a watch-folder preference or starting a monitor.
 @MainActor
 struct WatchFolderSelectionService {
+    /// Written only after a user selection successfully saves a writable grant.
+    nonisolated static let writableGrantPathKey = "watchFolderWritableGrantPath"
+
+    nonisolated static func cleanupAccessNeedsRenewal(for path: String, defaults: UserDefaults = .standard) -> Bool {
+        !path.isEmpty && defaults.string(forKey: writableGrantPathKey) != path
+    }
+
     enum FolderError: LocalizedError {
         case unavailable(String)
         case notDirectory
@@ -57,6 +64,7 @@ struct WatchFolderSelectionService {
             logger.error("Could not persist watch folder access at \(url.path)")
             throw FolderError.bookmark
         }
+        defaults.set(url.path, forKey: Self.writableGrantPathKey)
         defaults.set(url.path, forKey: AppConstants.watchFolderPathKey)
     }
 

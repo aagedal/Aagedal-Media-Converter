@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 762 tests pass. The
+- The unit-test baseline is green: 771 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 762 unit tests. The UI test target now has deterministic smoke
+- There are 771 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -43,7 +43,7 @@ issue link when it starts.
   navigation now have a tested accessibility-identifier contract. Most icon-heavy
   and custom AppKit/SwiftUI controls still need explicit labels, state values, and
   flow coverage.
-- The string catalog has 1,502 entries. All 59 previously missing App Intent
+- The string catalog has 1,505 entries. All 59 previously missing App Intent
   strings and the ordinary interface omissions are now translated into Norwegian.
   The only 15 missing entries are intentionally untranslated format/command tokens;
   CI rejects unclassified omissions and broken interpolation placeholders.
@@ -1300,6 +1300,16 @@ deduplication, recovery/removal, incomplete values, bounded details, healthy-fil
 progress, and directory failure recovery. Legacy read-only grant renewal and the wider
 filesystem audit remain open (Codex, 2026-09-10).
 
+Watch-folder cleanup now pauses until a legacy/unknown grant is renewed through an
+explicit folder selection, while ordinary monitoring continues. Settings exposes
+Renew Access with Norwegian recovery text. A local-only path marker is committed
+only after writable bookmark persistence succeeds; validation alone never upgrades
+access, and failed replacement retains the previous grant. Four regressions cover
+renewal/failure, sync exclusion, deduplicated errors, healthy imports during the pause,
+and cleanup resumption. All selections made before this marker need one renewal when
+cleanup is enabled. Live sandbox renewal and the wider filesystem audit remain open
+(Codex, 2026-09-10).
+
 ### 3.1 Split orchestration from state and views
 
 Status: in progress; queue decisions and bulk state transitions extracted 2026-09-05 (Codex).
@@ -1537,6 +1547,12 @@ operations. Three regressions cover quoted and escaped text, intervening operati
 and output scales containing commas. Full typed codec/output plans and broader
 filter ownership/preflight remain open (Codex, 2026-09-10).
 
+Output comment and timecode plans now honor the same explicit input/output boundary
+as source metadata. Opaque custom input options survive final output rewriting;
+conflicting output values are still removed or replaced. A policy matrix covers
+source/comment/timecode combinations and repeated application. Broader typed command
+ownership and preflight remain open (Codex, 2026-09-10).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1767,6 +1783,14 @@ modern or legacy routes throw instead of silently restoring source tracks. Three
 regressions preserve valid legacy ordering, duplicates, intentional silence, modern
 precedence, and round trips. Broader feature settings and migrations remain open
 (Codex, 2026-09-10).
+
+Settings snapshot imports now reject nonpositive schema versions and nested nulls
+before applying any preferences, avoiding invalid property-list writes to UserDefaults.
+Top-level null retains explicit removal semantics. Unsupported collection values are
+omitted as a whole during capture rather than silently losing individual elements;
+nonfinite numbers are rejected. Four regressions cover invalid imports, valid nested
+values, removal, and capture behavior. Broader feature preferences and schema migrations
+remain open (Codex, 2026-09-10).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -2087,7 +2111,32 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-10, Codex): Debug compilation and all 762 unit tests pass
+Latest validation (2026-09-10, Codex): Debug compilation and all 771 unit tests pass
+with zero failures or skips using the shared unit-only scheme. Nine new regressions
+cover metadata input/output boundaries, malformed settings snapshots, and legacy
+watch-folder cleanup grant renewal. The AV2 source progress fixture now waits for its
+queued callback before ending the fake encoder, removing a completion race exposed
+by the first suite run. A watcher test's UserDefaults actor-isolation fixture was
+corrected before the final green suite. All 43 release-script tests, manifest freshness,
+and localization checks pass (1,505 entries, 15 intentional omissions). The unsigned
+Release build passes; its bundle audit verifies all 44 Mach-O images and six packaged
+license notices. No bundled binaries or license assignments changed.
+
+Independent review found no further metadata-boundary or watcher permission regressions;
+existing bookmark tests also verify writable grants survive ordinary saves and stale
+renewal. No manual playback, sandbox renewal, VoiceOver, or UI screenshot checks were
+performed in this batch.
+
+Remaining implementation work: broader typed filters/codecs/output plans and preflight;
+orchestration extraction, feature settings and schema migrations; full package and
+framework/MCA cancellation draining; broader actor/UI and filesystem audits;
+multi-process subtitle and remote destination coordination; generated AV2 video,
+accurate Matroska layout labels, and IMF descriptor conformance. Manual UI, playback,
+Shortcuts, sandbox renewal, remote upload, capture/editor, and accessibility checks
+remain, as do runtime footprint measurements, clean-machine install/update, complete
+dependency provenance (99 unresolved license entries), and credentialed release checks.
+
+Previous validation (2026-09-10, Codex): Debug compilation and all 762 unit tests pass
 with zero failures or skips using the shared unit-only scheme. Twelve new regressions
 cover typed crop ordering, quoted/escaped custom expressions, camera/group import
 naming snapshots, strict audio-routing schema migration, and watcher file/directory

@@ -132,6 +132,66 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testSettingsSnapshotRejectsNonpositiveSchemaVersions() throws {
+        for version in [0, -1, Int.min] {
+            var snapshot = SettingsSnapshot(defaults: [:], modifiedAt: Date())
+            snapshot.schemaVersion = version
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            XCTAssertThrowsError(try SettingsSyncService.decodeSnapshot(encoder.encode(snapshot))) { error in
+                guard case SettingsSyncService.SyncError.invalidFile = error else {
+                    return XCTFail("Expected invalid-file error for schema \(version), got \(error)")
+                }
+            }
+        }
+    }
+
+    func testSettingsSnapshotRejectsNestedNullBeforeApplyingAnySettings() throws {
+        let invalidValues: [JSONValue] = [
+            .array([.string("valid"), .null]),
+            .object(["nested": .null]),
+            .array([.object(["nested": .array([.null])])])
+        ]
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        for value in invalidValues {
+            let snapshot = SettingsSnapshot(
+                defaults: [AppConstants.captureDisplayIDsKey: value],
+                modifiedAt: Date()
+            )
+            XCTAssertThrowsError(try SettingsSyncService.decodeSnapshot(encoder.encode(snapshot))) { error in
+                guard case SettingsSyncService.SyncError.invalidFile = error else {
+                    return XCTFail("Expected invalid-file error for nested null, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testSettingsSnapshotPreservesTopLevelRemovalAndNestedPropertyListValues() throws {
+        let values: [String: JSONValue] = [
+            "removed": .null,
+            "collection": .array([.bool(true), .int(42), .double(1.25), .object(["text": .string("value")])])
+        ]
+        let snapshot = SettingsSnapshot(defaults: values, modifiedAt: Date())
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoded = try SettingsSyncService.decodeSnapshot(encoder.encode(snapshot))
+        XCTAssertEqual(decoded.defaults, values)
+        XCTAssertTrue(PropertyListSerialization.propertyList(
+            decoded.defaults["collection"]!.propertyListValue,
+            isValidFor: .binary
+        ))
+    }
+
+    func testSettingsSnapshotCaptureRejectsUnsupportedCollectionsWithoutDroppingElements() {
+        XCTAssertNil(JSONValue.from(["valid", Data([1, 2])] as [Any]))
+        XCTAssertNil(JSONValue.from(["valid": "text", "unsupported": Date()] as [String: Any]))
+        XCTAssertNil(JSONValue.from(["nested": [Data([1])]] as [String: Any]))
+        XCTAssertNil(JSONValue.from(Double.infinity))
+        XCTAssertNil(JSONValue.from(Double.nan))
+        XCTAssertEqual(JSONValue.from([true, 42, "value"] as [Any]), .array([.bool(true), .int(42), .string("value")]))
+    }
+
     func testSubprocessRunnerCapturesOutputAndStructuredExit() async throws {
         let result = try await SubprocessRunner().run(
             SubprocessRequest(
@@ -7780,6 +7840,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: avmdecPath)
         let decodedY4M = Data("YUV4MPEG2 W2 H2 F24:1 Ip A1:1 C420\nFRAME\nfixture".utf8)
         let progressValues = OSAllocatedUnfairLock<[Double]>(initialState: [])
+        let runnerMayFinish = expectation(description: "Active AV2 source decode progress observed before exit")
         let runner = SequencedRecordingSubprocessRunner { _, request, outputHandler in
             if request.executableURL.path == avmdecPath {
                 outputHandler?(SubprocessOutputChunk(stream: .standardOutput, data: decodedY4M))
@@ -7795,6 +7856,10 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 stream: .standardError,
                 data: Data("0.50 speed=1.0x\r".utf8)
             ))
+            // Completion intentionally invalidates queued progress callbacks. Keep
+            // the fake encoder active until its reassembled record is observed.
+            let progressResult = await XCTWaiter.fulfillment(of: [runnerMayFinish], timeout: 1.0)
+            XCTAssertEqual(progressResult, .completed)
             try Data("encoded fixture".utf8).write(
                 to: URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
             )
@@ -7819,6 +7884,9 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             using: converter,
             progressUpdate: { progress, _ in
                 progressValues.withLock { $0.append(progress) }
+                if abs(progress - 0.5) < 0.001 {
+                    runnerMayFinish.fulfill()
+                }
             }
         )
 

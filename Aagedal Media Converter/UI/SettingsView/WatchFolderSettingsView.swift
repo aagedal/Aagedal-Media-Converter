@@ -6,6 +6,7 @@ import SwiftUI
 
 struct WatchFolderSettingsView: View {
     @State private var folderErrorMessage: String?
+    @AppStorage(WatchFolderSelectionService.writableGrantPathKey) private var writableGrantPath = ""
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @AppStorage(AppConstants.watchFolderAutoActivateOnLaunchKey) private var watchFolderAutoActivateOnLaunch = false
     @AppStorage(AppConstants.watchFolderIgnoreOlderThan24hKey) private var watchFolderIgnoreOlderThan24h = false
@@ -124,6 +125,13 @@ struct WatchFolderSettingsView: View {
                     }
                 }
             if watchFolderAutoDeleteOlderThanWeek {
+                if !watchFolderPath.isEmpty && writableGrantPath != watchFolderPath {
+                    Text("Select the watch folder again to allow automatic cleanup. Monitoring remains available until access is renewed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Renew Access", action: selectWatchFolder)
+                        .accessibilityIdentifier("settings.watchFolder.renewAccess")
+                }
                 durationPickerRow(
                     title: "Deletion threshold",
                     valueBinding: deleteDurationValueBinding,

@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **Older watch-folder grants can be renewed from Settings.** Automatic cleanup pauses until access is renewed while monitoring continues.
+- **Malformed settings imports are rejected before preferences are changed**, including nested null values and invalid schema versions.
+- **Output comments and timecode preserve custom input options** while overriding conflicting output metadata.
+
 - **Camera-card and group imports retain filename rules and destinations through compatibility checks and metadata loading**, including master-name overrides.
 - **Watch-folder file inspection failures show recovery guidance and retry automatically.** Failed file or directory observations restart the stability check before import.
 - **Custom crop filters preserve quoted expressions and intervening operations**, with explicit ordering around built-in geometry filters.

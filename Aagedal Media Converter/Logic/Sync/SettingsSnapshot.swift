@@ -66,6 +66,7 @@ enum JSONValue: Codable, Equatable {
             }
             let objCType = String(cString: number.objCType)
             if objCType == "d" || objCType == "f" {
+                guard number.doubleValue.isFinite else { return nil }
                 return .double(number.doubleValue)
             }
             return .int(number.intValue)
@@ -74,16 +75,34 @@ enum JSONValue: Codable, Equatable {
             return .string(string)
         }
         if let array = any as? [Any] {
-            return .array(array.compactMap { JSONValue.from($0) })
+            var values: [JSONValue] = []
+            for value in array {
+                guard let converted = JSONValue.from(value) else { return nil }
+                values.append(converted)
+            }
+            return .array(values)
         }
         if let dict = any as? [String: Any] {
             var object: [String: JSONValue] = [:]
             for (key, value) in dict {
-                if let converted = JSONValue.from(value) { object[key] = converted }
+                guard let converted = JSONValue.from(value) else { return nil }
+                object[key] = converted
             }
             return .object(object)
         }
         return nil
+    }
+
+    /// Nested nulls cannot be stored in UserDefaults. Only a top-level null is
+    /// supported by the snapshot format, where it explicitly removes a key.
+    var isPropertyListCompatible: Bool {
+        switch self {
+        case .string, .bool, .int: return true
+        case .double(let value): return value.isFinite
+        case .array(let values): return values.allSatisfy(\.isPropertyListCompatible)
+        case .object(let values): return values.values.allSatisfy(\.isPropertyListCompatible)
+        case .null: return false
+        }
     }
 
     /// The plain value suitable for `UserDefaults.set(_:forKey:)`. `null` maps to

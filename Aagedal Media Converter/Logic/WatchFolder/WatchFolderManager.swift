@@ -19,16 +19,22 @@ actor WatchFolderManager {
     private var isMonitoring = false
     private var monitoringGeneration: UInt64 = 0
     private var reportedFailures = WatchFolderFailureTracker()
+    private let defaults: UserDefaults
+    private let trashItem: @Sendable (URL) throws -> Void
     private let pollingWait: @Sendable () async throws -> Void
 
     private let readResourceValues: @Sendable (URL) throws -> URLResourceValues
 
     init(
+        defaults: UserDefaults = .standard,
+        trashItem: @escaping @Sendable (URL) throws -> Void = { try FileSafetyUtils.trashWatchFolderItem($0) },
         pollingWait: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(5)) },
         readResourceValues: @escaping @Sendable (URL) throws -> URLResourceValues = {
             try $0.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey])
         }
     ) {
+        self.defaults = defaults
+        self.trashItem = trashItem
         self.pollingWait = pollingWait
         self.readResourceValues = readResourceValues
     }
@@ -119,6 +125,17 @@ actor WatchFolderManager {
         }
 
         let settings = loadDurationSettings()
+        // Old watch-folder bookmarks may carry read-only grants. A bookmark cannot
+        // upgrade its own sandbox permission: require a fresh user selection before
+        // cleanup, while leaving ordinary monitoring available.
+        let cleanupNeedsRenewal = settings.deleteEnabled && WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: folderPath, defaults: defaults)
+        if cleanupNeedsRenewal {
+            if reportedFailures.shouldReportCleanupAccessFailure() {
+                onError(String(localized: "Automatic cleanup needs renewed folder access. Select Renew Access in Watch Folder Settings and select the folder again. Monitoring continues; cleanup will resume after selection."))
+            }
+        } else {
+            reportedFailures.cleanupAccessSucceeded()
+        }
         let now = Date()
         var currentFiles: [URL: Int64] = [:]
         var stableFiles: [URL] = []
@@ -160,9 +177,10 @@ actor WatchFolderManager {
             let fileAge = now.timeIntervalSince(relevantDate)
             
             if settings.deleteEnabled, let deleteThreshold = settings.deleteThreshold, fileAge > deleteThreshold {
+                guard !cleanupNeedsRenewal else { continue }
                 do {
                     // Use trash instead of permanent delete for safety (recoverable)
-                    try FileSafetyUtils.trashWatchFolderItem(fileURL)
+                    try trashItem(fileURL)
                     reportedFailures.cleanupSucceeded(for: fileURL)
                     if let description = settings.deleteDescription {
                         Self.logger.info("Trashed watch folder file older than \(description, privacy: .public): \(fileURL.lastPathComponent, privacy: .public)")
@@ -262,7 +280,6 @@ private extension WatchFolderManager {
     }
     
     func loadDurationSettings() -> DurationSettings {
-        let defaults = UserDefaults.standard
         let ignoreEnabled = defaults.bool(forKey: AppConstants.watchFolderIgnoreOlderThan24hKey)
         let deleteEnabled = defaults.bool(forKey: AppConstants.watchFolderAutoDeleteOlderThanWeekKey)
         let ignoreValueRaw = defaults.object(forKey: AppConstants.watchFolderIgnoreDurationValueKey) as? NSNumber
@@ -310,8 +327,18 @@ private extension WatchFolderManager {
 /// report a later failure. Missing files no longer retain cleanup failure state.
 struct WatchFolderFailureTracker {
     private var scanFailed = false
+    private var cleanupAccessFailed = false
     private var cleanupFailures: Set<URL> = []
     private var metadataFailures: Set<URL> = []
+
+    mutating func shouldReportCleanupAccessFailure() -> Bool {
+        defer { cleanupAccessFailed = true }
+        return !cleanupAccessFailed
+    }
+
+    mutating func cleanupAccessSucceeded() {
+        cleanupAccessFailed = false
+    }
 
     mutating func shouldReportScanFailure() -> Bool {
         defer { scanFailed = true }

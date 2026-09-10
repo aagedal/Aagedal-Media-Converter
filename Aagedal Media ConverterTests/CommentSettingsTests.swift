@@ -7,6 +7,38 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class CommentSettingsTests: XCTestCase {
+    func testOutputMetadataPoliciesPreserveOpaqueInputOptions() {
+        let input = [
+            "-timecode", "01:00:00:00", "-metadata", "comment=Input",
+            "-metadata:s:v:0", "timecode=02:00:00:00", "-i", "source.mov"
+        ]
+        let output = [
+            "-c:v", "copy", "-timecode", "03:00:00:00",
+            "-metadata", "comment=Old", "-metadata", "timecode=04:00:00:00",
+            "-metadata:s:v:0", "timecode=05:00:00:00", "-metadata", "title=Keep"
+        ]
+        for source in [SourceMetadataPlan.unchanged, .strip, .preserve(input: 0)] {
+            for comment in [CommentMetadataPlan.source, .set("New")] {
+                for timecode in [TimecodeMetadataPlan.clear, .set("10:00:00:00")] {
+                    let plan = OutputMetadataPlan(source: source, comment: comment, timecode: timecode)
+                    var arguments = input + output
+                    plan.apply(to: &arguments, outputArgumentsStart: input.count)
+                    XCTAssertEqual(Array(arguments.prefix(input.count)), input)
+                    let rendered = Array(arguments.dropFirst(input.count))
+                    XCTAssertFalse(rendered.contains("-timecode"))
+                    XCTAssertFalse(rendered.contains("comment=Old"))
+                    XCTAssertTrue(rendered.contains("title=Keep"))
+                    XCTAssertEqual(Self.values(for: "-metadata:s:v:0", in: rendered).filter { $0.hasPrefix("timecode=") },
+                                   [timecode == .clear ? "timecode=" : "timecode=10:00:00:00"])
+                    XCTAssertEqual(rendered.contains("comment=New"), comment == .set("New"))
+                    let once = arguments
+                    plan.apply(to: &arguments, outputArgumentsStart: input.count)
+                    XCTAssertEqual(arguments, once)
+                }
+            }
+        }
+    }
+
     func testSourceMetadataPlanOwnsOutputMappingAndKeepsInputFlags() {
         let inputArguments = ["-fflags", "+bitexact+genpts", "-i", "source.mov"]
         let outputArguments = [

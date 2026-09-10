@@ -17,6 +17,62 @@ final class WatchFolderSelectionServiceTests: XCTestCase {
         return (directory, defaults)
     }
 
+    func testLegacyGrantRequiresSelectionAndSuccessfulSelectionRenewsCleanupAccess() throws {
+        let fixture = try fixture()
+        let url = fixture.directory
+        let oldGrant = Data([7])
+        fixture.defaults.set(url.path, forKey: AppConstants.watchFolderPathKey)
+        fixture.defaults.set([url.absoluteString: oldGrant], forKey: "securityScopedBookmarks")
+        var maySave = false
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
+            createBookmark: { _, options in
+                XCTAssertFalse(options.contains(.securityScopeAllowOnlyReadAccess))
+                guard maySave else { throw CocoaError(.fileWriteNoPermission) }
+                return Data([8])
+            }, startScope: { _ in true }, stopScope: { _ in })
+        let service = WatchFolderSelectionService(defaults: fixture.defaults, bookmarkManager: bookmarks)
+
+        XCTAssertTrue(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: url.path, defaults: fixture.defaults))
+        try service.validate(url)
+        XCTAssertTrue(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: url.path, defaults: fixture.defaults),
+                      "Read validation must not silently upgrade an old grant")
+        XCTAssertThrowsError(try service.select(url))
+        XCTAssertTrue(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: url.path, defaults: fixture.defaults))
+        XCTAssertEqual(fixture.defaults.dictionary(forKey: "securityScopedBookmarks")?[url.absoluteString] as? Data, oldGrant)
+        XCTAssertEqual(fixture.defaults.string(forKey: AppConstants.watchFolderPathKey), url.path)
+
+        maySave = true
+        try service.select(url)
+        XCTAssertFalse(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: url.path, defaults: fixture.defaults))
+        XCTAssertTrue(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: "/another/folder", defaults: fixture.defaults))
+        XCTAssertEqual(fixture.defaults.dictionary(forKey: "securityScopedBookmarks")?[url.absoluteString] as? Data, Data([8]))
+    }
+
+    func testFailedReplacementPreservesPreviouslyRenewedFolderAccess() throws {
+        let fixture = try fixture()
+        fixture.defaults.set("/previous/watch", forKey: WatchFolderSelectionService.writableGrantPathKey)
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
+            createBookmark: { _, _ in throw CocoaError(.fileWriteNoPermission) }, startScope: { _ in false })
+        let service = WatchFolderSelectionService(defaults: fixture.defaults, bookmarkManager: bookmarks)
+
+        XCTAssertThrowsError(try service.select(fixture.directory))
+
+        XCTAssertEqual(fixture.defaults.string(forKey: AppConstants.watchFolderPathKey), "/previous/watch")
+        XCTAssertFalse(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: "/previous/watch", defaults: fixture.defaults))
+        XCTAssertTrue(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: fixture.directory.path, defaults: fixture.defaults))
+        XCTAssertFalse(WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: "", defaults: fixture.defaults))
+    }
+
+    func testCleanupAccessFailureReportsOnceAndCanReportAfterRecovery() {
+        XCTAssertFalse(SettingsSyncKeys.all.contains(WatchFolderSelectionService.writableGrantPathKey))
+        var tracker = WatchFolderFailureTracker()
+        XCTAssertTrue(tracker.shouldReportCleanupAccessFailure())
+        tracker.scanSucceeded(currentFiles: [])
+        XCTAssertFalse(tracker.shouldReportCleanupAccessFailure())
+        tracker.cleanupAccessSucceeded()
+        XCTAssertTrue(tracker.shouldReportCleanupAccessFailure())
+    }
+
     func testMissingSelectionPreservesPreferenceAndDoesNotCreateFolderOrBookmark() throws {
         let fixture = try fixture()
         let missing = fixture.directory.appendingPathComponent("missing")

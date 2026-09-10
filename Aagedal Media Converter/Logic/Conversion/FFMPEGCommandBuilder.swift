@@ -37,9 +37,9 @@ enum TimecodeMetadataPlan: Equatable, Sendable {
         self = resolvedValue.flatMap { $0.isEmpty ? nil : $0 }.map(Self.set) ?? .clear
     }
 
-    func apply(to arguments: inout [String]) {
+    func apply(to arguments: inout [String], outputArgumentsStart: Int = 0) {
         guard self != .unchanged else { return }
-        var index = 0
+        var index = outputArgumentsStart
         while index + 1 < arguments.count {
             let option = arguments[index]
             if option == "-timecode" ||
@@ -83,9 +83,9 @@ enum CommentMetadataPlan: Equatable, Sendable {
         return nil
     }
 
-    func apply(to arguments: inout [String]) {
+    func apply(to arguments: inout [String], outputArgumentsStart: Int = 0) {
         guard self != .unchanged else { return }
-        var index = 0
+        var index = outputArgumentsStart
         while index + 1 < arguments.count {
             if arguments[index] == "-metadata", arguments[index + 1].hasPrefix("comment=") {
                 arguments.removeSubrange(index...index + 1)
@@ -166,8 +166,8 @@ struct OutputMetadataPlan: Equatable, Sendable {
 
     func apply(to arguments: inout [String], outputArgumentsStart: Int = 0) {
         source.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
-        comment.apply(to: &arguments)
-        timecode.apply(to: &arguments)
+        comment.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+        timecode.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
     }
 }
 

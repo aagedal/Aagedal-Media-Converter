@@ -3,6 +3,56 @@ import os
 @testable import Aagedal_Media_Converter
 
 final class WatchFolderPollingTests: XCTestCase {
+    func testLegacyCleanupGrantPausesTrashButImportsHealthyFilesAndResumesAfterRenewal() async throws {
+        enum PollingFinished: Error { case finished }
+        let name = "WatchFolderPollingTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: folder)
+            defaults.removePersistentDomain(forName: name)
+        }
+        defaults.set(true, forKey: AppConstants.watchFolderAutoDeleteOlderThanWeekKey)
+        defaults.set(1, forKey: AppConstants.watchFolderDeleteDurationValueKey)
+        defaults.set("days", forKey: AppConstants.watchFolderDeleteDurationUnitKey)
+        let old = folder.appendingPathComponent("old.mov")
+        let recent = folder.appendingPathComponent("recent.mov")
+        try Data([1]).write(to: old)
+        try Data([1]).write(to: recent)
+        let completed = expectation(description: "Cleanup resumes after renewed selection")
+        let scans = OSAllocatedUnfairLock(initialState: 0)
+        let errors = OSAllocatedUnfairLock(initialState: [String]())
+        let imported = OSAllocatedUnfairLock(initialState: [URL]())
+        let trashed = OSAllocatedUnfairLock(initialState: [URL]())
+        let manager = WatchFolderManager(defaults: try XCTUnwrap(UserDefaults(suiteName: name)), trashItem: { url in
+            trashed.withLock { $0.append(url) }
+            try FileManager.default.removeItem(at: url)
+        }, pollingWait: {
+            let count = scans.withLock { value in value += 1; return value }
+            if count == 2 {
+                XCTAssertTrue(trashed.withLock { $0.isEmpty })
+                // This marker is committed by successful folder selection.
+                UserDefaults(suiteName: name)?.set(folder.path, forKey: WatchFolderSelectionService.writableGrantPathKey)
+            }
+            if count == 3 { completed.fulfill(); throw PollingFinished.finished }
+        }, readResourceValues: { url in
+            var values = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            values.creationDate = url == old ? Date(timeIntervalSince1970: 0) : Date()
+            return values
+        })
+        await manager.startMonitoring(folderPath: folder.path, generation: 1,
+            onNewFiles: { urls in imported.withLock { $0.append(contentsOf: urls) } },
+            onError: { message in errors.withLock { $0.append(message) } })
+        await fulfillment(of: [completed], timeout: 3)
+        await manager.stopMonitoring(generation: 2)
+
+        XCTAssertEqual(errors.withLock { $0.count }, 1)
+        XCTAssertEqual(imported.withLock { $0 }, [recent])
+        XCTAssertEqual(trashed.withLock { $0 }, [old])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recent.path))
+    }
+
     func testMissingDirectoryReportsOnceAndReportsAgainAfterRecovery() async throws {
         enum PollingFinished: Error { case finished }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
