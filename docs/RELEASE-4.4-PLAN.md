@@ -38,7 +38,7 @@ and general reachability cleanup are not required to close it.
 
 ### 2. Triage the remaining correctness risks
 
-- [ ] Give each risk below a recorded disposition: fixed with regression evidence,
+- [x] Give each risk below a recorded disposition: fixed with regression evidence,
   verified unaffected in the supported scope, or affected functionality disabled
   with a clear user-facing explanation. Include issue/evidence references.
 
@@ -51,8 +51,20 @@ and general reachability cleanup are not required to close it.
 | Matroska layout labels inferred from channel counts | Verify media tracks remain correct; fix misleading labels or explicitly present unknown/inferred information |
 | Generated waveform/synthesized AV2 video | Keep unsupported combinations rejected clearly; adding support belongs to follow-up work |
 
-These are unresolved review topics, not claims that every one is a reproduced
-defect. Completing the entire typed-plan or concurrency audit is not a gate.
+The recorded dispositions below cover the supported scope of each review. Live
+workflow and distribution validation remain separate gates; these dispositions
+do not claim exhaustive concurrency or format conformance coverage.
+
+| Review | Recorded 4.4 disposition |
+| --- | --- |
+| [Numeric filters](4.4-numeric-filter-review.md) | Reject ambiguous crop targets and mapping changes before encoding; explicit output ordering retains regression coverage. |
+| [Helper draining](4.4-helper-draining-review.md) | Cancelled extraction and updater owners drain before replacement; late-write regressions pass. |
+| [Coordination](4.4-coordination-review.md) | Subtitle publication and same-destination remote uploads lock across cooperating processes; endpoint aliases and external clients remain outside that guarantee. |
+| [IMF](4.4-imf-review.md) | Both export presets disabled with a user-facing explanation; settings preserved. |
+| [Matroska audio](4.4-matroska-layout-review.md) | Suppress guessed speaker labels and split AVC-Intra channels by position, with generated audio verification. |
+| [Generated AV2](4.4-generated-av2-review.md) | Unsupported synthesized-video and waveform requests rejected before output ownership or publication. |
+
+Completing the entire typed-plan or concurrency audit is not a gate.
 
 ### 3. Validate changed workflows in the real app
 
@@ -149,6 +161,26 @@ remain open. Final checks passed: 843 unit tests, three conversion UI smoke test
 53 release-script tests, localization, inventory freshness and the unsigned Release
 bundle audit. See [continuation validation](4.4-validation-continuation-2026-09-11.md).
 
+## Workflow and attribution continuation
+
+[Workflow validation](4.4-validation-workflows-2026-09-11.md) records the latest
+changes and checks. [Shortcuts handoffs](4.4-shortcuts-review.md) now survive early
+replay, have one receiving-window owner, and serialize file-bearing conversions
+across metadata loading and encoding. [Saved-state review](4.4-upgrade-review.md)
+fixes upload-profile and bookmark erasure paths while preserving malformed data.
+The combined suite passes **852 unit tests, five UI smoke tests, and 55 release-script
+tests**. Generated native/MPV preview play/pause, seeking, capture and reopen now
+have real-app automation evidence; audible playback and wider live checks remain
+pending. The unsigned Release audit verifies 44 Mach-O images and six notices.
+
+The [provenance review](4.4-dependency-provenance-review.md) now corrects the
+FFmpeg GPL v3 notice/metadata mismatch and AVM top-level license using retained
+local evidence. All 29 selected MPVKit archive checksums were verified, and
+rclone's embedded dependency records preserved. **99 missing notices plus explicit
+FFmpeg corresponding-source/static-dependency review remain open.** Archive
+identity does not replace package/transitive attribution. No executable or public
+feed was changed. Development remains 4.4.0 (576); no candidate is frozen.
+
 ## What can wait for 4.5
 
 - Full orchestration extraction and typed filter/codec/output plans.
@@ -169,7 +201,8 @@ data-loss or silent-output-correctness issue affects enabled supported flows, an
 remaining limitations have explicit dispositions. A green test suite alone is
 insufficient, but finishing the whole improvement roadmap is unnecessary.
 
-Recommended next work: resolve attribution and triage the six risk topics first;
-then execute the bounded live matrix, fix its findings, and validate the candidate.
+Recommended next work: finish source/dependency attribution and execute the bounded
+live matrix, fix its findings, and validate the candidate. The six named risk
+reviews now have recorded dispositions; new findings remain tracked separately.
 Estimate a release date after those first two activities establish the actual
 remaining defects. This plan does not authorize implementation or publication.

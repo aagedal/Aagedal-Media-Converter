@@ -43,6 +43,29 @@ disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
 
+## 4.4 workflow continuation — 2026-09-11
+
+The latest continuation fixes lost/multiply delivered Shortcuts handoffs and
+serializes competing file-bearing conversions across import and encoding.
+Unreadable upload profiles and malformed saved-access stores survive edits;
+valid bookmarks remain usable when sibling entries are damaged. The combined
+Debug suite passes **852 unit tests**, including nine new handoff/persistence
+regressions, and **55 release-script tests** pass. Localization and inventory
+freshness pass. Five combined UI smoke tests cover conversion and native/MPV
+preview play/pause, seeking, capture and reopen. The unsigned Release audit passes
+for 44 Mach-O images and six packaged notices. See [workflow validation](docs/4.4-validation-workflows-2026-09-11.md)
+for final preview and Release evidence and the remaining live checks.
+
+The FFmpeg GPL v3 notice/metadata mismatch and AVM top-level license are now
+corrected from local source/build evidence. All 29 selected MPVKit binary archives
+were verified against pinned checksums, and rclone's exact embedded module list
+was preserved for source recovery. These are provenance gains, not attribution
+closure: 99 missing notices, corresponding-source recovery, and static/package
+component review remain publishing blockers. The six original correctness risks
+now have recorded dispositions in the [release plan](docs/RELEASE-4.4-PLAN.md).
+Installed-upgrade, live services/recording/accessibility and signed distribution
+gates remain open. No bundled executable or public feed was changed.
+
 ## 4.4 stabilization continuation — 2026-09-11
 
 The finite release scope is being closed independently of the broader roadmap.

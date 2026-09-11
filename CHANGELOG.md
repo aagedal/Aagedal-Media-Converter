@@ -29,6 +29,7 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 ## Saved settings and file access
 
 - **Damaged download history and schedules are preserved**, with recovery guidance and an explicit reset action.
+- **Unreadable upload profiles and saved-access records are preserved.** Opening Upload Settings cannot replace damaged profiles with an empty default, and a malformed bookmark entry no longer prevents other saved locations from resolving.
 - **Malformed settings imports and audio routes are rejected** instead of silently changing saved preferences. Legacy audio presets and upload-profile upgrades preserve newer choices.
 - **Watch-folder access can be renewed from Settings.** Scan, access, and Trash failures provide recovery guidance; cleanup pauses when access is insufficient.
 - **SSH keys selected with Browse retain sandbox access across launches**, with guidance when access must be granted again.
@@ -42,6 +43,11 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 - **Preview and thumbnail operations have bounded waits**, and replaced players ignore stale setup and seek callbacks.
 - **Screenshots use consistent format and transparency settings**, including recovery from an invalid saved alpha preference.
 
+## Shortcuts
+
+- **Cold-launch requests remain available until a window accepts them**, and a submission is handled by only one receiving window.
+- **File-bearing Shortcuts conversions run in submission order**, retaining each request’s preset and destination while importing and converting.
+
 ## Interface and diagnostics
 
 - **Tool Diagnostics in Settings checks bundled helpers and selected transcription models**, with paths, architecture, executable status, and recovery guidance.
@@ -52,7 +58,7 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 ## Dependencies and release checks
 
 - **Bundled FFmpeg updated to 9.0.1**, MPVKit updated for preview playback, and SwiftMediaMetadata updated to 3.0.0.
-- **Release checks verify bundled dependency inventories and packaged notice contents**, and block publication while attribution is incomplete or FFmpeg’s reported license disagrees with its attribution or notice.
+- **Release checks verify bundled dependency inventories and packaged notice contents**, and block publication while attribution or source review is incomplete, or FFmpeg’s reported license disagrees with its attribution or notice.
 
 # v.4.3.0
 
