@@ -26,6 +26,67 @@ final class YTDLPDownloadControl: @unchecked Sendable {
     private var executionID: UUID?
     private var cancelAction: (@Sendable () -> Void)?
     private var stopReason: StopReason?
+    private var outputPath: String?
+    private var initialOutputSignature: OutputSignature?
+    private var outputFinalized = false
+
+    private struct OutputSignature: Equatable {
+        let size: UInt64
+        let modified: Date
+        let inode: UInt64
+
+        init?(url: URL) {
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                  let size = attributes[.size] as? UInt64,
+                  let modified = attributes[.modificationDate] as? Date,
+                  let inode = attributes[.systemFileNumber] as? UInt64 else { return nil }
+            self.size = size
+            self.modified = modified
+            self.inode = inode
+        }
+    }
+
+    /// The destination reported by this download, retained after cancellation for recovery.
+    func recordOutputPath(_ path: String, in folder: URL, finalized: Bool = false) {
+        let destination = path.hasPrefix("/") ? URL(fileURLWithPath: path) : folder.appendingPathComponent(path)
+        lock.withLock {
+            if outputPath != path {
+                outputPath = path
+                initialOutputSignature = OutputSignature(url: destination)
+                outputFinalized = false
+            }
+            outputFinalized = outputFinalized || finalized
+        }
+    }
+
+    /// Never infer ownership from a title or from other recently modified files.
+    func partialFile(in folder: URL) -> URL? {
+        let (recordedPath, initialSignature, finalized) = lock.withLock {
+            (outputPath, initialOutputSignature, outputFinalized)
+        }
+        guard let path = recordedPath, !path.isEmpty else { return nil }
+        let destination = path.hasPrefix("/")
+            ? URL(fileURLWithPath: path)
+            : folder.appendingPathComponent(path)
+        let resolvedFolder = folder.standardizedFileURL.resolvingSymlinksInPath()
+        let prefix = resolvedFolder.path.hasSuffix("/") ? resolvedFolder.path : resolvedFolder.path + "/"
+        // Prefer an in-progress file when a previous completed destination also exists.
+        let candidates = path.hasSuffix(".part")
+            ? [destination]
+            : [destination.appendingPathExtension("part"), destination]
+        for candidate in candidates {
+            let resolved = candidate.standardizedFileURL.resolvingSymlinksInPath()
+            guard resolved.path.hasPrefix(prefix),
+                  let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+                  values.isRegularFile == true, values.isSymbolicLink != true else { continue }
+            // With --no-part a live download writes directly to its destination.
+            // A pre-existing, unchanged completed file is not evidence of recovery.
+            if candidate == destination, !path.hasSuffix(".part"), !finalized,
+               let initialSignature, OutputSignature(url: candidate) == initialSignature { continue }
+            return candidate
+        }
+        return nil
+    }
 
     @discardableResult
     func cancel() -> Bool {
@@ -630,6 +691,7 @@ actor YTDLPService {
 
             // Parse output path (from merger or download destination)
             if let path = YTDLPProgressParser.parseOutputPath(trimmed) {
+                control.recordOutputPath(path, in: outputFolder)
                 parsedState.lock.lock()
                 parsedState.outputPath = path
                 parsedState.lock.unlock()
@@ -665,6 +727,7 @@ actor YTDLPService {
             // This avoids capturing stray verbose/debug stdout (e.g. a raw title or
             // a warning line that happens to lack a "[" prefix) as the output path.
             if !isStderr && trimmed.hasPrefix("/") {
+                control.recordOutputPath(trimmed, in: outputFolder, finalized: true)
                 parsedState.lock.lock()
                 parsedState.outputPath = trimmed
                 parsedState.lock.unlock()

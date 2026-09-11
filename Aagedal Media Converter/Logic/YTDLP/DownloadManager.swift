@@ -88,7 +88,7 @@ class DownloadManager {
     // MARK: - Live Recording Stats
 
     /// Starts periodic updates of file size and duration for live stream recording
-    private func startLiveRecordingStatUpdates(itemID: UUID, outputFolder: URL) {
+    private func startLiveRecordingStatUpdates(itemID: UUID, outputFolder: URL, control: YTDLPDownloadControl) {
         // Cancel any existing stat task for this item
         liveRecordingStatTasks[itemID]?.cancel()
 
@@ -107,11 +107,8 @@ class DownloadManager {
             while !Task.isCancelled {
                 updateCount += 1
 
-                // Get the item's name to use as a hint for finding the right partial file
-                let nameHint = self.findItem(itemID)?.name
-
-                // Find the partial file being written (using name hint to find the right one)
-                if let partialFile = findPartialFile(in: outputFolder, nameHint: nameHint) {
+                // Read only the destination reported by this download.
+                if let partialFile = control.partialFile(in: outputFolder) {
                     // Update file size
                     if let attrs = try? FileManager.default.attributesOfItem(atPath: partialFile.path),
                        let fileSize = attrs[.size] as? Int64 {
@@ -651,7 +648,7 @@ class DownloadManager {
                         // Start stat updates when we detect live stream recording
                         if isLiveStream && !wasLiveStreamRecording {
                             self.logger.info("[LiveStream] Detected live stream, starting stat updates")
-                            self.startLiveRecordingStatUpdates(itemID: itemID, outputFolder: outputFolder)
+                            self.startLiveRecordingStatUpdates(itemID: itemID, outputFolder: outputFolder, control: control)
                         }
                     }
                 },
@@ -749,11 +746,9 @@ class DownloadManager {
             case .liveRecordingStopped:
                 logger.info("Download stopped for item: \(itemID), searching for partial file...")
 
-                // Get the item's name to help find the right partial file
-                let nameHint = findItem(itemID)?.name
-
-                // Try to find the partial file in the output folder
-                if let partialFile = findPartialFile(in: outputFolder, nameHint: nameHint) {
+                // Recover only a destination emitted by this download; another
+                // recording in the same folder must never be adopted or renamed.
+                if let partialFile = control.partialFile(in: outputFolder) {
                     logger.info("Found partial file: \(partialFile.path)")
 
                     // Rename the file to remove .part extension if present
@@ -1127,67 +1122,6 @@ class DownloadManager {
 
         // Remove from queue
         videoItems?.wrappedValue.removeAll { $0.id == itemID }
-    }
-
-    /// Finds the most recently modified video file in the output folder (including .part files)
-    /// - Parameters:
-    ///   - folder: The folder to search in
-    ///   - nameHint: Optional filename hint to prioritize matching files (e.g., item name without extension)
-    private func findPartialFile(in folder: URL, nameHint: String? = nil) -> URL? {
-        let fileManager = FileManager.default
-        let videoExtensions = ["mp4", "mkv", "webm", "mov", "avi", "flv", "ts", "m4v", "part"]
-
-        guard let contents = try? fileManager.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        // Find video files modified recently. 5 minutes covers downloads that stalled
-        // briefly (e.g. flaky upstream, sleep/wake) before the user hit stop — a 60s
-        // window missed those cases and reported "partial file not found".
-        let recentCutoff = Date().addingTimeInterval(-300)
-
-        let recentVideoFiles = contents.compactMap { url -> (URL, Date)? in
-            // Check if it's a video file or .part file
-            let ext = url.pathExtension.lowercased()
-            guard videoExtensions.contains(ext) || url.lastPathComponent.contains(".part") else {
-                return nil
-            }
-
-            // Get modification date
-            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
-                  values.isRegularFile == true,
-                  let modDate = values.contentModificationDate,
-                  modDate > recentCutoff else {
-                return nil
-            }
-
-            return (url, modDate)
-        }
-
-        // If we have a name hint, try to find a file matching it first
-        if let hint = nameHint, !hint.isEmpty {
-            // Look for files containing the hint (handles both with and without .part extension)
-            let matchingFiles = recentVideoFiles.filter { url, _ in
-                url.lastPathComponent.contains(hint)
-            }
-            if let match = matchingFiles.sorted(by: { $0.1 > $1.1 }).first {
-                logger.info("Found matching partial file: \(match.0.lastPathComponent)")
-                return match.0
-            }
-        }
-
-        // Fall back to most recently modified file
-        let sorted = recentVideoFiles.sorted { $0.1 > $1.1 }
-        if let mostRecent = sorted.first {
-            logger.info("Found partial file: \(mostRecent.0.lastPathComponent), modified: \(mostRecent.1)")
-            return mostRecent.0
-        }
-
-        return nil
     }
 
     /// Checks if a URL is likely supported by yt-dlp

@@ -285,3 +285,87 @@ final class ScheduledDownloadStoreTests: XCTestCase {
         }
     }
 }
+
+final class DownloadPartialFileOwnershipTests: XCTestCase {
+    private var folder: URL!
+
+    override func setUpWithError() throws {
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try FileManager.default.removeItem(at: folder)
+    }
+
+    func testMissingDestinationNeverAdoptsAnotherRecentRecording() throws {
+        let unrelated = try write("Other recording.mp4.part")
+        let control = YTDLPDownloadControl()
+        XCTAssertNil(control.partialFile(in: folder))
+        control.recordOutputPath("Recording.mp4", in: folder)
+        XCTAssertNil(control.partialFile(in: folder))
+        XCTAssertEqual(try Data(contentsOf: unrelated), Data("fixture".utf8))
+    }
+
+    func testExactPartialIsPreferredOverPreviousCompletedFileAndNewerUnrelatedFile() throws {
+        _ = try write("Recording.mp4")
+        let partial = try write("Recording.mp4.part")
+        _ = try write("Other Recording.mp4.part")
+        let control = YTDLPDownloadControl()
+        control.recordOutputPath("Recording.mp4", in: folder)
+        XCTAssertEqual(control.partialFile(in: folder), partial)
+    }
+
+    func testAbsoluteAndAlreadyPartialDestinationsAreSupportedWithoutAgeCutoff() throws {
+        let partial = try write("Recording.mp4.part")
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 0)], ofItemAtPath: partial.path)
+        let control = YTDLPDownloadControl()
+        control.recordOutputPath(partial.path, in: folder)
+        XCTAssertEqual(control.partialFile(in: folder), partial)
+    }
+
+    func testCompletedDestinationIsAvailableAfterFinalization() throws {
+        let completed = try write("Recording.mp4")
+        let control = YTDLPDownloadControl()
+        control.recordOutputPath(completed.path, in: folder, finalized: true)
+        XCTAssertEqual(control.partialFile(in: folder), completed)
+    }
+
+    func testUnchangedCompletedDestinationIsNotAdoptedBeforePartialCreation() throws {
+        let completed = try write("Recording.mp4")
+        let control = YTDLPDownloadControl()
+        control.recordOutputPath(completed.path, in: folder)
+        XCTAssertNil(control.partialFile(in: folder))
+        XCTAssertEqual(try Data(contentsOf: completed), Data("fixture".utf8))
+    }
+
+    func testNoPartRecordingCanBeRecoveredAfterDestinationStartsGrowing() throws {
+        let completed = try write("Recording.mp4")
+        let control = YTDLPDownloadControl()
+        control.recordOutputPath(completed.path, in: folder)
+        try Data("growing recording".utf8).write(to: completed)
+        XCTAssertEqual(control.partialFile(in: folder), completed)
+    }
+
+    func testEscapingPathsSymlinksAndDirectoriesCannotBeRecovered() throws {
+        let outside = folder.deletingLastPathComponent().appendingPathComponent(UUID().uuidString + ".mp4")
+        try Data("outside".utf8).write(to: outside)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        let link = folder.appendingPathComponent("linked.mp4")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
+        let directory = folder.appendingPathComponent("directory.mp4")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let control = YTDLPDownloadControl()
+        for path in [outside.path, "../" + outside.lastPathComponent, link.path, directory.path] {
+            control.recordOutputPath(path, in: folder)
+            XCTAssertNil(control.partialFile(in: folder), path)
+        }
+        XCTAssertEqual(try Data(contentsOf: outside), Data("outside".utf8))
+    }
+
+    private func write(_ name: String) throws -> URL {
+        let url = folder.appendingPathComponent(name)
+        try Data("fixture".utf8).write(to: url)
+        return url
+    }
+}
