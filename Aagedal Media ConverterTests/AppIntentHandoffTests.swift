@@ -63,12 +63,17 @@ final class AppIntentHandoffTests: XCTestCase {
     @MainActor
     func testBufferedRequestsReplayInSubmissionOrderOnlyOnce() {
         var received: [Int] = []
-        let requests = PendingAppIntentRequests { received.append($0.object as! Int) }
+        var receiverReady = false
+        var requests: PendingAppIntentRequests!
+        requests = PendingAppIntentRequests { notification in
+            guard receiverReady, requests.claim(notification) else { return }
+            received.append(notification.object as! Int)
+        }
         for index in 0..<20 {
             requests.submit(name: .enqueueFileURL, object: index,
                             userInfo: [PendingAppIntentRequests.requestIDKey: UUID()])
         }
-        received.removeAll()
+        receiverReady = true
         requests.drain()
         XCTAssertEqual(received, Array(0..<20))
         requests.drain()
@@ -99,4 +104,60 @@ final class AppIntentHandoffTests: XCTestCase {
         requests.drain()
         XCTAssertEqual(received, [3, 2])
     }
+    @MainActor
+    func testDrainBeforeReceiversAreReadyRetainsRequests() {
+        var receiverReady = false
+        var received: [Int] = []
+        var requests: PendingAppIntentRequests!
+        requests = PendingAppIntentRequests { notification in
+            guard receiverReady, requests.claim(notification) else { return }
+            received.append(notification.object as! Int)
+        }
+        requests.submit(name: .enqueueFileURL, object: 1,
+                        userInfo: [PendingAppIntentRequests.requestIDKey: UUID()])
+        requests.drain()
+        requests.drain()
+        XCTAssertTrue(received.isEmpty)
+        receiverReady = true
+        requests.drain()
+        requests.drain()
+        XCTAssertEqual(received, [1])
+    }
+
+    @MainActor
+    func testMultipleWindowReceiversOnlyClaimRequestOnce() {
+        var accepted = 0
+        var requests: PendingAppIntentRequests!
+        requests = PendingAppIntentRequests { notification in
+            for _ in 0..<3 {
+                if requests.claim(notification) { accepted += 1 }
+            }
+        }
+        requests.submit(name: .convertImmediately, object: nil,
+                        userInfo: [PendingAppIntentRequests.requestIDKey: UUID()])
+        requests.drain()
+        XCTAssertEqual(accepted, 1)
+    }
+
+    @MainActor
+    func testReplaySkipsRequestsConsumedDuringEarlierDelivery() {
+        var receiverReady = false
+        var received: [Int] = []
+        let laterID = UUID()
+        var requests: PendingAppIntentRequests!
+        requests = PendingAppIntentRequests { notification in
+            guard receiverReady, requests.claim(notification) else { return }
+            received.append(notification.object as! Int)
+            requests.consume(id: laterID)
+            requests.drain() // Reentrant replay must not recurse or double-deliver.
+        }
+        requests.submit(name: .enqueueFileURL, object: 1,
+                        userInfo: [PendingAppIntentRequests.requestIDKey: UUID()])
+        requests.submit(name: .enqueueFileURL, object: 2,
+                        userInfo: [PendingAppIntentRequests.requestIDKey: laterID])
+        receiverReady = true
+        requests.drain()
+        XCTAssertEqual(received, [1])
+    }
+
 }

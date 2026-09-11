@@ -33,6 +33,14 @@ struct ContentViewNotificationHandlers: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .convertPickFiles)) { notification in
                 handleConvertPickFilesNotification(notification)
             }
+            .task { @MainActor in
+                // Let this modifier's subscriptions attach before replaying a
+                // cold-launch request. An earlier onAppear drain is harmless:
+                // unclaimed requests remain buffered until a receiver is ready.
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                PendingAppIntentRequests.shared.drain()
+            }
     }
 
     /// Handles a convert/enqueue App Intent that ran without any file input
@@ -41,14 +49,10 @@ struct ContentViewNotificationHandlers: ViewModifier {
     /// For convert intents (`startConversion` flag absent or true), conversion
     /// starts once the user picks files; the enqueue intent only queues them.
     private func handleConvertPickFilesNotification(_ notification: Notification) {
-        // Mark the buffered request handled so a later drain() won't replay it.
-        if let requestID = notification.userInfo?[PendingAppIntentRequests.requestIDKey] as? UUID {
-            PendingAppIntentRequests.shared.consume(id: requestID)
-        }
-
         guard case let .pickFiles(preset, shouldConvert) = AppIntentHandoff(
             notification: notification, selectedPreset: selectedPreset
         ) else { return }
+        guard PendingAppIntentRequests.shared.claim(notification) else { return }
         if preset != selectedPreset {
             applyPreset(preset)
         }
@@ -59,14 +63,11 @@ struct ContentViewNotificationHandlers: ViewModifier {
     }
 
     private func handleEnqueueNotification(_ notification: Notification) {
-        // Mark the buffered request handled so a later drain() won't replay it.
-        if let requestID = notification.userInfo?[PendingAppIntentRequests.requestIDKey] as? UUID {
-            PendingAppIntentRequests.shared.consume(id: requestID)
-        }
-
         guard case let .enqueue(urls) = AppIntentHandoff(
             notification: notification, selectedPreset: selectedPreset
         ) else { return }
+
+        guard PendingAppIntentRequests.shared.claim(notification) else { return }
 
         let importPreset = selectedPreset
         let importFolder = outputFolder
@@ -129,9 +130,7 @@ struct ContentViewNotificationHandlers: ViewModifier {
             notification: notification, selectedPreset: selectedPreset
         ) else { return }
 
-        if let requestID = notification.userInfo?[PendingAppIntentRequests.requestIDKey] as? UUID {
-            PendingAppIntentRequests.shared.consume(id: requestID)
-        }
+        guard PendingAppIntentRequests.shared.claim(notification) else { return }
 
         Task {
             await MainActor.run {
