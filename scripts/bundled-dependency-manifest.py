@@ -144,12 +144,40 @@ def require_complete_licenses(manifest: dict[str, Any]) -> None:
         if not entry.get("license") or entry["license"] == "NOASSERTION"
         or entry.get("licenseFile") not in notices
     )
+    problems = []
     if unresolved:
-        raise RuntimeError(
+        problems.append(
             f"License attribution is incomplete for {len(unresolved)} dependencies:\n  "
             + "\n  ".join(unresolved)
-            + "\nSee docs/bundled-dependency-licenses.md before publishing."
         )
+    for entry in manifest["tools"]:
+        reported = entry.get("reportedLicense")
+        if reported is None:
+            continue
+        if reported != entry.get("license"):
+            problems.append(f"{entry['path']}: binary reports {reported}, manifest declares {entry.get('license')}")
+        notice = entry.get("licenseFile")
+        if notice in notices and reported.startswith("GPL-"):
+            version = reported.split("-")[1].split(".")[0]
+            content = (REPOSITORY_ROOT / notice).read_text(encoding="utf-8")
+            if not re.search(rf"GNU GENERAL PUBLIC LICENSE\s+Version {version},", content):
+                problems.append(f"{entry['path']}: notice {notice} does not contain the reported GPL version {version} text")
+    if problems:
+        raise RuntimeError("\n".join(problems) + "\nSee docs/bundled-dependency-licenses.md before publishing.")
+
+
+def ffmpeg_reported_license(path: Path) -> str:
+    """Record the executable's own license, independently of reviewed attribution."""
+    output = command_output([str(path), "-L"])
+    match = re.search(r"GNU (Lesser )?General Public License.*?version (\d+)(?:\.\d+)? of the License.*?any later version", output, re.DOTALL)
+    if not match:
+        raise RuntimeError(f"Unable to identify reported FFmpeg license: {path}")
+    family = "LGPL" if match.group(1) else "GPL"
+    # LGPL FFmpeg builds use version 2.1, while GPL builds use integer versions.
+    version = re.search(r"version (\d+(?:\.\d+)?) of the License", match.group(0)).group(1)
+    if "." not in version:
+        version += ".0"
+    return f"{family}-{version}-or-later"
 
 
 def architectures(path: Path) -> list[str]:
@@ -217,6 +245,8 @@ def build_manifest() -> dict[str, Any]:
                 "licenseFile": license_file,
             }
         )
+        if path.name == "ffmpeg":
+            entry["reportedLicense"] = ffmpeg_reported_license(path)
         tools.append(entry)
 
     libraries: list[dict[str, Any]] = []

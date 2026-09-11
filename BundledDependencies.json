@@ -129,7 +129,8 @@
       "component": "FFmpeg",
       "version": "9.0.1",
       "license": "GPL-2.0-or-later",
-      "licenseFile": "Licenses/ffmpeg-LICENSE.txt"
+      "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
+      "reportedLicense": "GPL-3.0-or-later"
     },
     {
       "path": "Aagedal Media Converter/Binaries/mxf2raw",
