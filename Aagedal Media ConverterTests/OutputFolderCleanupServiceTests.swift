@@ -174,4 +174,81 @@ final class OutputFolderCleanupServiceTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
         XCTAssertNil(service.lastError)
     }
+
+    func testDirectorySymlinkCleanupPreservesSelectedScopeAndUnrelatedFiles() throws {
+        let fixture = try fixture()
+        let target = fixture.directory.appendingPathComponent("target", isDirectory: true)
+        let link = fixture.directory.appendingPathComponent("linked-output", isDirectory: true)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        let old = try writeFile("old.mov", in: target)
+        let recent = try writeFile("recent.mov", in: target)
+        let hidden = try writeFile(".hidden.mov", in: target)
+        let nested = target.appendingPathComponent("nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
+        let nestedFile = try writeFile("old.mov", in: nested)
+        fixture.defaults.set(link.path, forKey: "outputFolder")
+        var active = false
+        var stops = 0
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
+            startScope: { url in XCTAssertEqual(url.path, link.path); active = true; return true },
+            stopScope: { url in XCTAssertEqual(url.path, link.path); active = false; stops += 1 })
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks,
+            readResourceValues: { url in
+                XCTAssertTrue(active)
+                XCTAssertEqual(url.deletingLastPathComponent().path, link.path)
+                if url.lastPathComponent == recent.lastPathComponent {
+                    return try url.resourceValues(forKeys: [.creationDateKey, .isRegularFileKey])
+                }
+                return try self.oldMetadata(for: url)
+            })
+
+        service.performCleanupIfNeeded()
+
+        XCTAssertNil(service.lastError)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
+        for url in [recent, hidden, nested, nestedFile, link] {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+        }
+        XCTAssertEqual(fixture.defaults.string(forKey: "outputFolder"), link.path)
+        XCTAssertFalse(active)
+        XCTAssertEqual(stops, 1)
+    }
+
+    func testUnavailableFolderPreservesSavedGrantAndRecoversInNewServiceInstance() throws {
+        let fixture = try fixture()
+        let folder = fixture.directory.appendingPathComponent("unavailable-output", isDirectory: true)
+        fixture.defaults.set(folder.path, forKey: "outputFolder")
+        let savedBookmarks = [folder.absoluteString: Data([7])]
+        fixture.defaults.set(savedBookmarks, forKey: "securityScopedBookmarks")
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
+            resolveData: { _ in throw CocoaError(.fileReadNoSuchFile) }, startScope: { _ in false })
+        let unavailableService = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks)
+
+        unavailableService.performCleanupIfNeeded()
+
+        XCTAssertNotNil(unavailableService.lastError)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+        XCTAssertEqual(fixture.defaults.string(forKey: "outputFolder"), folder.path)
+        XCTAssertEqual(fixture.defaults.dictionary(forKey: "securityScopedBookmarks") as? [String: Data], savedBookmarks)
+
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        let old = try writeFile("old.mov", in: folder)
+        var starts = 0
+        var stops = 0
+        let restoredBookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
+            resolveData: { data in XCTAssertEqual(data, Data([7])); return (folder, false) },
+            startScope: { _ in starts += 1; return starts > 1 }, stopScope: { _ in stops += 1 })
+        let restartedService = OutputFolderCleanupService(defaults: fixture.defaults,
+            bookmarkManager: restoredBookmarks, readResourceValues: { try self.oldMetadata(for: $0) })
+
+        restartedService.performCleanupIfNeeded()
+
+        XCTAssertNil(restartedService.lastError)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
+        XCTAssertEqual(starts, 2)
+        XCTAssertEqual(stops, 1)
+        XCTAssertEqual(fixture.defaults.string(forKey: "outputFolder"), folder.path)
+        XCTAssertEqual(fixture.defaults.dictionary(forKey: "securityScopedBookmarks") as? [String: Data], savedBookmarks)
+    }
 }

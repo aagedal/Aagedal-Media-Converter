@@ -66,11 +66,14 @@ final class OutputFolderCleanupService {
         defer { bookmarkManager.stopAccessing(access) }
         let contents: [URL]
         do {
+            // Foundation rejects enumeration of an unresolved directory symlink.
+            // Keep the selected folder's scope and child paths while listing its
+            // target, as selection and Finder reveal already support symlinks.
             contents = try fileManager.contentsOfDirectory(
-                at: folderURL,
+                at: folderURL.resolvingSymlinksInPath(),
                 includingPropertiesForKeys: [.creationDateKey, .isRegularFileKey],
                 options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-            )
+            ).map { folderURL.appendingPathComponent($0.lastPathComponent) }
         } catch {
             logger.error("Could not enumerate output folder at \(outputFolder): \(error.localizedDescription)")
             lastError = String(localized: "Automatic cleanup could not open the output folder. Check that it is available and select it again in Settings. \(error.localizedDescription)")
