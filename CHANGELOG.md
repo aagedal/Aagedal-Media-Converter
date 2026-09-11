@@ -21,6 +21,8 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 
 - **External helpers share bounded execution and process-tree cancellation.** Conversion, downloads, uploads, transcription, analytics, and metadata probes report launch failures, timeouts, and tool errors.
 - **Deno and yt-dlp update retries wait for the previous update to drain**, including extraction and checksum work.
+- **Stopped live downloads recover only their reported destination**, preventing an unrelated recent recording in the same folder from being adopted or renamed.
+- **Download retries wait for the cancelled attempt to finish**, including rapid retries and forced re-downloads. Cancelling a playlist also cancels its current attempt and leaves later entries cancelled.
 - **Retries wait for cancelled helpers to finish**, with stale callbacks prevented from changing newer jobs. Conversion cancellation also drains native waveform and package preparation.
 - **Subtitle jobs stage their results before publishing**, reserve separate names, and preserve unrelated or edited subtitle files when retrying. Publication is coordinated across app processes.
 - **Uploads to the same remote destination run in queue order within the app.** Overlapping uploads from another app process on the same Mac report a retryable error. Retries wait for cancelled transfers, and file access remains open until each transfer finishes.
@@ -32,6 +34,7 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 - **Unreadable upload profiles and saved-access records are preserved.** Opening Upload Settings cannot replace damaged profiles with an empty default, and a malformed bookmark entry no longer prevents other saved locations from resolving.
 - **Malformed settings imports and audio routes are rejected** instead of silently changing saved preferences. Legacy audio presets and upload-profile upgrades preserve newer choices.
 - **Watch-folder access can be renewed from Settings.** Scan, access, and Trash failures provide recovery guidance; cleanup pauses when access is insufficient.
+- **Automatic output cleanup supports folders selected through symbolic links**, retaining the selected location and its saved access.
 - **SSH keys selected with Browse retain sandbox access across launches**, with guidance when access must be granted again.
 - **Imports retain their filename and destination settings while metadata loads**, including camera-card groups and image sequences.
 

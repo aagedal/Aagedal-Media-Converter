@@ -181,6 +181,32 @@ FFmpeg corresponding-source/static-dependency review remain open.** Archive
 identity does not replace package/transitive attribution. No executable or public
 feed was changed. Development remains 4.4.0 (576); no candidate is frozen.
 
+## Recovery and source-evidence continuation
+
+[Recovery validation](4.4-validation-recovery-2026-09-11.md) records **867 passing
+unit tests, 19 passing UI workflow tests, and 55 passing release-script tests**.
+The [folder-access review](4.4-folder-access-review.md) fixes cleanup through
+selected directory symlinks and verifies saved-grant recovery through recreated
+services. The [download review](4.4-download-recovery-review.md) prevents stopped
+downloads from adopting unrelated recent files and drains cancelled attempts
+before retries, including playlist cancellation before helper startup.
+
+The UI matrix now includes keyboard cancel/reset/retry/repeat conversion,
+English/Norwegian Settings and recovery flows, unavailable output/watch folders,
+both preview backends, screen-capture rate choices and tool diagnostics. The
+final retry change has full unit coverage; the broader UI executable preceded
+that change. Actual network, permissions, recording/editor, VoiceOver, Shortcuts,
+installed-upgrade and signed-distribution gates remain open. The unsigned Release
+audit again passes 44 Mach-O images and six matching notices at 4.4.0 (576).
+
+[Dependency provenance](4.4-dependency-provenance-review.md) now retains AVM
+compiler-input evidence and 39 dependency/build snapshots. It also recovers the
+exact rclone source revision and all 142 modules with matching Go-verified
+checksums, retaining 197 module notice candidates plus main-source/runtime
+notices. These narrow source recovery work but do not replace build selection,
+file-level/embedded-asset review or offline packaging. **99 missing notices plus
+explicit FFmpeg source/static-dependency review still block publication.**
+
 ## What can wait for 4.5
 
 - Full orchestration extraction and typed filter/codec/output plans.
