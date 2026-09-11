@@ -404,6 +404,70 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testNativePreviewSeekScreenshotAndReopen() throws {
+        try exercisePreview(container: "mp4", expectedBackend: "AVPlayer")
+    }
+
+    @MainActor
+    func testMPVPreviewSeekScreenshotAndReopen() throws {
+        try exercisePreview(container: "mkv", expectedBackend: "MPV")
+    }
+
+    @MainActor
+    private func exercisePreview(container: String, expectedBackend: String) throws {
+        launchApp(generatedFixture: true, previewContainer: container)
+        defer { terminateAndCleanFixtures() }
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+
+        for attempt in 0..<2 {
+            queueItem.rightClick()
+            let preview = app.menuItems["Preview / Trim"]
+            XCTAssertTrue(preview.waitForExistence(timeout: 5))
+            preview.click()
+            let media = element("preview.media")
+            XCTAssertTrue(media.waitForExistence(timeout: 10))
+            XCTAssertTrue(waitForValue("\(expectedBackend) ready", of: media, timeout: 30))
+            let timecode = element("trim.timecode")
+            XCTAssertTrue(timecode.waitForExistence(timeout: 5))
+            timecode.click()
+            let input = element("trim.timecodeInput")
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.typeKey("a", modifierFlags: .command)
+            input.typeText("00:00:01:00")
+            input.typeKey(.return, modifierFlags: [])
+            XCTAssertTrue(waitForValue("00:00:01:00", of: timecode, timeout: 10))
+            if attempt == 0 {
+                let reveal = element("trim.revealScreenshot")
+                XCTAssertFalse(reveal.isEnabled)
+                element("trim.captureFrame").click()
+                XCTAssertTrue(waitForEnabled(true, of: reveal, timeout: 30))
+                // A preview sheet may extend beyond its parent window; capture
+                // the full app so attachments do not crop the sheet's controls.
+                let attachment = XCTAttachment(screenshot: app.screenshot())
+                attachment.name = "\(expectedBackend) preview after seek and screenshot"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+            app.typeKey("l", modifierFlags: [])
+            let advances = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@", "00:00:01:00"), object: timecode
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [advances], timeout: 5), .completed)
+            app.typeKey("k", modifierFlags: [])
+            let pausedTimecode = try XCTUnwrap(timecode.value as? String)
+            let staysPaused = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@", pausedTimecode), object: timecode
+            )
+            staysPaused.isInverted = true
+            XCTAssertEqual(XCTWaiter.wait(for: [staysPaused], timeout: 1), .completed)
+            element("preview.close").click()
+            XCTAssertTrue(media.waitForNonExistence(timeout: 10))
+        }
+        XCTAssertEqual(queueItem.value as? String, "waiting")
+    }
+
+    @MainActor
     func testImportsGeneratedFixtureAndSelectsPreset() throws {
         launchApp(generatedFixture: true)
         defer { terminateAndCleanFixtures() }
@@ -536,12 +600,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         locale: String = "en_US",
         additionalArguments: [String] = [],
         damagedSchedules: Bool = false,
-        damagedHistory: Bool = false
+        damagedHistory: Bool = false,
+        previewContainer: String? = nil
     ) {
         app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-ffmpegBinarySource", "app", "-defaultExportPreset", defaultPreset]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        if let previewContainer {
+            app.launchEnvironment["AMC_UI_TEST_PREVIEW_CONTAINER"] = previewContainer
+        }
         if damagedHistory {
             app.launchEnvironment["AMC_UI_TEST_DAMAGED_HISTORY"] = "1"
         }

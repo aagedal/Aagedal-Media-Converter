@@ -1712,10 +1712,11 @@ struct ContentView: View {
         }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let fixtureURL = directory.appendingPathComponent("ui-test-fixture.mp4")
+        let container = ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] == "mkv" ? "mkv" : "mp4"
+        let fixtureURL = directory.appendingPathComponent("ui-test-fixture.\(container)")
         let fixtureDuration = ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1"
             ? 15
-            : 2
+            : (ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] != nil ? 6 : 2)
 
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
@@ -2954,6 +2955,9 @@ enum UITestFixtureConfiguration {
         // Configure before any @AppStorage is constructed, so syncing the view's
         // current folder cannot write the fixture path into the saved preferences.
         arguments["outputFolder"] = directory.path
+        arguments[AppConstants.screenshotDirectoryKey] = directory.path
+        arguments[AppConstants.screenshot8BitFormatKey] = ScreenshotFormat.png.rawValue
+        arguments[AppConstants.preferredTimecodeDisplayModeKey] = "relative"
         UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
     }
 }
