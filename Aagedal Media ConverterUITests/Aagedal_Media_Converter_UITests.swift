@@ -523,6 +523,42 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testCancelledConversionCanRetryAndConvertAgainUsingKeyboard() throws {
+        launchApp(
+            generatedFixture: true,
+            defaultPreset: "H.264 / AVC",
+            realtimeInput: true
+        )
+        defer { terminateAndCleanFixtures() }
+
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
+        let conversionButton = element("toolbar.conversion")
+        XCTAssertTrue(waitForEnabled(true, of: conversionButton, timeout: 5))
+        app.activate()
+        app.typeKey(.return, modifierFlags: .command)
+        XCTAssertTrue(waitForValue("converting", of: queueItem, timeout: 10))
+        XCTAssertTrue(waitForLabel("Cancel Conversion", of: conversionButton, timeout: 5))
+        app.typeKey(.return, modifierFlags: .command)
+        XCTAssertTrue(waitForValue("cancelled", of: queueItem, timeout: 10))
+        XCTAssertTrue(waitForEnabled(false, of: conversionButton, timeout: 5))
+
+        // Exercise reset and retry after cancellation, then repeat with an
+        // existing successful output through the normal app collision policy.
+        for attempt in 1...2 {
+            app.typeKey("r", modifierFlags: [.command, .shift])
+            XCTAssertTrue(waitForValue("waiting", of: queueItem, timeout: 5))
+            XCTAssertTrue(waitForEnabled(true, of: conversionButton, timeout: 5))
+            app.typeKey(.return, modifierFlags: .command)
+            XCTAssertTrue(waitForValue("converting", of: queueItem, timeout: 10))
+            XCTAssertTrue(waitForValue("done", of: queueItem, timeout: 45))
+            XCTAssertTrue(waitForLabel("Start Conversion", of: conversionButton, timeout: 5))
+            XCTAssertTrue(waitForEnabled(false, of: conversionButton, timeout: 5))
+            attachWindowScreenshot(named: "Keyboard conversion recovery - attempt \(attempt)")
+        }
+    }
+
+    @MainActor
     func testExposesSuccessfulConversionResult() throws {
         launchApp(
             generatedFixture: true,
