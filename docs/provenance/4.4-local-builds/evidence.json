@@ -1,0 +1,106 @@
+{
+  "reviewedDate": "2026-09-11",
+  "scope": "Local artifact correspondence evidence; not complete attribution or reproducible build verification.",
+  "avmSourceRevision": "000682c868c9c265fe0bd5b552a8d10ec49ac9a4",
+  "ffmpegBuildRepositoryRevision": "00023f51d635ac7ab5b83f5419e57f004254318e",
+  "binaryComparisons": [
+    {
+      "tool": "avmenc",
+      "bundledPath": "Aagedal Media Converter/Binaries/avmenc",
+      "bundledSHA256": "443d0e97b4f36af6ff674300e7f483ba72b20d84c0cba1bddb6233f0e658af89",
+      "localBuildPath": "/Users/truls.aagedal/Developer/avm/build_arm64/avmenc",
+      "localBuildSHA256": "46a43b3be33d4b6ba2c06b55afe727e796e58559f8be379b5499ee9fe8ba5af4",
+      "signatureRemovedSHA256": [
+        "108db3d1e2b5db3d1e8bcfcbeefda44bca8cf9189b5719f65867f002d7c62f98",
+        "c117694ba86dc2a177356ba6d177794f8d7d5f1145f76984a34d393348bfda8c"
+      ],
+      "signatureRemovedBytes": [
+        12544552,
+        12544552
+      ],
+      "signatureRemovedEqual": false,
+      "signatureRemovedLinkeditVMSize": [
+        1605632,
+        1654784
+      ],
+      "equalAfterAlsoZeroingLinkeditVMSize": true,
+      "signatureRemovedZeroLinkeditVMSizeSHA256": [
+        "c1237d5c0b73e650447f5643b5422f6c664814de58706c987ed211016fc8c304",
+        "c1237d5c0b73e650447f5643b5422f6c664814de58706c987ed211016fc8c304"
+      ]
+    },
+    {
+      "tool": "avmdec",
+      "bundledPath": "Aagedal Media Converter/Binaries/avmdec",
+      "bundledSHA256": "6cfb8d7daa3a5909730a7bc540ee8513241269290aff10ab6f10499d7caff694",
+      "localBuildPath": "/Users/truls.aagedal/Developer/avm/build_arm64/avmdec",
+      "localBuildSHA256": "5dc1f870a2a6e77c1f4d40f82cca446de6744442aadc7eb061b7945de855df0c",
+      "signatureRemovedSHA256": [
+        "d93c29664525e3357993cc63a4be10f974e546099452e588afb46af02860d17f",
+        "0444f013fdbb20169dedb5a104c893fed1194b1003cc9b65284b87b94765602c"
+      ],
+      "signatureRemovedBytes": [
+        12510368,
+        12510368
+      ],
+      "signatureRemovedEqual": false,
+      "signatureRemovedLinkeditVMSize": [
+        1605632,
+        1654784
+      ],
+      "equalAfterAlsoZeroingLinkeditVMSize": true,
+      "signatureRemovedZeroLinkeditVMSizeSHA256": [
+        "493d9ea87e491da8b28ef266f0a196cfec9efcb1ae0600172e07fab1b1dfc296",
+        "493d9ea87e491da8b28ef266f0a196cfec9efcb1ae0600172e07fab1b1dfc296"
+      ]
+    },
+    {
+      "tool": "ffmpeg",
+      "bundledPath": "Aagedal Media Converter/Binaries/ffmpeg",
+      "bundledSHA256": "e8214cc43d5b5c3699e7fd439a129dc95346038d8b822a3cc104e7b00fad18e3",
+      "localBuildPath": "/Users/truls.aagedal/Developer/ffmpeg-apple-silicon/dist/9.0.1/full/ffmpeg",
+      "localBuildSHA256": "dc3770d91735cfe8b0ef8f4eb7c6f8431d722cca0d79c0959d62be216868d604",
+      "signatureRemovedSHA256": [
+        "19a4ec06a29a4325536be72868aefd1d668b7510adcceb8e2fd94501caa7331c",
+        "19a4ec06a29a4325536be72868aefd1d668b7510adcceb8e2fd94501caa7331c"
+      ],
+      "signatureRemovedBytes": [
+        54554664,
+        54554664
+      ],
+      "signatureRemovedEqual": true
+    }
+  ],
+  "snapshots": [
+    {
+      "localSource": "/Users/truls.aagedal/Developer/ffmpeg-apple-silicon/dist/9.0.1/full/README.md",
+      "snapshot": "ffmpeg-9.0.1-full-README.md",
+      "sha256": "82ed6c368633a7dbe2bd9a6f92aa50cc525e038c014e25091a723cdf8e872ad0"
+    },
+    {
+      "localSource": "/Users/truls.aagedal/Developer/avm/LICENSE",
+      "snapshot": "avm-source-LICENSE.txt",
+      "sha256": "d7c2b594c4075df6903d5baf1c99223ac668093a5d45a15fcf10c9fe2adc061e"
+    },
+    {
+      "localSource": "/Users/truls.aagedal/Developer/avm/PATENTS",
+      "snapshot": "avm-source-PATENTS.txt",
+      "sha256": "661fb8e504744e95587b556b94a58343448300606a41bea8c7a9b97125696e61"
+    },
+    {
+      "localSource": "/Users/truls.aagedal/Developer/avm/build_arm64/CMakeCache.txt",
+      "snapshot": "avm-CMakeCache.txt",
+      "sha256": "137b5b1f26e358216f7e949518e8d427e8e6b8d3dc8dbed6740a3d1acc67b413"
+    },
+    {
+      "localSource": "/Users/truls.aagedal/Developer/avm/build_arm64/CMakeFiles/avmenc.dir/link.txt",
+      "snapshot": "avmenc-link.txt",
+      "sha256": "1508c3ab0a23a4778b30c31c756faaadc7d0940bb8f0748ff06b6876cc327d26"
+    },
+    {
+      "localSource": "/Users/truls.aagedal/Developer/avm/build_arm64/CMakeFiles/avmdec.dir/link.txt",
+      "snapshot": "avmdec-link.txt",
+      "sha256": "25cc9c3b9355019a71248138a46acd1e25961e8c28202bcd1e72cd4896cd77d7"
+    }
+  ]
+}

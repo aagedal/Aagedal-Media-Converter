@@ -14,7 +14,9 @@ python3 scripts/bundled-dependency-manifest.py --check --require-complete-licens
 
 `release.sh` runs this gate before building, signing, notarizing, or uploading.
 It rejects missing notice references and `NOASSERTION` licenses, even when the
-checked-in manifest is otherwise current. Ordinary inventory checks remain usable
+checked-in manifest is otherwise current. It also rejects explicit
+`pendingAttribution` work, and inconsistencies between an executable's reported
+license, recorded license, and notice header. Ordinary inventory checks remain usable
 while attribution work is unfinished. This gate verifies recorded attribution;
 it cannot establish that an assignment or a notice is legally sufficient.
 
@@ -55,9 +57,12 @@ No binary or license text was replaced during the inventory/gate change.
 The [4.4 provenance review](4.4-dependency-provenance-review.md) recovers exact
 rclone VCS identity and module records, an AVM revision lead, historical dylib
 copy scripts, and pinned package evidence. The 99 missing attributions remain.
-The current FFmpeg executable also reports GPL v3-or-later while the manifest
-and packaged notice specify v2. Inventory freshness does not detect this semantic
-mismatch; the current non-null notice does not establish complete attribution.
+The continuation preserved local FFmpeg/AVM build evidence and corrected FFmpeg's
+manifest and packaged notice to GPL v3-or-later, matching the executable's report.
+FFmpeg remains explicitly blocked by `pendingAttribution` for corresponding sources
+and static dependency notices. AVM's pinned local source also corrected its
+top-level license from BSD-2-Clause to BSD-3-Clause-Clear; its missing notice remains
+unresolved because the retained link records show additional static dependencies.
 
 ## Size and static dependency baseline
 

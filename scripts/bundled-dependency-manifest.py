@@ -34,12 +34,12 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
     },
     "avmdec": {
         "component": "Alliance for Open Media reference tools",
-        "license": "BSD-2-Clause",
+        "license": "BSD-3-Clause-Clear",
         "licenseFile": None,
     },
     "avmenc": {
         "component": "Alliance for Open Media reference tools",
-        "license": "BSD-2-Clause",
+        "license": "BSD-3-Clause-Clear",
         "licenseFile": None,
     },
     "bmxparse": {
@@ -58,8 +58,12 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
     },
     "ffmpeg": {
         "component": "FFmpeg",
-        "license": "GPL-2.0-or-later",
+        "license": "GPL-3.0-or-later",
         "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
+        "pendingAttribution": [
+            "Preserve corresponding FFmpeg 9.0.1 sources, patches, and build records.",
+            "Review and package notices for the actual statically linked dependencies.",
+        ],
         "versionArguments": ["-version"],
         "versionPattern": r"ffmpeg version ([^ ]+)",
     },
@@ -150,6 +154,12 @@ def require_complete_licenses(manifest: dict[str, Any]) -> None:
             f"License attribution is incomplete for {len(unresolved)} dependencies:\n  "
             + "\n  ".join(unresolved)
         )
+    for entry in [*manifest["tools"], *manifest["libraries"]]:
+        if entry.get("pendingAttribution"):
+            problems.append(
+                f"{entry['path']}: attribution review remains incomplete:\n  "
+                + "\n  ".join(entry["pendingAttribution"])
+            )
     for entry in manifest["tools"]:
         reported = entry.get("reportedLicense")
         if reported is None:
@@ -247,6 +257,8 @@ def build_manifest() -> dict[str, Any]:
         )
         if path.name == "ffmpeg":
             entry["reportedLicense"] = ffmpeg_reported_license(path)
+        if metadata.get("pendingAttribution"):
+            entry["pendingAttribution"] = metadata["pendingAttribution"]
         tools.append(entry)
 
     libraries: list[dict[str, Any]] = []

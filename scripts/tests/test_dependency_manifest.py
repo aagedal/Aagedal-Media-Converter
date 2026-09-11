@@ -60,6 +60,27 @@ class DependencyLicenseTests(unittest.TestCase):
     def test_complete_attribution_passes(self):
         manifest.require_complete_licenses(self.complete_manifest())
 
+    def test_matching_license_and_notice_do_not_clear_pending_source_review(self):
+        data = self.complete_manifest()
+        data["tools"][0].update(
+            license="GPL-3.0-or-later", reportedLicense="GPL-3.0-or-later",
+            pendingAttribution=["Corresponding sources have not been preserved."],
+        )
+        self.notice.write_text("GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n")
+        with self.assertRaisesRegex(RuntimeError, "Corresponding sources have not been preserved"):
+            manifest.require_complete_licenses(data)
+
+    def test_library_pending_review_fails_alongside_missing_notice(self):
+        data = self.complete_manifest()
+        data["libraries"] = [{
+            "path": "Frameworks/library.dylib", "license": "MIT", "licenseFile": None,
+            "pendingAttribution": ["Review compiled components."],
+        }]
+        with self.assertRaises(RuntimeError) as failure:
+            manifest.require_complete_licenses(data)
+        self.assertIn("incomplete for 1 dependencies", str(failure.exception))
+        self.assertIn("Review compiled components", str(failure.exception))
+
     def test_missing_or_uninventoried_notice_fails(self):
         for notice in [None, "Licenses/missing-LICENSE.txt"]:
             with self.subTest(notice=notice):

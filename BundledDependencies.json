@@ -34,7 +34,7 @@
       ],
       "component": "Alliance for Open Media reference tools",
       "version": null,
-      "license": "BSD-2-Clause",
+      "license": "BSD-3-Clause-Clear",
       "licenseFile": null
     },
     {
@@ -52,7 +52,7 @@
       ],
       "component": "Alliance for Open Media reference tools",
       "version": null,
-      "license": "BSD-2-Clause",
+      "license": "BSD-3-Clause-Clear",
       "licenseFile": null
     },
     {
@@ -128,9 +128,13 @@
       ],
       "component": "FFmpeg",
       "version": "9.0.1",
-      "license": "GPL-2.0-or-later",
+      "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
-      "reportedLicense": "GPL-3.0-or-later"
+      "reportedLicense": "GPL-3.0-or-later",
+      "pendingAttribution": [
+        "Preserve corresponding FFmpeg 9.0.1 sources, patches, and build records.",
+        "Review and package notices for the actual statically linked dependencies."
+      ]
     },
     {
       "path": "Aagedal Media Converter/Binaries/mxf2raw",
@@ -2164,8 +2168,8 @@
     },
     {
       "path": "Licenses/ffmpeg-LICENSE.txt",
-      "bytes": 17985,
-      "sha256": "4a5f3d09ceadfdffa6ac719ef05538c40c1fcf722a451fccc75d62302e4b27b7"
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
     },
     {
       "path": "Licenses/mpv-LICENSE.txt",
