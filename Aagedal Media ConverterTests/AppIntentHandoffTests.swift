@@ -160,4 +160,71 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertEqual(received, [1])
     }
 
+    @MainActor
+    func testClaimedConversionsKeepFIFOSettingsAcrossImportAndConversionSuspension() async {
+        let queue = AppIntentOperationQueue()
+        let importStarted = expectation(description: "first import suspended")
+        let conversionStarted = expectation(description: "first conversion suspended")
+        let allFinished = expectation(description: "queued handoffs finished")
+        var finishImport: CheckedContinuation<Void, Never>?
+        var finishConversion: CheckedContinuation<Void, Never>?
+        var events: [String] = []
+        var sharedPreset = "initial"
+        var sharedOutput = "/initial"
+
+        queue.enqueue {
+            events.append("first import")
+            await withCheckedContinuation { continuation in
+                finishImport = continuation
+                importStarted.fulfill()
+            }
+            sharedPreset = "audio"
+            sharedOutput = "/audio"
+            events.append("first conversion")
+            await withCheckedContinuation { continuation in
+                finishConversion = continuation
+                conversionStarted.fulfill()
+            }
+            XCTAssertEqual(sharedPreset, "audio")
+            XCTAssertEqual(sharedOutput, "/audio")
+            events.append("first complete")
+        }
+        queue.enqueue {
+            events.append("second import")
+            sharedPreset = "video"
+            sharedOutput = "/video"
+            events.append("second complete")
+        }
+        await fulfillment(of: [importStarted], timeout: 2)
+        XCTAssertEqual(events, ["first import"])
+        XCTAssertEqual(sharedPreset, "initial")
+        finishImport?.resume()
+        await fulfillment(of: [conversionStarted], timeout: 2)
+        XCTAssertEqual(events, ["first import", "first conversion"])
+        // A picker/enqueue arriving during conversion must not mutate its state.
+        queue.enqueue {
+            events.append("picker")
+            XCTAssertEqual(sharedPreset, "video")
+            XCTAssertEqual(sharedOutput, "/video")
+            allFinished.fulfill()
+        }
+        finishConversion?.resume()
+        await fulfillment(of: [allFinished], timeout: 2)
+        XCTAssertEqual(events, ["first import", "first conversion", "first complete",
+                                "second import", "second complete", "picker"])
+    }
+
+    @MainActor
+    func testOperationQueueAcceptsNewWorkAfterBecomingIdle() async {
+        let queue = AppIntentOperationQueue()
+        let firstFinished = expectation(description: "first work finished")
+        let secondFinished = expectation(description: "later work finished")
+        var events: [Int] = []
+        queue.enqueue { events.append(1); firstFinished.fulfill() }
+        await fulfillment(of: [firstFinished], timeout: 2)
+        queue.enqueue { events.append(2); secondFinished.fulfill() }
+        await fulfillment(of: [secondFinished], timeout: 2)
+        XCTAssertEqual(events, [1, 2])
+    }
+
 }

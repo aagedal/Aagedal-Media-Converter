@@ -95,3 +95,25 @@ final class PendingAppIntentRequests {
         }
     }
 }
+
+/// Keeps claimed handoffs from mutating the shared queue/preset/output while another
+/// handoff is importing or converting. The operation owns its turn across awaits.
+@MainActor
+final class AppIntentOperationQueue {
+    static let shared = AppIntentOperationQueue()
+    private var operations: [@MainActor () async -> Void] = []
+    private var isRunning = false
+
+    func enqueue(_ operation: @escaping @MainActor () async -> Void) {
+        operations.append(operation)
+        guard !isRunning else { return }
+        isRunning = true
+        Task { @MainActor in
+            while !operations.isEmpty {
+                let next = operations.removeFirst()
+                await next()
+            }
+            isRunning = false
+        }
+    }
+}

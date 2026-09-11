@@ -53,13 +53,12 @@ struct ContentViewNotificationHandlers: ViewModifier {
             notification: notification, selectedPreset: selectedPreset
         ) else { return }
         guard PendingAppIntentRequests.shared.claim(notification) else { return }
-        if preset != selectedPreset {
+        AppIntentOperationQueue.shared.enqueue {
             applyPreset(preset)
+            pendingConvertAfterImport = shouldConvert
+            NSApp.activate(ignoringOtherApps: true)
+            isFileImporterPresented = true
         }
-
-        pendingConvertAfterImport = shouldConvert
-        NSApp.activate(ignoringOtherApps: true)
-        isFileImporterPresented = true
     }
 
     private func handleEnqueueNotification(_ notification: Notification) {
@@ -68,7 +67,12 @@ struct ContentViewNotificationHandlers: ViewModifier {
         ) else { return }
 
         guard PendingAppIntentRequests.shared.claim(notification) else { return }
+        AppIntentOperationQueue.shared.enqueue {
+            enqueueFiles(urls)
+        }
+    }
 
+    private func enqueueFiles(_ urls: [URL]) {
         let importPreset = selectedPreset
         let importFolder = outputFolder
         let importSettings = VideoImportSettings()
@@ -132,17 +136,7 @@ struct ContentViewNotificationHandlers: ViewModifier {
 
         guard PendingAppIntentRequests.shared.claim(notification) else { return }
 
-        Task {
-            await MainActor.run {
-                currentOutputFolder = folderURL
-                outputFolder = folderURL.path
-                // Switch the app to the requested preset before converting so
-                // startConversion() (which reads selectedPreset) uses it too.
-                if preset != selectedPreset {
-                    applyPreset(preset)
-                }
-            }
-
+        AppIntentOperationQueue.shared.enqueue {
             for fileURL in fileURLs {
                 if var videoItem = await VideoFileUtils.createVideoItem(
                     from: fileURL,
@@ -160,6 +154,12 @@ struct ContentViewNotificationHandlers: ViewModifier {
                     }
                 }
             }
+            // Metadata loading suspends. Apply the request's settings only after
+            // import, immediately before conversion snapshots them. The modifier's
+            // captured selectedPreset may be stale, so apply unconditionally.
+            currentOutputFolder = folderURL
+            outputFolder = folderURL.path
+            applyPreset(preset)
             await startConversion()
         }
     }
