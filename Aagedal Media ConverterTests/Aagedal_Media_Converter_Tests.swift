@@ -8634,6 +8634,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             try Data("#!/bin/sh\nexit 0\n".utf8).write(to: decoderURL)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: decoderURL.path)
         }
+        let progressHandled = expectation(description: "Progress callback completes cancellation")
         let runner = SequencedRecordingSubprocessRunner { _, request, outputHandler in
             guard request.executableURL != decoderURL else { return successfulSubprocessResult() }
             let outputURL = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
@@ -8644,6 +8645,13 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                     data: Data("frame= 12 fps=24 time=00:00:00.50 speed=1.0x\r".utf8)
                 ))
             }.value
+            // Parsing queues delivery on MainActor. Returning immediately races
+            // successful completion against the queued callback and allows the
+            // converter to invalidate its progress gate before cancellation runs.
+            // Keep the helper alive until the callback finishes, as this test
+            // specifically exercises cancellation from an active helper's output.
+            let delivery = await XCTWaiter.fulfillment(of: [progressHandled], timeout: 7)
+            XCTAssertEqual(delivery, .completed)
             return successfulSubprocessResult()
         }
         let converter = FFMPEGConverter(
@@ -8672,6 +8680,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             }
             XCTAssertEqual(cancelled.wait(timeout: .now() + 5), .success,
                            "Progress must release the gate and preserve runner identity during cancellation")
+            progressHandled.fulfill()
         }
 
         XCTAssertEqual(callbackCount.value, 1)
@@ -11336,52 +11345,6 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         } catch is CancellationError {
             // Expected even when there is no next frame to check cancellation.
         }
-    }
-
-    func testIMFQueueCancellationStopsFramePreparationBeforeWrapper() async throws {
-        guard BinaryPathResolver.raw2bmxPath != nil else {
-            throw XCTSkip("Bundled raw2bmx is required to enter IMF frame preparation")
-        }
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let runner = SequencedRecordingSubprocessRunner { index, request, _ in
-            XCTAssertEqual(index, 0, "Cancellation must prevent launching the package wrapper")
-            let pattern = try XCTUnwrap(request.arguments.last)
-            for frame in 1...2 {
-                let path = pattern.replacingOccurrences(of: "%06d", with: String(format: "%06d", frame))
-                try Data([0xFF, 0x4F, 1]).write(to: URL(fileURLWithPath: path))
-            }
-            return successfulSubprocessResult()
-        }
-        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" })
-        let preparedStatuses = OSAllocatedUnfairLock(initialState: [String]())
-        let result = await runConversion(
-            ConversionRequest(
-                inputURL: root.appendingPathComponent("input.mov"),
-                outputURL: root.appendingPathComponent("output"),
-                preset: .imfJ2K,
-                includeDateTag: false,
-                sourceMetadata: videoMetadata(timecode: nil, frameRate: 24, duration: 1),
-                expectedDuration: 1,
-                videoFrameRate: 24
-            ),
-            using: converter
-        ) { _, status in
-            guard let status, status.hasPrefix("Preparing J2C frames") else { return }
-            preparedStatuses.withLock { $0.append(status) }
-            let cancelled = DispatchSemaphore(value: 0)
-            Task {
-                await converter.cancelConversion()
-                cancelled.signal()
-            }
-            XCTAssertEqual(cancelled.wait(timeout: .now() + 5), .success,
-                           "Frame preparation must leave the converter actor available for cancellation")
-        }
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorReason, "Conversion cancelled")
-        XCTAssertEqual(preparedStatuses.withLock { $0 }, ["Preparing J2C frames 1/2"])
-        XCTAssertEqual(runner.requests.count, 1)
     }
 
     func testPackageCodestreamPreparationRequiresEveryFrameAndCountsWrittenBytes() throws {
@@ -16349,5 +16312,49 @@ private actor DeferredWhisperCapabilityRunner: SubprocessRunning {
     func finishDraining() {
         for continuation in drains { continuation.resume() }
         drains.removeAll()
+    }
+}
+
+final class RemoteUploadLeaseTests: XCTestCase {
+    func testSameDestinationAcrossProfilesRejectsOverlapAndAllowsRetry() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let firstConfig = UploadConfig(server: "MEDIA.example", port: 22, username: "first", remotePath: "/deliveries", backendType: .sftp)
+        var secondConfig = UploadConfig(server: "media.example", port: 22, username: "second", remotePath: "/deliveries/", backendType: .sftp)
+        secondConfig.s3Bucket = "unused-previous-backend"
+        secondConfig.smbShare = "unused-previous-backend"
+        let first = try RemoteUploadLease(config: firstConfig, fileName: "Clip.mov", lockDirectory: directory)
+        XCTAssertThrowsError(try RemoteUploadLease(config: secondConfig, fileName: "clip.mov", lockDirectory: directory))
+        first.release()
+        let retry = try RemoteUploadLease(config: secondConfig, fileName: "clip.mov", lockDirectory: directory)
+        first.release() // A late duplicate release must not close the retry's reused descriptor.
+        XCTAssertThrowsError(try RemoteUploadLease(config: firstConfig, fileName: "clip.mov", lockDirectory: directory))
+        retry.release()
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).count, 1)
+    }
+
+    func testDifferentFilesCanUploadConcurrently() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let config = UploadConfig(server: "media.example", port: 22, username: "editor", remotePath: "/deliveries", backendType: .sftp)
+        let first = try RemoteUploadLease(config: config, fileName: "first.mov", lockDirectory: directory)
+        defer { first.release() }
+        let second = try RemoteUploadLease(config: config, fileName: "second.mov", lockDirectory: directory)
+        defer { second.release() }
+    }
+
+    func testLockSymlinkDoesNotModifyTarget() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let config = UploadConfig(server: "media.example", port: 22, username: "editor", remotePath: "/deliveries", backendType: .sftp)
+        let lease = try RemoteUploadLease(config: config, fileName: "clip.mov", lockDirectory: directory)
+        lease.release()
+        let lock = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).first)
+        let target = directory.appendingPathComponent("unrelated.txt")
+        try "preserve me".write(to: target, atomically: true, encoding: .utf8)
+        try FileManager.default.removeItem(at: lock)
+        try FileManager.default.createSymbolicLink(at: lock, withDestinationURL: target)
+        XCTAssertThrowsError(try RemoteUploadLease(config: config, fileName: "clip.mov", lockDirectory: directory))
+        XCTAssertEqual(try String(contentsOf: target, encoding: .utf8), "preserve me")
     }
 }

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import CryptoKit
+import Darwin
 import Foundation
 import os
 
@@ -85,6 +86,17 @@ final class SubtitleSRTNaming: Sendable {
         try reservations.withLock { reserved in
             guard reserved[reservation.key] == reservation.id else { throw CancellationError() }
             let destination = reservation.url
+            // All app processes publishing in this directory must serialize the
+            // ownership check and replacement. Lock the directory inode itself so
+            // aliases share the lock, without leaving sidecars or stale lock files.
+            // Never block the main actor waiting for another app process.
+            let directoryDescriptor = open(destination.deletingLastPathComponent().path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+            guard directoryDescriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            defer { close(directoryDescriptor) }
+            guard flock(directoryDescriptor, LOCK_EX | LOCK_NB) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            defer { flock(directoryDescriptor, LOCK_UN) }
 
             let record = SubtitleSRTOwnershipRecord(
                 owner: reservation.owner,

@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Another upload to this destination is active in the app. Wait for it to finish, then retry.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "En annen opplasting til dette målet er aktiv i appen. Vent til den er ferdig, og prøv igjen."
+        }
+      }
+    }
+  },
+  "Could not coordinate access to the upload destination. Try again after checking local app storage access.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Kunne ikke samordne tilgangen til opplastingsmålet. Kontroller appens tilgang til lokal lagring, og prøv igjen."
+        }
+      }
+    }
+  },
+  "IMF export is unavailable in 4.4 because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "IMF-eksport er ikke tilgjengelig i 4.4 fordi pakkebeskrivelser og samsvar med standarden ikke er validert. Bruk en annen eksportforhåndsinnstilling og et validert verktøy for IMF-mastering."
+        }
+      }
+    }
+  },
     "Cannot safely apply video adjustments to numeric filters with this stream mapping. Use -filter:v:0 for video and typed audio filter options, or map individual required streams explicitly." : {
       "localizations" : {
         "nb" : {

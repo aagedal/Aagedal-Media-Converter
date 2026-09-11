@@ -4,6 +4,9 @@
 
 import Foundation
 import OSLog
+import CryptoKit
+import Darwin
+import os
 
 protocol RcloneUpdating: Sendable {
     func resolveRclonePath() async -> String?
@@ -92,6 +95,8 @@ actor RcloneService: RcloneUploading {
         let remoteEnv = try await buildRemoteEnvironment(config: config, rclonePath: rclonePath)
         try Task.checkCancellation()
         let destination = uploadDestination(for: config)
+        let lease = try RemoteUploadLease(config: config, fileName: localFile.lastPathComponent)
+        defer { lease.release() }
 
         var args: [String] = ["copy", localFile.path, destination]
         args.append(contentsOf: [
@@ -623,4 +628,56 @@ private func sanitizeErrorMessage(_ message: String) -> String {
         sanitized = String(sanitized.prefix(500)) + "…"
     }
     return sanitized
+}
+
+/// Cooperative, same-user/same-app coordination across services and processes.
+/// Persistent lock files must never be unlinked: doing so lets a second process
+/// lock a new inode while the original upload still holds the old one.
+final class RemoteUploadLease: Sendable {
+    private let descriptor: OSAllocatedUnfairLock<Int32>
+
+    init(config: UploadConfig, fileName: String, lockDirectory: URL? = nil) throws {
+        let directory = try lockDirectory ?? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask,
+            appropriateFor: nil, create: true
+        ).appendingPathComponent("Aagedal Media Converter/UploadLocks", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        // Do not include credentials, profile IDs or usernames: two profiles may
+        // address the same remote object through different accounts. Case folding
+        // conservatively serializes names on case-insensitive servers as well.
+        let endpoint: [String]
+        switch config.backendType {
+        case .s3:
+            endpoint = [config.s3Endpoint ?? "", config.s3Bucket ?? ""]
+        case .smb:
+            endpoint = [config.server, String(config.port), config.smbShare ?? ""]
+        case .ftp, .sftp, .gdrive:
+            endpoint = [config.server, String(config.port)]
+        }
+        let components = ([config.backendType.rawValue] + endpoint + [
+            NSString(string: "/" + config.remotePath).standardizingPath, fileName
+        ]).map { $0.precomposedStringWithCanonicalMapping.lowercased() }
+        let digest = SHA256.hash(data: try JSONEncoder().encode(components))
+            .map { String(format: "%02x", $0) }.joined()
+        let path = directory.appendingPathComponent(digest + ".lock").path
+        let descriptor = open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        guard descriptor >= 0 else {
+            throw UploadError.uploadFailed(String(localized: "Could not coordinate access to the upload destination. Try again after checking local app storage access."))
+        }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            close(descriptor)
+            throw UploadError.uploadFailed(String(localized: "Another upload to this destination is active in the app. Wait for it to finish, then retry."))
+        }
+        self.descriptor = OSAllocatedUnfairLock(initialState: descriptor)
+    }
+
+    func release() {
+        descriptor.withLock {
+            guard $0 >= 0 else { return }
+            close($0)
+            $0 = -1
+        }
+    }
+
+    deinit { release() }
 }

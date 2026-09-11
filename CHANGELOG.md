@@ -13,15 +13,17 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 - **Audio routing preserves track order and intentional duplication**, with fixes for channel operations, subtitle-container compatibility, and Stream Copy track metadata.
 - **AV2 Matroska exports preserve audio timing and padding**, including delayed tracks, trims, AAC preroll, and Opus codec delay. Additional AAC channel layouts are supported.
 - **AV2 assembly rejects damaged or incompatible segments.** Invalid trims and unsupported generated-video combinations report errors instead of producing incomplete output.
-- **DCP and IMF frame preparation reports damaged frames and write failures** before wrapping a package.
+- **DCP frame preparation reports damaged frames and write failures** before wrapping a package.
+- **IMF export is temporarily unavailable** while package descriptors and standards conformance are validated. Existing IMF settings are preserved.
 - **Failed and cancelled conversions clean up their partial outputs**, while existing files and source media remain protected from replacement.
 
 ## Cancellation and recovery
 
 - **External helpers share bounded execution and process-tree cancellation.** Conversion, downloads, uploads, transcription, analytics, and metadata probes report launch failures, timeouts, and tool errors.
+- **Deno and yt-dlp update retries wait for the previous update to drain**, including extraction and checksum work.
 - **Retries wait for cancelled helpers to finish**, with stale callbacks prevented from changing newer jobs. Conversion cancellation also drains native waveform and package preparation.
-- **Subtitle jobs stage their results before publishing**, reserve separate names, and preserve unrelated or edited subtitle files when retrying.
-- **Uploads to the same remote destination run in queue order within the app.** Retries wait for cancelled transfers, and file access remains open until each transfer finishes.
+- **Subtitle jobs stage their results before publishing**, reserve separate names, and preserve unrelated or edited subtitle files when retrying. Publication is coordinated across app processes.
+- **Uploads to the same remote destination run in queue order within the app.** Overlapping uploads from another app process on the same Mac report a retryable error. Retries wait for cancelled transfers, and file access remains open until each transfer finishes.
 - **Transcription captures settings once per run**, and Parakeet rejects invalid chunk durations or overlap settings that cannot advance through the source.
 
 ## Saved settings and file access
@@ -50,7 +52,7 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 ## Dependencies and release checks
 
 - **Bundled FFmpeg updated to 9.0.1**, MPVKit updated for preview playback, and SwiftMediaMetadata updated to 3.0.0.
-- **Release checks verify bundled dependency inventories and packaged notice contents**, and block publication while attribution is incomplete.
+- **Release checks verify bundled dependency inventories and packaged notice contents**, and block publication while attribution is incomplete or FFmpeg’s reported license disagrees with its attribution or notice.
 
 # v.4.3.0
 

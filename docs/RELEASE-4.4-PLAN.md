@@ -123,6 +123,32 @@ These findings do not close the live-workflow, signed-distribution, IMF descript
 package/helper draining, or multi-process coordination gates. No public release
 or appcast change has been made.
 
+## Additional stabilization — cancellation, coordination and IMF
+
+Continuation based on `4bb9cb7` records these dispositions:
+
+- [IMF review](4.4-imf-review.md): both IMF export presets are disabled before
+  tool lookup or output creation because descriptor, identity and schema gaps
+  prevent a conformance claim. Settings and conversion errors explain the
+  restriction; existing preferences are preserved.
+- [Helper draining](4.4-helper-draining-review.md): Deno extraction and whole
+  updates retain cancelled owners until drained; yt-dlp cancellation now spans
+  release lookup, checksums and publication. Regression helpers deliberately
+  perform late writes to verify replacements wait.
+- [Coordination review](4.4-coordination-review.md): subtitle publication locks
+  the destination directory across app processes. Remote uploads acquire a
+  same-destination lock for cooperating instances under the same user/container.
+  Endpoint aliases, other clients and live network behavior remain explicit limits.
+- The dependency gate now records FFmpeg's own reported license and rejects the
+  known manifest/notice mismatches alongside the 99 missing attributions. This
+  strengthens detection; it does not supply the missing source/build evidence.
+
+These close concrete implementation findings in the remaining risk reviews, but
+manual workflow validation, complete attribution and signed distribution gates
+remain open. Final checks passed: 843 unit tests, three conversion UI smoke tests,
+53 release-script tests, localization, inventory freshness and the unsigned Release
+bundle audit. See [continuation validation](4.4-validation-continuation-2026-09-11.md).
+
 ## What can wait for 4.5
 
 - Full orchestration extraction and typed filter/codec/output plans.

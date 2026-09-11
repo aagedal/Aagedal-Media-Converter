@@ -540,12 +540,14 @@ final class UploadDestinationIdentityTests: XCTestCase {
 }
 
 final class RcloneCancellationBoundaryTests: XCTestCase {
+    private let config = isolatedRcloneConfig()
+
     func testCancelledUploadResolutionCannotLaunchRunner() async throws {
         let started = expectation(description: "Resolving upload binary")
         let resolver = SuspendedRcloneResolver(started: started)
         let runner = CancellationIgnoringRcloneRunner()
         let service = RcloneService(updateService: resolver, subprocessRunner: runner)
-        let task = Task {
+        let task = Task { [config] in
             try await service.upload(localFile: URL(fileURLWithPath: "/fixture/source.mov"), config: config) { _, _ in }
         }
         await fulfillment(of: [started], timeout: 2)
@@ -566,7 +568,7 @@ final class RcloneCancellationBoundaryTests: XCTestCase {
         let resolver = SuspendedRcloneResolver(started: started)
         let runner = CancellationIgnoringRcloneRunner()
         let service = RcloneService(updateService: resolver, subprocessRunner: runner)
-        let task = Task { try await service.testConnection(config: config) }
+        let task = Task { [config] in try await service.testConnection(config: config) }
         await fulfillment(of: [started], timeout: 2)
         task.cancel()
         await resolver.finish(path: nil)
@@ -589,7 +591,7 @@ final class RcloneCancellationBoundaryTests: XCTestCase {
                 isFileReadable: { _ in true }
             )
             let progress = BoundaryProgressRecorder()
-            let task = Task {
+            let task = Task { [config] in
                 switch operation {
                 case 0:
                     _ = try await service.upload(
@@ -615,10 +617,16 @@ final class RcloneCancellationBoundaryTests: XCTestCase {
     }
 }
 
-private let config = UploadConfig(
-    server: "fixture", port: 22, username: "editor", backendType: .sftp,
-    sftpKeyFilePath: "/fixture/key"
-)
+private func isolatedRcloneConfig() -> UploadConfig {
+    // XCTest may run the cancellation and scope classes in parallel app processes.
+    // Give each test instance its own remote destination so the production lease
+    // does not correctly reject an unrelated fixture before its runner starts.
+    UploadConfig(
+        server: "fixture", port: 22, username: "editor",
+        remotePath: "/fixture-tests/\(UUID().uuidString)", backendType: .sftp,
+        sftpKeyFilePath: "/fixture/key"
+    )
+}
 
 private actor SuspendedRcloneResolver: RcloneUpdating {
     let started: XCTestExpectation
@@ -682,6 +690,8 @@ private final class BoundaryProgressRecorder: @unchecked Sendable {
 }
 
 final class RcloneScopeLifetimeTests: XCTestCase {
+    private let config = isolatedRcloneConfig()
+
     func testUploadScopesRemainOwnedUntilCancelledRunnerDrains() async throws {
         let started = expectation(description: "Upload running with file and key scopes")
         let runner = CancellationIgnoringRcloneRunner(started: started)
@@ -690,7 +700,7 @@ final class RcloneScopeLifetimeTests: XCTestCase {
         let parent = localFile.deletingLastPathComponent()
         let scopes = UploadScopeRecorder(available: [parent, keyFile])
         let service = makeService(runner: runner, scopes: scopes)
-        let task = Task {
+        let task = Task { [config] in
             try await service.upload(localFile: localFile, config: config) { _, _ in }
         }
         await fulfillment(of: [started], timeout: 2)
@@ -737,7 +747,7 @@ final class RcloneScopeLifetimeTests: XCTestCase {
         let keyFile = URL(fileURLWithPath: "/fixture/key")
         let scopes = UploadScopeRecorder(available: [keyFile])
         let service = makeService(runner: runner, scopes: scopes)
-        let task = Task { try await service.testConnection(config: config) }
+        let task = Task { [config] in try await service.testConnection(config: config) }
         await fulfillment(of: [started], timeout: 2)
         XCTAssertEqual(scopes.requested, [keyFile])
         XCTAssertEqual(scopes.activeCount, 1)
@@ -780,7 +790,7 @@ final class RcloneScopeLifetimeTests: XCTestCase {
                 return true
             }
         )
-        let task = Task { try await service.upload(localFile: localFile, config: config) { _, _ in } }
+        let task = Task { [config] in try await service.upload(localFile: localFile, config: config) { _, _ in } }
         await fulfillment(of: [started], timeout: 2)
         let request = await runner.lastRequest
         XCTAssertEqual(request?.environment?["RCLONE_CONFIG_UPLOAD_KEY_FILE"], movedKey.path)
