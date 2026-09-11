@@ -785,15 +785,19 @@ actor YTDLPUpdateService {
     /// Owns the current warm-up so repeated launches supersede earlier work and
     /// cancellation reaches the child process managed by the shared runner.
     func runYTDLPWarmUp(at path: String) async throws -> SubprocessResult {
-        if let previousWarmUp = activeWarmUp {
-            activeWarmUp = nil
-            previousWarmUp.task.cancel()
-        }
+        try Task.checkCancellation()
+        let previousWarmUp = activeWarmUp?.task
+        previousWarmUp?.cancel()
 
         let warmUpID = UUID()
         let runner = warmUpRunner
         let warmUpTask = Task {
-            try await runner.run(at: path)
+            // Retain the predecessor even if this queued request is cancelled.
+            // A later replacement must wait for the entire drain chain before
+            // starting another PyInstaller extraction for the same binary.
+            if let previousWarmUp { _ = await previousWarmUp.result }
+            try Task.checkCancellation()
+            return try await runner.run(at: path)
         }
         activeWarmUp = (warmUpID, warmUpTask)
 

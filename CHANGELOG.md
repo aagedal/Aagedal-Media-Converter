@@ -1,5 +1,9 @@
 # v.4.3.0
 
+- **Numeric custom video-filter targets follow output stream order**, including audio-first mappings, for crop and automatic deinterlacing.
+- **Repeated yt-dlp warm-ups wait for cancelled helpers to finish**, including queued replacements.
+- **Parakeet transcription validates chunk and overlap settings once per run**, preventing invalid durations and overlap that cannot advance through the source.
+
 - **Custom crop filters follow the last matching video-filter option**, including repeated `-vf` and video-filter aliases.
 - **Automatic deinterlacing preserves quoted custom expressions and explicit filter settings**, and progressive video retains a valid filter when automatic deinterlacing is removed.
 - **Whisper capability refresh waits for cancelled probes to finish**, preventing overlapping helper processes during repeated refreshes.

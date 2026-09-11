@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-10
+Last reviewed: 2026-09-11
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -9,7 +9,7 @@ issue link when it starts.
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
-- The unit-test baseline is green: 817 tests pass. The
+- The unit-test baseline is green: 829 tests pass. The
   anamorphic-crop regression was fixed and now has generated-media coverage for
   pixels, square-pixel SAR, and output dimensions; custom-command tokenization now
   has focused coverage for empty quoted arguments and whitespace handling; every
@@ -23,7 +23,7 @@ issue link when it starts.
   `FFMPEGConverter.swift` (4,981 lines), `ConversionManager.swift` (2,986),
   `ContentView.swift` (2,908), `VideoFileListView.swift` (2,178), and
   `ExportPreset.swift` (2,028).
-- There are 817 unit tests. The UI test target now has deterministic smoke
+- There are 829 unit tests. The UI test target now has deterministic smoke
   assertions for empty-queue launch, Settings navigation, generated-fixture import,
   preset selection, conversion success, conversion failure details, and start/cancel
   state transitions.
@@ -855,6 +855,12 @@ snapshot. Two injected-runner regressions verify delayed cleanup, latest-only pu
 and cache retention. Broader package/framework and superseded-helper draining remain
 open (Codex, 2026-09-10).
 
+yt-dlp warm-up replacement now retains and awaits the cancelled predecessor before
+launching another helper. Cancelled queued requests preserve the drain chain, and
+already-cancelled callers cannot retire current work. Three injected-runner regressions
+cover delayed shutdown, queued cancellation, and current-run preservation. Broader
+package/framework and superseded-helper draining remain open (Codex, 2026-09-11).
+
 ### 2.2 Remove sync-over-async waits
 
 Status: in progress; image-sequence duration probing migrated async end-to-end,
@@ -1620,6 +1626,15 @@ options cannot become active again. Generated color-band readback verifies effec
 crop dimensions/pixels. Numeric output-stream mappings and broader typed codec/output
 ownership remain open (Codex, 2026-09-10).
 
+Numeric primary-video filters now resolve output order for automatic stream selection
+and explicit typed maps with known preceding stream counts, including audio-first
+output and input-only disable flags. Crop and deinterlace use the last matching numeric
+or video-specific option. Generated audio-first media verifies cropped dimensions and
+pixels. Whole-input and numeric-input maps, optional/multiple preceding streams, negative
+maps, and complex graphs still need stream inventory before their numeric targets can
+be resolved safely; broader typed codec/output ownership remains open
+(Codex, 2026-09-11).
+
 ### 3.3 Centralize settings access
 
 Status: in progress; settings snapshots and upload-profile migration safety added 2026-09-06 (Codex).
@@ -1891,6 +1906,15 @@ opaque format selections preserve source transparency through PNG. Five regressi
 cover captured preferences, missing/malformed storage without rewriting it, explicit
 alpha discard, and controller-level codec/pixel-format selection. Wider feature settings
 and migrations remain open (Codex, 2026-09-10).
+
+Parakeet chunk and overlap settings now use one validated immutable snapshot per run,
+captured before progress callbacks or audio extraction. Malformed, nonfinite, fractional,
+and excessive values fall back without rewriting storage; overlap remains shorter than
+the selected chunk, including one-second chunks. Unchanged defaults retain CLI-default
+omission; customized settings explicitly pass both durations to avoid relying on a
+different installed CLI default. Preference and runner regressions cover normalization,
+storage retention, argument generation, and snapshot stability. Broader feature settings
+and migrations remain open (Codex, 2026-09-11).
 
 ## Priority 4 — Accessibility, localization, and product polish
 
@@ -2218,7 +2242,31 @@ remain (Codex, 2026-09-06).
 
 ## Suggested delivery sequence
 
-Latest validation (2026-09-10, Codex): Debug compilation and all 817 unit tests pass
+Latest validation (2026-09-11, Codex): Debug compilation and all 829 unit tests pass
+with zero failures or skips. Twelve new regressions cover numeric output-filter mapping
+(including generated audio-first crop pixels), Parakeet duration validation and per-run
+capture, and yt-dlp warm-up predecessor draining. Independent review caught the Parakeet
+CLI/app default mismatch before the final green run and hardened a cancellation test
+against hanging on future regressions. All 43 release-script tests, manifest freshness,
+and localization checks pass (1,528 entries, 15 intentional omissions). The release-script
+fixture compiler initially selected an incompatible Command Line Tools SDK; explicitly
+selecting Xcode's SDK resolved all 19 fixture compilation errors. Three conversion UI
+smoke tests pass from a fresh locally signed build: success, failure details, and
+start/cancel. The unsigned Release build and bundle audit pass, verifying all 44
+Mach-O images and six packaged license notices.
+
+Remaining implementation work: broader typed filter/codec/output plans and stream-inventory
+resolution for ambiguous numeric filter targets; orchestration extraction; remaining feature
+settings and schema migrations; package/framework and superseded-helper draining; wider
+actor/UI/filesystem audits; multi-process subtitle/remote coordination; generated AV2
+waveform/synthesized video, accurate Matroska layout labels, and IMF descriptors. Manual
+playback, Shortcuts, sandbox renewal, remote upload, capture/editor, VoiceOver, broader UI,
+and real-model transcription validation remain. Runtime measurements, clean-machine
+installation/update, complete dependency provenance (99 unresolved license entries), and
+credentialed release validation remain open. No bundled binaries or license assignments
+changed.
+
+Previous validation (2026-09-10, Codex): Debug compilation and all 817 unit tests pass
 with zero failures. Thirteen new regressions cover effective filter aliases, quoted and
 explicit deinterlacers, valid progressive filter removal, screenshot settings and
 controller pixel formats, and Whisper capability helper draining/cache retention.

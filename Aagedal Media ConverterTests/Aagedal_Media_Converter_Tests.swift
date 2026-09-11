@@ -6342,8 +6342,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             parakeetPath: "/fixture/parakeet-mlx",
             ffmpegPath: "/fixture/tools/ffmpeg",
             modelID: "mlx-community/parakeet-fixture",
-            chunkDuration: 120,
-            overlapDuration: 12
+            settings: ParakeetSettingsSnapshot(chunkDuration: 120, overlapDuration: 12)
         ) { update in
             progressValues.withLock { $0.append(update.percentage) }
         }
@@ -6393,8 +6392,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 parakeetPath: "/fixture/parakeet-mlx",
                 ffmpegPath: nil,
                 modelID: "fixture",
-                chunkDuration: AppConstants.defaultParakeetChunkDuration,
-                overlapDuration: AppConstants.defaultParakeetOverlapDuration
+                settings: ParakeetSettingsSnapshot()
             ) { _ in }
             XCTFail("Expected timeout")
         } catch let error as ParakeetServiceError {
@@ -6424,8 +6422,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 parakeetPath: "/fixture/parakeet-mlx",
                 ffmpegPath: nil,
                 modelID: "fixture",
-                chunkDuration: 0,
-                overlapDuration: 0
+                settings: ParakeetSettingsSnapshot(chunkDuration: 0, overlapDuration: 0)
             ) { _ in }
             XCTFail("Expected process failure")
         } catch let error as ParakeetServiceError {
@@ -7575,6 +7572,85 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             ))
             XCTAssertEqual(args, ["-vf", "hflip", option, "crop=32:48:32:0,format=rgb24",
                                   "-filter:v:1", "vflip", "-af", "volume=0.5"])
+        }
+    }
+
+    func testNumericVideoFiltersFollowOutputMappingOrder() {
+        for (maps, outputIndex) in [
+            ([], 0),
+            (["-map", "0:v:2", "-map", "0:a:0"], 0),
+            (["-map", "0:a:0", "-map", "1:v:3"], 1),
+            (["-map", "0:a:0", "-map", "0:s:0", "-map", "0:V"], 2),
+            (["-map", "0:a", "-map", "0:v:0", "-an"], 0),
+            (["-an", "-vn", "-i", "input.mov", "-map", "0:a:0", "-map", "0:v:0"], 1)
+        ] {
+            let primary = "-filter:\(outputIndex)"
+            let other = "-filter:\(outputIndex + 1)"
+            var args = maps + ["-vf", "hflip", primary, "format=rgb24", other, "vflip"]
+            XCTAssertTrue(FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &args,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+                sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+            ))
+            XCTAssertEqual(args, maps + ["-vf", "hflip", primary, "crop=32:48:32:0,format=rgb24", other, "vflip"])
+            let overridden = maps + [primary, "hflip", "-filter:v:0", "vflip"]
+            XCTAssertEqual(PrimaryVideoFilterPlan(arguments: overridden).filterOptionIndex, maps.count + 2)
+        }
+    }
+
+    func testNumericVideoFilterResolutionDoesNotGuessAmbiguousMapCounts() {
+        for maps in [
+            ["-map", "0"],
+            ["-map", "0:a", "-map", "0:v"],
+            ["-map", "0:a:0?", "-map", "0:v:0"],
+            ["-map", "0:v:0?", "-map", "0:a:0", "-map", "1:v:0"],
+            ["-map", "[audio]", "-map", "0:v:0"],
+            ["-map", "0:v", "-map", "-0:v:0"],
+            ["-map", "0:0", "-map", "0:v:0"],
+            ["-filter_complex", "anullsrc"],
+            ["-vn"]
+        ] {
+            XCTAssertNil(PrimaryVideoFilterPlan(arguments: maps + ["-filter:0", "hflip", "-filter:1", "vflip"]).filterOptionIndex, "\(maps)")
+        }
+    }
+
+    func testDeinterlaceUsesNumericVideoFilterAfterAudioMap() async {
+        var args = ["-map", "0:a:0", "-map", "0:v:0", "-vf", "yadif,hflip",
+                    "-filter:1", "yadif,scale=64:48", "-filter:0", "volume=0.5"]
+        await FFMPEGCommandBuilder.adjustDeinterlaceFilter(
+            inputURL: URL(fileURLWithPath: "/private/source.mov"), ffmpegArgs: &args,
+            sourceMetadata: videoMetadata(timecode: nil, frameRate: 25)
+        )
+        XCTAssertEqual(args, ["-map", "0:a:0", "-map", "0:v:0", "-vf", "yadif,hflip",
+                              "-filter:1", "scale=64:48", "-filter:0", "volume=0.5"])
+    }
+
+    func testGeneratedCropUsesNumericFilterAfterAudioMap() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("audio-first.nut")
+        var args = ["-map", "1:a:0", "-map", "0:v:0", "-c:v", "rawvideo", "-c:a", "pcm_s16le",
+                    "-vf", "hflip", "-filter:1", "format=rgb24", "-filter:0", "volume=0.5"]
+        XCTAssertTrue(FFMPEGCommandBuilder.applyCropToVideoFilter(
+            &args,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+            sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+        ))
+        try runFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+            "color=c=red:s=64x48:r=1,drawbox=x=32:y=0:w=32:h=48:c=lime:t=fill",
+            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono"
+        ] + args + ["-t", "1", output.path])
+        let decoded = directory.appendingPathComponent("crop.rgb")
+        try runFFmpeg(["-hide_banner", "-loglevel", "error", "-y", "-i", output.path,
+                       "-map", "0:v:0", "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", decoded.path])
+        let pixels = try Data(contentsOf: decoded)
+        XCTAssertEqual(pixels.count, 32 * 48 * 3)
+        for offset in stride(from: 0, to: pixels.count, by: 3) {
+            XCTAssertLessThan(pixels[offset], 30)
+            XCTAssertGreaterThan(pixels[offset + 1], 140)
+            XCTAssertLessThan(pixels[offset + 2], 30)
         }
     }
 
@@ -13698,8 +13774,7 @@ private func fixtureParakeetService(runner: any SubprocessRunning) -> ParakeetSe
         subprocessRunner: runner,
         parakeetPathProvider: { "/fixture/parakeet-mlx" },
         ffmpegPathProvider: { "/fixture/ffmpeg" },
-        chunkDurationProvider: { AppConstants.defaultParakeetChunkDuration },
-        overlapDurationProvider: { AppConstants.defaultParakeetOverlapDuration }
+        settingsProvider: { ParakeetSettingsSnapshot() }
     )
 }
 

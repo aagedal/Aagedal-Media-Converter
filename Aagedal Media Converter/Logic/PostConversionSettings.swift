@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import CoreFoundation
 
 /// Values are captured before an operation suspends, so later preference edits
 /// affect the next operation rather than changing an in-flight subtitle job.
@@ -12,6 +13,62 @@ struct TranscriptionSettingsSnapshot: Sendable {
     let parakeetModel: ParakeetModel
     let parakeetLanguage: String
     let embedSubtitles: Bool
+}
+
+/// Validated once at the start of a Parakeet run. Nonpositive stored values
+/// retain the historical meaning of using the CLI defaults.
+struct ParakeetSettingsSnapshot: Sendable, Equatable {
+    // A single chunk cannot usefully exceed the entire transcription deadline.
+    static let maximumChunkDuration = 12 * 60 * 60
+
+    let chunkDuration: Int
+    let overlapDuration: Int
+
+    init(
+        chunkDuration: Int = AppConstants.defaultParakeetChunkDuration,
+        overlapDuration: Int = AppConstants.defaultParakeetOverlapDuration
+    ) {
+        self.chunkDuration = (1...Self.maximumChunkDuration).contains(chunkDuration)
+            ? chunkDuration : AppConstants.defaultParakeetChunkDuration
+        let requestedOverlap = (1...Self.maximumChunkDuration).contains(overlapDuration)
+            ? overlapDuration : AppConstants.defaultParakeetOverlapDuration
+        // The CLI must advance after each chunk, including chunks shorter than
+        // its default overlap. Explicitly pass zero for a one-second chunk.
+        self.overlapDuration = min(requestedOverlap, self.chunkDuration - 1)
+    }
+
+    init(defaults: UserDefaults) {
+        self.init(
+            chunkDuration: Self.duration(defaults.object(forKey: AppConstants.parakeetChunkDurationKey))
+                ?? AppConstants.defaultParakeetChunkDuration,
+            overlapDuration: Self.duration(defaults.object(forKey: AppConstants.parakeetOverlapDurationKey))
+                ?? AppConstants.defaultParakeetOverlapDuration
+        )
+    }
+
+    var arguments: [String] {
+        // Keep the historical CLI defaults when neither setting is customized.
+        // CLI versions can default to a different chunk size (e.g. 120 seconds),
+        // so a custom setting must send the validated pair together.
+        guard chunkDuration != AppConstants.defaultParakeetChunkDuration
+                || overlapDuration != AppConstants.defaultParakeetOverlapDuration else { return [] }
+        return ["--chunk-duration", "\(chunkDuration)", "--overlap-duration", "\(overlapDuration)"]
+    }
+
+    private static func duration(_ value: Any?) -> Int? {
+        let number: Double
+        if let stored = value as? NSNumber {
+            guard CFGetTypeID(stored) != CFBooleanGetTypeID() else { return nil }
+            number = stored.doubleValue
+        } else if let stored = value as? String, let parsed = Double(stored) {
+            number = parsed
+        } else {
+            return nil
+        }
+        guard number.isFinite, number.rounded(.towardZero) == number,
+              (1...Double(maximumChunkDuration)).contains(number) else { return nil }
+        return Int(number)
+    }
 }
 
 struct OCRSettingsSnapshot: Sendable {

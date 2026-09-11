@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7A33AB1A44DF44149B983E60 /* YTDLPWarmUpDrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */; };
 		C954573AF1D84E73A9596708 /* DownloadHistoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */; };
 		81F0864DD57840B9971CD561 /* IVFConcatenatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81BE4D4410A4875A8EF38EE /* IVFConcatenatorTests.swift */; };
 		A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */; };
@@ -337,6 +338,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPWarmUpDrainTests.swift; sourceTree = "<group>"; };
 		DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadHistoryServiceTests.swift; sourceTree = "<group>"; };
 		D81BE4D4410A4875A8EF38EE /* IVFConcatenatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IVFConcatenatorTests.swift; sourceTree = "<group>"; };
 		1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BMXProbeLifecycleTests.swift; sourceTree = "<group>"; };
@@ -1023,6 +1025,7 @@
 				204DA9E2FCAE49CE950DF5F7 /* AnalyticsCancellationDrainTests.swift */,
 				D81BE4D4410A4875A8EF38EE /* IVFConcatenatorTests.swift */,
 				DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */,
+				993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */,
 				7748A92962A74E189CB18CD7 /* AV2AACParserTests.swift */,
 				D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */,
 				1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */,
@@ -1699,6 +1702,7 @@
 				7C8FED84939945209B1B6012 /* AnalyticsCancellationDrainTests.swift in Sources */,
 				81F0864DD57840B9971CD561 /* IVFConcatenatorTests.swift in Sources */,
 				C954573AF1D84E73A9596708 /* DownloadHistoryServiceTests.swift in Sources */,
+				7A33AB1A44DF44149B983E60 /* YTDLPWarmUpDrainTests.swift in Sources */,
 				EC4CE91691E24FB19B6E1838 /* AV2AACParserTests.swift in Sources */,
 				D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */,
 				A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */,

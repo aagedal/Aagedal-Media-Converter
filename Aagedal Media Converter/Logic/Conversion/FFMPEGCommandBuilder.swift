@@ -34,13 +34,56 @@ struct PrimaryVideoFilterPlan: Equatable, Sendable {
 
     init(arguments: [String]) {
         var filterOptionIndex: Int?
-        let filterOptions: Set<String> = ["-vf", "-filter", "-filter:v", "-filter:v:0"]
-        for index in arguments.indices where index + 1 < arguments.count {
+        let outputArgumentsStart = arguments.lastIndex(of: "-i").map { min($0 + 2, arguments.count) } ?? 0
+        var filterOptions: Set<String> = ["-vf", "-filter", "-filter:v", "-filter:v:0"]
+        if let outputIndex = Self.primaryVideoOutputIndex(arguments: arguments, outputArgumentsStart: outputArgumentsStart) {
+            filterOptions.insert("-filter:\(outputIndex)")
+        }
+        for index in arguments.indices where index >= outputArgumentsStart && index + 1 < arguments.count {
             if filterOptions.contains(arguments[index]) {
                 filterOptionIndex = index
             }
         }
         self.filterOptionIndex = filterOptionIndex
+    }
+
+    /// Numeric filter specifiers address the output order, not the input stream index.
+    /// Resolve only map forms with a known preceding stream count. Whole-input maps,
+    /// graph labels, removals, and optional preceding streams need stream inventory.
+    private static func primaryVideoOutputIndex(arguments: [String], outputArgumentsStart: Int) -> Int? {
+        let outputArguments = arguments.dropFirst(outputArgumentsStart)
+        guard !outputArguments.contains("-vn"),
+              !arguments.contains("-filter_complex"),
+              !arguments.contains("-lavfi"),
+              !arguments.contains("-filter_complex_script") else { return nil }
+        let maps = outputArguments.indices.compactMap { index -> String? in
+            guard arguments[index] == "-map", index + 1 < arguments.count else { return nil }
+            return arguments[index + 1]
+        }
+        guard !maps.isEmpty else { return 0 }
+        guard !maps.contains(where: { $0.hasPrefix("-") }) else { return nil }
+        var outputIndex = 0
+        for map in maps {
+            let optional = map.hasSuffix("?")
+            let components = (optional ? String(map.dropLast()) : map).split(separator: ":", omittingEmptySubsequences: false)
+            guard components.count >= 2, let inputIndex = Int(components[0]), inputIndex >= 0 else { return nil }
+            let type = components[1]
+            guard ["v", "V", "a", "s", "d", "t"].contains(type) else { return nil }
+            // Unindexed typed maps may emit several streams; a leading video map
+            // still establishes the primary video's output index.
+            guard components.count == 2 || (components.count == 3 && Int(components[2]).map { $0 >= 0 } == true) else {
+                return nil
+            }
+            if (type == "a" && outputArguments.contains("-an")) ||
+                (type == "s" && outputArguments.contains("-sn")) ||
+                (type == "d" && outputArguments.contains("-dn")) {
+                continue
+            }
+            if type == "v" || type == "V" { return optional ? nil : outputIndex }
+            guard components.count == 3, !optional else { return nil }
+            outputIndex += 1
+        }
+        return nil
     }
 }
 

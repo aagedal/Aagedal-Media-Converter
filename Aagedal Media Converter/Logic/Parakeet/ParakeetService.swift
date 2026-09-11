@@ -14,8 +14,7 @@ actor ParakeetService {
     private let audioExtractor: ParakeetAudioExtractor
     private let parakeetPathProvider: @Sendable () -> String?
     private let ffmpegPathProvider: @Sendable () -> String?
-    private let chunkDurationProvider: @Sendable () -> Int
-    private let overlapDurationProvider: @Sendable () -> Int
+    private let settingsProvider: @Sendable () -> ParakeetSettingsSnapshot
 
     private var activeRunIDs: Set<UUID> = []
     private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
@@ -28,19 +27,15 @@ actor ParakeetService {
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         parakeetPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.parakeetMlxPath },
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
-        chunkDurationProvider: @escaping @Sendable () -> Int = {
-            UserDefaults.standard.integer(forKey: AppConstants.parakeetChunkDurationKey)
-        },
-        overlapDurationProvider: @escaping @Sendable () -> Int = {
-            UserDefaults.standard.integer(forKey: AppConstants.parakeetOverlapDurationKey)
+        settingsProvider: @escaping @Sendable () -> ParakeetSettingsSnapshot = {
+            ParakeetSettingsSnapshot(defaults: .standard)
         }
     ) {
         transcriber = ParakeetCLITranscriber(subprocessRunner: subprocessRunner)
         audioExtractor = ParakeetAudioExtractor(subprocessRunner: subprocessRunner)
         self.parakeetPathProvider = parakeetPathProvider
         self.ffmpegPathProvider = ffmpegPathProvider
-        self.chunkDurationProvider = chunkDurationProvider
-        self.overlapDurationProvider = overlapDurationProvider
+        self.settingsProvider = settingsProvider
     }
 
     func generateSubtitles(
@@ -58,6 +53,7 @@ actor ParakeetService {
         defer { finishRun(runID, operationID: operationID) }
         guard !cancelledRunIDs.contains(runID) else { throw ParakeetServiceError.cancelled }
 
+        let settings = settingsProvider()
         guard let parakeetPath = parakeetPathProvider() else {
             throw ParakeetServiceError.binaryNotFound
         }
@@ -90,8 +86,6 @@ actor ParakeetService {
         logger.info("Starting Parakeet transcription with \(model.displayName, privacy: .public), language setting: \(language ?? "default", privacy: .public)")
         progress(ParakeetProgress(stage: .transcribing, percentage: 0, message: "Starting transcription..."))
 
-        let chunkDuration = chunkDurationProvider()
-        let overlapDuration = overlapDurationProvider()
         let transcriber = self.transcriber
         let audioExtractor = self.audioExtractor
         let generationTask = Task {
@@ -125,8 +119,7 @@ actor ParakeetService {
                 parakeetPath: parakeetPath,
                 ffmpegPath: ffmpegPath,
                 modelID: model.id,
-                chunkDuration: chunkDuration,
-                overlapDuration: overlapDuration,
+                settings: settings,
                 progress: progress
             )
         }
@@ -309,8 +302,7 @@ struct ParakeetCLITranscriber: Sendable {
         parakeetPath: String,
         ffmpegPath: String?,
         modelID: String,
-        chunkDuration: Int,
-        overlapDuration: Int,
+        settings: ParakeetSettingsSnapshot,
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws {
         try Task.checkCancellation()
@@ -318,12 +310,7 @@ struct ParakeetCLITranscriber: Sendable {
             inputFile.path, "--output-format", "srt", "--output-dir", outputDirectory.path,
             "--model", modelID
         ]
-        if chunkDuration > 0, chunkDuration != AppConstants.defaultParakeetChunkDuration {
-            arguments += ["--chunk-duration", "\(chunkDuration)"]
-        }
-        if overlapDuration > 0, overlapDuration != AppConstants.defaultParakeetOverlapDuration {
-            arguments += ["--overlap-duration", "\(overlapDuration)"]
-        }
+        arguments += settings.arguments
 
         let extraPathEntries = ffmpegPath.map { [($0 as NSString).deletingLastPathComponent] } ?? []
         let configuration = HomebrewPythonExecutor.pythonToolExecutionConfiguration(

@@ -336,8 +336,7 @@ final class SubtitleSRTPublicationTests: XCTestCase {
             subprocessRunner: runner,
             parakeetPathProvider: { "/fixture/parakeet-mlx" },
             ffmpegPathProvider: { "/fixture/ffmpeg" },
-            chunkDurationProvider: { AppConstants.defaultParakeetChunkDuration },
-            overlapDurationProvider: { AppConstants.defaultParakeetOverlapDuration }
+            settingsProvider: { ParakeetSettingsSnapshot() }
         )
         async let firstURL = first.generateSubtitlesOnly(
             inputFile: fixture.source, model: .base, language: "auto", operationID: UUID()
@@ -411,8 +410,7 @@ final class SubtitleSRTPublicationTests: XCTestCase {
                     subprocessRunner: runner,
                     parakeetPathProvider: { "/fixture/parakeet-mlx" },
                     ffmpegPathProvider: { "/fixture/ffmpeg" },
-                    chunkDurationProvider: { AppConstants.defaultParakeetChunkDuration },
-                    overlapDurationProvider: { AppConstants.defaultParakeetOverlapDuration }
+                    settingsProvider: { ParakeetSettingsSnapshot() }
                 )
                 _ = try await service.generateSubtitlesOnly(
                     inputFile: fixture.directory.appendingPathComponent("clip.mov"),
