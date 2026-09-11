@@ -43,6 +43,35 @@ disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
 
+## 4.4 stabilization continuation — 2026-09-11
+
+The finite release scope is being closed independently of the broader roadmap.
+Development metadata is 4.4.0 (576), and the changelog now separates draft 4.4
+notes from the published history recovered from `ce2f016`. Detailed incremental
+notes remain in `docs/4.4-development-history.md`.
+
+Numeric filters with ambiguous crop ownership or app-managed stream-map changes
+now fail before encoding with localized recovery guidance. Matroska metadata no
+longer asserts speaker positions from channel counts; both AVC-Intra splitters
+extract channels by position. Generated 3.0 and 5.1(side) inputs preserve all
+channel sample values, with silent padding checked. Unsupported AV2 synthesized
+and both waveform pipelines retain explicit rejection and clean output ownership.
+
+The full unit suite passes **837 tests** with no failures or skips. Release-script
+checks pass **43 tests**; localization passes with **1,530 entries** and only the
+15 intentional omissions. Three conversion UI smoke tests pass. The unsigned
+Release build passes its audit of 44 Mach-O images and six packaged notices;
+inventory freshness passes. See
+[the validation record](docs/4.4-validation-2026-09-11.md) for the environment,
+complete validation evidence, initial failures, and unperformed live checks.
+
+The [provenance review](docs/4.4-dependency-provenance-review.md) recovers specific
+rclone/AVM/package evidence but leaves 99 missing attributions open. It also finds
+that FFmpeg reports GPL v3-or-later while its manifest and packaged notice specify
+v2. IMF conformance, multi-process subtitle/remote coordination, package/helper
+draining, live workflow validation, and signed distribution remain release work.
+No publication or bundled binary/license change was made in this continuation.
+
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.

@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Cannot safely apply video adjustments to numeric filters with this stream mapping. Use -filter:v:0 for video and typed audio filter options, or map individual required streams explicitly." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videojusteringer kan ikke brukes trygt på numeriske filtre med denne strømtilordningen. Bruk -filter:v:0 for video og typespesifikke lydfiltre, eller tilordne de nødvendige strømmene enkeltvis og eksplisitt."
+          }
+        }
+      }
+    },
+    "Numeric filters cannot be combined with automatic stream mapping changes. Use -filter:v:0 for video and typed audio filter options before enabling audio routing, mute, or generated video." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numeriske filtre kan ikke kombineres med automatiske endringer i strømtilordningen. Bruk -filter:v:0 for video og typespesifikke lydfiltre før du aktiverer lydruting, demping eller generert video."
+          }
+        }
+      }
+    },
   "Add every video from the playlist or channel as separate queue items (downloads run sequentially)": {
     "localizations": {
       "nb": {

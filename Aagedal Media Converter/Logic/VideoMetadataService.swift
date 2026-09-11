@@ -620,7 +620,7 @@ actor VideoMetadataService {
         let primary = timedVideo.first
 
         let video = timedVideo.map { Self.mapVideoStream($0) }
-        let audio = meta.audioStreams.map { Self.mapAudioStream($0) }
+        let audio = meta.audioStreams.map { Self.mapAudioStream($0, format: meta.format) }
         let subtitles = meta.subtitleStreams.map { Self.mapSubtitleStream($0) }
 
         // Frame count: prefer the primary stream's frameCount, else derive from duration × fps.
@@ -763,8 +763,15 @@ actor VideoMetadataService {
         )
     }
 
-    static func mapAudioStream(_ stream: SwiftMediaMetadata.AudioStream) -> VideoMetadata.AudioStream {
-        VideoMetadata.AudioStream(
+    static func mapAudioStream(
+        _ stream: SwiftMediaMetadata.AudioStream,
+        format: SwiftMediaMetadata.VideoFormat? = nil
+    ) -> VideoMetadata.AudioStream {
+        // The current Matroska reader synthesizes layouts from channel counts, without
+        // reading speaker positions. Do not publish those guesses as known metadata.
+        // Conversion probes consume this mapped metadata too; preserve channel counts.
+        let hasInferredLayout = format == .mkv || format == .webm
+        return VideoMetadata.AudioStream(
             index: stream.index,
             languageCode: stream.language?.lowercased(),
             title: stream.title,
@@ -773,7 +780,7 @@ actor VideoMetadataService {
             profile: stream.profile,
             sampleRate: stream.sampleRate,
             channels: stream.channels,
-            channelLayout: stream.channelLayout,
+            channelLayout: hasInferredLayout ? nil : stream.channelLayout,
             bitDepth: stream.bitDepth,
             bitRate: stream.bitRate.map { Int64($0) },
             isDefault: stream.isDefault ?? false

@@ -9,10 +9,91 @@ import Darwin
 import AVFoundation
 import os
 import SwiftUI
+import struct SwiftMediaMetadata.AudioStream
+import enum SwiftMediaMetadata.VideoFormat
 import XCTest
 @testable import Aagedal_Media_Converter
 
+final class MatroskaLayoutPresentationTests: XCTestCase {
+    func testMatroskaAndWebMDoNotPublishCountDerivedSpeakerLayouts() {
+        for format in [SwiftMediaMetadata.VideoFormat.mkv, .webm] {
+            for (count, layout) in [(1, "mono"), (2, "stereo"), (3, "2.1"), (4, "4.0"),
+                                    (5, "5.0"), (6, "5.1"), (7, "6.1"), (8, "7.1")] {
+                var stream = SwiftMediaMetadata.AudioStream(index: 2)
+                stream.channels = count
+                stream.channelLayout = layout
+                stream.codec = "A_PCM/INT/LIT"
+                stream.sampleRate = 48_000
+                let mapped = VideoMetadataService.mapAudioStream(stream, format: format)
+                XCTAssertNil(mapped.channelLayout)
+                XCTAssertEqual(mapped.channels, count)
+                XCTAssertEqual(mapped.index, 2)
+                XCTAssertEqual(mapped.codec, stream.codec)
+                XCTAssertEqual(mapped.sampleRate, 48_000)
+                // Presentation mapping must not mutate the raw routing metadata.
+                XCTAssertEqual(stream.channelLayout, layout)
+            }
+        }
+    }
+
+    func testOtherContainersRetainExplicitSpeakerLayouts() {
+        var stream = SwiftMediaMetadata.AudioStream(index: 0)
+        stream.channels = 6
+        stream.channelLayout = "5.1(side)"
+        XCTAssertEqual(VideoMetadataService.mapAudioStream(stream, format: .mov).channelLayout, "5.1(side)")
+        XCTAssertEqual(VideoMetadataService.mapAudioStream(stream, format: .mp4).channelLayout, "5.1(side)")
+    }
+}
+
 final class Aagedal_Media_Converter_Tests: XCTestCase {
+
+    func testAVCIntraPositionalSplittingPreservesMatroskaChannelSamples() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let suite = "MatroskaChannelSamples.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(AVCIntraAudioChannels.ch8.rawValue, forKey: AppConstants.avcIntraAudioChannelsKey)
+        let settings = try XCTUnwrap(CodecExportSettings(preset: .tvAVCIntra, defaults: defaults))
+
+        for (channels, layout) in [(3, "3.0"), (6, "5.1(side)")] {
+            let input = directory.appendingPathComponent("input-\(channels).mkv")
+            let output = directory.appendingPathComponent("output-\(channels).mkv")
+            let levels = (1...channels).map { String(Double($0) / 10) }.joined(separator: "|")
+            try runFFmpeg([
+                "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                "aevalsrc=\(levels):c=\(layout):s=48000:d=0.05", "-c:a", "pcm_f32le", input.path
+            ])
+            var arguments: [String] = []
+            await FFMPEGCommandBuilder.adjustArgumentsForInput(
+                preset: .tvAVCIntra, codecSettings: settings, inputURL: input,
+                ffmpegArgs: &arguments, trimStart: 0, trimEnd: 0.05
+            )
+            let filterIndex = try XCTUnwrap(arguments.firstIndex(of: "-filter_complex"))
+            XCTAssertFalse(arguments[filterIndex + 1].contains("channelsplit"))
+            try runFFmpeg(["-hide_banner", "-loglevel", "error", "-y", "-i", input.path]
+                + arguments + ["-c:a", "pcm_f32le", output.path])
+            let streams = await FFMPEGProbeService.fetchAudioStreams(for: output)
+            XCTAssertEqual(streams?.count, 8)
+            XCTAssertTrue(streams?.allSatisfy { $0.channels == 1 } == true)
+
+            for channel in 0..<8 {
+                let samplesURL = directory.appendingPathComponent("samples.f32le")
+                try runFFmpeg([
+                    "-hide_banner", "-loglevel", "error", "-y", "-i", output.path,
+                    "-map", "0:a:\(channel)", "-c:a", "pcm_f32le", "-f", "f32le", samplesURL.path
+                ])
+                let samples = try Data(contentsOf: samplesURL)
+                XCTAssertGreaterThan(samples.count, 0)
+                let expected = channel < channels ? Float(channel + 1) / 10 : 0
+                for offset in stride(from: 0, to: samples.count, by: MemoryLayout<Float>.size) {
+                    let sample = samples.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: Float.self) }
+                    XCTAssertEqual(sample, expected, accuracy: 0.000001, "\(layout), channel \(channel), sample \(offset / 4)")
+                }
+            }
+        }
+    }
 
     func testQueueFailureDiagnosticsIncludesAllFailedStages() throws {
         let details = try XCTUnwrap(QueueFailureDiagnostics.details(
@@ -7625,6 +7706,87 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                               "-filter:1", "scale=64:48", "-filter:0", "volume=0.5"])
     }
 
+    func testAmbiguousNumericFiltersRejectCropWithoutMutatingArguments() {
+        for maps in [
+            ["-map", "0"],
+            ["-map", "0:a", "-map", "0:v"],
+            ["-map", "0:a:0?", "-map", "0:v:0"],
+            ["-map", "[audio]", "-map", "0:v:0"],
+            ["-map", "0:v", "-map", "-0:v:0"],
+            ["-map", "0:0", "-map", "0:v:0"]
+        ] {
+            let original = maps + ["-vf", "yadif,hflip", "-filter:0", "vflip"]
+            var arguments = original
+            let plan = PrimaryVideoFilterPlan(arguments: arguments)
+            XCTAssertTrue(plan.hasAmbiguousNumericTarget, "\(maps)")
+            XCTAssertNotNil(plan.preparationError)
+            XCTAssertNil(plan.filterOptionIndex)
+            XCTAssertFalse(FFMPEGCommandBuilder.applyCropToVideoFilter(
+                &arguments,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+                sourceWidth: 64, sourceHeight: 48, pixelAspectRatio: 1
+            ))
+            XCTAssertEqual(arguments, original)
+        }
+    }
+
+    func testAmbiguousNumericFiltersLeaveDeinterlaceAliasesUntouched() async {
+        let original = ["-map", "0", "-vf", "yadif,hflip", "-filter:0", "vflip"]
+        var arguments = original
+        await FFMPEGCommandBuilder.adjustDeinterlaceFilter(
+            inputURL: URL(fileURLWithPath: "/private/source.mov"), ffmpegArgs: &arguments,
+            sourceMetadata: videoMetadata(timecode: nil, frameRate: 25)
+        )
+        XCTAssertEqual(arguments, original)
+    }
+
+    func testTypedFiltersStillSupportUnknownMapCountsAndIgnoreInputNumericOptions() {
+        for arguments in [
+            ["-map", "0", "-filter:v:0", "hflip"],
+            ["-filter:0", "hflip", "-i", "source.mov", "-map", "0", "-vf", "vflip"]
+        ] {
+            let plan = PrimaryVideoFilterPlan(arguments: arguments)
+            XCTAssertFalse(plan.hasAmbiguousNumericTarget)
+            XCTAssertNil(plan.preparationError)
+            XCTAssertEqual(plan.filterOptionIndex, arguments.count - 2)
+        }
+    }
+
+    func testCustomCropRejectsAmbiguousNumericFilterBeforeEncoding() async throws {
+        try await withPresetSettingsAsync([
+            AppConstants.customPresetCommandKey(for: 0): "-map 0 -c:v libx264 -filter:0 hflip",
+            AppConstants.customPresetApplyCropKey(for: 0): true
+        ]) {
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"),
+                outputFileURL: URL(fileURLWithPath: "/private/output.mov"),
+                preset: .custom1, comment: "", includeDateTag: false,
+                trimStart: nil, trimEnd: nil,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.5, y: 0, width: 0.5, height: 1)),
+                sourceMetadata: videoMetadata(timecode: nil, frameRate: 25)
+            )
+            XCTAssertTrue(command.arguments.isEmpty)
+            XCTAssertTrue(try XCTUnwrap(command.preparationError).contains("-filter:v:0"))
+        }
+    }
+
+    func testNumericFilterRejectsMuteBeforeOutputIndexesChange() async throws {
+        try await withPresetSettingsAsync([
+            AppConstants.customPresetCommandKey(for: 0): "-map 0:a:0 -map 0:v:0 -c:v libx264 -filter:1 hflip"
+        ]) {
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/private/source.mov"),
+                outputFileURL: URL(fileURLWithPath: "/private/output.mov"),
+                preset: .custom1, comment: "", includeDateTag: false,
+                trimStart: nil, trimEnd: nil,
+                sourceMetadata: videoMetadata(timecode: nil, frameRate: 25),
+                isMuted: true
+            )
+            XCTAssertTrue(command.arguments.isEmpty)
+            XCTAssertTrue(try XCTUnwrap(command.preparationError).contains("automatic stream mapping"))
+        }
+    }
+
     func testGeneratedCropUsesNumericFilterAfterAudioMap() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -9102,7 +9264,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let fixtureStreams = try XCTUnwrap(probedFixtureStreams)
         XCTAssertEqual(fixtureStreams.count, 1)
         XCTAssertEqual(fixtureStreams.first?.channels, 6)
-        XCTAssertEqual(fixtureStreams.first?.channelLayout, "5.1")
+        XCTAssertNil(fixtureStreams.first?.channelLayout, "Matroska channel counts do not establish speaker positions")
 
         let surroundTrack = AudioTrackInfo(
             streamIndex: 0,
@@ -9307,28 +9469,38 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
         let inputURL = temporaryDirectory.appendingPathComponent("source.wav")
-        let outputBaseURL = temporaryDirectory.appendingPathComponent("converted")
-        let result = try await withPresetSettingsAsync([:]) {
-            await runConversion(ConversionRequest(
-                inputURL: inputURL,
-                outputURL: outputBaseURL,
-                preset: .av2,
-                includeDateTag: false,
-                synthesizedVideoRequest: SynthesizedVideoRequest(
-                    width: 64,
-                    height: 48,
-                    backgroundHex: "000000",
-                    frameRate: 24,
-                    includeAudio: true
+        try await withPresetSettingsAsync([:]) {
+            for pipeline in ["synthesized", "ffmpeg-waveform", "swift-waveform"] {
+                let outputBaseURL = temporaryDirectory.appendingPathComponent(pipeline)
+                let waveform = pipeline == "synthesized" ? nil : WaveformVideoRequest(
+                    width: 64, height: 48, backgroundHex: "000000", foregroundHex: "FFFFFF",
+                    normalizeAudio: false, style: .linear, frameRate: 24,
+                    renderingEngine: pipeline == "swift-waveform" ? .swift : .ffmpeg,
+                    swiftStyle: .capsules, bandCount: 1, frequencyDistribution: .linear,
+                    foregroundGradientEnabled: false, foregroundGradientEndHex: "FFFFFF",
+                    backgroundGradientEnabled: false, backgroundGradientEndHex: "000000",
+                    waveformOpacity: 1
                 )
-            ))
-        }
+                let result = await runConversion(ConversionRequest(
+                    inputURL: inputURL,
+                    outputURL: outputBaseURL,
+                    preset: .av2,
+                    includeDateTag: false,
+                    waveformRequest: waveform,
+                    synthesizedVideoRequest: pipeline == "synthesized" ? SynthesizedVideoRequest(
+                        width: 64, height: 48, backgroundHex: "000000", frameRate: 24,
+                        includeAudio: true
+                    ) : nil
+                ))
 
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorReason, "AV2 export does not yet support generated video from audio-only sources")
-        let outputURL = outputBaseURL.appendingPathExtension(ExportPreset.av2.outputExtension(for: inputURL))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path))
-        XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL))
+                XCTAssertFalse(result.success, pipeline)
+                XCTAssertEqual(result.errorReason, "AV2 export does not yet support generated video from audio-only sources", pipeline)
+                let outputURL = outputBaseURL.appendingPathExtension(ExportPreset.av2.outputExtension(for: inputURL))
+                XCTAssertFalse(FileManager.default.fileExists(atPath: outputURL.path), pipeline)
+                XCTAssertFalse(FileSafetyUtils.isCreatedByApp(outputURL), pipeline)
+            }
+        }
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: temporaryDirectory.path).isEmpty)
     }
 
     func testCoreConverterCancellationStopsRunningFFmpeg() async throws {

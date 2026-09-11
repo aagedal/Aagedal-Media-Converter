@@ -60,7 +60,10 @@ enum AudioRoutingService {
             let trackInfo = AudioTrackInfo(
                 streamIndex: audioRelativeIndex,
                 channels: basicStream.channels ?? detailedStream?.channels,
-                channelLayout: basicStream.channelLayout ?? detailedStream?.channelLayout,
+                // Apply the same presentation policy as the metadata panel: the Matroska
+                // reader's count-derived layout must not become a known speaker label.
+                channelLayout: detailedStream != nil ? detailedStream?.channelLayout
+                    : (["mkv", "webm"].contains(url.pathExtension.lowercased()) ? nil : basicStream.channelLayout),
                 codec: detailedStream?.codec,
                 codecLongName: detailedStream?.codecLongName,
                 sampleRate: detailedStream?.sampleRate,

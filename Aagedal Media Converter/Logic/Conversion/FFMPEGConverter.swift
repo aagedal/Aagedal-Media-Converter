@@ -4901,30 +4901,19 @@ actor FFMPEGConverter {
                     monoOutputs.append(outputLabel)
                     outputIndex += 1
                 } else {
-                    // Multi-channel stream - split to mono
-                    let splitLayout: String
-                    if channels == 2 {
-                        splitLayout = "stereo"
-                    } else if channels == 6 {
-                        splitLayout = "5.1"
-                    } else if channels == 8 {
-                        splitLayout = "7.1"
-                    } else {
-                        splitLayout = stream.channelLayout ?? "stereo"
-                    }
-
+                    // Preserve decoded channel order without assuming speaker positions.
                     var channelLabels: [String] = []
                     for ch in 0..<channels {
                         channelLabels.append("s\(audioPosition)c\(ch)")
                     }
                     let outputLabelsStr = channelLabels.map { "[\($0)]" }.joined()
 
-                    filterParts.append("[0:a:\(audioPosition)]channelsplit=channel_layout=\(splitLayout)\(outputLabelsStr)")
+                    filterParts.append("[0:a:\(audioPosition)]asplit=\(channels)\(outputLabelsStr)")
 
                     // Format each split channel
-                    for label in channelLabels {
+                    for (channel, label) in channelLabels.enumerated() {
                         let formattedLabel = "mono\(outputIndex)"
-                        filterParts.append("[\(label)]aformat=sample_fmts=s32:sample_rates=48000:channel_layouts=mono[\(formattedLabel)]")
+                        filterParts.append("[\(label)]pan=mono|c0=c\(channel),aformat=sample_fmts=s32:sample_rates=48000:channel_layouts=mono[\(formattedLabel)]")
                         monoOutputs.append(formattedLabel)
                         outputIndex += 1
                     }

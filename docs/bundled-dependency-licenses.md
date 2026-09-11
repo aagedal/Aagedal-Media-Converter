@@ -50,6 +50,15 @@ Before publishing:
 
 No binary or license text was replaced during the inventory/gate change.
 
+## Additional provenance findings — 2026-09-11
+
+The [4.4 provenance review](4.4-dependency-provenance-review.md) recovers exact
+rclone VCS identity and module records, an AVM revision lead, historical dylib
+copy scripts, and pinned package evidence. The 99 missing attributions remain.
+The current FFmpeg executable also reports GPL v3-or-later while the manifest
+and packaged notice specify v2. Inventory freshness does not detect this semantic
+mismatch; the current non-null notice does not establish complete attribution.
+
 ## Size and static dependency baseline
 
 The unsigned Release build measured on 2026-09-06 (version 4.3.0, build 575,

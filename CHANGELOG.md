@@ -1,164 +1,67 @@
+# v.4.4.0
+
+> In development. Release validation is still in progress.
+
+This release focuses on conversion correctness, reliable cancellation, saved-state recovery, and recording improvements.
+
+## Conversion
+
+- **Trim and crop validation catches invalid requests before encoding.** Anamorphic sources, odd dimensions, image sequences with companion audio, and custom filter ordering receive corrected geometry and timing.
+- **Export settings stay consistent throughout each job**, including filenames, destinations, track routing, codecs, subtitles, metadata, timecode, and generated video.
+- **Ambiguous numeric custom filters fail with guidance before automatic cropping or stream remapping**, preventing the app from silently overriding the wrong filter.
+- **Matroska metadata shows channel counts without guessing speaker layouts**, and AVC-Intra mono splitting preserves channels by position.
+- **Audio routing preserves track order and intentional duplication**, with fixes for channel operations, subtitle-container compatibility, and Stream Copy track metadata.
+- **AV2 Matroska exports preserve audio timing and padding**, including delayed tracks, trims, AAC preroll, and Opus codec delay. Additional AAC channel layouts are supported.
+- **AV2 assembly rejects damaged or incompatible segments.** Invalid trims and unsupported generated-video combinations report errors instead of producing incomplete output.
+- **DCP and IMF frame preparation reports damaged frames and write failures** before wrapping a package.
+- **Failed and cancelled conversions clean up their partial outputs**, while existing files and source media remain protected from replacement.
+
+## Cancellation and recovery
+
+- **External helpers share bounded execution and process-tree cancellation.** Conversion, downloads, uploads, transcription, analytics, and metadata probes report launch failures, timeouts, and tool errors.
+- **Retries wait for cancelled helpers to finish**, with stale callbacks prevented from changing newer jobs. Conversion cancellation also drains native waveform and package preparation.
+- **Subtitle jobs stage their results before publishing**, reserve separate names, and preserve unrelated or edited subtitle files when retrying.
+- **Uploads to the same remote destination run in queue order within the app.** Retries wait for cancelled transfers, and file access remains open until each transfer finishes.
+- **Transcription captures settings once per run**, and Parakeet rejects invalid chunk durations or overlap settings that cannot advance through the source.
+
+## Saved settings and file access
+
+- **Damaged download history and schedules are preserved**, with recovery guidance and an explicit reset action.
+- **Malformed settings imports and audio routes are rejected** instead of silently changing saved preferences. Legacy audio presets and upload-profile upgrades preserve newer choices.
+- **Watch-folder access can be renewed from Settings.** Scan, access, and Trash failures provide recovery guidance; cleanup pauses when access is insufficient.
+- **SSH keys selected with Browse retain sandbox access across launches**, with guidance when access must be granted again.
+- **Imports retain their filename and destination settings while metadata loads**, including camera-card groups and image sequences.
+
+## Recording and preview
+
+- **Growing recordings support Auto, 25, 29.97, 50, 59.94, and 60 fps**, with rational timing and drop-frame timecode at the two NTSC rates. Non-growing recording presets retain variable frame rate.
+- **Stopping growing recordings drains final frames and timecode**, including immediate-stop recordings, and reports writer failures.
+- **Screen, window, microphone, and audio-meter setup can time out or be cancelled**, preventing late callbacks from restarting stopped work.
+- **Preview and thumbnail operations have bounded waits**, and replaced players ignore stale setup and seek callbacks.
+- **Screenshots use consistent format and transparency settings**, including recovery from an invalid saved alpha preference.
+
+## Interface and diagnostics
+
+- **Tool Diagnostics in Settings checks bundled helpers and selected transcription models**, with paths, architecture, executable status, and recovery guidance.
+- **Norwegian translations cover more Settings, downloads, recording, and Shortcuts controls**, including all previously untranslated App Intent strings.
+- **Accessibility names and keyboard access are improved** for Settings, crop and trim controls, folder actions, and screenshots.
+- **The conversion toolbar stays disabled when no files are waiting.**
+
+## Dependencies and release checks
+
+- **Bundled FFmpeg updated to 9.0.1**, MPVKit updated for preview playback, and SwiftMediaMetadata updated to 3.0.0.
+- **Release checks verify bundled dependency inventories and packaged notice contents**, and block publication while attribution is incomplete.
+
 # v.4.3.0
-
-- **Numeric custom video-filter targets follow output stream order**, including audio-first mappings, for crop and automatic deinterlacing.
-- **Repeated yt-dlp warm-ups wait for cancelled helpers to finish**, including queued replacements.
-- **Parakeet transcription validates chunk and overlap settings once per run**, preventing invalid durations and overlap that cannot advance through the source.
-
-- **Custom crop filters follow the last matching video-filter option**, including repeated `-vf` and video-filter aliases.
-- **Automatic deinterlacing preserves quoted custom expressions and explicit filter settings**, and progressive video retains a valid filter when automatic deinterlacing is removed.
-- **Whisper capability refresh waits for cancelled probes to finish**, preventing overlapping helper processes during repeated refreshes.
-- **Screenshot settings preserve transparency when the saved alpha preference is invalid**, and capture uses a consistent snapshot of format preferences.
-
-- **Download option labels and tooltips now follow the selected language**, including recording from start, audio-only downloads, playlist downloads, and automatic conversion.
-
-- **Damaged download history is preserved and shows a confirmed reset action**, so automatic history updates cannot erase unreadable saved entries.
-
-- **AV2 rejects invalid trim intervals before probing or launching helpers.**
-- **AV2 assembly rejects damaged or incompatible segments** instead of silently publishing a shortened video, and reads one frame at a time.
-
-- **Damaged saved download schedules show recovery guidance and a confirmed reset action**, preserving schedules added during the current session.
-- **Invalid trim ranges fail before conversion preparation**, including native waveform and AVC-Intra audio preprocessing, instead of exporting beyond the selected interval.
-- **Cancelled BMX wrapping stays cancelled across helper registration**, preventing late handoffs from starting a retired operation.
-
-- **Crop filters and AV2 output dimensions share the same bounded crop area**, including even dimensions at odd-sized source edges. Invalid or unreadable crop geometry fails preparation instead of silently dropping the crop.
-- **Cancelling AVC-Intra conversions stops and drains audio-label preparation**, including native waveform exports, and rejects late probe results.
-- **Malformed saved download schedules are preserved** when restoring, adding, or removing schedules. Valid legacy schedules still load.
-
-- **Older watch-folder grants can be renewed from Settings.** Automatic cleanup pauses until access is renewed while monitoring continues.
-- **Malformed settings imports are rejected before preferences are changed**, including nested null values and invalid schema versions.
-- **Output comments and timecode preserve custom input options** while overriding conflicting output metadata.
-
-- **Camera-card and group imports retain filename rules and destinations through compatibility checks and metadata loading**, including master-name overrides.
-- **Watch-folder file inspection failures show recovery guidance and retry automatically.** Failed file or directory observations restart the stability check before import.
-- **Custom crop filters preserve quoted expressions and intervening operations**, with explicit ordering around built-in geometry filters.
-- **Malformed saved audio routes are rejected instead of silently restoring tracks.** Valid legacy selections, duplicates, and intentional silence remain supported.
-
-- **Custom video crops work when audio is copied**, and filters following pixel-aspect normalization retain valid crop ordering.
-- **Import filename previews retain their naming rules, counters, output folders, and containers while metadata loads.**
-- **Watch-folder scan and Trash failures show recovery guidance without repeating every poll.** Replaced or disabled sessions reject late updates, and startup errors stay visible until acknowledged.
-- **Cancelled or invalidated MXF label probes cannot publish stale results or refill cleared caches.**
-
-- **Image-sequence start trims keep companion audio aligned with the picture.**
-- **Export settings stay consistent while media details load**, including output names, destination subfolders, codecs, subtitles, comments, and generated video.
-- **New imports retain their date-tag, waveform, and timecode defaults while metadata loads.**
-- **Watch-folder errors preserve your saved location** and explain how to reconnect or reselect it. New selections retain access for optional Trash cleanup.
-
-- **Uploads targeting the same remote file run in queue order**, including retries and separate queue rows, while other destinations can upload concurrently.
-- **Cancelling from conversion progress no longer deadlocks**, including ordinary FFmpeg, AV2 decoding, and native waveform rendering.
-- **Package and AV2 cancellation waits for active helpers to stop**, rejects late success, and prevents old chunk failures from cancelling replacement exports.
-- **Trimmed Stream Copy preserves each track's own title and language**, and metadata stripping stays effective through final output options.
-- **Native waveform exports preserve metadata from the original audio source.**
-
-- **AV2 AAC exports support additional multichannel layouts**, including 2.1, quad, and 6.1, while preserving routed tracks and their channel data.
-- **Subtitle engines reserve independent filenames**, preserve unrelated or edited SRT files, and reuse only their own unchanged outputs on retry.
-- **SSH keys selected with Browse retain sandbox access across launches**, including moved files, with guidance when access must be granted again.
-- **Analytics cancellation waits for helper processes and temporary-file cleanup**, including superseded runs.
-
-- **AV2 Opus audio retains exact end padding**, preserving decoded sample counts after trims and track routing.
-- **Upload retries wait for cancelled transfers to stop**, reject stale callbacks, and release output-file readers before re-encoding. Source uploads remain independent, and file/key access stays open until each transfer finishes.
-- **Removed or retried subtitle jobs cannot publish stale SRT files.** Whisper, Parakeet, and OCR verify queue ownership before replacing the final subtitle.
-- **Comments and timecode follow the item’s settings through final command assembly**, including conflicting additional arguments; generated image sequences omit container comments.
-- **BMX cancellation waits for the wrapper process to stop**, including targeted cancellation during package post-processing.
-
-- **The conversion toolbar stays disabled when no files are waiting**, keeping SwiftUI and AppKit enabled states consistent after success or failure.
-
-- **AV2 Matroska audio preserves delayed tracks and packet timing**, including reordered/duplicated routes, trims, AAC preroll, and Opus codec delay.
-- **Native waveform cancellation waits for audio analysis and video encoding to drain**, while old encoder completion cannot clear its replacement.
-- **Conversion follow-ups and manual analytics keep their attempt identity.** Cancelled, removed, and retried items reject stale progress, results, subtitle embedding, upload dispatch, and analytics exports; delayed analytics cancellation preserves a newer run.
-- **DCP/IMF remembered content kinds stay stable during single-item preparation**, and metadata editors share the same title and content-kind defaults.
-
-- **Merged conversion updates follow the correct queue rows after removal or reordering.** Cancelled batches reject late progress, and replacing progress observers preserves the new subscription.
-- **Cancelling ordinary FFmpeg conversions waits for the encoder runner to drain**, keeping cancellation from returning while that tracked process is still stopping.
-- **Image-sequence filename frame rates match the source or generated-video request**, including queue previews, instead of using the default import rate.
-- **Timecode settings override conflicting custom timecode arguments.** Extreme or malformed timing values retain the original label without crashing.
-- **Single and merged generated-video exports share captured appearance and resolution settings.** Invalid nonfinite waveform frame rates fall back to the default.
-
-- **Generated video honors selected audio tracks without adding unwanted copies**, preserves intentional duplicates, and respects removed tracks and mute settings. Silent synthetic video has a finite duration; unknown duration shows guidance before encoding.
-
-- **Cancelling or removing queued media during inspection prevents it from starting an encode.** Reordered rows receive the correct metadata, and completed import details are preserved.
-- **Stream Copy and custom presets retain their selected settings throughout conversion**, including containers, custom commands, crop and audio-routing options, and source-file protection.
-- **AVC-Intra default audio labels stay consistent during encoding**, while manual overrides and labels from the source retain precedence.
-- **Filename labels stay aligned with captured codec settings**, including broadcast formats, animated/custom suffixes, AV2 and DCP/IMF formats, and retained merge settings. Invalid saved image-sequence frame rates no longer crash filename formatting.
-
-- **TV/AVC-Intra, proxy, and animated-still exports retain their selected settings**, including output format and AVC-Intra audio channel labels.
-- **Import, queue, and Settings filename previews share template formatting**, with accurate large counters and no unnecessary source-protection suffix for already-renamed outputs.
-- **MPV preview cleanup cancels pending observations and track refreshes**, preventing closed or replaced players from publishing stale playback events.
-- **Output-folder and automatic-cleanup failures now show recovery guidance.** Failed folder selection and unavailable drives preserve the saved output location; cleanup restores saved folder access and offers retry.
-
-- **Export comment and date formatting stay consistent throughout a conversion**, including AV2 Matroska and generated-video output.
-- **AV2 keeps captured container timing and consistent trim boundaries** across picture, audio, progress, and parallel chunks, including invalid trim values.
-- **Cancelled or replaced downloads discard late file details**, preventing stale metadata from triggering auto-encoding.
-
-- **ProRes and video-loop exports keep their captured settings**, including ProRes profile and metadata handling, throughout preparation and encoding.
-- **Subtitle preservation stays consistent during conversion preparation**, even if the preference changes while media is being inspected.
-- **Cancelled downloads discard late thumbnails and recording statistics**, and retries retain ownership of their new thumbnail request.
-
-- **H.264, H.265, and AV1 exports retain their codec and container settings throughout a job**, including output naming and waveform encoding.
-- **Delayed preview seeks respect pause and later playback actions**, and old image-sequence timer callbacks cannot advance a restarted preview.
-- **Saved folder access survives bookmark renewal without losing write access**, and temporary output-folder checks release their access correctly.
-
-- **Image-sequence exports keep frame and sidecar settings consistent throughout a job**, including format, JPEG quality, numbering width, and metadata sidecar choice.
-- **Closing capture discards pending virtual displays**, including creation that finishes after teardown or cancellation during startup.
-
-- **Audio Only exports keep their selected settings throughout a job**, including file format, codec, bit depth, bitrate, metadata preservation, and output naming.
-- **Cold-launch Shortcuts requests replay in submission order**, preserving the order in which requests reached the app.
-- **Delayed camera and C2PA metadata reads retain file access** until parsing finishes, even if the interface has already stopped waiting.
-
-- **IMF exports keep encoding and package settings consistent**, including resolution, frame rate, color, codec profile, and intermediate-file retention when preferences change during a job.
-- **Capture preview changes use one guarded restart**, including system-audio and microphone-device changes, while active recordings retain their settings.
-- **Watch-folder monitoring stops reliably during rapid restarts**, preventing a cancelled polling task from scanning alongside its replacement.
-
-- **Screen capture starts and previews recover from delayed callbacks.** Startup has a deadline, late successful starts are stopped, and old previews cannot replace a recording or restore a deselected display.
-- **DCP exports keep their encoding and package settings consistent.** Resolution, frame rate, bitrate, scaling, and intermediate-image retention are captured once per conversion.
-- **Tool Diagnostics rejects special files without hanging** and reports known incompatible helper architectures before package or AV2 export starts.
-- **Release validation checks system search paths accurately** and records bundle size and static dependency reports for cleanup planning.
-
-- **Screen-recording shutdown has a deadline.** Retired streams cannot append more samples or revive meters; stopped sessions reject late recording starts and retain folder access until all recordings finish.
-- **IMF checks audio helpers for concat and image-sequence sources before encoding.** Missing wrappers are detected using the same source selection as package audio extraction.
-- **Bundled license notices are available offline in About > Licenses.** Release validation verifies that all existing notices are packaged intact.
-
-- **Exports check required helpers before encoding.** DCP, IMF, and AV2 report missing or non-executable tools with guidance to Tool Diagnostics before creating output files.
-- **Audio metering stops reliably during startup.** Discovery, startup, and stop waits are bounded; delayed callbacks cannot restart a stopped meter or overwrite a newer session.
-- **Upload-profile upgrades preserve saved destinations.** Newer profiles take precedence, and malformed legacy data stays available for repair instead of being deleted during migration.
-
-- **Legacy audio preset upgrades preserve newer settings.** Existing Audio Only format and visibility choices survive migration when the old migration marker is missing.
-
-- **AV2 encoding keeps consistent settings throughout a job.** Geometry, quality, chunking, output bit depth, container, audio codec, and bitrate use one captured set of preferences, including output naming and final Matroska metadata.
-- **Microphone permission waits can time out or be cancelled.** Stopping capture prevents a late permission response from resuming setup; unanswered prompts show recovery guidance.
-- **Tool Diagnostics checks selected transcription models.** It reports missing or empty Whisper files and incomplete Parakeet cache resources, and rejects folders selected as executable tools.
-
-- **The preset picker keeps its active selection visible**, even when that preset is hidden in Settings. Descriptive built-in preset names now translate into Norwegian without changing saved identifiers or custom names.
-
-- **Upload Settings no longer reads passwords just to check whether they are saved.** Credential presence checks avoid secret-data retrieval and authentication prompts.
-
-- **Screen and window discovery no longer waits indefinitely.** Recording and system-audio metering stop waiting after 15 seconds and respond promptly to cancellation.
-- **Standalone subtitle and analytics actions keep consistent settings.** Model, language, OCR engine, analytics frame sampling, and automatic export preferences are captured before work starts.
-- **Tool Diagnostics now includes package and AV2 helpers.** BMX and AS-DCP helpers have bounded version checks; AV2 and Parakeet expose availability and architecture with a clear note when version validation is unavailable.
-
-
-- **Tool Diagnostics in Settings** shows active tool paths, architecture, executable status, and bounded version checks, with distinct guidance for missing tools, launch failures, and timeouts.
-- **Norwegian Settings and Shortcuts** now localize dynamic choices and descriptions, and Shortcuts search matches translated actions. Long empty-queue tips wrap fully.
-- **Trim and crop accessibility** adds spoken timeline positions and boundaries, chapter actions, keyboard-focusable timecode buttons, and clearer crop/track control names.
-- **Post-conversion settings stay consistent during a job.** Transcription, OCR, and analytics capture their preferences at operation start, including subtitle embedding and OCR engine selection.
-- **Release checks now track license notice contents** and stop publishing when bundled dependency attribution is incomplete.
 
 A smaller, focused release built around **Shortcuts & Spotlight**. Instead of a single "convert with whatever's selected" action, there's now **one Convert action per export preset**, a **Convert with Default Preset** action that follows your configured default — so it can drive any of your *custom* presets — and the most common presets are surfaced as zero-setup **Spotlight / Siri shortcuts**. All of them now **launch the app automatically** when it isn't already running. Under the hood, the bundled **FFmpeg moves to 8.1.1**. Rounding it out: the queue's **drag-to-share handle now works on every drag** (not just the first after launch), and **importing from a camera card no longer freezes the window**.
 
 ## Shortcuts & App Intents
 
-- **Norwegian Shortcuts actions are now fully translated.** All 59 previously untranslated action titles, descriptions, and parameter summaries now have Norwegian text, with automated checks protecting their placeholders.
-
 - **One "Convert Immediately" action per built-in preset.** Every built-in export preset — VideoLoop, VideoLoop with Sound, Animated Still, H.264, H.265, AV1, AV2, TV (HEVC and AVC-Intra), ProRes, Proxy, Stream Copy, Audio Only, Image Sequence, DCP, and both IMF flavours — is now its own Shortcuts action (e.g. *Convert to ProRes*, *Extract Audio*, *Remux (Stream Copy)*). Each adds the files, sets the output folder to the source folder, switches the app to that preset, and starts conversion. Actions use your saved settings for that preset (encoder, resolution, container, quality, audio), so a one-tap shortcut behaves exactly like picking the preset in the app.
 - **New "Convert with Default Preset" action.** Converts using whatever you've set as the default preset in Settings, resolved at the moment it runs. Because the default can be *any* preset — including one of the ten user-defined **Custom** slots — this is the way to drive a custom preset from Shortcuts or Spotlight, which can't expose each custom slot as its own static action (their names are user-defined).
 - **Spotlight & Siri shortcuts.** The ten most common presets — led by **Convert (Default Preset)** — are exposed as zero-setup App Shortcuts, so you can run them from Spotlight or by voice (e.g. *"Convert with Aagedal Media Converter"*) without first building a shortcut. Because a Spotlight/Siri phrase can't carry files, running one this way opens the app, switches to that preset, and presents a file picker — convert actions then start as soon as you choose your files. Apple caps this surface at ten per app; the niche presets (AV2, TV, Image Sequence, DCP, IMF) stay available as full actions inside the Shortcuts app.
 - **The app now opens automatically.** Every convert action and "Add to Encode Queue" now launches the app if it isn't already running and reliably hands off its files, instead of silently doing nothing when the app was closed. A small launch-time buffer replays a request that arrives before the window's receivers are ready, so nothing is lost to the cold-launch race — and never runs twice.
-
-## Screen recording
-
-- **Stopping growing recordings preserves the final frames and timecode.** Video and timecode wait together when the writer is busy, failures are reported, and final frames drain with a deadline. Immediate-stop recordings now retain the correct single-frame duration.
-
-- **Broadcast frame rates and drop-frame timecode.** Screen recording now offers 25, 29.97, 50, 59.94, and 60 fps alongside display-native Auto. Growing recordings use exact rational timing, including the MOV duration, and drop-frame timecode at 29.97/59.94 with midnight rollover. Settings and the recording overlay explain constant versus variable frame rate.
-- **Norwegian capture settings are more complete.** Rate choices, preset names/descriptions, dynamic range, and frame-rate explanations are now localized. Capture folder buttons also have explicit accessibility labels.
 
 ## Encoding
 
@@ -166,70 +69,6 @@ A smaller, focused release built around **Shortcuts & Spotlight**. Instead of a 
 
 ## Fixes
 
-- **AV2 chunk exports now explain temporary-storage failures before encoding starts.** Planning no longer leaves scratch folders behind, and existing files or directories are preserved if scratch creation fails.
-
-- **Settings sidebar controls have explicit accessibility names.** Pane names and the show/hide sidebar action are exposed for assistive technology, with bilingual navigation coverage.
-
-- **Cancelling DCP/IMF export now stops frame preparation.** Queue cancellation interrupts JPEG 2000 codestream preparation between frames, cleans scratch files after the worker stops, and prevents package wrapping from starting.
-
-- **Settings controls have clearer accessibility names.** Folder actions, timecode adjustments, and update-command copying now announce their purpose. Screenshot format and transparency pickers have distinct spoken labels.
-
-- **Preview thumbnails and filmstrips no longer wait indefinitely on AVFoundation.** Native rendering has a deadline and cancellation support, and late images cannot overwrite fallback thumbnails.
-- **Player setup now ignores stale framework callbacks.** Track checks, initial seeks, and audio-selection loads are bounded; replacing or closing a player cancels owned work and prevents late results from changing the new player.
-- **DCP and IMF exports stop when a picture frame cannot be prepared.** Failed frame reads, malformed frames, and write errors are reported before video wrapping instead of silently producing an incomplete package.
-
-- **Partial-download duration inspection can no longer wait indefinitely on media parsing.** The shared duration probe now bounds its parser and AVFoundation fallbacks and returns promptly when cancelled.
-
-- **Queue failures now have an accessible Error details view.** Conversion, download, subtitle, upload, and analysis errors can be read and selected in a scrollable popover. Copy diagnostics includes app, system, and preset context with known file paths and URLs redacted; upload and analysis failures also retain their status text.
-- **Preview and fullscreen controls now expose more useful accessibility information.** Crop inputs have descriptive labels and pixel values, timecode displays expose editing actions, transport controls announce their state, and the fullscreen timeline supports accessible slider adjustment. New labels are translated into Norwegian.
-- **Release validation now rejects missing architectures and unresolved bundled libraries.** Exported and archived apps are checked for arm64, executable permissions, transitive library resolution, and bundle containment before publication, with the same gate on Release CI builds.
-
-- **Norwegian screen-recording controls are no longer left in English.** The remaining virtual-display and multi-display recording labels are translated, and localization validation now catches new unclassified omissions and broken interpolation placeholders.
-- **Cancelling an external tool now targets its complete process group.** Every shared-runner launch starts in a dedicated POSIX process group, so timeout and cancellation reliably reach descendants created during shutdown or reparented after a wrapper exits before escalating from TERM to KILL.
-- **Settings sync now explains monitoring, iCloud download, and backup-opening failures.** Switching sync folders no longer lets an old monitor close the new monitor’s file descriptor, and backup-opening errors appear even when sync is disabled.
-- **Settings sync no longer overwrites an unreadable or damaged remote snapshot.** Automatic reconciliation now preserves malformed, unreadable, and newer-format files, surfaces an actionable error, and waits for the file to become usable instead of treating it as a missing file and seeding over it. Manual import uses the same format validation.
-- **Parallel AV2 encoding now uses the shared coordinated subprocess pipeline.** Every concurrent FFmpeg-to-avmenc chunk has process-tree cancellation, a seven-day safety deadline, bounded and redacted diagnostics, and split-record-safe frame progress. The first real worker failure remains visible while sibling pipelines stop, and partial chunk files plus scratch directories are removed before the conversion finishes.
-- **Single-file AV2 encoding now uses the shared coordinated subprocess pipeline.** FFmpeg-to-avmenc streaming has process-tree cancellation for both tools, seven-day safety deadlines, bounded and redacted diagnostics, split-record-safe progress, and partial-IVF cleanup. Cancelling or superseding a conversion stops the whole pipeline and cannot publish a late success, while producer launch and pipe failures remain distinguishable from encoder failures.
-- **Native waveform encoding is now bounded and cancellation-safe.** Rendered BGRA frames stream through the shared subprocess layer with natural backpressure, a seven-day safety deadline, bounded/redacted diagnostics, process-tree cancellation, output validation, and partial-output cleanup. A stalled encoder or frame writer can no longer strand the conversion queue, and cancelled work cannot publish a late result.
-- **Parakeet model downloads are now bounded, integrity-checked, and cancellation-safe.** HuggingFace metadata and file requests have explicit resource deadlines and exactly-once completion, while parent-task and Settings cancellation stop only the selected model's active request. Downloads build a private cache snapshot and publish it only after a final ownership check, so failed or late cancelled attempts cannot expose partial models or overwrite retries. Remote cache paths are validated, downloaded file sizes are checked, and LFS files are SHA-256 verified before installation.
-- **Whisper model downloads are now cancellation-safe and explicitly bounded.** Each URLSession download has a twelve-hour resource deadline and an exactly-once completion gate. Parent-task and Settings cancellation stop the underlying transfer promptly, per-attempt ownership rejects late files and progress from cancelled downloads, and a retry cannot be overwritten or cleared by its predecessor. Cancelled downloads no longer surface as user-visible failures.
-- **Stopping a screen recording can no longer remain busy forever during file finalization.** AVAssetWriter finalization now has a non-joining 60-second safety deadline and responds promptly to parent cancellation. The writer remains alive for any late framework callback, while the capture UI and sandbox access can still finish teardown with a specific actionable error.
-- **Apple Vision subtitle OCR can no longer hang the conversion queue on one frame.** Each blocking Vision request now has a non-joining ten-second per-frame deadline matching Tesseract, responds promptly to parent cancellation, and owns its PNG bytes so a late framework completion remains safe after temporary OCR files are removed.
-- **SSIMULACRA2 preflight can no longer wait indefinitely for media information.** Duration and resolution discovery now use the same non-joining 15-second deadline policy as other metadata consumers, return actionable timeout errors, and respond promptly to analytics cancellation before any frame tools launch.
-- **Preview media preflight no longer performs unbounded or duplicate metadata reads.** Full preview assets and on-demand row thumbnails now share one bounded result for duration, video topology, waveform metadata, and HDR classification. Audio-only inputs use a bounded essential-info fallback, timeout does not immediately re-enter the same stalled parser, and cancellation remains prompt.
-- **AV2 conversion planning now probes metadata only once per operation.** Chunk selection, single-pipeline fallback, Matroska bit-depth setup, and preserved-timecode setup reuse the same bounded result instead of repeatedly entering a parser that may have already timed out.
-- **Conversion audio, duration, chapter, and output checks can no longer wait indefinitely for raw metadata.** The shared probe facade now applies a non-joining 15-second deadline to all four operations. Video audio-stream discovery reuses the cached single-flight metadata read, while raw duration, chapter, output-verification, and audio-only probes retain sandbox access until any late parser completion.
-- **Conversion planning no longer waits indefinitely for rich media metadata.** Crop geometry, preserved timecode, AVC-Intra duration, deinterlace decisions, AV2 planning/muxing, and audio-routing enrichment now use the shared non-joining 15-second metadata deadline. Existing request metadata is reused for deinterlace and AVC-Intra planning, and an AV2 timeout no longer immediately retries the same geometry read.
-- **Player audio controls no longer wait indefinitely for metadata.** Audio ordering, AVPlayer track-option refresh, and on-demand channel-waveform discovery use the shared non-joining metadata deadline. Superseded or torn-down refreshes are cancelled and late results cannot overwrite a newer player item.
-- **Preview generation can no longer hang on waveform metadata discovery.** Cached per-stream waveform discovery and new waveform rendering now reuse one non-joining 15-second metadata probe, and cancelling preview generation is no longer swallowed as missing optional metadata.
-- **Camera-card and queue merge checks can no longer hang on metadata parsing.** Camera-card compatibility analysis, automatic format splitting, and conversion merge preflight now share a non-joining 15-second metadata deadline. Card files are probed concurrently so large cards retain one deadline window. Timeout remains a normal unavailable-metadata fallback, while parent cancellation returns promptly instead of being swallowed by `try?`. Closing, superseding, or completing the card dialog cancels its owned check, rejects late results, and releases folder access; terminal probe failure is no longer presented as ongoing work or mislabeled as a missing video track.
-- **The metadata comparison window no longer stays stuck on a stalled supplemental metadata read.** Lazy C2PA and camera-metadata probes now have non-joining 15-second deadlines and return promptly when their parent task is cancelled, so every row leaves its “Checking…” state even if SwiftMediaMetadata does not cooperate.
-- **Stalled media metadata or thumbnail reads can no longer pin import or player loading past their deadlines.** The 15-second metadata and queue-thumbnail guards now resolve without joining a non-cooperative parser or AVFoundation read, parent-task cancellation returns promptly, and the lightweight metadata fallback is independently bounded instead of re-entering the same stalled single-flight read indefinitely.
-- **Quitting no longer blocks the main thread while preview work is cancelled.** AppKit now holds normal termination asynchronously while preview subprocess cancellation runs behind a non-joining two-second safety bound; repeated quit requests share one cleanup and one completion reply.
-- **DCP/IMF package wrapping is now cancellable and bounded.** DCP picture/audio wrapping, IMF App 2e picture wrapping, IMF audio wrapping, and WAV padding use the shared subprocess layer with twelve-hour safety deadlines, concurrent bounded diagnostics, private-path redaction, nonempty-output validation, and partial-file cleanup. Queue cancellation and superseding conversions stop the active wrapper and reject late output while preserving IMF wrap-progress reporting.
-- **DCP/IMF package-audio extraction is now cancellable and bounded.** PCM WAV extraction uses the shared subprocess layer with a twelve-hour safety deadline, concurrent bounded diagnostics, private-path redaction, nonempty-output validation, and partial-file cleanup. Queue cancellation now stops the active extraction instead of leaving FFmpeg running during package post-processing.
-- **Whisper availability now refreshes when the selected FFmpeg changes.** Switching between bundled, Homebrew, and custom FFmpeg sources invalidates the shared capability cache; custom-path edits are debounced so Settings and queue controls follow the active binary without launching a probe pair for every keystroke.
-- **Whisper availability checks no longer block the UI or wait indefinitely.** FFmpeg capability and version discovery now runs asynchronously through the shared subprocess layer with five-second deadlines, bounded output, executable-path redaction, and cancellation-safe shared caching. Settings and queue controls show loading state and update when the probe completes instead of triggering synchronous `Process` waits during UI access.
-- **Removing every audio track no longer crashes DCP/IMF export.** An empty customized audio route is now treated as an intentional silent package, avoiding an empty-stream array access during package audio extraction.
-- **Merge trim and conformance preparation is now cancellable and bounded.** Its one-shot FFmpeg runs use the shared subprocess layer with process-tree cancellation, a twelve-hour safety deadline, bounded/redacted diagnostics, and nonempty-output validation. Cancelling a batch stops active preparation; cancelling any row in the pending merge invalidates the stale merge snapshot and lets the remaining rows continue individually. Failed, timed-out, or cancelled preparation removes partial clips.
-- **Preview thumbnail and waveform generation is now cancellable and bounded.** Its FFmpeg and AV2 helper invocations use the shared subprocess layer with process-tree cancellation, a thirty-minute deadline, bounded/redacted diagnostics, and nonempty-output validation. Failed, timed-out, and cancelled attempts remove partial cache files; cancellation is preserved across fallback paths; app termination stops every tracked preview process; and a cancelled attempt cannot clear the state of a replacement generation.
-- **BMX MXF rewrapping and metadata probes are now cancellable and bounded.** `bmxtranswrap` and `mxf2raw` use the shared subprocess layer with process-tree cancellation, explicit deadlines, bounded output, redacted private paths, and split-chunk-safe progress parsing. Rewraps are serialized and require a nonempty output, partial failures are removed before fallback, oversized metadata is rejected rather than partially parsed, and conversion-scoped cancellation promptly removes queued work, survives pre-registration races, and cannot report late success.
-- **Video-quality analytics is now cancellable and bounded.** VMAF, PSNR, XPSNR, and SSIMULACRA2 tool invocations use the shared subprocess layer with process-tree cancellation, explicit deadlines, bounded output capture, split-chunk-safe progress, and redacted private paths. Starting a replacement analysis cannot be disrupted by late cleanup from the superseded attempt, and VMAF scratch logs are removed on failure and cancellation as well as success.
-- **Image-sequence import no longer blocks a thread while probing associated audio.** Folder and single-image imports now await media duration asynchronously behind a non-joining five-second deadline. Late probes retain the exact selected-folder or resolved-parent sandbox scope, single-frame imports only inspect sibling audio when that parent scope is valid, overlapping file-picker tasks cannot append duplicate sequences, and cancellation is checked before applying an audio-derived frame rate. The former semaphore compatibility bridge has been removed.
-- **rclone version and custom-binary checks now use the shared cancellable subprocess layer.** Both probes have a five-second deadline, bounded output capture, process-tree cleanup, and redacted executable paths instead of blocking waits and a detached watchdog.
-- **Native waveform analysis and preview decoding are now safely cancellable.** Their one-shot FFmpeg decoders use the shared subprocess layer with process-tree cancellation, twelve-hour safety deadlines, bounded/redacted diagnostics, and no unbounded pipe wait. Cancelling a conversion during audio analysis now stops both FFmpeg and the FFT work; stale analysis, frame-writing, termination, and progress callbacks are fenced from a newer attempt. Very short audio is safely zero-padded when the requested waveform duration extends beyond the decoded samples instead of crashing in the FFT loop.
-- **Ordinary FFmpeg conversions now use the shared cancellable subprocess layer.** The main single-process encode path has process-tree cancellation, a seven-day safety deadline, bounded stderr capture, redacted private paths, and split-record-safe progress parsing. Late output and cleanup from a cancelled or superseded encode are fenced from the next attempt, including same-destination retries, while stale handlers cannot clear a newer AV2 process handle. Timeout, launch, and nonzero-exit failures retain the existing one-shot cleanup and completion behavior. AV2 decoder pipes and package rewrappers remain on their specialized paths for now.
-- **Parakeet transcription is now asynchronously and safely cancellable.** Both selected-track FFmpeg extraction and parakeet-mlx run through the shared subprocess layer with process-tree cancellation, generous deadlines, bounded/redacted diagnostics, and split-chunk-safe progress parsing. Per-attempt cancellation is isolated across overlapping and grouped runs, parent-task cancellation is rechecked before publication, and queue progress plus optional subtitle embedding are fenced against stale attempts. Each run uses a short private staging directory and atomically publishes to a reserved final path, so failed or cancelled retries preserve valid subtitles and simultaneous same-name runs cannot overwrite one another.
-- **Whisper transcription is now asynchronously and safely cancellable.** FFmpeg Whisper-filter runs use the shared subprocess layer with process-tree cancellation, a twelve-hour safety deadline, bounded/redacted diagnostics, and split-chunk-safe progress parsing. Per-attempt cancellation is isolated across overlapping and grouped runs—even when cancel wins the actor scheduling race—and each run stages its SRT before atomically publishing to a reserved destination, so cancelled or failed reruns preserve existing subtitles and concurrent same-name runs cannot overwrite one another. Stale embedding attempts are fenced from replacing the video, and replacement failures preserve the original. Filter values with punctuation-heavy legal paths now survive both FFmpeg parsing layers without exposing input, model, or output paths in logs.
-- **Bitmap-subtitle extraction now uses the shared cancellable subprocess layer.** The FFmpeg stage before OCR has process-tree cancellation, a thirty-minute deadline, bounded diagnostics, redacted source and scratch paths, and split-chunk-safe progress parsing, so a wedged extraction cannot pin the queue or leak private paths in its failure message.
-- **rclone uploads now use the shared cancellable subprocess layer.** Uploads, connection tests, and password obscuring have explicit deadlines, bounded output capture, split-line-safe progress parsing, stdin-only password delivery, and redacted diagnostics. Cancelling one item now terminates only that upload, while late callbacks from an older attempt cannot overwrite or clear a retry.
-- **yt-dlp downloads now use the shared cancellable subprocess layer.** Normal, forced, playlist, and live downloads share bounded concurrent output draining, redacted diagnostics, task/process-tree cancellation, and the existing five-minute inactivity watchdog. Per-item cancellation keeps simultaneous downloads isolated, and live recording stops still preserve their distinct partial-file recovery path.
-- **yt-dlp metadata and playlist probes can no longer wait forever.** They now run through a shared cancellable subprocess layer with a five-minute deadline, concurrent stdout/stderr draining, bounded diagnostics, TERM-to-KILL descendant cleanup, and redacted cookie/URL command descriptions and error text.
-- **Toolbar cancellation now fully closes the active conversion batch.** The queue could stop its FFmpeg process and update the visible row while leaving the original batch task suspended, especially when cancellation arrived during process startup. Batch completion is now registered before work starts and released by Cancel All, so cancellation cannot strand the conversion lifecycle.
-- **Failed and cancelled conversions no longer leave partial outputs or stale file-ownership records.** Ordinary-file exports now remove an incomplete destination and revoke its app-created registration after FFmpeg fails, is cancelled, or cannot launch, so a later unrelated file at the same path cannot be treated as safe to delete.
-- **Audio routing no longer duplicates the video stream map** when a preset's first explicit map selects audio; custom track ordering and channel operations now reuse the existing video map.
-- **Keep Subtitles is limited to subtitle-capable outputs.** Image sequences, animated stills, DCP/IMF MXF, IVF, and audio-only outputs no longer receive invalid subtitle codec arguments.
-- **Stream Copy no longer carries subtitle streams into the output.** The command used FFmpeg's attachment-stream selector (`t`) where it intended the subtitle selector (`s`), so subtitle tracks could be copied even though Stream Copy has no subtitle option. Audio and video streams continue to be copied without re-encoding.
 - **Drag-to-share works on every drag, not just the first.** The drag handle on a finished queue row (the four-arrows icon) lets you drag the exported file straight into another app or Finder. It used to work only on the first drag after launch and then go dead — or start reordering the queue instead — because the drag was started from the wrong place and an unfinished drag session blocked all the ones after it. It now begins a proper file drag every time. The drag image is the row's own thumbnail (rounded, with a soft drop shadow) instead of a generic black document icon, and dropping the file back onto the queue re-adds it so you can compare the export against the original.
 - **Importing from a camera card no longer freezes the window.** Scanning a camera/SD card ran on the main thread, locking up the UI until it finished. The scan now runs off the main actor, so the window stays responsive.
 
@@ -298,7 +137,7 @@ The headline is experimental **AV2 encoding** via the bundled AOM AVM reference 
 
 ## Housekeeping
 
-- **SwiftMediaMetadata updated to 3.0.0.** The package remains on its renamed `aagedal/SwiftMediaMetadata` repository and now includes the new lossless XMP, preservation-policy, and metadata-capability APIs. The app's current read-only integration remains source-compatible with the major update.
+- **SwiftExif now resolves from Codeberg** (`taagedal/SwiftExif`, 1.9.1). The GitHub mirror is frozen at 1.6.0, so "Update to Latest Package Versions" kept re-resolving the stale URL and finding nothing newer. Both consumers compile unchanged.
 - **Release zips strip AppleDouble metadata** (`--norsrc --noextattr --noacl --noqtn`). Without this, `ditto` encodes xattrs / ACLs / creation dates as `._<name>` companions inside the zip, which macOS Sequoia no longer merges back on extract — they surface as visible files inside the `.app`, break the codesignature seal, and trip Gatekeeper's "app is damaged". The 4.1.2 release zip was re-packaged retroactively with the same fix.
 - Removed the stale `GEMINI.md` project-context file (recoverable from git history).
 

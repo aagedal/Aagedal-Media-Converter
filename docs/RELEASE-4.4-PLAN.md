@@ -1,6 +1,6 @@
 # 4.4 release plan — Stabilization and release readiness
 
-Status: proposed release scope; no release readiness claimed.
+Status: stabilization in progress; no release readiness claimed.
 Created: 2026-09-11.
 
 4.3 is stable; 4.4 is in development. Ship the improvements already implemented
@@ -90,9 +90,38 @@ codec/device combination are follow-up work. Core flow failures must be resolved
   supported macOS and the current supported release where available. Do not
   publish publicly just to run these checks; distinguish staging checks from any
   final live-channel verification.
-- [ ] Prepare accurate 4.4 release notes and version/build metadata. The checked-in
-  changelog and marketing version still say 4.3.0 at planning time; reconcile the
-  actual changes since the stable release rather than relabel historical entries.
+- [ ] Prepare accurate 4.4 release notes and version/build metadata. Draft notes and development metadata now identify 4.4.0 (576); finalize them
+  against the frozen candidate and signed artifact before release.
+
+## Stabilization evidence — 2026-09-11 continuation
+
+- Development metadata is now **4.4.0 (576)**. This is not a frozen or signed
+  release candidate. `CHANGELOG.md` separates draft 4.4 notes from the exact
+  published history recovered from stable release commit `ce2f016`; incremental
+  engineering notes are retained in [the development history](4.4-development-history.md).
+- [Numeric-filter review](4.4-numeric-filter-review.md): ambiguous crop targets
+  and numeric filters combined with app-managed output mapping changes now fail
+  before encoding with typed-filter guidance. Known explicit output ordering
+  remains supported; ambiguous deinterlace aliases are left untouched.
+- [Matroska review](4.4-matroska-layout-review.md): suppresses count-derived
+  speaker labels and extracts AVC-Intra mono channels by position, avoiding
+  layout guesses that could remix or silence samples.
+- [Generated AV2 review](4.4-generated-av2-review.md): synthesized video and
+  both waveform engines retain explicit unsupported-request rejection with no
+  output file or app-created ownership left behind.
+- [Dependency provenance review](4.4-dependency-provenance-review.md): records
+  exact rclone revision evidence, an AVM revision lead, pinned package revisions,
+  and historical dylib-copy scripts. The 99 missing attributions remain open.
+  It additionally confirms that FFmpeg reports GPL v3-or-later while its manifest
+  entry and notice still specify v2. Correct attribution requires more than
+  eliminating `NOASSERTION` entries.
+
+The [validation record](4.4-validation-2026-09-11.md) records the new regression
+evidence and the combined checks.
+
+These findings do not close the live-workflow, signed-distribution, IMF descriptor,
+package/helper draining, or multi-process coordination gates. No public release
+or appcast change has been made.
 
 ## What can wait for 4.5
 

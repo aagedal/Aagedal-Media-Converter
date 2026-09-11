@@ -31,12 +31,25 @@ struct FFMPEGCommand {
 /// Other indexed streams retain ownership of their own filters.
 struct PrimaryVideoFilterPlan: Equatable, Sendable {
     let filterOptionIndex: Int?
+    let hasAmbiguousNumericTarget: Bool
+    let hasNumericTarget: Bool
+
+    var preparationError: String? {
+        guard hasAmbiguousNumericTarget else { return nil }
+        return String(localized: "Cannot safely apply video adjustments to numeric filters with this stream mapping. Use -filter:v:0 for video and typed audio filter options, or map individual required streams explicitly.")
+    }
 
     init(arguments: [String]) {
         var filterOptionIndex: Int?
         let outputArgumentsStart = arguments.lastIndex(of: "-i").map { min($0 + 2, arguments.count) } ?? 0
         var filterOptions: Set<String> = ["-vf", "-filter", "-filter:v", "-filter:v:0"]
-        if let outputIndex = Self.primaryVideoOutputIndex(arguments: arguments, outputArgumentsStart: outputArgumentsStart) {
+        let outputIndex = Self.primaryVideoOutputIndex(arguments: arguments, outputArgumentsStart: outputArgumentsStart)
+        hasNumericTarget = arguments.indices.contains { index in
+            index >= outputArgumentsStart && index + 1 < arguments.count &&
+                arguments[index].hasPrefix("-filter:") && Int(arguments[index].dropFirst("-filter:".count)) != nil
+        }
+        hasAmbiguousNumericTarget = outputIndex == nil && hasNumericTarget
+        if let outputIndex {
             filterOptions.insert("-filter:\(outputIndex)")
         }
         for index in arguments.indices where index >= outputArgumentsStart && index + 1 < arguments.count {
@@ -44,7 +57,8 @@ struct PrimaryVideoFilterPlan: Equatable, Sendable {
                 filterOptionIndex = index
             }
         }
-        self.filterOptionIndex = filterOptionIndex
+        // Even a typed alias may be superseded by an unresolved numeric option.
+        self.filterOptionIndex = hasAmbiguousNumericTarget ? nil : filterOptionIndex
     }
 
     /// Numeric filter specifiers address the output order, not the input stream index.
@@ -373,6 +387,28 @@ enum FFMPEGCommandBuilder {
         )
 
         let inputPlan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
+        let presetArguments = capturedDCPSettings?.ffmpegArguments
+            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? capturedImageSequenceSettings?.ffmpegArguments
+            ?? capturedAudioOnlySettings?.ffmpegArguments
+            ?? capturedCodecSettings?.ffmpegArguments
+            ?? preset.ffmpegArguments
+        let hasNumericFilters = PrimaryVideoFilterPlan(arguments: presetArguments + (additionalOutputArguments ?? [])).hasNumericTarget
+        let changesAudioMapping = audioRoutingConfig != nil && preset.outputsAudioTrack &&
+            (capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting)
+        let changesOutputMapping = (additionalOutputArguments ?? []).contains {
+            ["-map", "-an", "-vn", "-sn", "-dn", "-filter_complex", "-lavfi", "-filter_complex_script"].contains($0)
+        }
+        // Numeric filters follow the final output order. Do not interpret them
+        // against preset maps that a later app-owned transformation will replace.
+        if hasNumericFilters && (changesAudioMapping || isMuted || inputPlan.isImageSequence ||
+            waveformRequest != nil || synthesizedVideoRequest != nil || changesOutputMapping) {
+            return FFMPEGCommand(
+                arguments: [], normalizedTrimStart: normalizedTrimStart,
+                normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                preparationError: String(localized: "Numeric filters cannot be combined with automatic stream mapping changes. Use -filter:v:0 for video and typed audio filter options before enabling audio routing, mute, or generated video.")
+            )
+        }
         // DCP hints apply only to the ordinary file source, before its input boundary.
         let fileInputOptions = preset == .dcp ? [
             "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"
@@ -388,12 +424,7 @@ enum FFMPEGCommandBuilder {
 
             arguments.append(contentsOf: waveformCommandArguments(for: waveformRequest, includeAudioOutput: includeAudioOutput, audioRoutingConfig: audioRoutingConfig))
 
-            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
-                ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
-                ?? capturedImageSequenceSettings?.ffmpegArguments
-                ?? capturedAudioOnlySettings?.ffmpegArguments
-                ?? capturedCodecSettings?.ffmpegArguments
-                ?? preset.ffmpegArguments
+            var ffmpegArgs = presetArguments
             await adjustArgumentsForInput(
                 preset: preset,
                 audioOnlySettings: capturedAudioOnlySettings,
@@ -436,12 +467,7 @@ enum FFMPEGCommandBuilder {
 
             arguments.append(contentsOf: synthesizedVideoCommandArguments(for: synthesizedVideoRequest))
 
-            var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
-                ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
-                ?? capturedImageSequenceSettings?.ffmpegArguments
-                ?? capturedAudioOnlySettings?.ffmpegArguments
-                ?? capturedCodecSettings?.ffmpegArguments
-                ?? preset.ffmpegArguments
+            var ffmpegArgs = presetArguments
             await adjustArgumentsForInput(
                 preset: preset,
                 audioOnlySettings: capturedAudioOnlySettings,
@@ -525,12 +551,7 @@ enum FFMPEGCommandBuilder {
             )
         }
 
-        var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
-            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
-            ?? capturedImageSequenceSettings?.ffmpegArguments
-            ?? capturedAudioOnlySettings?.ffmpegArguments
-            ?? capturedCodecSettings?.ffmpegArguments
-            ?? preset.ffmpegArguments
+        var ffmpegArgs = presetArguments
 
         // Image sequence inputs (via customInputArguments): the inputURL is a directory
         // so skip audio probing. If no associated audio, strip audio args entirely.
@@ -574,6 +595,13 @@ enum FFMPEGCommandBuilder {
            cropConfig.isActive,
            preset.outputsVisualFrames,
            (capturedCodecSettings?.appliesCrop ?? preset.appliesCrop) {
+            if let preparationError = PrimaryVideoFilterPlan(arguments: ffmpegArgs).preparationError {
+                return FFMPEGCommand(
+                    arguments: [], normalizedTrimStart: normalizedTrimStart,
+                    normalizedTrimEnd: normalizedTrimEnd, effectiveDuration: nil,
+                    preparationError: preparationError
+                )
+            }
             guard let geometry = await sourceGeometry(
                 for: visualSourceURL ?? inputURL,
                 sourceMetadata: visualSourceURL == nil ? sourceMetadata : nil
@@ -1654,7 +1682,6 @@ extension FFMPEGCommandBuilder {
             guard stream.isDecodable else { continue }
 
             let channels = stream.channels ?? 2
-            let channelLayout = stream.channelLayout ?? (channels == 1 ? "mono" : "stereo")
 
             if channels == 1 {
                 // Mono stream - use directly but ensure consistent format
@@ -1663,20 +1690,6 @@ extension FFMPEGCommandBuilder {
                 monoOutputs.append(outputLabel)
                 outputIndex += 1
             } else {
-                // Multi-channel stream - split into individual mono channels
-                // Determine channel layout for splitting
-                let splitLayout: String
-                if channels == 2 {
-                    splitLayout = "stereo"
-                } else if channels == 6 {
-                    splitLayout = "5.1"
-                } else if channels == 8 {
-                    splitLayout = "7.1"
-                } else {
-                    // Generic layout based on channel count
-                    splitLayout = channelLayout
-                }
-
                 // Generate output labels for each channel
                 var channelLabels: [String] = []
                 for ch in 0..<channels {
@@ -1684,13 +1697,14 @@ extension FFMPEGCommandBuilder {
                 }
                 let outputLabelsStr = channelLabels.map { "[\($0)]" }.joined()
 
-                // Add channelsplit filter
-                filterParts.append("[0:a:\(audioPosition)]channelsplit=channel_layout=\(splitLayout)\(outputLabelsStr)")
+                // Extract by channel index: a count-derived speaker layout can reorder,
+                // remix, or silence channels before channelsplit sees the input.
+                filterParts.append("[0:a:\(audioPosition)]asplit=\(channels)\(outputLabelsStr)")
 
                 // Add format filter for each split channel to ensure consistent output
-                for label in channelLabels {
+                for (channel, label) in channelLabels.enumerated() {
                     let formattedLabel = "mono\(outputIndex)"
-                    filterParts.append("[\(label)]aformat=sample_fmts=s32:sample_rates=48000:channel_layouts=mono[\(formattedLabel)]")
+                    filterParts.append("[\(label)]pan=mono|c0=c\(channel),aformat=sample_fmts=s32:sample_rates=48000:channel_layouts=mono[\(formattedLabel)]")
                     monoOutputs.append(formattedLabel)
                     outputIndex += 1
                 }
@@ -2122,6 +2136,8 @@ extension FFMPEGCommandBuilder {
             logger.debug("Skipping inactive crop config")
             return true
         }
+
+        guard !PrimaryVideoFilterPlan(arguments: ffmpegArgs).hasAmbiguousNumericTarget else { return false }
 
         // Resolve before mutating arguments: invalid crops must not leave an empty -vf.
         guard let geometry = CropGeometryPlan(
