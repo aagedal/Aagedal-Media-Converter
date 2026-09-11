@@ -1,0 +1,19 @@
+{
+  "binaryPath": "Aagedal Media Converter/Binaries/rclone",
+  "binarySHA256": "8870619556592f9cacaa433b459b30747d5154873beb1014f0737da09284406e",
+  "buildInfoPath": "rclone-build-info.txt",
+  "buildInfoSHA256": "16afbfa8e0e5eb56142cb6cd3f5987f412a9f27a5d6e8f931c8704610d27fe3f",
+  "moduleCount": 142,
+  "scope": "Embedded self-reported build information, not independently verified source-to-binary provenance.",
+  "inspectedMissingCachePaths": [
+    "~/go/pkg/mod",
+    "~/Library/Caches/go-build",
+    "~/.cache/go-build"
+  ],
+  "remainingWork": [
+    "Recover main source at c441cac8089c7d5314a37673291fdb8236900884 and original build selection/recipe.",
+    "Retrieve exact module versions and verify their embedded Go h1 checksums using Go module tooling.",
+    "Review notices for compiled modules and Go 1.26.2 runtime/standard library, plus any embedded non-Go assets.",
+    "Package the resulting reviewed notice set; do not substitute a generic main-project MIT notice."
+  ]
+}
