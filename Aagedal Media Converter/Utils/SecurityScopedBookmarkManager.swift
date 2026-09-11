@@ -66,8 +66,8 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         let accessed = startScope(url)
         defer { if accessed { stopScope(url) } }
         do {
-            var modes = userDefaults.dictionary(forKey: readOnlyKey) ?? [:]
-            var bookmarks = userDefaults.dictionary(forKey: bookmarksKey) ?? [:]
+            var modes = try storedDictionary(forKey: readOnlyKey)
+            var bookmarks = try storedDictionary(forKey: bookmarksKey)
             // A later import must not downgrade a folder already saved for output.
             // Legacy records have unknown permissions; preserve their scope too.
             let savedReadOnly = modes[storageURL.absoluteString] as? Bool
@@ -87,11 +87,20 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         }
     }
 
+    /// Missing stores are empty; unsupported stored values must remain available for recovery.
+    private func storedDictionary(forKey key: String) throws -> [String: Any] {
+        guard let value = userDefaults.object(forKey: key) else { return [:] }
+        guard let dictionary = value as? [String: Any] else {
+            throw CocoaError(.coderReadCorrupt)
+        }
+        return dictionary
+    }
+
     func resolveBookmark(for url: URL) -> URL? {
         lock.lock()
         defer { lock.unlock() }
-        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey) as? [String: Data],
-              let data = bookmarks[url.absoluteString] else { return nil }
+        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey),
+              let data = bookmarks[url.absoluteString] as? Data else { return nil }
         do {
             let resolved = try resolveData(data)
             if resolved.isStale {

@@ -197,4 +197,33 @@ final class UploadProfileMigrationTests: XCTestCase {
             XCTAssertEqual(before as NSDictionary, defaults.dictionaryRepresentation() as NSDictionary)
         }
     }
+    func testMalformedModernProfilesRejectEditorLoadAndSubsequentSave() throws {
+        for malformed: Any in [Data("damaged".utf8), "wrong-storage-type", Data("{}".utf8)] {
+            try withStore { defaults in
+                defaults.set(malformed, forKey: AppConstants.uploadProfilesKey)
+                let selected = UUID()
+                UploadProfileStore.saveSelectedProfileID(selected, defaults: defaults)
+                let before = defaults.dictionaryRepresentation() as NSDictionary
+                XCTAssertThrowsError(try UploadProfileStore.loadProfilesForEditing(defaults: defaults))
+                XCTAssertFalse(UploadProfileStore.saveProfiles([.new(backend: .ftp)], defaults: defaults))
+                XCTAssertFalse(UploadProfileStore.saveProfiles([], defaults: defaults))
+                XCTAssertEqual(defaults.dictionaryRepresentation() as NSDictionary, before)
+            }
+        }
+    }
+
+    func testEditorCanLoadMissingOrExplicitlyEmptyProfilesAndSaveNewDestination() throws {
+        for existing in [false, true] {
+            try withStore { defaults in
+                if existing {
+                    defaults.set(Data("[]".utf8), forKey: AppConstants.uploadProfilesKey)
+                }
+                XCTAssertEqual(try UploadProfileStore.loadProfilesForEditing(defaults: defaults), [])
+                let profile = UploadProfile.new(backend: .sftp)
+                XCTAssertTrue(UploadProfileStore.saveProfiles([profile], defaults: defaults))
+                XCTAssertEqual(try UploadProfileStore.loadProfilesForEditing(defaults: defaults), [profile])
+            }
+        }
+    }
+
 }

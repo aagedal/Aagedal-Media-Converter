@@ -19,6 +19,7 @@ struct UploadSettingsView: View {
 
     // Profiles
     @State private var profiles: [UploadProfile] = UploadProfileStore.loadProfiles()
+    @State private var profileStoreUnreadable = (try? UploadProfileStore.loadProfilesForEditing()) == nil
     @AppStorage(AppConstants.uploadSelectedProfileIDKey) private var selectedProfileID = ""
 
     // Upload behavior
@@ -70,9 +71,16 @@ struct UploadSettingsView: View {
     var body: some View {
         Form {
             rcloneStatusSection
-            profileSection
-            uploadBehaviorSection
-            testConnectionSection
+            if profileStoreUnreadable {
+                Section {
+                    Text("Saved upload profiles could not be read. Your saved data has been preserved. Restore a settings backup or repair the saved profiles, then reopen Settings.")
+                        .foregroundStyle(.red)
+                }
+            } else {
+                profileSection
+                uploadBehaviorSection
+                testConnectionSection
+            }
         }
         .formStyle(.grouped)
         .task { await loadInitialState() }
@@ -758,6 +766,14 @@ struct UploadSettingsView: View {
     private func loadInitialState() async {
         rcloneCustomPath = RcloneUpdateService.shared.getCustomPath() ?? ""
         await refreshRcloneStatus()
+
+        do {
+            profiles = try UploadProfileStore.loadProfilesForEditing()
+            profileStoreUnreadable = false
+        } catch {
+            profileStoreUnreadable = true
+            return
+        }
 
         if profiles.isEmpty {
             // First-run: create a default FTP profile so the view always has something to show.

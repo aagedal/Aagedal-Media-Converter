@@ -163,4 +163,42 @@ final class SecurityScopedBookmarkManagerTests: XCTestCase {
         XCTAssertFalse(manager.startAccessingSecurityScopedResource(for: original))
         manager.stopAccessingSecurityScopedResource(for: original)
     }
+    func testMalformedTopLevelStoresRejectSaveWithoutErasingRecoveryData() throws {
+        for key in ["securityScopedBookmarks", "securityScopedBookmarksReadOnly"] {
+            for malformed: Any in [Data([0, 1, 2]), "unsupported-schema", ["invalid-array"]] {
+                let defaults = try isolatedDefaults()
+                defaults.set(malformed, forKey: key)
+                let before = defaults.dictionaryRepresentation() as NSDictionary
+                var activeScopes = 0
+                let manager = SecurityScopedBookmarkManager(defaults: defaults, createBookmark: { _, _ in
+                    XCTFail("Malformed state must be rejected before bookmark creation")
+                    return Data([3])
+                }, startScope: { _ in activeScopes += 1; return true },
+                    stopScope: { _ in activeScopes -= 1 })
+                XCTAssertFalse(manager.saveWritableBookmark(for: URL(fileURLWithPath: "/new/output")))
+                XCTAssertEqual(defaults.dictionaryRepresentation() as NSDictionary, before)
+                XCTAssertEqual(activeScopes, 0)
+            }
+        }
+    }
+
+    func testMalformedSiblingDoesNotBlockValidBookmarkOrDisappearDuringRenewal() throws {
+        let defaults = try isolatedDefaults()
+        let valid = URL(fileURLWithPath: "/valid/output")
+        let malformed = URL(fileURLWithPath: "/recoverable/output")
+        defaults.set([valid.absoluteString: Data([1]), malformed.absoluteString: "unsupported-entry"],
+                     forKey: "securityScopedBookmarks")
+        let manager = SecurityScopedBookmarkManager(defaults: defaults,
+            createBookmark: { _, _ in Data([2]) },
+            resolveData: { data in
+                XCTAssertEqual(data, Data([1]))
+                return (valid, true)
+            }, startScope: { _ in false }, stopScope: { _ in })
+        XCTAssertNil(manager.resolveBookmark(for: malformed))
+        XCTAssertEqual(manager.resolveBookmark(for: valid), valid)
+        let saved = defaults.dictionary(forKey: "securityScopedBookmarks")
+        XCTAssertEqual(saved?[valid.absoluteString] as? Data, Data([2]))
+        XCTAssertEqual(saved?[malformed.absoluteString] as? String, "unsupported-entry")
+    }
+
 }

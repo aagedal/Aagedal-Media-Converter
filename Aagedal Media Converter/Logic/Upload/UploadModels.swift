@@ -231,15 +231,23 @@ struct UploadProfile: Codable, Identifiable, Equatable, Sendable {
 
 enum UploadProfileStore {
     static func loadProfiles(defaults: UserDefaults = .standard) -> [UploadProfile] {
-        guard let data = defaults.data(forKey: AppConstants.uploadProfilesKey) else {
-            return []
-        }
-        return (try? JSONDecoder().decode([UploadProfile].self, from: data)) ?? []
+        (try? loadProfilesForEditing(defaults: defaults)) ?? []
     }
 
-    static func saveProfiles(_ profiles: [UploadProfile], defaults: UserDefaults = .standard) {
-        guard let data = try? JSONEncoder().encode(profiles) else { return }
+    /// Read-only consumers may show no destinations on failure; editors must distinguish
+    /// an empty list from unreadable recovery data before creating or saving profiles.
+    static func loadProfilesForEditing(defaults: UserDefaults = .standard) throws -> [UploadProfile] {
+        guard let stored = defaults.object(forKey: AppConstants.uploadProfilesKey) else { return [] }
+        guard let data = stored as? Data else { throw CocoaError(.coderReadCorrupt) }
+        return try JSONDecoder().decode([UploadProfile].self, from: data)
+    }
+
+    @discardableResult
+    static func saveProfiles(_ profiles: [UploadProfile], defaults: UserDefaults = .standard) -> Bool {
+        guard (try? loadProfilesForEditing(defaults: defaults)) != nil,
+              let data = try? JSONEncoder().encode(profiles) else { return false }
         defaults.set(data, forKey: AppConstants.uploadProfilesKey)
+        return true
     }
 
     static func loadSelectedProfileID(defaults: UserDefaults = .standard) -> UUID? {

@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Saved upload profiles could not be read. Your saved data has been preserved. Restore a settings backup or repair the saved profiles, then reopen Settings.": {
+    "localizations": {
+      "nb": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Kunne ikke lese lagrede opplastingsprofiler. De lagrede dataene er bevart. Gjenopprett en sikkerhetskopi av innstillingene eller reparer de lagrede profilene, og åpne deretter Innstillinger på nytt."
+        }
+      }
+    }
+  },
   "Another upload to this destination is active in the app. Wait for it to finish, then retry.": {
     "localizations": {
       "nb": {
