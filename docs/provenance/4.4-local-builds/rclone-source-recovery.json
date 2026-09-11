@@ -11,9 +11,9 @@
     "~/.cache/go-build"
   ],
   "remainingWork": [
-    "Recover main source at c441cac8089c7d5314a37673291fdb8236900884 and original build selection/recipe.",
-    "Retrieve exact module versions and verify their embedded Go h1 checksums using Go module tooling.",
-    "Review notices for compiled modules and Go 1.26.2 runtime/standard library, plus any embedded non-Go assets.",
-    "Package the resulting reviewed notice set; do not substitute a generic main-project MIT notice."
-  ]
+    "Recover original minimal-build selection/recipe and reconcile compiled packages with recovered exact-revision source.",
+    "Review the 197 recovered module notice candidates, main-source and Go runtime notices, file-level exceptions and embedded assets.",
+    "Package the reviewed complete notice set and required accompanying material; exact source retrieval alone does not complete attribution."
+  ],
+  "followUpRecovery": "rclone-sources/source-recovery.json"
 }
