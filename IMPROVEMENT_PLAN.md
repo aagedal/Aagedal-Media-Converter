@@ -6,6 +6,43 @@ This is the prioritized improvement roadmap. `TODO.md` remains a small historica
 feature checklist; new improvement work should be tracked here with an owner or
 issue link when it starts.
 
+## Release split and completion rule
+
+4.3 is stable. **4.4 is the stabilization release in development; 4.5 is the
+proposed local agent-access release.** The release plans below govern remaining
+scope; the numbered sections retain implementation evidence and history.
+
+- [4.4 release plan](docs/RELEASE-4.4-PLAN.md): a finite release checklist covering
+  concrete correctness issues, live regression validation, dependency attribution,
+  and signed installation/update checks. Completing this entire roadmap is not a
+  prerequisite for 4.4.
+- [4.5 release plan](docs/RELEASE-4.5-PLAN.md): shared job ownership, typed request
+  boundaries, local MCP, and prioritized follow-up improvements. Deferred roadmap
+  work is a backlog, not a requirement to finish every audit before shipping MCP.
+
+| Existing workstream | Required for 4.4 | Target for 4.5 / follow-up |
+| --- | --- | --- |
+| 0.1–0.3 Baseline and CI | Preserve completed baseline; rerun on candidate | Ongoing maintenance |
+| 1.1–1.3 Conversion tests | Existing matrix/UI smoke stays green; regressions get focused tests; triage unresolved output risks | Broader matrix and new format combinations |
+| 2.1 Subprocess runner | Preserve migration; fix demonstrated cancellation/helper leaks in shipped paths | Broader package/framework and multi-process coordination audit |
+| 2.2 Async and ownership | No known reproducible hangs, unsafe late writes, or cancellation regressions in candidate | Wider actor/UI binding audit and architectural cleanup |
+| 2.3 Errors | Actionable failures in release smoke flows, especially file access | Remaining diagnostic consistency and filesystem audit |
+| 3.1 Orchestration | Fix concrete regressions only | Shared application/job service for MCP |
+| 3.2 Typed plans | Preserve captured settings and reject known invalid requests | Typed agent requests/plans first; broader filter/codec/output extraction incrementally |
+| 3.3 Settings | Verify upgrade preservation and known corruption recovery | Remaining settings centralization/schema migrations |
+| 4.1 Accessibility | Core import, preset, convert/cancel, error, and Settings keyboard/VoiceOver smoke | Complete custom-control and secondary-flow audit |
+| 4.2 Localization | Catalog gate and changed-flow English/Norwegian check | Exhaustive scrolled-content and secondary-flow review |
+| 4.3 Recording rates (section number, not release version) | Live rate, A/V sync, permission, and editor validation of shipped changes | Additional compatibility coverage |
+| 4.4 Dependency diagnostics (section number) | Missing-tool recovery smoke and clean-machine validation | Further first-run polish |
+| Priority 5 Release hygiene | Complete attribution, package/signature checks, clean install and update | Runtime memory profiling, dynamic reachability, measured size optimization |
+
+An open audit is not automatically a release blocker. A confirmed defect that can
+lose data, silently produce incorrect supported output, corrupt settings, or leave
+work writing after cancellation must be fixed or have the affected path explicitly
+disabled before 4.4. Record a disposition for unresolved risks; do not silently
+reclassify them as polish. Historical time estimates and delivery ordering below
+are not current release commitments.
+
 ## Audit snapshot
 
 - The project builds successfully with Xcode 26.6 and Swift 6 strict concurrency.
@@ -2240,7 +2277,12 @@ No binaries were removed and no license assignments changed. Runtime memory,
 dynamic reachability, complete attribution, and credentialed release checks
 remain (Codex, 2026-09-06).
 
-## Suggested delivery sequence
+## Validation history and original delivery sequence
+
+The release split above supersedes the original sequence at the end of this
+section. The following entries record past checks, not fresh release-candidate
+validation or a cumulative list of remaining blockers. Later entries can supersede
+older outstanding-work statements.
 
 Latest validation (2026-09-11, Codex): Debug compilation and all 829 unit tests pass
 with zero failures or skips. Twelve new regressions cover numeric output-filter mapping
