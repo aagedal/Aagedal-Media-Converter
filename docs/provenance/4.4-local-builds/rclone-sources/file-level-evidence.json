@@ -1,0 +1,68 @@
+{
+  "scope": "Selected file-level notices and embedded-asset provenance leads. Review evidence, not a complete notice set.",
+  "files": [
+    {
+      "scope": "main",
+      "sourcePath": "lib/http/templates/index.html",
+      "sourceSHA256": "34c8efedc48680a34ef2c8294ac6d79c3d2a1ec2f56a2aef797558d82e8f10d7",
+      "snapshotPath": "file-level-evidence/main/lib/http/templates/index.html",
+      "snapshotSHA256": "34c8efedc48680a34ef2c8294ac6d79c3d2a1ec2f56a2aef797558d82e8f10d7",
+      "snapshotBytes": 17296,
+      "completeSourceFile": true
+    },
+    {
+      "scope": "main",
+      "sourcePath": "cmd/gui/dist/README.md",
+      "sourceSHA256": "17d19f8d0fd6f20213d3c93c45b8d72f5f74f7b903acb5941b5b0d6b698ae9ad",
+      "snapshotPath": "file-level-evidence/main/cmd/gui/dist/README.md",
+      "snapshotSHA256": "17d19f8d0fd6f20213d3c93c45b8d72f5f74f7b903acb5941b5b0d6b698ae9ad",
+      "snapshotBytes": 49,
+      "completeSourceFile": true
+    },
+    {
+      "scope": "go",
+      "sourcePath": "src/crypto/internal/fips140/edwards25519/scalar.go",
+      "sourceSHA256": "b9bc9ba5a2160dccee62ccbb4371c90c5d1c654d55b8ae08f33fa29c58876050",
+      "snapshotPath": "file-level-evidence/go/src/crypto/internal/fips140/edwards25519/scalar.go",
+      "snapshotSHA256": "b9bc9ba5a2160dccee62ccbb4371c90c5d1c654d55b8ae08f33fa29c58876050",
+      "snapshotBytes": 11561,
+      "completeSourceFile": true
+    },
+    {
+      "scope": "go",
+      "sourcePath": "src/debug/elf/elf.go",
+      "sourceSHA256": "ff2f811d29a56303bad96c3c7cff1a83814a974503a51cee918a314a96eb476e",
+      "snapshotPath": "file-level-evidence/go/src/debug/elf/elf.go.notice.txt",
+      "snapshotSHA256": "05f5cf488584cf7c3df139be6bea283691166366c511d29940602f295975448f",
+      "snapshotBytes": 2567,
+      "completeSourceFile": false
+    },
+    {
+      "scope": "modules",
+      "sourcePath": "github.com/prometheus/client_golang@v1.23.2/prometheus/internal/almost_equal.go",
+      "sourceSHA256": "e22e24dab3b51d50a9f036ad4ee2154bba4e4a5cee61553535423c0d9c340f2a",
+      "snapshotPath": "file-level-evidence/modules/github.com/prometheus/client_golang@v1.23.2/prometheus/internal/almost_equal.go.notice.txt",
+      "snapshotSHA256": "9f3b9f65351e80655cf97999612c0504d8f961920eb618cbd377065d2265918d",
+      "snapshotBytes": 1281,
+      "completeSourceFile": false
+    },
+    {
+      "scope": "modules",
+      "sourcePath": "golang.org/x/net@v0.52.0/publicsuffix/table.go",
+      "sourceSHA256": "00add19ece14eec90b1320a81dc2c680474e88255e08df82f2d942bcf414979a",
+      "snapshotPath": "file-level-evidence/modules/golang.org/x/net@v0.52.0/publicsuffix/table.go",
+      "snapshotSHA256": "00add19ece14eec90b1320a81dc2c680474e88255e08df82f2d942bcf414979a",
+      "snapshotBytes": 1836,
+      "completeSourceFile": true
+    },
+    {
+      "scope": "modules",
+      "sourcePath": "github.com/dsnet/compress@v0.0.2-0.20230904184137-39efe44ab707/bzip2/prefix.go",
+      "sourceSHA256": "1b252283120b6d1d7262dc0fb6c88268567753e7c62e3f014aadbe648a65629f",
+      "snapshotPath": "file-level-evidence/modules/github.com/dsnet/compress@v0.0.2-0.20230904184137-39efe44ab707/bzip2/prefix.go",
+      "snapshotSHA256": "1b252283120b6d1d7262dc0fb6c88268567753e7c62e3f014aadbe648a65629f",
+      "snapshotBytes": 10683,
+      "completeSourceFile": true
+    }
+  ]
+}

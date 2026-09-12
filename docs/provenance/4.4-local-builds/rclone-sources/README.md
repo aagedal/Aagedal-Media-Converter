@@ -56,14 +56,67 @@ The public Go proxy rejected the main pseudo-version
 the full revision succeeded. That proxy response does not establish that the
 source revision is absent upstream; use the working full-revision archive URL.
 
+## Source selection and embedded-file follow-up (2026-09-12)
+
+`source-selection.json` records an offline `go list -mod=readonly -deps -json .`
+using Go 1.26.2 and the embedded darwin/arm64, CGO-disabled settings. The verified
+main archive already contains the minimal backend imports: crypt, ftp, local,
+s3, sftp and smb. The complete entry-point and backend/command selection files
+are retained in the report with their hashes. **The resulting 922-package graph
+selects exactly the same 142 module versions and checksums as the executable.**
+Every selected module Go/assembly source and embed input was compared byte for
+byte to its module ZIP; all ZIP hashes match the original recovery inventory.
+This is strong source-selection evidence, but does not recover the exact original
+build invocation or prove which functions survived linker elimination.
+
+The graph selects 66 embedded files in 15 packages. All 66 complete byte sequences
+occur in the hash-verified bundled executable. They include S3 provider YAML,
+command documentation, protobuf edition defaults, the generated public-suffix
+data, an HTTP favicon and the HTTP directory template. The GUI input is only
+`cmd/gui/dist/README.md` containing the instruction to run `make fetch-gui`;
+this archive does not supply a populated GUI distribution.
+
+`file-level-evidence.json` indexes additional offline review snapshots and records
+both original-source and snapshot hashes. These materially extend the prior
+filename-only notice search:
+
+- The embedded HTTP template carries Matthew Holt / Caddy copyright, Apache 2.0
+  terms and an explicit rclone modification statement. Retain that notice in the
+  eventual offline attribution alongside the applicable license text.
+- Prometheus `almost_equal.go` carries Björn Rabenstein's MIT notice and says its
+  code was copied to avoid a dependency; its module-root license alone does not
+  preserve that notice.
+- Go's selected Edwards25519 scalar implementation, selected ELF definitions and
+  dsnet's bzip2 prefix implementation contain additional third-party notices.
+  The retained source excerpts/files make those notices available for review.
+- The selected public-suffix table identifies upstream data revision
+  `d6c92f1bbb7433e5db7b8405c25d4035fb8ff376`. Its generated data and the favicon
+  still need their applicable asset/source notice obligations established.
+
+Reproduce with the recovered, checksum-verified Go toolchain and populated module
+cache (no network is used):
+
+```sh
+python3 scripts/audit-rclone-source-selection.py \
+  --source-archive /path/to/rclone-c441cac-source.tar.gz \
+  --go-root /path/to/go \
+  --module-cache /path/to/rclone-go/pkg/mod \
+  --output /tmp/rclone-source-selection.json
+```
+
+The script verifies the main archive and bundled executable hashes, module ZIP
+hashes and selected cached module contents. Use an unmodified extracted Go
+1.26.2 toolchain verified as described above; its standard-library files are not
+individually authenticated by this script. Python 3.12+ is required for safe
+archive extraction using the `data` filter.
+
 ## Remaining review
 
-Recover the original minimal-build selection/recipe and reconcile its compiled
-packages against the source graph and binary. Review the recovered module notices
-and file-level/embedded-asset surfaces. The main tree contains `go:embed` inputs,
-including HTTP templates, GUI assets, images and documentation; their presence
-alone does not establish that each shipped. The Go root license is retained, but
-a full runtime/standard-library source exception review is still needed. Package
-the reviewed notices for offline viewing, record any required source material,
-and rerun the strict publication gate and final-bundle checks. No executable,
-license assignment or gate changed in this recovery.
+Complete the notice review across the selected source files, including runtime
+and standard-library exceptions, generated asset provenance and accompanying
+source requirements. The retained file-level snapshots are targeted findings,
+not an exhaustive scan. Review all 197 module notice candidates for applicability
+and package the complete reviewed attribution for offline viewing. Retain the
+original build recipe if recovered, or produce and validate a documented rebuild.
+Rerun the strict publication gate and final-bundle checks after those steps.
+No executable, license assignment or publication gate changed in this follow-up.

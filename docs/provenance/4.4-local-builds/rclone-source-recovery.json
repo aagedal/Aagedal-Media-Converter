@@ -11,9 +11,10 @@
     "~/.cache/go-build"
   ],
   "remainingWork": [
-    "Recover original minimal-build selection/recipe and reconcile compiled packages with recovered exact-revision source.",
-    "Review the 197 recovered module notice candidates, main-source and Go runtime notices, file-level exceptions and embedded assets.",
+    "Exact archive minimal backend selection is recovered and the target source graph matches all 142 embedded module records; retain the original invocation or validate a documented rebuild.",
+    "Complete review of 197 module notice candidates, selected source exceptions and embedded assets, including follow-up file-level evidence.",
     "Package the reviewed complete notice set and required accompanying material; exact source retrieval alone does not complete attribution."
   ],
-  "followUpRecovery": "rclone-sources/source-recovery.json"
+  "followUpRecovery": "rclone-sources/source-recovery.json",
+  "sourceSelectionFollowUp": "rclone-sources/source-selection.json"
 }
