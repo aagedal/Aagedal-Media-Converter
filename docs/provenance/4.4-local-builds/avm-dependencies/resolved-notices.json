@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "libyuv/LICENSE",
+      "bytes": 1506,
+      "sha256": "2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f"
+    },
+    {
+      "path": "libyuv/PATENTS",
+      "bytes": 1387,
+      "sha256": "4da84211f947c6f9f7dd8fbce513e1522e01833407ae732b8c9a2bbb75fed495"
+    },
+    {
+      "path": "libyuv/AUTHORS",
+      "bytes": 98,
+      "sha256": "1e8751834a0341c39c75a06021fdad56aa614fc6cd7cf0a7f8a18921689c9e2c"
+    },
+    {
+      "path": "libyuv/upstream-match.json",
+      "bytes": 16110,
+      "sha256": "64da6333f31032c70feeb35443785b3ec32d1861a0a38ecced3dba90b7ffe0dd"
+    },
+    {
+      "path": "libyuv/retained-source.patch",
+      "bytes": 11559,
+      "sha256": "f06c2595286624a7d81dbcbc6bbb312dacab90ac05e7cb46d2b1592595782e6b"
+    },
+    {
+      "path": "libyuv/upstream-file-NOTICES.txt",
+      "bytes": 3141,
+      "sha256": "8a7c23391a4566804e9cc1b112abea860e789dacf630007ac16a919613cc2d65"
+    },
+    {
+      "path": "tensorflow/nested/fft2d-LICENSE",
+      "bytes": 185,
+      "sha256": "64a68ebd98d10064bfd8f6c8dc4fa094747bd33af191f694183ce163cba5c9b5"
+    },
+    {
+      "path": "tensorflow/nested/xla-LICENSE",
+      "bytes": 11356,
+      "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+    },
+    {
+      "path": "tensorflow/nested/tsl-LICENSE",
+      "bytes": 11356,
+      "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+    },
+    {
+      "path": "file-level-NOTICES.txt",
+      "bytes": 367661,
+      "sha256": "c36cbf559243d96863628d5918247d0534bd0d628ed0de7da8bd1ef4076f832f"
+    }
+  ]
+}

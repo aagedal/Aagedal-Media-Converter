@@ -1,0 +1,221 @@
+--- upstream/include/libyuv/basic_types.h
++++ retained/include/libyuv/basic_types.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_BASIC_TYPES_H_  // NOLINT
+--- upstream/include/libyuv/convert.h
++++ retained/include/libyuv/convert.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_CONVERT_H_  // NOLINT
+--- upstream/include/libyuv/convert_argb.h
++++ retained/include/libyuv/convert_argb.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2012 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_CONVERT_ARGB_H_  // NOLINT
+--- upstream/include/libyuv/convert_from.h
++++ retained/include/libyuv/convert_from.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_CONVERT_FROM_H_  // NOLINT
+--- upstream/include/libyuv/cpu_id.h
++++ retained/include/libyuv/cpu_id.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_CPU_ID_H_  // NOLINT
+--- upstream/include/libyuv/planar_functions.h
++++ retained/include/libyuv/planar_functions.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_PLANAR_FUNCTIONS_H_  // NOLINT
+--- upstream/include/libyuv/rotate.h
++++ retained/include/libyuv/rotate.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_ROTATE_H_  // NOLINT
+--- upstream/include/libyuv/row.h
++++ retained/include/libyuv/row.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_ROW_H_  // NOLINT
+--- upstream/include/libyuv/scale.h
++++ retained/include/libyuv/scale.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_SCALE_H_  // NOLINT
+--- upstream/include/libyuv/scale_row.h
++++ retained/include/libyuv/scale_row.h
+@@ -1,11 +1,12 @@
+ /*
+- *  Copyright 2013 The LibYuv Project Authors. All rights reserved.
++ * Copyright (c) 2021, Alliance for Open Media. All rights reserved
+  *
+- *  Use of this source code is governed by a BSD-style license
+- *  that can be found in the LICENSE file in the root of the source
+- *  tree. An additional intellectual property rights grant can be found
+- *  in the file PATENTS. All contributing project authors may
+- *  be found in the AUTHORS file in the root of the source tree.
++ * This source code is subject to the terms of the BSD 3-Clause Clear License and the
++ * Alliance for Open Media Patent License 1.0. If the BSD 3-Clause Clear License was
++ * not distributed with this source code in the LICENSE file, you can obtain it
++ * at aomedia.org/license/software-license/bsd-3-c-c/.  If the Alliance for Open Media Patent
++ * License 1.0 was not distributed with this source code in the PATENTS file, you
++ * can obtain it at aomedia.org/license/patent-license/.
+  */
+ 
+ #ifndef INCLUDE_LIBYUV_SCALE_ROW_H_  // NOLINT
+--- upstream/source/cpu_id.cc
++++ retained/source/cpu_id.cc
+@@ -121,7 +121,7 @@
+ }
+ #endif  // defined(_M_IX86) || defined(_M_X64) ..
+ 
+-// based on libvpx arm_cpudetect.c
++// based on libavm arm_cpudetect.c
+ // For Arm, but public to allow testing on any CPU
+ LIBYUV_API SAFEBUFFERS
+ int ArmCpuCaps(const char* cpuinfo_name) {

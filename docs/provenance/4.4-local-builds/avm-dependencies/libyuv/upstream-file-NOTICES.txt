@@ -1,0 +1,65 @@
+Sources: include/libyuv/basic_types.h, include/libyuv/convert.h, include/libyuv/convert_from.h, include/libyuv/cpu_id.h, include/libyuv/planar_functions.h, include/libyuv/rotate.h, include/libyuv/row.h, include/libyuv/scale.h, source/cpu_id.cc, source/planar_functions.cc, source/row_common.cc, source/row_gcc.cc, source/row_neon.cc, source/row_win.cc, source/scale.cc, source/scale_neon.cc
+/*
+ *  Copyright 2011 The LibYuv Project Authors. All rights reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree. An additional intellectual property rights grant can be found
+ *  in the file PATENTS. All contributing project authors may
+ *  be found in the AUTHORS file in the root of the source tree.
+ */
+
+Sources: include/libyuv/convert_argb.h, source/row_any.cc, source/scale_mips.cc
+/*
+ *  Copyright 2012 The LibYuv Project Authors. All rights reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree. An additional intellectual property rights grant can be found
+ *  in the file PATENTS. All contributing project authors may
+ *  be found in the AUTHORS file in the root of the source tree.
+ */
+
+Sources: include/libyuv/scale_row.h, source/scale_common.cc, source/scale_gcc.cc, source/scale_win.cc
+/*
+ *  Copyright 2013 The LibYuv Project Authors. All rights reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree. An additional intellectual property rights grant can be found
+ *  in the file PATENTS. All contributing project authors may
+ *  be found in the AUTHORS file in the root of the source tree.
+ */
+
+Sources: source/row_mips.cc
+/*
+ *  Copyright (c) 2012 The LibYuv project authors. All Rights Reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree. An additional intellectual property rights grant can be found
+ *  in the file PATENTS. All contributing project authors may
+ *  be found in the AUTHORS file in the root of the source tree.
+ */
+
+Sources: source/row_neon64.cc, source/scale_neon64.cc
+/*
+ *  Copyright 2014 The LibYuv Project Authors. All rights reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree. An additional intellectual property rights grant can be found
+ *  in the file PATENTS. All contributing project authors may
+ *  be found in the AUTHORS file in the root of the source tree.
+ */
+
+Sources: source/scale_any.cc
+/*
+ *  Copyright 2015 The LibYuv Project Authors. All rights reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree. An additional intellectual property rights grant can be found
+ *  in the file PATENTS. All contributing project authors may
+ *  be found in the AUTHORS file in the root of the source tree.
+ */

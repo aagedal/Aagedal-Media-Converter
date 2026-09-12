@@ -86,3 +86,12 @@ A further local search found no libyuv `LICENSE`, `PATENTS`, or `AUTHORS` copy i
 sibling development projects, and no AVM Git history for those three paths.
 The missing libyuv material and the source-authentication, reachability and
 file-level review work above remain release blockers.
+
+## Attribution assembled (2026-09-12)
+
+The previous missing-material and file-level-review statements above describe
+the earlier inventory state. They are superseded by
+[the attribution resolution](attribution-resolution.md): libyuv's historical
+notices are recovered against its compiled source subset; complete dependency
+and embedded notices are now in `Licenses/avm-LICENSE.txt`. The Eigen Source Code
+Form archive must accompany distribution, as detailed in that record.
