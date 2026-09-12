@@ -1,6 +1,226 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Optional tool — not installed": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valgfritt verktøy — ikke installert"
+          }
+        }
+      }
+    },
+    "Parakeet is optional and only needed for Parakeet transcription. Install uv using the linked instructions, then run this command in Terminal:": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parakeet er valgfritt og trengs bare for Parakeet-transkripsjon. Installer uv ved hjelp av veiledningen i lenken, og kjør deretter denne kommandoen i Terminal:"
+          }
+        }
+      }
+    },
+    "Install uv": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installer uv"
+          }
+        }
+      }
+    },
+    "Parakeet installation instructions": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installasjonsveiledning for Parakeet"
+          }
+        }
+      }
+    },
+    "In Transcription settings, select Parakeet. If it is installed elsewhere, use Custom path to select parakeet-mlx. Download a model before transcribing.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg Parakeet i transkripsjonsinnstillingene. Hvis det er installert et annet sted, bruker du Egendefinert sti til å velge parakeet-mlx. Last ned en modell før du transkriberer."
+          }
+        }
+      }
+    },
+    "Open Transcription Settings": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne transkripsjonsinnstillinger"
+          }
+        }
+      }
+    },
+    "SSIMULACRA2 is optional and only needed for its quality metric. Install Rust using the linked instructions, then run this command in Terminal:": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSIMULACRA2 er valgfritt og trengs bare for dette kvalitetsmålet. Installer Rust ved hjelp av veiledningen i lenken, og kjør deretter denne kommandoen i Terminal:"
+          }
+        }
+      }
+    },
+    "Install Rust": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installer Rust"
+          }
+        }
+      }
+    },
+    "SSIMULACRA2 installation instructions": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installasjonsveiledning for SSIMULACRA2"
+          }
+        }
+      }
+    },
+    "The app looks for ssimulacra2_rs in ~/.cargo/bin, /opt/homebrew/bin, and /usr/local/bin. Standard conversions do not require this tool.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appen ser etter ssimulacra2_rs i ~/.cargo/bin, /opt/homebrew/bin og /usr/local/bin. Vanlige konverteringer krever ikke dette verktøyet."
+          }
+        }
+      }
+    },
+    "Open Analytics Settings": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne analyseinnstillinger"
+          }
+        }
+      }
+    },
+    "Only Parakeet transcription needs this model. In Transcription settings, select Parakeet, install its tool if needed, then download the selected model or choose an available model.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bare Parakeet-transkripsjon trenger denne modellen. Velg Parakeet i transkripsjonsinnstillingene, installer verktøyet om nødvendig, og last deretter ned den valgte modellen eller velg en tilgjengelig modell."
+          }
+        }
+      }
+    },
+    "In Transcription settings, select Whisper and download the selected model. For a custom model, select the file again to restore access, or choose an available model.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg Whisper i transkripsjonsinnstillingene og last ned den valgte modellen. For en egendefinert modell velger du filen på nytt for å gjenopprette tilgang, eller velger en tilgjengelig modell."
+          }
+        }
+      }
+    },
+    "In Downloads settings, choose App Download and install or update the tool. For Homebrew, follow the installation instructions there; for Custom, select an executable file again.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg App-nedlasting i nedlastingsinnstillingene og installer eller oppdater verktøyet. For Homebrew følger du installasjonsveiledningen der. For Egendefinert velger du en kjørbar fil på nytt."
+          }
+        }
+      }
+    },
+    "Open Downloads Settings": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne nedlastingsinnstillinger"
+          }
+        }
+      }
+    },
+    "In Upload settings, select App (Bundled) for rclone. If using Homebrew or Custom, check the selected installation and executable path.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg App (inkludert) for rclone i opplastingsinnstillingene. Hvis du bruker Homebrew eller Egendefinert, kontrollerer du den valgte installasjonen og stien til den kjørbare filen."
+          }
+        }
+      }
+    },
+    "Open Upload Settings": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne opplastingsinnstillinger"
+          }
+        }
+      }
+    },
+    "In OCR settings, select the bundled Tesseract or select an installed custom executable. If the bundled tool is unavailable, reinstall the app.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg den inkluderte Tesseract-versjonen i OCR-innstillingene, eller velg en installert egendefinert kjørbar fil. Installer appen på nytt hvis det inkluderte verktøyet ikke er tilgjengelig."
+          }
+        }
+      }
+    },
+    "Open OCR Settings": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Åpne OCR-innstillinger"
+          }
+        }
+      }
+    },
+    "In Downloads settings, select the bundled FFmpeg or select an installed custom executable. If the bundled tool is unavailable, reinstall the app.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velg den inkluderte FFmpeg-versjonen i nedlastingsinnstillingene, eller velg en installert egendefinert kjørbar fil. Installer appen på nytt hvis det inkluderte verktøyet ikke er tilgjengelig."
+          }
+        }
+      }
+    },
+    "This helper is bundled with the app. Reinstall the app if it is missing or incompatible.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dette hjelpeverktøyet følger med appen. Installer appen på nytt hvis det mangler eller er inkompatibelt."
+          }
+        }
+      }
+    },
+    "After making changes, return here and click Check Tools again.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Når du har gjort endringer, går du tilbake hit og klikker på Kontroller verktøy på nytt."
+          }
+        }
+      }
+    },
   "Saved upload profiles could not be read. Your saved data has been preserved. Restore a settings backup or repair the saved profiles, then reopen Settings.": {
     "localizations": {
       "nb": {
