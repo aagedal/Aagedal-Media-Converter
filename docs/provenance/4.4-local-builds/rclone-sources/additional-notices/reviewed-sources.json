@@ -1,0 +1,48 @@
+{
+  "retrievedOn": "2026-09-12",
+  "sources": [
+    {
+      "path": "public-suffix-list.dat",
+      "url": "https://raw.githubusercontent.com/publicsuffix/list/d6c92f1bbb7433e5db7b8405c25d4035fb8ff376/public_suffix_list.dat",
+      "sha256": "a5638281157e8c902b127a5376f9ea2d024bf2ee11524133a6a76cd1d14ee7be",
+      "bytes": 330467
+    },
+    {
+      "path": "hsluv-LICENSE",
+      "url": "https://raw.githubusercontent.com/hsluv/hsluv-go/master/LICENSE.txt",
+      "sha256": "092cd62d642081a92e81c12da3ad7659e18b38fd1ac7e273d5fcec265d192f3b",
+      "bytes": 1059
+    },
+    {
+      "path": "ntgo-LICENSE",
+      "url": "https://raw.githubusercontent.com/ntrrg/ntgo/v0.8.0/LICENSE",
+      "sha256": "fa92e73eadb684fd08a7b6d7cfa995129acbb42b0f286a134f0f4c607a9db002",
+      "bytes": 1097
+    },
+    {
+      "path": "go-radix-LICENSE",
+      "url": "https://raw.githubusercontent.com/armon/go-radix/v1.0.0/LICENSE",
+      "sha256": "831892cd31b9eef0311bb1de9014527ef5d3592eed7add1f9f829510d2065e62",
+      "bytes": 1079
+    },
+    {
+      "path": "Unicode-LICENSE",
+      "url": "https://raw.githubusercontent.com/unicode-org/icu/release-77-1/LICENSE",
+      "sha256": "451167c55c0fa447cc2d5632714f5e3c567fe4f1e1badefab2c1333852198aca",
+      "bytes": 26487
+    },
+    {
+      "path": "Unicode-15-LICENSE",
+      "url": "https://raw.githubusercontent.com/unicode-org/icu/release-72-1/icu4c/LICENSE",
+      "sha256": "af3e84c401f1a35e8d32d6eb1a33fe587c3981aa5cd206033d9527c1855b57a2",
+      "bytes": 25505
+    },
+    {
+      "path": "GPL-3.0",
+      "url": "https://www.gnu.org/licenses/gpl-3.0.txt",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "bytes": 35149
+    }
+  ],
+  "unicodeNoticeExtraction": "Only the complete leading Unicode license section (before first dashed separator) is packaged; full upstream snapshots retained as evidence."
+}

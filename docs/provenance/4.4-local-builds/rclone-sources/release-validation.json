@@ -1,0 +1,23 @@
+{
+  "verifiedOn": "2026-09-12",
+  "binarySHA256": "1037b434d983341c999ca372462be4a4365c78b548730c75d8eebf0705309f83",
+  "reproducibleBuildByteIdentical": true,
+  "activeModules": 139,
+  "selectedPackages": 916,
+  "selectedSourceFiles": 4342,
+  "all65EmbedInputsFoundInBinary": true,
+  "packagedNoticeInputs": 209,
+  "packagedNoticesSHA256": "5cafe245a21a2bd4a3e494784f9eca91efd8d180f95ad7e4115320baf1c7a022",
+  "sourceArchive": {
+    "component": "rclone",
+    "path": "build/attribution/rclone-4.4-source.tar.gz",
+    "bytes": 272389436,
+    "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
+  },
+  "sourceArchiveManifestInputsVerified": 430,
+  "remainingLimitations": [
+    "Live authenticated FTP/SFTP/SMB/S3 uploads were not run in this attribution check; local copy/lsd/obscure and backend registration were verified."
+  ],
+  "publicSuffixSourceRegeneratesSelectedTableAndAllThreeDataFiles": true,
+  "buildOnlyRelinkRecipePassed": true
+}

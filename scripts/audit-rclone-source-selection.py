@@ -38,13 +38,19 @@ def main():
     parser.add_argument('--go-root', required=True, type=Path)
     parser.add_argument('--module-cache', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--historical', action='store_true', help='Audit the original 142-module helper (requires --binary)')
+    parser.add_argument('--binary', type=Path, help='Override the helper to inspect')
     args = parser.parse_args()
-    binary = (REPO / 'Aagedal Media Converter/Binaries/rclone').read_bytes()
-    binary_evidence = json.loads((EVIDENCE.parent / 'rclone-source-recovery.json').read_text())
+    require(not args.historical or args.binary, 'Historical audit requires the original --binary')
+    binary = (args.binary or REPO / 'Aagedal Media Converter/Binaries/rclone').read_bytes()
+    evidence_path = EVIDENCE.parent / 'rclone-source-recovery.json' if args.historical else EVIDENCE / 'release-review.json'
+    binary_evidence = json.loads(evidence_path.read_text())
     require(sha256(binary) == binary_evidence['binarySHA256'], 'Bundled binary changed')
     recovery = json.loads((EVIDENCE / 'source-recovery.json').read_text())
     require(sha256(args.source_archive.read_bytes()) == recovery['mainArchiveSHA256'], 'Main archive hash mismatch')
     modules = json.loads((EVIDENCE / 'modules.json').read_text())['modules']
+    if not args.historical:
+        modules = [m for m in modules if m['Path'] in binary_evidence['activeModules']]
     expected = {m['Path']: (m['Version'], m['Sum']) for m in modules}
     expected_zip_hashes = {m['Path']: m['sourceZipSHA256'] for m in modules}
     with tempfile.TemporaryDirectory(prefix='rclone-selection-') as temporary:
@@ -52,6 +58,12 @@ def main():
         with tarfile.open(args.source_archive) as archive:
             archive.extractall(root, filter='data')
         source = next(p for p in root.iterdir() if p.is_dir())
+        if not args.historical:
+            selection = source / 'cmd/all/all.go'
+            original = selection.read_text()
+            excluded = '\t_ "github.com/rclone/rclone/cmd/serve/s3"\n'
+            require(original.count(excluded) == 1, 'Unexpected command selection')
+            selection.write_text(original.replace(excluded, ''))
         env = dict(os.environ, GOROOT=str(args.go_root.resolve()), GOPATH=str(root / 'gopath'),
                    GOMODCACHE=str(args.module_cache.resolve()), GOCACHE=str(root / 'cache'),
                    GOTOOLCHAIN='local', GOWORK='off', GOPROXY='off', GOSUMDB='off',
@@ -104,6 +116,7 @@ def main():
             selections.append({'path': filename, 'sha256': sha256(data), 'content': data.decode()})
         report = {
             'scope': 'Source graph selected by recorded target settings, not a reproduced binary, proof of linker retention, or completed notice review.',
+            'variant': 'original' if args.historical else '4.4 rebuilt helper without serve/s3',
             'binarySHA256': sha256(binary),
             'sourceArchiveSHA256': recovery['mainArchiveSHA256'],
             'goVersion': version,
