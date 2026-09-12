@@ -20,41 +20,29 @@ license, recorded license, and notice header. Ordinary inventory checks remain u
 while attribution work is unfinished. This gate verifies recorded attribution;
 it cannot establish that an assignment or a notice is legally sufficient.
 
-## Remaining attribution and packaging work
+## Current attribution and packaging status
 
-As of 2026-09-12 the inventory contains 10 tools and no source dylibs. Seven tools
-refer to existing notices. `avmdec`, `avmenc`, and `rclone` still have no complete
-local notice, so the publication gate fails for three entries plus FFmpeg's
-explicit pending source/static-dependency review. The 96 unused legacy dylibs
-were removed after checking the current build graph, runtime lookups, every
-helper's load dependencies, and the Release bundle. Their identities and scope
-are preserved in [the packaging review](4.4-dylib-packaging-review.md). This is
-removal of unused files, not attribution of historical copies or package binaries.
+The 2026-09-12 completion pass covers all 10 bundled tools and the three pinned
+Swift packages. There are no source-tree dylibs. Twelve offline notices are
+included in the app, covering AVM, rclone, FFmpeg, MPVKit and their reviewed
+transitive components as well as OCR, BMX, asdcplib, Sparkle and
+SwiftMediaMetadata/GeoNames. The strict attribution gate passes.
 
-The repository also includes an mpv notice, which is inventoried even though no
-entry currently references it. The presence of a project's generic license text
-alone does not establish the effective license of a particular binary and its
-compiled dependencies. Do not assign dylib licenses solely from their names.
+`PackageAttributions.json` binds notice review to exact `Package.resolved`
+revisions. `AttributionSources.json` identifies 89 retained source archives;
+the strict gate checks required components, byte sizes and SHA-256 hashes.
+The release script creates and uploads their source companion with the app.
+See [source distribution instructions](attribution-sources.md) and the
+[completion record](4.4-attribution-completion.md) for binary replacements,
+validation and explicit upstream provenance limits.
 
-Before publishing:
+When changing dependencies, review actual build options and transitive notices,
+update both metadata and source material, regenerate the inventory, and rerun
+the strict gate and exported-bundle verification. Final bundle verification
+checks notice bytes; it does not substitute for source and license review.
 
-1. Establish provenance and versions for the actual bundled builds, including
-   enabled build options and statically linked components. Preserve the evidence
-   alongside the attribution when adding metadata.
-2. Add the corresponding full notices and any required accompanying material,
-   and connect each retained binary to its reviewed attribution. Account for
-   transitive dependencies, downloaded components, and package frameworks beyond
-   this manifest's Binaries/Frameworks scope separately.
-3. Keep new notices included in app resources and the About > Licenses viewer.
-   The nine current notices are packaged and readable offline, including Sparkle,
-   SwiftMediaMetadata, and its GeoNames acknowledgement. Exported-bundle,
-   final-ZIP, and Release CI validation now checks their byte sizes and SHA-256
-   against the manifest using `verify-release-bundle.py --manifest BundledDependencies.json`.
-   This checks packaging, not completeness of attribution.
-4. Complete reachability analysis before removing unused binaries, regenerate the
-   inventory, and rerun the strict gate plus exported-bundle validation.
-
-No binary or license text was replaced during the inventory/gate change.
+The sections below preserve the earlier audit history; their outstanding counts
+are superseded by the completion record.
 
 ## Additional provenance findings — 2026-09-11
 

@@ -23,20 +23,17 @@ the shared subprocess runner are recorded as complete. Preserve those gains.
 
 ### 1. Close dependency attribution and packaging gaps
 
-- [ ] Resolve the three remaining source-inventory attributions: avmenc, avmdec,
-  and rclone, plus explicit FFmpeg source/static-dependency review. The 96 unused
-  legacy dylibs were removed with packaging/runtime evidence on 2026-09-12.
-  Establish actual build provenance, add the appropriate notices/material, and
-  verify packaged notice coverage.
-- [ ] Pass the existing complete-license gate and inventory freshness check.
-  Do not bypass the gate or infer licenses from filenames. If removing a dependency
-  is necessary, prove it is unused, update packaging/inventory, and validate it.
-- [ ] Verify framework and transitive dependency coverage identified in
-  [the dependency inventory](bundled-dependency-licenses.md).
+- [x] Resolve AVM, rclone, FFmpeg and MPVKit/transitive attribution with retained
+  notices, corresponding sources and build evidence. OCR, BMX and asdcplib
+  transitive notices were also completed.
+- [x] Pass the complete-license gate and inventory freshness check, including
+  pinned Swift packages and 89 hash-verified source archives.
+- [x] Package the notices in About > Licenses and create the source companion.
 
-This is a concrete publishing blocker: scripts/release.sh currently invokes the
-strict attribution gate before building or uploading. Binary-size optimization
-and general reachability cleanup are not required to close it.
+See [the attribution completion record](4.4-attribution-completion.md) and
+[source distribution instructions](attribution-sources.md). The release script
+requires the reviewed source material before building and uploads it with the
+application. Signed distribution and the other workflow gates below remain.
 
 ### 2. Triage the remaining correctness risks
 

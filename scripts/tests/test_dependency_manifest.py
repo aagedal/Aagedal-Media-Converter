@@ -131,5 +131,40 @@ class DependencyLicenseTests(unittest.TestCase):
                 manifest.ffmpeg_reported_license(Path("ffmpeg"))
 
 
+    def test_package_pending_attribution_is_a_publication_blocker(self):
+        data = self.complete_manifest()
+        data["packages"] = [{"path": "SwiftPackages/example", "license": "MIT",
+            "licenseFile": "Licenses/component-LICENSE.txt",
+            "pendingAttribution": ["Missing statically linked component notice."]}]
+        with self.assertRaisesRegex(RuntimeError, "Missing statically linked component"):
+            manifest.require_complete_licenses(data)
+
+    def test_package_notice_is_required_even_when_tool_notices_are_complete(self):
+        data = self.complete_manifest()
+        data["packages"] = [{"path": "SwiftPackages/example", "license": "MIT", "licenseFile": None}]
+        with self.assertRaisesRegex(RuntimeError, "SwiftPackages/example"):
+            manifest.require_complete_licenses(data)
+
+    def test_package_revision_change_invalidates_review(self):
+        import json
+        pin = {"identity": "example", "location": "https://example.com/repo", "state": {"revision": "new"}}
+        resolved = self.root / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        resolved.parent.mkdir(parents=True)
+        resolved.write_text(json.dumps({"pins": [pin]}))
+        (self.root / "PackageAttributions.json").write_text(json.dumps({"packages": [{
+            "identity": "example", "sourceURL": pin["location"], "revision": "old"}]}))
+        with self.assertRaisesRegex(RuntimeError, "attribution is stale"):
+            manifest.package_inventory()
+
+    def test_added_package_requires_attribution_record(self):
+        import json
+        resolved = self.root / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        resolved.parent.mkdir(parents=True)
+        resolved.write_text(json.dumps({"pins": [{"identity": "new", "location": "https://example.com/repo", "state": {"revision": "new"}}]}))
+        (self.root / "PackageAttributions.json").write_text(json.dumps({"packages": []}))
+        with self.assertRaisesRegex(RuntimeError, "does not cover"):
+            manifest.package_inventory()
+
+
 if __name__ == "__main__":
     unittest.main()

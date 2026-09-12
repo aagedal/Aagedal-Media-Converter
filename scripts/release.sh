@@ -78,7 +78,7 @@ SCHEME="Aagedal Media Converter"
 
 if [[ -z "${1:-}" || -z "${2:-}" ]]; then
     echo "    Reading version from xcodebuild -showBuildSettings (takes a few seconds)…"
-    BUILD_SETTINGS=$(xcodebuild -project "$PROJECT" -showBuildSettings -scheme "$SCHEME")
+    BUILD_SETTINGS=$(xcodebuild -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates -project "$PROJECT" -showBuildSettings -scheme "$SCHEME")
 fi
 if [[ -n "${1:-}" ]]; then
     MARKETING_VERSION="$1"
@@ -96,13 +96,19 @@ echo "==> Building $MARKETING_VERSION ($CURRENT_PROJECT_VERSION)"
 # -----------------------------------------------------------------------------
 # Build & export
 # -----------------------------------------------------------------------------
-BUILD_DIR="$(pwd)/build"
+BUILD_DIR="$(pwd)/build/release"
 ARCHIVE_PATH="$BUILD_DIR/AagedalMediaConverter.xcarchive"
 EXPORT_DIR="$BUILD_DIR/export"
 EXPORT_OPTIONS_PLIST="$BUILD_DIR/ExportOptions.plist"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
+
+# Preserve reviewed source inputs in build/attribution; release outputs have their
+# own directory so cleaning a previous release cannot erase corresponding sources.
+SOURCE_MANIFEST_SHA256=$(shasum -a 256 AttributionSources.json | awk '{print $1}')
+SOURCE_COMPANION="$BUILD_DIR/Aagedal_Media_Converter_${MARKETING_VERSION}_${CURRENT_PROJECT_VERSION}_Sources_${SOURCE_MANIFEST_SHA256:0:12}.tar"
+python3 scripts/package-attribution-sources.py --output "$SOURCE_COMPANION"
 
 # Inline export options — Developer ID, no provisioning profile rewriting.
 cat > "$EXPORT_OPTIONS_PLIST" <<EOF
@@ -121,7 +127,7 @@ EOF
 # from also compiling an x86_64 slice that the arm64-only main target would
 # discard at link time. The main target already sets EXCLUDED_ARCHS=x86_64
 # but that setting doesn't always propagate into SPM package builds.
-xcodebuild archive \
+xcodebuild archive -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration Release \
@@ -260,21 +266,26 @@ xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     if gh release view "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
         echo "==> Uploading $RELEASE_ZIP_NAME to existing GitHub release $MARKETING_VERSION"
+        # Publish source material first. A failed binary upload may leave extra
+        # sources, but can never expose a new binary before its sources.
+        gh release upload "$MARKETING_VERSION" "$SOURCE_COMPANION" \
+            --repo "$GITHUB_OWNER/$GITHUB_REPO" --clobber
         gh release upload "$MARKETING_VERSION" "$RELEASE_ZIP" \
-            --repo "$GITHUB_OWNER/$GITHUB_REPO" \
-            --clobber
+            --repo "$GITHUB_OWNER/$GITHUB_REPO" --clobber
     else
         echo "==> Creating GitHub release $MARKETING_VERSION"
-        gh release create "$MARKETING_VERSION" "$RELEASE_ZIP" \
+        gh release create "$MARKETING_VERSION" "$SOURCE_COMPANION" "$RELEASE_ZIP" --draft \
             --repo "$GITHUB_OWNER/$GITHUB_REPO" \
             --target main \
             --title "$MARKETING_VERSION" \
             --generate-notes
     fi
+    # A new (or resumed) draft is made public only after all uploads succeeded.
+    gh release edit "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" --draft=false
 else
     echo "==> GitHub CLI is unavailable or unauthenticated — skipping upload."
     echo "    1. Create release $MARKETING_VERSION at https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/new"
-    echo "    2. Attach $RELEASE_ZIP"
+    echo "    2. Attach $RELEASE_ZIP and $SOURCE_COMPANION"
 fi
 
 cp "$APPCAST_CANDIDATE" "$APPCAST"

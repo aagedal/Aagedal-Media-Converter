@@ -301,6 +301,9 @@
 		A90606000000000000000105 /* sparkle-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000205 /* sparkle-LICENSE.txt */; };
 		A90606000000000000000106 /* swiftmediametadata-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000206 /* swiftmediametadata-LICENSE.txt */; };
 		A90606000000000000000107 /* geonames-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000207 /* geonames-LICENSE.txt */; };
+		A90606000000000000000108 /* avm-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000208 /* avm-LICENSE.txt */; };
+		A90606000000000000000109 /* rclone-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A90606000000000000000209 /* rclone-LICENSE.txt */; };
+		A9060600000000000000010A /* mpvkit-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A9060600000000000000020A /* mpvkit-LICENSE.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -646,6 +649,9 @@
 		A90606000000000000000205 /* sparkle-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "sparkle-LICENSE.txt"; sourceTree = "<group>"; };
 		A90606000000000000000206 /* swiftmediametadata-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "swiftmediametadata-LICENSE.txt"; sourceTree = "<group>"; };
 		A90606000000000000000207 /* geonames-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "geonames-LICENSE.txt"; sourceTree = "<group>"; };
+		A90606000000000000000208 /* avm-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "avm-LICENSE.txt"; sourceTree = "<group>"; };
+		A90606000000000000000209 /* rclone-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "rclone-LICENSE.txt"; sourceTree = "<group>"; };
+		A9060600000000000000020A /* mpvkit-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mpvkit-LICENSE.txt"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -741,6 +747,9 @@
 				A90606000000000000000205 /* sparkle-LICENSE.txt */,
 				A90606000000000000000206 /* swiftmediametadata-LICENSE.txt */,
 				A90606000000000000000207 /* geonames-LICENSE.txt */,
+				A90606000000000000000208 /* avm-LICENSE.txt */,
+				A90606000000000000000209 /* rclone-LICENSE.txt */,
+				A9060600000000000000020A /* mpvkit-LICENSE.txt */,
 				A90606000000000000000204 /* tesseract-LICENSE.txt */,
 				A90606000000000000000203 /* mpv-LICENSE.txt */,
 				A90606000000000000000202 /* bmx-LICENSE.txt */,
@@ -1430,6 +1439,9 @@
 				A90606000000000000000105 /* sparkle-LICENSE.txt in Resources */,
 				A90606000000000000000106 /* swiftmediametadata-LICENSE.txt in Resources */,
 				A90606000000000000000107 /* geonames-LICENSE.txt in Resources */,
+				A90606000000000000000108 /* avm-LICENSE.txt in Resources */,
+				A90606000000000000000109 /* rclone-LICENSE.txt in Resources */,
+				A9060600000000000000010A /* mpvkit-LICENSE.txt in Resources */,
 				A90606000000000000000104 /* tesseract-LICENSE.txt in Resources */,
 				A90606000000000000000103 /* mpv-LICENSE.txt in Resources */,
 				A90606000000000000000102 /* bmx-LICENSE.txt in Resources */,

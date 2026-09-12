@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import subprocess
 import sys
 from typing import Any
@@ -35,12 +36,14 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
     "avmdec": {
         "component": "Alliance for Open Media reference tools",
         "license": "BSD-3-Clause-Clear",
-        "licenseFile": None,
+        "licenseFile": "Licenses/avm-LICENSE.txt",
+        "requiredSourceComponents": ["AVM Eigen"],
     },
     "avmenc": {
         "component": "Alliance for Open Media reference tools",
         "license": "BSD-3-Clause-Clear",
-        "licenseFile": None,
+        "licenseFile": "Licenses/avm-LICENSE.txt",
+        "requiredSourceComponents": ["AVM Eigen"],
     },
     "bmxparse": {
         "component": "BBC BMX",
@@ -60,10 +63,7 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "component": "FFmpeg",
         "license": "GPL-3.0-or-later",
         "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
-        "pendingAttribution": [
-            "Preserve corresponding FFmpeg 9.0.1 sources, patches, and build records.",
-            "Review and package notices for the actual statically linked dependencies.",
-        ],
+        "requiredSourceComponents": ["FFmpeg 9.0.1 build", "FFmpeg generated inputs"],
         "versionArguments": ["-version"],
         "versionPattern": r"ffmpeg version ([^ ]+)",
     },
@@ -83,8 +83,9 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
     },
     "rclone": {
         "component": "rclone",
-        "license": "MIT",
-        "licenseFile": None,
+        "license": "MIT AND LGPL-3.0-only AND MPL-2.0",
+        "licenseFile": "Licenses/rclone-LICENSE.txt",
+        "requiredSourceComponents": ["rclone"],
         "versionArguments": ["version"],
         "versionPattern": r"rclone (v[^\s]+)",
     },
@@ -144,7 +145,7 @@ def license_inventory() -> list[dict[str, Any]]:
 def require_complete_licenses(manifest: dict[str, Any]) -> None:
     notices = {entry["path"] for entry in manifest["licenseFiles"]}
     unresolved = sorted(
-        entry["path"] for entry in [*manifest["tools"], *manifest["libraries"]]
+        entry["path"] for entry in [*manifest["tools"], *manifest["libraries"], *manifest.get("packages", [])]
         if not entry.get("license") or entry["license"] == "NOASSERTION"
         or entry.get("licenseFile") not in notices
     )
@@ -154,7 +155,7 @@ def require_complete_licenses(manifest: dict[str, Any]) -> None:
             f"License attribution is incomplete for {len(unresolved)} dependencies:\n  "
             + "\n  ".join(unresolved)
         )
-    for entry in [*manifest["tools"], *manifest["libraries"]]:
+    for entry in [*manifest["tools"], *manifest["libraries"], *manifest.get("packages", [])]:
         if entry.get("pendingAttribution"):
             problems.append(
                 f"{entry['path']}: attribution review remains incomplete:\n  "
@@ -172,8 +173,35 @@ def require_complete_licenses(manifest: dict[str, Any]) -> None:
             content = (REPOSITORY_ROOT / notice).read_text(encoding="utf-8")
             if not re.search(rf"GNU GENERAL PUBLIC LICENSE\s+Version {version},", content):
                 problems.append(f"{entry['path']}: notice {notice} does not contain the reported GPL version {version} text")
+    required_sources = {
+        component for entry in [*manifest["tools"], *manifest["libraries"], *manifest.get("packages", [])]
+        for component in entry.get("requiredSourceComponents", [])
+    }
+    recorded_sources = {entry["component"] for entry in manifest.get("sourceArchives", [])}
+    if required_sources - recorded_sources:
+        problems.append("Missing required source material: " + ", ".join(sorted(required_sources - recorded_sources)))
+    if manifest.get("sourceArchives"):
+        try:
+            verifier = runpy.run_path(str(REPOSITORY_ROOT / "scripts/package-attribution-sources.py"))["verify_sources"]
+            verifier(REPOSITORY_ROOT, {"archives": manifest["sourceArchives"]})
+        except (OSError, ValueError, KeyError) as error:
+            problems.append(str(error))
     if problems:
         raise RuntimeError("\n".join(problems) + "\nSee docs/bundled-dependency-licenses.md before publishing.")
+
+
+def package_inventory() -> list[dict[str, Any]]:
+    """Bind reviewed package attribution to exactly the checked-in source pins."""
+    records = json.loads((REPOSITORY_ROOT / "PackageAttributions.json").read_text())["packages"]
+    resolved = REPOSITORY_ROOT / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+    pins = {pin["identity"]: pin for pin in json.loads(resolved.read_text())["pins"]}
+    if len(records) != len(pins) or {entry["identity"] for entry in records} != pins.keys():
+        raise RuntimeError("Swift package attribution does not cover the resolved package set")
+    for entry in records:
+        pin = pins[entry["identity"]]
+        if entry["revision"] != pin["state"]["revision"] or entry["sourceURL"] != pin["location"]:
+            raise RuntimeError(f"Swift package attribution is stale: {entry['identity']}")
+    return records
 
 
 def ffmpeg_reported_license(path: Path) -> str:
@@ -255,6 +283,8 @@ def build_manifest() -> dict[str, Any]:
         )
         if path.name == "ffmpeg":
             entry["reportedLicense"] = ffmpeg_reported_license(path)
+        if metadata.get("requiredSourceComponents"):
+            entry["requiredSourceComponents"] = metadata["requiredSourceComponents"]
         if metadata.get("pendingAttribution"):
             entry["pendingAttribution"] = metadata["pendingAttribution"]
         tools.append(entry)
@@ -277,8 +307,10 @@ def build_manifest() -> dict[str, Any]:
         if entry["licenseFile"] is None
     )
     return {
-        "schemaVersion": 2,
-        "scope": "Mach-O files shipped from Binaries and Frameworks",
+        "schemaVersion": 3,
+        "scope": "Source-tree tools/libraries, resolved Swift packages, and required source accompaniment",
+        "packages": package_inventory(),
+        "sourceArchives": json.loads((REPOSITORY_ROOT / "AttributionSources.json").read_text())["archives"],
         "tools": tools,
         "libraries": libraries,
         "licenseFiles": license_files,

@@ -1,0 +1,749 @@
+{
+  "buildRecipeRepository": "https://github.com/aagedal/ffmpeg-apple-silicon",
+  "downloadedArchives": [
+    {
+      "path": "1.4.0.tar.gz",
+      "bytes": 3691240,
+      "sha256": "e72241ac9524bb653ae52ced768b508045d4438726a303f10181a38f764a453c"
+    },
+    {
+      "path": "SVT-AV1-v4.2.0.tar.gz",
+      "bytes": 11070537,
+      "sha256": "c7b13c4a84bd3751aa35fcc72be13e6875467e7c2216879251a486e5b1e4e740"
+    },
+    {
+      "path": "ffmpeg-9.0.1.tar.xz",
+      "bytes": 12036420,
+      "sha256": "cf38e0e28c7e5605942c4a77755349b0145804a397af37eb1fb4c77cb237f635"
+    },
+    {
+      "path": "freetype-2.14.3.tar.xz",
+      "bytes": 2670220,
+      "sha256": "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+    },
+    {
+      "path": "fribidi-1.0.16.tar.xz",
+      "bytes": 1098260,
+      "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c"
+    },
+    {
+      "path": "harfbuzz-14.3.1.tar.xz",
+      "bytes": 19826476,
+      "sha256": "9dae9538aae2ffdf70cec31f2c27bf68e2aaeeae3112688467697d5faf6194f7"
+    },
+    {
+      "path": "lame-4.0.tar.gz",
+      "bytes": 1496810,
+      "sha256": "3df5124d5ad3a98312ffd7ba6a9b36230e4f8a3e66d3ce0f425e336c32d216eb"
+    },
+    {
+      "path": "libaom-3.14.1.tar.gz",
+      "bytes": 6368868,
+      "sha256": "44bf90dbd23e734d50e70a8c41c285193922938bd0d3bc2ee56764d181d55ef5"
+    },
+    {
+      "path": "libass-0.17.5.tar.xz",
+      "bytes": 460148,
+      "sha256": "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc"
+    },
+    {
+      "path": "libogg-1.3.6.tar.gz",
+      "bytes": 604469,
+      "sha256": "83e6704730683d004d20e21b8f7f55dcb3383cdf84c0daedf30bde175f774638"
+    },
+    {
+      "path": "libpng-1.6.58.tar.xz",
+      "bytes": 1070096,
+      "sha256": "28eb403f51f0f7405249132cecfe82ea5c0ef97f1b32c5a65828814ae0d34775"
+    },
+    {
+      "path": "libtheora-1.2.0.tar.gz",
+      "bytes": 2535283,
+      "sha256": "279327339903b544c28a92aeada7d0dcfd0397b59c2f368cc698ac56f515906e"
+    },
+    {
+      "path": "libvorbis-1.3.7.tar.gz",
+      "bytes": 1658963,
+      "sha256": "0e982409a9c3fc82ee06e08205b1355e5c6aa4c36bca58146ef399621b0ce5ab"
+    },
+    {
+      "path": "libwebp-1.6.0.tar.gz",
+      "bytes": 4296070,
+      "sha256": "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564"
+    },
+    {
+      "path": "opus-1.6.1.tar.gz",
+      "bytes": 10472813,
+      "sha256": "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1"
+    },
+    {
+      "path": "v0.12.0.tar.gz",
+      "bytes": 1698757,
+      "sha256": "03e9be69a30be4011f559da75328b6d7cea8ad921fabfbd551ce10bf45cdc992"
+    },
+    {
+      "path": "v1.16.0.tar.gz",
+      "bytes": 5635379,
+      "sha256": "7a479a3c66b9f5d5542a4c6a1b7d3768a983b1e5c14c60a9396edc9b649e015c"
+    },
+    {
+      "path": "v1.2.0.tar.gz",
+      "bytes": 646315,
+      "sha256": "816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec"
+    },
+    {
+      "path": "v2.5.4.tar.gz",
+      "bytes": 2157028,
+      "sha256": "a695fbe19c0165f295a8531b1e4e855cd94d0875d2f88ec4b61080677e27188a"
+    },
+    {
+      "path": "v3.2.0.tar.gz",
+      "bytes": 18583070,
+      "sha256": "a28f93f3b4fa65601be324587072e32a6a704a304ba7b1aec9b70b3f709bc1dc"
+    },
+    {
+      "path": "vvenc-1.14.0.tar.gz",
+      "bytes": 2352859,
+      "sha256": "dd43d061d59dbc0d9b9ae5b99cb40672877dd811646228938f065798939ee174"
+    },
+    {
+      "path": "whisper.cpp-1.9.2.tar.gz",
+      "bytes": 9622263,
+      "sha256": "a6abd064fcca8b85e794d205abf328c522e9451db43a3eadc178b883b7d0e9cd"
+    }
+  ],
+  "gitSources": [
+    {
+      "directory": "x264",
+      "revision": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+      "remote": "https://code.videolan.org/videolan/x264.git"
+    },
+    {
+      "directory": "x265-4.2",
+      "revision": "e444744c03978c1fb4e037168967020cf2648427",
+      "remote": "https://bitbucket.org/multicoreware/x265_git.git"
+    }
+  ],
+  "notices": [
+    {
+      "path": "sources/SVT-AV1-v4.2.0/LICENSE-BSD2.md",
+      "bytes": 1316,
+      "sha256": "c582fcbeb9cf972a60d298bfaf41dc5adff2dd14208946edcb9bb56a281e8438"
+    },
+    {
+      "path": "sources/SVT-AV1-v4.2.0/LICENSE.md",
+      "bytes": 1709,
+      "sha256": "0acc2fcb27472bdc9aaf8b71f37055bbdac4f54671b7d922f241bd7fcd0dd3e6"
+    },
+    {
+      "path": "sources/SVT-AV1-v4.2.0/PATENTS.md",
+      "bytes": 5767,
+      "sha256": "20678ab10402659106dc4c147c97b2a6e94b5c0695415e15a8f195ebc3547922"
+    },
+    {
+      "path": "sources/SVT-AV1-v4.2.0/third_party/fastfeat/LICENSE",
+      "bytes": 1506,
+      "sha256": "043dcfd059386f9facd376351b2bd79325778744aa442177390cdfcca54babed"
+    },
+    {
+      "path": "sources/SVT-AV1-v4.2.0/third_party/safestringlib/LICENSE",
+      "bytes": 2247,
+      "sha256": "c0f99a208799ca20c9ccf31a30533d49334eb458dca5a3d14f9afe3e884e5d7d"
+    },
+    {
+      "path": "sources/brotli-1.2.0/LICENSE",
+      "bytes": 1084,
+      "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/COPYING.GPLv2",
+      "bytes": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/COPYING.GPLv3",
+      "bytes": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/COPYING.LGPLv2.1",
+      "bytes": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/COPYING.LGPLv3",
+      "bytes": 7651,
+      "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/LICENSE.md",
+      "bytes": 4346,
+      "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/doc/authors.texi",
+      "bytes": 403,
+      "sha256": "fb5fac6dd8f7474033e933814491a8297d8723c52be4dcbcc82eef9c4f008dd2"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/tests/checkasm/ext/LICENSE",
+      "bytes": 1402,
+      "sha256": "a2dc8194271e5989c0622531c645a7b41af5da92eeb2531e4f2a3ec31023bc52"
+    },
+    {
+      "path": "sources/ffmpeg-9.0.1/tests/checkasm/ext/src/html_data/LICENSE",
+      "bytes": 1361,
+      "sha256": "0fd2c601fb2ead2add56807b7e32664da8d973b9835a422464f210bfea997a52"
+    },
+    {
+      "path": "sources/freetype-2.14.3/LICENSE.TXT",
+      "bytes": 2149,
+      "sha256": "bd36c8b474855fa294c2ec5c184544478ef3720aad37d65a6296a4f264fd2d3b"
+    },
+    {
+      "path": "sources/freetype-2.14.3/docs/FTL.TXT",
+      "bytes": 6743,
+      "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f"
+    },
+    {
+      "path": "sources/freetype-2.14.3/docs/GPLv2.TXT",
+      "bytes": 17994,
+      "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18"
+    },
+    {
+      "path": "sources/fribidi-1.0.16/AUTHORS",
+      "bytes": 1640,
+      "sha256": "cb173f55c9514c8f38f4647ac3fedd5f8611358d331e65ab955da931e826861c"
+    },
+    {
+      "path": "sources/fribidi-1.0.16/COPYING",
+      "bytes": 26440,
+      "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b"
+    },
+    {
+      "path": "sources/harfbuzz-14.3.1/AUTHORS",
+      "bytes": 201,
+      "sha256": "19bfe8f5ed100636cd24ab0c90a3f71c21d8b02d9ba00719447a0faab364d49f"
+    },
+    {
+      "path": "sources/harfbuzz-14.3.1/COPYING",
+      "bytes": 1971,
+      "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64"
+    },
+    {
+      "path": "sources/harfbuzz-14.3.1/src/ms-use/COPYING",
+      "bytes": 1141,
+      "sha256": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
+    },
+    {
+      "path": "sources/harfbuzz-14.3.1/test/COPYING",
+      "bytes": 4370,
+      "sha256": "9b35b8485f69cd298fccbb3c40a827dc06cf1185553bef827903497d2944a8d7"
+    },
+    {
+      "path": "sources/harfbuzz-14.3.1/test/shape/data/aots/COPYING",
+      "bytes": 593,
+      "sha256": "f55f74bf740db07bb032a90aa74af4307adea3d489c1ccba12453cf0c0a764cb"
+    },
+    {
+      "path": "sources/harfbuzz-14.3.1/test/shape/data/text-rendering-tests/COPYING",
+      "bytes": 584,
+      "sha256": "d24039e4d22c9bc72096f6174374539d92a3d6e1163938546ec59179fe095e6f"
+    },
+    {
+      "path": "sources/highway-1.4.0/LICENSE",
+      "bytes": 20785,
+      "sha256": "e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af"
+    },
+    {
+      "path": "sources/highway-1.4.0/debian/copyright",
+      "bytes": 825,
+      "sha256": "6e4ecf1cae052b678ea3178dd4b3652d581ee66a82d58db8800dd7d80dd6de76"
+    },
+    {
+      "path": "sources/lame-4.0/COPYING",
+      "bytes": 25281,
+      "sha256": "e64f9c5a18f56828c10a575df13ade641aa3af4512a7afe6c411256943b57aaf"
+    },
+    {
+      "path": "sources/lame-4.0/LICENSE",
+      "bytes": 503,
+      "sha256": "5c1f8d44f1eacbea3e1c31ff6ee11a4e1690ccbed4ee4af16de3b6eb61dc69a8"
+    },
+    {
+      "path": "sources/lame-4.0/debian/copyright",
+      "bytes": 2317,
+      "sha256": "eb2efb4511f3c5d5e4747b6f3a0da1dd5649975082284e12889b6892ededd53d"
+    },
+    {
+      "path": "sources/lame-4.0/mpglib/AUTHORS",
+      "bytes": 604,
+      "sha256": "d8ecf9556aafa8c653796d6be3dc43deea374257680e21c30109a5c3c4484263"
+    },
+    {
+      "path": "sources/libaom-3.14.1/AUTHORS",
+      "bytes": 13105,
+      "sha256": "1bf4faf64255fc1ffe1428e56f58f36050eeaac47a6401e532ca15823d21e9ac"
+    },
+    {
+      "path": "sources/libaom-3.14.1/LICENSE",
+      "bytes": 1316,
+      "sha256": "4764a286d8b2faeaf42f4418e7d7a28d58fc8fd4d00a3d0a7f44b0a4099de7f2"
+    },
+    {
+      "path": "sources/libaom-3.14.1/PATENTS",
+      "bytes": 5701,
+      "sha256": "661fb8e504744e95587b556b94a58343448300606a41bea8c7a9b97125696e61"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/fastfeat/LICENSE",
+      "bytes": 1504,
+      "sha256": "499041ddee5227b6f29ca06c17803e5fe24d60f243c69635cd76b7ba08d0ddd5"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/googletest/src/LICENSE",
+      "bytes": 1475,
+      "sha256": "9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/highway/LICENSE-BSD3",
+      "bytes": 1515,
+      "sha256": "d25e82e26acd42ca3ccc9993622631163425b869b9e16284226d534cff6470f2"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/libwebm/AUTHORS.TXT",
+      "bytes": 137,
+      "sha256": "3edb5f5496bfff3d6d4a62fa75fe996b814920d0d6e348c2e65c589e7ac5d177"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/libwebm/LICENSE.TXT",
+      "bytes": 1496,
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/libwebm/PATENTS.TXT",
+      "bytes": 1436,
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/libyuv/LICENSE",
+      "bytes": 1506,
+      "sha256": "2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/vector/LICENSE",
+      "bytes": 1084,
+      "sha256": "ff6c857ce2708e87701323078aef115c1872a1f80a9649f86dc899b48083bc60"
+    },
+    {
+      "path": "sources/libaom-3.14.1/third_party/x86inc/LICENSE",
+      "bytes": 936,
+      "sha256": "719d8fa235f2068e0ae6d6a7dceb0a7720d7840f0f0ebed29957989e6ded3cd8"
+    },
+    {
+      "path": "sources/libass-0.17.5/COPYING",
+      "bytes": 755,
+      "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/AUTHORS",
+      "bytes": 3913,
+      "sha256": "c987f35e1e87c45aeef0c7d204f0003eb4cb9652c6f1aad45f5521e8a22d8bdd"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/LICENSE",
+      "bytes": 1508,
+      "sha256": "8405932022a556380c2d8c272eff154a923feb197233f348ce5f7334fb0a5ede"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/PATENTS",
+      "bytes": 1333,
+      "sha256": "91915f8ae056a68a3c5bdf05d9f6f78bb6903e27a8ca3a8434c9e4ac87300575"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/debian/copyright",
+      "bytes": 10405,
+      "sha256": "ec6f5bc1043fba8ffa648157b5beee8915865a54f25c5f3201b0e910cd09ebde"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/lib/extras/LICENSE.apngdis",
+      "bytes": 1017,
+      "sha256": "4319c422c3bf10168877a83cd9ff848684b9e53dce9a68de0a3f454a825933f6"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/HEVCSoftware/cfg/LICENSE",
+      "bytes": 1744,
+      "sha256": "44a2c5f2ce34d00a30554a44d3e51377852f84bc183dc1b9fb2b48ece976ebef"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/brotli/LICENSE",
+      "bytes": 1084,
+      "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/googletest/LICENSE",
+      "bytes": 1475,
+      "sha256": "9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/highway/LICENSE",
+      "bytes": 11356,
+      "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/highway/LICENSE-BSD3",
+      "bytes": 1515,
+      "sha256": "d25e82e26acd42ca3ccc9993622631163425b869b9e16284226d534cff6470f2"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/highway/debian/copyright",
+      "bytes": 825,
+      "sha256": "6e4ecf1cae052b678ea3178dd4b3652d581ee66a82d58db8800dd7d80dd6de76"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libjpeg-turbo/LICENSE.md",
+      "bytes": 5213,
+      "sha256": "60c756742db3ad1913304e8b13f0e86e22e51adb50cc0b3333c163f7e45ceec1"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/AUTHORS",
+      "bytes": 1467,
+      "sha256": "cb3a8e25c2b418d6b23af682d2ff850e67ba0785caa83531f746af62bcb4c6dd"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/LICENSE",
+      "bytes": 5345,
+      "sha256": "16d9daaafbf63a31a5bdc91d4600972548fef5aaa1244202393288dbd079c49a"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/ci/LICENSE_MIT.txt",
+      "bytes": 1036,
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/contrib/gregbook/COPYING",
+      "bytes": 18097,
+      "sha256": "d6cb0e9e560f51085556949a84af12b79a00f10ab8b66c752537faf7cd665572"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/contrib/gregbook/LICENSE",
+      "bytes": 2373,
+      "sha256": "b6a03c1803eb58ffb1f1278d5c7d4096c4c116e66dce8a7553e8c77d163c3438"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/contrib/pngexif/LICENSE_MIT.txt",
+      "bytes": 1036,
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/contrib/pngminus/LICENSE.txt",
+      "bytes": 1164,
+      "sha256": "1806f1f10d393e9e377b3a8d1b968452b54f1a90378f14eeef45426946ace330"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/libpng/scripts/cmake/AUTHORS.md",
+      "bytes": 819,
+      "sha256": "1f5bf5f43d1eeb17d5a8f66f169ce9779bc0f0b8314ac07d558615fe2aaa08ff"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/sjpeg/AUTHORS",
+      "bytes": 423,
+      "sha256": "a92601cf6c7c62a101c11fa350c2da1d01ee33bf0ae01471f23f75f0a2271492"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/sjpeg/COPYING",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/skcms/LICENSE",
+      "bytes": 1635,
+      "sha256": "e59bb5c5c6ba426a9ac4ba9fe667ad14c5166b12aa25be8af1d122b14fbe2e36"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/skcms/bazel/rbe/linux-bazel-4.2.1/LICENSE",
+      "bytes": 11340,
+      "sha256": "fd112c80352fc42a60f051012c6b9adef055123e395dece30fa8f44880f39e96"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/skcms/bazel/rbe/windows-bazel-4.2.1/LICENSE",
+      "bytes": 11340,
+      "sha256": "fd112c80352fc42a60f051012c6b9adef055123e395dece30fa8f44880f39e96"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/zlib/LICENSE",
+      "bytes": 1002,
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/third_party/zlib/contrib/dotzlib/LICENSE_1_0.txt",
+      "bytes": 1359,
+      "sha256": "36266a8fd073568394cb81cdb2b124f7fdae2c64c1a7ed09db34b4d22efa2951"
+    },
+    {
+      "path": "sources/libogg-1.3.6/AUTHORS",
+      "bytes": 198,
+      "sha256": "6fcb33d0cdd60b5054e7df820916388b590427514288c2bab01c626bb8ae9506"
+    },
+    {
+      "path": "sources/libogg-1.3.6/COPYING",
+      "bytes": 1466,
+      "sha256": "d2ab5758336489da61c12cc5bb757da5339c4ae9001f9bb0562b4370249af814"
+    },
+    {
+      "path": "sources/libpng-1.6.58/AUTHORS",
+      "bytes": 1773,
+      "sha256": "0c777e9f2a67bd4058ab91050eb7a56106c92ed038ba8fe5f54c83344f2d93ca"
+    },
+    {
+      "path": "sources/libpng-1.6.58/LICENSE",
+      "bytes": 5345,
+      "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526"
+    },
+    {
+      "path": "sources/libpng-1.6.58/ci/LICENSE_MIT.txt",
+      "bytes": 1036,
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1"
+    },
+    {
+      "path": "sources/libpng-1.6.58/contrib/gregbook/COPYING",
+      "bytes": 18097,
+      "sha256": "d6cb0e9e560f51085556949a84af12b79a00f10ab8b66c752537faf7cd665572"
+    },
+    {
+      "path": "sources/libpng-1.6.58/contrib/gregbook/LICENSE",
+      "bytes": 2373,
+      "sha256": "b6a03c1803eb58ffb1f1278d5c7d4096c4c116e66dce8a7553e8c77d163c3438"
+    },
+    {
+      "path": "sources/libpng-1.6.58/contrib/pngexif/LICENSE_MIT.txt",
+      "bytes": 1036,
+      "sha256": "508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1"
+    },
+    {
+      "path": "sources/libpng-1.6.58/contrib/pngminus/LICENSE.txt",
+      "bytes": 1164,
+      "sha256": "1806f1f10d393e9e377b3a8d1b968452b54f1a90378f14eeef45426946ace330"
+    },
+    {
+      "path": "sources/libpng-1.6.58/scripts/cmake/AUTHORS.md",
+      "bytes": 862,
+      "sha256": "50633b976f0133862c921aa67d56de2c0b42eb344c8ca3853686efb092a447db"
+    },
+    {
+      "path": "sources/libtheora-1.2.0/AUTHORS",
+      "bytes": 828,
+      "sha256": "ef0ba8da05924cf4e2f9acf782076892ed477c01a6d4cc9f5d107652cf84da8c"
+    },
+    {
+      "path": "sources/libtheora-1.2.0/COPYING",
+      "bytes": 1470,
+      "sha256": "8417fad7da775735564e209484a2e011e0fa201e94f01fdbee6e4977e478e6fc"
+    },
+    {
+      "path": "sources/libtheora-1.2.0/LICENSE",
+      "bytes": 960,
+      "sha256": "2c902950c73a63cd285dc0c36573de9c5fefe66d49312949c51d941f33e92932"
+    },
+    {
+      "path": "sources/libvorbis-1.3.7/AUTHORS",
+      "bytes": 65,
+      "sha256": "f5cab9f16035f770f50299f85cf2938c06dc3a9a30425961067788102ec896d3"
+    },
+    {
+      "path": "sources/libvorbis-1.3.7/COPYING",
+      "bytes": 1470,
+      "sha256": "ec1815db59fcd302846df949d7424876cb2e2dc5ed1606c5fb0b36787b1cf43a"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/AUTHORS",
+      "bytes": 9352,
+      "sha256": "fd2d1ac03d9d3c864bd98c2042de2d8f7fbd78b298c8d9c506076b6c6a9de889"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/LICENSE",
+      "bytes": 1537,
+      "sha256": "8267348d5af1262c11d1a08de2f5afc77457755f1ac658627dd9acf71011d615"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/PATENTS",
+      "bytes": 1436,
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/third_party/googletest/src/LICENSE",
+      "bytes": 1475,
+      "sha256": "9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/third_party/libwebm/AUTHORS.TXT",
+      "bytes": 137,
+      "sha256": "3edb5f5496bfff3d6d4a62fa75fe996b814920d0d6e348c2e65c589e7ac5d177"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/third_party/libwebm/LICENSE.TXT",
+      "bytes": 1496,
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/third_party/libwebm/PATENTS.TXT",
+      "bytes": 1436,
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/third_party/libyuv/LICENSE",
+      "bytes": 1506,
+      "sha256": "2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/third_party/nalloc/LICENSE",
+      "bytes": 1069,
+      "sha256": "d7dd0396ec46975e1bf9093680068ef301bc0ed204603e623a6f7073ab922ab1"
+    },
+    {
+      "path": "sources/libvpx-1.16.0/third_party/x86inc/LICENSE",
+      "bytes": 936,
+      "sha256": "719d8fa235f2068e0ae6d6a7dceb0a7720d7840f0f0ebed29957989e6ded3cd8"
+    },
+    {
+      "path": "sources/libwebp-1.6.0/AUTHORS",
+      "bytes": 3279,
+      "sha256": "f251be89fd442bd9d701360730aea163cc8e2076ff03528f59267dc2c4f8b60a"
+    },
+    {
+      "path": "sources/libwebp-1.6.0/COPYING",
+      "bytes": 1496,
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+    },
+    {
+      "path": "sources/libwebp-1.6.0/PATENTS",
+      "bytes": 1436,
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c"
+    },
+    {
+      "path": "sources/openjpeg-2.5.4/AUTHORS.md",
+      "bytes": 712,
+      "sha256": "cf22e984f9fbb9be7550e9a94120595ba8c4a7de0d63f47d3725f4b2e28a4387"
+    },
+    {
+      "path": "sources/openjpeg-2.5.4/LICENSE",
+      "bytes": 2112,
+      "sha256": "a6af136f3e15038a666b61f376612a07d9a4e48cb7c01adbf3e33b3f14ab49b6"
+    },
+    {
+      "path": "sources/openjpeg-2.5.4/src/bin/wx/OPJViewer/source/license.txt",
+      "bytes": 1683,
+      "sha256": "8081c33f6953950dcf424aa844714658b73ada0fcaea16e4487f5fa07ef0960d"
+    },
+    {
+      "path": "sources/openjpeg-2.5.4/thirdparty/astyle/LICENSE.md",
+      "bytes": 1094,
+      "sha256": "2e8480e753b7a1d100c80920f4250b1bc9f93a18c6a5953c42b11445218cd0fb"
+    },
+    {
+      "path": "sources/openjpeg-2.5.4/thirdparty/liblcms2/COPYING",
+      "bytes": 1078,
+      "sha256": "c725daac91a9259ce5e195683c0eeb797d345035c36ac5ba114c9fa80e11639a"
+    },
+    {
+      "path": "sources/openjpeg-2.5.4/thirdparty/libpng/LICENSE",
+      "bytes": 5345,
+      "sha256": "7317e078e2d3b5d7ba5a6159e650945153262b44b76f6700f8e9edb261c5143e"
+    },
+    {
+      "path": "sources/opus-1.6.1/AUTHORS",
+      "bytes": 239,
+      "sha256": "f9fd849e652219ce98e008303370b352d37663d0ffb27b8dc514ad93c9c7438b"
+    },
+    {
+      "path": "sources/opus-1.6.1/COPYING",
+      "bytes": 1945,
+      "sha256": "01e1167d54a096d123cf6dfbbeb19587278845c6481d2d66d545669846079551"
+    },
+    {
+      "path": "sources/vmaf-3.2.0/LICENSE",
+      "bytes": 2833,
+      "sha256": "a6fdb51d02b9dfe198e55534bb8047fe6d756eda117f4ff83de98f92c1952710"
+    },
+    {
+      "path": "sources/vvenc-1.14.0/AUTHORS.md",
+      "bytes": 787,
+      "sha256": "4e170fa83949185c388add08fa4535a84c0aa2db779546b8d85f08e51c345bdb"
+    },
+    {
+      "path": "sources/vvenc-1.14.0/LICENSE.txt",
+      "bytes": 1768,
+      "sha256": "88330a2cc59b9dd90674f8759900bc9c06e9efc8799dadda067609addefb49d1"
+    },
+    {
+      "path": "sources/vvenc-1.14.0/thirdparty/nlohmann_json/LICENSE.MIT",
+      "bytes": 1076,
+      "sha256": "86b998c792894ccb911a1cb7994f7a9652894e7a094c0b5e45be2f553f45cf14"
+    },
+    {
+      "path": "sources/vvenc-1.14.0/thirdparty/simde/COPYING",
+      "bytes": 1077,
+      "sha256": "75ce0a8c5a7bff42fbd6f8f3b469b518132132c4f4948fb8d02b1ccb5d0df9d8"
+    },
+    {
+      "path": "sources/whisper.cpp-1.9.2/AUTHORS",
+      "bytes": 21736,
+      "sha256": "09800c8c5bdf54bcfd65d869c85ea1b1756016f15798bef9e706ca390ab04f12"
+    },
+    {
+      "path": "sources/whisper.cpp-1.9.2/LICENSE",
+      "bytes": 1078,
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+    },
+    {
+      "path": "sources/whisper.cpp-1.9.2/bindings/go/LICENSE",
+      "bytes": 1069,
+      "sha256": "3fa8d70be1f0deb5fb971a9c36cfbdcdc904fa46646560f9ac859494b40248b6"
+    },
+    {
+      "path": "sources/whisper.cpp-1.9.2/examples/wchess/wchess.wasm/chessboardjs-1.0.0/js/chessboard-1.0.0/LICENSE.md",
+      "bytes": 1052,
+      "sha256": "d33e835c372360941e425214c06c2063f7058d850b9a0153d5a624c1cab9bf31"
+    },
+    {
+      "path": "sources/whisper.cpp-1.9.2/tests/earnings21/normalizers/LICENSE",
+      "bytes": 1279,
+      "sha256": "fff3c2ad5a861a1dedc227f08afca28a12bd6fd80a11e0095901262c4fe61d16"
+    },
+    {
+      "path": "sources/whisper.cpp-1.9.2/tests/librispeech/normalizers/LICENSE",
+      "bytes": 1279,
+      "sha256": "fff3c2ad5a861a1dedc227f08afca28a12bd6fd80a11e0095901262c4fe61d16"
+    },
+    {
+      "path": "sources/whisper.cpp-1.9.2/tests/librispeech-parakeet/normalizers/LICENSE",
+      "bytes": 1279,
+      "sha256": "fff3c2ad5a861a1dedc227f08afca28a12bd6fd80a11e0095901262c4fe61d16"
+    },
+    {
+      "path": "sources/x264/AUTHORS",
+      "bytes": 1999,
+      "sha256": "783150c1bef404fc7140924f3006eff27c940ea73ef38b3bc76fcb9c173229a5"
+    },
+    {
+      "path": "sources/x264/COPYING",
+      "bytes": 17992,
+      "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
+    },
+    {
+      "path": "sources/x265-4.2/COPYING",
+      "bytes": 18120,
+      "sha256": "d8afb1bcc7a2cfc603683b168d6987ef0a48e59e0da3693bf55c5d33b67e2b49"
+    },
+    {
+      "path": "sources/x265-4.2/source/dynamicHDR10/LICENSE.txt",
+      "bytes": 849,
+      "sha256": "47f15d63e82eb8a4de6e46471d5f96cf6d052fd5355944a002c3157880248b69"
+    },
+    {
+      "path": "sources/x265-4.2/source/dynamicHDR10/json11/LICENSE.txt",
+      "bytes": 1057,
+      "sha256": "950e288a2548cb33f6a90d23958806b0803f510ab17c600d661619a73ae3a6c8"
+    }
+  ]
+}
