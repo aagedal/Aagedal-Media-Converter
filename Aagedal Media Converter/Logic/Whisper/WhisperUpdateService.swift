@@ -96,13 +96,16 @@ actor WhisperUpdateService {
     /// Invalidates the cached snapshot, publishes a loading transition, and joins
     /// the next shared probe. Useful when the selected FFmpeg binary changes.
     func refreshCapabilitySnapshot() async throws -> WhisperCapabilitySnapshot {
-        probeTask?.cancel()
+        try Task.checkCancellation()
+        let previousProbe = probeTask
+        previousProbe?.cancel()
         probeTask = nil
         probeID = nil
         cachedSnapshot = nil
         for subscriber in subscribers.values {
             subscriber.yield(.loading)
         }
+        startProbeIfNeeded(waitingFor: previousProbe)
         return try await capabilitySnapshot()
     }
 
@@ -126,21 +129,22 @@ actor WhisperUpdateService {
         return stream
     }
 
-    private func startProbeIfNeeded() {
+    private func startProbeIfNeeded(
+        waitingFor previousProbe: Task<WhisperCapabilitySnapshot, Never>? = nil
+    ) {
         guard cachedSnapshot == nil, probeTask == nil else { return }
-
-        guard let ffmpegPath = ffmpegPathProvider() else {
-            completeProbe(
-                .init(isAvailable: false, ffmpegVersion: "unknown"),
-                id: nil
-            )
-            return
-        }
-
+        let ffmpegPath = ffmpegPathProvider()
         let id = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.performProbe(ffmpegPath: ffmpegPath, subprocessRunner: runner)
+            // Keep replacement probes behind the cancelled pair until both helpers
+            // have drained. Repeated refreshes retain this chain even when a queued
+            // replacement is itself cancelled before it starts.
+            if let previousProbe { _ = await previousProbe.value }
+            guard !Task.isCancelled, let ffmpegPath else {
+                return WhisperCapabilitySnapshot(isAvailable: false, ffmpegVersion: "unknown")
+            }
+            return await Self.performProbe(ffmpegPath: ffmpegPath, subprocessRunner: runner)
         }
         probeID = id
         probeTask = task

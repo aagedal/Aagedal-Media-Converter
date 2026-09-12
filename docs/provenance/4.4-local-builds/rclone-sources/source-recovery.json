@@ -1,0 +1,68 @@
+{
+  "retrievedOn": "2026-09-11",
+  "mainSourceURL": "https://codeload.github.com/rclone/rclone/tar.gz/c441cac8089c7d5314a37673291fdb8236900884",
+  "mainArchiveSHA256": "d8f5b16d8f48dfaa584b1f50a185546da8dbc43c49c88f665e12a17dab382f58",
+  "mainArchiveBytes": 15907649,
+  "embeddedModuleChecksumsMatchingMainGoSum": 142,
+  "goToolchain": {
+    "filename": "go1.26.2.darwin-arm64.tar.gz",
+    "os": "darwin",
+    "arch": "arm64",
+    "version": "go1.26.2",
+    "sha256": "32af1522bf3e3ff3975864780a429cc0b41d190ec7bf90faa661d6d64566e7af",
+    "size": 64664058,
+    "kind": "archive"
+  },
+  "goToolchainChecksumSource": "https://go.dev/dl/?mode=json&include=all",
+  "retainedFiles": [
+    {
+      "sourcePath": "COPYING",
+      "snapshotPath": "main/COPYING",
+      "bytes": 1095,
+      "sha256": "8cd2e9e750b90a04b7d82dbbca3930c696ae0309d7c10464f90a44f45754cd04"
+    },
+    {
+      "sourcePath": "go.mod",
+      "snapshotPath": "main/go.mod",
+      "bytes": 13887,
+      "sha256": "8e286119356966c12624628bde803098d4c4ca0ae086a846223a571e46b7ad1a"
+    },
+    {
+      "sourcePath": "go.sum",
+      "snapshotPath": "main/go.sum",
+      "bytes": 110279,
+      "sha256": "5375fdb0d25e42059a311469b91c7ba2b7645b065c1f48355ae66ad982e020fc"
+    },
+    {
+      "sourcePath": "cmd/bisync/LICENSE.cjnaz",
+      "snapshotPath": "main/cmd/bisync/LICENSE.cjnaz",
+      "bytes": 1074,
+      "sha256": "f3329cd6c4dcb098ddbbd8671f2457bbb7c82b3bd8129c73190d3468db77c4e6"
+    },
+    {
+      "sourcePath": "cmd/serve/dlna/LICENSE.anacrolix",
+      "snapshotPath": "main/cmd/serve/dlna/LICENSE.anacrolix",
+      "bytes": 1635,
+      "sha256": "d51c00bad765eba320d6f2f9c955a48f060835a3cd0b9803e06bbc345efffd4b"
+    },
+    {
+      "sourcePath": "fs/rc/js/LICENSE.wasmexec",
+      "snapshotPath": "main/fs/rc/js/LICENSE.wasmexec",
+      "bytes": 1479,
+      "sha256": "4835612df0098ca95f8e7d9e3bffcb02358d435dbb38057c844c99d7f725eb20"
+    },
+    {
+      "sourcePath": "go/LICENSE",
+      "snapshotPath": "go/LICENSE",
+      "bytes": 1453,
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+    },
+    {
+      "sourcePath": "go/PATENTS",
+      "snapshotPath": "go/PATENTS",
+      "bytes": 1303,
+      "sha256": "96f408bfae65bf137fc2525d3ecb030271c50c1e90799f87abf8846d8dd505cc"
+    }
+  ],
+  "scope": "Exact-revision source retrieval and checksum agreement, not a verified build or completed attribution. Main archive and toolchain were downloaded to temporary storage and are not committed."
+}

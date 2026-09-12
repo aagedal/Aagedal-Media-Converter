@@ -1,0 +1,163 @@
+{
+  "bmx": {
+    "upstream": "https://github.com/bbc/bmx",
+    "revision": "278a9027580ea5f4a27d5d5040d5dc208c6ef538",
+    "notices": [
+      {
+        "path": "COPYING",
+        "sourceSHA256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b",
+        "noticeSHA256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b"
+      },
+      {
+        "path": "deps/libMXF/COPYING",
+        "sourceSHA256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b",
+        "noticeSHA256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b"
+      },
+      {
+        "path": "deps/libMXFpp/COPYING",
+        "sourceSHA256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b",
+        "noticeSHA256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b"
+      },
+      {
+        "path": "src/writer_helper/JPEGXSWriterHelper.cpp",
+        "sourceSHA256": "51a1bfc78b5db0d0147ace403bfc679ddff06d7598d558f8036456b8c4933414",
+        "noticeSHA256": "358cde6c1a7dd44b4b7ca1e3204b74901a468429304db82dcde16163245000d8"
+      },
+      {
+        "path": "deps/libMXFpp/libMXF++/metadata/JPEGXSSubDescriptor.cpp",
+        "sourceSHA256": "cb7c24e1db423551527a1489f4cefffc3027ca6a1fee10a34870532189cc1ff7",
+        "noticeSHA256": "358cde6c1a7dd44b4b7ca1e3204b74901a468429304db82dcde16163245000d8"
+      },
+      {
+        "path": "src/common/MD5.cpp",
+        "sourceSHA256": "b17ba835600891b0eb76ea7effdf7b1cb88cec8b87ab3ab1e5501851f4f8bf81",
+        "noticeSHA256": "657bd19da9080c47036180a1c2f41aa1ac4bebc3d814194b437ed4753ecb9a50"
+      },
+      {
+        "path": "src/common/SHA1.cpp",
+        "sourceSHA256": "3d24e4d068783f7dd3b24833a537594e9b3c763e86e0c1405632feead4f3d0e7",
+        "noticeSHA256": "f9dc66dd7f8f50a371c9a892ae6bf3efd189ee3a152756a9bf2038a63c2acfe1"
+      }
+    ],
+    "binaries": [
+      {
+        "name": "raw2bmx",
+        "sha256": "56d178ed7ed7198d7dd95fbf3c8ab0466242e27a11a74f5632ffa18d673c175d",
+        "selectedSymbols": [
+          "00000001000e7524 T __ZN3bmx18JPEGXSWriterHelper12ProcessFrameEPKhj",
+          "000000010006d2bc T __ZN3bmx8md5_initEPNS_10MD5ContextE",
+          "00000001000703e0 T __ZN3bmx9sha1_initEPNS_11SHA1ContextE",
+          "00000001000fff9c T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataE",
+          "00000001000fffdc T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataEP14MXFMetadataSet"
+        ],
+        "dynamicLibraries": [
+          "\t/usr/lib/libexpat.1.dylib (compatibility version 7.0.0, current version 8.0.0)",
+          "\t/usr/lib/libcurl.4.dylib (compatibility version 7.0.0, current version 9.0.0)",
+          "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2100.43.0)",
+          "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)"
+        ]
+      },
+      {
+        "name": "bmxtranswrap",
+        "sha256": "defa9a5eb98b3a51fc2041caab3120e887cfc18c61d9cba3c42895b89c9a3e6d",
+        "selectedSymbols": [
+          "0000000100124d6c T __ZN3bmx18JPEGXSWriterHelper12ProcessFrameEPKhj",
+          "000000010006d364 T __ZN3bmx8md5_initEPNS_10MD5ContextE",
+          "0000000100070488 T __ZN3bmx9sha1_initEPNS_11SHA1ContextE",
+          "000000010013d704 T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataE",
+          "000000010013d744 T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataEP14MXFMetadataSet"
+        ],
+        "dynamicLibraries": [
+          "\t/usr/lib/libexpat.1.dylib (compatibility version 7.0.0, current version 8.0.0)",
+          "\t/usr/lib/libcurl.4.dylib (compatibility version 7.0.0, current version 9.0.0)",
+          "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2100.43.0)",
+          "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)"
+        ]
+      },
+      {
+        "name": "mxf2raw",
+        "sha256": "4b294b6a9873b7c41bf5858cf53196dcb38233d72ac4347826486eae609e8b9d",
+        "selectedSymbols": [
+          "000000010003b7b0 T __ZN3bmx8md5_initEPNS_10MD5ContextE",
+          "000000010003e8d4 T __ZN3bmx9sha1_initEPNS_11SHA1ContextE",
+          "00000001000cbfe0 T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataE",
+          "00000001000cc020 T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataEP14MXFMetadataSet"
+        ],
+        "dynamicLibraries": [
+          "\t/usr/lib/libexpat.1.dylib (compatibility version 7.0.0, current version 8.0.0)",
+          "\t/usr/lib/libcurl.4.dylib (compatibility version 7.0.0, current version 9.0.0)",
+          "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2100.43.0)",
+          "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)"
+        ]
+      },
+      {
+        "name": "bmxparse",
+        "sha256": "c3e0e36e33f418435d5c56c4af2b5feebef0f4ab6781da96935bab6382aa0fc1",
+        "selectedSymbols": [
+          "000000010001b820 T __ZN3bmx8md5_initEPNS_10MD5ContextE",
+          "000000010005cb20 T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataE",
+          "000000010005cb60 T __ZN5mxfpp19JPEGXSSubDescriptorC1EPNS_14HeaderMetadataEP14MXFMetadataSet"
+        ],
+        "dynamicLibraries": [
+          "\t/usr/lib/libexpat.1.dylib (compatibility version 7.0.0, current version 8.0.0)",
+          "\t/usr/lib/libcurl.4.dylib (compatibility version 7.0.0, current version 9.0.0)",
+          "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2100.43.0)",
+          "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)"
+        ]
+      }
+    ]
+  },
+  "asdcplib": {
+    "upstream": "https://github.com/cinecert/asdcplib",
+    "revision": "d53aac87d1e52d71bbc47631911e75e01e6ad328",
+    "notices": [
+      {
+        "path": "COPYING",
+        "sourceSHA256": "a6308c8ab4660d470976b4e1ce2c85daa44002340a917988cdc506df6379696d",
+        "noticeSHA256": "a6308c8ab4660d470976b4e1ce2c85daa44002340a917988cdc506df6379696d"
+      },
+      {
+        "path": "src/asdcp-wrap.cpp",
+        "sourceSHA256": "bc4ec7678d70a3810a2a8043f28253611d1e9cc3df0f2c094d52f8815b7ae05b",
+        "noticeSHA256": "56e4cea6e7c9642719e81769b13e1b4559a154b2399f2ed3d247427b1efbca98"
+      },
+      {
+        "path": "src/KM_aes.cpp",
+        "sourceSHA256": "e94f093ad596d91674ca362a05799ab79deb77172a3090ea997ceedab277525f",
+        "noticeSHA256": "675588885e9459152395874124a2ef3fea8b29ecb376da099ef92561585612d6"
+      },
+      {
+        "path": "src/KM_sha1.cpp",
+        "sourceSHA256": "ab415f8f41bbba37e9c48c498638a609521e9e26b3cec49e0450f00a880f0aee",
+        "noticeSHA256": "4f157f891b6c1ecc29c9acf3d158afe050b1d41e1df2e8c55ca9d7390dfe0a88"
+      },
+      {
+        "path": "src/KM_tai.cpp",
+        "sourceSHA256": "14230322069fb4fed722ad004465c71936c2f9b08c9a4136efd385cf96f26971",
+        "noticeSHA256": "774be90bdc13b0a2de2388649deebfb896d04b14dd3f40e9b5a8e987090776a9"
+      },
+      {
+        "path": "src/ACES.h",
+        "sourceSHA256": "96d63ac1aa237d390b0c2db71b725f612118687932c7278151562c6a97718c97",
+        "noticeSHA256": "d4fecade52f0b8ff7850d287d9247ded0a15b55fbef37c8c4af13abfd14ca40b"
+      }
+    ],
+    "binaries": [
+      {
+        "name": "asdcp-wrap",
+        "sha256": "a68b6142111b3232bc5b7e01eccda103f31d41fc0bb6394caea14df9211a3cea",
+        "selectedSymbols": [
+          "00000001000b13d0 T __ZN4Kumu11caltime_taiEPKNS_3TAI7caltimeEPNS0_3taiE",
+          "00000001000b9ad4 t __ZN4Kumu11caltime_taiEPKNS_3TAI7caltimeEPNS0_3taiE.cold.1",
+          "00000001000b2e98 T __ZN4Kumu12AES_init_ctxEPNS_7AES_ctxEPKh",
+          "00000001000b60e4 T __ZN4Kumu9SHA1_InitEPNS_8SHA1_CTXE",
+          "00000001000c8023 s __ZN5AS_024ACESL5MagicE"
+        ],
+        "dynamicLibraries": [
+          "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2000.67.0)",
+          "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)"
+        ]
+      }
+    ]
+  }
+}

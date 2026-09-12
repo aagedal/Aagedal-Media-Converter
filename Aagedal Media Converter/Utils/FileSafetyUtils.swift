@@ -88,37 +88,16 @@ enum FileSafetyUtils {
     ) -> URL {
         let inputStandardized = inputURL.standardizedFileURL
 
-        // Build the candidate filename
-        var finalName = baseName
-
-        // If suffix is empty and extension matches input, force a suffix to prevent overwrite
-        let inputExtension = inputURL.pathExtension.lowercased()
-        let outputExtension = fileExtension.lowercased()
-
-        if suffix.isEmpty && inputExtension == outputExtension {
-            // Check if output folder is same as input folder
-            let inputFolder = inputURL.deletingLastPathComponent().standardizedFileURL
-            let outputFolderStandardized = outputFolder.standardizedFileURL
-
-            if inputFolder == outputFolderStandardized {
-                // Same folder, same extension, no suffix - would overwrite!
-                finalName += "_encoded"
-                logger.warning("Added _encoded suffix to prevent overwriting source file")
-            }
-        }
-
-        if !suffix.isEmpty {
-            finalName += suffix
-        }
-
+        let finalName = baseName + suffix
         var candidate = outputFolder.appendingPathComponent(finalName).appendingPathExtension(fileExtension)
 
-        // Final safety check: never return same path as input
-        if candidate.standardizedFileURL == inputStandardized {
-            // This shouldn't happen with the above logic, but just in case
+        // Judge the complete rendered name: templates may already have changed it
+        // even when no automatic suffix remains. Compare conservatively without case
+        // because the default macOS filesystem treats differently cased names as equal.
+        if candidate.standardizedFileURL.path.caseInsensitiveCompare(inputStandardized.path) == .orderedSame {
             let safeName = baseName + "_encoded" + suffix
             candidate = outputFolder.appendingPathComponent(safeName).appendingPathExtension(fileExtension)
-            logger.error("Final safety check triggered - prevented overwriting input file")
+            logger.warning("Added _encoded suffix to prevent overwriting source file")
         }
 
         return candidate

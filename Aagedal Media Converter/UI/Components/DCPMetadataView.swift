@@ -106,21 +106,9 @@ struct DCPMetadataView: View {
         .padding(24)
         .frame(width: 640, height: 360)
         .onAppear {
-            let stored = item.dcpMetadata
-            let meta = stored ?? DCPItemMetadata()
-            contentTitleText = meta.contentTitleText.isEmpty
-                ? (item.url.deletingPathExtension().lastPathComponent)
-                : meta.contentTitleText
-            // First-time edit (no metadata stored yet): prefer the user's most
-            // recent contentKind choice for this format. Once stored, respect
-            // whatever they explicitly set.
-            if stored == nil,
-               let raw = UserDefaults.standard.string(forKey: AppConstants.lastDCPContentKindKey),
-               let remembered = DCPContentKind(rawValue: raw) {
-                contentKind = remembered
-            } else {
-                contentKind = meta.contentKind
-            }
+            let meta = PackageMetadataSettings().resolveDCPMetadata(item.dcpMetadata, inputURL: item.url)
+            contentTitleText = meta.contentTitleText
+            contentKind = meta.contentKind
             annotationText = meta.annotationText
             ratingLabel = meta.ratingLabel
             audioLanguage = meta.audioLanguage

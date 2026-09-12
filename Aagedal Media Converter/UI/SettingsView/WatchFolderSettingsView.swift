@@ -5,6 +5,8 @@
 import SwiftUI
 
 struct WatchFolderSettingsView: View {
+    @State private var folderErrorMessage: String?
+    @AppStorage(WatchFolderSelectionService.writableGrantPathKey) private var writableGrantPath = ""
     @AppStorage(AppConstants.watchFolderPathKey) private var watchFolderPath = ""
     @AppStorage(AppConstants.watchFolderAutoActivateOnLaunchKey) private var watchFolderAutoActivateOnLaunch = false
     @AppStorage(AppConstants.watchFolderIgnoreOlderThan24hKey) private var watchFolderIgnoreOlderThan24h = false
@@ -20,6 +22,14 @@ struct WatchFolderSettingsView: View {
             watchFolderSection
         }
         .formStyle(.grouped)
+        .alert("Watch Folder", isPresented: Binding(
+            get: { folderErrorMessage != nil },
+            set: { if !$0 { folderErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { folderErrorMessage = nil }
+        } message: {
+            Text(folderErrorMessage ?? "")
+        }
     }
 
     private var watchFolderSection: some View {
@@ -42,11 +52,11 @@ struct WatchFolderSettingsView: View {
 
                         Button(action: {
                             let url = URL(fileURLWithPath: watchFolderPath)
-                            guard FileManager.default.fileExists(atPath: url.path) else {
-                                watchFolderPath = ""
-                                return
+                            do {
+                                try WatchFolderSelectionService().reveal(url)
+                            } catch {
+                                folderErrorMessage = error.localizedDescription
                             }
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
                         }) {
                             Image(systemName: "arrow.right.circle.fill")
                                 .foregroundColor(.accentColor)
@@ -107,7 +117,7 @@ struct WatchFolderSettingsView: View {
             }
             Toggle("Automatically delete files older than", isOn: $watchFolderAutoDeleteOlderThanWeek)
                 .toggleStyle(SwitchToggleStyle())
-                .help("Permanently remove files that have stayed in the watch folder longer than the selected duration")
+                .help("Move files that have stayed in the watch folder longer than the selected duration to Trash")
                 .onChange(of: watchFolderAutoDeleteOlderThanWeek) { _, isOn in
                     if !isOn {
                         watchFolderDeleteDurationValue = AppConstants.defaultWatchFolderDeleteDurationValue
@@ -115,6 +125,13 @@ struct WatchFolderSettingsView: View {
                     }
                 }
             if watchFolderAutoDeleteOlderThanWeek {
+                if !watchFolderPath.isEmpty && writableGrantPath != watchFolderPath {
+                    Text("Select the watch folder again to allow automatic cleanup. Monitoring remains available until access is renewed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Renew Access", action: selectWatchFolder)
+                        .accessibilityIdentifier("settings.watchFolder.renewAccess")
+                }
                 durationPickerRow(
                     title: "Deletion threshold",
                     valueBinding: deleteDurationValueBinding,
@@ -203,9 +220,11 @@ struct WatchFolderSettingsView: View {
         }
         
         if panel.runModal() == .OK, let url = panel.url {
-            watchFolderPath = url.path
-            // Save security-scoped bookmark for the watch folder
-            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+            do {
+                try WatchFolderSelectionService().select(url)
+            } catch {
+                folderErrorMessage = error.localizedDescription
+            }
         }
     }
 }

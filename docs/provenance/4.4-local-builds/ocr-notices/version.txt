@@ -1,0 +1,5 @@
+tesseract 5.5.2
+ leptonica-1.87.0
+  libpng 1.6.56 : zlib 1.2.12
+ Found NEON
+ Found libcurl/8.7.1 SecureTransport (LibreSSL/3.3.6) zlib/1.2.12 nghttp2/1.69.0

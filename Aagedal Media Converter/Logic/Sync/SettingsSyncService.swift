@@ -556,6 +556,17 @@ final class SettingsSyncService {
         guard snapshot.schemaVersion <= SettingsSnapshot.currentSchemaVersion else {
             throw SyncError.unsupportedSchema(snapshot.schemaVersion)
         }
+        guard snapshot.schemaVersion > 0 else {
+            throw SyncError.invalidFile
+        }
+        // Validate the entire payload before applying any keys. A nested null
+        // would otherwise raise an Objective-C exception in UserDefaults.set.
+        guard snapshot.defaults.values.allSatisfy({ value in
+            if case .null = value { return true }
+            return value.isPropertyListCompatible
+        }) else {
+            throw SyncError.invalidFile
+        }
         return snapshot
     }
 

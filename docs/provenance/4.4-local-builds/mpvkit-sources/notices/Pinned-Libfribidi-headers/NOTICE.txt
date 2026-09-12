@@ -1,0 +1,552 @@
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-config.h =====
+
+/* Not copyrighted, in public domain. */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-joining-types.h =====
+
+/* FriBidi
+ * fribidi-joining-types.h - character joining types
+ *
+ * Author:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc.
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ *
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-char-sets.h =====
+
+/* FriBidi
+ * fribidi-char-sets.h - character set conversion routines
+ *
+ * Authors:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *   Dov Grobgeld, 1999, 2000
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * Copyright (C) 1999,2000 Dov Grobgeld
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-char-sets-list.h =====
+
+/* FriBidi
+ * fribidi-char-sets-list.h - list of supported character sets
+ *
+ * Author:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc.
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ *
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-common.h =====
+
+/* FriBidi
+ * fribidi-common.h - common include for library headers
+ *
+ * Author:
+ *   Behdad Esfahbod, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc.
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-unicode.h =====
+
+/* FriBidi
+ * fribidi-unicode.h - general Unicode definitions
+ *
+ * Author:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-types.h =====
+
+/* FriBidi
+ * fribidi-types.h - define data types for the rest of the library
+ *
+ * Author:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc.
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ *
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-bidi-types.h =====
+
+/* FriBidi
+ * fribidi-bidi-types.h - character bidi types
+ *
+ * Author:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc.
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ *
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-deprecated.h =====
+
+/* FriBidi
+ * fribidi-deprecated.h - Deprecated interfaces
+ *
+ * Author:
+ *   Behdad Esfahbod, 2004, 2005
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc
+ * Copyright (C) 2004, 2005 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-mirroring.h =====
+
+/* fribidi-mirroring.h - get mirrored character
+ *
+ * Copyright (C) 2004  Sharif FarsiWeb, Inc
+ * Copyright (C) 2001, 2002, 2004  Behdad Esfahbod
+ * Copyright (C) 1999, 2000, 2017  Dov Grobgeld
+ * 
+ * This file is part of GNU FriBidi.
+ * 
+ * GNU FriBidi is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * as published by the Free Software Foundation; either version 2.1
+ * of the License, or (at your option) any later version.
+ * 
+ * GNU FriBidi is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with GNU FriBidi; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com> or write to
+ * Sharif FarsiWeb, Inc., PO Box 13445-389, Tehran, Iran.
+ *
+ * Author(s):
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *   Dov Grobgeld, 1999, 2000
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-joining.h =====
+
+/* FriBidi
+ * fribidi-joining.h - Arabic joining algorithm
+ *
+ * Authors:
+ *   Behdad Esfahbod, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc
+ * Copyright (C) 2004 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-flags.h =====
+
+/* FriBidi
+ * fribidi-flags.h - option flags
+ *
+ * Author:
+ *   Behdad Esfahbod, 2005
+ *
+ * Copyright (C) 2005 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ *
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi.h =====
+
+/* FriBidi
+ * fribidi.h - Unicode bidirectional and Arabic joining/shaping algorithms
+ *
+ * Author:
+ *   Behdad Esfahbod, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-bidi.h =====
+
+/* FriBidi
+ * fribidi-bidi.h - bidirectional algorithm
+ *
+ * Authors:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *   Dov Grobgeld, 1999, 2000
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * Copyright (C) 1999,2000 Dov Grobgeld
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-brackets.h =====
+
+/* fribidi-brackets.h - get bracket character property
+ *
+ * Copyright (C) 2004  Sharif FarsiWeb, Inc
+ * Copyright (C) 2001, 2002, 2004  Behdad Esfahbod
+ * Copyright (C) 1999, 2000, 2017  Dov Grobgeld
+ * 
+ * This file is part of GNU FriBidi.
+ * 
+ * GNU FriBidi is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * as published by the Free Software Foundation; either version 2.1
+ * of the License, or (at your option) any later version.
+ * 
+ * GNU FriBidi is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with GNU FriBidi; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com> or write to
+ * Sharif FarsiWeb, Inc., PO Box 13445-389, Tehran, Iran.
+ *
+ * Author(s):
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *   Dov Grobgeld, 1999, 2000, 2017
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-bidi-types-list.h =====
+
+/* FriBidi
+ * fribidi-bidi-types-list.h - list of bidi types
+ *
+ * Author:
+ *   Behdad Esfahbod, 2001, 2002, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc.
+ * Copyright (C) 2001,2002 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ *
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-arabic.h =====
+
+/* fribidi-arabic.h - do Arabic shaping to presentation forms
+ *
+ * Copyright (C) 2005  Behdad Esfahbod
+ * 
+ * This file is part of GNU FriBidi.
+ * 
+ * GNU FriBidi is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * as published by the Free Software Foundation; either version 2.1
+ * of the License, or (at your option) any later version.
+ * 
+ * GNU FriBidi is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with GNU FriBidi; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com> or write to
+ * Sharif FarsiWeb, Inc., PO Box 13445-389, Tehran, Iran.
+ *
+ * Author(s):
+ *   Behdad Esfahbod, 2005
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-shape.h =====
+
+/* FriBidi
+ * fribidi-shape.h - shaping
+ *
+ * Author:
+ *   Behdad Esfahbod, 2004, 2005
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc
+ * Copyright (C) 2004, 2005 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ * 
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+
+
+===== pinned-archive-header; Libfribidi.xcframework/macos-arm64_x86_64/Libfribidi.framework/Headers/fribidi/fribidi-joining-types-list.h =====
+
+/* FriBidi
+ * fribidi-joining-types-list.h - list of joining types
+ *
+ * Author:
+ *   Behdad Esfahbod, 2004
+ *
+ * Copyright (C) 2004 Sharif FarsiWeb, Inc.
+ * Copyright (C) 2004 Behdad Esfahbod
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ * 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library, in a file named COPYING; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+ * Boston, MA 02110-1301, USA
+ *
+ * For licensing issues, contact <fribidi.license@gmail.com>.
+ */
+

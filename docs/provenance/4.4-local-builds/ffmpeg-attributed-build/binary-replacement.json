@@ -1,0 +1,9 @@
+{
+  "previousSHA256": "e8214cc43d5b5c3699e7fd439a129dc95346038d8b822a3cc104e7b00fad18e3",
+  "sha256": "25ee9d7ecd96c81b18cf5970e58201f4c94c4b1f5b4dea51c765aa28c639afd2",
+  "bytes": 54661504,
+  "architecture": "arm64",
+  "signature": "ad-hoc; re-signed by release pipeline",
+  "sourceVersion": "9.0.1",
+  "buildSystemRevision": "00023f5"
+}

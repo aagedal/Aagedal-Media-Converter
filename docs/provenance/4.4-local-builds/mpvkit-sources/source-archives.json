@@ -1,0 +1,589 @@
+{
+  "archives": [
+    {
+      "component": "MPVKit: gnutls",
+      "path": "build/attribution/mpvkit/gnutls-source.tar.gz",
+      "bytes": 11018461,
+      "sha256": "1d95c82f0dbcf8de6669591b67cdd4c268542eb8789462f02ac6baa4cfd16470",
+      "url": "https://codeload.github.com/gnutls/gnutls/tar.gz/refs/tags/3.8.11"
+    },
+    {
+      "component": "MPVKit: nettle",
+      "path": "build/attribution/mpvkit/nettle-source.tar.gz",
+      "bytes": 2640485,
+      "sha256": "b4c518adb174e484cb4acea54118f02380c7133771e7e9beb98a0787194ee47c",
+      "url": "https://ftp.gnu.org/gnu/nettle/nettle-3.10.tar.gz"
+    },
+    {
+      "component": "MPVKit: gmp",
+      "path": "build/attribution/mpvkit/gmp-source.tar.gz",
+      "bytes": 3322091,
+      "sha256": "fb776e19e0267053c3d6ffef0dcc001fb441da0e2b5224cfd9656aa2f1b8614d",
+      "url": "https://codeload.github.com/alisw/GMP/tar.gz/refs/tags/v6.2.1"
+    },
+    {
+      "component": "MPVKit: lcms2",
+      "path": "build/attribution/mpvkit/lcms2-source.tar.gz",
+      "bytes": 5257509,
+      "sha256": "6e6f6411db50e85ae8ff7777f01b2da0614aac13b7b9fcbea66dc56a1bc71418",
+      "url": "https://codeload.github.com/mm2/Little-CMS/tar.gz/refs/tags/lcms2.17"
+    },
+    {
+      "component": "MPVKit: libunibreak",
+      "path": "build/attribution/mpvkit/libunibreak-source.tar.gz",
+      "bytes": 169640,
+      "sha256": "890674996168ef5ba143d80d49ab8b61594a4eb70198dcac76caf6e1bd264a41",
+      "url": "https://codeload.github.com/adah1972/libunibreak/tar.gz/refs/tags/libunibreak_6_1"
+    },
+    {
+      "component": "MPVKit: freetype",
+      "path": "build/attribution/mpvkit/freetype-source.tar.gz",
+      "bytes": 2515533,
+      "sha256": "dc49de6b01a266eef4876a4dd34d9842c475d3e28ff2eff63bd2fb760ab56261",
+      "url": "https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-14-3"
+    },
+    {
+      "component": "MPVKit: fribidi",
+      "path": "build/attribution/mpvkit/fribidi-source.tar.gz",
+      "bytes": 2144176,
+      "sha256": "5a1d187a33daa58fcee2ad77f0eb9d136dd6fa4096239199ba31e850d397e8a8",
+      "url": "https://codeload.github.com/fribidi/fribidi/tar.gz/refs/tags/v1.0.16"
+    },
+    {
+      "component": "MPVKit: harfbuzz",
+      "path": "build/attribution/mpvkit/harfbuzz-source.tar.gz",
+      "bytes": 37408544,
+      "sha256": "c652d5d94971031654ab3989891a490a895d3e3f2b71171c62692b28e94b1b93",
+      "url": "https://codeload.github.com/harfbuzz/harfbuzz/tar.gz/refs/tags/14.2.0"
+    },
+    {
+      "component": "MPVKit: libass",
+      "path": "build/attribution/mpvkit/libass-source.tar.gz",
+      "bytes": 351516,
+      "sha256": "fa286fc9ee1ba3b932703a3df7b8474d01dc8abe29ec69b6fa68781dc4bf7acc",
+      "url": "https://codeload.github.com/libass/libass/tar.gz/refs/tags/0.17.5"
+    },
+    {
+      "component": "MPVKit: libbluray",
+      "path": "build/attribution/mpvkit/libbluray-source.tar.gz",
+      "bytes": 593766,
+      "sha256": "0dc218f79435798a62da2a0510e0e921a3f7c1b140507df8e65f48d98046f024",
+      "url": "https://code.videolan.org/videolan/libbluray/-/archive/1.4.0/libbluray-1.4.0.tar.gz"
+    },
+    {
+      "component": "MPVKit: dav1d",
+      "path": "build/attribution/mpvkit/dav1d-source.tar.gz",
+      "bytes": 1713950,
+      "sha256": "cbe212b02faf8c6eed5b6d55ef8a6e363aaab83f15112e960701a9c3df813686",
+      "url": "https://codeload.github.com/videolan/dav1d/tar.gz/refs/tags/1.5.3"
+    },
+    {
+      "component": "MPVKit: libdovi",
+      "path": "build/attribution/mpvkit/libdovi-source.tar.gz",
+      "bytes": 489628,
+      "sha256": "8ccb1922d7dbb57bc4f2c15c10b90c462f7a5f292efe317c116db923728dd3f1",
+      "url": "https://codeload.github.com/quietvoid/dovi_tool/tar.gz/refs/tags/libdovi-3.3.2"
+    },
+    {
+      "component": "MPVKit: libplacebo",
+      "path": "build/attribution/mpvkit/libplacebo-source.tar.gz",
+      "bytes": 862269,
+      "sha256": "d05fdf90bea2f629eaa2d115e909fd356388ac639e54f77b87a018a6d76224bd",
+      "url": "https://codeload.github.com/haasn/libplacebo/tar.gz/refs/tags/v7.360.1"
+    },
+    {
+      "component": "MPVKit: spirv-cross",
+      "path": "build/attribution/mpvkit/spirv-cross-source.tar.gz",
+      "bytes": 1875088,
+      "sha256": "cf4f12a767d63f63024e61750e372ffdc95567513b99ed9be6f21f474b328ddd",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Cross/tar.gz/refs/tags/vulkan-sdk-1.4.309.0"
+    },
+    {
+      "component": "MPVKit: shaderc",
+      "path": "build/attribution/mpvkit/shaderc-source.tar.gz",
+      "bytes": 228956,
+      "sha256": "fca5041b1fdea6daba167b63e04e55e5059fab40828342126169336643445447",
+      "url": "https://codeload.github.com/google/shaderc/tar.gz/refs/tags/v2025.5"
+    },
+    {
+      "component": "MPVKit: samba",
+      "path": "build/attribution/mpvkit/samba-source.tar.gz",
+      "bytes": 37518874,
+      "sha256": "927c54ae62fe70c9e16e65f64c3922e7fa6fb13e3808d73d0c2c38cc9fa677c1",
+      "url": "https://codeload.github.com/samba-team/samba/tar.gz/refs/tags/samba-4.15.13"
+    },
+    {
+      "component": "MPVKit: uchardet",
+      "path": "build/attribution/mpvkit/uchardet-source.tar.xz",
+      "bytes": 222648,
+      "sha256": "e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0",
+      "url": "https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz"
+    },
+    {
+      "component": "MPVKit: MoltenVK",
+      "path": "build/attribution/mpvkit/MoltenVK-source.tar.gz",
+      "bytes": 1260733,
+      "sha256": "6864db532f1dbbdb621a8d0ec13f24edae318fd9269dd3dd0cdff791334bb1cb",
+      "url": "https://codeload.github.com/KhronosGroup/MoltenVK/tar.gz/refs/tags/v1.4.2"
+    },
+    {
+      "component": "MPVKit: openssl",
+      "path": "build/attribution/mpvkit/openssl-source.tar.gz",
+      "bytes": 18290391,
+      "sha256": "5af6007f8ce1b6fb2c807e4dbf87dc7390682c77e02dc2d97115177f43fb4d79",
+      "url": "https://codeload.github.com/openssl/openssl/tar.gz/refs/tags/openssl-3.3.5"
+    },
+    {
+      "component": "MPVKit: shaderc-abseil",
+      "path": "build/attribution/mpvkit/shaderc-abseil-source.tar.gz",
+      "bytes": 2222719,
+      "sha256": "4ae9fc64860d5204f0ca6bd6c7a5f8e59ced118494db7e14537d8ed55dce5715",
+      "url": "https://codeload.github.com/abseil/abseil-cpp/tar.gz/1315c900e1ddbb08a23e06eeb9a06450052ccb5e"
+    },
+    {
+      "component": "MPVKit: shaderc-effcee",
+      "path": "build/attribution/mpvkit/shaderc-effcee-source.tar.gz",
+      "bytes": 39969,
+      "sha256": "d6d6b602f1b6f09d3a83c44a067d087c23fdc3d3530e2e5dd27be2adda91fe4d",
+      "url": "https://codeload.github.com/google/effcee/tar.gz/08da24ec245a274fea3a128ba50068f163390565"
+    },
+    {
+      "component": "MPVKit: shaderc-glslang",
+      "path": "build/attribution/mpvkit/shaderc-glslang-source.tar.gz",
+      "bytes": 4250661,
+      "sha256": "272d2725b140e09e85b96eecdc59c2e00c1a14cda2301767e1bf3c363a44b931",
+      "url": "https://codeload.github.com/KhronosGroup/glslang/tar.gz/7a47e2531cb334982b2a2dd8513dca0a3de4373d"
+    },
+    {
+      "component": "MPVKit: shaderc-googletest",
+      "path": "build/attribution/mpvkit/shaderc-googletest-source.tar.gz",
+      "bytes": 873606,
+      "sha256": "7aca173cc96c0feaa01035184e34b020daaa93ddc132c5a829b7ea34006f701b",
+      "url": "https://codeload.github.com/google/googletest/tar.gz/1d17ea141d2c11b8917d2c7d029f1c4e2b9769b2"
+    },
+    {
+      "component": "MPVKit: shaderc-re2",
+      "path": "build/attribution/mpvkit/shaderc-re2-source.tar.gz",
+      "bytes": 390803,
+      "sha256": "f0a65168e64a10ab556b265f2f411678e6b9555f21e04202f84f250b659954ba",
+      "url": "https://codeload.github.com/google/re2/tar.gz/4a8cee3dd3c3d81b6fe8b867811e193d5819df07"
+    },
+    {
+      "component": "MPVKit: shaderc-spirv_headers",
+      "path": "build/attribution/mpvkit/shaderc-spirv_headers-source.tar.gz",
+      "bytes": 558965,
+      "sha256": "c693867f10a7760ef1bcf85419d51783586768cc2c601d03841bc6a8b2554b9c",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/b824a462d4256d720bebb40e78b9eb8f78bbb305"
+    },
+    {
+      "component": "MPVKit: shaderc-spirv_tools",
+      "path": "build/attribution/mpvkit/shaderc-spirv_tools-source.tar.gz",
+      "bytes": 3428734,
+      "sha256": "8f830936b057003be77e90d37068ff6066eb87a1bab0033f8f2f5feaa966ce56",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Tools/tar.gz/262bdab48146c937467f826699a40da0fdfc0f1a"
+    },
+    {
+      "component": "MPVKit: MoltenVK-SPIRV-Cross",
+      "path": "build/attribution/mpvkit/MoltenVK-SPIRV-Cross-source.tar.gz",
+      "bytes": 2007157,
+      "sha256": "b81b9956289950570953738e666a031ca32ff64e4fc925eba89f227c42109518",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Cross/tar.gz/6c09849fe88c48eaed08413aa022aaa136a3a057"
+    },
+    {
+      "component": "MPVKit: MoltenVK-SPIRV-Headers",
+      "path": "build/attribution/mpvkit/MoltenVK-SPIRV-Headers-source.tar.gz",
+      "bytes": 572275,
+      "sha256": "232899f1ad4104fb5bc377b94596c7621575eee62ad9a9e8f929b63a7dd8a7ad",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/29981f65241605e08b0ede4cfeb999fe3b723c6a"
+    },
+    {
+      "component": "MPVKit: MoltenVK-SPIRV-Tools",
+      "path": "build/attribution/mpvkit/MoltenVK-SPIRV-Tools-source.tar.gz",
+      "bytes": 3527179,
+      "sha256": "20219c0962dffb0d7644bb3116a5923cfcf0526a569baa0b2a17343dd2fa6e5d",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Tools/tar.gz/0d6fd73ca73830ccab5fa1f00ed5ed40124e2c55"
+    },
+    {
+      "component": "MPVKit: MoltenVK-Vulkan-Headers",
+      "path": "build/attribution/mpvkit/MoltenVK-Vulkan-Headers-source.tar.gz",
+      "bytes": 3376893,
+      "sha256": "f492279345cbc10708b64fcd432b3ff6c8246a5837c4db2b649abba00cf82208",
+      "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/e3b1eec08173d6b825cd3ac88c885a63b621504a"
+    },
+    {
+      "component": "MPVKit: MoltenVK-cereal",
+      "path": "build/attribution/mpvkit/MoltenVK-cereal-source.tar.gz",
+      "bytes": 386830,
+      "sha256": "12e10fb541270632f6683286ce8c7e8c321fe4addb53fa91ed498b95c1758f93",
+      "url": "https://codeload.github.com/USCiLab/cereal/tar.gz/a56bad8bbb770ee266e930c95d37fff2a5be7fea"
+    },
+    {
+      "component": "MPVKit: gnutls-gnulib",
+      "path": "build/attribution/mpvkit/gnutls-gnulib-source.tar.gz",
+      "bytes": 9052477,
+      "sha256": "87aded12d4800c1fd2abd3db7a61942eec6bc2325485706cb3f6987bbcafb166",
+      "url": "https://codeload.github.com/coreutils/gnulib/tar.gz/05c63bc908a67a316fea29ddf4c702d89cf5bdec"
+    },
+    {
+      "component": "MPVKit: libplacebo-glad",
+      "path": "build/attribution/mpvkit/libplacebo-glad-source.tar.gz",
+      "bytes": 645779,
+      "sha256": "33dbeae44d8315ece57e14eba4b1b4a02ac5406d1c4f49cd20048c91522a6b9a",
+      "url": "https://codeload.github.com/Dav1dde/glad/tar.gz/73db193f853e2ee079bf3ca8a64aa2eaf6459043"
+    },
+    {
+      "component": "MPVKit: libplacebo-jinja",
+      "path": "build/attribution/mpvkit/libplacebo-jinja-source.tar.gz",
+      "bytes": 276954,
+      "sha256": "b88a20dcc2e34072fcf4159325bc6c34cd4b29a81a8b83d15d2f28ba561da296",
+      "url": "https://codeload.github.com/pallets/jinja/tar.gz/15206881c006c79667fe5154fe80c01c65410679"
+    },
+    {
+      "component": "MPVKit: libplacebo-markupsafe",
+      "path": "build/attribution/mpvkit/libplacebo-markupsafe-source.tar.gz",
+      "bytes": 83817,
+      "sha256": "da7c010c9c81a66ac73036558c1fcb6212b50482f43211cd1254035b94f82414",
+      "url": "https://codeload.github.com/pallets/markupsafe/tar.gz/297fc8e356e6836a62087949245d09a28e9f1b13"
+    },
+    {
+      "component": "MPVKit: libplacebo-Vulkan-Headers",
+      "path": "build/attribution/mpvkit/libplacebo-Vulkan-Headers-source.tar.gz",
+      "bytes": 2940820,
+      "sha256": "26df9841c30806a994e2fdf42f7c87bcb1ced9db9a06033469123939fb3fa075",
+      "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/450bd2232225d6c7728a4108055ac2e37cef6475"
+    },
+    {
+      "component": "MPVKit: libplacebo-fast_float",
+      "path": "build/attribution/mpvkit/libplacebo-fast_float-source.tar.gz",
+      "bytes": 120200,
+      "sha256": "2b132274539286e41f37857cac22aa8441d21bd86d55de825a3342b149f66801",
+      "url": "https://codeload.github.com/fastfloat/fast_float/tar.gz/97b54ca9e75f5303507699d27c6b4f4efe4641a1"
+    },
+    {
+      "component": "MPVKit: gnutls-libtasn1",
+      "path": "build/attribution/mpvkit/gnutls-libtasn1-source.tar.gz",
+      "bytes": 828920,
+      "sha256": "439ef5d67e62ead0ebbd1f06167b6f1b764910d3cf0811707c3b6b625b49a92b",
+      "url": "https://gitlab.com/gnutls/libtasn1/-/archive/6b45b25e94ea538192cc0f97e9ad57171d1c6374/libtasn1-6b45b25e94ea538192cc0f97e9ad57171d1c6374.tar.gz"
+    },
+    {
+      "component": "MPVKit: gnutls-nettle",
+      "path": "build/attribution/mpvkit/gnutls-nettle-source.tar.gz",
+      "bytes": 1876089,
+      "sha256": "7960f4f0903911d71ccf596a1c3eda67f9d73dd82e4fb43f650f89a3fb1e5eb7",
+      "url": "https://codeload.github.com/gnutls/nettle/tar.gz/40178e78ae73ec2a8cda8cd53664df9c73ac1961"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-libc-0.2.172",
+      "path": "build/attribution/mpvkit/libdovi-crate-libc-0.2.172.crate",
+      "bytes": 791646,
+      "sha256": "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa",
+      "url": "https://static.crates.io/crates/libc/libc-0.2.172.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-tinyvec-1.9.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-tinyvec-1.9.0.crate",
+      "bytes": 54137,
+      "sha256": "09b3661f17e86524eccd4371ab0429194e0d7c008abb45f7a7495b1719463c71",
+      "url": "https://static.crates.io/crates/tinyvec/tinyvec-1.9.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-serde-1.0.219",
+      "path": "build/attribution/mpvkit/libdovi-crate-serde-1.0.219.crate",
+      "bytes": 78983,
+      "sha256": "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6",
+      "url": "https://static.crates.io/crates/serde/serde-1.0.219.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-serde_derive-1.0.219",
+      "path": "build/attribution/mpvkit/libdovi-crate-serde_derive-1.0.219.crate",
+      "bytes": 57798,
+      "sha256": "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00",
+      "url": "https://static.crates.io/crates/serde_derive/serde_derive-1.0.219.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-syn-2.0.101",
+      "path": "build/attribution/mpvkit/libdovi-crate-syn-2.0.101.crate",
+      "bytes": 299250,
+      "sha256": "8ce2b7fc941b3a24138a0a7cf8e858bfc6a992e7978a068a5c760deb0ed43caf",
+      "url": "https://static.crates.io/crates/syn/syn-2.0.101.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-unicode-ident-1.0.18",
+      "path": "build/attribution/mpvkit/libdovi-crate-unicode-ident-1.0.18.crate",
+      "bytes": 47743,
+      "sha256": "5a5f39404a5da50712a4c1eecf25e90dd62b613502b7e925fd4e4d19b5c96512",
+      "url": "https://static.crates.io/crates/unicode-ident/unicode-ident-1.0.18.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-quote-1.0.40",
+      "path": "build/attribution/mpvkit/libdovi-crate-quote-1.0.40.crate",
+      "bytes": 31063,
+      "sha256": "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d",
+      "url": "https://static.crates.io/crates/quote/quote-1.0.40.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-proc-macro2-1.0.95",
+      "path": "build/attribution/mpvkit/libdovi-crate-proc-macro2-1.0.95.crate",
+      "bytes": 51820,
+      "sha256": "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778",
+      "url": "https://static.crates.io/crates/proc-macro2/proc-macro2-1.0.95.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-crc-3.3.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-crc-3.3.0.crate",
+      "bytes": 13905,
+      "sha256": "9710d3b3739c2e349eb44fe848ad0b7c8cb1e42bd87ee49371df2f7acaf3e675",
+      "url": "https://static.crates.io/crates/crc/crc-3.3.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-crc-catalog-2.4.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-crc-catalog-2.4.0.crate",
+      "bytes": 10155,
+      "sha256": "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5",
+      "url": "https://static.crates.io/crates/crc-catalog/crc-catalog-2.4.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-bitvec-1.0.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-bitvec-1.0.1.crate",
+      "bytes": 224375,
+      "sha256": "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c",
+      "url": "https://static.crates.io/crates/bitvec/bitvec-1.0.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-wyz-0.5.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-wyz-0.5.1.crate",
+      "bytes": 18790,
+      "sha256": "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed",
+      "url": "https://static.crates.io/crates/wyz/wyz-0.5.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-tap-1.0.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-tap-1.0.1.crate",
+      "bytes": 11316,
+      "sha256": "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369",
+      "url": "https://static.crates.io/crates/tap/tap-1.0.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-radium-0.7.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-radium-0.7.0.crate",
+      "bytes": 10906,
+      "sha256": "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09",
+      "url": "https://static.crates.io/crates/radium/radium-0.7.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-funty-2.0.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-funty-2.0.0.crate",
+      "bytes": 13160,
+      "sha256": "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c",
+      "url": "https://static.crates.io/crates/funty/funty-2.0.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-bitvec_helpers-3.1.6",
+      "path": "build/attribution/mpvkit/libdovi-crate-bitvec_helpers-3.1.6.crate",
+      "bytes": 5205,
+      "sha256": "d9a6aff977a34114f146bd3379c9d170a8eafcffcdeecbb7cc3bd2470a39709a",
+      "url": "https://static.crates.io/crates/bitvec_helpers/bitvec_helpers-3.1.6.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-bitstream-io-2.6.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-bitstream-io-2.6.0.crate",
+      "bytes": 38256,
+      "sha256": "6099cdc01846bc367c4e7dd630dc5966dccf36b652fae7a74e17b640411a91b2",
+      "url": "https://static.crates.io/crates/bitstream-io/bitstream-io-2.6.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-anyhow-1.0.98",
+      "path": "build/attribution/mpvkit/libdovi-crate-anyhow-1.0.98.crate",
+      "bytes": 53334,
+      "sha256": "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487",
+      "url": "https://static.crates.io/crates/anyhow/anyhow-1.0.98.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-gimli-0.32.3",
+      "path": "build/attribution/mpvkit/libdovi-crate-gimli-0.32.3.crate",
+      "bytes": 289789,
+      "sha256": "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7",
+      "url": "https://static.crates.io/crates/gimli/gimli-0.32.3.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-addr2line-0.25.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-addr2line-0.25.1.crate",
+      "bytes": 43134,
+      "sha256": "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b",
+      "url": "https://static.crates.io/crates/addr2line/addr2line-0.25.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-object-0.37.3",
+      "path": "build/attribution/mpvkit/libdovi-crate-object-0.37.3.crate",
+      "bytes": 344032,
+      "sha256": "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe",
+      "url": "https://static.crates.io/crates/object/object-0.37.3.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-memchr-2.7.6",
+      "path": "build/attribution/mpvkit/libdovi-crate-memchr-2.7.6.crate",
+      "bytes": 97616,
+      "sha256": "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273",
+      "url": "https://static.crates.io/crates/memchr/memchr-2.7.6.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-rustc-demangle-0.1.26",
+      "path": "build/attribution/mpvkit/libdovi-crate-rustc-demangle-0.1.26.crate",
+      "bytes": 30340,
+      "sha256": "56f7d92ca342cea22a06f2121d944b4fd82af56988c270852495420f961d4ace",
+      "url": "https://static.crates.io/crates/rustc-demangle/rustc-demangle-0.1.26.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-hashbrown-0.16.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-hashbrown-0.16.1.crate",
+      "bytes": 147785,
+      "sha256": "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100",
+      "url": "https://static.crates.io/crates/hashbrown/hashbrown-0.16.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-miniz_oxide-0.8.9",
+      "path": "build/attribution/mpvkit/libdovi-crate-miniz_oxide-0.8.9.crate",
+      "bytes": 67132,
+      "sha256": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+      "url": "https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.8.9.crate"
+    },
+    {
+      "component": "MPVKit recipe: MPVKit",
+      "path": "build/attribution/mpvkit/MPVKit-aagedal-1.0.0-n8.1.2.tar.gz",
+      "bytes": 81782,
+      "sha256": "16fa66fa6ec62a51c7b754128c28e13a16662783095f82e758863a35afb272d5",
+      "url": "https://codeload.github.com/aagedal/MPVKit/tar.gz/refs/tags/aagedal-1.0.0-n8.1.2"
+    },
+    {
+      "component": "MPVKit recipe: gnutls-build",
+      "path": "build/attribution/mpvkit/gnutls-build-3.8.11.tar.gz",
+      "bytes": 17846,
+      "sha256": "f15b4e8e624dccbd8a624b42a5f7975beb16bcde8253a48512cb4ac637a42757",
+      "url": "https://codeload.github.com/mpvkit/gnutls-build/tar.gz/refs/tags/3.8.11"
+    },
+    {
+      "component": "MPVKit recipe: lcms2-build",
+      "path": "build/attribution/mpvkit/lcms2-build-2.17.0.tar.gz",
+      "bytes": 16844,
+      "sha256": "b27aa905f24f23b319ab5671149b9c49eb722efce72b55d2db883d299204a198",
+      "url": "https://codeload.github.com/mpvkit/lcms2-build/tar.gz/refs/tags/2.17.0"
+    },
+    {
+      "component": "MPVKit recipe: libass-build",
+      "path": "build/attribution/mpvkit/libass-build-0.17.5.tar.gz",
+      "bytes": 5114,
+      "sha256": "442fa17cd6999c7627c330ef44d1b7f2d121baaf9cb0d5e912c1bbbca6ca9792",
+      "url": "https://codeload.github.com/mpvkit/libass-build/tar.gz/refs/tags/0.17.5"
+    },
+    {
+      "component": "MPVKit recipe: libbluray-build",
+      "path": "build/attribution/mpvkit/libbluray-build-1.4.0.tar.gz",
+      "bytes": 19070,
+      "sha256": "5b11e1cedd694854f7694eba0afbca946b1a1e33e76329620291cc9013d5f7ce",
+      "url": "https://codeload.github.com/mpvkit/libbluray-build/tar.gz/refs/tags/1.4.0"
+    },
+    {
+      "component": "MPVKit recipe: libdav1d-build",
+      "path": "build/attribution/mpvkit/libdav1d-build-1.5.3.tar.gz",
+      "bytes": 17619,
+      "sha256": "152e792b38f4f0d4115a6994e6872d518c8cb7181a386d0fb635fa2b3884f603",
+      "url": "https://codeload.github.com/mpvkit/libdav1d-build/tar.gz/refs/tags/1.5.3"
+    },
+    {
+      "component": "MPVKit recipe: libdovi-build",
+      "path": "build/attribution/mpvkit/libdovi-build-3.3.2.tar.gz",
+      "bytes": 17232,
+      "sha256": "db04d1c03c697029d47481fc1d7451e695661e35d8ce76aadd10e8cc8cd70010",
+      "url": "https://codeload.github.com/mpvkit/libdovi-build/tar.gz/refs/tags/3.3.2"
+    },
+    {
+      "component": "MPVKit recipe: libplacebo-build",
+      "path": "build/attribution/mpvkit/libplacebo-build-7.360.1.tar.gz",
+      "bytes": 6549,
+      "sha256": "7712d9827f229213fc0f92d9250c5e8c503a0e3632323cd4971e34d62b37ed90",
+      "url": "https://codeload.github.com/mpvkit/libplacebo-build/tar.gz/refs/tags/7.360.1"
+    },
+    {
+      "component": "MPVKit recipe: libshaderc-build",
+      "path": "build/attribution/mpvkit/libshaderc-build-2025.5.0.tar.gz",
+      "bytes": 18209,
+      "sha256": "454d83bc4b878b00b9b1d17418b787311d81cb0dc7acd18d62601be892593189",
+      "url": "https://codeload.github.com/mpvkit/libshaderc-build/tar.gz/refs/tags/2025.5.0"
+    },
+    {
+      "component": "MPVKit recipe: libsmbclient-build",
+      "path": "build/attribution/mpvkit/libsmbclient-build-4.15.13-2512.tar.gz",
+      "bytes": 187715,
+      "sha256": "d6d3f29777a8909e36ee6c06f7641266efae821fa770c667fdd82a586f93169c",
+      "url": "https://codeload.github.com/mpvkit/libsmbclient-build/tar.gz/refs/tags/4.15.13-2512"
+    },
+    {
+      "component": "MPVKit recipe: libuavs3d-build",
+      "path": "build/attribution/mpvkit/libuavs3d-build-1.2.1-fix.tar.gz",
+      "bytes": 5133,
+      "sha256": "b57f603167d727ea81ecd4a6e6ddac8665f6ed94325e14e715ad8b67677bb146",
+      "url": "https://codeload.github.com/mpvkit/libuavs3d-build/tar.gz/refs/tags/1.2.1-fix"
+    },
+    {
+      "component": "MPVKit recipe: libuchardet-build",
+      "path": "build/attribution/mpvkit/libuchardet-build-0.0.8.tar.gz",
+      "bytes": 4135,
+      "sha256": "85072c2763ec7fdddff4c971d6045d5e9863382447e86ef6b8d505fc0ab21ef4",
+      "url": "https://codeload.github.com/mpvkit/libuchardet-build/tar.gz/refs/tags/0.0.8"
+    },
+    {
+      "component": "MPVKit recipe: moltenvk-build",
+      "path": "build/attribution/mpvkit/moltenvk-build-1.4.2.tar.gz",
+      "bytes": 6842,
+      "sha256": "9e090713349eb65e0ac61b37260f1ff174940670ee54474795e0ef4e2ce3f01b",
+      "url": "https://codeload.github.com/mpvkit/moltenvk-build/tar.gz/refs/tags/1.4.2"
+    },
+    {
+      "component": "MPVKit recipe: openssl-build",
+      "path": "build/attribution/mpvkit/openssl-build-3.3.5.tar.gz",
+      "bytes": 16881,
+      "sha256": "84152658ec471ce859399e576b9819122583a45eb943208af119913ad0c1f80b",
+      "url": "https://codeload.github.com/mpvkit/openssl-build/tar.gz/refs/tags/3.3.5"
+    },
+    {
+      "component": "mpv",
+      "path": "build/attribution/mpvkit/mpv-local-source.tar.gz",
+      "bytes": 7278254,
+      "sha256": "006ff824d2ccfb4b4ddc417c9f9bac27266f49c944ccc3c458b9390194e8647f"
+    },
+    {
+      "component": "FFmpeg",
+      "path": "build/attribution/mpvkit/FFmpeg-local-source.tar.gz",
+      "bytes": 16873307,
+      "sha256": "feb1f8c5a2ed8116745a09e92d194a6f226e783fc277ca2259672e4bf3c24a63"
+    },
+    {
+      "component": "MPVKit Rust standard-library licensing/source reference (build-date inference)",
+      "path": "build/attribution/mpvkit/rust-src-nightly-2025-12-22.tar.xz",
+      "bytes": 3722860,
+      "sha256": "548d78b43e5cab86a793267ffe756b99737d7f0397acf1181acc7d939b34d2a7",
+      "url": "https://static.rust-lang.org/dist/2025-12-22/rust-src-nightly.tar.xz"
+    },
+    {
+      "component": "MPVKit pinned wrapper and build sources",
+      "path": "build/attribution/mpvkit/MPVKit-pinned-source.tar.gz",
+      "bytes": 81749,
+      "sha256": "c29dc8723087ef1b05c194504016af4bdecb30eba75ba878a2828123445dacad",
+      "url": "https://github.com/aagedal/MPVKit/tree/230c3174f1515898f24599147ad61c2a277d0dc2"
+    },
+    {
+      "component": "MPVKit local patches and build configuration",
+      "path": "build/attribution/mpvkit/local-build-configuration.tar.gz",
+      "bytes": 88489,
+      "sha256": "dcf6f53b16f5077fc33329091be20ec0b022d1f5ea15f4d5eb7568167ad07fa8"
+    },
+    {
+      "component": "MPVKit crc-catalog upstream source (crate VCS revision)",
+      "path": "build/attribution/mpvkit/crc-catalog-upstream-source.tar.gz",
+      "bytes": 10317,
+      "sha256": "16b5e9a284c91f9b9750a95213ac770a965a65780525fe2671580c9ab1aaa51f",
+      "url": "https://codeload.github.com/akhilles/crc-catalog/tar.gz/b500ea693c552f8d946e290722a7b3ee8b9a7ee2"
+    }
+  ]
+}

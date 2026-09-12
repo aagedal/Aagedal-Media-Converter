@@ -5,11 +5,65 @@
 // Observer management for PreviewPlayerController (loop, time, playback monitoring).
 
 import Foundation
+import Combine
 @preconcurrency import AVKit
 @preconcurrency import AVFoundation
 import OSLog
 
 extension PreviewPlayerController {
+    // MARK: - MPV Observers
+
+    /// Own subscriptions for one player. Finite actor hops also check the generation
+    /// because cancelling a subscription cannot retract a callback already queued.
+    func installMPVObservers(
+        timePosition: AnyPublisher<Double, Never>,
+        fileLoaded: AnyPublisher<Bool, Never>,
+        reachedEnd: AnyPublisher<Bool, Never>,
+        refreshDelay: Duration = .milliseconds(500),
+        refreshTracks: @escaping @MainActor () -> Void
+    ) {
+        removeMPVObservers()
+        let observationID = UUID()
+        mpvObservationID = observationID
+
+        timePosition.sink { [weak self] time in
+            Task { @MainActor [weak self] in
+                guard let self, self.mpvObservationID == observationID else { return }
+                self.currentPlaybackTime = time
+            }
+        }.store(in: &mpvObservers)
+
+        fileLoaded.filter { $0 }.prefix(1).sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.mpvObservationID == observationID else { return }
+                self.isReady = true
+            }
+        }.store(in: &mpvObservers)
+
+        reachedEnd.removeDuplicates().filter { $0 }.sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.mpvObservationID == observationID else { return }
+                self.playbackDidFinish?()
+            }
+        }.store(in: &mpvObservers)
+
+        mpvTrackRefreshTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: refreshDelay) }
+            catch { return }
+            guard !Task.isCancelled, let self,
+                  self.mpvObservationID == observationID else { return }
+            self.mpvTrackRefreshTask = nil
+            refreshTracks()
+        }
+    }
+
+    func removeMPVObservers() {
+        mpvObservationID = nil
+        mpvObservers.removeAll()
+        mpvTrackRefreshTask?.cancel()
+        mpvTrackRefreshTask = nil
+    }
+
     
     // MARK: - Loop Observer
     
@@ -21,7 +75,7 @@ extension PreviewPlayerController {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self, weak item] _ in
             Task { @MainActor [weak self, weak item] in
                 guard let self, let item, self.player?.currentItem === item, self.loopObserverID == observerID else { return }
                 self.handlePlaybackEnded()
@@ -65,12 +119,14 @@ extension PreviewPlayerController {
     func installMPVTrimObserver() {
         removeMPVTrimObserver()
 
-        guard useMPV, mpvPlayer != nil else { return }
+        guard useMPV, let mpv = mpvPlayer, let observationID = mpvObservationID else { return }
 
-        // Check playback position every 0.1 seconds
-        mpvTrimObserverTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, let mpv = self.mpvPlayer else { return }
+        // Check playback position every 0.1 seconds. Timer invalidation cannot
+        // retract actor work already queued for a retired player.
+        mpvTrimObserverTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self, weak mpv] _ in
+            Task { @MainActor [weak self, weak mpv] in
+                guard let self, let mpv, self.mpvPlayer === mpv,
+                      self.mpvObservationID == observationID else { return }
 
                 // Only loop if loopPlayback is enabled
                 guard self.videoItem.loopPlayback else { return }

@@ -1,0 +1,178 @@
+[
+  {
+    "target": "Libmpv-GPL",
+    "archiveSHA256": "cfabdb70615205e8cb3c9f55dc6491194d900c42012b673f4e2819af8d216216",
+    "member": "Libmpv.xcframework/macos-arm64_x86_64/Libmpv.framework/Versions/A/Libmpv",
+    "memberSHA256": "b5ddaaa2fa61ccfbb92bcbcb6e5ddcdb6b4f14316ffde283a8fe23ee1ceba84d",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "c78e6138c99f0e1e42e93368a63e3e0c4674b679fbbc8457377d36c8bc3acc28",
+        "scratchSHA256": "c78e6138c99f0e1e42e93368a63e3e0c4674b679fbbc8457377d36c8bc3acc28",
+        "scratchPath": "../MPVKit/dist/libmpv/macos/scratch/arm64/libmpv.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "6a5c39a15dc1aa166b84bf1cb332de46c8413bcff3e3f629c2ccee8d7146f3a6",
+        "scratchSHA256": "6a5c39a15dc1aa166b84bf1cb332de46c8413bcff3e3f629c2ccee8d7146f3a6",
+        "scratchPath": "../MPVKit/dist/libmpv/macos/scratch/x86_64/libmpv.a",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "target": "Libavcodec-GPL",
+    "archiveSHA256": "b8bfd580f325995072a78bd9b8ec139781010955a96b09897a4cc202d80d17cf",
+    "member": "Libavcodec.xcframework/macos-arm64_x86_64/Libavcodec.framework/Versions/A/Libavcodec",
+    "memberSHA256": "93203f35a23a34307771d15515953a9ba8e3d7fbd45be552275666b86b2097be",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "9c3ecbc84f1e577b156b06713c12a442c47a1f9a739355286a55639b6f6ae6e1",
+        "scratchSHA256": "9c3ecbc84f1e577b156b06713c12a442c47a1f9a739355286a55639b6f6ae6e1",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/arm64/libavcodec/libavcodec.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "595bf85f0508a8ded65c356d3637673f0723b9ba8a1e6ea660b2fb654da3e6e9",
+        "scratchSHA256": "595bf85f0508a8ded65c356d3637673f0723b9ba8a1e6ea660b2fb654da3e6e9",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/x86_64/libavcodec/libavcodec.a",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "target": "Libavdevice-GPL",
+    "archiveSHA256": "5eeb5485d9f2cf5b63f5d31aa65a06c07eb3b53c2b30ae95edde71af1c055658",
+    "member": "Libavdevice.xcframework/macos-arm64_x86_64/Libavdevice.framework/Versions/A/Libavdevice",
+    "memberSHA256": "8e471c9428f848dbc377125f3030651f9f82142091f2568c54d2d842177d7d05",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "4b4925932be4c8b12f7fa7b832f53cd04df67b3409d47d0844df5e83d0783dd5",
+        "scratchSHA256": "4b4925932be4c8b12f7fa7b832f53cd04df67b3409d47d0844df5e83d0783dd5",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/arm64/libavdevice/libavdevice.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "ab84e9fa55edf1c83d8aa89fc07033c863733f1e5f10378a119791cb31ba506a",
+        "scratchSHA256": "ab84e9fa55edf1c83d8aa89fc07033c863733f1e5f10378a119791cb31ba506a",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/x86_64/libavdevice/libavdevice.a",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "target": "Libavformat-GPL",
+    "archiveSHA256": "d8631fe273bb52326bb09e30e4f7dddfb197d656dc8072d7db117c5a618a832a",
+    "member": "Libavformat.xcframework/macos-arm64_x86_64/Libavformat.framework/Versions/A/Libavformat",
+    "memberSHA256": "59195169993bfd1e8e4aba80a5ff982e34214746b545a0ee6a2d08c1cf17496e",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "476cf535903c3b51ee21384a40f7f29658c59bbed25712130c5baba234abd2ed",
+        "scratchSHA256": "476cf535903c3b51ee21384a40f7f29658c59bbed25712130c5baba234abd2ed",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/arm64/libavformat/libavformat.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "09cb1b110c3422d2a92fcc3656574f33aa80e21b3faebf7714702ba385e8c2b9",
+        "scratchSHA256": "09cb1b110c3422d2a92fcc3656574f33aa80e21b3faebf7714702ba385e8c2b9",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/x86_64/libavformat/libavformat.a",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "target": "Libavfilter-GPL",
+    "archiveSHA256": "7be6453e2146b1c3d99fd52e45d19566e7044bbf335799fc960f53a81e8e0b8f",
+    "member": "Libavfilter.xcframework/macos-arm64_x86_64/Libavfilter.framework/Versions/A/Libavfilter",
+    "memberSHA256": "c5d0c6afe2a9875d961cde4bf9d570f3650d5cc7e8011d6c2bfe42eed7b4b2a8",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "f1442400c05d282c577a5a5aa90689b7a7e3a85bb9a194661b560f00b01b5df1",
+        "scratchSHA256": "f1442400c05d282c577a5a5aa90689b7a7e3a85bb9a194661b560f00b01b5df1",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/arm64/libavfilter/libavfilter.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "7546a414d46b76b05fc2400d93420731a620c5d90b22bca17f718659d6507b65",
+        "scratchSHA256": "7546a414d46b76b05fc2400d93420731a620c5d90b22bca17f718659d6507b65",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/x86_64/libavfilter/libavfilter.a",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "target": "Libavutil-GPL",
+    "archiveSHA256": "c86a89424fde74caec2da4e56035050e7bad1e844465ce07b8a2b190d8d41fca",
+    "member": "Libavutil.xcframework/macos-arm64_x86_64/Libavutil.framework/Versions/A/Libavutil",
+    "memberSHA256": "5273145c45e8662fffbf4b8f2c1638a8b04749ba204c29c65dd57c4d8d380cb3",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "cde7218c8c1b40c94e4180b2253bc33fe8e838359204136a54fb248b37d15497",
+        "scratchSHA256": "cde7218c8c1b40c94e4180b2253bc33fe8e838359204136a54fb248b37d15497",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/arm64/libavutil/libavutil.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "cc4e549d4b1731b3bba9842787b84c6b26dc77bced12ecaad1b6801113c572cb",
+        "scratchSHA256": "cc4e549d4b1731b3bba9842787b84c6b26dc77bced12ecaad1b6801113c572cb",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/x86_64/libavutil/libavutil.a",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "target": "Libswresample-GPL",
+    "archiveSHA256": "5f0cf2dcf0c2f83c5ad734def64c042391803211dfda7bd31755adbef565b869",
+    "member": "Libswresample.xcframework/macos-arm64_x86_64/Libswresample.framework/Versions/A/Libswresample",
+    "memberSHA256": "3b4a5cb51c08b10264ec9479bf454a4a93ff14a02d751416debb16a69b751d80",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "7e9e051a4be12e68b994577886d16cc25515bae490482845c2d3071eab2b3760",
+        "scratchSHA256": "7e9e051a4be12e68b994577886d16cc25515bae490482845c2d3071eab2b3760",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/arm64/libswresample/libswresample.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "3dfd44747ae8a5f1a46333e1d516ee6a0f17e216b85cb2e8f95d22b2e341af16",
+        "scratchSHA256": "3dfd44747ae8a5f1a46333e1d516ee6a0f17e216b85cb2e8f95d22b2e341af16",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/x86_64/libswresample/libswresample.a",
+        "matches": true
+      }
+    ]
+  },
+  {
+    "target": "Libswscale-GPL",
+    "archiveSHA256": "0d1cb7d97b511bc34cbd1c49a3dd350ff3eecda8373265b221b3a20de92f82ff",
+    "member": "Libswscale.xcframework/macos-arm64_x86_64/Libswscale.framework/Versions/A/Libswscale",
+    "memberSHA256": "584b351a042fb032fd5343c483a1ef0a8638e0bf8fda28dcb334c4a199d7be8c",
+    "slices": [
+      {
+        "architecture": "arm64",
+        "sha256": "7b1d84980a8c4022916e105e60eaf3dea735b252466996caaba8a8d4d8ca16e4",
+        "scratchSHA256": "7b1d84980a8c4022916e105e60eaf3dea735b252466996caaba8a8d4d8ca16e4",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/arm64/libswscale/libswscale.a",
+        "matches": true
+      },
+      {
+        "architecture": "x86_64",
+        "sha256": "322c7088458a358343aa4ab098080391f66b665178b9f8aec5b3d503d6c32fe2",
+        "scratchSHA256": "322c7088458a358343aa4ab098080391f66b665178b9f8aec5b3d503d6c32fe2",
+        "scratchPath": "../MPVKit/dist/FFmpeg/macos/scratch/x86_64/libswscale/libswscale.a",
+        "matches": true
+      }
+    ]
+  }
+]

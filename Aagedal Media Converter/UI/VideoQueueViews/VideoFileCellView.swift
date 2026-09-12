@@ -77,8 +77,6 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     private let downloadedDragButton = DraggableFileImageView()
     private let copyPathButton = NSButton()
     private let dragButton = DraggableFileImageView()
-    private let liveRecordingBadge = NSView()
-    private let liveRecordingLabel = NSTextField(labelWithString: "LIVE")
 
     // Row 2: Progress bar
     private let progressBar = NSProgressIndicator()
@@ -589,23 +587,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         dragButton.setContentHuggingPriority(.required, for: .horizontal)
         dragButton.thumbnailProvider = { [weak thumbnailImageView] in thumbnailImageView?.image }
 
-        // Live recording badge
-        liveRecordingBadge.wantsLayer = true
-        liveRecordingBadge.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.8).cgColor
-        liveRecordingBadge.layer?.cornerRadius = 4
-        liveRecordingBadge.isHidden = true
-        liveRecordingBadge.translatesAutoresizingMaskIntoConstraints = false
-        configureLabel(liveRecordingLabel, font: .systemFont(ofSize: 9, weight: .bold), color: .white)
-        liveRecordingBadge.addSubview(liveRecordingLabel)
-        liveRecordingLabel.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            liveRecordingLabel.leadingAnchor.constraint(equalTo: liveRecordingBadge.leadingAnchor, constant: 4),
-            liveRecordingLabel.trailingAnchor.constraint(equalTo: liveRecordingBadge.trailingAnchor, constant: -4),
-            liveRecordingLabel.centerYAnchor.constraint(equalTo: liveRecordingBadge.centerYAnchor),
-        ])
-
         // Use gravity areas so the input → output labels sit flush on the leading edge
-        // while finder / drag / live badges stay pinned to the trailing edge. Labels
+        // while finder / drag buttons stay pinned to the trailing edge. Labels
         // keep their natural width instead of being force-equalized (which created a
         // big gap when one filename was much longer than the other).
         filenameStack.setViews(
@@ -613,7 +596,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             in: .leading
         )
         filenameStack.setViews(
-            [finderButton, copyPathButton, dragButton, liveRecordingBadge],
+            [finderButton, copyPathButton, dragButton],
             in: .trailing
         )
 
@@ -1025,11 +1008,6 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             dragButton.toolTip = config.status == .done
                 ? "Drag this icon to share the exported file with other apps."
                 : "Output file already exists and will be overwritten during conversion. Drag to share or archive before converting."
-        }
-
-        // Live recording
-        if isFirstConfigure || prev?.isLiveStreamRecording != config.isLiveStreamRecording {
-            liveRecordingBadge.isHidden = !config.isLiveStreamRecording
         }
 
         // Progress bar — also re-render on the *fractional* progress values, not just

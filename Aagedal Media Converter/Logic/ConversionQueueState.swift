@@ -3,6 +3,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import os
+
+/// Captured by callbacks so invalidating a batch also invalidates work already
+/// dispatched to the main actor, without another suspension before UI mutation.
+final class ConversionCallbackOwnership: Sendable {
+    let id = UUID()
+    private let active = OSAllocatedUnfairLock(initialState: true)
+
+    var isActive: Bool { active.withLock { $0 } }
+
+    func invalidate() { active.withLock { $0 = false } }
+}
 
 /// Queue decisions and item mutations without process, binding, or actor dependencies.
 enum ConversionQueueState {
@@ -15,6 +27,60 @@ enum ConversionQueueState {
         items.first {
             $0.status == .waiting && (allowedItemIDs?.contains($0.id) ?? true)
         }
+    }
+
+    /// Resolve callback targets by source identity and current state, never by
+    /// positions retained across asynchronous encoding or probing.
+    static func callbackIndices(
+        for selectedItems: [VideoItem],
+        in items: [VideoItem],
+        status: ConversionManager.ConversionStatus = .converting
+    ) -> [Int] {
+        selectedItems.compactMap { selected in
+            items.firstIndex {
+                $0.id == selected.id && $0.url == selected.url && $0.status == status
+            }
+        }
+    }
+
+    static func applyProgress(
+        _ progress: Double,
+        message: String?,
+        isDuration: Bool,
+        for selectedItems: [VideoItem],
+        ownership: ConversionCallbackOwnership,
+        in items: inout [VideoItem]
+    ) {
+        guard ownership.isActive else { return }
+        for index in callbackIndices(for: selectedItems, in: items) {
+            items[index].progress = progress
+            if isDuration {
+                items[index].eta = message
+                items[index].statusMessage = nil
+            } else {
+                items[index].statusMessage = message
+            }
+        }
+    }
+
+    /// Resolve the selected item again after asynchronous metadata preparation.
+    /// Queue positions can change while probing; cancelled, removed, or replaced
+    /// sources must never receive the delayed result or start encoding.
+    static func beginPreparedItem(
+        _ selectedItem: VideoItem,
+        details: VideoFileUtils.VideoItemDetails?,
+        in items: inout [VideoItem]
+    ) -> Int? {
+        guard let index = items.firstIndex(where: {
+            $0.id == selectedItem.id && $0.url == selectedItem.url && $0.status == .waiting
+        }) else { return nil }
+        // A concurrent import can have completed a newer details load meanwhile.
+        if !items[index].detailsLoaded, let details {
+            items[index].apply(details: details)
+            items[index].detailsLoaded = true
+        }
+        items[index].status = .converting
+        return index
     }
 
     /// Failed and cancelled items contribute neither work nor duration. Waiting items

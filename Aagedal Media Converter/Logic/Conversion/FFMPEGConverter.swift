@@ -31,17 +31,17 @@ private final class ConversionCompletionGate: @unchecked Sendable {
     }
 }
 
-/// Prevents progress callbacks already queued on another executor from mutating a
-/// cancelled or superseded conversion.
+/// Rejects progress callbacks admitted after cancellation or supersession. An already
+/// admitted callback may finish after invalidation; the manager's attempt ownership
+/// checks still govern UI publication. Invoke callers outside the lock so callbacks
+/// can synchronously request cancellation without blocking gate invalidation.
 private final class ConversionProgressGate: @unchecked Sendable {
     private let lock = NSLock()
     private var active = true
 
     func run(_ action: @Sendable () -> Void) {
-        lock.withLock {
-            guard active else { return }
-            action()
-        }
+        guard lock.withLock({ active }) else { return }
+        action()
     }
 
     func invalidate() {
@@ -96,7 +96,11 @@ private final class ConversionOutputReservations: @unchecked Sendable {
 }
 
 actor FFMPEGConverter {
+    @TaskLocal private static var runningSubprocessID: UUID?
     private var currentSubprocessTask: Task<Void, Never>?
+    private var joinableSubprocessID: UUID?
+    private var currentWaveformEncodingTask: Task<SubprocessResult, Error>?
+    private var currentWaveformEncodingID: UUID?
     private var currentDependencyPreflightTask: Task<String?, Error>?
     private var currentWaveformAnalysisTask: Task<FrequencyBandData, Error>?
     private var currentWaveformAnalysisID: UUID?
@@ -112,15 +116,19 @@ actor FFMPEGConverter {
     private var currentAVCIntraPreprocessingTaskID: UUID?
     private var currentAV2HelperTask: Task<AV2HelperRunResult, Never>?
     private var currentAV2HelperTaskID: UUID?
+    private var currentMCALabelTask: Task<URL?, Never>?
+    private var currentMCALabelTaskID: UUID?
     private var currentAV2PipelineTasks: [UUID: Task<SubprocessPipelineResult, Error>] = [:]
     private var currentProgressGate: ConversionProgressGate?
     private var activeConversionID: UUID?
     private var postProcessingConversionID: UUID?
     private var activeBMXOperationID: UUID?
     private let subprocessRunner: any SubprocessRunning
+    private let bmxService: BMXService
     private let ffmpegPathProvider: @Sendable () -> String?
     private let avmdecPathProvider: @Sendable () -> String?
     private let dependencyPreflight: ConversionDependencyPreflight
+    private let mcaAudioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
     private let preflightAudioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "FFMPEGConverter")
@@ -161,18 +169,24 @@ actor FFMPEGConverter {
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        bmxService: BMXService = .shared,
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath },
         dependencyPreflight: ConversionDependencyPreflight = ConversionDependencyPreflight(),
+        mcaAudioStreamProvider: @escaping @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = {
+            await FFMPEGProbeService.fetchAudioStreams(for: $0)
+        },
         preflightAudioStreamProvider: @escaping @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = {
             await FFMPEGProbeService.fetchAudioStreams(for: $0)
         }
     ) {
         self.subprocessRunner = subprocessRunner
+        self.bmxService = bmxService
         self.ffmpegPathProvider = ffmpegPathProvider
         self.avmdecPathProvider = avmdecPathProvider
         self.dependencyPreflight = dependencyPreflight
         self.preflightAudioStreamProvider = preflightAudioStreamProvider
+        self.mcaAudioStreamProvider = mcaAudioStreamProvider
     }
 
     // MARK: - Temp File Cleanup
@@ -201,11 +215,21 @@ actor FFMPEGConverter {
     /// the labels flag in that case, preserving today's behavior). Mirrors the
     /// AVC-Intra mono-split layout in `FFMPEGCommandBuilder.adjustAVCIntraAudio`:
     /// each input audio channel becomes one mono output track in input order.
-    private static func prepareAVCIntraMCALabelsFile(
+    static func prepareAVCIntraMCALabelsFile(
         inputURL: URL,
-        audioRoutingConfig: AudioRoutingConfig?
+        audioRoutingConfig: AudioRoutingConfig?,
+        targetChannelCount: Int,
+        mcaDefaults: AVCIntraMCADefaults,
+        audioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = { url in
+            await FFMPEGProbeService.fetchAudioStreams(for: url)
+        },
+        mcaLabelProvider: @Sendable (URL) async -> [AudioTrackMCALabels]? = { url in
+            await BMXService.shared.getAudioTrackLabels(url: url)
+        }
     ) async -> URL? {
-        let allStreams = await FFMPEGProbeService.fetchAudioStreams(for: inputURL) ?? []
+        guard !Task.isCancelled else { return nil }
+        let allStreams = await audioStreamProvider(inputURL) ?? []
+        guard !Task.isCancelled else { return nil }
         // Walk the unfiltered list so audio-relative indices match the routing UI
         // (which sees every audio stream, decodable or not). Only decodable streams
         // produce output tracks, but the override key must use the original index.
@@ -223,7 +247,8 @@ actor FFMPEGConverter {
         // Read input MCA labels via mxf2raw only when the input is itself MXF.
         let mcaLabels: [AudioTrackMCALabels]
         if inputURL.pathExtension.lowercased() == "mxf" {
-            mcaLabels = await BMXService.shared.getAudioTrackLabels(url: inputURL) ?? []
+            mcaLabels = await mcaLabelProvider(inputURL) ?? []
+            guard !Task.isCancelled else { return nil }
         } else {
             mcaLabels = []
         }
@@ -241,19 +266,17 @@ actor FFMPEGConverter {
             }
         }
 
-        let audioChannelsRaw = UserDefaults.standard.string(forKey: AppConstants.avcIntraAudioChannelsKey)
-            ?? AppConstants.defaultAVCIntraAudioChannels
-        let targetChannelCount = (AVCIntraAudioChannels(rawValue: audioChannelsRaw) ?? .ch8).count
-
         guard let content = MCALabelsBuilder.buildAVCIntraLabelsFile(
             inputStreams: inputInfos,
             inputMCALabels: mcaLabels,
             overrides: overrides,
-            outputTrackCount: targetChannelCount
+            outputTrackCount: targetChannelCount,
+            mcaDefaults: mcaDefaults
         ) else {
             return nil
         }
 
+        guard !Task.isCancelled else { return nil }
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("mca-labels-\(UUID().uuidString).txt")
         do {
@@ -264,6 +287,52 @@ actor FFMPEGConverter {
             logger.error("Failed to write MCA labels file: \(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    /// Own both probes independently of the callback task that performs post-processing.
+    /// Queue cancellation can then stop and drain MCA work without joining that callback.
+    private func prepareTrackedAVCIntraMCALabelsFile(
+        conversionID: UUID,
+        inputURL: URL,
+        audioRoutingConfig: AudioRoutingConfig?,
+        targetChannelCount: Int,
+        mcaDefaults: AVCIntraMCADefaults
+    ) async -> URL? {
+        guard activeConversionID == conversionID || postProcessingConversionID == conversionID else {
+            return nil
+        }
+        let taskID = UUID()
+        let audioStreamProvider = mcaAudioStreamProvider
+        let task = Task {
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.prepareAVCIntraMCALabelsFile(
+                    inputURL: inputURL,
+                    audioRoutingConfig: audioRoutingConfig,
+                    targetChannelCount: targetChannelCount,
+                    mcaDefaults: mcaDefaults,
+                    audioStreamProvider: audioStreamProvider
+                )
+            }
+        }
+        currentMCALabelTask?.cancel()
+        currentMCALabelTask = task
+        currentMCALabelTaskID = taskID
+        let result = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        let ownsTask = currentMCALabelTaskID == taskID
+        if ownsTask {
+            currentMCALabelTask = nil
+            currentMCALabelTaskID = nil
+        }
+        guard ownsTask, !task.isCancelled, !Task.isCancelled,
+              activeConversionID == conversionID || postProcessingConversionID == conversionID else {
+            if let result { Self.cleanupTempFile(at: result, label: "cancelled MCA labels") }
+            return nil
+        }
+        return result
     }
 
     // MARK: - Output Validation
@@ -322,6 +391,7 @@ actor FFMPEGConverter {
 
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             let output = diagnostic(for: result)
             guard result.succeeded else {
                 cleanupPartialOutput()
@@ -369,12 +439,14 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.runPackageWrapper(
-                executablePath: executablePath,
-                arguments: arguments,
-                outputURL: outputURL,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.runPackageWrapper(
+                    executablePath: executablePath,
+                    arguments: arguments,
+                    outputURL: outputURL,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentPackageWrapperTask?.cancel()
         currentPackageWrapperTask = task
@@ -407,16 +479,18 @@ actor FFMPEGConverter {
         guard postProcessingConversionID == conversionID else { throw CancellationError() }
         let taskID = UUID()
         let task = Task.detached {
-            var lastEmit = Date.distantPast
-            return try Self.preparePackageCodestreams(
-                sourceDirectory: sourceDirectory,
-                frameNames: frameNames,
-                destinationDirectory: destinationDirectory
-            ) { completed, total in
-                let now = Date()
-                if now.timeIntervalSince(lastEmit) >= 0.25 || completed == total {
-                    lastEmit = now
-                    progress(completed, total)
+            try Self.$runningSubprocessID.withValue(taskID) {
+                var lastEmit = Date.distantPast
+                return try Self.preparePackageCodestreams(
+                    sourceDirectory: sourceDirectory,
+                    frameNames: frameNames,
+                    destinationDirectory: destinationDirectory
+                ) { completed, total in
+                    let now = Date()
+                    if now.timeIntervalSince(lastEmit) >= 0.25 || completed == total {
+                        lastEmit = now
+                        progress(completed, total)
+                    }
                 }
             }
         }
@@ -465,6 +539,11 @@ actor FFMPEGConverter {
         av2Settings: AV2Settings? = nil,
         dcpSettings: DCPSettings? = nil,
         imfSettings: IMFSettings? = nil,
+        audioOnlySettings: AudioOnlySettings? = nil,
+        imageSequenceSettings: ImageSequenceSettings? = nil,
+        codecSettings: CodecExportSettings? = nil,
+        subtitleSettings: SubtitleExportSettings? = nil,
+        commentSettings: CommentSettings? = nil,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
@@ -472,10 +551,28 @@ actor FFMPEGConverter {
         let inputURL = request.inputURL
         let outputURL = request.outputURL
         let preset = request.preset
+        // The current writer cannot provide descriptors linked to the encoded MXF essence.
+        // Reject all entry paths (including saved presets and Shortcuts) before any work or output.
+        if preset == .imfJ2K || preset == .imfProRes {
+            completion(false, String(localized: "IMF export is unavailable in 4.4 because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.", comment: "Release restriction on IMF exports until package conformance is established. IMF import remains available."))
+            return
+        }
+        let trimPreparationError = preset == .av2
+            ? AV2TrimPlan(start: request.trimStart, end: request.trimEnd).preparationError
+            : FFMPEGTrimPlan(start: request.trimStart, end: request.trimEnd).preparationError
+        if let preparationError = trimPreparationError {
+            completion(false, preparationError)
+            return
+        }
         // Capture encoding and packaging preferences before cancellation or metadata work can suspend.
         let capturedAV2Settings = preset == .av2 ? (av2Settings ?? AV2Settings()) : nil
         let capturedDCPSettings = preset == .dcp ? (dcpSettings ?? DCPSettings()) : nil
         let capturedIMFSettings = (preset == .imfJ2K || preset == .imfProRes) ? (imfSettings ?? IMFSettings()) : nil
+        let capturedAudioOnlySettings = preset == .audioOnly ? (audioOnlySettings ?? AudioOnlySettings()) : nil
+        let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
+        let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
+        let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
+        let capturedCommentSettings = commentSettings ?? CommentSettings()
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -511,6 +608,9 @@ actor FFMPEGConverter {
         currentDependencyPreflightTask = nil
         currentProgressGate?.invalidate()
         currentSubprocessTask?.cancel()
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
         currentWaveformAnalysisTask?.cancel()
         currentWaveformAnalysisTask = nil
         currentWaveformAnalysisID = nil
@@ -532,6 +632,9 @@ actor FFMPEGConverter {
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
+        currentMCALabelTask?.cancel()
+        currentMCALabelTask = nil
+        currentMCALabelTaskID = nil
         for task in currentAV2PipelineTasks.values { task.cancel() }
         currentAV2PipelineTasks.removeAll()
         let supersededBMXOperationID = activeBMXOperationID
@@ -539,8 +642,7 @@ actor FFMPEGConverter {
         postProcessingConversionID = nil
         activeBMXOperationID = nil
         if let supersededBMXOperationID {
-            await BMXService.shared.cancel(operationID: supersededBMXOperationID)
-            _ = await BMXService.shared.finishCancellationTracking(operationID: supersededBMXOperationID)
+            await bmxService.cancel(operationID: supersededBMXOperationID)
         }
         let conversionID = UUID()
         activeConversionID = conversionID
@@ -660,12 +762,7 @@ actor FFMPEGConverter {
             // FFmpeg outputs to a temp MOV inside the working folder; bmxtranswrap will produce the OP1a MXF.
             outputFileURL = finalSubfolderURL.appendingPathComponent("imf_prores_temp.mov")
             Self.logger.info("IMF App 5: FFmpeg will output ProRes MOV for OP1a rewrap")
-        } else if isImageSequenceExport {
-            let formatRaw = UserDefaults.standard.string(forKey: AppConstants.imageSequenceExportFormatKey) ?? AppConstants.defaultImageSequenceExportFormat
-            let format = ImageSequenceFormat(rawValue: formatRaw) ?? .png
-            let padding = UserDefaults.standard.integer(forKey: AppConstants.imageSequenceNumberingPaddingKey)
-            let effectivePadding = padding > 0 ? padding : AppConstants.defaultImageSequenceNumberingPadding
-
+        } else if let imageSequenceSettings = capturedImageSequenceSettings {
             // Create subfolder: outputDir/basename_seq/
             let subfolderName = outputURL.lastPathComponent
             let subfolderURL = outputDir.appendingPathComponent(subfolderName, isDirectory: true)
@@ -688,11 +785,14 @@ actor FFMPEGConverter {
 
             // Build the FFMPEG output pattern: subfolder/basename_%06d.png
             let baseName = outputURL.lastPathComponent
-            let patternFileName = "\(baseName)_%0\(effectivePadding)d.\(format.primaryExtension)"
+            let patternFileName = imageSequenceSettings.outputPattern(baseName: baseName)
             outputFileURL = finalSubfolderURL.appendingPathComponent(patternFileName)
         } else {
-            // Use the same captured container for AV2 naming and muxing.
-            let outputExtension = capturedAV2Settings?.container.fileExtension ?? preset.outputExtension(for: inputURL)
+            // Use the captured container for naming and encoding.
+            let outputExtension = capturedAV2Settings?.container.fileExtension
+                ?? capturedAudioOnlySettings?.format.fileExtension
+                ?? capturedCodecSettings?.outputExtension(for: inputURL)
+                ?? preset.outputExtension(for: inputURL)
             outputFileURL = outputURL.appendingPathExtension(outputExtension)
 
             // CRITICAL: Ensure we never overwrite the source file
@@ -761,7 +861,8 @@ actor FFMPEGConverter {
                 ffmpegPath: ffmpegPath,
                 trimStart: request.trimStart,
                 trimEnd: request.trimEnd,
-                conversionID: conversionID
+                conversionID: conversionID,
+                targetChannelCount: capturedCodecSettings?.avcIntraAudioChannels?.count ?? 8
             )
             switch preprocessingResult {
             case .success(let preProcessedURL):
@@ -794,12 +895,16 @@ actor FFMPEGConverter {
                 preset: preset,
                 dcpSettings: capturedDCPSettings,
                 imfSettings: capturedIMFSettings,
+                audioOnlySettings: capturedAudioOnlySettings,
+                imageSequenceSettings: capturedImageSequenceSettings,
+                codecSettings: capturedCodecSettings,
                 waveformRequest: waveformRequest,
                 audioRoutingConfig: request.audioRoutingConfig,
                 trimStart: request.trimStart,
                 trimEnd: request.trimEnd,
                 comment: request.comment,
                 includeDateTag: request.includeDateTag,
+                commentSettings: capturedCommentSettings,
                 isMuted: request.isMuted,
                 additionalOutputArguments: request.additionalOutputArguments,
                 expectedDuration: request.expectedDuration,
@@ -914,6 +1019,7 @@ actor FFMPEGConverter {
                     audioRoutingConfig: request.audioRoutingConfig,
                     comment: request.comment,
                     includeDateTag: request.includeDateTag,
+                    commentSettings: capturedCommentSettings,
                     timecodeConfig: request.timecodeConfig,
                     sourceMetadata: request.sourceMetadata ?? (request.visualSourceURL == nil ? av2PlanningMetadata : nil),
                     trimStart: request.trimStart,
@@ -982,6 +1088,11 @@ actor FFMPEGConverter {
             preset: preset,
             dcpSettings: capturedDCPSettings,
             imfSettings: capturedIMFSettings,
+            audioOnlySettings: capturedAudioOnlySettings,
+            imageSequenceSettings: capturedImageSequenceSettings,
+            codecSettings: capturedCodecSettings,
+            commentSettings: capturedCommentSettings,
+            subtitleSettings: capturedSubtitleSettings,
             comment: request.comment,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
@@ -992,11 +1103,28 @@ actor FFMPEGConverter {
             sourceMetadata: request.sourceMetadata,
             waveformRequest: request.waveformRequest,
             synthesizedVideoRequest: request.synthesizedVideoRequest,
+            synthesizedVideoDuration: tempAudioURL != nil
+                ? FFMPEGCommandBuilder.calculateEffectiveDuration(trimStart: request.trimStart, trimEnd: request.trimEnd)
+                : (request.trimStart == nil && request.trimEnd == nil ? request.expectedDuration : nil),
+            synthesizedVideoUsesSourceMetadataDuration: tempAudioURL == nil,
             visualSourceURL: request.visualSourceURL,
             customInputArguments: effectiveCustomInputArguments,
             additionalOutputArguments: request.additionalOutputArguments,
             isMuted: request.isMuted
         )
+
+        if let preparationError = command.preparationError {
+            if let tempAudioURL { Self.cleanupTempFile(at: tempAudioURL, label: "Preprocessed audio") }
+            if let tempMXFURL { Self.cleanupTempFile(at: tempMXFURL, label: "Intermediate MXF") }
+            if let dcpSubfolderURL { Self.cleanupTempFile(at: dcpSubfolderURL, label: "Unstarted DCP package") }
+            if let imfSubfolderURL { Self.cleanupTempFile(at: imfSubfolderURL, label: "Unstarted IMF package") }
+            if isImageSequenceExport {
+                Self.cleanupTempFile(at: outputFileURL.deletingLastPathComponent(), label: "Unstarted image sequence")
+            }
+            _ = await finishTrackedConversion(conversionID)
+            finish(false, preparationError)
+            return
+        }
 
         // For an AV2 Matroska source the decoded video arrives on input 0 (the avmdec pipe) and the
         // audio lives on input 1 (the original file). Redirect the preset's audio/subtitle maps,
@@ -1073,6 +1201,7 @@ actor FFMPEGConverter {
         )
 
         // Capture values for the closure
+        let bmxService = self.bmxService
         let capturedRequest = request
         let capturedTempAudioURL = tempAudioURL
         let capturedTempMXFURL = tempMXFURL
@@ -1132,25 +1261,33 @@ actor FFMPEGConverter {
                     Self.logger.info("Running bmxtranswrap to rewrap MXF to OP1a format")
                     progressUpdate(0.95, "Rewrapping to OP1a...")
 
-                    let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
+                    let mcaLabelsFile = await self?.prepareTrackedAVCIntraMCALabelsFile(
+                        conversionID: conversionID,
                         inputURL: capturedInputURL,
-                        audioRoutingConfig: capturedRequest.audioRoutingConfig
+                        audioRoutingConfig: capturedRequest.audioRoutingConfig,
+                        targetChannelCount: capturedCodecSettings?.avcIntraAudioChannels?.count ?? 8,
+                        mcaDefaults: capturedCodecSettings?.avcIntraMCADefaults ?? .none
                     )
-                    let bmxResult = await BMXService.shared.rewrapToOP1a(
-                        inputURL: tempMXF,
-                        outputURL: capturedFinalOutputURL,
-                        clipName: capturedInputBaseName,
-                        mcaLabelsFile: mcaLabelsFile,
-                        operationID: conversionID,
-                        progress: { bmxProgress in
-                            // Map bmx progress to 95-100% range
-                            let overallProgress = 0.95 + (bmxProgress * 0.05)
-                            Task { @MainActor in
-                                progressUpdate(overallProgress, "Rewrapping to OP1a...")
+                    let bmxResult: BMXRewrapResult
+                    if await self?.isPostProcessing(conversionID) == true {
+                        bmxResult = await bmxService.rewrapToOP1a(
+                            inputURL: tempMXF,
+                            outputURL: capturedFinalOutputURL,
+                            clipName: capturedInputBaseName,
+                            mcaLabelsFile: mcaLabelsFile,
+                            operationID: conversionID,
+                            progress: { bmxProgress in
+                                // Map bmx progress to 95-100% range
+                                let overallProgress = 0.95 + (bmxProgress * 0.05)
+                                Task { @MainActor in
+                                    progressUpdate(overallProgress, "Rewrapping to OP1a...")
+                                }
                             }
-                        }
-                    )
-                    let lateCancellation = await BMXService.shared.finishCancellationTracking(
+                        )
+                    } else {
+                        bmxResult = BMXRewrapResult(success: false, stderr: "", cancelled: true)
+                    }
+                    let lateCancellation = await bmxService.finishCancellationTracking(
                         operationID: conversionID
                     )
                     await self?.clearActiveBMXOperation(if: conversionID)
@@ -1599,7 +1736,7 @@ actor FFMPEGConverter {
 
                         let bmxFlags = color.bmxFlags
 
-                        let bmxResult = await BMXService.shared.rewrapToIMFOP1a(
+                        let bmxResult = await bmxService.rewrapToIMFOP1a(
                             inputURL: capturedFinalOutputURL,
                             outputURL: tmpVideoMXF,
                             colorPrimaries: bmxFlags.colorPrimaries,
@@ -1615,7 +1752,7 @@ actor FFMPEGConverter {
                                 progressUpdate(overall, "Wrapping ProRes → MXF \(pct)%")
                             }
                         )
-                        let lateCancellation = await BMXService.shared.finishCancellationTracking(
+                        let lateCancellation = await bmxService.finishCancellationTracking(
                             operationID: conversionID
                         )
                         await self?.clearActiveBMXOperation(if: conversionID)
@@ -1847,13 +1984,14 @@ actor FFMPEGConverter {
                         errorReason = "Conversion cancelled"
                     }
 
-                    if success {
+                    if success, let imageSequenceSettings = capturedImageSequenceSettings {
                         let stillOwnsPostProcessing = await self?.generateImageSequenceMetadataSidecarIfOwned(
                             conversionID: conversionID,
                             originalFileName: capturedInputBaseName,
                             outputFolder: outputFolder,
                             metadata: capturedRequest.sourceMetadata,
-                            cameraMetadata: capturedRequest.sourceCameraMetadata
+                            cameraMetadata: capturedRequest.sourceCameraMetadata,
+                            settings: imageSequenceSettings
                         ) ?? false
                         if !stillOwnsPostProcessing {
                             success = false
@@ -1862,7 +2000,13 @@ actor FFMPEGConverter {
                     }
                 }
 
-                let stillOwned = await self?.finishPostProcessing(if: conversionID) ?? false
+                let stillOwned: Bool
+                if let self {
+                    stillOwned = await self.finishPostProcessing(if: conversionID)
+                } else {
+                    _ = await bmxService.finishCancellationTracking(operationID: conversionID)
+                    stillOwned = false
+                }
                 if !stillOwned {
                     success = false
                     errorReason = "Conversion cancelled"
@@ -1879,14 +2023,16 @@ actor FFMPEGConverter {
 
         if let decoderRequest = av2DecodeRequest {
             let runner = subprocessRunner
-            currentSubprocessTask = Task {
+            currentSubprocessTask = makeJoinableSubprocessTask(conversionID: conversionID) {
                 do {
                     let pipelineResult = try await runner.runPipeline(
                         producer: decoderRequest,
                         consumer: subprocessRequest,
                         consumerOutputHandler: { chunk in
-                            guard case .standardError = chunk.stream else { return }
-                            progressStreamParser.consume(chunk.data)
+                            Self.$runningSubprocessID.withValue(conversionID) {
+                                guard case .standardError = chunk.stream else { return }
+                                progressStreamParser.consume(chunk.data)
+                            }
                         }
                     )
                     progressStreamParser.finish()
@@ -1948,11 +2094,13 @@ actor FFMPEGConverter {
         }
 
         let runner = subprocessRunner
-        currentSubprocessTask = Task {
+        currentSubprocessTask = makeJoinableSubprocessTask(conversionID: conversionID) {
             do {
                 let result = try await runner.run(subprocessRequest) { chunk in
-                    guard case .standardError = chunk.stream else { return }
-                    progressStreamParser.consume(chunk.data)
+                    Self.$runningSubprocessID.withValue(conversionID) {
+                        guard case .standardError = chunk.stream else { return }
+                        progressStreamParser.consume(chunk.data)
+                    }
                 }
                 progressStreamParser.finish()
                 handleFFmpegTermination(result.terminationStatus, result.standardError, nil)
@@ -2225,24 +2373,36 @@ actor FFMPEGConverter {
         let pipelineID = UUID()
         let runner = subprocessRunner
         let pipelineTask = Task {
-            try await runner.runPipeline(
-                producer: ffmpegRequest,
-                consumer: avmencRequest,
-                producerOutputHandler: { chunk in
-                    guard totalFrames == 0, case .standardError = chunk.stream else { return }
-                    ffmpegProgressParser.consume(chunk.data)
-                },
-                consumerOutputHandler: { chunk in
-                    guard case .standardOutput = chunk.stream else { return }
-                    avmencProgressParser.consume(chunk.data)
-                }
-            )
+            try await Self.$runningSubprocessID.withValue(pipelineID) {
+                let result = try await runner.runPipeline(
+                    producer: ffmpegRequest,
+                    consumer: avmencRequest,
+                    producerOutputHandler: { chunk in
+                        Self.$runningSubprocessID.withValue(pipelineID) {
+                            guard totalFrames == 0, case .standardError = chunk.stream else { return }
+                            ffmpegProgressParser.consume(chunk.data)
+                        }
+                    },
+                    consumerOutputHandler: { chunk in
+                        Self.$runningSubprocessID.withValue(pipelineID) {
+                            guard case .standardOutput = chunk.stream else { return }
+                            avmencProgressParser.consume(chunk.data)
+                        }
+                    }
+                )
+                try Task.checkCancellation()
+                return result
+            }
         }
         currentAV2PipelineTasks[pipelineID] = pipelineTask
 
         let pipelineResult: SubprocessPipelineResult
         do {
-            pipelineResult = try await pipelineTask.value
+            pipelineResult = try await withTaskCancellationHandler {
+                try await pipelineTask.value
+            } onCancel: {
+                pipelineTask.cancel()
+            }
         } catch is CancellationError {
             currentAV2PipelineTasks.removeValue(forKey: pipelineID)
             if FileManager.default.fileExists(atPath: outputFileURL.path) {
@@ -2430,7 +2590,6 @@ actor FFMPEGConverter {
                 if !outcome.success, firstFailure == nil {
                     firstFailure = outcome
                     group.cancelAll()
-                    self.cancelAV2PipelineTasks()
                 }
             }
         }
@@ -2497,20 +2656,30 @@ actor FFMPEGConverter {
         let pipelineID = UUID()
         let runner = subprocessRunner
         let pipelineTask = Task {
-            try await runner.runPipeline(
-                producer: ffmpegRequest,
-                consumer: avmencRequest,
-                consumerOutputHandler: { chunk in
-                    guard case .standardOutput = chunk.stream else { return }
-                    progressParser.consume(chunk.data)
-                }
-            )
+            try await Self.$runningSubprocessID.withValue(pipelineID) {
+                let result = try await runner.runPipeline(
+                    producer: ffmpegRequest,
+                    consumer: avmencRequest,
+                    consumerOutputHandler: { chunk in
+                        Self.$runningSubprocessID.withValue(pipelineID) {
+                            guard case .standardOutput = chunk.stream else { return }
+                            progressParser.consume(chunk.data)
+                        }
+                    }
+                )
+                try Task.checkCancellation()
+                return result
+            }
         }
         currentAV2PipelineTasks[pipelineID] = pipelineTask
 
         let pipelineResult: SubprocessPipelineResult
         do {
-            pipelineResult = try await pipelineTask.value
+            pipelineResult = try await withTaskCancellationHandler {
+                try await pipelineTask.value
+            } onCancel: {
+                pipelineTask.cancel()
+            }
         } catch is CancellationError {
             currentAV2PipelineTasks.removeValue(forKey: pipelineID)
             Self.cleanupAV2SegmentIfPresent(seg.outputURL, label: "cancelled AV2 chunk")
@@ -2587,12 +2756,6 @@ actor FFMPEGConverter {
         return AV2SegmentOutcome(index: seg.index, success: false, errorReason: failureReason)
     }
 
-    private func cancelAV2PipelineTasks() {
-        for task in currentAV2PipelineTasks.values {
-            task.cancel()
-        }
-    }
-
     private static func fileHasContent(at url: URL) -> Bool {
         guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return false }
         return size > 0
@@ -2623,6 +2786,7 @@ actor FFMPEGConverter {
         audioRoutingConfig: AudioRoutingConfig?,
         comment: String,
         includeDateTag: Bool,
+        commentSettings: CommentSettings,
         timecodeConfig: TimecodeConfig?,
         sourceMetadata knownSourceMetadata: VideoMetadata?,
         trimStart: Double?,
@@ -2727,7 +2891,8 @@ actor FFMPEGConverter {
         let metadata = MatroskaMuxer.Metadata(
             comment: FFMPEGCommandBuilder.commentMetadataValue(
                 comment: comment,
-                includeDateTag: includeDateTag
+                includeDateTag: includeDateTag,
+                settings: commentSettings
             ),
             timecode: timecode
         )
@@ -2847,6 +3012,9 @@ actor FFMPEGConverter {
             await FFMPEGProbeService.fetchAudioStreams(for: $0)
         }
     ) async -> AV2MuxAudioExtractionResult {
+        let trim = AV2TrimPlan(start: trimStart, end: trimEnd)
+        if let preparationError = trim.preparationError { return .failed(preparationError) }
+
         func operationIsCurrent() -> Bool {
             guard !Task.isCancelled else { return false }
             guard let conversionID else { return true }
@@ -2895,16 +3063,14 @@ actor FFMPEGConverter {
         defer { Self.cleanupTempFile(at: routedAudioURL, label: "AV2 routed audio") }
 
         var args = ["-y", "-nostdin", "-hide_banner"]
-        if let trimStart, trimStart > 0 { args += ["-ss", String(format: "%.6f", trimStart)] }
+        args += trim.inputArguments
         args += source.arguments
-        if let trimStart, let trimEnd, trimEnd > trimStart {
-            args += ["-t", String(format: "%.6f", trimEnd - trimStart)]
-        } else if let trimEnd, trimEnd > 0, trimStart == nil {
-            args += ["-t", String(format: "%.6f", trimEnd)]
-        }
+        args += trim.outputArguments
         args += ["-vn"]
         args += routingArguments
-        args += ["-c:a", codec.ffmpegEncoder, "-b:a", bitrate, "-f", "matroska", routedAudioURL.path]
+        // Keep the source timeline relative to the picture/trim origin. Otherwise the audio-only
+        // muxer shifts every stream to hide encoder preroll, changing audio/video synchronization.
+        args += ["-c:a", codec.ffmpegEncoder, "-b:a", bitrate, "-avoid_negative_ts", "disabled", "-f", "matroska", routedAudioURL.path]
         switch await runTrackedAV2Helper(
             ffmpegPath,
             args,
@@ -2931,18 +3097,38 @@ actor FFMPEGConverter {
             return .failed("Expected \(plannedTrackCount) routed audio tracks, but FFmpeg produced \(routedStreams.count)")
         }
 
+        let opusPadding: [[Int64]]?
+        if codec == .opus {
+            guard let routedData = try? Data(contentsOf: routedAudioURL, options: .mappedIfSafe),
+                  let padding = AV2AudioPacketTiming.discardPadding(inMatroska: routedData),
+                  padding.count == plannedTrackCount else {
+                return .failed("Could not preserve Opus encoder padding from the routed audio output")
+            }
+            opusPadding = padding
+        } else {
+            opusPadding = nil
+        }
+
         var tracks: [MatroskaMuxer.AudioTrack] = []
         for trackIndex in routedStreams.indices {
             guard operationIsCurrent() else { return .cancelled }
             let elementaryURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("av2audio_\(UUID().uuidString).\(codec.intermediateExtension)")
             defer { Self.cleanupTempFile(at: elementaryURL, label: "AV2 mux audio track") }
+            let timingURL = elementaryURL.appendingPathExtension("framecrc")
+            defer { Self.cleanupTempFile(at: timingURL, label: "AV2 mux audio timing") }
             var extractionArguments = [
-                "-y", "-nostdin", "-hide_banner", "-i", routedAudioURL.path,
+                "-y", "-nostdin", "-hide_banner", "-copyts", "-i", routedAudioURL.path,
                 "-map", "0:a:\(trackIndex)", "-vn", "-c:a", "copy"
             ]
             extractionArguments += codec == .opus ? ["-f", "ogg"] : ["-f", "adts"]
             extractionArguments += [elementaryURL.path]
+            // A second copy output records packet PTS in the same extraction pass. Elementary
+            // AAC/Ogg files alone cannot carry the source-track offset or internal timestamp gaps.
+            extractionArguments += [
+                "-map", "0:a:\(trackIndex)", "-vn", "-c:a", "copy",
+                "-avoid_negative_ts", "disabled", "-f", "framecrc", timingURL.path
+            ]
             let extractionResult = await runTrackedAV2Helper(
                 ffmpegPath,
                 extractionArguments,
@@ -2954,7 +3140,11 @@ actor FFMPEGConverter {
             }
             guard case .success = extractionResult,
                   Self.fileHasContent(at: elementaryURL),
-                  let track = Self.parseAV2MuxAudioTrack(elementaryURL, codec: codec) else {
+                  let parsedTrack = Self.parseAV2MuxAudioTrack(elementaryURL, codec: codec),
+                  let manifest = try? String(contentsOf: timingURL, encoding: .utf8),
+                  let track = AV2AudioPacketTiming.applying(
+                    manifest: manifest, to: parsedTrack, discardPaddingNanoseconds: opusPadding?[trackIndex]
+                  ) else {
                 if case .failed(let reason) = extractionResult {
                     return .failed("Could not packetize routed audio track \(trackIndex + 1): \(reason)")
                 }
@@ -3086,13 +3276,15 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.runAV2Helper(
-                executablePath: path,
-                arguments: arguments,
-                timeout: timeout,
-                additionalSensitiveValues: additionalSensitiveValues,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.runAV2Helper(
+                    executablePath: path,
+                    arguments: arguments,
+                    timeout: timeout,
+                    additionalSensitiveValues: additionalSensitiveValues,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = task
@@ -3193,53 +3385,13 @@ actor FFMPEGConverter {
         return data.subdata(in: payloadStart..<(payloadStart + Int(value)))
     }
 
-    /// Parses an ADTS AAC stream into raw AAC access units plus the derived AudioSpecificConfig,
-    /// sample rate and channel count (read from the first frame's header).
     static func adtsChannelCount(forConfiguration configuration: UInt8) -> Int? {
-        switch configuration {
-        case 1...6: Int(configuration)
-        case 7: 8
-        default: nil
-        }
+        AV2AACParser.channelCount(forConfiguration: configuration)
     }
 
     private static func parseADTS(_ url: URL) -> (frames: [Data], asc: Data, sampleRate: Double, channels: Int)? {
-        guard let data = try? Data(contentsOf: url), data.count > 7 else { return nil }
-        let bytes = [UInt8](data)
-        let rateTable: [Double] = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350]
-        var frames: [Data] = []
-        var asc: Data? = nil
-        var sampleRate: Double = 48000
-        var channels = 2
-        var i = 0
-        while i + 7 <= bytes.count {
-            guard bytes[i] == 0xFF, (bytes[i + 1] & 0xF0) == 0xF0 else { break } // syncword
-            let protectionAbsent = bytes[i + 1] & 0x01
-            let headerLen = protectionAbsent == 1 ? 7 : 9
-            let profile = (bytes[i + 2] >> 6) & 0x03
-            let freqIdx = (bytes[i + 2] >> 2) & 0x0F
-            let chanCfg = ((bytes[i + 2] & 0x01) << 2) | ((bytes[i + 3] >> 6) & 0x03)
-            let frameLen = (Int(bytes[i + 3] & 0x03) << 11) | (Int(bytes[i + 4]) << 3) | (Int(bytes[i + 5] >> 5) & 0x07)
-            guard frameLen >= headerLen, i + frameLen <= bytes.count else { break }
-            if asc == nil {
-                guard let parsedChannels = adtsChannelCount(forConfiguration: chanCfg) else {
-                    // Configuration zero requires parsing the AAC Program Config Element. Reject it
-                    // until that is supported rather than silently describing multichannel audio as stereo.
-                    return nil
-                }
-                let aot = UInt8(profile + 1) // ADTS profile = audioObjectType − 1
-                let b0 = (aot << 3) | (freqIdx >> 1)
-                let b1 = ((freqIdx & 0x01) << 7) | (chanCfg << 3)
-                asc = Data([b0, b1])
-                if Int(freqIdx) < rateTable.count { sampleRate = rateTable[Int(freqIdx)] }
-                channels = parsedChannels
-            }
-            let payloadStart = i + headerLen
-            frames.append(data.subdata(in: payloadStart..<(i + frameLen)))
-            i += frameLen
-        }
-        guard let asc, !frames.isEmpty else { return nil }
-        return (frames, asc, sampleRate, channels)
+        guard let data = try? Data(contentsOf: url), let track = AV2AACParser.parse(data) else { return nil }
+        return (track.frames, track.audioSpecificConfig, track.sampleRate, track.channels)
     }
 
     /// Returns true if a Matroska/WebM file carries an AV2 video track (CodecID `V_AV2`). Scans the
@@ -3278,12 +3430,16 @@ actor FFMPEGConverter {
         preset: ExportPreset,
         dcpSettings: DCPSettings?,
         imfSettings: IMFSettings?,
+        audioOnlySettings: AudioOnlySettings?,
+        imageSequenceSettings: ImageSequenceSettings?,
+        codecSettings: CodecExportSettings?,
         waveformRequest: WaveformVideoRequest,
         audioRoutingConfig: AudioRoutingConfig?,
         trimStart: Double?,
         trimEnd: Double?,
         comment: String,
         includeDateTag: Bool,
+        commentSettings: CommentSettings,
         isMuted: Bool,
         additionalOutputArguments: [String]?,
         expectedDuration: Double?,
@@ -3314,6 +3470,11 @@ actor FFMPEGConverter {
             completion(success && wasActive, wasActive ? errorReason : "Conversion cancelled")
         }
 
+        if let preparationError = FFMPEGTrimPlan(start: trimStart, end: trimEnd).preparationError {
+            await complete(false, preparationError)
+            return
+        }
+
         // Compute effective duration for the render
         let effectiveDuration: Double
         if let trimStart, let trimEnd, trimEnd > trimStart {
@@ -3338,20 +3499,25 @@ actor FFMPEGConverter {
         let analysisID = UUID()
         let runner = subprocessRunner
         let analysisTask = Task {
-            try await WaveformPCMDecoder.decode(
-                url: inputURL,
-                ffmpegPath: ffmpegPath,
-                frameRate: waveformRequest.frameRate,
-                duration: effectiveDuration,
-                bandCount: waveformRequest.bandCount,
-                frequencyDistribution: waveformRequest.frequencyDistribution,
-                normalizeAudio: waveformRequest.normalizeAudio,
-                audioRoutingConfig: audioRoutingConfig,
-                trimStart: trimStart,
-                trimEnd: trimEnd,
-                subprocessRunner: runner
-            )
+            try await Self.$runningSubprocessID.withValue(analysisID) {
+                try await WaveformPCMDecoder.decode(
+                    url: inputURL,
+                    ffmpegPath: ffmpegPath,
+                    frameRate: waveformRequest.frameRate,
+                    duration: effectiveDuration,
+                    bandCount: waveformRequest.bandCount,
+                    frequencyDistribution: waveformRequest.frequencyDistribution,
+                    normalizeAudio: waveformRequest.normalizeAudio,
+                    audioRoutingConfig: audioRoutingConfig,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd,
+                    subprocessRunner: runner
+                )
+            }
         }
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
         currentWaveformAnalysisTask?.cancel()
         currentWaveformAnalysisTask = analysisTask
         currentWaveformAnalysisID = analysisID
@@ -3382,6 +3548,10 @@ actor FFMPEGConverter {
             preset: preset,
             dcpSettings: dcpSettings,
             imfSettings: imfSettings,
+            audioOnlySettings: audioOnlySettings,
+            imageSequenceSettings: imageSequenceSettings,
+            codecSettings: codecSettings,
+            commentSettings: commentSettings,
             width: waveformRequest.width,
             height: waveformRequest.height,
             frameRate: waveformRequest.frameRate,
@@ -3395,6 +3565,11 @@ actor FFMPEGConverter {
         )
         guard activeConversionID == conversionID else {
             await complete(false, "Conversion cancelled")
+            return
+        }
+
+        if let preparationError = command.preparationError {
+            await complete(false, preparationError)
             return
         }
 
@@ -3417,6 +3592,7 @@ actor FFMPEGConverter {
         )
         Self.logger.info("FFmpeg native waveform command: \(subprocessRequest.redactedCommandDescription, privacy: .public)")
 
+        let bmxService = self.bmxService
         let capturedNeedsBMXRewrap = needsBMXRewrap
         let capturedTempMXFURL = tempMXFURL
         let capturedFinalOutputURL = outputFileURL
@@ -3436,14 +3612,10 @@ actor FFMPEGConverter {
             nil
         }
 
-        currentSubprocessTask?.cancel()
-        currentSubprocessTask = Task { [weak self] in
-            defer {
-                Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
-            }
-            let result: SubprocessResult
-            do {
-                result = try await runner.runWithStreamingStandardInput(
+        let encodingID = UUID()
+        let encodingTask = Task {
+            try await Self.$runningSubprocessID.withValue(encodingID) {
+                try await runner.runWithStreamingStandardInput(
                     subprocessRequest,
                     inputProducer: { standardInput in
                         await WaveformFramePipeWriter.writeFrames(
@@ -3461,13 +3633,32 @@ actor FFMPEGConverter {
                             backgroundImage: backgroundCGImage,
                             waveformOpacity: waveformRequest.waveformOpacity,
                             progressUpdate: { renderProgress in
-                                let overall = 0.10 + renderProgress * 0.85
-                                gatedProgressUpdate(overall, "Rendering waveform…")
+                                Self.$runningSubprocessID.withValue(encodingID) {
+                                    let overall = 0.10 + renderProgress * 0.85
+                                    gatedProgressUpdate(overall, "Rendering waveform…")
+                                }
                             }
                         )
                     },
                     outputHandler: nil
                 )
+            }
+        }
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = encodingTask
+        currentWaveformEncodingID = encodingID
+
+        currentSubprocessTask?.cancel()
+        joinableSubprocessID = nil
+        currentSubprocessTask = Task { [weak self] in
+            defer {
+                Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
+            }
+            let result: SubprocessResult
+            do {
+                let encodingResult = await encodingTask.result
+                await self?.clearWaveformEncoding(if: encodingID)
+                result = try encodingResult.get()
             } catch is CancellationError {
                 Self.cleanupWaveformTemporaryMXFIfPresent(capturedTempMXFURL)
                 await complete(false, "Conversion cancelled")
@@ -3525,12 +3716,15 @@ actor FFMPEGConverter {
                 Self.logger.info("Running bmxtranswrap for native waveform output")
                 gatedProgressUpdate(0.95, "Rewrapping to OP1a...")
 
-                let mcaLabelsFile = await Self.prepareAVCIntraMCALabelsFile(
+                let mcaLabelsFile = await self?.prepareTrackedAVCIntraMCALabelsFile(
+                    conversionID: conversionID,
                     inputURL: capturedInputURL,
-                    audioRoutingConfig: capturedAudioRoutingConfig
+                    audioRoutingConfig: capturedAudioRoutingConfig,
+                    targetChannelCount: codecSettings?.avcIntraAudioChannels?.count ?? 8,
+                    mcaDefaults: codecSettings?.avcIntraMCADefaults ?? .none
                 )
                 if await self?.activateBMXOperationIfActiveConversion(conversionID) == true {
-                    let bmxResult = await BMXService.shared.rewrapToOP1a(
+                    let bmxResult = await bmxService.rewrapToOP1a(
                         inputURL: tempMXF,
                         outputURL: capturedFinalOutputURL,
                         clipName: capturedInputBaseName,
@@ -3543,7 +3737,7 @@ actor FFMPEGConverter {
                             }
                         }
                     )
-                    let lateCancellation = await BMXService.shared.finishCancellationTracking(
+                    let lateCancellation = await bmxService.finishCancellationTracking(
                         operationID: conversionID
                     )
                     await self?.clearActiveBMXOperation(if: conversionID)
@@ -3595,15 +3789,17 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.stageAudioAsWAV(
-                inputURL: inputURL,
-                outputFolder: outputFolder,
-                baseName: baseName,
-                ffmpegPath: ffmpegPath,
-                trimStart: trimStart,
-                trimEnd: trimEnd,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.stageAudioAsWAV(
+                    inputURL: inputURL,
+                    outputFolder: outputFolder,
+                    baseName: baseName,
+                    ffmpegPath: ffmpegPath,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentImageSequenceAudioTask?.cancel()
         currentImageSequenceAudioTask = task
@@ -3832,27 +4028,18 @@ actor FFMPEGConverter {
         originalFileName: String,
         outputFolder: URL,
         metadata: VideoMetadata?,
-        cameraMetadata: CameraMetadata?
+        cameraMetadata: CameraMetadata?,
+        settings: ImageSequenceSettings
     ) -> Bool {
         guard postProcessingConversionID == conversionID else { return false }
 
-        let sidecarEnabled = UserDefaults.standard.object(
-            forKey: AppConstants.imageSequenceMetadataSidecarEnabledKey
-        ) != nil
-            ? UserDefaults.standard.bool(forKey: AppConstants.imageSequenceMetadataSidecarEnabledKey)
-            : AppConstants.defaultImageSequenceMetadataSidecarEnabled
-
-        if sidecarEnabled, let metadata {
-            let formatRaw = UserDefaults.standard.string(
-                forKey: AppConstants.imageSequenceMetadataSidecarFormatKey
-            ) ?? AppConstants.defaultImageSequenceMetadataSidecarFormat
-            let format = MetadataSidecarGenerator.SidecarFormat(rawValue: formatRaw) ?? .markdown
+        if settings.metadataSidecarEnabled, let metadata {
             MetadataSidecarGenerator.generateSidecar(
                 originalFileName: originalFileName,
                 outputFolder: outputFolder,
                 metadata: metadata,
                 cameraMetadata: cameraMetadata,
-                format: format
+                format: settings.metadataSidecarFormat
             )
         }
         return true
@@ -3904,66 +4091,25 @@ actor FFMPEGConverter {
         inputURL: URL,
         customInputArguments: [String]?
     ) -> PackageAudioInput {
-        guard let customInputArguments else {
-            return PackageAudioInput(
-                arguments: ["-i", inputURL.path],
-                probeURL: inputURL,
-                ffmpegInputIndex: 0,
-                assumesSingleAudioStreamIfProbeUnavailable: packageAudioOnlyExtensions.contains(
-                    inputURL.pathExtension.lowercased()
-                )
-            )
-        }
-
-        let inputPaths = customInputArguments.indices.compactMap { index -> String? in
-            guard customInputArguments[index] == "-i",
-                  customInputArguments.indices.contains(index + 1) else {
-                return nil
+        let plan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
+        let isAudioFile = packageAudioOnlyExtensions.contains(inputURL.pathExtension.lowercased())
+        switch plan {
+        case .imageSequence:
+            guard let audioPath = plan.companionAudioPath else {
+                return PackageAudioInput(arguments: [], probeURL: nil, ffmpegInputIndex: 0,
+                                         assumesSingleAudioStreamIfProbeUnavailable: false)
             }
-            return customInputArguments[index + 1]
+            let audioURL = URL(fileURLWithPath: audioPath)
+            return PackageAudioInput(arguments: FFMPEGInputPlan.file(audioURL).arguments(),
+                                     probeURL: audioURL, ffmpegInputIndex: 0,
+                                     assumesSingleAudioStreamIfProbeUnavailable: true)
+        case .file, .concat:
+            return PackageAudioInput(arguments: plan.arguments(), probeURL: inputURL, ffmpegInputIndex: 0,
+                                     assumesSingleAudioStreamIfProbeUnavailable: isAudioFile)
+        case .custom:
+            return PackageAudioInput(arguments: plan.arguments(), probeURL: inputURL, ffmpegInputIndex: 0,
+                                     assumesSingleAudioStreamIfProbeUnavailable: false)
         }
-
-        if customInputArguments.contains("-framerate") {
-            // Image sequences carry audio as their second input. The frames are unnecessary for
-            // PCM extraction, so open the associated audio directly and keep map indices simple.
-            guard inputPaths.count >= 2 else {
-                return PackageAudioInput(
-                    arguments: [],
-                    probeURL: nil,
-                    ffmpegInputIndex: 0,
-                    assumesSingleAudioStreamIfProbeUnavailable: false
-                )
-            }
-            let audioURL = URL(fileURLWithPath: inputPaths[1])
-            return PackageAudioInput(
-                arguments: ["-i", audioURL.path],
-                probeURL: audioURL,
-                ffmpegInputIndex: 0,
-                assumesSingleAudioStreamIfProbeUnavailable: true
-            )
-        }
-
-        if customInputArguments.contains("concat") {
-            // The concat demuxer exposes the merged stream as input 0. Probe the representative
-            // first clip for its stream layout, but extract from the full concat list.
-            return PackageAudioInput(
-                arguments: customInputArguments,
-                probeURL: inputURL,
-                ffmpegInputIndex: 0,
-                assumesSingleAudioStreamIfProbeUnavailable: packageAudioOnlyExtensions.contains(
-                    inputURL.pathExtension.lowercased()
-                )
-            )
-        }
-
-        // Preserve future custom input forms. `inputURL` remains the best available source for
-        // stream-layout probing; the custom arguments still control what FFmpeg actually reads.
-        return PackageAudioInput(
-            arguments: customInputArguments,
-            probeURL: inputURL,
-            ffmpegInputIndex: 0,
-            assumesSingleAudioStreamIfProbeUnavailable: false
-        )
     }
 
     private func extractPackageAudioAsPCMWAV(
@@ -3983,16 +4129,18 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.extractAudioAsPCMWAV(
-                inputURL: inputURL,
-                customInputArguments: customInputArguments,
-                outputFolder: outputFolder,
-                ffmpegPath: ffmpegPath,
-                trimStart: trimStart,
-                trimEnd: trimEnd,
-                audioRoutingConfig: audioRoutingConfig,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.extractAudioAsPCMWAV(
+                    inputURL: inputURL,
+                    customInputArguments: customInputArguments,
+                    outputFolder: outputFolder,
+                    ffmpegPath: ffmpegPath,
+                    trimStart: trimStart,
+                    trimEnd: trimEnd,
+                    audioRoutingConfig: audioRoutingConfig,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentPackageAudioTask?.cancel()
         currentPackageAudioTask = task
@@ -4158,6 +4306,7 @@ actor FFMPEGConverter {
 
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             guard result.succeeded else {
                 let diagnostic = request.redactedDiagnostic(result.standardErrorText)
                 let reason = Self.dcpIMFErrorReason(
@@ -4190,7 +4339,44 @@ actor FFMPEGConverter {
         }
     }
 
+    /// Ordinary FFmpeg and decoder tasks only own bounded runner execution; their
+    /// post-processing is dispatched separately. Native waveform tasks still own
+    /// framework/probe post-processing and deliberately remain outside this join.
+    private func makeJoinableSubprocessTask(
+        conversionID: UUID,
+        operation: @escaping @Sendable () async -> Void
+    ) -> Task<Void, Never> {
+        joinableSubprocessID = conversionID
+        return Task {
+            await Self.$runningSubprocessID.withValue(conversionID) {
+                await operation()
+            }
+        }
+    }
+
     func cancelConversion() async {
+        let imageSequenceAudioTask = currentImageSequenceAudioTask
+        let imageSequenceAudioID = currentImageSequenceAudioTaskID
+        let packageAudioTask = currentPackageAudioTask
+        let packageAudioID = currentPackageAudioTaskID
+        let packagePreparationTask = currentPackagePreparationTask
+        let packagePreparationID = currentPackagePreparationTaskID
+        let packageWrapperTask = currentPackageWrapperTask
+        let packageWrapperID = currentPackageWrapperTaskID
+        let avcIntraPreprocessingTask = currentAVCIntraPreprocessingTask
+        let avcIntraPreprocessingID = currentAVCIntraPreprocessingTaskID
+        let av2HelperTask = currentAV2HelperTask
+        let av2HelperID = currentAV2HelperTaskID
+        let mcaLabelTask = currentMCALabelTask
+        let mcaLabelTaskID = currentMCALabelTaskID
+        let av2PipelineTasks = currentAV2PipelineTasks
+        let waveformAnalysisTask = currentWaveformAnalysisTask
+        let waveformAnalysisID = currentWaveformAnalysisID
+        let waveformEncodingTask = currentWaveformEncodingTask
+        let waveformEncodingID = currentWaveformEncodingID
+        let subprocessTask = currentSubprocessTask
+        let subprocessID = joinableSubprocessID
+        joinableSubprocessID = nil
         let bmxOperationID = activeBMXOperationID
         activeConversionID = nil
         postProcessingConversionID = nil
@@ -4201,6 +4387,9 @@ actor FFMPEGConverter {
         currentProgressGate = nil
         currentSubprocessTask?.cancel()
         currentSubprocessTask = nil
+        currentWaveformEncodingTask?.cancel()
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
         currentWaveformAnalysisTask?.cancel()
         currentWaveformAnalysisTask = nil
         currentWaveformAnalysisID = nil
@@ -4222,12 +4411,63 @@ actor FFMPEGConverter {
         currentAV2HelperTask?.cancel()
         currentAV2HelperTask = nil
         currentAV2HelperTaskID = nil
+        currentMCALabelTask?.cancel()
+        currentMCALabelTask = nil
+        currentMCALabelTaskID = nil
         for task in currentAV2PipelineTasks.values { task.cancel() }
         currentAV2PipelineTasks.removeAll()
+        // Tracking belongs to the post-processing callback, which may still be
+        // between its ownership check and entering the BMX actor.
         if let bmxOperationID {
-            await BMXService.shared.cancel(operationID: bmxOperationID)
-            _ = await BMXService.shared.finishCancellationTracking(operationID: bmxOperationID)
+            await bmxService.cancel(operationID: bmxOperationID)
         }
+        // Capture and detach before suspending: a replacement conversion may be
+        // installed while the old runner drains. Never join from inside that same
+        // runner (including injected runners that synchronously request cancellation).
+        if let subprocessID, Self.runningSubprocessID != subprocessID {
+            await subprocessTask?.value
+        }
+        // Native analysis owns a bounded decoder plus cancellation-aware FFT work.
+        if let waveformAnalysisID, Self.runningSubprocessID != waveformAnalysisID {
+            _ = await waveformAnalysisTask?.result
+        }
+        // Join only the native encoder, not its later framework/MCA post-processing.
+        if let waveformEncodingID, Self.runningSubprocessID != waveformEncodingID {
+            _ = await waveformEncodingTask?.result
+        }
+        // Helper probes use non-joining deadlines; the task still owns its runner
+        // and bounded file work. Detach every handle before waiting so late completion
+        // cannot clear a replacement conversion.
+        if let imageSequenceAudioID, Self.runningSubprocessID != imageSequenceAudioID {
+            _ = await imageSequenceAudioTask?.result
+        }
+        if let packageAudioID, Self.runningSubprocessID != packageAudioID {
+            _ = await packageAudioTask?.result
+        }
+        if let packagePreparationID, Self.runningSubprocessID != packagePreparationID {
+            _ = await packagePreparationTask?.result
+        }
+        if let packageWrapperID, Self.runningSubprocessID != packageWrapperID {
+            _ = await packageWrapperTask?.result
+        }
+        if let avcIntraPreprocessingID, Self.runningSubprocessID != avcIntraPreprocessingID {
+            _ = await avcIntraPreprocessingTask?.result
+        }
+        if let av2HelperID, Self.runningSubprocessID != av2HelperID {
+            _ = await av2HelperTask?.result
+        }
+        if let mcaLabelTaskID, Self.runningSubprocessID != mcaLabelTaskID {
+            _ = await mcaLabelTask?.result
+        }
+        for (pipelineID, task) in av2PipelineTasks where Self.runningSubprocessID != pipelineID {
+            _ = await task.result
+        }
+    }
+
+    private func clearWaveformEncoding(if encodingID: UUID) {
+        guard currentWaveformEncodingID == encodingID else { return }
+        currentWaveformEncodingTask = nil
+        currentWaveformEncodingID = nil
     }
 
     @discardableResult
@@ -4251,9 +4491,9 @@ actor FFMPEGConverter {
     private func beginPostProcessing(_ conversionID: UUID, usesBMX: Bool) async -> Bool {
         guard activeConversionID == conversionID else { return false }
         if usesBMX {
-            await BMXService.shared.prepareCancellationTracking(operationID: conversionID)
+            await bmxService.prepareCancellationTracking(operationID: conversionID)
             guard activeConversionID == conversionID else {
-                _ = await BMXService.shared.finishCancellationTracking(operationID: conversionID)
+                _ = await bmxService.finishCancellationTracking(operationID: conversionID)
                 return false
             }
         }
@@ -4274,20 +4514,22 @@ actor FFMPEGConverter {
     }
 
     private func finishPostProcessing(if conversionID: UUID) async -> Bool {
+        // The callback owns tracking until its last possible BMX handoff. A stop
+        // must leave the cancellation tombstone intact across that actor hop.
+        _ = await bmxService.finishCancellationTracking(operationID: conversionID)
         guard postProcessingConversionID == conversionID else { return false }
         postProcessingConversionID = nil
         if activeBMXOperationID == conversionID {
             activeBMXOperationID = nil
-            _ = await BMXService.shared.finishCancellationTracking(operationID: conversionID)
         }
         return true
     }
 
     private func activateBMXOperationIfActiveConversion(_ conversionID: UUID) async -> Bool {
         guard activeConversionID == conversionID else { return false }
-        await BMXService.shared.prepareCancellationTracking(operationID: conversionID)
+        await bmxService.prepareCancellationTracking(operationID: conversionID)
         guard activeConversionID == conversionID else {
-            _ = await BMXService.shared.finishCancellationTracking(operationID: conversionID)
+            _ = await bmxService.finishCancellationTracking(operationID: conversionID)
             return false
         }
         activeBMXOperationID = conversionID
@@ -4546,6 +4788,7 @@ actor FFMPEGConverter {
 
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             let output = diagnostic(for: result)
             guard result.succeeded else {
                 cleanupPartialOutput()
@@ -4601,14 +4844,9 @@ actor FFMPEGConverter {
         ffmpegPath: String,
         trimStart: Double?,
         trimEnd: Double?,
-        conversionID: UUID
+        conversionID: UUID,
+        targetChannelCount: Int
     ) async -> AVCIntraAudioPreprocessingResult {
-        // Get target channel count from settings
-        let audioChannelsRaw = UserDefaults.standard.string(forKey: AppConstants.avcIntraAudioChannelsKey)
-            ?? AppConstants.defaultAVCIntraAudioChannels
-        let audioChannels = AVCIntraAudioChannels(rawValue: audioChannelsRaw) ?? .ch8
-        let targetChannelCount = audioChannels.count
-
         // Create temp file
         let tempDir = FileManager.default.temporaryDirectory
         let tempURL = tempDir.appendingPathComponent("avc_audio_\(UUID().uuidString)").appendingPathExtension("mka")
@@ -4669,30 +4907,19 @@ actor FFMPEGConverter {
                     monoOutputs.append(outputLabel)
                     outputIndex += 1
                 } else {
-                    // Multi-channel stream - split to mono
-                    let splitLayout: String
-                    if channels == 2 {
-                        splitLayout = "stereo"
-                    } else if channels == 6 {
-                        splitLayout = "5.1"
-                    } else if channels == 8 {
-                        splitLayout = "7.1"
-                    } else {
-                        splitLayout = stream.channelLayout ?? "stereo"
-                    }
-
+                    // Preserve decoded channel order without assuming speaker positions.
                     var channelLabels: [String] = []
                     for ch in 0..<channels {
                         channelLabels.append("s\(audioPosition)c\(ch)")
                     }
                     let outputLabelsStr = channelLabels.map { "[\($0)]" }.joined()
 
-                    filterParts.append("[0:a:\(audioPosition)]channelsplit=channel_layout=\(splitLayout)\(outputLabelsStr)")
+                    filterParts.append("[0:a:\(audioPosition)]asplit=\(channels)\(outputLabelsStr)")
 
                     // Format each split channel
-                    for label in channelLabels {
+                    for (channel, label) in channelLabels.enumerated() {
                         let formattedLabel = "mono\(outputIndex)"
-                        filterParts.append("[\(label)]aformat=sample_fmts=s32:sample_rates=48000:channel_layouts=mono[\(formattedLabel)]")
+                        filterParts.append("[\(label)]pan=mono|c0=c\(channel),aformat=sample_fmts=s32:sample_rates=48000:channel_layouts=mono[\(formattedLabel)]")
                         monoOutputs.append(formattedLabel)
                         outputIndex += 1
                     }
@@ -4749,12 +4976,14 @@ actor FFMPEGConverter {
         let taskID = UUID()
         let runner = subprocessRunner
         let task = Task {
-            await Self.runAVCIntraAudioPreprocessing(
-                executablePath: ffmpegPath,
-                arguments: args,
-                outputURL: tempURL,
-                subprocessRunner: runner
-            )
+            await Self.$runningSubprocessID.withValue(taskID) {
+                await Self.runAVCIntraAudioPreprocessing(
+                    executablePath: ffmpegPath,
+                    arguments: args,
+                    outputURL: tempURL,
+                    subprocessRunner: runner
+                )
+            }
         }
         currentAVCIntraPreprocessingTask?.cancel()
         currentAVCIntraPreprocessingTask = task

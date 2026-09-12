@@ -19,6 +19,8 @@ struct PreviewPlayerFooter: View {
                 Text(item.name)
                     .font(.headline)
                     .lineLimit(1)
+                    .accessibilityIdentifier("preview.media")
+                    .accessibilityValue(previewTestStatus)
                 durationDetails
             }
 
@@ -43,7 +45,19 @@ struct PreviewPlayerFooter: View {
             }
             .buttonStyle(.plain)
             .help("Close preview")
+            .accessibilityLabel("Close preview")
+            .accessibilityIdentifier("preview.close")
         }
+    }
+
+    private var previewTestStatus: String {
+#if DEBUG
+        if ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1" {
+            let backend = controller.useImageSequence ? "ImageSequence" : (controller.useMPV ? "MPV" : "AVPlayer")
+            return "\(backend) \(controller.isReady ? "ready" : "loading")"
+        }
+#endif
+        return ""
     }
 
     private var durationDetails: some View {

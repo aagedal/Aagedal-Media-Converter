@@ -360,8 +360,6 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         switch channels {
         case 1: return "Mono"
         case 2: return "Stereo"
-        case 6: return "5.1"
-        case 8: return "7.1"
         default: return "\(channels) ch"
         }
     }

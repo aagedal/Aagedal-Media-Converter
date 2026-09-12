@@ -289,6 +289,7 @@ actor YTDLPUpdateService {
         id: UUID,
         task: Task<String, Error>
     )?
+    private var activeYTDLPUpdate: (id: UUID, task: Task<Void, Error>)?
     private var cachedDenoPath: String?
     private var activeDownloadTasks: [YTDLPDownloadKind: URLSessionDownloadTask] = [:]
 
@@ -785,15 +786,19 @@ actor YTDLPUpdateService {
     /// Owns the current warm-up so repeated launches supersede earlier work and
     /// cancellation reaches the child process managed by the shared runner.
     func runYTDLPWarmUp(at path: String) async throws -> SubprocessResult {
-        if let previousWarmUp = activeWarmUp {
-            activeWarmUp = nil
-            previousWarmUp.task.cancel()
-        }
+        try Task.checkCancellation()
+        let previousWarmUp = activeWarmUp?.task
+        previousWarmUp?.cancel()
 
         let warmUpID = UUID()
         let runner = warmUpRunner
         let warmUpTask = Task {
-            try await runner.run(at: path)
+            // Retain the predecessor even if this queued request is cancelled.
+            // A later replacement must wait for the entire drain chain before
+            // starting another PyInstaller extraction for the same binary.
+            if let previousWarmUp { _ = await previousWarmUp.result }
+            try Task.checkCancellation()
+            return try await runner.run(at: path)
         }
         activeWarmUp = (warmUpID, warmUpTask)
 
@@ -861,17 +866,17 @@ actor YTDLPUpdateService {
     private func runDenoUpdate(
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> String {
-        if let previousUpdate = activeDenoUpdate {
-            activeDenoUpdate = nil
-            previousUpdate.task.cancel()
-            activeDownloadTasks[.deno]?.cancel()
-            activeDenoExtraction?.task.cancel()
-            _ = try? await previousUpdate.task.value
-        }
+        try Task.checkCancellation()
+        let previousUpdate = activeDenoUpdate
+        previousUpdate?.task.cancel()
 
         let updateID = UUID()
         let updateTask = Task {
-            try await self.downloadDenoRuntime(progress: progress)
+            // Publish the new owner before suspension. Even a cancelled queued
+            // update must drain its predecessor before the next update can start.
+            _ = try? await previousUpdate?.task.value
+            try Task.checkCancellation()
+            return try await self.downloadDenoRuntime(progress: progress)
         }
         activeDenoUpdate = (updateID, updateTask)
 
@@ -986,15 +991,16 @@ actor YTDLPUpdateService {
         from archiveURL: URL,
         temporaryDirectory: URL = FileManager.default.temporaryDirectory
     ) async throws -> DenoArchiveExtraction {
-        if let previousExtraction = activeDenoExtraction {
-            activeDenoExtraction = nil
-            previousExtraction.task.cancel()
-        }
+        try Task.checkCancellation()
+        let previousExtraction = activeDenoExtraction
+        previousExtraction?.task.cancel()
 
         let extractionID = UUID()
         let extractor = denoArchiveExtractor
         let extractionTask = Task {
-            try await extractor.extract(
+            _ = try? await previousExtraction?.task.value
+            try Task.checkCancellation()
+            return try await extractor.extract(
                 from: archiveURL,
                 temporaryDirectory: temporaryDirectory
             )
@@ -1049,6 +1055,38 @@ actor YTDLPUpdateService {
     /// Downloads and installs the latest yt-dlp release
     /// - Parameter progress: Callback for download progress (0.0 to 1.0)
     func downloadUpdate(progress: @escaping @Sendable (Double) -> Void) async throws {
+        try await runYTDLPUpdate {
+            try await self.downloadYTDLPRuntime(progress: progress)
+        }
+    }
+
+    /// Keep cancellation and retry ownership across release lookup, hashing and
+    /// publication, including phases after the URLSession download has finished.
+    func runYTDLPUpdate(operation: @escaping @Sendable () async throws -> Void) async throws {
+        try Task.checkCancellation()
+        let previous = activeYTDLPUpdate
+        previous?.task.cancel()
+        let id = UUID()
+        let task = Task {
+            _ = try? await previous?.task.value
+            try Task.checkCancellation()
+            try await operation()
+            try Task.checkCancellation()
+        }
+        activeYTDLPUpdate = (id, task)
+        defer {
+            if activeYTDLPUpdate?.id == id { activeYTDLPUpdate = nil }
+        }
+        try await withTaskCancellationHandler {
+            try await task.value
+            try Task.checkCancellation()
+            guard activeYTDLPUpdate?.id == id else { throw CancellationError() }
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func downloadYTDLPRuntime(progress: @escaping @Sendable (Double) -> Void) async throws {
         guard let (version, downloadURL, checksumURL) = try await getLatestReleaseVersion() else {
             throw YTDLPUpdateError.assetNotFound
         }
@@ -1082,8 +1120,10 @@ actor YTDLPUpdateService {
             throw error
         }
 
-        // Move to final location
+        // Cancellation after checksum verification must not publish the binary.
         let fm = FileManager.default
+        defer { try? fm.removeItem(at: tempURL) }
+        try Task.checkCancellation()
         let destinationPath = downloadedPath
         let destinationDir = destinationPath.deletingLastPathComponent()
 
@@ -1208,12 +1248,15 @@ actor YTDLPUpdateService {
             cancelledWork = true
         }
         if kind == .deno, let extraction = activeDenoExtraction {
-            activeDenoExtraction = nil
+            // Retain the cancelled owner until it drains; retries chain behind it.
             extraction.task.cancel()
             cancelledWork = true
         }
         if kind == .deno, let update = activeDenoUpdate {
-            activeDenoUpdate = nil
+            update.task.cancel()
+            cancelledWork = true
+        }
+        if kind == .ytdlp, let update = activeYTDLPUpdate {
             update.task.cancel()
             cancelledWork = true
         }
@@ -1234,8 +1277,12 @@ actor YTDLPUpdateService {
         let delegate = YTDLPDownloadProgressDelegate(progressHandler: progress)
         let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
 
-        defer { activeDownloadTasks[kind] = nil }
-
+        var ownedTask: URLSessionDownloadTask?
+        defer {
+            if let ownedTask, activeDownloadTasks[kind] === ownedTask {
+                activeDownloadTasks[kind] = nil
+            }
+        }
         let cancellation = URLSessionTaskCancellation()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -1268,6 +1315,7 @@ actor YTDLPUpdateService {
                     }
                 }
                 cancellation.register(task)
+                ownedTask = task
                 activeDownloadTasks[kind] = task
                 task.resume()
             }

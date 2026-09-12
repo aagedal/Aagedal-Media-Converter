@@ -100,7 +100,10 @@ struct SettingsView: View {
         case .sync: SyncSettingsView()
         case .updates: UpdateSettingsView()
         case .shortcuts: ShortcutsSettingsView()
-        case .tools: ToolDiagnosticsSettingsView()
+        case .tools:
+            ToolDiagnosticsSettingsView { destination in
+                if let tab = SettingsTab(rawValue: destination) { selectedTab = tab }
+            }
         }
     }
 

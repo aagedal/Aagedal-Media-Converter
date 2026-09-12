@@ -28,6 +28,73 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testDamagedScheduleRecoveryInBothLanguages() throws {
+        for (language, locale, warningText, cancelTitle) in [
+            ("en", "en_US", "Saved download schedules could not be read.", "Cancel"),
+            ("nb", "nb_NO", "Lagrede nedlastingsplaner kunne ikke leses.", "Avbryt")
+        ] {
+            launchApp(language: language, locale: locale, damagedSchedules: true)
+            defer { app.terminate() }
+            app.activate()
+            let warning = element("scheduledDownloadStorageWarning")
+            XCTAssertTrue(warning.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(
+                format: "label == %@ OR value == %@", warningText, warningText
+            )).firstMatch.exists)
+            attachWindowScreenshot(named: "Schedule storage warning - \(language)")
+            element("scheduledDownloadStorageResetButton").click()
+            let confirmation = element("scheduledDownloadStorageResetConfirmButton")
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            attachWindowScreenshot(named: "Schedule storage reset confirmation - \(language)")
+            app.sheets.firstMatch.buttons[cancelTitle].click()
+            XCTAssertTrue(warning.exists)
+            element("scheduledDownloadStorageResetButton").click()
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            confirmation.click()
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: warning)
+            XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed)
+            XCTAssertTrue(element("queue.empty").exists)
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testDamagedHistoryRecoveryInBothLanguages() throws {
+        for (language, locale, warningText, cancelTitle) in [
+            ("en", "en_US", "Saved download history could not be read.", "Cancel"),
+            ("nb", "nb_NO", "Lagret nedlastingshistorikk kunne ikke leses.", "Avbryt")
+        ] {
+            launchApp(language: language, locale: locale, damagedHistory: true)
+            defer { app.terminate() }
+            app.activate()
+            let warning = element("downloadHistoryStorageWarning")
+            XCTAssertTrue(warning.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(
+                format: "label == %@ OR value == %@", warningText, warningText
+            )).firstMatch.exists)
+            let optionLabels = language == "nb"
+                ? ["Ta opp fra starten", "Kun lyd", "Konverter", "Opplasting"]
+                : ["Record from start", "Audio only", "Encode", "Upload"]
+            for label in optionLabels {
+                XCTAssertTrue(app.buttons[label].exists, "Missing localized download option: \(label)")
+            }
+            attachWindowScreenshot(named: "History storage warning - \(language)")
+            element("downloadHistoryStorageResetButton").click()
+            let confirmation = element("downloadHistoryStorageResetConfirmButton")
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            attachWindowScreenshot(named: "History storage reset confirmation - \(language)")
+            app.sheets.firstMatch.buttons[cancelTitle].click()
+            XCTAssertTrue(warning.exists)
+            element("downloadHistoryStorageResetButton").click()
+            XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+            confirmation.click()
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: warning)
+            XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testHiddenDefaultPresetStillDisplaysItsSelectionInBothLanguages() throws {
         for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
             launchApp(language: language, locale: locale, additionalArguments: ["-videoLoopVisible", "NO"])
@@ -105,6 +172,109 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         let metadataTab = element("settings.tab.metadata")
         metadataTab.click()
         XCTAssertEqual(settingsRoot.value as? String, "metadata")
+    }
+
+    @MainActor
+    func testOutputFolderErrorsPreserveLocationInBothLanguages() throws {
+        for (language, locale, cleanupPrefix, unavailablePrefix) in [
+            ("en", "en_US", "Automatic cleanup", "The output folder is unavailable"),
+            ("nb", "nb_NO", "Automatisk opprydding", "Utdatamappen er utilgjengelig")
+        ] {
+            let missingFolder = "/private/tmp/AMC-UITest-Missing-\(UUID().uuidString)"
+            launchApp(language: language, locale: locale, additionalArguments: [
+                "-outputFolder", missingFolder, "-saveNextToOriginal", "NO",
+                "-autoDeleteOldEncodes", "YES", "-autoDeleteOldEncodesDays", "7"
+            ])
+            defer { app.terminate() }
+            let settingsButton = element("toolbar.settings")
+            XCTAssertTrue(settingsButton.waitForExistence(timeout: 10))
+            settingsButton.click()
+            let cleanupError = element("settings.general.cleanupError")
+            XCTAssertTrue(cleanupError.waitForExistence(timeout: 10))
+            attachWindowScreenshot(named: "Output cleanup error - \(language)")
+            // Selectable SwiftUI text exposes its contents as an accessibility value.
+            let cleanupText = cleanupError.value as? String ?? cleanupError.label
+            XCTAssertTrue(cleanupText.hasPrefix(cleanupPrefix), cleanupText)
+            element("settings.general.retryCleanup").click()
+            XCTAssertTrue(cleanupError.exists)
+            XCTAssertTrue(app.staticTexts[missingFolder].exists)
+            element("settings.general.revealOutput").click()
+            let alert = app.sheets.firstMatch
+            XCTAssertTrue(alert.waitForExistence(timeout: 5))
+            XCTAssertTrue(alert.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", unavailablePrefix, unavailablePrefix)).firstMatch.exists)
+            attachWindowScreenshot(named: "Output location error - \(language)")
+            alert.buttons["OK"].click()
+            XCTAssertTrue(app.staticTexts[missingFolder].exists)
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testWatchFolderUnavailableRevealPreservesLocationInBothLanguages() throws {
+        for (language, locale, unavailablePrefix) in [
+            ("en", "en_US", "The watch folder is unavailable"),
+            ("nb", "nb_NO", "Overvåkingsmappen er utilgjengelig")
+        ] {
+            let missingFolder = "/private/tmp/AMC-UITest-Missing-Watch-\(UUID().uuidString)"
+            launchApp(language: language, locale: locale, additionalArguments: [
+                "-watchFolderPath", missingFolder,
+                "-watchFolderModeEnabled", "NO", "-watchFolderAutoActivateOnLaunch", "NO"
+            ])
+            defer { app.terminate() }
+            XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+            app.activate()
+            element("toolbar.settings").click()
+            XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+            element("settings.tab.watchFolder").click()
+            let reveal = element("settings.watchFolder.reveal")
+            XCTAssertTrue(reveal.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts[missingFolder].exists)
+            // Retry after dismissal: a missing volume must retain its saved path
+            // and continue to offer reauthorization/reconnection guidance.
+            for attempt in 1...2 {
+                reveal.click()
+                let alert = app.sheets.firstMatch
+                XCTAssertTrue(alert.waitForExistence(timeout: 5))
+                XCTAssertTrue(alert.staticTexts.containing(NSPredicate(
+                    format: "label BEGINSWITH %@ OR value BEGINSWITH %@", unavailablePrefix, unavailablePrefix
+                )).firstMatch.exists)
+                if attempt == 1 {
+                    attachWindowScreenshot(named: "Watch folder location error - \(language)")
+                }
+                alert.buttons["OK"].click()
+                XCTAssertTrue(app.staticTexts[missingFolder].exists)
+                XCTAssertTrue(reveal.exists)
+            }
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testWatchFolderStartupFailureRemainsVisibleAfterModeDisablesInBothLanguages() throws {
+        for (language, locale, unavailablePrefix) in [
+            ("en", "en_US", "The watch folder is unavailable"),
+            ("nb", "nb_NO", "Overvåkingsmappen er utilgjengelig")
+        ] {
+            let missingFolder = "/private/tmp/AMC-UITest-Missing-Watch-\(UUID().uuidString)"
+            launchApp(language: language, locale: locale, additionalArguments: [
+                "-watchFolderPath", missingFolder,
+                "-watchFolderAutoActivateOnLaunch", "YES"
+            ])
+            defer { app.terminate() }
+            let alert = app.sheets.firstMatch
+            XCTAssertTrue(alert.waitForExistence(timeout: 10))
+            XCTAssertTrue(alert.staticTexts.containing(NSPredicate(
+                format: "label BEGINSWITH %@ OR value BEGINSWITH %@", unavailablePrefix, unavailablePrefix
+            )).firstMatch.exists)
+            attachWindowScreenshot(named: "Watch folder startup error - \(language)")
+            alert.buttons["OK"].click()
+            XCTAssertTrue(alert.waitForNonExistence(timeout: 5))
+            element("toolbar.settings").click()
+            XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+            element("settings.tab.watchFolder").click()
+            XCTAssertTrue(app.staticTexts[missingFolder].waitForExistence(timeout: 5))
+            app.terminate()
+        }
     }
 
     @MainActor
@@ -234,6 +404,70 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testNativePreviewSeekScreenshotAndReopen() throws {
+        try exercisePreview(container: "mp4", expectedBackend: "AVPlayer")
+    }
+
+    @MainActor
+    func testMPVPreviewSeekScreenshotAndReopen() throws {
+        try exercisePreview(container: "mkv", expectedBackend: "MPV")
+    }
+
+    @MainActor
+    private func exercisePreview(container: String, expectedBackend: String) throws {
+        launchApp(generatedFixture: true, previewContainer: container)
+        defer { terminateAndCleanFixtures() }
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+
+        for attempt in 0..<2 {
+            queueItem.rightClick()
+            let preview = app.menuItems["Preview / Trim"]
+            XCTAssertTrue(preview.waitForExistence(timeout: 5))
+            preview.click()
+            let media = element("preview.media")
+            XCTAssertTrue(media.waitForExistence(timeout: 10))
+            XCTAssertTrue(waitForValue("\(expectedBackend) ready", of: media, timeout: 30))
+            let timecode = element("trim.timecode")
+            XCTAssertTrue(timecode.waitForExistence(timeout: 5))
+            timecode.click()
+            let input = element("trim.timecodeInput")
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.typeKey("a", modifierFlags: .command)
+            input.typeText("00:00:01:00")
+            input.typeKey(.return, modifierFlags: [])
+            XCTAssertTrue(waitForValue("00:00:01:00", of: timecode, timeout: 10))
+            if attempt == 0 {
+                let reveal = element("trim.revealScreenshot")
+                XCTAssertFalse(reveal.isEnabled)
+                element("trim.captureFrame").click()
+                XCTAssertTrue(waitForEnabled(true, of: reveal, timeout: 30))
+                // A preview sheet may extend beyond its parent window; capture
+                // the full app so attachments do not crop the sheet's controls.
+                let attachment = XCTAttachment(screenshot: app.screenshot())
+                attachment.name = "\(expectedBackend) preview after seek and screenshot"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+            app.typeKey("l", modifierFlags: [])
+            let advances = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@", "00:00:01:00"), object: timecode
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [advances], timeout: 5), .completed)
+            app.typeKey("k", modifierFlags: [])
+            let pausedTimecode = try XCTUnwrap(timecode.value as? String)
+            let staysPaused = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@", pausedTimecode), object: timecode
+            )
+            staysPaused.isInverted = true
+            XCTAssertEqual(XCTWaiter.wait(for: [staysPaused], timeout: 1), .completed)
+            element("preview.close").click()
+            XCTAssertTrue(media.waitForNonExistence(timeout: 10))
+        }
+        XCTAssertEqual(queueItem.value as? String, "waiting")
+    }
+
+    @MainActor
     func testImportsGeneratedFixtureAndSelectsPreset() throws {
         launchApp(generatedFixture: true)
         defer { terminateAndCleanFixtures() }
@@ -286,6 +520,42 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(waitForValue("cancelled", of: queueItem, timeout: 10))
         XCTAssertTrue(waitForLabel("Start Conversion", of: conversionButton, timeout: 5))
         XCTAssertTrue(waitForEnabled(false, of: conversionButton, timeout: 5))
+    }
+
+    @MainActor
+    func testCancelledConversionCanRetryAndConvertAgainUsingKeyboard() throws {
+        launchApp(
+            generatedFixture: true,
+            defaultPreset: "H.264 / AVC",
+            realtimeInput: true
+        )
+        defer { terminateAndCleanFixtures() }
+
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
+        let conversionButton = element("toolbar.conversion")
+        XCTAssertTrue(waitForEnabled(true, of: conversionButton, timeout: 5))
+        app.activate()
+        app.typeKey(.return, modifierFlags: .command)
+        XCTAssertTrue(waitForValue("converting", of: queueItem, timeout: 10))
+        XCTAssertTrue(waitForLabel("Cancel Conversion", of: conversionButton, timeout: 5))
+        app.typeKey(.return, modifierFlags: .command)
+        XCTAssertTrue(waitForValue("cancelled", of: queueItem, timeout: 10))
+        XCTAssertTrue(waitForEnabled(false, of: conversionButton, timeout: 5))
+
+        // Exercise reset and retry after cancellation, then repeat with an
+        // existing successful output through the normal app collision policy.
+        for attempt in 1...2 {
+            app.typeKey("r", modifierFlags: [.command, .shift])
+            XCTAssertTrue(waitForValue("waiting", of: queueItem, timeout: 5))
+            XCTAssertTrue(waitForEnabled(true, of: conversionButton, timeout: 5))
+            app.typeKey(.return, modifierFlags: .command)
+            XCTAssertTrue(waitForValue("converting", of: queueItem, timeout: 10))
+            XCTAssertTrue(waitForValue("done", of: queueItem, timeout: 45))
+            XCTAssertTrue(waitForLabel("Start Conversion", of: conversionButton, timeout: 5))
+            XCTAssertTrue(waitForEnabled(false, of: conversionButton, timeout: 5))
+            attachWindowScreenshot(named: "Keyboard conversion recovery - attempt \(attempt)")
+        }
     }
 
     @MainActor
@@ -364,12 +634,24 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         removeFixtureAfterImport: Bool = false,
         language: String = "en",
         locale: String = "en_US",
-        additionalArguments: [String] = []
+        additionalArguments: [String] = [],
+        damagedSchedules: Bool = false,
+        damagedHistory: Bool = false,
+        previewContainer: String? = nil
     ) {
         app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-ffmpegBinarySource", "app", "-defaultExportPreset", defaultPreset]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        if let previewContainer {
+            app.launchEnvironment["AMC_UI_TEST_PREVIEW_CONTAINER"] = previewContainer
+        }
+        if damagedHistory {
+            app.launchEnvironment["AMC_UI_TEST_DAMAGED_HISTORY"] = "1"
+        }
+        if damagedSchedules {
+            app.launchEnvironment["AMC_UI_TEST_DAMAGED_SCHEDULES"] = "1"
+        }
         if generatedFixture {
             app.launchArguments += [
                 "-saveNextToOriginal", "NO",

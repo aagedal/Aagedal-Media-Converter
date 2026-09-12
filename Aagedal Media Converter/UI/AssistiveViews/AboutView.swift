@@ -40,7 +40,7 @@ struct AboutView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Text("FFMPEG version: 8.1")
+            Text("FFMPEG version: 9.0.1")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
@@ -87,7 +87,13 @@ private struct BundledLicensesView: View {
         ("mpv", "mpv-LICENSE.txt"),
         ("tesseract", "tesseract-LICENSE.txt"),
         ("asdcplib", "asdcplib-LICENSE.txt"),
-        ("bmx", "bmx-LICENSE.txt")
+        ("bmx", "bmx-LICENSE.txt"),
+        ("Sparkle", "sparkle-LICENSE.txt"),
+        ("SwiftMediaMetadata", "swiftmediametadata-LICENSE.txt"),
+        ("GeoNames", "geonames-LICENSE.txt"),
+        ("AVM", "avm-LICENSE.txt"),
+        ("rclone", "rclone-LICENSE.txt"),
+        ("MPVKit", "mpvkit-LICENSE.txt")
     ]
 
     private var noticeText: String? {
@@ -109,12 +115,9 @@ private struct BundledLicensesView: View {
                 }
             }
 
-            ScrollView {
+            Group {
                 if let noticeText {
-                    Text(verbatim: noticeText)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
+                    LicenseNoticeTextView(text: noticeText)
                 } else {
                     Text("This license notice could not be loaded. See the source repository for license information.")
                         .foregroundStyle(.secondary)
@@ -135,6 +138,43 @@ private struct BundledLicensesView: View {
         }
         .padding(24)
         .frame(width: 680, height: 560)
+    }
+}
+
+// Native text layout keeps the complete multi-megabyte dependency notices
+// selectable and scrollable without laying out one enormous SwiftUI Text view.
+private struct LicenseNoticeTextView: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = false
+        textView.minSize = .zero
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainerInset = NSSize(width: 16, height: 16)
+        textView.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        textView.textColor = .labelColor
+        textView.backgroundColor = .textBackgroundColor
+        textView.setAccessibilityLabel(String(localized: "Licenses"))
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView,
+              textView.string != text else { return }
+        textView.string = text
+        textView.scrollToBeginningOfDocument(nil)
     }
 }
 

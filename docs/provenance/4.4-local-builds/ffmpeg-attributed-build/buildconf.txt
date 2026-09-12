@@ -1,0 +1,97 @@
+
+  configuration:
+    --prefix=/private/tmp/aagedal-ffmpeg-attribution-build/compiled
+    --metalcc='/private/tmp/aagedal-metal-toolchain/Metal.xctoolchain/usr/bin/metal -fmodules-cache-path=/private/tmp/aagedal-ffmpeg-attribution-build/build/clang-module-cache'
+    --metallib=/private/tmp/aagedal-metal-toolchain/Metal.xctoolchain/usr/bin/metallib
+    --enable-metal
+    --arch=arm64
+    --target-os=darwin
+    --pkg-config-flags=--static
+    --extra-cflags='-arch arm64 -I/private/tmp/aagedal-ffmpeg-attribution-build/compiled/include -O3 -fPIC -mcpu=apple-m1'
+    --extra-cxxflags='-arch arm64 -I/private/tmp/aagedal-ffmpeg-attribution-build/compiled/include -O3 -fPIC -mcpu=apple-m1'
+    --extra-ldflags='-arch arm64 -L/private/tmp/aagedal-ffmpeg-attribution-build/compiled/lib'
+    --extra-libs='-lpthread -lm -lz'
+    --enable-static
+    --disable-shared
+    --enable-gpl
+    --enable-version3
+    --disable-debug
+    --disable-doc
+    --enable-pthreads
+    --enable-runtime-cpudetect
+    --enable-neon
+    --enable-pic
+    --disable-libxcb
+    --disable-libxcb-shm
+    --disable-libxcb-xfixes
+    --disable-libxcb-shape
+    --disable-sdl2
+    --disable-xlib
+    --disable-libfontconfig
+    --enable-libass
+    --enable-libharfbuzz
+    --enable-libfreetype
+    --enable-libfribidi
+    --enable-libx264
+    --enable-libx265
+    --enable-libvpx
+    --enable-libaom
+    --enable-libsvtav1
+    --enable-libvvenc
+    --enable-libjxl
+    --enable-libwebp
+    --enable-libopus
+    --enable-libvorbis
+    --enable-libmp3lame
+    --enable-libtheora
+    --enable-libopenjpeg
+    --enable-libvmaf
+    --enable-whisper
+    --enable-videotoolbox
+    --enable-audiotoolbox
+    --enable-encoder=libx264
+    --enable-encoder=libx265
+    --enable-encoder=libvpx_vp8
+    --enable-encoder=libvpx_vp9
+    --enable-encoder=libaom_av1
+    --enable-encoder=libsvtav1
+    --enable-encoder=libvvenc
+    --enable-encoder=libjxl
+    --enable-encoder=libwebp
+    --enable-encoder=libwebp_anim
+    --enable-encoder=libopus
+    --enable-encoder=libvorbis
+    --enable-encoder=libmp3lame
+    --enable-encoder=aac
+    --enable-encoder=aac_at
+    --enable-encoder=flac
+    --enable-encoder=libtheora
+    --enable-encoder=libopenjpeg
+    --enable-encoder=h264_videotoolbox
+    --enable-encoder=hevc_videotoolbox
+    --enable-encoder=prores_videotoolbox
+    --enable-decoder=libjxl
+    --enable-decoder=aac
+    --enable-decoder=aac_at
+    --enable-decoder=flac
+    --enable-decoder=vvc
+    --enable-decoder=theora
+    --enable-filter=scale
+    --enable-filter=overlay
+    --enable-filter=whisper
+    --enable-filter=ssim
+    --enable-filter=psnr
+    --enable-filter=xpsnr
+    --enable-filter=msad
+
+Exiting with exit code 0
+ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers
+  built with Apple clang version 21.0.0 (clang-2100.1.1.101)
+  configuration: --prefix=/private/tmp/aagedal-ffmpeg-attribution-build/compiled --metalcc='/private/tmp/aagedal-metal-toolchain/Metal.xctoolchain/usr/bin/metal -fmodules-cache-path=/private/tmp/aagedal-ffmpeg-attribution-build/build/clang-module-cache' --metallib=/private/tmp/aagedal-metal-toolchain/Metal.xctoolchain/usr/bin/metallib --enable-metal --arch=arm64 --target-os=darwin --pkg-config-flags=--static --extra-cflags='-arch arm64 -I/private/tmp/aagedal-ffmpeg-attribution-build/compiled/include -O3 -fPIC -mcpu=apple-m1' --extra-cxxflags='-arch arm64 -I/private/tmp/aagedal-ffmpeg-attribution-build/compiled/include -O3 -fPIC -mcpu=apple-m1' --extra-ldflags='-arch arm64 -L/private/tmp/aagedal-ffmpeg-attribution-build/compiled/lib' --extra-libs='-lpthread -lm -lz' --enable-static --disable-shared --enable-gpl --enable-version3 --disable-debug --disable-doc --enable-pthreads --enable-runtime-cpudetect --enable-neon --enable-pic --disable-libxcb --disable-libxcb-shm --disable-libxcb-xfixes --disable-libxcb-shape --disable-sdl2 --disable-xlib --disable-libfontconfig --enable-libass --enable-libharfbuzz --enable-libfreetype --enable-libfribidi --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libsvtav1 --enable-libvvenc --enable-libjxl --enable-libwebp --enable-libopus --enable-libvorbis --enable-libmp3lame --enable-libtheora --enable-libopenjpeg --enable-libvmaf --enable-whisper --enable-videotoolbox --enable-audiotoolbox --enable-encoder=libx264 --enable-encoder=libx265 --enable-encoder=libvpx_vp8 --enable-encoder=libvpx_vp9 --enable-encoder=libaom_av1 --enable-encoder=libsvtav1 --enable-encoder=libvvenc --enable-encoder=libjxl --enable-encoder=libwebp --enable-encoder=libwebp_anim --enable-encoder=libopus --enable-encoder=libvorbis --enable-encoder=libmp3lame --enable-encoder=aac --enable-encoder=aac_at --enable-encoder=flac --enable-encoder=libtheora --enable-encoder=libopenjpeg --enable-encoder=h264_videotoolbox --enable-encoder=hevc_videotoolbox --enable-encoder=prores_videotoolbox --enable-decoder=libjxl --enable-decoder=aac --enable-decoder=aac_at --enable-decoder=flac --enable-decoder=vvc --enable-decoder=theora --enable-filter=scale --enable-filter=overlay --enable-filter=whisper --enable-filter=ssim --enable-filter=psnr --enable-filter=xpsnr --enable-filter=msad
+  libavutil      61.  1.101 / 61.  1.101
+  libavcodec     63.  1.101 / 63.  1.101
+  libavformat    63.  1.101 / 63.  1.101
+  libavdevice    63.  1.101 / 63.  1.101
+  libavfilter    12.  1.101 / 12.  1.101
+  libswscale     10.  1.101 / 10.  1.101
+  libswresample   7.  1.101 /  7.  1.101

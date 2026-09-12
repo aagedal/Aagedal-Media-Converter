@@ -95,7 +95,7 @@ enum WaveformStyle: String, CaseIterable, Identifiable {
 }
 
 struct AudioWaveformPreferences {
-    struct WaveformVideoConfig {
+    struct WaveformVideoConfig: Sendable {
         let resolution: CGSize
         let width: Int
         let height: Int
@@ -143,9 +143,7 @@ struct AudioWaveformPreferences {
         }
     }
 
-    static func loadConfig() -> WaveformVideoConfig {
-        let defaults = UserDefaults.standard
-
+    static func loadConfig(defaults: UserDefaults = .standard) -> WaveformVideoConfig {
         // Load aspect ratio and short edge, compute resolution
         let aspectRatioRaw = defaults.string(forKey: AppConstants.audioWaveformAspectRatioKey) ?? AppConstants.defaultAudioWaveformAspectRatio
         let aspectRatio = AspectRatio(rawValue: aspectRatioRaw) ?? .ratio16_9
@@ -250,10 +248,60 @@ struct AudioWaveformPreferences {
     }
 
     static func sanitizeFrameRate(_ value: Double) -> Double {
-        let valid = value.isFinite && value >= 10 && value <= 120
+        guard value.isFinite else { return AppConstants.defaultAudioWaveformFrameRate }
+        let valid = value >= 10 && value <= 120
         if valid { return value }
         if value == 0 { return AppConstants.defaultAudioWaveformFrameRate }
         return min(max(value, 10), 120)
+    }
+}
+
+/// Captures generated-video appearance and preset resolution before request preparation.
+/// Single-item and merge exports share the same audio-routing compatibility policy.
+struct GeneratedVideoSettings: Sendable {
+    private let preset: ExportPreset
+    private let waveform: WaveformVideoRequest
+    private let synthesized: SynthesizedVideoRequest
+
+    init(preset: ExportPreset, defaults: UserDefaults = .standard) {
+        self.preset = preset
+        let config = AudioWaveformPreferences.loadConfig(defaults: defaults)
+        let resolution = preset.resolvedWaveformResolution(defaultResolution: config.resolution, defaults: defaults)
+        waveform = WaveformVideoRequest(
+            width: Int(resolution.width), height: Int(resolution.height),
+            backgroundHex: config.backgroundHex, foregroundHex: config.foregroundHex,
+            normalizeAudio: config.normalizeAudio, style: config.style, frameRate: config.frameRate,
+            renderingEngine: config.renderingEngine, swiftStyle: config.swiftStyle,
+            bandCount: config.bandCount, frequencyDistribution: config.frequencyDistribution,
+            foregroundGradientEnabled: config.foregroundGradientEnabled,
+            foregroundGradientEndHex: config.foregroundGradientEndHex,
+            backgroundGradientEnabled: config.backgroundGradientEnabled,
+            backgroundGradientEndHex: config.backgroundGradientEndHex,
+            waveformOpacity: config.waveformOpacity
+        )
+        synthesized = SynthesizedVideoRequest(
+            width: Int(resolution.width), height: Int(resolution.height),
+            backgroundHex: config.backgroundHex, frameRate: config.frameRate, includeAudio: true
+        )
+    }
+
+    func requests(for items: [VideoItem]) -> (waveform: WaveformVideoRequest?, synthesized: SynthesizedVideoRequest?) {
+        let waveformItems = items.filter(\.requiresWaveformVideo)
+        if preset != .streamCopy, !waveformItems.isEmpty,
+           !waveformItems.contains(where: Self.splitsAudioToMono) {
+            return (waveform, nil)
+        }
+        let audioOnlyItems = items.filter { !$0.hasVideoStream }
+        guard preset.outputsVideoTrack, !audioOnlyItems.isEmpty,
+              !audioOnlyItems.contains(where: Self.splitsAudioToMono) else {
+            return (nil, nil)
+        }
+        return (nil, synthesized)
+    }
+
+    private static func splitsAudioToMono(_ item: VideoItem) -> Bool {
+        if case .splitToMono = item.audioRoutingConfig?.channelOperation { return true }
+        return false
     }
 }
 

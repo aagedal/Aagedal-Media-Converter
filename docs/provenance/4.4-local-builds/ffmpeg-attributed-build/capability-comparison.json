@@ -1,0 +1,26 @@
+{
+  "-encoders": {
+    "removed": [],
+    "added": []
+  },
+  "-decoders": {
+    "removed": [],
+    "added": []
+  },
+  "-filters": {
+    "removed": [],
+    "added": []
+  },
+  "-muxers": {
+    "removed": [],
+    "added": []
+  },
+  "-demuxers": {
+    "removed": [],
+    "added": []
+  },
+  "-protocols": {
+    "removed": [],
+    "added": []
+  }
+}

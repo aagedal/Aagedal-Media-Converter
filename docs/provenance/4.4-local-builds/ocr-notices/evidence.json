@@ -1,0 +1,23 @@
+{
+  "binarySHA256": "dc8106187b0078c3413b0b338e11af1d819e86b082819e0d58622d1f5beefd95",
+  "notices": [
+    {
+      "component": "Tesseract 5.5.2",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tesseract/5.5.2/LICENSE",
+      "snapshot": "docs/provenance/4.4-local-builds/ocr-notices/tesseract-LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "component": "Leptonica 1.87.0",
+      "url": "https://raw.githubusercontent.com/DanBloomberg/leptonica/1.87.0/leptonica-license.txt",
+      "snapshot": "docs/provenance/4.4-local-builds/ocr-notices/leptonica-LICENSE.txt",
+      "sha256": "87829abb5bbb00b55a107365da89e9a33f86c4250169e5a1e5588505be7d5806"
+    },
+    {
+      "component": "libpng 1.6.56",
+      "url": "https://raw.githubusercontent.com/pnggroup/libpng/v1.6.56/LICENSE",
+      "snapshot": "docs/provenance/4.4-local-builds/ocr-notices/libpng-LICENSE.txt",
+      "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526"
+    }
+  ]
+}

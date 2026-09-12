@@ -34,7 +34,11 @@ import Foundation
 @MainActor
 final class PendingAppIntentRequests {
     static let shared = PendingAppIntentRequests()
-    private init() {}
+    private let post: (Notification) -> Void
+
+    init(post: @escaping (Notification) -> Void = { NotificationCenter.default.post($0) }) {
+        self.post = post
+    }
 
     private struct Request {
         let name: Notification.Name
@@ -43,6 +47,8 @@ final class PendingAppIntentRequests {
     }
 
     private var pending: [UUID: Request] = [:]
+    private var pendingOrder: [UUID] = []
+    private var isDraining = false
 
     /// The userInfo key under which callers must place a `UUID` request id.
     static let requestIDKey = "requestID"
@@ -51,25 +57,63 @@ final class PendingAppIntentRequests {
     /// userInfo carries no `requestID`, the request is posted without buffering.
     func submit(name: Notification.Name, object: Any?, userInfo: [AnyHashable: Any]) {
         if let id = userInfo[Self.requestIDKey] as? UUID {
+            if pending[id] == nil { pendingOrder.append(id) }
             pending[id] = Request(name: name, object: object, userInfo: userInfo)
         }
-        NotificationCenter.default.post(name: name, object: object, userInfo: userInfo)
+        post(Notification(name: name, object: object, userInfo: userInfo))
     }
 
-    /// Mark a request handled so a later ``drain()`` won't replay it. Called by
-    /// the live notification handler.
-    func consume(id: UUID) {
-        pending.removeValue(forKey: id)
+    /// Atomically claim a buffered request. Only the first window receiving a
+    /// notification may handle it; subsequent receivers must skip it.
+    @discardableResult
+    func consume(id: UUID) -> Bool {
+        guard pending.removeValue(forKey: id) != nil else { return false }
+        pendingOrder.removeAll { $0 == id }
+        return true
     }
 
-    /// Replay and clear any requests not yet consumed. Called once a window's
+    /// Legacy notifications without a request ID are still handled directly.
+    /// Decode the payload before claiming so an invalid receiver cannot lose it.
+    func claim(_ notification: Notification) -> Bool {
+        guard let id = notification.userInfo?[Self.requestIDKey] as? UUID else { return true }
+        return consume(id: id)
+    }
+
+    /// Replay requests not yet consumed, retaining them until a receiver claims
+    /// them. Called once a window's
     /// receivers are attached (e.g. from `ContentView`'s `onAppear`).
     func drain() {
-        guard !pending.isEmpty else { return }
-        let requests = Array(pending.values)
-        pending.removeAll()
-        for request in requests {
-            NotificationCenter.default.post(name: request.name, object: request.object, userInfo: request.userInfo)
+        guard !isDraining, !pending.isEmpty else { return }
+        isDraining = true
+        defer { isDraining = false }
+        // Snapshot IDs, not requests: a synchronous receiver may consume another
+        // request or submit a new one while this replay is in progress.
+        let requestIDs = pendingOrder
+        for id in requestIDs {
+            guard let request = pending[id] else { continue }
+            post(Notification(name: request.name, object: request.object, userInfo: request.userInfo))
+        }
+    }
+}
+
+/// Keeps claimed handoffs from mutating the shared queue/preset/output while another
+/// handoff is importing or converting. The operation owns its turn across awaits.
+@MainActor
+final class AppIntentOperationQueue {
+    static let shared = AppIntentOperationQueue()
+    private var operations: [@MainActor () async -> Void] = []
+    private var isRunning = false
+
+    func enqueue(_ operation: @escaping @MainActor () async -> Void) {
+        operations.append(operation)
+        guard !isRunning else { return }
+        isRunning = true
+        Task { @MainActor in
+            while !operations.isEmpty {
+                let next = operations.removeFirst()
+                await next()
+            }
+            isRunning = false
         }
     }
 }

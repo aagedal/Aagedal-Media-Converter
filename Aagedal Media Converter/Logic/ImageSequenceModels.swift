@@ -76,16 +76,12 @@ struct ImageSequenceConfig: Equatable, Sendable {
 
     /// FFMPEG input arguments for this sequence, including associated audio if present
     var ffmpegInputArguments: [String] {
-        let patternPath = directory.appendingPathComponent(pattern).path
-        var args = [
-            "-framerate", String(format: "%.3f", frameRate),
-            "-start_number", "\(startNumber)",
-            "-i", patternPath
-        ]
-        if let audioURL = associatedAudioURL {
-            args.append(contentsOf: ["-i", audioURL.path])
-        }
-        return args
+        FFMPEGInputPlan.imageSequence(
+            pattern: directory.appendingPathComponent(pattern).path,
+            frameRate: String(format: "%.3f", frameRate),
+            startNumber: String(startNumber),
+            audioPath: associatedAudioURL?.path
+        ).arguments()
     }
 }
 

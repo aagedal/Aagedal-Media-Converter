@@ -81,6 +81,166 @@ final class AV2ScratchDirectoryTests: XCTestCase {
         XCTAssertEqual(nextBitDepth, 8)
     }
 
+    func testCapturedContainerControlsFrameLagInSingleAndSegmentedCommands() async throws {
+        let suite = "AV2ContainerCommandTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(2, forKey: AppConstants.av2ParallelChunksKey)
+        defaults.set(AV2RateControlMode.constantQuality.rawValue, forKey: AppConstants.av2RateControlModeKey)
+        let input = URL(fileURLWithPath: "/nonexistent/source.mov")
+        for container in [AV2Container.mkv, .ivf] {
+            defaults.set(container.rawValue, forKey: AppConstants.av2ContainerKey)
+            let settings = AV2Settings(defaults: defaults)
+            defaults.set("changed", forKey: AppConstants.av2ContainerKey)
+            let single = await AV2CommandBuilder.build(
+                inputURL: input, outputURL: input.appendingPathExtension(container.rawValue),
+                trimStart: nil, trimEnd: nil, cropConfig: nil,
+                metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24)), settings: settings
+            )
+            let segments = await AV2CommandBuilder.buildSegments(
+                inputURL: input, trimStart: nil, trimEnd: nil, cropConfig: nil,
+                metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24)), settings: settings
+            )
+            XCTAssertEqual(try XCTUnwrap(single).avmencArguments.contains("--lag-in-frames=0"), container == .mkv)
+            for segment in try XCTUnwrap(segments).segments {
+                XCTAssertEqual(segment.avmencArguments.contains("--lag-in-frames=0"), container == .mkv)
+            }
+        }
+    }
+
+    func testInvalidTrimStartUsesSameOriginForSingleAndSegmentedCommands() async throws {
+        let suite = "AV2TrimCommandTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(2, forKey: AppConstants.av2ParallelChunksKey)
+        let input = URL(fileURLWithPath: "/nonexistent/source.mov")
+        let settings = AV2Settings(defaults: defaults)
+        for start in [-5.0, Double.nan, Double.infinity] {
+            let single = await AV2CommandBuilder.build(
+                inputURL: input, outputURL: input.appendingPathExtension("ivf"),
+                trimStart: start, trimEnd: 10, cropConfig: nil,
+                metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24)), settings: settings
+            )
+            let command = try XCTUnwrap(single)
+            XCTAssertFalse(command.ffmpegArguments.contains("-ss"))
+            let durationIndex = try XCTUnwrap(command.ffmpegArguments.firstIndex(of: "-t"))
+            XCTAssertEqual(command.ffmpegArguments[durationIndex + 1], "10.000000")
+            XCTAssertEqual(command.effectiveDuration, 10)
+            let segments = await AV2CommandBuilder.buildSegments(
+                inputURL: input, trimStart: start, trimEnd: 10, cropConfig: nil,
+                metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24)), settings: settings
+            )
+            let plan = try XCTUnwrap(segments)
+            XCTAssertEqual(plan.totalFrames, 240)
+            XCTAssertFalse(plan.segments[0].ffmpegArguments.contains("-ss"))
+            let second = plan.segments[1].ffmpegArguments
+            let seek = try XCTUnwrap(second.firstIndex(of: "-ss"))
+            XCTAssertEqual(second[seek + 1], "5.000000")
+        }
+    }
+
+    func testUnrepresentableChunkFrameCountFallsBackWithoutIntegerOverflow() async throws {
+        let suite = "AV2FrameCountTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(2, forKey: AppConstants.av2ParallelChunksKey)
+        let plan = await AV2CommandBuilder.buildSegments(
+            inputURL: URL(fileURLWithPath: "/nonexistent/source.mov"),
+            trimStart: nil, trimEnd: nil, cropConfig: nil,
+            expectedDuration: Double.greatestFiniteMagnitude,
+            metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24)),
+            settings: AV2Settings(defaults: defaults)
+        )
+        XCTAssertNil(plan)
+    }
+
+    func testTrimPlanBoundsDurationsAndOmitsInvalidEnds() {
+        let bounded = AV2TrimPlan(start: 5, end: 20)
+        XCTAssertEqual(bounded.inputArguments, ["-ss", "5.000000"])
+        XCTAssertEqual(bounded.outputArguments, ["-t", "15.000000"])
+        XCTAssertEqual(bounded.effectiveDuration(sourceDuration: 12), 7)
+        XCTAssertEqual(bounded.effectiveDuration(sourceDuration: nil), 15)
+        XCTAssertEqual(bounded.effectiveDuration(sourceDuration: .infinity), 15)
+        for end in [-1.0, 0.0, Double.nan, Double.infinity] {
+            let plan = AV2TrimPlan(start: 5, end: end)
+            XCTAssertEqual(plan.outputArguments, [])
+            XCTAssertEqual(plan.effectiveDuration(sourceDuration: 12), 7)
+            XCTAssertNil(plan.effectiveDuration(sourceDuration: nil))
+        }
+        XCTAssertEqual(AV2TrimPlan(start: 20, end: nil).effectiveDuration(sourceDuration: 12), 0)
+    }
+
+    func testInvalidTrimIntervalsRejectSingleAndSegmentedPlans() async throws {
+        let suite = "AV2InvalidTrimTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(2, forKey: AppConstants.av2ParallelChunksKey)
+        let input = URL(fileURLWithPath: "/nonexistent/source.mov")
+        let settings = AV2Settings(defaults: defaults)
+        for end in [4.0, 5.0] {
+            let trim = AV2TrimPlan(start: 5, end: end)
+            XCTAssertEqual(trim.end, end)
+            XCTAssertNotNil(trim.preparationError)
+            XCTAssertTrue(trim.outputArguments.isEmpty)
+            XCTAssertNil(trim.effectiveDuration(sourceDuration: 60))
+            let command = await AV2CommandBuilder.build(
+                inputURL: input, outputURL: input.appendingPathExtension("ivf"),
+                trimStart: 5, trimEnd: end, cropConfig: nil,
+                metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24)), settings: settings
+            )
+            let segments = await AV2CommandBuilder.buildSegments(
+                inputURL: input, trimStart: 5, trimEnd: end, cropConfig: nil,
+                metadataSource: .resolved(videoMetadata(timecode: nil, frameRate: 24)), settings: settings
+            )
+            XCTAssertNil(command)
+            XCTAssertNil(segments)
+        }
+    }
+
+    func testInvalidTrimRejectsConversionAndAudioBeforeSideEffects() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("output.ivf")
+        let sentinel = Data("Existing output".utf8)
+        try sentinel.write(to: output)
+        let runner = ScratchRecordingRunner()
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: {
+            XCTFail("Invalid AV2 trim must fail before tool lookup")
+            return nil
+        })
+        let input = directory.appendingPathComponent("missing.mov")
+        for end in [4.0, 5.0] {
+            let expectedError = AV2TrimPlan(start: 5, end: end).preparationError
+            await converter.convert(
+                request: ConversionRequest(inputURL: input, outputURL: output, preset: .av2,
+                                           trimStart: 5, trimEnd: end),
+                progressUpdate: { _, _ in XCTFail("Invalid trim must not start conversion") },
+                completion: { success, error in
+                    XCTAssertFalse(success)
+                    XCTAssertEqual(error, expectedError)
+                }
+            )
+            let audio = await converter.extractAudioTracksForAV2Mux(
+                source: FFMPEGConverter.PackageAudioInput(
+                    arguments: ["-i", input.path], probeURL: input,
+                    ffmpegInputIndex: 0, assumesSingleAudioStreamIfProbeUnavailable: false
+                ),
+                audioRoutingConfig: nil, trimStart: 5, trimEnd: end,
+                ffmpegPath: "/nonexistent/ffmpeg",
+                audioStreamProvider: { _ in
+                    XCTFail("Invalid AV2 trim must fail before probing audio")
+                    return nil
+                }
+            )
+            guard case .failed(let error) = audio else { return XCTFail("Expected invalid trim failure") }
+            XCTAssertEqual(error, expectedError)
+        }
+        XCTAssertEqual(runner.launchCount, 0)
+        XCTAssertEqual(try Data(contentsOf: output), sentinel)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), ["output.ivf"])
+    }
+
     func testConflictingScratchFileFailsBeforeLaunchingAndPreservesFile() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let sentinel = Data("existing user data".utf8)

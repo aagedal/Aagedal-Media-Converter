@@ -60,6 +60,27 @@ class DependencyLicenseTests(unittest.TestCase):
     def test_complete_attribution_passes(self):
         manifest.require_complete_licenses(self.complete_manifest())
 
+    def test_matching_license_and_notice_do_not_clear_pending_source_review(self):
+        data = self.complete_manifest()
+        data["tools"][0].update(
+            license="GPL-3.0-or-later", reportedLicense="GPL-3.0-or-later",
+            pendingAttribution=["Corresponding sources have not been preserved."],
+        )
+        self.notice.write_text("GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n")
+        with self.assertRaisesRegex(RuntimeError, "Corresponding sources have not been preserved"):
+            manifest.require_complete_licenses(data)
+
+    def test_library_pending_review_fails_alongside_missing_notice(self):
+        data = self.complete_manifest()
+        data["libraries"] = [{
+            "path": "Frameworks/library.dylib", "license": "MIT", "licenseFile": None,
+            "pendingAttribution": ["Review compiled components."],
+        }]
+        with self.assertRaises(RuntimeError) as failure:
+            manifest.require_complete_licenses(data)
+        self.assertIn("incomplete for 1 dependencies", str(failure.exception))
+        self.assertIn("Review compiled components", str(failure.exception))
+
     def test_missing_or_uninventoried_notice_fails(self):
         for notice in [None, "Licenses/missing-LICENSE.txt"]:
             with self.subTest(notice=notice):
@@ -73,6 +94,76 @@ class DependencyLicenseTests(unittest.TestCase):
         data["libraries"] = [{"path": "Frameworks/library.dylib", "license": "NOASSERTION", "licenseFile": "Licenses/component-LICENSE.txt"}]
         with self.assertRaisesRegex(RuntimeError, "Frameworks/library.dylib"):
             manifest.require_complete_licenses(data)
+
+    def test_binary_license_mismatch_fails_with_other_attributions_complete(self):
+        data = self.complete_manifest()
+        data["tools"][0].update(license="GPL-2.0-or-later", reportedLicense="GPL-3.0-or-later")
+        self.notice.write_text("GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n")
+        with self.assertRaisesRegex(RuntimeError, "binary reports GPL-3.0-or-later"):
+            manifest.require_complete_licenses(data)
+
+    def test_matching_binary_license_still_requires_matching_notice(self):
+        data = self.complete_manifest()
+        data["tools"][0].update(license="GPL-3.0-or-later", reportedLicense="GPL-3.0-or-later")
+        self.notice.write_text("GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n")
+        with self.assertRaisesRegex(RuntimeError, "does not contain the reported GPL version 3"):
+            manifest.require_complete_licenses(data)
+        self.notice.write_text("GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n")
+        manifest.require_complete_licenses(data)
+
+    def test_license_mismatch_is_reported_alongside_missing_attribution(self):
+        data = self.complete_manifest()
+        data["tools"][0].update(licenseFile=None, reportedLicense="GPL-3.0-or-later")
+        with self.assertRaises(RuntimeError) as failure:
+            manifest.require_complete_licenses(data)
+        self.assertIn("incomplete for 1 dependencies", str(failure.exception))
+        self.assertIn("binary reports GPL-3.0-or-later", str(failure.exception))
+
+    def test_ffmpeg_license_probe_handles_gpl_and_lgpl(self):
+        for family, version, expected in [("", "3", "GPL-3.0-or-later"), ("", "2", "GPL-2.0-or-later"), ("Lesser ", "2.1", "LGPL-2.1-or-later")]:
+            with self.subTest(expected=expected), patch.object(manifest, "command_output", return_value=f"GNU {family}General Public License as published by\nthe Free Software Foundation; either version {version} of the License, or\n(at your option) any later version.") as probe:
+                self.assertEqual(manifest.ffmpeg_reported_license(Path("ffmpeg")), expected)
+                probe.assert_called_once_with(["ffmpeg", "-L"])
+
+    def test_unknown_ffmpeg_license_fails_closed(self):
+        with patch.object(manifest, "command_output", return_value="unrecognized license"):
+            with self.assertRaisesRegex(RuntimeError, "Unable to identify"):
+                manifest.ffmpeg_reported_license(Path("ffmpeg"))
+
+
+    def test_package_pending_attribution_is_a_publication_blocker(self):
+        data = self.complete_manifest()
+        data["packages"] = [{"path": "SwiftPackages/example", "license": "MIT",
+            "licenseFile": "Licenses/component-LICENSE.txt",
+            "pendingAttribution": ["Missing statically linked component notice."]}]
+        with self.assertRaisesRegex(RuntimeError, "Missing statically linked component"):
+            manifest.require_complete_licenses(data)
+
+    def test_package_notice_is_required_even_when_tool_notices_are_complete(self):
+        data = self.complete_manifest()
+        data["packages"] = [{"path": "SwiftPackages/example", "license": "MIT", "licenseFile": None}]
+        with self.assertRaisesRegex(RuntimeError, "SwiftPackages/example"):
+            manifest.require_complete_licenses(data)
+
+    def test_package_revision_change_invalidates_review(self):
+        import json
+        pin = {"identity": "example", "location": "https://example.com/repo", "state": {"revision": "new"}}
+        resolved = self.root / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        resolved.parent.mkdir(parents=True)
+        resolved.write_text(json.dumps({"pins": [pin]}))
+        (self.root / "PackageAttributions.json").write_text(json.dumps({"packages": [{
+            "identity": "example", "sourceURL": pin["location"], "revision": "old"}]}))
+        with self.assertRaisesRegex(RuntimeError, "attribution is stale"):
+            manifest.package_inventory()
+
+    def test_added_package_requires_attribution_record(self):
+        import json
+        resolved = self.root / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+        resolved.parent.mkdir(parents=True)
+        resolved.write_text(json.dumps({"pins": [{"identity": "new", "location": "https://example.com/repo", "state": {"revision": "new"}}]}))
+        (self.root / "PackageAttributions.json").write_text(json.dumps({"packages": []}))
+        with self.assertRaisesRegex(RuntimeError, "does not cover"):
+            manifest.package_inventory()
 
 
 if __name__ == "__main__":

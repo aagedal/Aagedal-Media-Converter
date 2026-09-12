@@ -20,10 +20,16 @@ import SwiftUI
 /// Coordinates watch-folder monitoring and automatic encoding scheduling for the ContentView.
 @MainActor
 final class WatchFolderCoordinator: ObservableObject {
-    private let manager = WatchFolderManager()
+    @Published var errorMessage: String?
+    private let manager: WatchFolderManager
     private var monitoringTask: Task<Void, Never>?
     private var autoEncodeTask: Task<Void, Never>?
     private var powerAssertion: UUID?
+    private var monitoringGeneration: UInt64 = 0
+
+    init(manager: WatchFolderManager = WatchFolderManager()) {
+        self.manager = manager
+    }
 
     /// Enables watch mode, prompting the user for a folder if needed and starting monitoring.
     /// - Parameters:
@@ -31,31 +37,58 @@ final class WatchFolderCoordinator: ObservableObject {
     ///   - promptForFolder: Closure returning a user-selected folder URL.
     ///   - updatePath: Closure invoked when a new folder path is chosen.
     ///   - onNewFiles: Callback invoked when stable files are detected.
-    /// - Returns: `true` when monitoring started, `false` if the user cancelled folder selection.
+    /// - Returns: `true` when monitoring started, `false` on cancellation or inaccessible folders.
     func enableWatchMode(
         currentPath: String,
         promptForFolder: @escaping @Sendable () async -> URL?,
         updatePath: @escaping @Sendable (String) async -> Void,
         onNewFiles: @escaping @Sendable ([URL]) async -> Void
     ) async -> Bool {
+        monitoringGeneration += 1
+        let generation = monitoringGeneration
+        // A replacement owns the session immediately, including while its picker
+        // or validation is pending. Stop all prior work before validating it.
+        cancelSessionTasks()
+        await manager.stopMonitoring(generation: generation)
+        guard monitoringGeneration == generation, !Task.isCancelled else { return false }
         var folderPath = currentPath
+        errorMessage = nil
+        let selection = WatchFolderSelectionService()
 
-        if folderPath.isEmpty {
-            guard let folderURL = await promptForFolder() else {
-                return false
+        do {
+            if folderPath.isEmpty {
+                guard let folderURL = await promptForFolder() else {
+                    return false
+                }
+                guard monitoringGeneration == generation, !Task.isCancelled else { return false }
+                try selection.select(folderURL)
+                folderPath = folderURL.path
+                await updatePath(folderPath)
+            } else {
+                try selection.validate(URL(fileURLWithPath: folderPath))
             }
-            folderPath = folderURL.path
-            await updatePath(folderPath)
-            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: folderURL)
+        } catch {
+            guard monitoringGeneration == generation, !Task.isCancelled else { return false }
+            errorMessage = error.localizedDescription
+            return false
         }
 
+        guard monitoringGeneration == generation, !Task.isCancelled else { return false }
         monitoringTask?.cancel()
-        monitoringTask = Task { [manager] in
-            await manager.startMonitoring(folderPath: folderPath) { urls in
-                Task {
+        monitoringTask = Task { [weak self, manager] in
+            guard self?.monitoringGeneration == generation, !Task.isCancelled else { return }
+            await manager.startMonitoring(folderPath: folderPath, generation: generation, onNewFiles: { [weak self] urls in
+                Task { @MainActor [weak self] in
+                    guard self?.monitoringGeneration == generation else { return }
                     await onNewFiles(urls)
                 }
-            }
+            }, onError: { [weak self] message in
+                Task { @MainActor [weak self] in
+                    guard let self, self.monitoringGeneration == generation else { return }
+                    // Preserve any error already awaiting acknowledgement.
+                    self.errorMessage = [self.errorMessage, message].compactMap { $0 }.joined(separator: "\n\n")
+                }
+            })
         }
 
         if UserDefaults.standard.bool(forKey: AppConstants.watchFolderKeepAwakeKey),
@@ -68,13 +101,18 @@ final class WatchFolderCoordinator: ObservableObject {
 
     /// Stops monitoring and clears any scheduled auto-encode tasks.
     func disableWatchMode() async {
+        monitoringGeneration += 1
+        cancelSessionTasks()
+        await manager.stopMonitoring(generation: monitoringGeneration)
+    }
+
+    private func cancelSessionTasks() {
         monitoringTask?.cancel()
         monitoringTask = nil
         autoEncodeTask?.cancel()
         autoEncodeTask = nil
         PowerAssertion.shared.release(powerAssertion)
         powerAssertion = nil
-        await manager.stopMonitoring()
     }
 
     /// Cancels any pending auto-encode task and schedules a new one that runs after a delay.

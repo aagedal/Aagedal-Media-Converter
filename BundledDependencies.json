@@ -1,6 +1,738 @@
 {
-  "schemaVersion": 2,
-  "scope": "Mach-O files shipped from Binaries and Frameworks",
+  "schemaVersion": 3,
+  "scope": "Source-tree tools/libraries, resolved Swift packages, and required source accompaniment",
+  "packages": [
+    {
+      "identity": "mpvkit",
+      "path": "SwiftPackages/mpvkit",
+      "sourceURL": "https://github.com/aagedal/MPVKit.git",
+      "revision": "230c3174f1515898f24599147ad61c2a277d0dc2",
+      "license": "GPL-3.0-or-later",
+      "licenseFile": "Licenses/mpvkit-LICENSE.txt",
+      "requiredSourceComponents": [
+        "MPVKit: gnutls",
+        "MPVKit: nettle",
+        "MPVKit: gmp",
+        "MPVKit: lcms2",
+        "MPVKit: libunibreak",
+        "MPVKit: freetype",
+        "MPVKit: fribidi",
+        "MPVKit: harfbuzz",
+        "MPVKit: libass",
+        "MPVKit: libbluray",
+        "MPVKit: dav1d",
+        "MPVKit: libdovi",
+        "MPVKit: libplacebo",
+        "MPVKit: spirv-cross",
+        "MPVKit: shaderc",
+        "MPVKit: samba",
+        "MPVKit: uchardet",
+        "MPVKit: MoltenVK",
+        "MPVKit: openssl",
+        "MPVKit: shaderc-abseil",
+        "MPVKit: shaderc-effcee",
+        "MPVKit: shaderc-glslang",
+        "MPVKit: shaderc-googletest",
+        "MPVKit: shaderc-re2",
+        "MPVKit: shaderc-spirv_headers",
+        "MPVKit: shaderc-spirv_tools",
+        "MPVKit: MoltenVK-SPIRV-Cross",
+        "MPVKit: MoltenVK-SPIRV-Headers",
+        "MPVKit: MoltenVK-SPIRV-Tools",
+        "MPVKit: MoltenVK-Vulkan-Headers",
+        "MPVKit: MoltenVK-cereal",
+        "MPVKit: gnutls-gnulib",
+        "MPVKit: libplacebo-glad",
+        "MPVKit: libplacebo-jinja",
+        "MPVKit: libplacebo-markupsafe",
+        "MPVKit: libplacebo-Vulkan-Headers",
+        "MPVKit: libplacebo-fast_float",
+        "MPVKit: gnutls-libtasn1",
+        "MPVKit: gnutls-nettle",
+        "MPVKit: libdovi-crate-libc-0.2.172",
+        "MPVKit: libdovi-crate-tinyvec-1.9.0",
+        "MPVKit: libdovi-crate-serde-1.0.219",
+        "MPVKit: libdovi-crate-serde_derive-1.0.219",
+        "MPVKit: libdovi-crate-syn-2.0.101",
+        "MPVKit: libdovi-crate-unicode-ident-1.0.18",
+        "MPVKit: libdovi-crate-quote-1.0.40",
+        "MPVKit: libdovi-crate-proc-macro2-1.0.95",
+        "MPVKit: libdovi-crate-crc-3.3.0",
+        "MPVKit: libdovi-crate-crc-catalog-2.4.0",
+        "MPVKit: libdovi-crate-bitvec-1.0.1",
+        "MPVKit: libdovi-crate-wyz-0.5.1",
+        "MPVKit: libdovi-crate-tap-1.0.1",
+        "MPVKit: libdovi-crate-radium-0.7.0",
+        "MPVKit: libdovi-crate-funty-2.0.0",
+        "MPVKit: libdovi-crate-bitvec_helpers-3.1.6",
+        "MPVKit: libdovi-crate-bitstream-io-2.6.0",
+        "MPVKit: libdovi-crate-anyhow-1.0.98",
+        "MPVKit: libdovi-crate-gimli-0.32.3",
+        "MPVKit: libdovi-crate-addr2line-0.25.1",
+        "MPVKit: libdovi-crate-object-0.37.3",
+        "MPVKit: libdovi-crate-memchr-2.7.6",
+        "MPVKit: libdovi-crate-rustc-demangle-0.1.26",
+        "MPVKit: libdovi-crate-hashbrown-0.16.1",
+        "MPVKit: libdovi-crate-miniz_oxide-0.8.9",
+        "MPVKit recipe: MPVKit",
+        "MPVKit recipe: gnutls-build",
+        "MPVKit recipe: lcms2-build",
+        "MPVKit recipe: libass-build",
+        "MPVKit recipe: libbluray-build",
+        "MPVKit recipe: libdav1d-build",
+        "MPVKit recipe: libdovi-build",
+        "MPVKit recipe: libplacebo-build",
+        "MPVKit recipe: libshaderc-build",
+        "MPVKit recipe: libsmbclient-build",
+        "MPVKit recipe: libuavs3d-build",
+        "MPVKit recipe: libuchardet-build",
+        "MPVKit recipe: moltenvk-build",
+        "MPVKit recipe: openssl-build",
+        "mpv",
+        "FFmpeg",
+        "MPVKit Rust standard-library licensing/source reference (build-date inference)",
+        "MPVKit pinned wrapper and build sources",
+        "MPVKit local patches and build configuration",
+        "MPVKit crc-catalog upstream source (crate VCS revision)"
+      ]
+    },
+    {
+      "identity": "sparkle",
+      "path": "SwiftPackages/sparkle",
+      "sourceURL": "https://github.com/sparkle-project/Sparkle",
+      "revision": "ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a",
+      "license": "MIT AND BSD-2-Clause AND Zlib",
+      "licenseFile": "Licenses/sparkle-LICENSE.txt"
+    },
+    {
+      "identity": "swiftmediametadata",
+      "path": "SwiftPackages/swiftmediametadata",
+      "sourceURL": "https://github.com/aagedal/SwiftMediaMetadata.git",
+      "revision": "c2d77c2dcefcb997623e52beca57bc61ce302cb9",
+      "license": "GPL-3.0-only AND CC-BY-4.0",
+      "licenseFile": "Licenses/swiftmediametadata-LICENSE.txt",
+      "requiredSourceComponents": [
+        "SwiftMediaMetadata 3.0.0"
+      ]
+    }
+  ],
+  "sourceArchives": [
+    {
+      "component": "AVM Eigen",
+      "path": "build/attribution/avm-eigen-source.tar.gz",
+      "bytes": 1810055,
+      "sha256": "1a020a15b0054bf684cb64f90bc8342281e38f4c731a9ef69a2afe849c6e89f0"
+    },
+    {
+      "component": "SwiftMediaMetadata 3.0.0",
+      "path": "build/attribution/swiftmediametadata-3.0.0-source.tar.gz",
+      "bytes": 1485131,
+      "sha256": "d5cb3dc83a23187bed255f5726813bed40440e922591a101f082d83a101f7096"
+    },
+    {
+      "component": "rclone",
+      "path": "build/attribution/rclone-4.4-source.tar.gz",
+      "bytes": 272389436,
+      "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
+    },
+    {
+      "component": "FFmpeg 9.0.1 build",
+      "path": "build/attribution/ffmpeg-9.0.1-source.tar.gz",
+      "bytes": 176572218,
+      "sha256": "23587fed102cfe66910db1d4ae66b50565387a1750e039fb10fde6fbfd027e71"
+    },
+    {
+      "component": "FFmpeg generated inputs",
+      "path": "build/attribution/ffmpeg-9.0.1-generated-inputs.tar.gz",
+      "bytes": 93452,
+      "sha256": "0e18c9471ded3960d40ce59d7b2a37963423a9e1002449982ab65271a7b55869"
+    },
+    {
+      "component": "MPVKit: gnutls",
+      "path": "build/attribution/mpvkit/gnutls-source.tar.gz",
+      "bytes": 11018461,
+      "sha256": "1d95c82f0dbcf8de6669591b67cdd4c268542eb8789462f02ac6baa4cfd16470",
+      "url": "https://codeload.github.com/gnutls/gnutls/tar.gz/refs/tags/3.8.11"
+    },
+    {
+      "component": "MPVKit: nettle",
+      "path": "build/attribution/mpvkit/nettle-source.tar.gz",
+      "bytes": 2640485,
+      "sha256": "b4c518adb174e484cb4acea54118f02380c7133771e7e9beb98a0787194ee47c",
+      "url": "https://ftp.gnu.org/gnu/nettle/nettle-3.10.tar.gz"
+    },
+    {
+      "component": "MPVKit: gmp",
+      "path": "build/attribution/mpvkit/gmp-source.tar.gz",
+      "bytes": 3322091,
+      "sha256": "fb776e19e0267053c3d6ffef0dcc001fb441da0e2b5224cfd9656aa2f1b8614d",
+      "url": "https://codeload.github.com/alisw/GMP/tar.gz/refs/tags/v6.2.1"
+    },
+    {
+      "component": "MPVKit: lcms2",
+      "path": "build/attribution/mpvkit/lcms2-source.tar.gz",
+      "bytes": 5257509,
+      "sha256": "6e6f6411db50e85ae8ff7777f01b2da0614aac13b7b9fcbea66dc56a1bc71418",
+      "url": "https://codeload.github.com/mm2/Little-CMS/tar.gz/refs/tags/lcms2.17"
+    },
+    {
+      "component": "MPVKit: libunibreak",
+      "path": "build/attribution/mpvkit/libunibreak-source.tar.gz",
+      "bytes": 169640,
+      "sha256": "890674996168ef5ba143d80d49ab8b61594a4eb70198dcac76caf6e1bd264a41",
+      "url": "https://codeload.github.com/adah1972/libunibreak/tar.gz/refs/tags/libunibreak_6_1"
+    },
+    {
+      "component": "MPVKit: freetype",
+      "path": "build/attribution/mpvkit/freetype-source.tar.gz",
+      "bytes": 2515533,
+      "sha256": "dc49de6b01a266eef4876a4dd34d9842c475d3e28ff2eff63bd2fb760ab56261",
+      "url": "https://codeload.github.com/freetype/freetype/tar.gz/refs/tags/VER-2-14-3"
+    },
+    {
+      "component": "MPVKit: fribidi",
+      "path": "build/attribution/mpvkit/fribidi-source.tar.gz",
+      "bytes": 2144176,
+      "sha256": "5a1d187a33daa58fcee2ad77f0eb9d136dd6fa4096239199ba31e850d397e8a8",
+      "url": "https://codeload.github.com/fribidi/fribidi/tar.gz/refs/tags/v1.0.16"
+    },
+    {
+      "component": "MPVKit: harfbuzz",
+      "path": "build/attribution/mpvkit/harfbuzz-source.tar.gz",
+      "bytes": 37408544,
+      "sha256": "c652d5d94971031654ab3989891a490a895d3e3f2b71171c62692b28e94b1b93",
+      "url": "https://codeload.github.com/harfbuzz/harfbuzz/tar.gz/refs/tags/14.2.0"
+    },
+    {
+      "component": "MPVKit: libass",
+      "path": "build/attribution/mpvkit/libass-source.tar.gz",
+      "bytes": 351516,
+      "sha256": "fa286fc9ee1ba3b932703a3df7b8474d01dc8abe29ec69b6fa68781dc4bf7acc",
+      "url": "https://codeload.github.com/libass/libass/tar.gz/refs/tags/0.17.5"
+    },
+    {
+      "component": "MPVKit: libbluray",
+      "path": "build/attribution/mpvkit/libbluray-source.tar.gz",
+      "bytes": 593766,
+      "sha256": "0dc218f79435798a62da2a0510e0e921a3f7c1b140507df8e65f48d98046f024",
+      "url": "https://code.videolan.org/videolan/libbluray/-/archive/1.4.0/libbluray-1.4.0.tar.gz"
+    },
+    {
+      "component": "MPVKit: dav1d",
+      "path": "build/attribution/mpvkit/dav1d-source.tar.gz",
+      "bytes": 1713950,
+      "sha256": "cbe212b02faf8c6eed5b6d55ef8a6e363aaab83f15112e960701a9c3df813686",
+      "url": "https://codeload.github.com/videolan/dav1d/tar.gz/refs/tags/1.5.3"
+    },
+    {
+      "component": "MPVKit: libdovi",
+      "path": "build/attribution/mpvkit/libdovi-source.tar.gz",
+      "bytes": 489628,
+      "sha256": "8ccb1922d7dbb57bc4f2c15c10b90c462f7a5f292efe317c116db923728dd3f1",
+      "url": "https://codeload.github.com/quietvoid/dovi_tool/tar.gz/refs/tags/libdovi-3.3.2"
+    },
+    {
+      "component": "MPVKit: libplacebo",
+      "path": "build/attribution/mpvkit/libplacebo-source.tar.gz",
+      "bytes": 862269,
+      "sha256": "d05fdf90bea2f629eaa2d115e909fd356388ac639e54f77b87a018a6d76224bd",
+      "url": "https://codeload.github.com/haasn/libplacebo/tar.gz/refs/tags/v7.360.1"
+    },
+    {
+      "component": "MPVKit: spirv-cross",
+      "path": "build/attribution/mpvkit/spirv-cross-source.tar.gz",
+      "bytes": 1875088,
+      "sha256": "cf4f12a767d63f63024e61750e372ffdc95567513b99ed9be6f21f474b328ddd",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Cross/tar.gz/refs/tags/vulkan-sdk-1.4.309.0"
+    },
+    {
+      "component": "MPVKit: shaderc",
+      "path": "build/attribution/mpvkit/shaderc-source.tar.gz",
+      "bytes": 228956,
+      "sha256": "fca5041b1fdea6daba167b63e04e55e5059fab40828342126169336643445447",
+      "url": "https://codeload.github.com/google/shaderc/tar.gz/refs/tags/v2025.5"
+    },
+    {
+      "component": "MPVKit: samba",
+      "path": "build/attribution/mpvkit/samba-source.tar.gz",
+      "bytes": 37518874,
+      "sha256": "927c54ae62fe70c9e16e65f64c3922e7fa6fb13e3808d73d0c2c38cc9fa677c1",
+      "url": "https://codeload.github.com/samba-team/samba/tar.gz/refs/tags/samba-4.15.13"
+    },
+    {
+      "component": "MPVKit: uchardet",
+      "path": "build/attribution/mpvkit/uchardet-source.tar.xz",
+      "bytes": 222648,
+      "sha256": "e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0",
+      "url": "https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz"
+    },
+    {
+      "component": "MPVKit: MoltenVK",
+      "path": "build/attribution/mpvkit/MoltenVK-source.tar.gz",
+      "bytes": 1260733,
+      "sha256": "6864db532f1dbbdb621a8d0ec13f24edae318fd9269dd3dd0cdff791334bb1cb",
+      "url": "https://codeload.github.com/KhronosGroup/MoltenVK/tar.gz/refs/tags/v1.4.2"
+    },
+    {
+      "component": "MPVKit: openssl",
+      "path": "build/attribution/mpvkit/openssl-source.tar.gz",
+      "bytes": 18290391,
+      "sha256": "5af6007f8ce1b6fb2c807e4dbf87dc7390682c77e02dc2d97115177f43fb4d79",
+      "url": "https://codeload.github.com/openssl/openssl/tar.gz/refs/tags/openssl-3.3.5"
+    },
+    {
+      "component": "MPVKit: shaderc-abseil",
+      "path": "build/attribution/mpvkit/shaderc-abseil-source.tar.gz",
+      "bytes": 2222719,
+      "sha256": "4ae9fc64860d5204f0ca6bd6c7a5f8e59ced118494db7e14537d8ed55dce5715",
+      "url": "https://codeload.github.com/abseil/abseil-cpp/tar.gz/1315c900e1ddbb08a23e06eeb9a06450052ccb5e"
+    },
+    {
+      "component": "MPVKit: shaderc-effcee",
+      "path": "build/attribution/mpvkit/shaderc-effcee-source.tar.gz",
+      "bytes": 39969,
+      "sha256": "d6d6b602f1b6f09d3a83c44a067d087c23fdc3d3530e2e5dd27be2adda91fe4d",
+      "url": "https://codeload.github.com/google/effcee/tar.gz/08da24ec245a274fea3a128ba50068f163390565"
+    },
+    {
+      "component": "MPVKit: shaderc-glslang",
+      "path": "build/attribution/mpvkit/shaderc-glslang-source.tar.gz",
+      "bytes": 4250661,
+      "sha256": "272d2725b140e09e85b96eecdc59c2e00c1a14cda2301767e1bf3c363a44b931",
+      "url": "https://codeload.github.com/KhronosGroup/glslang/tar.gz/7a47e2531cb334982b2a2dd8513dca0a3de4373d"
+    },
+    {
+      "component": "MPVKit: shaderc-googletest",
+      "path": "build/attribution/mpvkit/shaderc-googletest-source.tar.gz",
+      "bytes": 873606,
+      "sha256": "7aca173cc96c0feaa01035184e34b020daaa93ddc132c5a829b7ea34006f701b",
+      "url": "https://codeload.github.com/google/googletest/tar.gz/1d17ea141d2c11b8917d2c7d029f1c4e2b9769b2"
+    },
+    {
+      "component": "MPVKit: shaderc-re2",
+      "path": "build/attribution/mpvkit/shaderc-re2-source.tar.gz",
+      "bytes": 390803,
+      "sha256": "f0a65168e64a10ab556b265f2f411678e6b9555f21e04202f84f250b659954ba",
+      "url": "https://codeload.github.com/google/re2/tar.gz/4a8cee3dd3c3d81b6fe8b867811e193d5819df07"
+    },
+    {
+      "component": "MPVKit: shaderc-spirv_headers",
+      "path": "build/attribution/mpvkit/shaderc-spirv_headers-source.tar.gz",
+      "bytes": 558965,
+      "sha256": "c693867f10a7760ef1bcf85419d51783586768cc2c601d03841bc6a8b2554b9c",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/b824a462d4256d720bebb40e78b9eb8f78bbb305"
+    },
+    {
+      "component": "MPVKit: shaderc-spirv_tools",
+      "path": "build/attribution/mpvkit/shaderc-spirv_tools-source.tar.gz",
+      "bytes": 3428734,
+      "sha256": "8f830936b057003be77e90d37068ff6066eb87a1bab0033f8f2f5feaa966ce56",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Tools/tar.gz/262bdab48146c937467f826699a40da0fdfc0f1a"
+    },
+    {
+      "component": "MPVKit: MoltenVK-SPIRV-Cross",
+      "path": "build/attribution/mpvkit/MoltenVK-SPIRV-Cross-source.tar.gz",
+      "bytes": 2007157,
+      "sha256": "b81b9956289950570953738e666a031ca32ff64e4fc925eba89f227c42109518",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Cross/tar.gz/6c09849fe88c48eaed08413aa022aaa136a3a057"
+    },
+    {
+      "component": "MPVKit: MoltenVK-SPIRV-Headers",
+      "path": "build/attribution/mpvkit/MoltenVK-SPIRV-Headers-source.tar.gz",
+      "bytes": 572275,
+      "sha256": "232899f1ad4104fb5bc377b94596c7621575eee62ad9a9e8f929b63a7dd8a7ad",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/29981f65241605e08b0ede4cfeb999fe3b723c6a"
+    },
+    {
+      "component": "MPVKit: MoltenVK-SPIRV-Tools",
+      "path": "build/attribution/mpvkit/MoltenVK-SPIRV-Tools-source.tar.gz",
+      "bytes": 3527179,
+      "sha256": "20219c0962dffb0d7644bb3116a5923cfcf0526a569baa0b2a17343dd2fa6e5d",
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Tools/tar.gz/0d6fd73ca73830ccab5fa1f00ed5ed40124e2c55"
+    },
+    {
+      "component": "MPVKit: MoltenVK-Vulkan-Headers",
+      "path": "build/attribution/mpvkit/MoltenVK-Vulkan-Headers-source.tar.gz",
+      "bytes": 3376893,
+      "sha256": "f492279345cbc10708b64fcd432b3ff6c8246a5837c4db2b649abba00cf82208",
+      "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/e3b1eec08173d6b825cd3ac88c885a63b621504a"
+    },
+    {
+      "component": "MPVKit: MoltenVK-cereal",
+      "path": "build/attribution/mpvkit/MoltenVK-cereal-source.tar.gz",
+      "bytes": 386830,
+      "sha256": "12e10fb541270632f6683286ce8c7e8c321fe4addb53fa91ed498b95c1758f93",
+      "url": "https://codeload.github.com/USCiLab/cereal/tar.gz/a56bad8bbb770ee266e930c95d37fff2a5be7fea"
+    },
+    {
+      "component": "MPVKit: gnutls-gnulib",
+      "path": "build/attribution/mpvkit/gnutls-gnulib-source.tar.gz",
+      "bytes": 9052477,
+      "sha256": "87aded12d4800c1fd2abd3db7a61942eec6bc2325485706cb3f6987bbcafb166",
+      "url": "https://codeload.github.com/coreutils/gnulib/tar.gz/05c63bc908a67a316fea29ddf4c702d89cf5bdec"
+    },
+    {
+      "component": "MPVKit: libplacebo-glad",
+      "path": "build/attribution/mpvkit/libplacebo-glad-source.tar.gz",
+      "bytes": 645779,
+      "sha256": "33dbeae44d8315ece57e14eba4b1b4a02ac5406d1c4f49cd20048c91522a6b9a",
+      "url": "https://codeload.github.com/Dav1dde/glad/tar.gz/73db193f853e2ee079bf3ca8a64aa2eaf6459043"
+    },
+    {
+      "component": "MPVKit: libplacebo-jinja",
+      "path": "build/attribution/mpvkit/libplacebo-jinja-source.tar.gz",
+      "bytes": 276954,
+      "sha256": "b88a20dcc2e34072fcf4159325bc6c34cd4b29a81a8b83d15d2f28ba561da296",
+      "url": "https://codeload.github.com/pallets/jinja/tar.gz/15206881c006c79667fe5154fe80c01c65410679"
+    },
+    {
+      "component": "MPVKit: libplacebo-markupsafe",
+      "path": "build/attribution/mpvkit/libplacebo-markupsafe-source.tar.gz",
+      "bytes": 83817,
+      "sha256": "da7c010c9c81a66ac73036558c1fcb6212b50482f43211cd1254035b94f82414",
+      "url": "https://codeload.github.com/pallets/markupsafe/tar.gz/297fc8e356e6836a62087949245d09a28e9f1b13"
+    },
+    {
+      "component": "MPVKit: libplacebo-Vulkan-Headers",
+      "path": "build/attribution/mpvkit/libplacebo-Vulkan-Headers-source.tar.gz",
+      "bytes": 2940820,
+      "sha256": "26df9841c30806a994e2fdf42f7c87bcb1ced9db9a06033469123939fb3fa075",
+      "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/450bd2232225d6c7728a4108055ac2e37cef6475"
+    },
+    {
+      "component": "MPVKit: libplacebo-fast_float",
+      "path": "build/attribution/mpvkit/libplacebo-fast_float-source.tar.gz",
+      "bytes": 120200,
+      "sha256": "2b132274539286e41f37857cac22aa8441d21bd86d55de825a3342b149f66801",
+      "url": "https://codeload.github.com/fastfloat/fast_float/tar.gz/97b54ca9e75f5303507699d27c6b4f4efe4641a1"
+    },
+    {
+      "component": "MPVKit: gnutls-libtasn1",
+      "path": "build/attribution/mpvkit/gnutls-libtasn1-source.tar.gz",
+      "bytes": 828920,
+      "sha256": "439ef5d67e62ead0ebbd1f06167b6f1b764910d3cf0811707c3b6b625b49a92b",
+      "url": "https://gitlab.com/gnutls/libtasn1/-/archive/6b45b25e94ea538192cc0f97e9ad57171d1c6374/libtasn1-6b45b25e94ea538192cc0f97e9ad57171d1c6374.tar.gz"
+    },
+    {
+      "component": "MPVKit: gnutls-nettle",
+      "path": "build/attribution/mpvkit/gnutls-nettle-source.tar.gz",
+      "bytes": 1876089,
+      "sha256": "7960f4f0903911d71ccf596a1c3eda67f9d73dd82e4fb43f650f89a3fb1e5eb7",
+      "url": "https://codeload.github.com/gnutls/nettle/tar.gz/40178e78ae73ec2a8cda8cd53664df9c73ac1961"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-libc-0.2.172",
+      "path": "build/attribution/mpvkit/libdovi-crate-libc-0.2.172.crate",
+      "bytes": 791646,
+      "sha256": "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa",
+      "url": "https://static.crates.io/crates/libc/libc-0.2.172.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-tinyvec-1.9.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-tinyvec-1.9.0.crate",
+      "bytes": 54137,
+      "sha256": "09b3661f17e86524eccd4371ab0429194e0d7c008abb45f7a7495b1719463c71",
+      "url": "https://static.crates.io/crates/tinyvec/tinyvec-1.9.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-serde-1.0.219",
+      "path": "build/attribution/mpvkit/libdovi-crate-serde-1.0.219.crate",
+      "bytes": 78983,
+      "sha256": "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6",
+      "url": "https://static.crates.io/crates/serde/serde-1.0.219.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-serde_derive-1.0.219",
+      "path": "build/attribution/mpvkit/libdovi-crate-serde_derive-1.0.219.crate",
+      "bytes": 57798,
+      "sha256": "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00",
+      "url": "https://static.crates.io/crates/serde_derive/serde_derive-1.0.219.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-syn-2.0.101",
+      "path": "build/attribution/mpvkit/libdovi-crate-syn-2.0.101.crate",
+      "bytes": 299250,
+      "sha256": "8ce2b7fc941b3a24138a0a7cf8e858bfc6a992e7978a068a5c760deb0ed43caf",
+      "url": "https://static.crates.io/crates/syn/syn-2.0.101.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-unicode-ident-1.0.18",
+      "path": "build/attribution/mpvkit/libdovi-crate-unicode-ident-1.0.18.crate",
+      "bytes": 47743,
+      "sha256": "5a5f39404a5da50712a4c1eecf25e90dd62b613502b7e925fd4e4d19b5c96512",
+      "url": "https://static.crates.io/crates/unicode-ident/unicode-ident-1.0.18.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-quote-1.0.40",
+      "path": "build/attribution/mpvkit/libdovi-crate-quote-1.0.40.crate",
+      "bytes": 31063,
+      "sha256": "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d",
+      "url": "https://static.crates.io/crates/quote/quote-1.0.40.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-proc-macro2-1.0.95",
+      "path": "build/attribution/mpvkit/libdovi-crate-proc-macro2-1.0.95.crate",
+      "bytes": 51820,
+      "sha256": "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778",
+      "url": "https://static.crates.io/crates/proc-macro2/proc-macro2-1.0.95.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-crc-3.3.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-crc-3.3.0.crate",
+      "bytes": 13905,
+      "sha256": "9710d3b3739c2e349eb44fe848ad0b7c8cb1e42bd87ee49371df2f7acaf3e675",
+      "url": "https://static.crates.io/crates/crc/crc-3.3.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-crc-catalog-2.4.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-crc-catalog-2.4.0.crate",
+      "bytes": 10155,
+      "sha256": "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5",
+      "url": "https://static.crates.io/crates/crc-catalog/crc-catalog-2.4.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-bitvec-1.0.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-bitvec-1.0.1.crate",
+      "bytes": 224375,
+      "sha256": "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c",
+      "url": "https://static.crates.io/crates/bitvec/bitvec-1.0.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-wyz-0.5.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-wyz-0.5.1.crate",
+      "bytes": 18790,
+      "sha256": "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed",
+      "url": "https://static.crates.io/crates/wyz/wyz-0.5.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-tap-1.0.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-tap-1.0.1.crate",
+      "bytes": 11316,
+      "sha256": "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369",
+      "url": "https://static.crates.io/crates/tap/tap-1.0.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-radium-0.7.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-radium-0.7.0.crate",
+      "bytes": 10906,
+      "sha256": "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09",
+      "url": "https://static.crates.io/crates/radium/radium-0.7.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-funty-2.0.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-funty-2.0.0.crate",
+      "bytes": 13160,
+      "sha256": "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c",
+      "url": "https://static.crates.io/crates/funty/funty-2.0.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-bitvec_helpers-3.1.6",
+      "path": "build/attribution/mpvkit/libdovi-crate-bitvec_helpers-3.1.6.crate",
+      "bytes": 5205,
+      "sha256": "d9a6aff977a34114f146bd3379c9d170a8eafcffcdeecbb7cc3bd2470a39709a",
+      "url": "https://static.crates.io/crates/bitvec_helpers/bitvec_helpers-3.1.6.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-bitstream-io-2.6.0",
+      "path": "build/attribution/mpvkit/libdovi-crate-bitstream-io-2.6.0.crate",
+      "bytes": 38256,
+      "sha256": "6099cdc01846bc367c4e7dd630dc5966dccf36b652fae7a74e17b640411a91b2",
+      "url": "https://static.crates.io/crates/bitstream-io/bitstream-io-2.6.0.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-anyhow-1.0.98",
+      "path": "build/attribution/mpvkit/libdovi-crate-anyhow-1.0.98.crate",
+      "bytes": 53334,
+      "sha256": "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487",
+      "url": "https://static.crates.io/crates/anyhow/anyhow-1.0.98.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-gimli-0.32.3",
+      "path": "build/attribution/mpvkit/libdovi-crate-gimli-0.32.3.crate",
+      "bytes": 289789,
+      "sha256": "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7",
+      "url": "https://static.crates.io/crates/gimli/gimli-0.32.3.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-addr2line-0.25.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-addr2line-0.25.1.crate",
+      "bytes": 43134,
+      "sha256": "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b",
+      "url": "https://static.crates.io/crates/addr2line/addr2line-0.25.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-object-0.37.3",
+      "path": "build/attribution/mpvkit/libdovi-crate-object-0.37.3.crate",
+      "bytes": 344032,
+      "sha256": "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe",
+      "url": "https://static.crates.io/crates/object/object-0.37.3.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-memchr-2.7.6",
+      "path": "build/attribution/mpvkit/libdovi-crate-memchr-2.7.6.crate",
+      "bytes": 97616,
+      "sha256": "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273",
+      "url": "https://static.crates.io/crates/memchr/memchr-2.7.6.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-rustc-demangle-0.1.26",
+      "path": "build/attribution/mpvkit/libdovi-crate-rustc-demangle-0.1.26.crate",
+      "bytes": 30340,
+      "sha256": "56f7d92ca342cea22a06f2121d944b4fd82af56988c270852495420f961d4ace",
+      "url": "https://static.crates.io/crates/rustc-demangle/rustc-demangle-0.1.26.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-hashbrown-0.16.1",
+      "path": "build/attribution/mpvkit/libdovi-crate-hashbrown-0.16.1.crate",
+      "bytes": 147785,
+      "sha256": "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100",
+      "url": "https://static.crates.io/crates/hashbrown/hashbrown-0.16.1.crate"
+    },
+    {
+      "component": "MPVKit: libdovi-crate-miniz_oxide-0.8.9",
+      "path": "build/attribution/mpvkit/libdovi-crate-miniz_oxide-0.8.9.crate",
+      "bytes": 67132,
+      "sha256": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+      "url": "https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.8.9.crate"
+    },
+    {
+      "component": "MPVKit recipe: MPVKit",
+      "path": "build/attribution/mpvkit/MPVKit-aagedal-1.0.0-n8.1.2.tar.gz",
+      "bytes": 81782,
+      "sha256": "16fa66fa6ec62a51c7b754128c28e13a16662783095f82e758863a35afb272d5",
+      "url": "https://codeload.github.com/aagedal/MPVKit/tar.gz/refs/tags/aagedal-1.0.0-n8.1.2"
+    },
+    {
+      "component": "MPVKit recipe: gnutls-build",
+      "path": "build/attribution/mpvkit/gnutls-build-3.8.11.tar.gz",
+      "bytes": 17846,
+      "sha256": "f15b4e8e624dccbd8a624b42a5f7975beb16bcde8253a48512cb4ac637a42757",
+      "url": "https://codeload.github.com/mpvkit/gnutls-build/tar.gz/refs/tags/3.8.11"
+    },
+    {
+      "component": "MPVKit recipe: lcms2-build",
+      "path": "build/attribution/mpvkit/lcms2-build-2.17.0.tar.gz",
+      "bytes": 16844,
+      "sha256": "b27aa905f24f23b319ab5671149b9c49eb722efce72b55d2db883d299204a198",
+      "url": "https://codeload.github.com/mpvkit/lcms2-build/tar.gz/refs/tags/2.17.0"
+    },
+    {
+      "component": "MPVKit recipe: libass-build",
+      "path": "build/attribution/mpvkit/libass-build-0.17.5.tar.gz",
+      "bytes": 5114,
+      "sha256": "442fa17cd6999c7627c330ef44d1b7f2d121baaf9cb0d5e912c1bbbca6ca9792",
+      "url": "https://codeload.github.com/mpvkit/libass-build/tar.gz/refs/tags/0.17.5"
+    },
+    {
+      "component": "MPVKit recipe: libbluray-build",
+      "path": "build/attribution/mpvkit/libbluray-build-1.4.0.tar.gz",
+      "bytes": 19070,
+      "sha256": "5b11e1cedd694854f7694eba0afbca946b1a1e33e76329620291cc9013d5f7ce",
+      "url": "https://codeload.github.com/mpvkit/libbluray-build/tar.gz/refs/tags/1.4.0"
+    },
+    {
+      "component": "MPVKit recipe: libdav1d-build",
+      "path": "build/attribution/mpvkit/libdav1d-build-1.5.3.tar.gz",
+      "bytes": 17619,
+      "sha256": "152e792b38f4f0d4115a6994e6872d518c8cb7181a386d0fb635fa2b3884f603",
+      "url": "https://codeload.github.com/mpvkit/libdav1d-build/tar.gz/refs/tags/1.5.3"
+    },
+    {
+      "component": "MPVKit recipe: libdovi-build",
+      "path": "build/attribution/mpvkit/libdovi-build-3.3.2.tar.gz",
+      "bytes": 17232,
+      "sha256": "db04d1c03c697029d47481fc1d7451e695661e35d8ce76aadd10e8cc8cd70010",
+      "url": "https://codeload.github.com/mpvkit/libdovi-build/tar.gz/refs/tags/3.3.2"
+    },
+    {
+      "component": "MPVKit recipe: libplacebo-build",
+      "path": "build/attribution/mpvkit/libplacebo-build-7.360.1.tar.gz",
+      "bytes": 6549,
+      "sha256": "7712d9827f229213fc0f92d9250c5e8c503a0e3632323cd4971e34d62b37ed90",
+      "url": "https://codeload.github.com/mpvkit/libplacebo-build/tar.gz/refs/tags/7.360.1"
+    },
+    {
+      "component": "MPVKit recipe: libshaderc-build",
+      "path": "build/attribution/mpvkit/libshaderc-build-2025.5.0.tar.gz",
+      "bytes": 18209,
+      "sha256": "454d83bc4b878b00b9b1d17418b787311d81cb0dc7acd18d62601be892593189",
+      "url": "https://codeload.github.com/mpvkit/libshaderc-build/tar.gz/refs/tags/2025.5.0"
+    },
+    {
+      "component": "MPVKit recipe: libsmbclient-build",
+      "path": "build/attribution/mpvkit/libsmbclient-build-4.15.13-2512.tar.gz",
+      "bytes": 187715,
+      "sha256": "d6d3f29777a8909e36ee6c06f7641266efae821fa770c667fdd82a586f93169c",
+      "url": "https://codeload.github.com/mpvkit/libsmbclient-build/tar.gz/refs/tags/4.15.13-2512"
+    },
+    {
+      "component": "MPVKit recipe: libuavs3d-build",
+      "path": "build/attribution/mpvkit/libuavs3d-build-1.2.1-fix.tar.gz",
+      "bytes": 5133,
+      "sha256": "b57f603167d727ea81ecd4a6e6ddac8665f6ed94325e14e715ad8b67677bb146",
+      "url": "https://codeload.github.com/mpvkit/libuavs3d-build/tar.gz/refs/tags/1.2.1-fix"
+    },
+    {
+      "component": "MPVKit recipe: libuchardet-build",
+      "path": "build/attribution/mpvkit/libuchardet-build-0.0.8.tar.gz",
+      "bytes": 4135,
+      "sha256": "85072c2763ec7fdddff4c971d6045d5e9863382447e86ef6b8d505fc0ab21ef4",
+      "url": "https://codeload.github.com/mpvkit/libuchardet-build/tar.gz/refs/tags/0.0.8"
+    },
+    {
+      "component": "MPVKit recipe: moltenvk-build",
+      "path": "build/attribution/mpvkit/moltenvk-build-1.4.2.tar.gz",
+      "bytes": 6842,
+      "sha256": "9e090713349eb65e0ac61b37260f1ff174940670ee54474795e0ef4e2ce3f01b",
+      "url": "https://codeload.github.com/mpvkit/moltenvk-build/tar.gz/refs/tags/1.4.2"
+    },
+    {
+      "component": "MPVKit recipe: openssl-build",
+      "path": "build/attribution/mpvkit/openssl-build-3.3.5.tar.gz",
+      "bytes": 16881,
+      "sha256": "84152658ec471ce859399e576b9819122583a45eb943208af119913ad0c1f80b",
+      "url": "https://codeload.github.com/mpvkit/openssl-build/tar.gz/refs/tags/3.3.5"
+    },
+    {
+      "component": "mpv",
+      "path": "build/attribution/mpvkit/mpv-local-source.tar.gz",
+      "bytes": 7278254,
+      "sha256": "006ff824d2ccfb4b4ddc417c9f9bac27266f49c944ccc3c458b9390194e8647f"
+    },
+    {
+      "component": "FFmpeg",
+      "path": "build/attribution/mpvkit/FFmpeg-local-source.tar.gz",
+      "bytes": 16873307,
+      "sha256": "feb1f8c5a2ed8116745a09e92d194a6f226e783fc277ca2259672e4bf3c24a63"
+    },
+    {
+      "component": "MPVKit Rust standard-library licensing/source reference (build-date inference)",
+      "path": "build/attribution/mpvkit/rust-src-nightly-2025-12-22.tar.xz",
+      "bytes": 3722860,
+      "sha256": "548d78b43e5cab86a793267ffe756b99737d7f0397acf1181acc7d939b34d2a7",
+      "url": "https://static.rust-lang.org/dist/2025-12-22/rust-src-nightly.tar.xz"
+    },
+    {
+      "component": "MPVKit pinned wrapper and build sources",
+      "path": "build/attribution/mpvkit/MPVKit-pinned-source.tar.gz",
+      "bytes": 81749,
+      "sha256": "c29dc8723087ef1b05c194504016af4bdecb30eba75ba878a2828123445dacad",
+      "url": "https://github.com/aagedal/MPVKit/tree/230c3174f1515898f24599147ad61c2a277d0dc2"
+    },
+    {
+      "component": "MPVKit local patches and build configuration",
+      "path": "build/attribution/mpvkit/local-build-configuration.tar.gz",
+      "bytes": 88489,
+      "sha256": "dcf6f53b16f5077fc33329091be20ec0b022d1f5ea15f4d5eb7568167ad07fa8"
+    },
+    {
+      "component": "MPVKit crc-catalog upstream source (crate VCS revision)",
+      "path": "build/attribution/mpvkit/crc-catalog-upstream-source.tar.gz",
+      "bytes": 10317,
+      "sha256": "16b5e9a284c91f9b9750a95213ac770a965a65780525fe2671580c9ab1aaa51f",
+      "url": "https://codeload.github.com/akhilles/crc-catalog/tar.gz/b500ea693c552f8d946e290722a7b3ee8b9a7ee2"
+    }
+  ],
   "tools": [
     {
       "path": "Aagedal Media Converter/Binaries/asdcp-wrap",
@@ -34,8 +766,11 @@
       ],
       "component": "Alliance for Open Media reference tools",
       "version": null,
-      "license": "BSD-2-Clause",
-      "licenseFile": null
+      "license": "BSD-3-Clause-Clear",
+      "licenseFile": "Licenses/avm-LICENSE.txt",
+      "requiredSourceComponents": [
+        "AVM Eigen"
+      ]
     },
     {
       "path": "Aagedal Media Converter/Binaries/avmenc",
@@ -52,8 +787,11 @@
       ],
       "component": "Alliance for Open Media reference tools",
       "version": null,
-      "license": "BSD-2-Clause",
-      "licenseFile": null
+      "license": "BSD-3-Clause-Clear",
+      "licenseFile": "Licenses/avm-LICENSE.txt",
+      "requiredSourceComponents": [
+        "AVM Eigen"
+      ]
     },
     {
       "path": "Aagedal Media Converter/Binaries/bmxparse",
@@ -95,8 +833,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/ffmpeg",
-      "bytes": 54679648,
-      "sha256": "e8214cc43d5b5c3699e7fd439a129dc95346038d8b822a3cc104e7b00fad18e3",
+      "bytes": 54661504,
+      "sha256": "25ee9d7ecd96c81b18cf5970e58201f4c94c4b1f5b4dea51c765aa28c639afd2",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -128,8 +866,13 @@
       ],
       "component": "FFmpeg",
       "version": "9.0.1",
-      "license": "GPL-2.0-or-later",
-      "licenseFile": "Licenses/ffmpeg-LICENSE.txt"
+      "license": "GPL-3.0-or-later",
+      "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
+      "reportedLicense": "GPL-3.0-or-later",
+      "requiredSourceComponents": [
+        "FFmpeg 9.0.1 build",
+        "FFmpeg generated inputs"
+      ]
     },
     {
       "path": "Aagedal Media Converter/Binaries/mxf2raw",
@@ -171,8 +914,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/rclone",
-      "bytes": 39968528,
-      "sha256": "8870619556592f9cacaa433b459b30747d5154873beb1014f0737da09284406e",
+      "bytes": 39526544,
+      "sha256": "1037b434d983341c999ca372462be4a4365c78b548730c75d8eebf0705309f83",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -184,9 +927,12 @@
         "/usr/lib/libresolv.9.dylib"
       ],
       "component": "rclone",
-      "version": "v1.74.0-DEV",
-      "license": "MIT",
-      "licenseFile": null
+      "version": "v1.74.0-DEV-aagedal-4.4",
+      "license": "MIT AND LGPL-3.0-only AND MPL-2.0",
+      "licenseFile": "Licenses/rclone-LICENSE.txt",
+      "requiredSourceComponents": [
+        "rclone"
+      ]
     },
     {
       "path": "Aagedal Media Converter/Binaries/tesseract",
@@ -210,1941 +956,7 @@
       "licenseFile": "Licenses/tesseract-LICENSE.txt"
     }
   ],
-  "libraries": [
-    {
-      "path": "Aagedal Media Converter/Frameworks/libSvtAv1Enc.3.dylib",
-      "bytes": 3217872,
-      "sha256": "401d580f124ca767e0e0a5ad713fae677bdcdbd2ed540b86f6542c65be7f1479",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libSvtAv1Enc.3.dylib"
-      ],
-      "installName": "@rpath/libSvtAv1Enc.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libX11.6.dylib",
-      "bytes": 1025472,
-      "sha256": "3e425bf9b37dfeabe022402aed7b9011f087770f9bc1c74e095d242922eed96a",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libxcb.1.dylib"
-      ],
-      "installName": "@rpath/libX11.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libXau.6.dylib",
-      "bytes": 53312,
-      "sha256": "b196f21bd8c1edbb16953969ea8032f564a874ccf4c4a849d63402dd4292b359",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libXau.6.dylib"
-      ],
-      "installName": "@rpath/libXau.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libXdmcp.6.dylib",
-      "bytes": 54224,
-      "sha256": "64ab67713883a4e0736b864d4e68bcc3d498647ef60c00216d34b2513f0fb855",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libXdmcp.6.dylib"
-      ],
-      "installName": "@rpath/libXdmcp.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libaom.3.dylib",
-      "bytes": 4040576,
-      "sha256": "904f713d62d2a3431ba8372822b35d90ee16bcb3474d37bf8a5f8944762bb437",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libaom.3.dylib",
-        "@rpath/libvmaf.3.dylib"
-      ],
-      "installName": "@rpath/libaom.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libarchive.13.dylib",
-      "bytes": 702976,
-      "sha256": "2cf7371e03564a108be69b29f3c254e21b6b2aff5ebb0726718644072c012315",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libbz2.1.0.dylib",
-        "/usr/lib/libexpat.1.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libarchive.13.dylib",
-        "@rpath/libb2.1.dylib",
-        "@rpath/liblz4.1.dylib",
-        "@rpath/liblzma.5.dylib",
-        "@rpath/libzstd.1.dylib"
-      ],
-      "installName": "@rpath/libarchive.13.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libaribb24.0.dylib",
-      "bytes": 122768,
-      "sha256": "030bf9230c541ff83dec6ba5ddd8280689b07caced5c2d9b0df6156f3b078452",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libaribb24.0.dylib",
-        "@rpath/libpng16.16.dylib"
-      ],
-      "installName": "@rpath/libaribb24.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libass.9.dylib",
-      "bytes": 247328,
-      "sha256": "309e89873a76d74ac44cccdfa0f7ecaa34cbb10e39d4de31186382905d77e482",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/ApplicationServices.framework/Versions/A/ApplicationServices",
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "@rpath/libass.9.dylib",
-        "@rpath/libfreetype.6.dylib",
-        "@rpath/libfribidi.0.dylib",
-        "@rpath/libharfbuzz.0.dylib",
-        "@rpath/libunibreak.6.dylib"
-      ],
-      "installName": "@rpath/libass.9.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libavcodec.62.dylib",
-      "bytes": 10135968,
-      "sha256": "875bedeac30a46b450a6ee5e9f2ab72d98eb3f98936d27f8ae6bd21d845c2ba7",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
-        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libSvtAv1Enc.3.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libaom.3.dylib",
-        "@rpath/libaribb24.0.dylib",
-        "@rpath/libavcodec.62.dylib",
-        "@rpath/libavutil.60.dylib",
-        "@rpath/libdav1d.7.dylib",
-        "@rpath/libjxl.0.11.dylib",
-        "@rpath/libjxl_threads.0.11.dylib",
-        "@rpath/liblzma.5.dylib",
-        "@rpath/libmp3lame.0.dylib",
-        "@rpath/libogg.0.dylib",
-        "@rpath/libopencore-amrnb.0.dylib",
-        "@rpath/libopencore-amrwb.0.dylib",
-        "@rpath/libopenjp2.7.dylib",
-        "@rpath/libopus.0.dylib",
-        "@rpath/librav1e.0.8.dylib",
-        "@rpath/libsnappy.1.dylib",
-        "@rpath/libsoxr.0.dylib",
-        "@rpath/libspeex.1.dylib",
-        "@rpath/libswresample.6.dylib",
-        "@rpath/libtheoradec.2.dylib",
-        "@rpath/libtheoraenc.2.dylib",
-        "@rpath/libvmaf.3.dylib",
-        "@rpath/libvorbis.0.dylib",
-        "@rpath/libvorbisenc.2.dylib",
-        "@rpath/libvpx.11.dylib",
-        "@rpath/libwebp.7.dylib",
-        "@rpath/libwebpmux.3.dylib",
-        "@rpath/libx264.165.dylib",
-        "@rpath/libx265.215.dylib"
-      ],
-      "installName": "@rpath/libavcodec.62.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libavdevice.62.dylib",
-      "bytes": 203088,
-      "sha256": "a8d3169d7fc0804075e4f1458bc9aca85d370fee068e8a65acd942ce80f3c67d",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/AVFoundation.framework/Versions/A/AVFoundation",
-        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
-        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
-        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
-        "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
-        "/System/Library/Frameworks/CoreImage.framework/Versions/A/CoreImage",
-        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
-        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
-        "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
-        "/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL",
-        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libbz2.1.0.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "/usr/lib/libcurl.4.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "/usr/lib/libobjc.A.dylib",
-        "/usr/lib/libxml2.2.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libSvtAv1Enc.3.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libaom.3.dylib",
-        "@rpath/libarchive.13.dylib",
-        "@rpath/libaribb24.0.dylib",
-        "@rpath/libass.9.dylib",
-        "@rpath/libavcodec.62.dylib",
-        "@rpath/libavdevice.62.dylib",
-        "@rpath/libavfilter.11.dylib",
-        "@rpath/libavformat.62.dylib",
-        "@rpath/libavutil.60.dylib",
-        "@rpath/libbluray.3.dylib",
-        "@rpath/libdav1d.7.dylib",
-        "@rpath/libfontconfig.1.dylib",
-        "@rpath/libfreetype.6.dylib",
-        "@rpath/libgnutls.30.dylib",
-        "@rpath/libharfbuzz.0.dylib",
-        "@rpath/libjxl.0.11.dylib",
-        "@rpath/libjxl_threads.0.11.dylib",
-        "@rpath/liblzma.5.dylib",
-        "@rpath/libmp3lame.0.dylib",
-        "@rpath/libogg.0.dylib",
-        "@rpath/libopencore-amrnb.0.dylib",
-        "@rpath/libopencore-amrwb.0.dylib",
-        "@rpath/libopenjp2.7.dylib",
-        "@rpath/libopus.0.dylib",
-        "@rpath/librav1e.0.8.dylib",
-        "@rpath/librist.4.dylib",
-        "@rpath/librubberband.3.dylib",
-        "@rpath/libsamplerate.0.dylib",
-        "@rpath/libsnappy.1.dylib",
-        "@rpath/libsoxr.0.dylib",
-        "@rpath/libspeex.1.dylib",
-        "@rpath/libsrt.1.5.dylib",
-        "@rpath/libssh.4.dylib",
-        "@rpath/libswresample.6.dylib",
-        "@rpath/libswscale.9.dylib",
-        "@rpath/libtesseract.5.dylib",
-        "@rpath/libtheoradec.2.dylib",
-        "@rpath/libtheoraenc.2.dylib",
-        "@rpath/libvidstab.1.2.dylib",
-        "@rpath/libvmaf.3.dylib",
-        "@rpath/libvorbis.0.dylib",
-        "@rpath/libvorbisenc.2.dylib",
-        "@rpath/libvpx.11.dylib",
-        "@rpath/libwebp.7.dylib",
-        "@rpath/libwebpmux.3.dylib",
-        "@rpath/libx264.165.dylib",
-        "@rpath/libx265.215.dylib",
-        "@rpath/libxcb-shape.0.dylib",
-        "@rpath/libxcb-shm.0.dylib",
-        "@rpath/libxcb-xfixes.0.dylib",
-        "@rpath/libxcb.1.dylib",
-        "@rpath/libzimg.2.dylib",
-        "@rpath/libzmq.5.dylib"
-      ],
-      "installName": "@rpath/libavdevice.62.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libavfilter.11.dylib",
-      "bytes": 3155808,
-      "sha256": "1fd4bf20f2063187028864f042cbfaa2aac3c6d04f43cf1e8f2cb0a69b6b3169",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
-        "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
-        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
-        "/System/Library/Frameworks/CoreImage.framework/Versions/A/CoreImage",
-        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
-        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
-        "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
-        "/System/Library/Frameworks/OpenGL.framework/Versions/A/OpenGL",
-        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libbz2.1.0.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "/usr/lib/libcurl.4.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "/usr/lib/libobjc.A.dylib",
-        "/usr/lib/libxml2.2.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libSvtAv1Enc.3.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libaom.3.dylib",
-        "@rpath/libarchive.13.dylib",
-        "@rpath/libaribb24.0.dylib",
-        "@rpath/libass.9.dylib",
-        "@rpath/libavcodec.62.dylib",
-        "@rpath/libavfilter.11.dylib",
-        "@rpath/libavformat.62.dylib",
-        "@rpath/libavutil.60.dylib",
-        "@rpath/libbluray.3.dylib",
-        "@rpath/libdav1d.7.dylib",
-        "@rpath/libfontconfig.1.dylib",
-        "@rpath/libfreetype.6.dylib",
-        "@rpath/libgnutls.30.dylib",
-        "@rpath/libharfbuzz.0.dylib",
-        "@rpath/libjxl.0.11.dylib",
-        "@rpath/libjxl_threads.0.11.dylib",
-        "@rpath/liblzma.5.dylib",
-        "@rpath/libmp3lame.0.dylib",
-        "@rpath/libogg.0.dylib",
-        "@rpath/libopencore-amrnb.0.dylib",
-        "@rpath/libopencore-amrwb.0.dylib",
-        "@rpath/libopenjp2.7.dylib",
-        "@rpath/libopus.0.dylib",
-        "@rpath/librav1e.0.8.dylib",
-        "@rpath/librist.4.dylib",
-        "@rpath/librubberband.3.dylib",
-        "@rpath/libsamplerate.0.dylib",
-        "@rpath/libsnappy.1.dylib",
-        "@rpath/libsoxr.0.dylib",
-        "@rpath/libspeex.1.dylib",
-        "@rpath/libsrt.1.5.dylib",
-        "@rpath/libssh.4.dylib",
-        "@rpath/libswresample.6.dylib",
-        "@rpath/libswscale.9.dylib",
-        "@rpath/libtesseract.5.dylib",
-        "@rpath/libtheoradec.2.dylib",
-        "@rpath/libtheoraenc.2.dylib",
-        "@rpath/libvidstab.1.2.dylib",
-        "@rpath/libvmaf.3.dylib",
-        "@rpath/libvorbis.0.dylib",
-        "@rpath/libvorbisenc.2.dylib",
-        "@rpath/libvpx.11.dylib",
-        "@rpath/libwebp.7.dylib",
-        "@rpath/libwebpmux.3.dylib",
-        "@rpath/libx264.165.dylib",
-        "@rpath/libx265.215.dylib",
-        "@rpath/libzimg.2.dylib",
-        "@rpath/libzmq.5.dylib"
-      ],
-      "installName": "@rpath/libavfilter.11.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libavformat.62.dylib",
-      "bytes": 2410192,
-      "sha256": "df64013e29143b416af5a551d37d96f2f17551e51d09bb1f817e868c3c296666",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
-        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libbz2.1.0.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "/usr/lib/libxml2.2.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libSvtAv1Enc.3.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libaom.3.dylib",
-        "@rpath/libaribb24.0.dylib",
-        "@rpath/libavcodec.62.dylib",
-        "@rpath/libavformat.62.dylib",
-        "@rpath/libavutil.60.dylib",
-        "@rpath/libbluray.3.dylib",
-        "@rpath/libdav1d.7.dylib",
-        "@rpath/libgnutls.30.dylib",
-        "@rpath/libjxl.0.11.dylib",
-        "@rpath/libjxl_threads.0.11.dylib",
-        "@rpath/liblzma.5.dylib",
-        "@rpath/libmp3lame.0.dylib",
-        "@rpath/libogg.0.dylib",
-        "@rpath/libopencore-amrnb.0.dylib",
-        "@rpath/libopencore-amrwb.0.dylib",
-        "@rpath/libopenjp2.7.dylib",
-        "@rpath/libopus.0.dylib",
-        "@rpath/librav1e.0.8.dylib",
-        "@rpath/librist.4.dylib",
-        "@rpath/libsnappy.1.dylib",
-        "@rpath/libsoxr.0.dylib",
-        "@rpath/libspeex.1.dylib",
-        "@rpath/libsrt.1.5.dylib",
-        "@rpath/libssh.4.dylib",
-        "@rpath/libswresample.6.dylib",
-        "@rpath/libtheoradec.2.dylib",
-        "@rpath/libtheoraenc.2.dylib",
-        "@rpath/libvmaf.3.dylib",
-        "@rpath/libvorbis.0.dylib",
-        "@rpath/libvorbisenc.2.dylib",
-        "@rpath/libvpx.11.dylib",
-        "@rpath/libwebp.7.dylib",
-        "@rpath/libwebpmux.3.dylib",
-        "@rpath/libx264.165.dylib",
-        "@rpath/libx265.215.dylib",
-        "@rpath/libzmq.5.dylib"
-      ],
-      "installName": "@rpath/libavformat.62.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libavutil.60.dylib",
-      "bytes": 657360,
-      "sha256": "9769c3aa97c995e18df2f7b3c8fe9a7f2060cbeb8799231f8208a689f3218823",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
-        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libavutil.60.dylib"
-      ],
-      "installName": "@rpath/libavutil.60.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libb2.1.dylib",
-      "bytes": 85968,
-      "sha256": "17c15969e8d504e61de1d3d36c25cf713c4077abad45c2ade31ce8755009eb03",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libb2.1.dylib"
-      ],
-      "installName": "@rpath/libb2.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libbluray.3.dylib",
-      "bytes": 370672,
-      "sha256": "39e439edb26ae03b5888e9c8f89a22755c22a7a6a5adebff19eb343e720a1860",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/DiskArbitration.framework/Versions/A/DiskArbitration",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libxml2.2.dylib",
-        "@rpath/libbluray.3.dylib",
-        "@rpath/libfontconfig.1.dylib",
-        "@rpath/libfreetype.6.dylib",
-        "@rpath/libudfread.3.dylib"
-      ],
-      "installName": "@rpath/libbluray.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libbrotlicommon.1.dylib",
-      "bytes": 167264,
-      "sha256": "39b668b07670e8be3963877808e625b2d3e92ffc50008a91fbe9d36644836718",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libbrotlicommon.1.dylib"
-      ],
-      "installName": "@rpath/libbrotlicommon.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libbrotlidec.1.dylib",
-      "bytes": 87728,
-      "sha256": "126e1a58009887b0d83229b7b05c4b5c663044720f69b3097a6d3e087039c2de",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libbrotlicommon.1.dylib",
-        "@rpath/libbrotlidec.1.dylib"
-      ],
-      "installName": "@rpath/libbrotlidec.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libbrotlienc.1.dylib",
-      "bytes": 653328,
-      "sha256": "d23689f75729f891f8631b2471a1d2c0f80e7ba709d5f4a8fc29bc3747cbe0b9",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libbrotlicommon.1.dylib",
-        "@rpath/libbrotlienc.1.dylib"
-      ],
-      "installName": "@rpath/libbrotlienc.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libcjson.1.dylib",
-      "bytes": 89936,
-      "sha256": "ddec722059ce4e4b0e0c82a64c0acc0878b7552115b753ec097d86d94c6715f4",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libcjson.1.dylib"
-      ],
-      "installName": "@rpath/libcjson.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libcrypto.3.dylib",
-      "bytes": 4843248,
-      "sha256": "2ec43d7d90c325cdc265c0f073860fc9a624d6d0c516d3d8673c4dd4a5dba07e",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libcrypto.3.dylib"
-      ],
-      "installName": "@rpath/libcrypto.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libdav1d.7.dylib",
-      "bytes": 794080,
-      "sha256": "d6a859e0e5a96a8aa08478253033f99c6cbfe9f331441a5cb57a5544ca5b18f7",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libdav1d.7.dylib"
-      ],
-      "installName": "@rpath/libdav1d.7.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libfontconfig.1.dylib",
-      "bytes": 304544,
-      "sha256": "f3b5b836598deaef9fe37f29f3f87ca545e654b8096765f41d0b273bb9d6b361",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libexpat.1.dylib",
-        "@rpath/libfontconfig.1.dylib",
-        "@rpath/libfreetype.6.dylib",
-        "@rpath/libintl.8.dylib"
-      ],
-      "installName": "@rpath/libfontconfig.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libfreetype.6.dylib",
-      "bytes": 638192,
-      "sha256": "3e2251ebee07bace97ef3e5d382ceef95a5672bf77d735bc4bc30f64f590f2d7",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libbz2.1.0.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libfreetype.6.dylib",
-        "@rpath/libpng16.16.dylib"
-      ],
-      "installName": "@rpath/libfreetype.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libfribidi.0.dylib",
-      "bytes": 171920,
-      "sha256": "4adbf2b1ec93cd75aebd4b203e1e4914da1a3969ce193cc40deb2ce7f83ca3b8",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libfribidi.0.dylib"
-      ],
-      "installName": "@rpath/libfribidi.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libgif.dylib",
-      "bytes": 72816,
-      "sha256": "3f14307aa4d1bb101f20ca1acf3d3b7aa8ca385f8fb14793606e287080963768",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libgif.dylib"
-      ],
-      "installName": "@rpath/libgif.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libglib-2.0.0.dylib",
-      "bytes": 1354736,
-      "sha256": "e72d03608b608c964877503a37076e07334bb5f1832f6be463f22d294b348813",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "/usr/lib/libobjc.A.dylib",
-        "@rpath/libglib-2.0.0.dylib",
-        "@rpath/libintl.8.dylib",
-        "@rpath/libpcre2-8.0.dylib"
-      ],
-      "installName": "@rpath/libglib-2.0.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libgmp.10.dylib",
-      "bytes": 452832,
-      "sha256": "510d8581dd97ccac1c6258d2db753b8297baad4eacc44fa2aba2ac1209d010a4",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libgmp.10.dylib"
-      ],
-      "installName": "@rpath/libgmp.10.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libgnutls.30.dylib",
-      "bytes": 2361680,
-      "sha256": "ba86ac1eca71e948820af583ab90a21582dbdbada00c4cd2a9824fa95d2fa3f5",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/Security.framework/Versions/A/Security",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libgmp.10.dylib",
-        "@rpath/libgnutls.30.dylib",
-        "@rpath/libhogweed.6.dylib",
-        "@rpath/libidn2.0.dylib",
-        "@rpath/libintl.8.dylib",
-        "@rpath/libnettle.8.dylib",
-        "@rpath/libp11-kit.0.dylib",
-        "@rpath/libtasn1.6.dylib",
-        "@rpath/libunistring.5.dylib"
-      ],
-      "installName": "@rpath/libgnutls.30.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libgraphite2.3.dylib",
-      "bytes": 139232,
-      "sha256": "e9b7aee857feea6e579caac988a0bee9b573114c3439b7655a9ec0e504a971ef",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libgraphite2.3.dylib"
-      ],
-      "installName": "@rpath/libgraphite2.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libharfbuzz.0.dylib",
-      "bytes": 1282656,
-      "sha256": "9d2e48f1994eae8e33389d8f331df1964e592f796c66cee8dfa0c530687b4cdc",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreGraphics.framework/Versions/A/CoreGraphics",
-        "/System/Library/Frameworks/CoreText.framework/Versions/A/CoreText",
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libfreetype.6.dylib",
-        "@rpath/libglib-2.0.0.dylib",
-        "@rpath/libgraphite2.3.dylib",
-        "@rpath/libharfbuzz.0.dylib"
-      ],
-      "installName": "@rpath/libharfbuzz.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libhogweed.6.dylib",
-      "bytes": 316480,
-      "sha256": "9586bf6ccdbe267b72c672fa0279ef783d0fb81c7d3fba0fe263f0eeae9f5559",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libgmp.10.dylib",
-        "@rpath/libhogweed.6.dylib",
-        "@rpath/libnettle.8.dylib"
-      ],
-      "installName": "@rpath/libhogweed.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libhwy.1.dylib",
-      "bytes": 97792,
-      "sha256": "b1482fb7440386e2d29d9c5e49912749bebf64e819e8b8da531d680e9e1a019d",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libhwy.1.dylib"
-      ],
-      "installName": "@rpath/libhwy.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libidn2.0.dylib",
-      "bytes": 258528,
-      "sha256": "6bacc31244a5d9019a4d912d1ce3f179bedf07edd5b69e4a749b5278d362edcc",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libidn2.0.dylib",
-        "@rpath/libintl.8.dylib",
-        "@rpath/libunistring.5.dylib"
-      ],
-      "installName": "@rpath/libidn2.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libintl.8.dylib",
-      "bytes": 228720,
-      "sha256": "73fc54d8df36911a5911f233f6ad3d59b0023ce9ad198a10f25719ff4bcda790",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "@rpath/libintl.8.dylib"
-      ],
-      "installName": "@rpath/libintl.8.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libjpeg.8.dylib",
-      "bytes": 486672,
-      "sha256": "28a6870be67fe1401c3ac90967d79b656c4f2761ef078676afac24de5f98148b",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libjpeg.8.dylib"
-      ],
-      "installName": "@rpath/libjpeg.8.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libjxl.0.11.dylib",
-      "bytes": 1906448,
-      "sha256": "d78bfa7ef01e0f34f525846e58d4dd4e6a37d37b8dd56f07dcd1dcd764a4fdf0",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libbrotlicommon.1.dylib",
-        "@rpath/libbrotlidec.1.dylib",
-        "@rpath/libbrotlienc.1.dylib",
-        "@rpath/libhwy.1.dylib",
-        "@rpath/libjxl.0.11.dylib",
-        "@rpath/libjxl_cms.0.11.dylib"
-      ],
-      "installName": "@rpath/libjxl.0.11.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libjxl_cms.0.11.dylib",
-      "bytes": 112976,
-      "sha256": "59f4e6b3d4d5585c3b147d1b79db4d87e9b27db24aef55f88d579ed5125ce86f",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libhwy.1.dylib",
-        "@rpath/libjxl_cms.0.11.dylib",
-        "@rpath/liblcms2.2.dylib"
-      ],
-      "installName": "@rpath/libjxl_cms.0.11.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libjxl_threads.0.11.dylib",
-      "bytes": 56736,
-      "sha256": "0da37506b11825276360b79558b7024f7885d7943ba5e313f186d6aee541819d",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libjxl_threads.0.11.dylib"
-      ],
-      "installName": "@rpath/libjxl_threads.0.11.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/liblcms2.2.dylib",
-      "bytes": 357632,
-      "sha256": "60de29a496240f583d852dca26b102e232a453632cd89aec819afc8e1b166561",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/liblcms2.2.dylib"
-      ],
-      "installName": "@rpath/liblcms2.2.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libleptonica.6.dylib",
-      "bytes": 2208432,
-      "sha256": "72cf12ee4abdfa232807cbce01f01adb316f8a03891fd48458bc8ba0fc74fafc",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libgif.dylib",
-        "@rpath/libjpeg.8.dylib",
-        "@rpath/libleptonica.6.dylib",
-        "@rpath/libopenjp2.7.dylib",
-        "@rpath/libpng16.16.dylib",
-        "@rpath/libtiff.6.dylib",
-        "@rpath/libwebp.7.dylib",
-        "@rpath/libwebpmux.3.dylib"
-      ],
-      "installName": "@rpath/libleptonica.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/liblz4.1.dylib",
-      "bytes": 176960,
-      "sha256": "fb071a3b67a536b9536999f9c56d7155e001cd91a90906c76f2b25e8889ea4d9",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/liblz4.1.dylib"
-      ],
-      "installName": "@rpath/liblz4.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/liblzma.5.dylib",
-      "bytes": 185536,
-      "sha256": "f3bbe4b9af502b3fa87fd434dfce7fc60384b5c51d96c41393e321a3076a2c45",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/liblzma.5.dylib"
-      ],
-      "installName": "@rpath/liblzma.5.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libmbedcrypto.16.dylib",
-      "bytes": 515040,
-      "sha256": "686659eea7bd9e42671aa668da72fe006d8ee868ac2f736a23c9df63012b34df",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libmbedcrypto.16.dylib"
-      ],
-      "installName": "@rpath/libmbedcrypto.16.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libmp3lame.0.dylib",
-      "bytes": 304944,
-      "sha256": "f91686c17836ad4a86517da4ab80ad4b4dae62322b841a667d331dc1ff033395",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libmp3lame.0.dylib"
-      ],
-      "installName": "@rpath/libmp3lame.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libmujs.dylib",
-      "bytes": 306976,
-      "sha256": "f3dbaa27a8c505b9742873af979a59fed148b9dadc8e280f2ca090d455d7acd3",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libmujs.dylib"
-      ],
-      "installName": "@rpath/libmujs.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libnettle.8.dylib",
-      "bytes": 334016,
-      "sha256": "a8e5463b77644ba696507a01f921466cfe585f34d1b6f17121b587afce308ded",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libnettle.8.dylib"
-      ],
-      "installName": "@rpath/libnettle.8.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libogg.0.dylib",
-      "bytes": 72032,
-      "sha256": "b307b5a944906f9e147f3eed502ba0c47b9087270d6d2ebf8fc34f0546649aca",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libogg.0.dylib"
-      ],
-      "installName": "@rpath/libogg.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libopencore-amrnb.0.dylib",
-      "bytes": 178512,
-      "sha256": "7f3915b0a7a7329de82a47a524efd82e8ba27eeb7098257e00479585dd5e941b",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libopencore-amrnb.0.dylib"
-      ],
-      "installName": "@rpath/libopencore-amrnb.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libopencore-amrwb.0.dylib",
-      "bytes": 106144,
-      "sha256": "5d7a23448757395d5bfadbb5f5a2d83ba5cb69fc2489c7213aa9212a24e34d53",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libopencore-amrwb.0.dylib"
-      ],
-      "installName": "@rpath/libopencore-amrwb.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libopenjp2.7.dylib",
-      "bytes": 324160,
-      "sha256": "584be0202c1718dcee5b9c49e033c20466e89ad152a87258db697dc14a445ded",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libopenjp2.7.dylib"
-      ],
-      "installName": "@rpath/libopenjp2.7.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libopus.0.dylib",
-      "bytes": 357584,
-      "sha256": "b7f681d96bec5b6157694d647d55d2bf3bfc40ab9f328db1e6a87d83906830d7",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libopus.0.dylib"
-      ],
-      "installName": "@rpath/libopus.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libp11-kit.0.dylib",
-      "bytes": 1447888,
-      "sha256": "8a376287c71c9984a1a5c4eff7cb46260845a917a7cecd48a321169194a5f967",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libffi.dylib",
-        "@rpath/libp11-kit.0.dylib"
-      ],
-      "installName": "@rpath/libp11-kit.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libpcre2-8.0.dylib",
-      "bytes": 588224,
-      "sha256": "45e735ae5671d812d51ddf9c21382e8d00326ff2b6b97ffadc2b6063991d165d",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libpcre2-8.0.dylib"
-      ],
-      "installName": "@rpath/libpcre2-8.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libplacebo.351.dylib",
-      "bytes": 940048,
-      "sha256": "3cb6f92aae1541dcb05b5668418b7fb44017c18ee75cd0f646d5177b2c8c2027",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/liblcms2.2.dylib",
-        "@rpath/libplacebo.351.dylib",
-        "@rpath/libshaderc_shared.1.dylib",
-        "@rpath/libvulkan.1.dylib"
-      ],
-      "installName": "@rpath/libplacebo.351.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libpng16.16.dylib",
-      "bytes": 209344,
-      "sha256": "9ffd1e3e05fe09cdf3743ddbbaea618a8212dfa6fb51e64a13a97a40f73bb639",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libpng16.16.dylib"
-      ],
-      "installName": "@rpath/libpng16.16.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/librav1e.0.8.dylib",
-      "bytes": 2959600,
-      "sha256": "71e947fe4c2d9dd6dccf214f19bf0f205115e70b5d89db2fb3b5179dfe3dd9a0",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "@rpath/librav1e.0.8.dylib"
-      ],
-      "installName": "@rpath/librav1e.0.8.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/librist.4.dylib",
-      "bytes": 188224,
-      "sha256": "25e01f63fc5ebf4c054669f0059296becba09ff88352cccbeed2071b5597922e",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libcjson.1.dylib",
-        "@rpath/libmbedcrypto.16.dylib",
-        "@rpath/librist.4.dylib"
-      ],
-      "installName": "@rpath/librist.4.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/librubberband.3.dylib",
-      "bytes": 393840,
-      "sha256": "e858b8ad4c6bf33cd0330a2f8493699ef2d1881a458cb87179d6906d3cb48ff4",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/librubberband.3.dylib",
-        "@rpath/libsamplerate.0.dylib"
-      ],
-      "installName": "@rpath/librubberband.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libsamplerate.0.dylib",
-      "bytes": 1556768,
-      "sha256": "a68947959c19dcc502ec754dbaba25c8bc9d13698fb21e9cfd3bb06523f38d75",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libsamplerate.0.dylib"
-      ],
-      "installName": "@rpath/libsamplerate.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libshaderc_shared.1.dylib",
-      "bytes": 6939984,
-      "sha256": "5f1a4252d9b732490cd42389ca385bf27a877eb1d491981e0658f9525d1d0e60",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libshaderc_shared.1.dylib"
-      ],
-      "installName": "@rpath/libshaderc_shared.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libsharpyuv.0.dylib",
-      "bytes": 69568,
-      "sha256": "9744767e853171f4efbe379f74ab7c0552d017f54b762e3160ad3bb7306aa15e",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libsharpyuv.0.dylib"
-      ],
-      "installName": "@rpath/libsharpyuv.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libsnappy.1.dylib",
-      "bytes": 79552,
-      "sha256": "ca8fe26098c437c3b4bbadee7ecd0bec4b5721cdff5bcfc569b91010a2b284a0",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libsnappy.1.dylib"
-      ],
-      "installName": "@rpath/libsnappy.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libsodium.26.dylib",
-      "bytes": 290544,
-      "sha256": "a335c22b829d6e99019df6c17764c17a3e2f5ae99d6fabc6c81237684273f592",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libsodium.26.dylib"
-      ],
-      "installName": "@rpath/libsodium.26.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libsoxr.0.dylib",
-      "bytes": 159360,
-      "sha256": "b26293fa4056634a20fc50105ece2fd9c9ad6bc0bb55e106369e3bd92b100ca9",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libsoxr.0.dylib"
-      ],
-      "installName": "@rpath/libsoxr.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libspeex.1.dylib",
-      "bytes": 126176,
-      "sha256": "490162140e9fadbc34139e7ac69d4515d0969550f3482d61cd27025fbb44f660",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libspeex.1.dylib"
-      ],
-      "installName": "@rpath/libspeex.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libsrt.1.5.dylib",
-      "bytes": 713872,
-      "sha256": "bf0b248e20f386bef699fdfe780cf8ef5b3931e28648b38aa97506feb589eba5",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libcrypto.3.dylib",
-        "@rpath/libsrt.1.5.dylib",
-        "@rpath/libssl.3.dylib"
-      ],
-      "installName": "@rpath/libsrt.1.5.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libssh.4.dylib",
-      "bytes": 477840,
-      "sha256": "0cde42eee43ea8f82b1758c63de832dc4138c2686f895757f519d2d2275d0430",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/Kerberos.framework/Versions/A/Kerberos",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libcrypto.3.dylib",
-        "@rpath/libssh.4.dylib"
-      ],
-      "installName": "@rpath/libssh.4.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libssl.3.dylib",
-      "bytes": 900224,
-      "sha256": "5bd8bbfa85e7b5253ab2fe8b5603827317887feba37d8ae08ec97ac89f0a5fe0",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libcrypto.3.dylib",
-        "@rpath/libssl.3.dylib"
-      ],
-      "installName": "@rpath/libssl.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libswresample.6.dylib",
-      "bytes": 121472,
-      "sha256": "02ef7c4b679b03e09279f978c12c3bfc7201d042dcb7d2e70e5855529e2411fc",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
-        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libavutil.60.dylib",
-        "@rpath/libsoxr.0.dylib",
-        "@rpath/libswresample.6.dylib"
-      ],
-      "installName": "@rpath/libswresample.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libswscale.9.dylib",
-      "bytes": 518368,
-      "sha256": "7d2267130e80c58798db6c183d6e77f6faa747eab646ed6f3fe342c3e9ac7453",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreMedia.framework/Versions/A/CoreMedia",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/System/Library/Frameworks/CoreVideo.framework/Versions/A/CoreVideo",
-        "/System/Library/Frameworks/VideoToolbox.framework/Versions/A/VideoToolbox",
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libX11.6.dylib",
-        "@rpath/libavutil.60.dylib",
-        "@rpath/libswscale.9.dylib"
-      ],
-      "installName": "@rpath/libswscale.9.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libtasn1.6.dylib",
-      "bytes": 108240,
-      "sha256": "abecfdc8418c855d13845c0343897598694ad574196aa25a361c9e93ed2c89f8",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libtasn1.6.dylib"
-      ],
-      "installName": "@rpath/libtasn1.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libtesseract.5.dylib",
-      "bytes": 2792448,
-      "sha256": "f753e14bab222e3184338ae70dea1e144301d42b5f357eda0d749be331ed544d",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "/usr/lib/libcurl.4.dylib",
-        "@rpath/libarchive.13.dylib",
-        "@rpath/libleptonica.6.dylib",
-        "@rpath/libtesseract.5.dylib"
-      ],
-      "installName": "@rpath/libtesseract.5.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libtheoradec.2.dylib",
-      "bytes": 90800,
-      "sha256": "c6c3de78f9a530267f46d1eaf5d9d638724c62652535649d2c160a8678990341",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libtheoradec.2.dylib"
-      ],
-      "installName": "@rpath/libtheoradec.2.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libtheoraenc.2.dylib",
-      "bytes": 177152,
-      "sha256": "9a375b81d1ddcc9ee6a326d51ddc52c6f0155f00dcd733a899845ce10ba54c8c",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libogg.0.dylib",
-        "@rpath/libtheoraenc.2.dylib"
-      ],
-      "installName": "@rpath/libtheoraenc.2.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libtiff.6.dylib",
-      "bytes": 539248,
-      "sha256": "caab66fa0c15f5033a5ed8654462cbb1fb9417b9397713197ed94a96fe09fd2b",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libz.1.dylib",
-        "@rpath/libjpeg.8.dylib",
-        "@rpath/liblzma.5.dylib",
-        "@rpath/libtiff.6.dylib",
-        "@rpath/libzstd.1.dylib"
-      ],
-      "installName": "@rpath/libtiff.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libuchardet.0.dylib",
-      "bytes": 223840,
-      "sha256": "82b7daf63162af122186b76f44632892ada9b9b1d8a71e676f1ae96c311c0d0e",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libuchardet.0.dylib"
-      ],
-      "installName": "@rpath/libuchardet.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libudfread.3.dylib",
-      "bytes": 71168,
-      "sha256": "7e34889497dcc16e4011a9433640269115483e17f60bd32236ebc71628c825b8",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libudfread.3.dylib"
-      ],
-      "installName": "@rpath/libudfread.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libunibreak.6.dylib",
-      "bytes": 170528,
-      "sha256": "4d839073a795a73f99aaaf116b04704bf6cafb79e8a3e5fdb5ba3e35a3345cc5",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libunibreak.6.dylib"
-      ],
-      "installName": "@rpath/libunibreak.6.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libunistring.5.dylib",
-      "bytes": 2023040,
-      "sha256": "ac41210f7a54eaa4dc6c26abd4cc12ac02c6266baeef0f8813ebe981389d6b5c",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libiconv.2.dylib",
-        "@rpath/libunistring.5.dylib"
-      ],
-      "installName": "@rpath/libunistring.5.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libvidstab.1.2.dylib",
-      "bytes": 112336,
-      "sha256": "eb90556ee76804a6737b7e4253db008641df7c78dd2c08da0d0f12e6f2142518",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libvidstab.1.2.dylib"
-      ],
-      "installName": "@rpath/libvidstab.1.2.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libvmaf.3.dylib",
-      "bytes": 748000,
-      "sha256": "d55ae4c9ae1fbee0c593041e79b08923d5ab3363a469dd8605c016d3a36aad01",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libvmaf.3.dylib"
-      ],
-      "installName": "@rpath/libvmaf.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libvorbis.0.dylib",
-      "bytes": 194096,
-      "sha256": "eeb840b3979381a168a7a509b0da5e4cbbe71443341a5d19be18bf9fc58a517e",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libogg.0.dylib",
-        "@rpath/libvorbis.0.dylib"
-      ],
-      "installName": "@rpath/libvorbis.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libvorbisenc.2.dylib",
-      "bytes": 727936,
-      "sha256": "2283af5b95229f02e98a34abe81005b0042449604a2fd21c25c2c1e2fafd5a90",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libogg.0.dylib",
-        "@rpath/libvorbis.0.dylib",
-        "@rpath/libvorbisenc.2.dylib"
-      ],
-      "installName": "@rpath/libvorbisenc.2.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libvpx.11.dylib",
-      "bytes": 1763600,
-      "sha256": "f558166b0edbe84e97179d97dbdcc2e81c3df738a3e05848ecda9e979a41e639",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libvpx.11.dylib"
-      ],
-      "installName": "@rpath/libvpx.11.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libvulkan.1.dylib",
-      "bytes": 622208,
-      "sha256": "2574cc3b36501739a3202b419946d9e1110c8e55a30f9adfc0738b43aaff6b49",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libvulkan.1.dylib"
-      ],
-      "installName": "@rpath/libvulkan.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libwebp.7.dylib",
-      "bytes": 352320,
-      "sha256": "765da0c26deaf93541ef20660675571fefd7267b8ed54121bb4b2bf3a5478fc3",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libsharpyuv.0.dylib",
-        "@rpath/libwebp.7.dylib"
-      ],
-      "installName": "@rpath/libwebp.7.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libwebpmux.3.dylib",
-      "bytes": 73232,
-      "sha256": "3b653eba61f954d43ea95793189192a0fcdf4451aaf4609bd7575f5b8219b776",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libsharpyuv.0.dylib",
-        "@rpath/libwebp.7.dylib",
-        "@rpath/libwebpmux.3.dylib"
-      ],
-      "installName": "@rpath/libwebpmux.3.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libx264.165.dylib",
-      "bytes": 1274304,
-      "sha256": "bf3d2ee9e1ebc4e4db522c087245ef63452e1363edde0b46e0453fcb64e83cf6",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libx264.165.dylib"
-      ],
-      "installName": "@rpath/libx264.165.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libx265.215.dylib",
-      "bytes": 5494208,
-      "sha256": "ff39eab37d4fe5f605edb974ecc6385ce5fe0162dbf49cc6ab5ed963d5ee2d41",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libx265.215.dylib"
-      ],
-      "installName": "@rpath/libx265.215.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libxcb-shape.0.dylib",
-      "bytes": 71328,
-      "sha256": "1b0ceecdd25c726980baed843daff97f99f2100810a051041a43d86299ca8514",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libXau.6.dylib",
-        "@rpath/libXdmcp.6.dylib",
-        "@rpath/libxcb-shape.0.dylib",
-        "@rpath/libxcb.1.dylib"
-      ],
-      "installName": "@rpath/libxcb-shape.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libxcb-shm.0.dylib",
-      "bytes": 70432,
-      "sha256": "aeba691314efad84db9b0f8a650b7d71fdc6253382224a179b464ba3522d5c7f",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libXau.6.dylib",
-        "@rpath/libXdmcp.6.dylib",
-        "@rpath/libxcb-shm.0.dylib",
-        "@rpath/libxcb.1.dylib"
-      ],
-      "installName": "@rpath/libxcb-shm.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libxcb-xfixes.0.dylib",
-      "bytes": 81024,
-      "sha256": "130da87902364fb8d2fcfb87b66bc7187b1b691d56e1a6fb66efe67b125c86fb",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libXau.6.dylib",
-        "@rpath/libXdmcp.6.dylib",
-        "@rpath/libxcb-xfixes.0.dylib",
-        "@rpath/libxcb.1.dylib"
-      ],
-      "installName": "@rpath/libxcb-xfixes.0.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libxcb.1.dylib",
-      "bytes": 194768,
-      "sha256": "b702e0b818ae83cf89f8f3aa47ba54d7058a27455401ef40f208efffa5948e98",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libXau.6.dylib",
-        "@rpath/libXdmcp.6.dylib",
-        "@rpath/libxcb.1.dylib"
-      ],
-      "installName": "@rpath/libxcb.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libzimg.2.dylib",
-      "bytes": 404192,
-      "sha256": "3c9097068c5ba8c1eb0c9d1bfbedc81d4367f7c56c5d96bb90610f8b19e6a454",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libzimg.2.dylib"
-      ],
-      "installName": "@rpath/libzimg.2.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libzmq.5.dylib",
-      "bytes": 680256,
-      "sha256": "fc6f4062acfd8e8eebed1f4a98987c44d95ae4be0d4d936d12986a315f29f1c0",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "/usr/lib/libc++.1.dylib",
-        "@rpath/libsodium.26.dylib",
-        "@rpath/libzmq.5.dylib"
-      ],
-      "installName": "@rpath/libzmq.5.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    },
-    {
-      "path": "Aagedal Media Converter/Frameworks/libzstd.1.dylib",
-      "bytes": 670240,
-      "sha256": "6795240fdfc9f045664910eeb7284f284773ba3a57aa287d0aa708af5333352e",
-      "mode": "0644",
-      "architectures": [
-        "arm64"
-      ],
-      "linkedLibraries": [
-        "/usr/lib/libSystem.B.dylib",
-        "@rpath/libzstd.1.dylib"
-      ],
-      "installName": "@rpath/libzstd.1.dylib",
-      "license": "NOASSERTION",
-      "licenseFile": null
-    }
-  ],
+  "libraries": [],
   "licenseFiles": [
     {
       "path": "LICENSE",
@@ -2153,18 +965,28 @@
     },
     {
       "path": "Licenses/asdcplib-LICENSE.txt",
-      "bytes": 1577,
-      "sha256": "c535330754dbff1bd2665ff319a2f12a7577629c3cc4db3ef4affebc68e63620"
+      "bytes": 9518,
+      "sha256": "a217e9eaca90738f6bc29890e935945998e67f27024518b2a3a12084f5a4d683"
+    },
+    {
+      "path": "Licenses/avm-LICENSE.txt",
+      "bytes": 527561,
+      "sha256": "5cfa9300f0d60155236c9ebf1f926ac068bd3c0ea595e7566b872ffd6f54052a"
     },
     {
       "path": "Licenses/bmx-LICENSE.txt",
-      "bytes": 1555,
-      "sha256": "2df685fb22b125f467a2b3de987efdb412b15a6abd873e3d0f82cc79bb0b189b"
+      "bytes": 13923,
+      "sha256": "c87cfc5968783fd339e92bc7792b0add7eb42b4f929f45a692edeafd4d6ffade"
     },
     {
       "path": "Licenses/ffmpeg-LICENSE.txt",
-      "bytes": 17985,
-      "sha256": "4a5f3d09ceadfdffa6ac719ef05538c40c1fcf722a451fccc75d62302e4b27b7"
+      "bytes": 545307,
+      "sha256": "c1aad14a3809aae5604ed40a2d0a611a02beaf24483d4470641f4863cc8ea4e8"
+    },
+    {
+      "path": "Licenses/geonames-LICENSE.txt",
+      "bytes": 769,
+      "sha256": "d7e022b01048a1cac6bbad5ef9b3156f1afa5cbcbc6cf7556820a04fdf8a9d3f"
     },
     {
       "path": "Licenses/mpv-LICENSE.txt",
@@ -2172,115 +994,35 @@
       "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
     },
     {
+      "path": "Licenses/mpvkit-LICENSE.txt",
+      "bytes": 2624561,
+      "sha256": "1e0028fe109e6a20270815998dbdc7c04dfdb677e81f4b996b16bfe3cfe49460"
+    },
+    {
+      "path": "Licenses/rclone-LICENSE.txt",
+      "bytes": 1182659,
+      "sha256": "5cafe245a21a2bd4a3e494784f9eca91efd8d180f95ad7e4115320baf1c7a022"
+    },
+    {
+      "path": "Licenses/sparkle-LICENSE.txt",
+      "bytes": 6154,
+      "sha256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe"
+    },
+    {
+      "path": "Licenses/swiftmediametadata-LICENSE.txt",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
       "path": "Licenses/tesseract-LICENSE.txt",
-      "bytes": 11358,
-      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      "bytes": 19143,
+      "sha256": "99f26126f391f8c909c63222597c5b8bdcf592b0f8818c653966606e6cdf6b41"
     }
   ],
   "summary": {
     "toolCount": 10,
-    "libraryCount": 96,
-    "totalBytes": 224665888,
-    "entriesMissingLocalLicenseFile": [
-      "Aagedal Media Converter/Binaries/avmdec",
-      "Aagedal Media Converter/Binaries/avmenc",
-      "Aagedal Media Converter/Binaries/rclone",
-      "Aagedal Media Converter/Frameworks/libSvtAv1Enc.3.dylib",
-      "Aagedal Media Converter/Frameworks/libX11.6.dylib",
-      "Aagedal Media Converter/Frameworks/libXau.6.dylib",
-      "Aagedal Media Converter/Frameworks/libXdmcp.6.dylib",
-      "Aagedal Media Converter/Frameworks/libaom.3.dylib",
-      "Aagedal Media Converter/Frameworks/libarchive.13.dylib",
-      "Aagedal Media Converter/Frameworks/libaribb24.0.dylib",
-      "Aagedal Media Converter/Frameworks/libass.9.dylib",
-      "Aagedal Media Converter/Frameworks/libavcodec.62.dylib",
-      "Aagedal Media Converter/Frameworks/libavdevice.62.dylib",
-      "Aagedal Media Converter/Frameworks/libavfilter.11.dylib",
-      "Aagedal Media Converter/Frameworks/libavformat.62.dylib",
-      "Aagedal Media Converter/Frameworks/libavutil.60.dylib",
-      "Aagedal Media Converter/Frameworks/libb2.1.dylib",
-      "Aagedal Media Converter/Frameworks/libbluray.3.dylib",
-      "Aagedal Media Converter/Frameworks/libbrotlicommon.1.dylib",
-      "Aagedal Media Converter/Frameworks/libbrotlidec.1.dylib",
-      "Aagedal Media Converter/Frameworks/libbrotlienc.1.dylib",
-      "Aagedal Media Converter/Frameworks/libcjson.1.dylib",
-      "Aagedal Media Converter/Frameworks/libcrypto.3.dylib",
-      "Aagedal Media Converter/Frameworks/libdav1d.7.dylib",
-      "Aagedal Media Converter/Frameworks/libfontconfig.1.dylib",
-      "Aagedal Media Converter/Frameworks/libfreetype.6.dylib",
-      "Aagedal Media Converter/Frameworks/libfribidi.0.dylib",
-      "Aagedal Media Converter/Frameworks/libgif.dylib",
-      "Aagedal Media Converter/Frameworks/libglib-2.0.0.dylib",
-      "Aagedal Media Converter/Frameworks/libgmp.10.dylib",
-      "Aagedal Media Converter/Frameworks/libgnutls.30.dylib",
-      "Aagedal Media Converter/Frameworks/libgraphite2.3.dylib",
-      "Aagedal Media Converter/Frameworks/libharfbuzz.0.dylib",
-      "Aagedal Media Converter/Frameworks/libhogweed.6.dylib",
-      "Aagedal Media Converter/Frameworks/libhwy.1.dylib",
-      "Aagedal Media Converter/Frameworks/libidn2.0.dylib",
-      "Aagedal Media Converter/Frameworks/libintl.8.dylib",
-      "Aagedal Media Converter/Frameworks/libjpeg.8.dylib",
-      "Aagedal Media Converter/Frameworks/libjxl.0.11.dylib",
-      "Aagedal Media Converter/Frameworks/libjxl_cms.0.11.dylib",
-      "Aagedal Media Converter/Frameworks/libjxl_threads.0.11.dylib",
-      "Aagedal Media Converter/Frameworks/liblcms2.2.dylib",
-      "Aagedal Media Converter/Frameworks/libleptonica.6.dylib",
-      "Aagedal Media Converter/Frameworks/liblz4.1.dylib",
-      "Aagedal Media Converter/Frameworks/liblzma.5.dylib",
-      "Aagedal Media Converter/Frameworks/libmbedcrypto.16.dylib",
-      "Aagedal Media Converter/Frameworks/libmp3lame.0.dylib",
-      "Aagedal Media Converter/Frameworks/libmujs.dylib",
-      "Aagedal Media Converter/Frameworks/libnettle.8.dylib",
-      "Aagedal Media Converter/Frameworks/libogg.0.dylib",
-      "Aagedal Media Converter/Frameworks/libopencore-amrnb.0.dylib",
-      "Aagedal Media Converter/Frameworks/libopencore-amrwb.0.dylib",
-      "Aagedal Media Converter/Frameworks/libopenjp2.7.dylib",
-      "Aagedal Media Converter/Frameworks/libopus.0.dylib",
-      "Aagedal Media Converter/Frameworks/libp11-kit.0.dylib",
-      "Aagedal Media Converter/Frameworks/libpcre2-8.0.dylib",
-      "Aagedal Media Converter/Frameworks/libplacebo.351.dylib",
-      "Aagedal Media Converter/Frameworks/libpng16.16.dylib",
-      "Aagedal Media Converter/Frameworks/librav1e.0.8.dylib",
-      "Aagedal Media Converter/Frameworks/librist.4.dylib",
-      "Aagedal Media Converter/Frameworks/librubberband.3.dylib",
-      "Aagedal Media Converter/Frameworks/libsamplerate.0.dylib",
-      "Aagedal Media Converter/Frameworks/libshaderc_shared.1.dylib",
-      "Aagedal Media Converter/Frameworks/libsharpyuv.0.dylib",
-      "Aagedal Media Converter/Frameworks/libsnappy.1.dylib",
-      "Aagedal Media Converter/Frameworks/libsodium.26.dylib",
-      "Aagedal Media Converter/Frameworks/libsoxr.0.dylib",
-      "Aagedal Media Converter/Frameworks/libspeex.1.dylib",
-      "Aagedal Media Converter/Frameworks/libsrt.1.5.dylib",
-      "Aagedal Media Converter/Frameworks/libssh.4.dylib",
-      "Aagedal Media Converter/Frameworks/libssl.3.dylib",
-      "Aagedal Media Converter/Frameworks/libswresample.6.dylib",
-      "Aagedal Media Converter/Frameworks/libswscale.9.dylib",
-      "Aagedal Media Converter/Frameworks/libtasn1.6.dylib",
-      "Aagedal Media Converter/Frameworks/libtesseract.5.dylib",
-      "Aagedal Media Converter/Frameworks/libtheoradec.2.dylib",
-      "Aagedal Media Converter/Frameworks/libtheoraenc.2.dylib",
-      "Aagedal Media Converter/Frameworks/libtiff.6.dylib",
-      "Aagedal Media Converter/Frameworks/libuchardet.0.dylib",
-      "Aagedal Media Converter/Frameworks/libudfread.3.dylib",
-      "Aagedal Media Converter/Frameworks/libunibreak.6.dylib",
-      "Aagedal Media Converter/Frameworks/libunistring.5.dylib",
-      "Aagedal Media Converter/Frameworks/libvidstab.1.2.dylib",
-      "Aagedal Media Converter/Frameworks/libvmaf.3.dylib",
-      "Aagedal Media Converter/Frameworks/libvorbis.0.dylib",
-      "Aagedal Media Converter/Frameworks/libvorbisenc.2.dylib",
-      "Aagedal Media Converter/Frameworks/libvpx.11.dylib",
-      "Aagedal Media Converter/Frameworks/libvulkan.1.dylib",
-      "Aagedal Media Converter/Frameworks/libwebp.7.dylib",
-      "Aagedal Media Converter/Frameworks/libwebpmux.3.dylib",
-      "Aagedal Media Converter/Frameworks/libx264.165.dylib",
-      "Aagedal Media Converter/Frameworks/libx265.215.dylib",
-      "Aagedal Media Converter/Frameworks/libxcb-shape.0.dylib",
-      "Aagedal Media Converter/Frameworks/libxcb-shm.0.dylib",
-      "Aagedal Media Converter/Frameworks/libxcb-xfixes.0.dylib",
-      "Aagedal Media Converter/Frameworks/libxcb.1.dylib",
-      "Aagedal Media Converter/Frameworks/libzimg.2.dylib",
-      "Aagedal Media Converter/Frameworks/libzmq.5.dylib",
-      "Aagedal Media Converter/Frameworks/libzstd.1.dylib"
-    ]
+    "libraryCount": 0,
+    "totalBytes": 137003824,
+    "entriesMissingLocalLicenseFile": []
   }
 }

@@ -14,41 +14,47 @@ python3 scripts/bundled-dependency-manifest.py --check --require-complete-licens
 
 `release.sh` runs this gate before building, signing, notarizing, or uploading.
 It rejects missing notice references and `NOASSERTION` licenses, even when the
-checked-in manifest is otherwise current. Ordinary inventory checks remain usable
+checked-in manifest is otherwise current. It also rejects explicit
+`pendingAttribution` work, and inconsistencies between an executable's reported
+license, recorded license, and notice header. Ordinary inventory checks remain usable
 while attribution work is unfinished. This gate verifies recorded attribution;
 it cannot establish that an assignment or a notice is legally sufficient.
 
-## Remaining attribution and packaging work
+## Current attribution and packaging status
 
-As of 2026-09-05 the inventory contains 10 tools and 96 dylibs. Seven tools refer
-to existing notices. `avmdec`, `avmenc`, and `rclone` have no local notice, and all
-96 dylibs retain `NOASSERTION` pending evidence for their exact bundled builds.
-The publication gate therefore currently fails for 99 entries. The exact paths
-are in `summary.entriesMissingLocalLicenseFile` and in the gate's diagnostics.
+The 2026-09-12 completion pass covers all 10 bundled tools and the three pinned
+Swift packages. There are no source-tree dylibs. Twelve offline notices are
+included in the app, covering AVM, rclone, FFmpeg, MPVKit and their reviewed
+transitive components as well as OCR, BMX, asdcplib, Sparkle and
+SwiftMediaMetadata/GeoNames. The strict attribution gate passes.
 
-The repository also includes an mpv notice, which is inventoried even though no
-entry currently references it. The presence of a project's generic license text
-alone does not establish the effective license of a particular binary and its
-compiled dependencies. Do not assign dylib licenses solely from their names.
+`PackageAttributions.json` binds notice review to exact `Package.resolved`
+revisions. `AttributionSources.json` identifies 89 retained source archives;
+the strict gate checks required components, byte sizes and SHA-256 hashes.
+The release script creates and uploads their source companion with the app.
+See [source distribution instructions](attribution-sources.md) and the
+[completion record](4.4-attribution-completion.md) for binary replacements,
+validation and explicit upstream provenance limits.
 
-Before publishing:
+When changing dependencies, review actual build options and transitive notices,
+update both metadata and source material, regenerate the inventory, and rerun
+the strict gate and exported-bundle verification. Final bundle verification
+checks notice bytes; it does not substitute for source and license review.
 
-1. Establish provenance and versions for the actual bundled builds, including
-   enabled build options and statically linked components. Preserve the evidence
-   alongside the attribution when adding metadata.
-2. Add the corresponding full notices and any required accompanying material,
-   and connect each retained binary to its reviewed attribution. Account for
-   transitive dependencies, downloaded components, and package frameworks beyond
-   this manifest's Binaries/Frameworks scope separately.
-3. Keep new notices included in app resources and the About > Licenses viewer.
-   The six current notices are packaged and readable offline. Exported-bundle,
-   final-ZIP, and Release CI validation now checks their byte sizes and SHA-256
-   against the manifest using `verify-release-bundle.py --manifest BundledDependencies.json`.
-   This checks packaging, not completeness of attribution.
-4. Complete reachability analysis before removing unused binaries, regenerate the
-   inventory, and rerun the strict gate plus exported-bundle validation.
+The sections below preserve the earlier audit history; their outstanding counts
+are superseded by the completion record.
 
-No binary or license text was replaced during the inventory/gate change.
+## Additional provenance findings — 2026-09-11
+
+The [4.4 provenance review](4.4-dependency-provenance-review.md) recovers exact
+rclone VCS identity and module records, an AVM revision lead, historical dylib
+copy scripts, and pinned package evidence. The 99 missing attributions remain.
+The continuation preserved local FFmpeg/AVM build evidence and corrected FFmpeg's
+manifest and packaged notice to GPL v3-or-later, matching the executable's report.
+FFmpeg remains explicitly blocked by `pendingAttribution` for corresponding sources
+and static dependency notices. AVM's pinned local source also corrected its
+top-level license from BSD-2-Clause to BSD-3-Clause-Clear; its missing notice remains
+unresolved because the retained link records show additional static dependencies.
 
 ## Size and static dependency baseline
 

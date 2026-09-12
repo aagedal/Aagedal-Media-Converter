@@ -11,13 +11,30 @@ import SwiftUI
 @MainActor
 @Observable
 class DownloadManager {
-    static let shared = DownloadManager()
+    static let shared: DownloadManager = {
+#if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if environment["AMC_UI_TEST_SESSION"] == "1",
+           environment["AMC_UI_TEST_DAMAGED_SCHEDULES"] == "1",
+           let defaults = UserDefaults(suiteName: "com.aagedal.MediaConverter.UITestSchedules") {
+            defaults.removePersistentDomain(forName: "com.aagedal.MediaConverter.UITestSchedules")
+            defaults.set(Data("Damaged UI test schedules".utf8), forKey: ScheduledDownloadStore.key)
+            return DownloadManager(defaults: defaults)
+        }
+#endif
+        return DownloadManager()
+    }()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "DownloadManager")
-    private let ytdlpService = YTDLPService()
+    private let ytdlpService: YTDLPService
+    private let ytdlpAvailability: Bool?
+    private let scheduleStore: ScheduledDownloadStore
+
+    /// Keep recovery visible until the user explicitly replaces unreadable saved schedules.
+    private(set) var hasScheduledDownloadStorageError = false
 
     /// Active download tasks keyed by VideoItem ID
-    private var downloadTasks: [UUID: Task<Void, Never>] = [:]
+    private var downloadTasks: [UUID: (control: YTDLPDownloadControl, task: Task<Void, Never>)] = [:]
 
     /// Per-item subprocess cancellation, kept separate so concurrent downloads cannot
     /// stop whichever yt-dlp process happened to register most recently.
@@ -25,6 +42,9 @@ class DownloadManager {
 
     /// Live recording stat update tasks keyed by VideoItem ID
     private var liveRecordingStatTasks: [UUID: Task<Void, Never>] = [:]
+    private let thumbnailTasks = DownloadAuxiliaryTaskStore()
+    private let detailsTasks = DownloadAuxiliaryTaskStore()
+    private let detailsLoader: @Sendable (URL) async -> VideoFileUtils.VideoItemDetails
 
     /// Queue of video items (bound from ContentView)
     var videoItems: Binding<[VideoItem]>?
@@ -35,12 +55,43 @@ class DownloadManager {
     /// Callback to trigger encoding for a specific item (set by ContentView)
     var onAutoEncode: ((UUID) -> Void)?
 
-    private init() {}
+    init(defaults: UserDefaults = .standard, ytdlpService: YTDLPService = YTDLPService(), ytdlpAvailability: Bool? = nil, detailsLoader: @escaping @Sendable (URL) async -> VideoFileUtils.VideoItemDetails = {
+        await VideoFileUtils.loadDetails(for: $0)
+    }) {
+        self.ytdlpService = ytdlpService
+        self.ytdlpAvailability = ytdlpAvailability
+        self.detailsLoader = detailsLoader
+        self.scheduleStore = ScheduledDownloadStore(defaults: defaults)
+    }
+
+    /// Own post-download probes separately: the subprocess has already completed,
+    /// but cancellation or a retry must still invalidate metadata and auto-encoding.
+    @discardableResult
+    func loadDownloadedFileDetails(itemID: UUID, fileURL: URL, autoEncode: Bool) -> Task<Void, Never> {
+        let loader = detailsLoader
+        return detailsTasks.start(itemID: itemID, timeout: .seconds(60)) {
+            await loader(fileURL)
+        } completion: { [weak self] result in
+            guard let self, self.findItem(itemID)?.url == fileURL else { return }
+            switch result {
+            case .success(let details):
+                self.updateItem(itemID) { item in
+                    item.apply(details: details)
+                    item.detailsLoaded = true
+                }
+                if autoEncode {
+                    self.onAutoEncode?(itemID)
+                }
+            case .failure(let error):
+                self.logger.warning("Downloaded file details unavailable: \(error.localizedDescription)")
+            }
+        }
+    }
 
     // MARK: - Live Recording Stats
 
     /// Starts periodic updates of file size and duration for live stream recording
-    private func startLiveRecordingStatUpdates(itemID: UUID, outputFolder: URL) {
+    private func startLiveRecordingStatUpdates(itemID: UUID, outputFolder: URL, control: YTDLPDownloadControl) {
         // Cancel any existing stat task for this item
         liveRecordingStatTasks[itemID]?.cancel()
 
@@ -59,11 +110,8 @@ class DownloadManager {
             while !Task.isCancelled {
                 updateCount += 1
 
-                // Get the item's name to use as a hint for finding the right partial file
-                let nameHint = self.findItem(itemID)?.name
-
-                // Find the partial file being written (using name hint to find the right one)
-                if let partialFile = findPartialFile(in: outputFolder, nameHint: nameHint) {
+                // Read only the destination reported by this download.
+                if let partialFile = control.partialFile(in: outputFolder) {
                     // Update file size
                     if let attrs = try? FileManager.default.attributesOfItem(atPath: partialFile.path),
                        let fileSize = attrs[.size] as? Int64 {
@@ -78,14 +126,13 @@ class DownloadManager {
 
                     // Get duration from the partial file
                     let duration = await getDurationUsingFFprobe(for: partialFile)
+                    guard !Task.isCancelled else { break }
                     if let duration = duration {
                         if updateCount % 10 == 1 {
                             logger.info("[LiveStats] Update #\(updateCount): duration = \(String(format: "%.1f", duration))s")
                         }
-                        await MainActor.run {
-                            self.updateItem(itemID) { item in
-                                item.liveRecordingDuration = duration
-                            }
+                        self.updateItem(itemID) { item in
+                            item.liveRecordingDuration = duration
                         }
                     }
                 } else if updateCount == 1 {
@@ -109,45 +156,39 @@ class DownloadManager {
 
     /// Fetches thumbnail from yt-dlp metadata in parallel with download
     private func fetchThumbnailInBackground(itemID: UUID, urlString: String) {
-        Task.detached { [weak self] in
-            guard let self = self else { return }
-
-            do {
-                // Fetch metadata to get thumbnail URL
-                let metadata = try await self.ytdlpService.fetchMetadata(url: urlString)
-
-                // Update title if we got one
-                if !metadata.title.isEmpty {
-                    await MainActor.run {
-                        self.updateItem(itemID) { item in
-                            if item.name == "Fetching info..." || item.name.isEmpty {
-                                item.name = metadata.title
-                            }
-                        }
-                    }
-                }
-
-                // Download thumbnail if URL is available
-                if let thumbnailURL = metadata.thumbnailURL {
+        let service = ytdlpService
+        thumbnailTasks.start(itemID: itemID, timeout: .seconds(30)) {
+            let metadata = try await service.fetchMetadata(url: urlString)
+            try Task.checkCancellation()
+            var thumbnailData: Data?
+            if let thumbnailURL = metadata.thumbnailURL {
+                do {
                     let (data, response) = try await URLSession.shared.data(from: thumbnailURL)
-
-                    // Verify it's an image
-                    if let httpResponse = response as? HTTPURLResponse,
-                       httpResponse.statusCode == 200,
-                       !data.isEmpty {
-                        await MainActor.run {
-                            self.updateItem(itemID) { item in
-                                item.thumbnailData = data
-                            }
-                            self.logger.info("Fetched thumbnail for download: \(metadata.title)")
-                        }
+                    if let response = response as? HTTPURLResponse,
+                       response.statusCode == 200, !data.isEmpty {
+                        thumbnailData = data
+                    }
+                } catch {
+                    try Task.checkCancellation()
+                    // A failed optional image request still leaves a useful title.
+                }
+            }
+            return DownloadThumbnailResult(title: metadata.title, data: thumbnailData)
+        } completion: { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let thumbnail):
+                self.updateItem(itemID) { item in
+                    if !thumbnail.title.isEmpty,
+                       item.name == "Fetching info..." || item.name.isEmpty {
+                        item.name = thumbnail.title
+                    }
+                    if let data = thumbnail.data {
+                        item.thumbnailData = data
                     }
                 }
-            } catch {
-                // Silently fail - thumbnail is not critical
-                await MainActor.run {
-                    self.logger.info("Could not fetch thumbnail: \(error.localizedDescription)")
-                }
+            case .failure(let error):
+                self.logger.info("Could not fetch thumbnail: \(error.localizedDescription)")
             }
         }
     }
@@ -248,7 +289,14 @@ class DownloadManager {
     /// Re-adds previously scheduled downloads to the queue on app launch.
     /// Must be called after `videoItems`/`outputFolder` have been wired up.
     func restoreScheduledDownloads(items: Binding<[VideoItem]>, outputFolder: URL) {
-        let persisted = Self.loadPersistedScheduledDownloads()
+        let persisted: [PersistedScheduledDownload]
+        do {
+            persisted = try scheduleStore.load()
+        } catch {
+            hasScheduledDownloadStorageError = true
+            logger.error("Cannot restore scheduled downloads; saved data retained: \(error.localizedDescription)")
+            return
+        }
         guard !persisted.isEmpty else { return }
 
         self.videoItems = items
@@ -294,7 +342,12 @@ class DownloadManager {
         }
 
         // Rewrite persistence so the stored itemIDs match the freshly-created VideoItems.
-        Self.savePersistedScheduledDownloads(rewritten)
+        do {
+            try scheduleStore.save(rewritten)
+        } catch {
+            hasScheduledDownloadStorageError = true
+            logger.error("Cannot save restored scheduled downloads: \(error.localizedDescription)")
+        }
         logger.info("Restored \(rewritten.count) scheduled download(s) from persistence")
     }
 
@@ -333,24 +386,19 @@ class DownloadManager {
         logger.info("[TIMING] Item setup completed in \(String(format: "%.3f", setupElapsed))s, starting download task...")
 
         // Start download task
-        let control = YTDLPDownloadControl()
-        downloadControls[itemID] = control
-        let task = Task {
-            await self.performDownload(
-                itemID: itemID,
-                urlString: sourceURL,
-                outputFolder: folder,
-                liveFromStart: item.downloadLiveFromStart,
-                audioOnly: item.downloadAudioOnly,
-                control: control
-            )
-        }
-        downloadTasks[itemID] = task
+        launchDownloadTask(
+            itemID: itemID,
+            urlString: sourceURL,
+            outputFolder: folder,
+            liveFromStart: item.downloadLiveFromStart,
+            audioOnly: item.downloadAudioOnly
+        )
     }
 
     /// Checks if yt-dlp is available and configured
     func isYTDLPConfigured() async -> Bool {
-        await YTDLPUpdateService.shared.isYTDLPAvailable()
+        if let ytdlpAvailability { return ytdlpAvailability }
+        return await YTDLPUpdateService.shared.isYTDLPAvailable()
     }
 
     /// Starts a download for a URL and adds it to the video queue
@@ -408,19 +456,13 @@ class DownloadManager {
         items.wrappedValue.append(item)
 
         // Start download task (using unowned self since DownloadManager is a singleton)
-        let control = YTDLPDownloadControl()
-        downloadControls[itemID] = control
-        let task = Task {
-            await self.performDownload(
-                itemID: itemID,
-                urlString: urlString,
-                outputFolder: outputFolder,
-                liveFromStart: liveFromStart,
-                audioOnly: audioOnly,
-                control: control
-            )
-        }
-        downloadTasks[itemID] = task
+        launchDownloadTask(
+            itemID: itemID,
+            urlString: urlString,
+            outputFolder: outputFolder,
+            liveFromStart: liveFromStart,
+            audioOnly: audioOnly
+        )
 
         return itemID
     }
@@ -497,21 +539,27 @@ class DownloadManager {
         // still gets its own cancellation control so cancelling it cannot affect a separate
         // download that may already be running outside this playlist.
         for itemID in itemIDs {
+            guard !Task.isCancelled else {
+                cancelDownload(itemID: itemID)
+                continue
+            }
             guard let item = self.findItem(itemID), let sourceURL = item.sourceURL else { continue }
 
             self.updateItem(itemID) { $0.isDownloading = true }
 
             // performDownload kicks off its own thumbnail fetch — don't double-probe.
-            let control = YTDLPDownloadControl()
-            downloadControls[itemID] = control
-            await self.performDownload(
+            let task = launchDownloadTask(
                 itemID: itemID,
                 urlString: sourceURL,
                 outputFolder: outputFolder,
                 liveFromStart: false,
-                audioOnly: item.downloadAudioOnly,
-                control: control
+                audioOnly: item.downloadAudioOnly
             )
+            await withTaskCancellationHandler {
+                await task.value
+            } onCancel: {
+                task.cancel()
+            }
         }
 
         return itemIDs
@@ -530,6 +578,52 @@ class DownloadManager {
         return String(format: "%d:%02d", m, s)
     }
 
+    /// Serialize attempts for one queue row, including retries after explicit cancel.
+    @discardableResult
+    private func launchDownloadTask(
+        itemID: UUID,
+        urlString: String,
+        outputFolder: URL,
+        liveFromStart: Bool,
+        audioOnly: Bool,
+        forceOverwrite: Bool = false
+    ) -> Task<Void, Never> {
+        let previous = downloadTasks[itemID]?.task
+        previous?.cancel()
+        _ = downloadControls[itemID]?.cancel()
+        let control = YTDLPDownloadControl()
+        downloadControls[itemID] = control
+        let task = Task {
+            defer {
+                if self.downloadTasks[itemID]?.control === control {
+                    self.downloadTasks.removeValue(forKey: itemID)
+                }
+                if self.downloadControls[itemID] === control {
+                    self.downloadControls.removeValue(forKey: itemID)
+                }
+            }
+            await previous?.value
+            guard self.downloadControls[itemID] === control else { return }
+            guard !Task.isCancelled else {
+                self.cancelDownload(itemID: itemID)
+                return
+            }
+            if forceOverwrite {
+                await self.performForceDownload(
+                    itemID: itemID, urlString: urlString, outputFolder: outputFolder,
+                    liveFromStart: liveFromStart, audioOnly: audioOnly, control: control
+                )
+            } else {
+                await self.performDownload(
+                    itemID: itemID, urlString: urlString, outputFolder: outputFolder,
+                    liveFromStart: liveFromStart, audioOnly: audioOnly, control: control
+                )
+            }
+        }
+        downloadTasks[itemID] = (control, task)
+        return task
+    }
+
     /// Performs the actual download
     private func performDownload(
         itemID: UUID,
@@ -541,12 +635,6 @@ class DownloadManager {
     ) async {
         let downloadStartTime = Date()
         logger.info("[TIMING] performDownload started at \(downloadStartTime)")
-        defer {
-            if downloadControls[itemID] === control {
-                downloadTasks.removeValue(forKey: itemID)
-                downloadControls.removeValue(forKey: itemID)
-            }
-        }
 
         // Hold a security-scoped resource on the output folder for the duration of
         // the subprocess. Required when the folder was restored from a bookmark
@@ -565,12 +653,6 @@ class DownloadManager {
         do {
             let actualDownloadStartTime = Date()
             logger.info("[TIMING] Starting download immediately for: \(urlString)")
-
-            updateItem(itemID) { item in
-                if liveFromStart {
-                    item.isLiveStreamRecording = true
-                }
-            }
 
             let result = try await ytdlpService.download(
                 url: urlString,
@@ -598,7 +680,7 @@ class DownloadManager {
                         // Start stat updates when we detect live stream recording
                         if isLiveStream && !wasLiveStreamRecording {
                             self.logger.info("[LiveStream] Detected live stream, starting stat updates")
-                            self.startLiveRecordingStatUpdates(itemID: itemID, outputFolder: outputFolder)
+                            self.startLiveRecordingStatUpdates(itemID: itemID, outputFolder: outputFolder, control: control)
                         }
                     }
                 },
@@ -671,22 +753,9 @@ class DownloadManager {
             // Trigger details and metadata loading for the downloaded file
             if let item = findItem(itemID) {
                 let shouldAutoEncode = item.autoEncodeAfterDownload
-                Task.detached {
-                    let details = await VideoFileUtils.loadDetails(for: item.url)
-                    await MainActor.run {
-                        guard self.findItem(itemID)?.url == result.outputURL else { return }
-                        self.updateItem(itemID) { item in
-                            item.apply(details: details)
-                            item.detailsLoaded = true
-                        }
-
-                        // Trigger auto-encode if enabled
-                        if shouldAutoEncode {
-                            self.logger.info("Auto-encoding enabled for downloaded item: \(itemID)")
-                            self.onAutoEncode?(itemID)
-                        }
-                    }
-                }
+                loadDownloadedFileDetails(
+                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode
+                )
             }
 
         } catch let error as YTDLPError {
@@ -709,11 +778,9 @@ class DownloadManager {
             case .liveRecordingStopped:
                 logger.info("Download stopped for item: \(itemID), searching for partial file...")
 
-                // Get the item's name to help find the right partial file
-                let nameHint = findItem(itemID)?.name
-
-                // Try to find the partial file in the output folder
-                if let partialFile = findPartialFile(in: outputFolder, nameHint: nameHint) {
+                // Recover only a destination emitted by this download; another
+                // recording in the same folder must never be adopted or renamed.
+                if let partialFile = control.partialFile(in: outputFolder) {
                     logger.info("Found partial file: \(partialFile.path)")
 
                     // Rename the file to remove .part extension if present
@@ -763,16 +830,7 @@ class DownloadManager {
                     )
 
                     // Load details and metadata for the file
-                    Task.detached { [finalFile] in
-                        let details = await VideoFileUtils.loadDetails(for: finalFile)
-                        await MainActor.run {
-                            guard self.findItem(itemID)?.url == finalFile else { return }
-                            self.updateItem(itemID) { item in
-                                item.apply(details: details)
-                                item.detailsLoaded = true
-                            }
-                        }
-                    }
+                    loadDownloadedFileDetails(itemID: itemID, fileURL: finalFile, autoEncode: false)
                 } else {
                     logger.warning("Could not find partial file for stopped download")
                     updateItem(itemID) { item in
@@ -833,15 +891,17 @@ class DownloadManager {
     func cancelDownload(itemID: UUID) {
         logger.info("Cancel download requested for item: \(itemID)")
 
+        thumbnailTasks.cancel(itemID: itemID)
+        detailsTasks.cancel(itemID: itemID)
+
         // Stop live recording stat updates immediately
         stopLiveRecordingStatUpdates(itemID: itemID)
 
         _ = downloadControls[itemID]?.cancel()
 
-        if let task = downloadTasks[itemID] {
-            task.cancel()
-            downloadTasks.removeValue(forKey: itemID)
-        }
+        // Retain the cancelled task until it drains. A later retry must wait for
+        // its subprocess to stop touching the destination before starting again.
+        downloadTasks[itemID]?.task.cancel()
         downloadControls.removeValue(forKey: itemID)
 
         // Update item state
@@ -883,6 +943,8 @@ class DownloadManager {
             return
         }
 
+        cancelDownload(itemID: itemID)
+
         // Reset item state
         updateItem(itemID) { item in
             item.isDownloading = true
@@ -895,19 +957,13 @@ class DownloadManager {
         }
 
         // Start new download
-        let control = YTDLPDownloadControl()
-        downloadControls[itemID] = control
-        let task = Task {
-            await self.performDownload(
-                itemID: itemID,
-                urlString: sourceURL,
-                outputFolder: outputFolder,
-                liveFromStart: item.downloadLiveFromStart,
-                audioOnly: item.downloadAudioOnly,
-                control: control
-            )
-        }
-        downloadTasks[itemID] = task
+        launchDownloadTask(
+            itemID: itemID,
+            urlString: sourceURL,
+            outputFolder: outputFolder,
+            liveFromStart: item.downloadLiveFromStart,
+            audioOnly: item.downloadAudioOnly
+        )
     }
 
     /// Force re-downloads, overwriting existing file
@@ -917,6 +973,8 @@ class DownloadManager {
               let outputFolder = outputFolder else {
             return
         }
+
+        cancelDownload(itemID: itemID)
 
         // Reset item state
         updateItem(itemID) { item in
@@ -930,19 +988,14 @@ class DownloadManager {
         }
 
         // Start download with force overwrite
-        let control = YTDLPDownloadControl()
-        downloadControls[itemID] = control
-        let task = Task {
-            await self.performForceDownload(
-                itemID: itemID,
-                urlString: sourceURL,
-                outputFolder: outputFolder,
-                liveFromStart: item.downloadLiveFromStart,
-                audioOnly: item.downloadAudioOnly,
-                control: control
-            )
-        }
-        downloadTasks[itemID] = task
+        launchDownloadTask(
+            itemID: itemID,
+            urlString: sourceURL,
+            outputFolder: outputFolder,
+            liveFromStart: item.downloadLiveFromStart,
+            audioOnly: item.downloadAudioOnly,
+            forceOverwrite: true
+        )
     }
 
     /// Performs a forced download (overwrites existing files)
@@ -954,12 +1007,6 @@ class DownloadManager {
         audioOnly: Bool,
         control: YTDLPDownloadControl
     ) async {
-        defer {
-            if downloadControls[itemID] === control {
-                downloadTasks.removeValue(forKey: itemID)
-                downloadControls.removeValue(forKey: itemID)
-            }
-        }
         let folderAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: outputFolder)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(folderAccess) }
 
@@ -1050,22 +1097,9 @@ class DownloadManager {
             // Trigger details and metadata loading for the downloaded file
             if let item = findItem(itemID) {
                 let shouldAutoEncode = item.autoEncodeAfterDownload
-                Task.detached {
-                    let details = await VideoFileUtils.loadDetails(for: item.url)
-                    await MainActor.run {
-                        guard self.findItem(itemID)?.url == result.outputURL else { return }
-                        self.updateItem(itemID) { item in
-                            item.apply(details: details)
-                            item.detailsLoaded = true
-                        }
-
-                        // Trigger auto-encode if enabled
-                        if shouldAutoEncode {
-                            self.logger.info("Auto-encoding enabled for re-downloaded item: \(itemID)")
-                            self.onAutoEncode?(itemID)
-                        }
-                    }
-                }
+                loadDownloadedFileDetails(
+                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode
+                )
             }
 
         } catch YTDLPError.cancelled {
@@ -1102,67 +1136,6 @@ class DownloadManager {
 
         // Remove from queue
         videoItems?.wrappedValue.removeAll { $0.id == itemID }
-    }
-
-    /// Finds the most recently modified video file in the output folder (including .part files)
-    /// - Parameters:
-    ///   - folder: The folder to search in
-    ///   - nameHint: Optional filename hint to prioritize matching files (e.g., item name without extension)
-    private func findPartialFile(in folder: URL, nameHint: String? = nil) -> URL? {
-        let fileManager = FileManager.default
-        let videoExtensions = ["mp4", "mkv", "webm", "mov", "avi", "flv", "ts", "m4v", "part"]
-
-        guard let contents = try? fileManager.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        // Find video files modified recently. 5 minutes covers downloads that stalled
-        // briefly (e.g. flaky upstream, sleep/wake) before the user hit stop — a 60s
-        // window missed those cases and reported "partial file not found".
-        let recentCutoff = Date().addingTimeInterval(-300)
-
-        let recentVideoFiles = contents.compactMap { url -> (URL, Date)? in
-            // Check if it's a video file or .part file
-            let ext = url.pathExtension.lowercased()
-            guard videoExtensions.contains(ext) || url.lastPathComponent.contains(".part") else {
-                return nil
-            }
-
-            // Get modification date
-            guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
-                  values.isRegularFile == true,
-                  let modDate = values.contentModificationDate,
-                  modDate > recentCutoff else {
-                return nil
-            }
-
-            return (url, modDate)
-        }
-
-        // If we have a name hint, try to find a file matching it first
-        if let hint = nameHint, !hint.isEmpty {
-            // Look for files containing the hint (handles both with and without .part extension)
-            let matchingFiles = recentVideoFiles.filter { url, _ in
-                url.lastPathComponent.contains(hint)
-            }
-            if let match = matchingFiles.sorted(by: { $0.1 > $1.1 }).first {
-                logger.info("Found matching partial file: \(match.0.lastPathComponent)")
-                return match.0
-            }
-        }
-
-        // Fall back to most recently modified file
-        let sorted = recentVideoFiles.sorted { $0.1 > $1.1 }
-        if let mostRecent = sorted.first {
-            logger.info("Found partial file: \(mostRecent.0.lastPathComponent), modified: \(mostRecent.1)")
-            return mostRecent.0
-        }
-
-        return nil
     }
 
     /// Checks if a URL is likely supported by yt-dlp
@@ -1274,71 +1247,43 @@ class DownloadManager {
 
     // MARK: - Scheduled Download Persistence
 
-    private static let persistedScheduledDownloadsKey = "persistedScheduledDownloads.v1"
-
-    private struct PersistedScheduledDownload: Codable {
-        var itemID: UUID
-        let url: String
-        let scheduledTime: Date
-        let liveFromStart: Bool
-        let autoEncode: Bool
-        let uploadEnabled: Bool
-        let audioOnly: Bool
-
-        init(itemID: UUID, url: String, scheduledTime: Date, liveFromStart: Bool, autoEncode: Bool, uploadEnabled: Bool, audioOnly: Bool) {
-            self.itemID = itemID
-            self.url = url
-            self.scheduledTime = scheduledTime
-            self.liveFromStart = liveFromStart
-            self.autoEncode = autoEncode
-            self.uploadEnabled = uploadEnabled
-            self.audioOnly = audioOnly
+    /// Called only after explicit confirmation: replaces unreadable saved data with
+    /// the schedules still present in this session's queue.
+    func resetScheduledDownloadStorage() {
+        let entries = (videoItems?.wrappedValue ?? []).compactMap { item -> PersistedScheduledDownload? in
+            guard let time = item.scheduledDownloadTime, let url = item.sourceURL else { return nil }
+            return PersistedScheduledDownload(
+                itemID: item.id, url: url, scheduledTime: time,
+                liveFromStart: item.downloadLiveFromStart,
+                autoEncode: item.autoEncodeAfterDownload,
+                uploadEnabled: item.uploadEnabled, audioOnly: item.downloadAudioOnly
+            )
         }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            itemID = try container.decode(UUID.self, forKey: .itemID)
-            url = try container.decode(String.self, forKey: .url)
-            scheduledTime = try container.decode(Date.self, forKey: .scheduledTime)
-            liveFromStart = try container.decode(Bool.self, forKey: .liveFromStart)
-            autoEncode = try container.decode(Bool.self, forKey: .autoEncode)
-            uploadEnabled = try container.decode(Bool.self, forKey: .uploadEnabled)
-            // Back-compat: schedules persisted before audio-only existed have no key.
-            audioOnly = try container.decodeIfPresent(Bool.self, forKey: .audioOnly) ?? false
-        }
-    }
-
-    private static func loadPersistedScheduledDownloads() -> [PersistedScheduledDownload] {
-        guard let data = UserDefaults.standard.data(forKey: persistedScheduledDownloadsKey),
-              let entries = try? JSONDecoder().decode([PersistedScheduledDownload].self, from: data) else {
-            return []
-        }
-        return entries
-    }
-
-    private static func savePersistedScheduledDownloads(_ entries: [PersistedScheduledDownload]) {
-        if entries.isEmpty {
-            UserDefaults.standard.removeObject(forKey: persistedScheduledDownloadsKey)
-            return
-        }
-        if let data = try? JSONEncoder().encode(entries) {
-            UserDefaults.standard.set(data, forKey: persistedScheduledDownloadsKey)
+        do {
+            try scheduleStore.reset(with: entries)
+            hasScheduledDownloadStorageError = false
+        } catch {
+            hasScheduledDownloadStorageError = true
+            logger.error("Cannot reset scheduled downloads; saved data retained: \(error.localizedDescription)")
         }
     }
 
     private func appendPersistedSchedule(_ entry: PersistedScheduledDownload) {
-        var list = Self.loadPersistedScheduledDownloads()
-        list.removeAll { $0.itemID == entry.itemID }
-        list.append(entry)
-        Self.savePersistedScheduledDownloads(list)
+        do {
+            try scheduleStore.append(entry)
+        } catch {
+            hasScheduledDownloadStorageError = true
+            logger.error("Cannot persist scheduled download; saved data retained: \(error.localizedDescription)")
+        }
     }
 
     private func removePersistedSchedule(itemID: UUID) {
-        var list = Self.loadPersistedScheduledDownloads()
-        let before = list.count
-        list.removeAll { $0.itemID == itemID }
-        guard list.count != before else { return }
-        Self.savePersistedScheduledDownloads(list)
+        do {
+            try scheduleStore.remove(itemID: itemID)
+        } catch {
+            hasScheduledDownloadStorageError = true
+            logger.error("Cannot remove persisted schedule; saved data retained: \(error.localizedDescription)")
+        }
     }
 
     private static func formatDuration(_ seconds: Double) -> String {
@@ -1352,5 +1297,132 @@ class DownloadManager {
         } else {
             return String(format: "%02d:%02d", minutes, secs)
         }
+    }
+}
+
+private struct DownloadThumbnailResult: Sendable {
+    let title: String
+    let data: Data?
+}
+
+/// Owns optional per-download work independently of the transfer. A replaced or
+/// cancelled operation cannot publish results or remove its replacement's task.
+@MainActor
+final class DownloadAuxiliaryTaskStore {
+    private var tasks: [UUID: (generation: UUID, task: Task<Void, Never>)] = [:]
+
+    @discardableResult
+    func start<Output: Sendable>(
+        itemID: UUID,
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> Output,
+        completion: @escaping @MainActor (Result<Output, Error>) -> Void
+    ) -> Task<Void, Never> {
+        cancel(itemID: itemID)
+        let generation = UUID()
+        let task = Task { [weak self] in
+            let result: Result<Output, Error>
+            do {
+                result = .success(try await NonJoiningTaskDeadline.run(
+                    timeout: timeout, operation: operation
+                ))
+            } catch {
+                result = .failure(error)
+            }
+            guard let self, !Task.isCancelled,
+                  self.tasks[itemID]?.generation == generation else { return }
+            self.tasks.removeValue(forKey: itemID)
+            completion(result)
+        }
+        tasks[itemID] = (generation, task)
+        return task
+    }
+
+    func cancel(itemID: UUID) {
+        tasks.removeValue(forKey: itemID)?.task.cancel()
+    }
+}
+
+struct PersistedScheduledDownload: Codable, Equatable {
+    var itemID: UUID
+    let url: String
+    let scheduledTime: Date
+    let liveFromStart: Bool
+    let autoEncode: Bool
+    let uploadEnabled: Bool
+    let audioOnly: Bool
+
+    init(itemID: UUID, url: String, scheduledTime: Date, liveFromStart: Bool, autoEncode: Bool, uploadEnabled: Bool, audioOnly: Bool) {
+        self.itemID = itemID
+        self.url = url
+        self.scheduledTime = scheduledTime
+        self.liveFromStart = liveFromStart
+        self.autoEncode = autoEncode
+        self.uploadEnabled = uploadEnabled
+        self.audioOnly = audioOnly
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        itemID = try container.decode(UUID.self, forKey: .itemID)
+        url = try container.decode(String.self, forKey: .url)
+        scheduledTime = try container.decode(Date.self, forKey: .scheduledTime)
+        liveFromStart = try container.decode(Bool.self, forKey: .liveFromStart)
+        autoEncode = try container.decode(Bool.self, forKey: .autoEncode)
+        uploadEnabled = try container.decode(Bool.self, forKey: .uploadEnabled)
+        // Back-compat: schedules persisted before audio-only existed have no key.
+        audioOnly = container.contains(.audioOnly)
+            ? try container.decode(Bool.self, forKey: .audioOnly)
+            : false
+    }
+}
+
+/// A failed decode must never turn into an empty queue that overwrites recoverable schedules.
+struct ScheduledDownloadStore {
+    static let key = "persistedScheduledDownloads.v1"
+    let defaults: UserDefaults
+
+    func load() throws -> [PersistedScheduledDownload] {
+        guard let stored = defaults.object(forKey: Self.key) else { return [] }
+        guard let data = stored as? Data else {
+            throw CocoaError(.coderReadCorrupt)
+        }
+        return try JSONDecoder().decode([PersistedScheduledDownload].self, from: data)
+    }
+
+    func save(_ entries: [PersistedScheduledDownload]) throws {
+        // Refuse to replace an unsupported or damaged existing schema.
+        _ = try load()
+        if entries.isEmpty {
+            defaults.removeObject(forKey: Self.key)
+        } else {
+            let data = try JSONEncoder().encode(entries)
+            defaults.set(data, forKey: Self.key)
+        }
+    }
+
+    /// Explicit recovery only. Encode first so a failure preserves the original value.
+    func reset(with entries: [PersistedScheduledDownload]) throws {
+        let data = try JSONEncoder().encode(entries)
+        if entries.isEmpty {
+            defaults.removeObject(forKey: Self.key)
+        } else {
+            defaults.set(data, forKey: Self.key)
+        }
+    }
+
+    func append(_ entry: PersistedScheduledDownload) throws {
+        var entries = try load()
+        entries.removeAll { $0.itemID == entry.itemID }
+        entries.append(entry)
+        try save(entries)
+    }
+
+    func remove(itemID: UUID) throws {
+        var entries = try load()
+        let count = entries.count
+        entries.removeAll { $0.itemID == itemID }
+        guard entries.count != count else { return }
+        try save(entries)
     }
 }

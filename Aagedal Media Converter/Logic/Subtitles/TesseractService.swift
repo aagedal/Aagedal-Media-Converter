@@ -86,6 +86,7 @@ actor TesseractService {
 
     private let subtitleStreamExtractor: TesseractSubtitleStreamExtractor
     private var activeRunIDs: Set<UUID> = []
+    private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
     private var cancelledRunIDs: Set<UUID> = []
     private var cancelledOperationIDs: Set<UUID> = []
     private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
@@ -123,24 +124,29 @@ actor TesseractService {
         codec: String,
         language: String,
         engineKind: OCREngineKind = .userPreferred,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
-        registerRun(runID, operationID: operationID)
+        let publication = registerRun(runID, operationID: operationID)
         defer { finishRun(runID, operationID: operationID) }
         guard !cancelledRunIDs.contains(runID) else {
             throw TesseractServiceError.cancelled
         }
-        let baseName = sourceFile.deletingPathExtension().lastPathComponent
-        let srtURL = SubtitleSRTNaming.outputURL(directory: outputDirectory, baseName: baseName, method: .ocr)
+        let reservation = SubtitleSRTNaming.shared.reserve(
+            directory: outputDirectory, sourceFile: sourceFile, method: .ocr
+        )
+        defer { reservation.release() }
         return try await runPipeline(
             sourceFile: sourceFile,
-            srtURL: srtURL,
+            reservation: reservation,
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
             engineKind: engineKind,
             runID: runID,
+            publication: publication,
+            publicationIsCurrent: publicationIsCurrent,
             progress: progress
         )
     }
@@ -154,25 +160,30 @@ actor TesseractService {
         codec: String,
         language: String,
         engineKind: OCREngineKind = .userPreferred,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
-        registerRun(runID, operationID: operationID)
+        let publication = registerRun(runID, operationID: operationID)
         defer { finishRun(runID, operationID: operationID) }
         guard !cancelledRunIDs.contains(runID) else {
             throw TesseractServiceError.cancelled
         }
         let outputDirectory = sourceFile.deletingLastPathComponent()
-        let baseName = sourceFile.deletingPathExtension().lastPathComponent
-        let srtURL = SubtitleSRTNaming.outputURL(directory: outputDirectory, baseName: baseName, method: .ocr)
+        let reservation = SubtitleSRTNaming.shared.reserve(
+            directory: outputDirectory, sourceFile: sourceFile, method: .ocr
+        )
+        defer { reservation.release() }
         return try await runPipeline(
             sourceFile: sourceFile,
-            srtURL: srtURL,
+            reservation: reservation,
             subtitleStreamIndex: subtitleStreamIndex,
             codec: codec,
             language: language,
             engineKind: engineKind,
             runID: runID,
+            publication: publication,
+            publicationIsCurrent: publicationIsCurrent,
             progress: progress
         )
     }
@@ -182,6 +193,7 @@ actor TesseractService {
         cancelledOperationIDs.insert(operationID)
         let runIDs = runIDsByOperationID[operationID] ?? []
         cancelledRunIDs.formUnion(runIDs)
+        for runID in runIDs { publicationsByRunID[runID]?.cancel() }
         for runID in runIDs {
             currentExtractionTasks[runID]?.cancel()
             currentOCRTasks[runID]?.cancel()
@@ -191,6 +203,7 @@ actor TesseractService {
     /// Stops every active OCR run during an explicit batch shutdown.
     func cancelAllGeneration() {
         cancelledRunIDs.formUnion(activeRunIDs)
+        for publication in publicationsByRunID.values { publication.cancel() }
         for task in currentExtractionTasks.values { task.cancel() }
         for task in currentOCRTasks.values { task.cancel() }
     }
@@ -199,14 +212,17 @@ actor TesseractService {
 
     private func runPipeline(
         sourceFile: URL,
-        srtURL: URL,
+        reservation: SubtitleSRTReservation,
         subtitleStreamIndex: Int,
         codec: String,
         language: String,
         engineKind: OCREngineKind,
         runID: UUID,
+        publication: SubtitleSRTPublication,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool,
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
+        let srtURL = reservation.url
         // Sandboxed FFmpeg subprocess can't open user-imported files on external volumes
         // unless we hold security scope on the source URL for the duration of the run.
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: sourceFile)
@@ -312,8 +328,19 @@ actor TesseractService {
         // Step 4 — Write SRT
         progress(TesseractProgress(stage: .writingSRT, percentage: 0.97))
         let srtContent = buildSRT(from: srtEntries)
+        let stagedSRT = srtURL.deletingLastPathComponent()
+            .appendingPathComponent(".ocr-\(runID.uuidString).srt")
+        defer { try? FileManager.default.removeItem(at: stagedSRT) }
         do {
-            try srtContent.write(to: srtURL, atomically: true, encoding: .utf8)
+            try Task.checkCancellation()
+            try srtContent.write(to: stagedSRT, atomically: true, encoding: .utf8)
+            try await publication.publish(
+                stagedURL: stagedSRT,
+                reservation: reservation,
+                isCurrent: publicationIsCurrent
+            )
+        } catch is CancellationError {
+            throw TesseractServiceError.cancelled
         } catch {
             throw TesseractServiceError.srtGenerationFailed
         }
@@ -448,15 +475,20 @@ actor TesseractService {
         return lower == "pgssub" || lower == "hdmv_pgs_subtitle" || lower == "s_hdmv/pgs"
     }
 
-    private func registerRun(_ runID: UUID, operationID: UUID) {
+    private func registerRun(_ runID: UUID, operationID: UUID) -> SubtitleSRTPublication {
+        let publication = SubtitleSRTPublication()
+        publicationsByRunID[runID] = publication
         activeRunIDs.insert(runID)
         runIDsByOperationID[operationID, default: []].insert(runID)
         if cancelledOperationIDs.contains(operationID) {
             cancelledRunIDs.insert(runID)
+            publication.cancel()
         }
+        return publication
     }
 
     private func finishRun(_ runID: UUID, operationID: UUID) {
+        publicationsByRunID.removeValue(forKey: runID)
         currentExtractionTasks.removeValue(forKey: runID)?.cancel()
         currentOCRTasks.removeValue(forKey: runID)?.cancel()
         activeRunIDs.remove(runID)

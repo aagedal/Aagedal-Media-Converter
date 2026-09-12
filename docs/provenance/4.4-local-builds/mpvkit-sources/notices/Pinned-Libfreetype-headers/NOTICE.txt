@@ -1,0 +1,1071 @@
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftsnames.h =====
+
+/****************************************************************************
+ *
+ * ftsnames.h
+ *
+ *   Simple interface to access SFNT 'name' tables (which are used
+ *   to hold font names, copyright info, notices, etc.) (specification).
+ *
+ *   This is _not_ used to retrieve glyph names!
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftwinfnt.h =====
+
+/****************************************************************************
+ *
+ * ftwinfnt.h
+ *
+ *   FreeType API for accessing Windows fnt-specific data.
+ *
+ * Copyright (C) 2003-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftsizes.h =====
+
+/****************************************************************************
+ *
+ * ftsizes.h
+ *
+ *   FreeType size objects management (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/fttypes.h =====
+
+/****************************************************************************
+ *
+ * fttypes.h
+ *
+ *   FreeType simple types definitions (specification only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftparams.h =====
+
+/****************************************************************************
+ *
+ * ftparams.h
+ *
+ *   FreeType API for possible FT_Parameter tags (specification only).
+ *
+ * Copyright (C) 2017-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftmm.h =====
+
+/****************************************************************************
+ *
+ * ftmm.h
+ *
+ *   FreeType variation font interface (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/config/integer-types.h =====
+
+/****************************************************************************
+ *
+ * config/integer-types.h
+ *
+ *   FreeType integer types definitions.
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/config/ftstdlib.h =====
+
+/****************************************************************************
+ *
+ * ftstdlib.h
+ *
+ *   ANSI-specific library and header configuration file (specification
+ *   only).
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/config/ftheader.h =====
+
+/****************************************************************************
+ *
+ * ftheader.h
+ *
+ *   Build macros of the FreeType 2 library.
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/config/ftconfig.h =====
+
+/****************************************************************************
+ *
+ * ftconfig.h
+ *
+ *   ANSI-specific configuration file (specification only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/config/mac-support.h =====
+
+/****************************************************************************
+ *
+ * config/mac-support.h
+ *
+ *   Mac/OS X support configuration header.
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/config/ftoption.h =====
+
+/****************************************************************************
+ *
+ * ftoption.h
+ *
+ *   User-selectable configuration macros (specification only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/config/public-macros.h =====
+
+/****************************************************************************
+ *
+ * config/public-macros.h
+ *
+ *   Define a set of compiler macros used in public FreeType headers.
+ *
+ * Copyright (C) 2020-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftcolor.h =====
+
+/****************************************************************************
+ *
+ * ftcolor.h
+ *
+ *   FreeType's glyph color management (specification).
+ *
+ * Copyright (C) 2018-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftmodapi.h =====
+
+/****************************************************************************
+ *
+ * ftmodapi.h
+ *
+ *   FreeType modules public interface (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftbzip2.h =====
+
+/****************************************************************************
+ *
+ * ftbzip2.h
+ *
+ *   Bzip2-compressed stream support.
+ *
+ * Copyright (C) 2010-2026 by
+ * Joel Klinghed.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/fttrigon.h =====
+
+/****************************************************************************
+ *
+ * fttrigon.h
+ *
+ *   FreeType trigonometric functions (specification).
+ *
+ * Copyright (C) 2001-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftbbox.h =====
+
+/****************************************************************************
+ *
+ * ftbbox.h
+ *
+ *   FreeType exact bbox computation (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftlogging.h =====
+
+/****************************************************************************
+ *
+ * ftlogging.h
+ *
+ *   Additional debugging APIs.
+ *
+ * Copyright (C) 2020-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftgzip.h =====
+
+/****************************************************************************
+ *
+ * ftgzip.h
+ *
+ *   Gzip-compressed stream support.
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftdriver.h =====
+
+/****************************************************************************
+ *
+ * ftdriver.h
+ *
+ *   FreeType API for controlling driver modules (specification only).
+ *
+ * Copyright (C) 2017-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftoutln.h =====
+
+/****************************************************************************
+ *
+ * ftoutln.h
+ *
+ *   Support for the FT_Outline type used to store glyph shapes of
+ *   most scalable font formats (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftadvanc.h =====
+
+/****************************************************************************
+ *
+ * ftadvanc.h
+ *
+ *   Quick computation of advance widths (specification only).
+ *
+ * Copyright (C) 2008-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftsynth.h =====
+
+/****************************************************************************
+ *
+ * ftsynth.h
+ *
+ *   FreeType synthesizing code for emboldening and slanting
+ *   (specification).
+ *
+ * Copyright (C) 2000-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/fterrors.h =====
+
+/****************************************************************************
+ *
+ * fterrors.h
+ *
+ *   FreeType error code handling (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftgasp.h =====
+
+/****************************************************************************
+ *
+ * ftgasp.h
+ *
+ *   Access of TrueType's 'gasp' table (specification).
+ *
+ * Copyright (C) 2007-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftstroke.h =====
+
+/****************************************************************************
+ *
+ * ftstroke.h
+ *
+ *   FreeType path stroker (specification).
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftcache.h =====
+
+/****************************************************************************
+ *
+ * ftcache.h
+ *
+ *   FreeType Cache subsystem (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftotval.h =====
+
+/****************************************************************************
+ *
+ * ftotval.h
+ *
+ *   FreeType API for validating OpenType tables (specification).
+ *
+ * Copyright (C) 2004-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/freetype.h =====
+
+/****************************************************************************
+ *
+ * freetype.h
+ *
+ *   FreeType high-level API and common types (specification only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftincrem.h =====
+
+/****************************************************************************
+ *
+ * ftincrem.h
+ *
+ *   FreeType incremental loading (specification).
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftfntfmt.h =====
+
+/****************************************************************************
+ *
+ * ftfntfmt.h
+ *
+ *   Support functions for font formats.
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/fterrdef.h =====
+
+/****************************************************************************
+ *
+ * fterrdef.h
+ *
+ *   FreeType error codes (specification).
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ttnameid.h =====
+
+/****************************************************************************
+ *
+ * ttnameid.h
+ *
+ *   TrueType name ID definitions (specification only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftpfr.h =====
+
+/****************************************************************************
+ *
+ * ftpfr.h
+ *
+ *   FreeType API for accessing PFR-specific data (specification only).
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftgxval.h =====
+
+/****************************************************************************
+ *
+ * ftgxval.h
+ *
+ *   FreeType API for validating TrueTypeGX/AAT tables (specification).
+ *
+ * Copyright (C) 2004-2026 by
+ * Masatake YAMATO, Redhat K.K,
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/tttags.h =====
+
+/****************************************************************************
+ *
+ * tttags.h
+ *
+ *   Tags for TrueType and OpenType tables (specification only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftlzw.h =====
+
+/****************************************************************************
+ *
+ * ftlzw.h
+ *
+ *   LZW-compressed stream support.
+ *
+ * Copyright (C) 2004-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftsystem.h =====
+
+/****************************************************************************
+ *
+ * ftsystem.h
+ *
+ *   FreeType low-level system interface definition (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/t1tables.h =====
+
+/****************************************************************************
+ *
+ * t1tables.h
+ *
+ *   Basic Type 1/Type 2 tables definitions and interface (specification
+ *   only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/otsvg.h =====
+
+/****************************************************************************
+ *
+ * otsvg.h
+ *
+ *   Interface for OT-SVG support related things (specification).
+ *
+ * Copyright (C) 2022-2026 by
+ * David Turner, Robert Wilhelm, Werner Lemberg, and Moazin Khatti.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftimage.h =====
+
+/****************************************************************************
+ *
+ * ftimage.h
+ *
+ *   FreeType glyph image formats and default raster interface
+ *   (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/tttables.h =====
+
+/****************************************************************************
+ *
+ * tttables.h
+ *
+ *   Basic SFNT/TrueType tables definitions and interface
+ *   (specification only).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftcid.h =====
+
+/****************************************************************************
+ *
+ * ftcid.h
+ *
+ *   FreeType API for accessing CID font information (specification).
+ *
+ * Copyright (C) 2007-2026 by
+ * Dereg Clegg and Michael Toftdal.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftglyph.h =====
+
+/****************************************************************************
+ *
+ * ftglyph.h
+ *
+ *   FreeType convenience functions to handle glyphs (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftmoderr.h =====
+
+/****************************************************************************
+ *
+ * ftmoderr.h
+ *
+ *   FreeType module error offsets (specification).
+ *
+ * Copyright (C) 2001-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftbitmap.h =====
+
+/****************************************************************************
+ *
+ * ftbitmap.h
+ *
+ *   FreeType utility functions for bitmaps (specification).
+ *
+ * Copyright (C) 2004-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftlist.h =====
+
+/****************************************************************************
+ *
+ * ftlist.h
+ *
+ *   Generic list support for FreeType (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftmac.h =====
+
+/****************************************************************************
+ *
+ * ftmac.h
+ *
+ *   Additional Mac-specific API.
+ *
+ * Copyright (C) 1996-2026 by
+ * Just van Rossum, David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftlcdfil.h =====
+
+/****************************************************************************
+ *
+ * ftlcdfil.h
+ *
+ *   FreeType API for color filtering of subpixel bitmap glyphs
+ *   (specification).
+ *
+ * Copyright (C) 2006-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftbdf.h =====
+
+/****************************************************************************
+ *
+ * ftbdf.h
+ *
+ *   FreeType API for accessing BDF-specific strings (specification).
+ *
+ * Copyright (C) 2002-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/freetype/ftrender.h =====
+
+/****************************************************************************
+ *
+ * ftrender.h
+ *
+ *   FreeType renderer modules public interface (specification).
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+
+
+===== pinned-archive-header; Libfreetype.xcframework/macos-arm64_x86_64/Libfreetype.framework/Headers/freetype2/ft2build.h =====
+
+/****************************************************************************
+ *
+ * ft2build.h
+ *
+ *   FreeType 2 build and setup macros.
+ *
+ * Copyright (C) 1996-2026 by
+ * David Turner, Robert Wilhelm, and Werner Lemberg.
+ *
+ * This file is part of the FreeType project, and may only be used,
+ * modified, and distributed under the terms of the FreeType project
+ * license, LICENSE.TXT.  By continuing to use, modify, or distribute
+ * this file you indicate that you have read the license and
+ * understand and accept it fully.
+ *
+ */
+

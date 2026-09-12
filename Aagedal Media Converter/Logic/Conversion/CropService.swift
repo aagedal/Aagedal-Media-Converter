@@ -8,12 +8,9 @@
 // (at your option) any later version.
 
 import Foundation
-import OSLog
 
 /// Service for building FFMPEG crop filters from crop configurations
 enum CropService {
-    private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "Crop")
-
     /// Builds FFmpeg crop filter string from config
     /// Returns nil if no crop or invalid config
     /// - Parameters:
@@ -26,60 +23,46 @@ enum CropService {
         sourceWidth: Int,
         sourceHeight: Int
     ) -> String? {
-        guard config.isActive else {
-            logger.debug("Crop config is not active (full frame), skipping")
-            return nil
-        }
-
-        // Convert to pixel coordinates and ensure even dimensions
-        let pixelRect = config.pixelRect(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-            .evenDimensions()
-            .clamped(maxWidth: sourceWidth, maxHeight: sourceHeight)
-
-        // Validate crop
-        let validation = validateCrop(pixelRect: pixelRect, sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-
-        switch validation {
-        case .valid:
-            // FFmpeg crop filter: crop=width:height:x:y
-            let filter = "crop=\(pixelRect.width):\(pixelRect.height):\(pixelRect.x):\(pixelRect.y)"
-            logger.info("Generated crop filter: \(filter, privacy: .public)")
-            return filter
-        case .invalid(let reason):
-            logger.warning("Invalid crop config: \(reason, privacy: .public)")
-            return nil
-        }
-    }
-
-    /// Validates crop config against source dimensions
-    private static func validateCrop(
-        pixelRect: PixelCropRect,
-        sourceWidth: Int,
-        sourceHeight: Int
-    ) -> CropValidationResult {
-        // Check for invalid dimensions
-        if pixelRect.width < 2 || pixelRect.height < 2 {
-            return .invalid("Crop area too small (minimum 2x2)")
-        }
-
-        if pixelRect.x < 0 || pixelRect.y < 0 {
-            return .invalid("Crop position cannot be negative")
-        }
-
-        if pixelRect.x + pixelRect.width > sourceWidth {
-            return .invalid("Crop width exceeds source width")
-        }
-
-        if pixelRect.y + pixelRect.height > sourceHeight {
-            return .invalid("Crop height exceeds source height")
-        }
-
-        return .valid
+        CropGeometryPlan(config: config, sourceWidth: sourceWidth, sourceHeight: sourceHeight)?.filter
     }
 }
 
-/// Result of crop validation
-enum CropValidationResult {
-    case valid
-    case invalid(String)
+/// Resolves crop bounds once so pixel filters and encoder dimensions describe the same area.
+struct CropGeometryPlan: Equatable, Sendable {
+    let rect: PixelCropRect
+
+    init?(config: CropConfig, sourceWidth: Int, sourceHeight: Int) {
+        let normalized = config.normalizedRect
+        guard config.isActive,
+              sourceWidth >= 2, sourceHeight >= 2,
+              sourceWidth <= Int32.max, sourceHeight <= Int32.max,
+              [normalized.x, normalized.y, normalized.width, normalized.height].allSatisfy(\.isFinite),
+              normalized.width > 0, normalized.height > 0 else { return nil }
+
+        // Bound normalized values before converting to integers, including imported settings.
+        func pixels(_ value: Double, _ dimension: Int) -> Int {
+            Int((min(1, max(0, value)) * Double(dimension)).rounded())
+        }
+        rect = PixelCropRect(
+            x: pixels(normalized.x, sourceWidth),
+            y: pixels(normalized.y, sourceHeight),
+            width: pixels(normalized.width, sourceWidth),
+            height: pixels(normalized.height, sourceHeight)
+        ).clamped(maxWidth: sourceWidth, maxHeight: sourceHeight).evenDimensions()
+    }
+
+    var filter: String { "crop=\(rect.width):\(rect.height):\(rect.x):\(rect.y)" }
+
+    /// FFmpeg dimensions are signed 32-bit integers. Validate before narrowing or rounding.
+    static func squarePixelDimensions(
+        width: Int, height: Int, pixelAspectRatio: Double, roundWidthUp: Bool = false
+    ) -> (width: Int, height: Int)? {
+        let scaledWidth = (Double(width) * pixelAspectRatio).rounded()
+        guard width >= 2, height >= 2, height <= Int32.max,
+              pixelAspectRatio.isFinite, pixelAspectRatio > 0,
+              scaledWidth.isFinite, scaledWidth >= 1, scaledWidth < Double(Int32.max) else { return nil }
+        let integerWidth = Int(scaledWidth)
+        let evenWidth = roundWidthUp ? (integerWidth + 1) / 2 * 2 : integerWidth / 2 * 2
+        return (max(2, evenWidth), height / 2 * 2)
+    }
 }

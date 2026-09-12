@@ -112,7 +112,19 @@ def read_image(path: Path, architecture: str) -> Image:
     return Image(executable, dependencies, rpaths)
 
 
-def verify(bundle: Path, architecture: str = "arm64", report: dict | None = None) -> int:
+def verify_hardened_runtime(path: Path) -> None:
+    """Check each executable, including helpers copied as resources."""
+    subprocess.run(["/usr/bin/codesign", "--verify", "--strict", str(path)],
+                   check=True, capture_output=True, text=True, timeout=30)
+    result = subprocess.run(["/usr/bin/codesign", "--display", "--verbose=4", str(path)],
+                            check=True, capture_output=True, text=True, timeout=30)
+    flags = re.search(r"\bflags=0x([0-9a-fA-F]+)", result.stdout + result.stderr)
+    if not flags or not int(flags.group(1), 16) & 0x10000:
+        raise ValueError(f"{path}: executable signature does not enable Hardened Runtime; rebuild the archive with helper signing enabled")
+
+
+def verify(bundle: Path, architecture: str = "arm64", report: dict | None = None,
+           require_hardened_runtime: bool = False) -> int:
     bundle = bundle.resolve(strict=True)
     info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
     main = (bundle / "Contents/MacOS" / info["CFBundleExecutable"]).resolve()
@@ -132,6 +144,8 @@ def verify(bundle: Path, architecture: str = "arm64", report: dict | None = None
             real = path.resolve()
             if real not in images:
                 images[real] = read_image(real, architecture)
+                if require_hardened_runtime and images[real].executable:
+                    verify_hardened_runtime(real)
     if main not in images or not images[main].executable:
         raise ValueError(f"{main}: app executable is missing or is not a Mach-O executable")
 
@@ -229,10 +243,11 @@ def main() -> int:
     parser.add_argument("--architecture", default="arm64")
     parser.add_argument("--manifest", type=Path, help="Also verify packaged license notices against this dependency manifest")
     parser.add_argument("--report", type=Path, help="Write a JSON size and static dependency reachability report after validation")
+    parser.add_argument("--require-hardened-runtime", action="store_true", help="Require valid Hardened Runtime signatures on every executable before distribution")
     args = parser.parse_args()
     try:
         report = {} if args.report else None
-        count = verify(args.bundle, args.architecture, report)
+        count = verify(args.bundle, args.architecture, report, args.require_hardened_runtime)
         notice_count = verify_notices(args.bundle, args.manifest) if args.manifest else None
         if args.report:
             args.report.write_text(json.dumps(report, indent=2) + "\n")
@@ -240,6 +255,8 @@ def main() -> int:
         print(f"ERROR: release bundle validation failed: {error}", file=sys.stderr)
         return 1
     print(f"Verified {count} Mach-O images: {args.architecture}, executable permissions, and bundled library resolution.")
+    if args.require_hardened_runtime:
+        print("Verified Hardened Runtime signatures on all Mach-O executables.")
     if notice_count is not None:
         print(f"Verified {notice_count} packaged license notices against the dependency manifest.")
     return 0

@@ -97,8 +97,8 @@ enum AV2CommandBuilder {
 
     // MARK: - Single-process build
 
-    /// Builds the single-process AV2 command pair. Returns nil if the source dimensions cannot be
-    /// determined (in which case avmenc cannot be configured and the caller should fail).
+    /// Builds the single-process AV2 command pair. Returns nil if the trim interval is invalid or
+    /// the source dimensions cannot be determined (the caller should fail).
     static func build(
         inputURL: URL,
         outputURL: URL,
@@ -129,15 +129,10 @@ enum AV2CommandBuilder {
 
         // MARK: ffmpeg decode → y4m
         var ffmpeg: [String] = ["-y", "-nostdin", "-progress", "pipe:2", "-hide_banner"]
-        if let trimStart, trimStart > 0 {
-            ffmpeg += ["-ss", String(format: "%.6f", trimStart)]
-        }
-        appendInputArguments(customInputArguments, inputURL: inputURL, to: &ffmpeg)
-        if let trimStart, let trimEnd, trimEnd > trimStart {
-            ffmpeg += ["-t", String(format: "%.6f", trimEnd - trimStart)]
-        } else if let trimEnd, trimEnd > 0, trimStart == nil {
-            ffmpeg += ["-t", String(format: "%.6f", trimEnd)]
-        }
+        let trim = AV2TrimPlan(start: trimStart, end: trimEnd)
+        ffmpeg += FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
+            .arguments(seek: trim.inputArguments)
+        ffmpeg += trim.outputArguments
         ffmpeg += ["-map", "0:v:0", "-an", "-sn", "-dn"]
         ffmpeg += ["-vf", r.videoFilter]
         ffmpeg += ["-pix_fmt", r.pixFmt]
@@ -156,7 +151,7 @@ enum AV2CommandBuilder {
         // The .mkv muxer assigns one presentation timestamp per IVF frame record, so the bitstream
         // must have one record per displayed frame. By default avmenc uses alt-ref/lag frames, which
         // makes records ≠ displayed frames with non-sequential timestamps — disable it for muxing.
-        if AV2Container.current == .mkv { avmenc += ["--lag-in-frames=0"] }
+        if settings.container == .mkv { avmenc += ["--lag-in-frames=0"] }
         if r.autoTileColumns > 0 { avmenc += ["--tile-columns=\(r.autoTileColumns)"] }
         if r.autoTileRows > 0 { avmenc += ["--tile-rows=\(r.autoTileRows)"] }
         avmenc += ["-o", outputURL.path, "-"]
@@ -213,7 +208,9 @@ enum AV2CommandBuilder {
               let duration = r.effectiveDuration, duration > 0 else {
             return nil // can't partition without a frame count
         }
-        let totalFrames = max(1, Int((duration * frameRate).rounded()))
+        let frameCount = (duration * frameRate).rounded()
+        guard frameCount.isFinite, frameCount < Double(Int.max) else { return nil }
+        let totalFrames = max(1, Int(frameCount))
 
         let hint = settings.parallelChunks
         let chunkCount = resolvedChunkCount(totalFrames: totalFrames, hint: hint, rateMode: r.rateMode)
@@ -226,7 +223,7 @@ enum AV2CommandBuilder {
 
         let base = totalFrames / chunkCount
         let remainder = totalFrames % chunkCount
-        let trimBase = trimStart ?? 0
+        let trimBase = AV2TrimPlan(start: trimStart, end: trimEnd).start
 
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("av2chunks_\(UUID().uuidString)", isDirectory: true)
@@ -242,8 +239,8 @@ enum AV2CommandBuilder {
             // `count` frames with -frames:v (the most reliable boundary). Each chunk's avmenc forces
             // a key frame at its first input frame, so the chunks stay independently decodable.
             var ff: [String] = ["-y", "-nostdin", "-progress", "pipe:2", "-hide_banner"]
-            if startSec > 0 { ff += ["-ss", String(format: "%.6f", startSec)] }
-            appendInputArguments(customInputArguments, inputURL: inputURL, to: &ff)
+            let seek = startSec > 0 ? ["-ss", String(format: "%.6f", startSec)] : []
+            ff += FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments).arguments(seek: seek)
             ff += ["-frames:v", "\(count)"]
             ff += ["-map", "0:v:0", "-an", "-sn", "-dn"]
             ff += ["-vf", r.videoFilter]
@@ -257,7 +254,7 @@ enum AV2CommandBuilder {
             av += ["--cpu-used=\(r.speed)"]
             av += ["-t", "\(threadsPerWorker)"]
             // 1 IVF record per displayed frame for correct Matroska timing (see build()).
-            if AV2Container.current == .mkv { av += ["--lag-in-frames=0"] }
+            if settings.container == .mkv { av += ["--lag-in-frames=0"] }
             av += ["--limit=\(count)"]
             av += ["-o", segURL.path, "-"]
 
@@ -353,6 +350,7 @@ enum AV2CommandBuilder {
         metadataSource: MetadataSource,
         settings: AV2Settings
     ) async -> Resolved? {
+        guard AV2TrimPlan(start: trimStart, end: trimEnd).preparationError == nil else { return nil }
         let metadataURL = visualSourceURL ?? inputURL
         let metadata: VideoMetadata? = switch metadataSource {
         case .probeIfNeeded:
@@ -397,20 +395,22 @@ enum AV2CommandBuilder {
         }
 
         // Compute final (square-pixel) output dimensions.
-        let cropActive = (cropConfig?.isActive ?? false)
-        let basePxW: Int
-        let basePxH: Int
-        if cropActive, let cropConfig {
-            let rect = cropConfig.pixelRect(sourceWidth: srcW, sourceHeight: srcH).evenDimensions()
-            basePxW = rect.width
-            basePxH = rect.height
+        let cropGeometry: CropGeometryPlan?
+        if let cropConfig, cropConfig.isActive {
+            guard let resolvedCrop = CropGeometryPlan(
+                config: cropConfig, sourceWidth: srcW, sourceHeight: srcH
+            ) else { return nil }
+            cropGeometry = resolvedCrop
         } else {
-            basePxW = srcW
-            basePxH = srcH
+            cropGeometry = nil
         }
-
-        var finalW = evenDimension(Double(basePxW) * effectivePAR)
-        var finalH = evenDimension(Double(basePxH))
+        guard let dimensions = CropGeometryPlan.squarePixelDimensions(
+            width: cropGeometry?.rect.width ?? srcW,
+            height: cropGeometry?.rect.height ?? srcH,
+            pixelAspectRatio: effectivePAR
+        ) else { return nil }
+        var finalW = dimensions.width
+        var finalH = dimensions.height
 
         if let maxShortEdge = settings.resolutionLimit.maxHeight {
             let shortEdge = min(finalW, finalH)
@@ -458,9 +458,8 @@ enum AV2CommandBuilder {
         // Video filter chain: crop (optional) then an explicit forced scale so the emitted frame
         // size exactly equals avmenc's -w/-h.
         var videoFilter = "scale=\(finalW):\(finalH),setsar=1"
-        if cropActive, let cropConfig,
-           let cropFilter = CropService.buildCropFilter(config: cropConfig, sourceWidth: srcW, sourceHeight: srcH) {
-            videoFilter = "\(cropFilter),scale=\(finalW):\(finalH),setsar=1"
+        if let cropGeometry {
+            videoFilter = "\(cropGeometry.filter),scale=\(finalW):\(finalH),setsar=1"
         }
 
         return Resolved(
@@ -485,25 +484,10 @@ enum AV2CommandBuilder {
 
     // MARK: - Helpers
 
-    private static func appendInputArguments(
-        _ customInputArguments: [String]?,
-        inputURL: URL,
-        to arguments: inout [String]
-    ) {
-        if let customInputArguments {
-            arguments.append(contentsOf: customInputArguments)
-        } else {
-            arguments.append(contentsOf: ["-i", inputURL.path])
-        }
-    }
-
     private static func frameRateArgument(in arguments: [String]?) -> VideoMetadata.FrameRate? {
-        guard let arguments,
-              let index = arguments.firstIndex(of: "-framerate"),
-              arguments.indices.contains(index + 1) else {
-            return nil
-        }
-        return VideoMetadata.FrameRate(frameRateString: arguments[index + 1])
+        let plan = FFMPEGInputPlan(inputURL: URL(fileURLWithPath: "/"), customArguments: arguments)
+        guard let frameRate = plan.imageSequenceFrameRate else { return nil }
+        return VideoMetadata.FrameRate(frameRateString: frameRate)
     }
 
     /// Mirrors FFmpeg's trim arguments while keeping progress and chunk planning inside the
@@ -514,15 +498,7 @@ enum AV2CommandBuilder {
         trimStart: Double?,
         trimEnd: Double?
     ) -> Double? {
-        let start = max(0, trimStart ?? 0)
-
-        if let trimEnd, trimEnd > start {
-            let effectiveEnd = sourceDuration.map { min(trimEnd, max(0, $0)) } ?? trimEnd
-            return max(0, effectiveEnd - start)
-        }
-
-        guard let sourceDuration else { return nil }
-        return max(0, sourceDuration - start)
+        AV2TrimPlan(start: trimStart, end: trimEnd).effectiveDuration(sourceDuration: sourceDuration)
     }
 
     /// Rounds to the nearest even integer (codec requirement), with a floor of 2.

@@ -59,6 +59,7 @@ actor BMXService {
     private let mxf2rawPathProvider: @Sendable () -> String?
     private var activeTranswrapID: UUID?
     private var currentTranswrapTask: Task<SubprocessResult, Error>?
+    @TaskLocal private static var runningTranswrapID: UUID?
     private var pendingTranswrapIDs: Set<UUID> = []
     private var retainedCancellationTrackingIDs: Set<UUID> = []
     private var cancelledTranswrapIDs: Set<UUID> = []
@@ -75,6 +76,7 @@ actor BMXService {
         let labels: [AudioTrackMCALabels]
     }
     private var mcaCache: [URL: MCACacheEntry] = [:]
+    private var activeMCAProbeIDs: [URL: UUID] = [:]
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
@@ -224,23 +226,19 @@ actor BMXService {
         )
     }
 
-    /// Cancels the current bmxtranswrap operation
-    func cancel() {
-        if currentTranswrapTask != nil {
-            if let activeTranswrapID {
-                cancelledTranswrapIDs.insert(activeTranswrapID)
-            }
-            currentTranswrapTask?.cancel()
-            logger.info("bmxtranswrap cancelled")
-        }
+    /// Cancels the captured operation and waits for its subprocess to drain.
+    func cancel() async {
+        guard let activeTranswrapID else { return }
+        await cancel(operationID: activeTranswrapID)
     }
 
     /// Cancels one conversion's rewrap, retaining cancellation if it arrives before
     /// that operation reaches the subprocess registration point.
-    func cancel(operationID: UUID) {
+    func cancel(operationID: UUID) async {
+        let task = activeTranswrapID == operationID ? currentTranswrapTask : nil
         if activeTranswrapID == operationID {
             cancelledTranswrapIDs.insert(operationID)
-            currentTranswrapTask?.cancel()
+            task?.cancel()
         } else if let waiterIndex = transwrapSlotWaiters.firstIndex(where: { $0.operationID == operationID }) {
             let waiter = transwrapSlotWaiters.remove(at: waiterIndex)
             waiter.continuation.resume(returning: false)
@@ -249,6 +247,11 @@ actor BMXService {
             cancelledTranswrapIDs.insert(operationID)
         }
         logger.info("bmxtranswrap operation cancelled")
+        // The rewrap owns slot release and output validation. Joining only its runner
+        // keeps queued operations independent and never clears a newer operation.
+        if Self.runningTranswrapID != operationID {
+            _ = await task?.result
+        }
     }
 
     /// Retains targeted cancellation while a conversion prepares the inputs for BMX.
@@ -265,6 +268,11 @@ actor BMXService {
             cancelledTranswrapIDs.remove(operationID)
         }
         return wasCancelled
+    }
+
+    /// Snapshot of operation-owned tracking, used to inspect lifecycle handoffs.
+    func cancellationTrackingOperationIDs() -> Set<UUID> {
+        retainedCancellationTrackingIDs
     }
 
     /// Internal state probe used by deterministic cancellation tests.
@@ -351,9 +359,11 @@ actor BMXService {
         let progressParser = BMXProgressParser(progress: progress)
         activeTranswrapID = operationID
         let task = Task {
-            try await subprocessRunner.run(request) { chunk in
-                guard case .standardOutput = chunk.stream else { return }
-                progressParser.consume(chunk.data)
+            try await Self.$runningTranswrapID.withValue(operationID) {
+                try await subprocessRunner.run(request) { chunk in
+                    guard case .standardOutput = chunk.stream else { return }
+                    progressParser.consume(chunk.data)
+                }
             }
         }
         currentTranswrapTask = task
@@ -485,6 +495,7 @@ actor BMXService {
     /// - Parameter url: The MXF file to analyze
     /// - Returns: MXF info string, or nil if failed
     func getMXFInfo(url: URL) async -> String? {
+        guard !Task.isCancelled else { return nil }
         guard let mxf2rawPath = mxf2rawPathProvider() else {
             logger.error("mxf2raw binary not found")
             return nil
@@ -503,6 +514,7 @@ actor BMXService {
         )
         do {
             let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
             guard result.succeeded else {
                 let diagnostic = request.redactedDiagnostic(result.standardErrorText)
                 logger.warning("mxf2raw exited \(result.terminationStatus): \(diagnostic, privacy: .private(mask: .hash))")
@@ -540,6 +552,7 @@ actor BMXService {
     /// - Returns: Per-track MCA labels in the order mxf2raw emits Sound tracks, or nil if mxf2raw fails.
     ///           Tracks without MCA descriptors yield entries with nil/empty label fields.
     func getAudioTrackLabels(url: URL) async -> [AudioTrackMCALabels]? {
+        guard !Task.isCancelled else { return nil }
         logger.info("getAudioTrackLabels: starting for \(url.lastPathComponent, privacy: .public)")
 
         // Open security-scoped access so the mxf2raw subprocess can read user-imported
@@ -585,9 +598,19 @@ actor BMXService {
             sourceURL: url,
             outputCaptureLimit: Self.mcaXMLCaptureLimit
         )
+        // Identity survives suspension so an invalidated or replaced probe cannot
+        // publish stale labels or repopulate the cache after invalidation.
+        let probeID = UUID()
+        activeMCAProbeIDs[url] = probeID
+        defer {
+            if activeMCAProbeIDs[url] == probeID {
+                activeMCAProbeIDs.removeValue(forKey: url)
+            }
+        }
         let result: SubprocessResult
         do {
             result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
         } catch is CancellationError {
             return nil
         } catch {
@@ -605,6 +628,7 @@ actor BMXService {
             return nil
         }
 
+        guard activeMCAProbeIDs[url] == probeID else { return nil }
         let xmlData = result.standardOutput
         let labels = MXFInfoMCAParser.parse(xmlData: xmlData)
         mcaCache[url] = MCACacheEntry(modificationDate: mtime, labels: labels)
@@ -635,6 +659,7 @@ actor BMXService {
     /// Invalidates the cached MCA labels for a URL (e.g. when the file is replaced on disk).
     func invalidateMCACache(for url: URL) {
         mcaCache.removeValue(forKey: url)
+        activeMCAProbeIDs.removeValue(forKey: url)
     }
 }
 

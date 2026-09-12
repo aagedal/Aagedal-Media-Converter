@@ -17,88 +17,159 @@ actor WatchFolderManager {
     private var monitorTask: Task<Void, Never>?
     private var trackedFiles: [URL: Int64] = [:] // URL -> file size
     private var isMonitoring = false
+    private var monitoringGeneration: UInt64 = 0
+    private var reportedFailures = WatchFolderFailureTracker()
+    private let defaults: UserDefaults
+    private let trashItem: @Sendable (URL) throws -> Void
+    private let pollingWait: @Sendable () async throws -> Void
 
-    /// Start monitoring the specified folder
+    private let readResourceValues: @Sendable (URL) throws -> URLResourceValues
+
+    init(
+        defaults: UserDefaults = .standard,
+        trashItem: @escaping @Sendable (URL) throws -> Void = { try FileSafetyUtils.trashWatchFolderItem($0) },
+        pollingWait: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(5)) },
+        readResourceValues: @escaping @Sendable (URL) throws -> URLResourceValues = {
+            try $0.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey])
+        }
+    ) {
+        self.defaults = defaults
+        self.trashItem = trashItem
+        self.pollingWait = pollingWait
+        self.readResourceValues = readResourceValues
+    }
+
+    /// Replaces monitoring atomically; late commands from older sessions are ignored.
     func startMonitoring(
         folderPath: String,
-        onNewFiles: @escaping @Sendable ([URL]) -> Void
+        generation: UInt64,
+        onNewFiles: @escaping @Sendable ([URL]) -> Void,
+        onError: @escaping @Sendable (String) -> Void = { _ in }
     ) {
-        guard !isMonitoring else { return }
+        guard generation >= monitoringGeneration, !Task.isCancelled else { return }
+        stopMonitoring(generation: generation)
 
         isMonitoring = true
         Self.logger.info("Starting watch folder monitoring: \(folderPath, privacy: .public)")
         
-        monitorTask = Task { [weak self] in
-            await WatchFolderPollingLoop.run { [weak self] in
+        monitorTask = Task { [weak self, pollingWait] in
+            await WatchFolderPollingLoop.run(wait: pollingWait) { [weak self] in
                 guard let self else { return false }
-                return await self.scanIfMonitoring(folderPath: folderPath, onNewFiles: onNewFiles)
+                return await self.scanIfMonitoring(folderPath: folderPath, onNewFiles: onNewFiles, onError: onError)
             }
         }
     }
     
     /// Stop monitoring
-    func stopMonitoring() {
+    func stopMonitoring(generation: UInt64) {
+        guard generation >= monitoringGeneration else { return }
+        monitoringGeneration = generation
         Self.logger.info("Stopping watch folder monitoring")
         isMonitoring = false
         monitorTask?.cancel()
         monitorTask = nil
         trackedFiles.removeAll()
+        reportedFailures = WatchFolderFailureTracker()
     }
     
     /// Scan the folder and detect stable files (not growing)
-    private func scanIfMonitoring(folderPath: String, onNewFiles: @escaping @Sendable ([URL]) -> Void) -> Bool {
+    private func scanIfMonitoring(folderPath: String, onNewFiles: @escaping @Sendable ([URL]) -> Void, onError: @escaping @Sendable (String) -> Void) -> Bool {
         // Check on the manager actor, after the polling task's actor hop: Stop
         // may have cancelled an older task and started a replacement meanwhile.
         guard isMonitoring, !Task.isCancelled else { return false }
-        scanFolder(folderPath: folderPath, onNewFiles: onNewFiles)
+        scanFolder(folderPath: folderPath, onNewFiles: onNewFiles, onError: onError)
         return true
     }
 
     private func scanFolder(
         folderPath: String,
-        onNewFiles: @escaping @Sendable ([URL]) -> Void
+        onNewFiles: @escaping @Sendable ([URL]) -> Void,
+        onError: @escaping @Sendable (String) -> Void
     ) {
         let folderURL = URL(fileURLWithPath: folderPath)
+
+        // Restore the selected folder grant before enumeration. Report access
+        // failures through the same recovery path as disconnected drives.
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: folderURL)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         
-        // Check if folder exists
-        guard FileManager.default.fileExists(atPath: folderURL.path) else {
-            Self.logger.warning("Watch folder does not exist: \(folderPath, privacy: .public)")
-            return
-        }
-        
-        // Access security-scoped resource
-        let hasAccess = SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: folderURL)
-        defer {
-            if hasAccess {
-                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: folderURL)
+        let fileURLs: [URL]
+        do {
+            fileURLs = try WatchFolderDirectoryContents.list(in: folderURL)
+        } catch {
+            // Lost visibility breaks every stability streak. After recovery,
+            // require two successful observations before importing any file.
+            trackedFiles.removeAll()
+            Self.logger.error("Failed to enumerate watch folder \(folderPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            if reportedFailures.shouldReportScanFailure() {
+                onError(String(localized: "The watch folder could not be scanned. Reconnect its drive or select the folder again in Settings. Monitoring will retry automatically. \(error.localizedDescription)"))
             }
-        }
-        
-        guard let enumerator = FileManager.default.enumerator(
-            at: folderURL,
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey],
-            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
-        ) else {
-            Self.logger.error("Failed to create file enumerator for: \(folderPath, privacy: .public)")
             return
+        }
+        reportedFailures.scanSucceeded(currentFiles: Set(fileURLs))
+        var cleanupFailures: [String] = []
+        var metadataFailures: [String] = []
+        var metadataFailureCount = 0
+        defer {
+            if metadataFailureCount > 0 {
+                var detail = metadataFailures.joined(separator: "\n")
+                if metadataFailureCount > metadataFailures.count {
+                    detail += "\n" + String(localized: "Additional files affected: \(metadataFailureCount - metadataFailures.count)")
+                }
+                onError(String(localized: "Some watch-folder files could not be inspected. Check their permissions or reconnect the drive. Monitoring will retry automatically. \(detail)"))
+            }
+            if !cleanupFailures.isEmpty {
+                let detail = cleanupFailures.joined(separator: "\n")
+                onError(String(localized: "Some old watch-folder files could not be moved to Trash. Check folder permissions or select the folder again in Settings. Cleanup will retry automatically. \(detail)"))
+            }
         }
 
         let settings = loadDurationSettings()
+        // Old watch-folder bookmarks may carry read-only grants. A bookmark cannot
+        // upgrade its own sandbox permission: require a fresh user selection before
+        // cleanup, while leaving ordinary monitoring available.
+        let cleanupNeedsRenewal = settings.deleteEnabled && WatchFolderSelectionService.cleanupAccessNeedsRenewal(for: folderPath, defaults: defaults)
+        if cleanupNeedsRenewal {
+            if reportedFailures.shouldReportCleanupAccessFailure() {
+                onError(String(localized: "Automatic cleanup needs renewed folder access. Select Renew Access in Watch Folder Settings and select the folder again. Monitoring continues; cleanup will resume after selection."))
+            }
+        } else {
+            reportedFailures.cleanupAccessSucceeded()
+        }
         let now = Date()
         var currentFiles: [URL: Int64] = [:]
         var stableFiles: [URL] = []
-        
-        // Convert enumerator to array for async iteration
-        let fileURLs = enumerator.allObjects.compactMap { $0 as? URL }
         
         for fileURL in fileURLs {
             guard AppConstants.supportedVideoExtensions.contains(fileURL.pathExtension.lowercased()) else {
                 continue
             }
             
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey]),
-                  resourceValues.isRegularFile == true,
-                  let fileSize = resourceValues.fileSize else {
+            let resourceValues: URLResourceValues
+            let fileSize: Int
+            do {
+                resourceValues = try readResourceValues(fileURL)
+                // Directories and other non-regular entries are intentionally skipped.
+                if resourceValues.isRegularFile == false {
+                    reportedFailures.metadataSucceeded(for: fileURL)
+                    continue
+                }
+                guard resourceValues.isRegularFile == true,
+                      let size = resourceValues.fileSize, size >= 0 else {
+                    throw CocoaError(.fileReadUnknown)
+                }
+                fileSize = size
+                reportedFailures.metadataSucceeded(for: fileURL)
+            } catch {
+                if reportedFailures.shouldReportMetadataFailure(for: fileURL) {
+                    Self.logger.error("Failed to inspect watch folder file \(fileURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    metadataFailureCount += 1
+                    if metadataFailures.count < 5 {
+                        metadataFailures.append("\(fileURL.lastPathComponent): \(error.localizedDescription)")
+                    }
+                }
+                // Failed observations must break the stability streak. A recovered
+                // file needs two successful scans before it can be imported.
                 continue
             }
 
@@ -106,9 +177,11 @@ actor WatchFolderManager {
             let fileAge = now.timeIntervalSince(relevantDate)
             
             if settings.deleteEnabled, let deleteThreshold = settings.deleteThreshold, fileAge > deleteThreshold {
+                guard !cleanupNeedsRenewal else { continue }
                 do {
                     // Use trash instead of permanent delete for safety (recoverable)
-                    try FileSafetyUtils.trashWatchFolderItem(fileURL)
+                    try trashItem(fileURL)
+                    reportedFailures.cleanupSucceeded(for: fileURL)
                     if let description = settings.deleteDescription {
                         Self.logger.info("Trashed watch folder file older than \(description, privacy: .public): \(fileURL.lastPathComponent, privacy: .public)")
                     } else {
@@ -116,6 +189,9 @@ actor WatchFolderManager {
                     }
                 } catch {
                     Self.logger.error("Failed to trash old watch folder file \(fileURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    if reportedFailures.shouldReportCleanupFailure(for: fileURL), cleanupFailures.count < 5 {
+                        cleanupFailures.append("\(fileURL.lastPathComponent): \(error.localizedDescription)")
+                    }
                 }
                 trackedFiles.removeValue(forKey: fileURL)
                 continue
@@ -165,6 +241,19 @@ actor WatchFolderManager {
     }
 }
 
+/// Enumerates a directory symlink's target while keeping child URLs beneath the
+/// selected folder, so later import operations can find its saved bookmark.
+enum WatchFolderDirectoryContents {
+    static func list(in folder: URL, fileManager: FileManager = .default) throws -> [URL] {
+        let entries = try fileManager.contentsOfDirectory(
+            at: folder.resolvingSymlinksInPath(),
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        return entries.map { folder.appendingPathComponent($0.lastPathComponent) }
+    }
+}
+
 /// Each polling task owns its cancellation state, so a newer monitor cannot
 /// reactivate an old task by changing the manager's shared monitoring flag.
 enum WatchFolderPollingLoop {
@@ -191,7 +280,6 @@ private extension WatchFolderManager {
     }
     
     func loadDurationSettings() -> DurationSettings {
-        let defaults = UserDefaults.standard
         let ignoreEnabled = defaults.bool(forKey: AppConstants.watchFolderIgnoreOlderThan24hKey)
         let deleteEnabled = defaults.bool(forKey: AppConstants.watchFolderAutoDeleteOlderThanWeekKey)
         let ignoreValueRaw = defaults.object(forKey: AppConstants.watchFolderIgnoreDurationValueKey) as? NSNumber
@@ -232,5 +320,50 @@ private extension WatchFolderManager {
         case .days: unitName = value == 1 ? "day" : "days"
         }
         return "\(value) \(unitName)"
+    }
+}
+
+/// Alerts once per continuous failure, while allowing a recovered operation to
+/// report a later failure. Missing files no longer retain cleanup failure state.
+struct WatchFolderFailureTracker {
+    private var scanFailed = false
+    private var cleanupAccessFailed = false
+    private var cleanupFailures: Set<URL> = []
+    private var metadataFailures: Set<URL> = []
+
+    mutating func shouldReportCleanupAccessFailure() -> Bool {
+        defer { cleanupAccessFailed = true }
+        return !cleanupAccessFailed
+    }
+
+    mutating func cleanupAccessSucceeded() {
+        cleanupAccessFailed = false
+    }
+
+    mutating func shouldReportScanFailure() -> Bool {
+        defer { scanFailed = true }
+        return !scanFailed
+    }
+
+    mutating func scanSucceeded(currentFiles: Set<URL>) {
+        scanFailed = false
+        cleanupFailures.formIntersection(currentFiles)
+        metadataFailures.formIntersection(currentFiles)
+    }
+
+    mutating func shouldReportMetadataFailure(for url: URL) -> Bool {
+        metadataFailures.insert(url).inserted
+    }
+
+    mutating func metadataSucceeded(for url: URL) {
+        metadataFailures.remove(url)
+    }
+
+    mutating func shouldReportCleanupFailure(for url: URL) -> Bool {
+        cleanupFailures.insert(url).inserted
+    }
+
+    mutating func cleanupSucceeded(for url: URL) {
+        cleanupFailures.remove(url)
     }
 }

@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-09-11",
+  "sourceRoot": "/Users/truls.aagedal/Developer/avm",
+  "scope": "Retained compiler dependency files for all local build targets; compilation evidence does not prove final executable reachability. Current source bytes are fingerprints, not proof of build-time bytes or complete attribution.",
+  "compilerDependencyFileCount": 858,
+  "compilerDependencyRecordSetSHA256": "4acfc11a1c35aa9831c4f52facce9268291d3aeccf814a639b012d4a01fa422c",
+  "components": [
+    {
+      "directory": "build_arm64/FXdiv",
+      "compilerReferencedFileCount": 1,
+      "compilerReferencedFilesSHA256": "8f530da5a3a83ab8038599d84e9af5736d9a02b0215d98f45ac6bd19f0254f40",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/FXdiv/LICENSE",
+          "snapshotPath": "FXdiv/LICENSE",
+          "bytes": 1117,
+          "sha256": "7cac00006125b1486a27e4801ed66357236e984c540bd323945ab7b66b078ec3"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/XNNPACK",
+      "compilerReferencedFileCount": 255,
+      "compilerReferencedFilesSHA256": "58730b133fbfc193878fd5991945da82d1516b13788881f2def1d223f79ecfc3",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/XNNPACK/LICENSE",
+          "snapshotPath": "XNNPACK/LICENSE",
+          "bytes": 1560,
+          "sha256": "63f519e15726f4c4f830bd958f694c84fecb4e0a4cacc527d2696bb71ef95ada"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/xnnpack.cmake",
+          "snapshotPath": "XNNPACK/source-selection.cmake",
+          "bytes": 1962,
+          "sha256": "8978620bd361e2e0895b1e489fe6a788723652ccb78e4da93f8605d4f47351d1"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/abseil-cpp",
+      "compilerReferencedFileCount": 318,
+      "compilerReferencedFilesSHA256": "d4f88d12db373e3c7b01a6d8b88439471dded13b300cba6960be9e447939c72b",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/abseil-cpp/AUTHORS",
+          "snapshotPath": "abseil-cpp/AUTHORS",
+          "bytes": 295,
+          "sha256": "1fd39030c119b4c97014f59e0ad0ed65f23475bbdf55a52740f31eb82b34b4ee"
+        },
+        {
+          "sourcePath": "build_arm64/abseil-cpp/LICENSE",
+          "snapshotPath": "abseil-cpp/LICENSE",
+          "bytes": 11361,
+          "sha256": "c79a7fea0e3cac04cd43f20e7b648e5a0ff8fa5344e644b0ee09ca1162b62747"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/abseil-cpp.cmake",
+          "snapshotPath": "abseil-cpp/source-selection.cmake",
+          "bytes": 1552,
+          "sha256": "60624ebcf16ff12d222f4de1efb32cfa78a02cb55376f4b1af0d81e73bdec91a"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/cpuinfo",
+      "compilerReferencedFileCount": 15,
+      "compilerReferencedFilesSHA256": "4ca5af415653ca144ab0bc8459016eae55e57f6a644c72cb495e5cf5a61a1805",
+      "hasOwnGitMetadata": true,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/cpuinfo/LICENSE",
+          "snapshotPath": "cpuinfo/LICENSE",
+          "bytes": 1424,
+          "sha256": "8e7e60636c3aa0cb03571a1a841ce5697f9551ff92b3c426c2561613d15ade70"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/cpuinfo.cmake",
+          "snapshotPath": "cpuinfo/source-selection.cmake",
+          "bytes": 1696,
+          "sha256": "47693fb3bc06ca1df07f4452d75f6ef82b001d5c1b6f5d8d1f3de9be752a4cb3"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/eigen",
+      "compilerReferencedFileCount": 368,
+      "compilerReferencedFilesSHA256": "5b32e351b6f1c74dba5059752c8c18d9573c754762c689d27e4f8cc6d062186b",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/eigen/COPYING.APACHE",
+          "snapshotPath": "eigen/COPYING.APACHE",
+          "bytes": 11362,
+          "sha256": "03379001a7b12a2ec997a25554247d985270b353c10d5bafee9ac8d6519820b7"
+        },
+        {
+          "sourcePath": "build_arm64/eigen/COPYING.BSD",
+          "snapshotPath": "eigen/COPYING.BSD",
+          "bytes": 1517,
+          "sha256": "51928dce36213c5333ba3172e847d735d4c6e9b7ff2722a326c49067155b82eb"
+        },
+        {
+          "sourcePath": "build_arm64/eigen/COPYING.MINPACK",
+          "snapshotPath": "eigen/COPYING.MINPACK",
+          "bytes": 2193,
+          "sha256": "c87b7f8ee88f6195e91743820c00354833583aef091b72e2d4a49c8e28e798a0"
+        },
+        {
+          "sourcePath": "build_arm64/eigen/COPYING.MPL2",
+          "snapshotPath": "eigen/COPYING.MPL2",
+          "bytes": 16727,
+          "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172"
+        },
+        {
+          "sourcePath": "build_arm64/eigen/COPYING.README",
+          "snapshotPath": "eigen/COPYING.README",
+          "bytes": 264,
+          "sha256": "db640ff2bd90c6abd6a4d3fbb351e0ee4d555417cf840492054d1cbb2ea85644"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/eigen.cmake",
+          "snapshotPath": "eigen/source-selection.cmake",
+          "bytes": 4672,
+          "sha256": "f833c68820c6d71c153034b5c28b5f01619bfa6cc9c1add2f9c6a9ab2e440e99"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/farmhash",
+      "compilerReferencedFileCount": 2,
+      "compilerReferencedFilesSHA256": "c89cd48bad4a6271ddcb6a36aabd43d318e5399a9cb1064ac91689798f21bf12",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/farmhash/COPYING",
+          "snapshotPath": "farmhash/COPYING",
+          "bytes": 1110,
+          "sha256": "4162dd091caae234f72d3b57e138174f733e736b2430a4c51b098b17d866fcb6"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/farmhash.cmake",
+          "snapshotPath": "farmhash/source-selection.cmake",
+          "bytes": 1738,
+          "sha256": "59fc911c12492c7c11242a5d5adb5ca5053c1ed9dd6914d0ca3f9e1c4ddb0aba"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/fft2d",
+      "compilerReferencedFileCount": 2,
+      "compilerReferencedFilesSHA256": "75a97dccad1c5226f9e93e28c91a0694116f767f2d8b3d64f6c3c64ea46b2e6c",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/fft2d/readme.txt",
+          "snapshotPath": "fft2d/readme.txt",
+          "bytes": 7183,
+          "sha256": "5b5e610da10394132a42d82ed6501fe1b83a1d19e1bb160c8ace10ed61708765"
+        },
+        {
+          "sourcePath": "build_arm64/fft2d/readme2d.txt",
+          "snapshotPath": "fft2d/readme2d.txt",
+          "bytes": 3212,
+          "sha256": "0b2a2082537735a2a576dbec2e8f9c1a09812eac6df6a389502a6ba860072906"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/fft2d.cmake",
+          "snapshotPath": "fft2d/source-selection.cmake",
+          "bytes": 1458,
+          "sha256": "db716f3ee29c818907f73cc334c243a540ff7e2b3dd5b06aa942625664431f66"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/flatbuffers",
+      "compilerReferencedFileCount": 28,
+      "compilerReferencedFilesSHA256": "76231341cd8d74b2488d9124e6b892139040fa12be9bcc1340f06dd8950c16ea",
+      "hasOwnGitMetadata": true,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/flatbuffers/LICENSE",
+          "snapshotPath": "flatbuffers/LICENSE",
+          "bytes": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/flatbuffers.cmake",
+          "snapshotPath": "flatbuffers/source-selection.cmake",
+          "bytes": 2854,
+          "sha256": "863515a721c7ea42741d07f09b88e13304f35790f8ee346f3a5e85c44da45f37"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/fp16",
+      "compilerReferencedFileCount": 4,
+      "compilerReferencedFilesSHA256": "3861c285db5afb8937c3b1df453041f1762b38df25b3ea1f6c2eac7fb19c3dd5",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/fp16/LICENSE",
+          "snapshotPath": "fp16/LICENSE",
+          "bytes": 1157,
+          "sha256": "17e4f539024be2749ee729d1e2f01d24cef12ece8c9bf18e91a4349be29c80bf"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/gemmlowp",
+      "compilerReferencedFileCount": 77,
+      "compilerReferencedFilesSHA256": "a20736c4e7cfab740c0f0339c935569f11c24a9012a219f5a1362604e0a3a4c5",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/gemmlowp/AUTHORS",
+          "snapshotPath": "gemmlowp/AUTHORS",
+          "bytes": 390,
+          "sha256": "916234caa03bbb2769b278e165515a8ca9fa9d8f60b7b57a5dd6a4f026208ce2"
+        },
+        {
+          "sourcePath": "build_arm64/gemmlowp/LICENSE",
+          "snapshotPath": "gemmlowp/LICENSE",
+          "bytes": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/gemmlowp.cmake",
+          "snapshotPath": "gemmlowp/source-selection.cmake",
+          "bytes": 2030,
+          "sha256": "1c1979244e016a0983a071fd93d2066d717fb1b0d86f7c6ab4fe44d957b53040"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/pthreadpool",
+      "compilerReferencedFileCount": 8,
+      "compilerReferencedFilesSHA256": "67d04a0ea13d5ad0256aebc352d582e761be4499e629e51bac8b07a900544fcb",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/pthreadpool/LICENSE",
+          "snapshotPath": "pthreadpool/LICENSE",
+          "bytes": 1378,
+          "sha256": "57814a606b4d0fb087d9a534919084b6c11b58a4174cb5a4aef200187780dc3a"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "build_arm64/ruy",
+      "compilerReferencedFileCount": 77,
+      "compilerReferencedFilesSHA256": "13e08b0161c01068f9d29d9da5c4e90390cbf1d74981402ced38728002ce07d5",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "build_arm64/ruy/LICENSE",
+          "snapshotPath": "ruy/LICENSE",
+          "bytes": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/tensorflow/lite/tools/cmake/modules/ruy.cmake",
+          "snapshotPath": "ruy/source-selection.cmake",
+          "bytes": 1341,
+          "sha256": "41a5e812204f5e54eebd376b0e258ef7e79336d1ed5af1b70ad34b8a13020dc2"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "third_party/fastfeat",
+      "compilerReferencedFileCount": 4,
+      "compilerReferencedFilesSHA256": "ac06828fb7cad104c071e27daa90323f726aaadc3dcb9db83db08430f408cf19",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "third_party/fastfeat/LICENSE",
+          "snapshotPath": "fastfeat/LICENSE",
+          "bytes": 1506,
+          "sha256": "043dcfd059386f9facd376351b2bd79325778744aa442177390cdfcca54babed"
+        },
+        {
+          "sourcePath": "third_party/fastfeat/README.libavm",
+          "snapshotPath": "fastfeat/README.libavm",
+          "bytes": 1664,
+          "sha256": "318be031a1e138aa62f0da76f879bb84e5266eee40d0adfc500e4368bd226f6f"
+        }
+      ],
+      "trackedFilesInAVMRepository": 6
+    },
+    {
+      "directory": "third_party/libwebm",
+      "compilerReferencedFileCount": 14,
+      "compilerReferencedFilesSHA256": "48454d9cedc6d5d51230835088d5a888d848eed8fd6ad4229399c91e9b19e97c",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "third_party/libwebm/AUTHORS.TXT",
+          "snapshotPath": "libwebm/AUTHORS.TXT",
+          "bytes": 98,
+          "sha256": "1e8751834a0341c39c75a06021fdad56aa614fc6cd7cf0a7f8a18921689c9e2c"
+        },
+        {
+          "sourcePath": "third_party/libwebm/LICENSE.TXT",
+          "snapshotPath": "libwebm/LICENSE.TXT",
+          "bytes": 1496,
+          "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+        },
+        {
+          "sourcePath": "third_party/libwebm/PATENTS.TXT",
+          "snapshotPath": "libwebm/PATENTS.TXT",
+          "bytes": 1436,
+          "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c"
+        },
+        {
+          "sourcePath": "third_party/libwebm/README.libavm",
+          "snapshotPath": "libwebm/README.libavm",
+          "bytes": 376,
+          "sha256": "7c646568aa685a000736167d715738c615b0333036d2adeed5a98936a4ac596e"
+        }
+      ],
+      "trackedFilesInAVMRepository": 21
+    },
+    {
+      "directory": "third_party/libyuv",
+      "compilerReferencedFileCount": 27,
+      "compilerReferencedFilesSHA256": "cf6fdbe2012ea5b3194515a355d08fb9928a9e76115df84c5a936b6d012289cb",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "third_party/libyuv/README.libavm",
+          "snapshotPath": "libyuv/README.libavm",
+          "bytes": 435,
+          "sha256": "5d211990b91b8124de0fd9a8c8e7759cab62cbd9503fac027f39242768776d09"
+        }
+      ],
+      "trackedFilesInAVMRepository": 64,
+      "missingReferencedMaterial": [
+        "LICENSE",
+        "PATENTS",
+        "AUTHORS"
+      ]
+    },
+    {
+      "directory": "third_party/tensorflow",
+      "compilerReferencedFileCount": 542,
+      "compilerReferencedFilesSHA256": "f51c6ac4abdf19b2459b9b35ae6af80efa52b20a6bd5cbab2c3c8a3a97af5676",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "third_party/tensorflow/AUTHORS",
+          "snapshotPath": "tensorflow/AUTHORS",
+          "bytes": 357,
+          "sha256": "75170265e3c927fd53a790912a0ed6fbca0b42e63ae2d6c60fa049a9da9f2597"
+        },
+        {
+          "sourcePath": "third_party/tensorflow/LICENSE",
+          "snapshotPath": "tensorflow/LICENSE",
+          "bytes": 13575,
+          "sha256": "71c6915d04265772a0339bed47276942c678b45cc01534210ebe6984fd1aec65"
+        }
+      ],
+      "trackedFilesInAVMRepository": 0
+    },
+    {
+      "directory": "third_party/vector",
+      "compilerReferencedFileCount": 2,
+      "compilerReferencedFilesSHA256": "40a04447991009345f0415c896088dddadb17779521485dbdca5bb80a4df843d",
+      "hasOwnGitMetadata": false,
+      "retainedFiles": [
+        {
+          "sourcePath": "third_party/vector/LICENSE",
+          "snapshotPath": "vector/LICENSE",
+          "bytes": 1084,
+          "sha256": "ff6c857ce2708e87701323078aef115c1872a1f80a9649f86dc899b48083bc60"
+        },
+        {
+          "sourcePath": "third_party/vector/README.libavm",
+          "snapshotPath": "vector/README.libavm",
+          "bytes": 488,
+          "sha256": "e2fb5ce52c51980d26cabb28a0d369b381ddd77f13c20005d447001e87eb8ec7"
+        }
+      ],
+      "trackedFilesInAVMRepository": 4
+    }
+  ]
+}

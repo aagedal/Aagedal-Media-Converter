@@ -209,17 +209,22 @@ struct FileNameSettingsView: View {
     }
 
     private var templatePreview: String {
-        let counterString = String(format: "%0\(max(1, customCounterPadding))d", customCounterValue)
-        let sampleSourceName = FileNameProcessor.processFileName("My Sømmer Vidéo æø!")
-        // Sample stand-in values for preset-derived variables — actual values come from the active preset at conversion time.
-        let substituted = customTemplate
-            .replacingOccurrences(of: "{sourceName}", with: sampleSourceName)
-            .replacingOccurrences(of: "{date}", with: datePreview)
-            .replacingOccurrences(of: "{counter}", with: counterString)
-            .replacingOccurrences(of: "{presetSuffix}", with: "_h264")
-            .replacingOccurrences(of: "{resolution}", with: "1080p")
-            .replacingOccurrences(of: "{framerate}", with: "25p")
-        return FileNameProcessor.processFileName(substituted)
+        let settings = FileNamePreferences(
+            isEnabled: enableFileNameProcessing,
+            replaceSpaces: fileNameReplaceSpaces,
+            replaceScandinavianCharacters: fileNameReplaceScandinavianChars,
+            specialCharacterRemovalMode: SpecialCharacterRemovalMode(rawValue: specialCharRemovalModeRaw) ?? .loose,
+            includePresetSuffix: fileNameIncludePresetSuffix,
+            customTemplateEnabled: enableCustomTemplate,
+            template: customTemplate,
+            dateFormat: customDateFormat,
+            counterPadding: customCounterPadding
+        )
+        let sourceName = FileNameProcessor.processFileName("My Sømmer Vidéo æø!", settings: settings)
+        return FileNameProcessor.applyCustomTemplate(
+            sourceName: sourceName, counter: customCounterValue, settings: settings,
+            context: FileNameTemplateContext(presetSuffix: "_h264", resolution: "1080p", framerate: "25p")
+        )
     }
 }
 

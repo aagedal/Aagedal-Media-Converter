@@ -1,0 +1,2620 @@
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/realloc.h =====
+
+/* realloc.h
+
+   Copyright (C) 2002 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/cfb.h =====
+
+/* cfb.h
+
+   Cipher feedback mode.
+
+   Copyright (C) 2015, 2017 Dmitry Eremin-Solenikov
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/eddsa.h =====
+
+/* eddsa.h
+
+   Copyright (C) 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/dsa-compat.h =====
+
+/* dsa-compat.h
+
+   Old DSA publickey interface.
+
+   Copyright (C) 2002, 2013, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/md2.h =====
+
+/* md2.h
+
+   The MD2 hash function, described in RFC 1319.
+
+   Copyright (C) 2003 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/md5-compat.h =====
+
+/* md5-compat.h
+
+   The md5 hash function, RFC 1321-style interface.
+
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/ripemd160.h =====
+
+/* ripemd160.h
+
+   RIPEMD-160 hash function.
+
+   Copyright (C) 2011 Andres Mejia
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/pkcs1.h =====
+
+/* pkcs1.h
+
+   PKCS1 embedding.
+
+   Copyright (C) 2003 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/umac.h =====
+
+/* umac.h
+
+   UMAC message authentication code (RFC-4418).
+
+   Copyright (C) 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/blowfish.h =====
+
+/* blowfish.h
+
+   Blowfish block cipher.
+
+   Copyright (C) 2014 Niels Möller
+   Copyright (C) 1998, 2001 FSF, Ray Dassen, Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/version.h =====
+
+/* version.h
+
+   Information about library version.
+
+   Copyright (C) 2015 Red Hat, Inc.
+   Copyright (C) 2015 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/yarrow.h =====
+
+/* yarrow.h
+
+   The yarrow pseudo-randomness generator.
+
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/pgp.h =====
+
+/* pgp.h
+
+   PGP related functions.
+
+   Copyright (C) 2001, 2002 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/base64.h =====
+
+/* base64.h
+   
+   Base-64 encoding and decoding.
+
+   Copyright (C) 2002 Niels Möller, Dan Egnor
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/sha.h =====
+
+/* sha.h
+
+   This file is deprecated, and provided only for backwards
+   compatibility with earlier versions of Nettle. Please use sha1.h
+   and/or sha2.h instead.
+
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/asn1.h =====
+
+/* asn1.h
+
+   Limited support for ASN.1 DER decoding.
+
+   Copyright (C) 2005 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/chacha.h =====
+
+/* chacha.h
+
+   The ChaCha stream cipher.
+
+   Copyright (C) 2013 Joachim Strömbergson
+   Copyright (C) 2012 Simon Josefsson
+   Copyright (C) 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/drbg-ctr.h =====
+
+/* drbg-ctr.h
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/gosthash94.h =====
+
+/* gosthash94.h
+
+   The GOST R 34.11-94 hash function, described in RFC 5831.
+
+   Copyright (C) 2012 Nikos Mavrogiannopoulos, Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/gosthash94.h =====
+
+/* Copyright: 2009-2012 Aleksey Kravchenko <rhash.admin@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/pss-mgf1.h =====
+
+/* pss-mgf1.h
+
+   PKCS#1 mask generation function 1, used in RSA-PSS (RFC-3447).
+
+   Copyright (C) 2017 Daiki Ueno
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/serpent.h =====
+
+/* serpent.h
+
+   The serpent block cipher.
+
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/poly1305.h =====
+
+/* poly1305.h
+
+   Poly1305 message authentication code.
+
+   Copyright (C) 2013 Nikos Mavrogiannopoulos
+   Copyright (C) 2013, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/base16.h =====
+
+/* base16.h
+   
+   Hex encoding and decoding, following spki conventions (i.e.
+   allowing whitespace between digits).
+
+   Copyright (C) 2002 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/sha3.h =====
+
+/* sha3.h
+
+   The sha3 hash function (aka Keccak).
+
+   Copyright (C) 2012 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/hkdf.h =====
+
+/* hkdf.h
+
+   TLS PRF code (RFC-5246, RFC-2246).
+
+   Copyright (C) 2017 Red Hat, Inc.
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/md5.h =====
+
+/* md5.h
+
+   The MD5 hash function, described in RFC 1321.
+
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/sexp.h =====
+
+/* sexp.h
+
+   Parsing s-expressions.
+   Copyright (C) 2002 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/siv-gcm.h =====
+
+/* siv-gcm.h
+
+   AES-GCM-SIV, RFC8452
+
+   Copyright (C) 2022 Red Hat, Inc.
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/memops.h =====
+
+/* memops.h
+
+   Copyright (C) 2016 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/ecdsa.h =====
+
+/* ecdsa.h
+
+   Copyright (C) 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/pbkdf2.h =====
+
+/* pbkdf2.h
+
+   PKCS #5 password-based key derivation function PBKDF2, see RFC 2898.
+
+   Copyright (C) 2012 Simon Josefsson
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/eax.h =====
+
+/* eax.h
+
+   EAX mode, see http://www.cs.ucdavis.edu/~rogaway/papers/eax.pdf
+
+   Copyright (C) 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/nist-keywrap.h =====
+
+/* nist-keywrap.h
+
+   AES Key Wrap function.
+   implements RFC 3394
+   https://tools.ietf.org/html/rfc3394
+
+   Copyright (C) 2021 Nicolas Mora
+                 2021 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/balloon.h =====
+
+/* balloon.h
+
+   Balloon password-hashing algorithm.
+
+   Copyright (C) 2022 Zoltan Fridrich
+   Copyright (C) 2022 Red Hat, Inc.
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/salsa20.h =====
+
+/* salsa20.h
+
+   The Salsa20 stream cipher.
+
+   Copyright (C) 2012 Simon Josefsson
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/cast128.h =====
+
+/* cast128.h
+
+   The CAST-128 block cipher.
+
+   Copyright (C) 2001, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/arctwo.h =====
+
+/* arctwo.h
+
+   The arctwo/rfc2268 block cipher.
+
+   Copyright (C) 2004 Simon Josefsson
+   Copyright (C) 2002, 2004, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/sha2.h =====
+
+/* sha2.h
+
+   The sha2 family of hash functions.
+
+   Copyright (C) 2001, 2012 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/buffer.h =====
+
+/* buffer.h
+
+   A bare-bones string stream.
+
+   Copyright (C) 2002 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/chacha-poly1305.h =====
+
+/* chacha-poly1305.h
+
+   AEAD mechanism based on chacha and poly1305.
+   See draft-agl-tls-chacha20poly1305-04.
+
+   Copyright (C) 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/camellia.h =====
+
+/* camellia.h
+
+   Copyright (C) 2006,2007 NTT
+   (Nippon Telegraph and Telephone Corporation).
+
+   Copyright (C) 2010, 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/md4.h =====
+
+/* md4.h
+
+   The MD4 hash function, described in RFC 1320.
+
+   Copyright (C) 2003 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/hmac.h =====
+
+/* hmac.h
+
+   HMAC message authentication code (RFC-2104).
+
+   Copyright (C) 2001, 2002 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/nettle-meta.h =====
+
+/* nettle-meta.h
+
+   Information about algorithms.
+
+   Copyright (C) 2002, 2014, 2020 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/aes.h =====
+
+/* aes.h
+
+   The aes/rijndael block cipher.
+
+   Copyright (C) 2001, 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/nettle-types.h =====
+
+/* nettle-types.h
+
+   Copyright (C) 2005, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/macros.h =====
+
+/* macros.h
+
+   Copyright (C) 2001, 2010 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/sm3.h =====
+
+/* sm3.h
+
+   The SM3 hash function.
+
+   Copyright (C) 2017 Jia Zhang
+   Copyright (C) 2021 Tianjia Zhang <tianjia.zhang@linux.alibaba.com>
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/des.h =====
+
+/* des.h
+
+   The des block cipher. And triple des.
+
+   Copyright (C) 1992 Dana L. How
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/twofish.h =====
+
+/* twofish.h
+
+   The twofish block cipher.
+
+   Copyright (C) 2001, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/gostdsa.h =====
+
+/* gostdsa.h
+
+   Copyright (C) 2015 Dmity Eremin-Solenikov
+   Copyright (C) 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/streebog.h =====
+
+/* streebog.h
+
+   The Streebog family of hash functions.
+
+   Copyright (C) 2020 Dmitry Baryshkov
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/sha1.h =====
+
+/* sha1.h
+
+   The sha1 hash function.
+
+   Copyright (C) 2001, 2012 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/gcm.h =====
+
+/* gcm.h
+
+   Galois counter mode, specified by NIST,
+   http://csrc.nist.gov/publications/nistpubs/800-38D/SP-800-38D.pdf
+
+   Copyright (C) 2011 Katholieke Universiteit Leuven
+   Copyright (C) 2011, 2014 Niels Möller
+
+   Contributed by Nikos Mavrogiannopoulos
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/ecc.h =====
+
+/* ecc.h
+
+   Copyright (C) 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/rsa.h =====
+
+/* rsa.h
+
+   The RSA publickey algorithm.
+
+   Copyright (C) 2001, 2002 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/ocb.h =====
+
+/* ocb.h
+
+   OCB AEAD mode, RFC 7253
+
+   Copyright (C) 2021 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/curve448.h =====
+
+/* curve448.h
+
+   Copyright (C) 2017 Daiki Ueno
+   Copyright (C) 2017 Red Hat, Inc.
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/cbc.h =====
+
+/* cbc.h
+
+   Cipher block chaining mode.
+
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/curve25519.h =====
+
+/* curve25519.h
+
+   Copyright (C) 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/xts.h =====
+
+/* xts.h
+
+   XEX-based tweaked-codebook mode with ciphertext stealing (XTS)
+
+   Copyright (C) 2005 Niels Möller
+   Copyright (C) 2018 Red Hat, Inc.
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/dsa.h =====
+
+/* dsa.h
+
+   The DSA publickey algorithm.
+
+   Copyright (C) 2002, 2013, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/ecc-curve.h =====
+
+/* ecc-curve.h
+
+   Copyright (C) 2013 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/pss.h =====
+
+/* pss.h
+
+   PKCS#1 RSA-PSS (RFC-3447).
+
+   Copyright (C) 2017 Daiki Ueno
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/knuth-lfib.h =====
+
+/* knuth-lfib.h
+
+   The "lagged fibonacci" pseudorandomness generator, described in
+   Knuth, TAoCP, 3.6
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/cmac.h =====
+
+/* cmac.h
+
+   CMAC mode, as specified in RFC4493
+
+   Copyright (C) 2017 Red Hat, Inc.
+
+   Contributed by Nikos Mavrogiannopoulos
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/ctr.h =====
+
+/* ctr.h
+
+   Counter mode, using an network byte order incremented counter,
+   matching the testcases of NIST 800-38A.
+
+   Copyright (C) 2005 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/bignum.h =====
+
+/* bignum.h
+
+   Bignum operations that are missing from gmp.
+
+   Copyright (C) 2001 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/sm4.h =====
+
+/* sm4.h
+
+   Copyright (C) 2022 Tianjia Zhang <tianjia.zhang@linux.alibaba.com>
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/siv-cmac.h =====
+
+/* siv-cmac.h
+
+   AES-SIV, RFC5297
+
+   Copyright (C) 2017 Nikos Mavrogiannopoulos
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/ccm.h =====
+
+/* ccm.h
+
+   Counter with CBC-MAC mode, specified by NIST,
+   http://csrc.nist.gov/publications/nistpubs/800-38C/SP800-38C_updated-July20_2007.pdf
+
+   Copyright (C) 2014 Exegin Technologies Limited
+   Copyright (C) 2014 Owen Kirby
+
+   Contributed to GNU Nettle by Owen Kirby
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+
+
+===== pinned-archive-header; nettle.xcframework/macos-arm64_x86_64/nettle.framework/Headers/arcfour.h =====
+
+/* arcfour.h
+
+   The arcfour/rc4 stream cipher.
+
+   Copyright (C) 2001, 2014 Niels Möller
+
+   This file is part of GNU Nettle.
+
+   GNU Nettle is free software: you can redistribute it and/or
+   modify it under the terms of either:
+
+     * the GNU Lesser General Public License as published by the Free
+       Software Foundation; either version 3 of the License, or (at your
+       option) any later version.
+
+   or
+
+     * the GNU General Public License as published by the Free
+       Software Foundation; either version 2 of the License, or (at your
+       option) any later version.
+
+   or both in parallel, as here.
+
+   GNU Nettle is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   General Public License for more details.
+
+   You should have received copies of the GNU General Public License and
+   the GNU Lesser General Public License along with this program.  If
+   not, see http://www.gnu.org/licenses/.
+*/
+

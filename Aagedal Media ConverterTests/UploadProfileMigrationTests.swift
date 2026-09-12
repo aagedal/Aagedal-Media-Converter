@@ -128,4 +128,102 @@ final class UploadProfileMigrationTests: XCTestCase {
             XCTAssertNotNil(defaults.data(forKey: "uploadFTPProfiles"))
         }
     }
+
+    func testSelectedSSHKeyPersistsReadOnlyAccessAcrossStoreReload() throws {
+        try withStore { defaults in
+            let keyURL = URL(fileURLWithPath: "/fixture/selected-key")
+            var activeScopes = 0
+            let bookmarks = SecurityScopedBookmarkManager(
+                defaults: defaults,
+                createBookmark: { url, options in
+                    XCTAssertEqual(url, keyURL)
+                    XCTAssertEqual(activeScopes, 1)
+                    XCTAssertTrue(options.contains(.withSecurityScope))
+                    XCTAssertTrue(options.contains(.securityScopeAllowOnlyReadAccess))
+                    return Data([3, 1, 4])
+                },
+                startScope: { _ in activeScopes += 1; return true },
+                stopScope: { _ in activeScopes -= 1 }
+            )
+            var profile = UploadProfile.new(backend: .sftp)
+            profile.useKeyAuth = true
+            try profile.selectSSHKeyFile(keyURL, bookmarkManager: bookmarks)
+            UploadProfileStore.saveProfiles([profile], defaults: defaults)
+            XCTAssertEqual(activeScopes, 0)
+
+            let reloaded = try XCTUnwrap(UploadProfileStore.loadProfiles(defaults: defaults).first)
+            XCTAssertEqual(reloaded.keyFilePath, keyURL.path)
+            // A new manager simulates the next app launch; only persisted data
+            // can recover the scope, and the profile needs no schema migration.
+            let relaunchedBookmarks = SecurityScopedBookmarkManager(
+                defaults: defaults,
+                resolveData: { data in
+                    XCTAssertEqual(data, Data([3, 1, 4]))
+                    return (keyURL, false)
+                }
+            )
+            XCTAssertEqual(
+                relaunchedBookmarks.resolveBookmark(for: URL(fileURLWithPath: reloaded.keyFilePath)),
+                keyURL
+            )
+        }
+    }
+
+    func testFailedSSHKeyBookmarkLeavesPreviousProfileAndSavedAccessIntact() throws {
+        try withStore { defaults in
+            let previousKey = URL(fileURLWithPath: "/fixture/previous-key")
+            let replacementKey = URL(fileURLWithPath: "/fixture/replacement-key")
+            defaults.set([previousKey.absoluteString: Data([8])], forKey: "securityScopedBookmarks")
+            var activeScopes = 0
+            let bookmarks = SecurityScopedBookmarkManager(
+                defaults: defaults,
+                createBookmark: { _, _ in throw CocoaError(.fileReadNoPermission) },
+                startScope: { _ in activeScopes += 1; return true },
+                stopScope: { _ in activeScopes -= 1 }
+            )
+            var profile = UploadProfile.new(backend: .sftp)
+            profile.keyFilePath = previousKey.path
+            UploadProfileStore.saveProfiles([profile], defaults: defaults)
+            let before = defaults.dictionaryRepresentation()
+
+            XCTAssertThrowsError(try profile.selectSSHKeyFile(replacementKey, bookmarkManager: bookmarks)) { error in
+                guard case UploadError.sshKeyBookmarkFailed = error else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+            }
+
+            XCTAssertEqual(profile.keyFilePath, previousKey.path)
+            XCTAssertEqual(activeScopes, 0)
+            XCTAssertEqual(before as NSDictionary, defaults.dictionaryRepresentation() as NSDictionary)
+        }
+    }
+    func testMalformedModernProfilesRejectEditorLoadAndSubsequentSave() throws {
+        for malformed: Any in [Data("damaged".utf8), "wrong-storage-type", Data("{}".utf8)] {
+            try withStore { defaults in
+                defaults.set(malformed, forKey: AppConstants.uploadProfilesKey)
+                let selected = UUID()
+                UploadProfileStore.saveSelectedProfileID(selected, defaults: defaults)
+                let before = defaults.dictionaryRepresentation() as NSDictionary
+                XCTAssertThrowsError(try UploadProfileStore.loadProfilesForEditing(defaults: defaults))
+                XCTAssertFalse(UploadProfileStore.saveProfiles([.new(backend: .ftp)], defaults: defaults))
+                XCTAssertFalse(UploadProfileStore.saveProfiles([], defaults: defaults))
+                XCTAssertEqual(defaults.dictionaryRepresentation() as NSDictionary, before)
+            }
+        }
+    }
+
+    func testEditorCanLoadMissingOrExplicitlyEmptyProfilesAndSaveNewDestination() throws {
+        for existing in [false, true] {
+            try withStore { defaults in
+                if existing {
+                    defaults.set(Data("[]".utf8), forKey: AppConstants.uploadProfilesKey)
+                }
+                XCTAssertEqual(try UploadProfileStore.loadProfilesForEditing(defaults: defaults), [])
+                let profile = UploadProfile.new(backend: .sftp)
+                XCTAssertTrue(UploadProfileStore.saveProfiles([profile], defaults: defaults))
+                XCTAssertEqual(try UploadProfileStore.loadProfilesForEditing(defaults: defaults), [profile])
+            }
+        }
+    }
+
 }

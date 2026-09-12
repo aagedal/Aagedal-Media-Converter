@@ -22,11 +22,11 @@ actor WhisperService {
     private let ffmpegPathProvider: @Sendable () -> String?
 
     private var activeRunIDs: Set<UUID> = []
+    private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
     private var cancelledRunIDs: Set<UUID> = []
     private var cancelledOperationIDs: Set<UUID> = []
     private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
     private var currentTranscriptionTasks: [UUID: Task<Void, Error>] = [:]
-    private var reservedOutputPaths: Set<String> = []
 
     init(
         modelManager: any WhisperModelProviding = WhisperModelManager.shared,
@@ -55,10 +55,11 @@ actor WhisperService {
         operationID: UUID,
         audioStreamIndex: Int? = nil,
         maxLineLength: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
-        registerRun(runID, operationID: operationID)
+        let publication = registerRun(runID, operationID: operationID)
         defer { finishRun(runID, operationID: operationID) }
         guard !cancelledRunIDs.contains(runID) else {
             throw WhisperServiceError.cancelled
@@ -85,9 +86,11 @@ actor WhisperService {
         }
 
         // Prepare output file path
-        let baseName = inputFile.deletingPathExtension().lastPathComponent
-        let srtFile = reserveOutputURL(directory: outputDirectory, baseName: baseName)
-        defer { reservedOutputPaths.remove(srtFile.path) }
+        let reservation = SubtitleSRTNaming.shared.reserve(
+            directory: outputDirectory, sourceFile: inputFile, method: .whisper
+        )
+        defer { reservation.release() }
+        let srtFile = reservation.url
         let stagedSRTFile = outputDirectory.appendingPathComponent(
             ".whisper-\(runID.uuidString).srt"
         )
@@ -139,7 +142,13 @@ actor WhisperService {
             throw WhisperServiceError.srtGenerationFailed
         }
         do {
-            try publish(stagedSRTFile, to: srtFile)
+            try await publication.publish(
+                stagedURL: stagedSRTFile,
+                reservation: reservation,
+                isCurrent: publicationIsCurrent
+            )
+        } catch is CancellationError {
+            throw WhisperServiceError.cancelled
         } catch {
             throw WhisperServiceError.transcriptionFailed(
                 "Could not publish subtitle output"
@@ -164,6 +173,7 @@ actor WhisperService {
         operationID: UUID,
         audioStreamIndex: Int? = nil,
         maxLineLength: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws -> URL {
         let outputDirectory = inputFile.deletingLastPathComponent()
@@ -175,6 +185,7 @@ actor WhisperService {
             operationID: operationID,
             audioStreamIndex: audioStreamIndex,
             maxLineLength: maxLineLength,
+            publicationIsCurrent: publicationIsCurrent,
             progress: progress
         )
     }
@@ -184,6 +195,7 @@ actor WhisperService {
         cancelledOperationIDs.insert(operationID)
         let runIDs = runIDsByOperationID[operationID] ?? []
         cancelledRunIDs.formUnion(runIDs)
+        for runID in runIDs { publicationsByRunID[runID]?.cancel() }
         for runID in runIDs {
             currentTranscriptionTasks[runID]?.cancel()
         }
@@ -193,6 +205,7 @@ actor WhisperService {
     /// Stops every active run during an explicit batch shutdown.
     func cancelAllGeneration() {
         cancelledRunIDs.formUnion(activeRunIDs)
+        for publication in publicationsByRunID.values { publication.cancel() }
         for task in currentTranscriptionTasks.values {
             task.cancel()
         }
@@ -218,15 +231,20 @@ actor WhisperService {
         return count
     }
 
-    private func registerRun(_ runID: UUID, operationID: UUID) {
+    private func registerRun(_ runID: UUID, operationID: UUID) -> SubtitleSRTPublication {
+        let publication = SubtitleSRTPublication()
+        publicationsByRunID[runID] = publication
         activeRunIDs.insert(runID)
         runIDsByOperationID[operationID, default: []].insert(runID)
         if cancelledOperationIDs.contains(operationID) {
             cancelledRunIDs.insert(runID)
+            publication.cancel()
         }
+        return publication
     }
 
     private func finishRun(_ runID: UUID, operationID: UUID) {
+        publicationsByRunID.removeValue(forKey: runID)
         currentTranscriptionTasks.removeValue(forKey: runID)?.cancel()
         activeRunIDs.remove(runID)
         cancelledRunIDs.remove(runID)
@@ -237,63 +255,7 @@ actor WhisperService {
         }
     }
 
-    private func reserveOutputURL(directory: URL, baseName: String) -> URL {
-        let preferred = SubtitleSRTNaming.outputURL(
-            directory: directory,
-            baseName: baseName,
-            method: .whisper
-        )
-        if !reservedOutputPaths.contains(preferred.path) {
-            reservedOutputPaths.insert(preferred.path)
-            return preferred
-        }
 
-        let fileManager = FileManager.default
-        let methodSpecific = outputCandidate(
-            directory: directory,
-            baseName: baseName,
-            suffix: ".whisper"
-        )
-        if !reservedOutputPaths.contains(methodSpecific.path),
-           !fileManager.fileExists(atPath: methodSpecific.path) {
-            reservedOutputPaths.insert(methodSpecific.path)
-            return methodSpecific
-        }
-
-        var suffix = 2
-        while true {
-            let candidate = outputCandidate(
-                directory: directory,
-                baseName: baseName,
-                suffix: ".whisper-\(suffix)"
-            )
-            if !reservedOutputPaths.contains(candidate.path),
-               !fileManager.fileExists(atPath: candidate.path) {
-                reservedOutputPaths.insert(candidate.path)
-                return candidate
-            }
-            suffix += 1
-        }
-    }
-
-    private func outputCandidate(directory: URL, baseName: String, suffix: String) -> URL {
-        let ending = suffix + ".srt"
-        let maximumBaseBytes = max(255 - ending.utf8.count, 1)
-        var shortenedBase = baseName
-        while shortenedBase.utf8.count > maximumBaseBytes {
-            shortenedBase.removeLast()
-        }
-        return directory.appendingPathComponent(shortenedBase + ending)
-    }
-
-    private func publish(_ stagedURL: URL, to destinationURL: URL) throws {
-        let fileManager = FileManager.default
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            _ = try fileManager.replaceItemAt(destinationURL, withItemAt: stagedURL)
-        } else {
-            try fileManager.moveItem(at: stagedURL, to: destinationURL)
-        }
-    }
 }
 
 /// FFmpeg boundary for the built-in Whisper filter. It keeps process policy and

@@ -13,37 +13,57 @@ final class ConversionDependencyPreflightTests: XCTestCase {
         XCTAssertNil(failure)
     }
 
-    func testCancellingAudioPreflightDoesNotCreateOutputDirectories() async {
+    func testIMFExportRejectsBeforeResolvingToolsProbingOrCreatingOutput() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let probeStarted = expectation(description: "Audio probe started")
-        let completed = expectation(description: "Conversion cancelled")
-        completed.assertForOverFulfill = true
-        let converter = FFMPEGConverter(
-            ffmpegPathProvider: { "/bin/sh" },
-            dependencyPreflight: ConversionDependencyPreflight { $0 == .asdcpWrap ? nil : "/bin/sh" },
-            preflightAudioStreamProvider: { _ in
-                probeStarted.fulfill()
-                try? await Task.sleep(for: .seconds(60))
-                return nil
-            }
-        )
-        let conversion = Task {
+        for preset in [ExportPreset.imfJ2K, .imfProRes] {
+            let converter = FFMPEGConverter(
+                ffmpegPathProvider: { XCTFail("Disabled export must not resolve FFmpeg"); return nil },
+                dependencyPreflight: ConversionDependencyPreflight { _ in
+                    XCTFail("Disabled export must not resolve helpers"); return nil
+                },
+                preflightAudioStreamProvider: { _ in
+                    XCTFail("Disabled export must not probe input"); return nil
+                }
+            )
+            let completed = expectation(description: "IMF conformance restriction reported")
+            completed.assertForOverFulfill = true
             await converter.convert(
-                request: ConversionRequest(inputURL: directory.appendingPathComponent("input.mov"), outputURL: directory.appendingPathComponent("out"), preset: .imfProRes),
+                request: ConversionRequest(inputURL: directory.appendingPathComponent("input.mov"), outputURL: directory.appendingPathComponent("out"), preset: preset),
                 progressUpdate: { _, _ in XCTFail("No encoding should start") },
                 completion: { success, reason in
                     XCTAssertFalse(success)
-                    XCTAssertEqual(reason, "Conversion cancelled")
+                    XCTAssertTrue(reason?.contains("IMF export is unavailable in 4.4") == true)
+                    XCTAssertTrue(reason?.contains("validated IMF mastering tool") == true)
                     completed.fulfill()
                 }
             )
+            await fulfillment(of: [completed], timeout: 1)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+            XCTAssertFalse(FileSafetyUtils.isCreatedByApp(directory.appendingPathComponent("out")))
         }
-        await fulfillment(of: [probeStarted], timeout: 2)
-        await converter.cancelConversion()
-        await fulfillment(of: [completed], timeout: 2)
-        await conversion.value
-        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    func testIMFExportRestrictionPreservesExistingOutput() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("existing.mxf")
+        let original = Data("existing delivery must survive rejection".utf8)
+        try original.write(to: output)
+        for preset in [ExportPreset.imfJ2K, .imfProRes] {
+            let converter = FFMPEGConverter()
+            await converter.convert(
+                request: ConversionRequest(inputURL: directory.appendingPathComponent("input.mov"), outputURL: output, preset: preset),
+                progressUpdate: { _, _ in XCTFail("Disabled export must not start") },
+                completion: { success, reason in
+                    XCTAssertFalse(success)
+                    XCTAssertTrue(reason?.contains("IMF export is unavailable") == true)
+                }
+            )
+            XCTAssertEqual(try Data(contentsOf: output), original)
+            XCTAssertFalse(FileSafetyUtils.isCreatedByApp(output))
+        }
     }
 
     func testUnknownAndConcatIMFAudioAreProbedBeforeEncoding() async throws {
@@ -84,25 +104,6 @@ final class ConversionDependencyPreflightTests: XCTestCase {
             return nil
         }
         XCTAssertNil(failure)
-    }
-
-    func testConverterRejectsUnknownSourceAudioBeforeCreatingOutputDirectories() async {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let converter = FFMPEGConverter(
-            ffmpegPathProvider: { "/bin/sh" },
-            dependencyPreflight: ConversionDependencyPreflight { $0 == .asdcpWrap ? nil : "/bin/sh" },
-            preflightAudioStreamProvider: { _ in [.init(index: 1, channels: 2, channelLayout: "stereo", codecName: "aac")] }
-        )
-        await converter.convert(
-            request: ConversionRequest(inputURL: directory.appendingPathComponent("input.mov"), outputURL: directory.appendingPathComponent("out"), preset: .imfProRes),
-            progressUpdate: { _, _ in XCTFail("No encoding should start") },
-            completion: { success, reason in
-                XCTAssertFalse(success)
-                XCTAssertTrue(reason?.contains("asdcp-wrap") == true)
-            }
-        )
-        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
     }
 
     func testEachSpecialExportRequiresOnlyItsPictureHelper() {
@@ -195,7 +196,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
     func testConverterRejectsMissingHelpersBeforeCreatingOutputDirectories() async {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        for preset in [ExportPreset.dcp, .imfJ2K, .imfProRes, .av2] {
+        for preset in [ExportPreset.dcp, .av2] {
             let converter = FFMPEGConverter(
                 ffmpegPathProvider: { "/bin/sh" },
                 dependencyPreflight: ConversionDependencyPreflight { _ in nil }

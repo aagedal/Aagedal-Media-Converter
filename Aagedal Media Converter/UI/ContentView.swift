@@ -66,6 +66,7 @@ struct ContentView: View {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ContentView")
     @Environment(\.openSettings) private var openSettings
     @State private var droppedFiles: [VideoItem] = []
+    @State private var showScheduleStorageResetConfirmation = false
     @AppStorage("outputFolder") private var outputFolder = AppConstants.defaultOutputDirectory.path {
         didSet {
             // Update the currentOutputFolder when outputFolder changes
@@ -108,6 +109,7 @@ struct ContentView: View {
     @AppStorage(AppConstants.watchFolderAutoActivateOnLaunchKey) private var watchFolderAutoActivateOnLaunch = false
     @State private var hasAppliedWatchFolderLaunchActivation = false
     @StateObject private var watchFolderCoordinator = WatchFolderCoordinator()
+    @State private var watchFolderToggleID = UUID()
     @State private var mergeClipsEnabled = false
     @State private var mergeClipsAvailable = false
     @State private var mergeClipsTooltip = "Add at least two compatible clips to enable merging."
@@ -352,8 +354,13 @@ struct ContentView: View {
                 // progress callback fires into an items array that no longer
                 // contains the uploading item (caused index-out-of-range crash).
                 if let group = encodingGroups.first(where: { $0.id == groupID }) {
-                    for item in group.items where item.uploadStatus.isActive {
-                        Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
+                    for item in group.items {
+                        if item.uploadStatus.isActive {
+                            Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
+                        }
+                        if let operationID = item.analyticsOperationID {
+                            Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                        }
                     }
                 }
                 encodingGroups.removeAll { $0.id == groupID }
@@ -372,6 +379,9 @@ struct ContentView: View {
                 guard !isConverting else { return }
                 if let gi = encodingGroups.firstIndex(where: { $0.id == groupID }) {
                     for ii in encodingGroups[gi].items.indices where encodingGroups[gi].items[ii].status != .waiting {
+                        if let operationID = encodingGroups[gi].items[ii].analyticsOperationID {
+                            Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                        }
                         encodingGroups[gi].items[ii].resetConversionState()
                     }
                 }
@@ -459,8 +469,8 @@ struct ContentView: View {
             }
             // Cancel in-progress preview generation (thumbnails/waveforms) to free CPU
             Task { await PreviewAssetGenerator.shared.cancelGeneration(for: item.url) }
-            if item.analyticsStatus.isInProgress {
-                Task { await AnalyticsService.shared.cancelAnalysis() }
+            if let operationID = item.analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
             }
             if item.uploadStatus == .uploading {
                 Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
@@ -476,6 +486,9 @@ struct ContentView: View {
 
     private func handleFileReset(_ index: Int, optionKeyPressed: Bool = false) {
         if index < droppedFiles.count {
+            if let operationID = droppedFiles[index].analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+            }
             droppedFiles[index].resetConversionState()
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
 
@@ -607,6 +620,14 @@ struct ContentView: View {
             } message: {
                 Text(settingsImportAlertMessage ?? "")
             }
+            .alert("Watch Folder", isPresented: Binding(
+                get: { watchFolderCoordinator.errorMessage != nil },
+                set: { if !$0 { watchFolderCoordinator.errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { watchFolderCoordinator.errorMessage = nil }
+            } message: {
+                Text(watchFolderCoordinator.errorMessage ?? "")
+            }
             .sheet(item: $cameraCardImportState) { state in
                 CameraCardImportView(
                     clipCount: state.videoURLs.count,
@@ -669,8 +690,41 @@ struct ContentView: View {
 
     // MARK: - Body Subviews
 
+    private var scheduledDownloadStorageWarning: some View {
+        HStack(alignment: .top) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Saved download schedules could not be read.")
+                    .font(.headline)
+                    .accessibilityIdentifier("scheduledDownloadStorageWarning")
+                Text("The saved data has been kept. New schedules work while the app stays open, but cannot be saved until you reset schedule storage.")
+                    .font(.caption)
+            }
+            Spacer()
+            Button("Reset Saved Schedules…") {
+                showScheduleStorageResetConfirmation = true
+            }
+            .accessibilityIdentifier("scheduledDownloadStorageResetButton")
+        }
+        .padding()
+        .background(.orange.opacity(0.1))
+        .alert("Reset saved download schedules?", isPresented: $showScheduleStorageResetConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset Saved Schedules", role: .destructive) {
+                DownloadManager.shared.resetScheduledDownloadStorage()
+            }
+            .accessibilityIdentifier("scheduledDownloadStorageResetConfirmButton")
+        } message: {
+            Text("This permanently replaces the unreadable saved data with the schedules currently in your queue. Previously saved schedules that could not be loaded will be lost.")
+        }
+    }
+
     private var mainContentView: some View {
         VStack {
+            if DownloadManager.shared.hasScheduledDownloadStorageError {
+                scheduledDownloadStorageWarning
+            }
             fileListView
                 .fileImporter(
                     isPresented: $isFileImporterPresented,
@@ -1011,6 +1065,7 @@ struct ContentView: View {
     @State private var cardCompatibilityCheckID: UUID?
     @State private var showCardConformanceMergeDialog = false
     @State private var cardConformanceItems: [VideoItem] = []
+    @State private var cardConformanceImportContext: VideoGroupImportContext?
     @State private var cardConformanceMetadata: [UUID: VideoMetadata] = [:]
 
     private struct CameraCardImportState: Identifiable {
@@ -1064,6 +1119,7 @@ struct ContentView: View {
         let uploadEnabled = cameraCardUploadEnabled
         let masterName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cardPreset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let importContext = VideoGroupImportContext(preset: cardPreset, outputFolder: outputFolder)
 
         let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
         defer {
@@ -1077,26 +1133,22 @@ struct ContentView: View {
         // Build VideoItems for the group
         var groupItems: [VideoItem] = []
         for url in state.videoURLs {
-            if var item = VideoFileUtils.makePlaceholderItem(
-                from: url,
-                outputFolder: outputFolder,
-                preset: cardPreset
-            ) {
+            if var item = importContext.makePlaceholder(from: url) {
                 if uploadEnabled {
                     item.uploadEnabled = true
                 }
                 if !masterName.isEmpty {
-                    let processedName = FileNameProcessor.processFileName(masterName)
+                    let processedName = FileNameProcessor.processFileName(masterName, settings: importContext.naming.fileName)
                     if concatEnabled {
                         // For concat, only the first item needs the master name override
                         if groupItems.isEmpty {
                             item.outputFileNameOverride = processedName
-                            item.outputURL = expectedOutputURL(for: item, preset: cardPreset)
+                            item.outputURL = importContext.outputURL(for: item)
                         }
                     } else {
                         let sequenceName = String(format: "%@_%03d", processedName, groupItems.count + 1)
                         item.outputFileNameOverride = sequenceName
-                        item.outputURL = expectedOutputURL(for: item, preset: cardPreset)
+                        item.outputURL = importContext.outputURL(for: item)
                     }
                 }
                 groupItems.append(item)
@@ -1121,7 +1173,7 @@ struct ContentView: View {
         // Load details (thumbnails, duration, metadata) in background
         let itemIDs = groupItems.map { $0.id }
         Task {
-            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, preset: cardPreset)
+            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, context: importContext)
         }
 
         if cameraCardAutoEncodeEnabled {
@@ -1144,6 +1196,7 @@ struct ContentView: View {
         let urls = state.videoURLs
         let folderURL = state.folderURL
         let preset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let importContext = VideoGroupImportContext(preset: preset, outputFolder: outputFolder)
         let checkID = UUID()
         cardCompatibilityCheckID = checkID
 
@@ -1152,7 +1205,7 @@ struct ContentView: View {
             defer { if hasAccess { folderURL.stopAccessingSecurityScopedResource() } }
 
             var tempItems = urls.compactMap {
-                VideoFileUtils.makePlaceholderItem(from: $0, outputFolder: outputFolder, preset: preset)
+                importContext.makePlaceholder(from: $0)
             }
             var metadataMap: [UUID: VideoMetadata] = [:]
 
@@ -1181,6 +1234,7 @@ struct ContentView: View {
                 cardCompatibilityCheckID = nil
                 // Store for conformance merge dialog
                 cardConformanceItems = tempItems
+                cardConformanceImportContext = importContext
                 cardConformanceMetadata = metadataMap
             }
         }
@@ -1201,6 +1255,7 @@ struct ContentView: View {
         let uploadEnabled = cameraCardUploadEnabled
         let masterName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cardPreset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let importContext = VideoGroupImportContext(preset: cardPreset, outputFolder: outputFolder)
 
         let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { state.folderURL.stopAccessingSecurityScopedResource() } }
@@ -1212,7 +1267,7 @@ struct ContentView: View {
         // Build items and gather their independent metadata probes concurrently so the
         // operation has one 15-second probe window regardless of card size.
         var allItems = state.videoURLs.compactMap {
-            VideoFileUtils.makePlaceholderItem(from: $0, outputFolder: outputFolder, preset: cardPreset)
+            importContext.makePlaceholder(from: $0)
         }
         if uploadEnabled {
             for index in allItems.indices {
@@ -1289,16 +1344,16 @@ struct ContentView: View {
             var namedItems = groupItems
             for i in namedItems.indices {
                 if !masterName.isEmpty {
-                    let processedName = FileNameProcessor.processFileName(groupName)
+                    let processedName = FileNameProcessor.processFileName(groupName, settings: importContext.naming.fileName)
                     if namedItems.count > 1 {
                         // Concat group — only first item gets the name override
                         if i == 0 {
                             namedItems[i].outputFileNameOverride = processedName
-                            namedItems[i].outputURL = expectedOutputURL(for: namedItems[i], preset: cardPreset)
+                            namedItems[i].outputURL = importContext.outputURL(for: namedItems[i])
                         }
                     } else {
                         namedItems[i].outputFileNameOverride = processedName
-                        namedItems[i].outputURL = expectedOutputURL(for: namedItems[i], preset: cardPreset)
+                        namedItems[i].outputURL = importContext.outputURL(for: namedItems[i])
                     }
                 }
             }
@@ -1317,7 +1372,7 @@ struct ContentView: View {
 
             let itemIDs = namedItems.map { $0.id }
             Task {
-                await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, preset: cardPreset)
+                await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, context: importContext)
             }
         }
 
@@ -1332,12 +1387,13 @@ struct ContentView: View {
 
     @MainActor
     private func performCameraCardForceMerge(referenceItemID: UUID) async {
-        guard let state = cameraCardImportState else { return }
+        guard let state = cameraCardImportState,
+              let importContext = cardConformanceImportContext else { return }
         cameraCardImportState = nil
 
         let uploadEnabled = cameraCardUploadEnabled
         let masterName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cardPreset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let cardPreset = importContext.preset
 
         let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { state.folderURL.stopAccessingSecurityScopedResource() } }
@@ -1351,10 +1407,10 @@ struct ContentView: View {
         for i in groupItems.indices {
             if uploadEnabled { groupItems[i].uploadEnabled = true }
             if !masterName.isEmpty {
-                let processedName = FileNameProcessor.processFileName(masterName)
+                let processedName = FileNameProcessor.processFileName(masterName, settings: importContext.naming.fileName)
                 if i == 0 {
                     groupItems[i].outputFileNameOverride = processedName
-                    groupItems[i].outputURL = expectedOutputURL(for: groupItems[i], preset: cardPreset)
+                    groupItems[i].outputURL = importContext.outputURL(for: groupItems[i])
                 }
             }
         }
@@ -1379,7 +1435,7 @@ struct ContentView: View {
 
         let itemIDs = groupItems.map { $0.id }
         Task {
-            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, preset: cardPreset)
+            await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, context: importContext)
         }
 
         if cameraCardAutoEncodeEnabled {
@@ -1408,6 +1464,7 @@ struct ContentView: View {
         guard response == .OK, !panel.urls.isEmpty else { return }
 
         let groupPreset = encodingGroups[groupIndex].preset ?? selectedPreset
+        let importContext = VideoGroupImportContext(preset: groupPreset, outputFolder: outputFolder)
         var newItemIDs: [UUID] = []
 
         for url in panel.urls {
@@ -1415,18 +1472,14 @@ struct ContentView: View {
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
             if hasAccess { url.stopAccessingSecurityScopedResource() }
 
-            if let item = VideoFileUtils.makePlaceholderItem(
-                from: url,
-                outputFolder: outputFolder,
-                preset: groupPreset
-            ) {
+            if let item = importContext.makePlaceholder(from: url) {
                 newItemIDs.append(item.id)
                 encodingGroups[groupIndex].items.append(item)
             }
         }
 
         // Load details asynchronously for added items
-        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, preset: groupPreset)
+        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, context: importContext)
     }
 
     /// Appends files dropped from Finder directly onto a group header.
@@ -1439,6 +1492,7 @@ struct ContentView: View {
 
         let supported = AppConstants.supportedVideoExtensions
         let groupPreset = encodingGroups[groupIndex].preset ?? selectedPreset
+        let importContext = VideoGroupImportContext(preset: groupPreset, outputFolder: outputFolder)
         var newItemIDs: [UUID] = []
 
         // Union of everything already in the queue — drag-drop should be idempotent.
@@ -1458,11 +1512,7 @@ struct ContentView: View {
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
             if hadAccess { url.stopAccessingSecurityScopedResource() }
 
-            if let item = VideoFileUtils.makePlaceholderItem(
-                from: url,
-                outputFolder: outputFolder,
-                preset: groupPreset
-            ) {
+            if let item = importContext.makePlaceholder(from: url) {
                 newItemIDs.append(item.id)
                 // Re-lookup each iteration: earlier loads above are awaited but the
                 // array is only mutated on the main actor, so the index stays valid
@@ -1477,17 +1527,16 @@ struct ContentView: View {
             encodingGroups[groupIndex].normalizeSequentialNaming()
         }
 
-        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, preset: groupPreset)
+        await loadGroupItemDetails(groupID: groupID, itemIDs: newItemIDs, context: importContext)
     }
 
     @MainActor
-    private func loadGroupItemDetails(groupID: UUID, itemIDs: [UUID], preset: ExportPreset) async {
+    private func loadGroupItemDetails(groupID: UUID, itemIDs: [UUID], context: VideoGroupImportContext) async {
         for itemID in itemIDs {
             guard let gi = encodingGroups.firstIndex(where: { $0.id == groupID }),
                   let ii = encodingGroups[gi].items.firstIndex(where: { $0.id == itemID }) else { continue }
 
-            let url = encodingGroups[gi].items[ii].url
-            let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            let details = await context.loadDetails(for: encodingGroups[gi].items[ii])
             if let gi2 = encodingGroups.firstIndex(where: { $0.id == groupID }),
                let ii2 = encodingGroups[gi2].items.firstIndex(where: { $0.id == itemID }) {
                 encodingGroups[gi2].items[ii2].apply(details: details)
@@ -1500,6 +1549,10 @@ struct ContentView: View {
     private func handleFileSelection(result: Result<[URL], Error>) async {
         switch result {
         case .success(let urls):
+            let importPreset = selectedPreset
+            let importFolder = outputFolder
+            let importSettings = VideoImportSettings()
+            let naming = VideoImportNamingSettings(preset: importPreset)
             for url in urls {
                 // Check for duplicates before creating placeholder
                 guard !droppedFiles.contains(where: { $0.url == url }) else {
@@ -1521,8 +1574,8 @@ struct ContentView: View {
                         guard !containsImageSequence(config) else { continue }
                         let item = VideoFileUtils.makePlaceholderItem(
                             fromImageSequence: config,
-                            outputFolder: outputFolder,
-                            preset: selectedPreset
+                            outputFolder: importFolder,
+                            preset: importPreset, settings: importSettings, namingSettings: naming
                         )
                         droppedFiles.append(item)
                         queueOrder.append(item.id)
@@ -1557,8 +1610,8 @@ struct ContentView: View {
                         guard !containsImageSequence(config) else { continue }
                         let item = VideoFileUtils.makePlaceholderItem(
                             fromImageSequence: config,
-                            outputFolder: outputFolder,
-                            preset: selectedPreset
+                            outputFolder: importFolder,
+                            preset: importPreset, settings: importSettings, namingSettings: naming
                         )
                         droppedFiles.append(item)
                         queueOrder.append(item.id)
@@ -1569,8 +1622,8 @@ struct ContentView: View {
 
                 guard let placeholder = VideoFileUtils.makePlaceholderItem(
                     from: url,
-                    outputFolder: outputFolder,
-                    preset: selectedPreset
+                    outputFolder: importFolder,
+                    preset: importPreset, settings: importSettings, namingSettings: naming
                 ) else {
                     Self.logger.info("Skipping unsupported file: \(url.lastPathComponent, privacy: .public)")
                     continue
@@ -1586,7 +1639,7 @@ struct ContentView: View {
 
                 // Load details asynchronously in background
                 Task(priority: .utility) {
-                    let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: selectedPreset)
+                    let details = await VideoFileUtils.loadDetails(for: url, outputFolder: importFolder, preset: importPreset, counter: placeholder.customCounterValue, namingSettings: naming)
                     await MainActor.run {
                         if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
                             self.droppedFiles[index].apply(details: details)
@@ -1628,6 +1681,9 @@ struct ContentView: View {
             return
         }
         hasHandledUITestFixtureLaunch = true
+        if environment["AMC_UI_TEST_DAMAGED_HISTORY"] == "1" {
+            showURLInputOverlay = true
+        }
 
         do {
             let directory = UITestFixtureConfiguration.directory
@@ -1656,10 +1712,11 @@ struct ContentView: View {
         }
 
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let fixtureURL = directory.appendingPathComponent("ui-test-fixture.mp4")
+        let container = ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] == "mkv" ? "mkv" : "mp4"
+        let fixtureURL = directory.appendingPathComponent("ui-test-fixture.\(container)")
         let fixtureDuration = ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1"
             ? 15
-            : 2
+            : (ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] != nil ? 6 : 2)
 
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
@@ -1920,17 +1977,17 @@ struct ContentView: View {
     }
 
     private func outputBaseName(for item: VideoItem, preset: ExportPreset) -> String {
-        if let override = item.outputFileNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !override.isEmpty {
-            let baseName = (override as NSString).deletingPathExtension
-            return FileNameProcessor.processFileName(baseName)
-        }
-
-        let sanitizedBaseName = FileNameProcessor.processFileName(item.url.deletingPathExtension().lastPathComponent)
-        let templatedBaseName = FileNameProcessor.applyCustomTemplate(sourceName: sanitizedBaseName, counter: item.customCounterValue, preset: preset)
-        let suppressAutoSuffix = FileNameProcessor.customTemplateUsesPresetSuffix
-        let suffixPart = (FileNameProcessor.includePresetSuffix && !suppressAutoSuffix) ? preset.fileSuffix : ""
-        return templatedBaseName + suffixPart
+        FileNameProcessor.outputBaseName(
+            inputURL: item.url, override: item.outputFileNameOverride,
+            counter: item.customCounterValue, preset: preset,
+            context: FileNameTemplateContext(
+                preset: preset,
+                imageSequenceFrameRate: FileNameTemplateContext.imageSequenceFrameRate(
+                    for: item,
+                    waveformFrameRate: preset == .imageSequence ? AudioWaveformPreferences.loadConfig().frameRate : nil
+                )
+            )
+        )
     }
 
     private func handleOutputFileNameOverride(itemID: UUID, newName: String?) {
@@ -1989,7 +2046,8 @@ struct ContentView: View {
             onShowCapture: { CaptureOverlayWindowController.shared.showCaptureOverlay() },
             onResetAll: resetAllFiles,
             hasResettableItems: hasResettableItems,
-            onClear: clearAllFiles
+            onClear: clearAllFiles,
+            onShowSettings: { openSettings() }
         )
     }
     
@@ -1997,6 +2055,10 @@ struct ContentView: View {
 
     @MainActor
     private func addFilesFromWatchFolder(_ urls: [URL]) async {
+        let importPreset = selectedPreset
+        let importFolder = outputFolder
+        let importSettings = VideoImportSettings()
+        let naming = VideoImportNamingSettings(preset: importPreset)
         for url in urls {
             // Check if file already exists in the list
             guard !droppedFiles.contains(where: { $0.url == url }) else {
@@ -2005,8 +2067,8 @@ struct ContentView: View {
 
             guard let placeholder = VideoFileUtils.makePlaceholderItem(
                 from: url,
-                outputFolder: outputFolder,
-                preset: selectedPreset
+                outputFolder: importFolder,
+                preset: importPreset, settings: importSettings, namingSettings: naming
             ) else {
                 Self.logger.info("Skipping unsupported file from watch folder: \(url.lastPathComponent, privacy: .public)")
                 continue
@@ -2022,7 +2084,7 @@ struct ContentView: View {
 
             // Load details asynchronously in background
             Task(priority: .utility) {
-                let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: selectedPreset)
+                let details = await VideoFileUtils.loadDetails(for: url, outputFolder: importFolder, preset: importPreset, counter: placeholder.customCounterValue, namingSettings: naming)
                 await MainActor.run {
                     if let index = self.droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
                         self.droppedFiles[index].apply(details: details)
@@ -2179,24 +2241,28 @@ struct ContentView: View {
 
             // Second try: try to access via existing bookmark
             if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: directory) {
+                defer { SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: directory) }
                 if isOutputFolderWritable(directory) {
-                    // Keep the bookmark active - ConversionManager will stop accessing later
+                    // Conversion acquires its own scope after this preflight returns.
                     continue
                 }
-                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: directory)
             }
 
             // Third try: try parent directory bookmark (for new subdirectories)
             let parentDirectory = directory.deletingLastPathComponent()
             if SecurityScopedBookmarkManager.shared.startAccessingSecurityScopedResource(for: parentDirectory) {
-                // Try to create the directory now that we have parent access
-                try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                defer { SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: parentDirectory) }
+                // Try to create the directory now that we have parent access.
+                do {
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                } catch {
+                    Self.logger.error("Unable to prepare output directory: \(error.localizedDescription, privacy: .public)")
+                }
                 if isOutputFolderWritable(directory) {
                     // Save a bookmark for this directory too
                     _ = SecurityScopedBookmarkManager.shared.saveWritableBookmark(for: directory)
                     continue
                 }
-                SecurityScopedBookmarkManager.shared.stopAccessingSecurityScopedResource(for: parentDirectory)
             }
 
             // Directory needs user access
@@ -2302,8 +2368,8 @@ struct ContentView: View {
             }
             // Cancel in-progress preview generation (thumbnails/waveforms) to free CPU
             Task { await PreviewAssetGenerator.shared.cancelGeneration(for: item.url) }
-            if item.analyticsStatus.isInProgress {
-                Task { await AnalyticsService.shared.cancelAnalysis() }
+            if let operationID = item.analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
             }
             if item.uploadStatus == .uploading {
                 Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
@@ -2345,6 +2411,9 @@ struct ContentView: View {
 
         var didReset = false
         for index in droppedFiles.indices where droppedFiles[index].status != .waiting {
+            if let operationID = droppedFiles[index].analyticsOperationID {
+                Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+            }
             droppedFiles[index].resetConversionState()
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
             if shouldClearSettings {
@@ -2356,6 +2425,9 @@ struct ContentView: View {
         // Reset group items too
         for gi in encodingGroups.indices {
             for ii in encodingGroups[gi].items.indices where encodingGroups[gi].items[ii].status != .waiting {
+                if let operationID = encodingGroups[gi].items[ii].analyticsOperationID {
+                    Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                }
                 encodingGroups[gi].items[ii].resetConversionState()
                 didReset = true
             }
@@ -2395,20 +2467,23 @@ struct ContentView: View {
     }
 
     private func handleWatchFolderToggle(_ enabled: Bool) {
+        let toggleID = UUID()
+        watchFolderToggleID = toggleID
         Task { @MainActor in
+            guard watchFolderToggleID == toggleID else { return }
             if enabled {
                 let success = await watchFolderCoordinator.enableWatchMode(
                     currentPath: watchFolderPath,
                     promptForFolder: { await promptForWatchFolderSelection() },
                     updatePath: { newPath in
-                        Task { @MainActor in
+                        await MainActor.run {
                             watchFolderPath = newPath
                         }
                     },
                     onNewFiles: { urls in await addFilesFromWatchFolder(urls) }
                 )
 
-                if !success {
+                if watchFolderToggleID == toggleID, !success {
                     watchFolderModeEnabled = false
                 }
             } else {
@@ -2840,182 +2915,6 @@ private struct ContentViewChangeHandlers: ViewModifier {
     }
 }
 
-/// ViewModifier for notification handlers (enqueue and convert immediately)
-private struct ContentViewNotificationHandlers: ViewModifier {
-    private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ContentViewNotificationHandlers")
-
-    @Binding var droppedFiles: [VideoItem]
-    @Binding var queueOrder: [UUID]
-    @Binding var currentOutputFolder: URL
-    @Binding var outputFolder: String
-    @Binding var isFileImporterPresented: Bool
-    @Binding var pendingConvertAfterImport: Bool
-    let selectedPreset: ExportPreset
-    let videoLoopDefaultMuted: Bool
-    let startConversion: () async -> Void
-    /// Switches the app to a given preset (with the usual side effects) before a
-    /// per-preset "Convert Immediately" App Intent starts conversion.
-    let applyPreset: (ExportPreset) -> Void
-
-    func body(content: Content) -> some View {
-        content
-            .onReceive(NotificationCenter.default.publisher(for: .enqueueFileURL)) { notification in
-                handleEnqueueNotification(notification)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .convertImmediately)) { notification in
-                handleConvertImmediatelyNotification(notification)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .convertPickFiles)) { notification in
-                handleConvertPickFilesNotification(notification)
-            }
-    }
-
-    /// Handles a convert/enqueue App Intent that ran without any file input
-    /// (e.g. a Spotlight/Siri phrase, which can't attach files): switch to the
-    /// carried preset, bring the window forward, and present the file importer.
-    /// For convert intents (`startConversion` flag absent or true), conversion
-    /// starts once the user picks files; the enqueue intent only queues them.
-    private func handleConvertPickFilesNotification(_ notification: Notification) {
-        // Mark the buffered request handled so a later drain() won't replay it.
-        if let requestID = notification.userInfo?[PendingAppIntentRequests.requestIDKey] as? UUID {
-            PendingAppIntentRequests.shared.consume(id: requestID)
-        }
-
-        if let rawValue = notification.userInfo?["presetRawValue"] as? String,
-           let preset = ExportPreset(rawValue: rawValue), preset != selectedPreset {
-            applyPreset(preset)
-        }
-
-        pendingConvertAfterImport = (notification.userInfo?["startConversion"] as? Bool) ?? true
-        NSApp.activate(ignoringOtherApps: true)
-        isFileImporterPresented = true
-    }
-
-    private func handleEnqueueNotification(_ notification: Notification) {
-        // Mark the buffered request handled so a later drain() won't replay it.
-        if let requestID = notification.userInfo?[PendingAppIntentRequests.requestIDKey] as? UUID {
-            PendingAppIntentRequests.shared.consume(id: requestID)
-        }
-
-        let urls: [URL]
-        if let singleURL = notification.object as? URL {
-            urls = [singleURL]
-        } else if let multipleURLs = notification.object as? [URL] {
-            urls = multipleURLs
-        } else {
-            return
-        }
-
-        for url in urls {
-            guard !droppedFiles.contains(where: { $0.url == url }) else { continue }
-
-            guard let placeholder = VideoFileUtils.makePlaceholderItem(
-                from: url,
-                outputFolder: outputFolder,
-                preset: selectedPreset
-            ) else {
-                Self.logger.info("Skipping unsupported file from AppIntent: \(url.lastPathComponent, privacy: .public)")
-                continue
-            }
-
-            droppedFiles.append(placeholder)
-            queueOrder.append(placeholder.id)
-            if selectedPreset == .videoLoop && videoLoopDefaultMuted {
-                droppedFiles[droppedFiles.count - 1].isMuted = true
-            }
-            let placeholderID = placeholder.id
-
-            Task(priority: .utility) {
-                let details = await VideoFileUtils.loadDetails(
-                    for: url,
-                    outputFolder: outputFolder,
-                    preset: selectedPreset,
-                    generateRowThumbnailIfMissing: false
-                )
-
-                await MainActor.run {
-                    if let index = droppedFiles.firstIndex(where: { $0.id == placeholderID }) {
-                        droppedFiles[index].apply(details: details)
-                        droppedFiles[index].detailsLoaded = true
-                    }
-                }
-
-                if details.thumbnailData == nil {
-                    Task.detached(priority: .background) {
-                        let thumbnailData = await VideoFileUtils.getCachedThumbnail(url: url, generateRowThumbnailIfMissing: true)
-                        guard let thumbnailData else { return }
-                        await MainActor.run {
-                            if let index = droppedFiles.firstIndex(where: { $0.id == placeholderID }),
-                               droppedFiles[index].thumbnailData == nil {
-                                droppedFiles[index].thumbnailData = thumbnailData
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func handleConvertImmediatelyNotification(_ notification: Notification) {
-        guard let info = notification.userInfo,
-              let folderURL = info["outputFolderURL"] as? URL else { return }
-
-        // Mark the buffered request handled so a later drain() won't replay it.
-        if let requestID = info[PendingAppIntentRequests.requestIDKey] as? UUID {
-            PendingAppIntentRequests.shared.consume(id: requestID)
-        }
-
-        let fileURLs: [URL]
-        if let singleURL = info["fileURL"] as? URL {
-            fileURLs = [singleURL]
-        } else if let multipleURLs = info["fileURLs"] as? [URL] {
-            fileURLs = multipleURLs
-        } else {
-            return
-        }
-
-        // Per-preset intents carry the preset to convert with; fall back to the
-        // app's currently selected preset (e.g. the legacy ConvertImmediatelyIntent).
-        let preset: ExportPreset
-        if let rawValue = info["presetRawValue"] as? String,
-           let requested = ExportPreset(rawValue: rawValue) {
-            preset = requested
-        } else {
-            preset = selectedPreset
-        }
-
-        Task {
-            await MainActor.run {
-                currentOutputFolder = folderURL
-                outputFolder = folderURL.path
-                // Switch the app to the requested preset before converting so
-                // startConversion() (which reads selectedPreset) uses it too.
-                if preset != selectedPreset {
-                    applyPreset(preset)
-                }
-            }
-
-            for fileURL in fileURLs {
-                if var videoItem = await VideoFileUtils.createVideoItem(
-                    from: fileURL,
-                    outputFolder: folderURL.path,
-                    preset: preset
-                ) {
-                    await MainActor.run {
-                        if !droppedFiles.contains(where: { $0.url == videoItem.url }) {
-                            if preset == .videoLoop && videoLoopDefaultMuted {
-                                videoItem.isMuted = true
-                            }
-                            droppedFiles.append(videoItem)
-                            queueOrder.append(videoItem.id)
-                        }
-                    }
-                }
-            }
-            await startConversion()
-        }
-    }
-}
 
 #if DEBUG
 /// The app owns all fixture filesystem operations; the UI runner's temporary
@@ -3057,6 +2956,9 @@ enum UITestFixtureConfiguration {
         // Configure before any @AppStorage is constructed, so syncing the view's
         // current folder cannot write the fixture path into the saved preferences.
         arguments["outputFolder"] = directory.path
+        arguments[AppConstants.screenshotDirectoryKey] = directory.path
+        arguments[AppConstants.screenshot8BitFormatKey] = ScreenshotFormat.png.rawValue
+        arguments[AppConstants.preferredTimecodeDisplayModeKey] = "relative"
         UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
     }
 }

@@ -1,0 +1,276 @@
+{
+  "scope": "Selected MPVKit-GPL binary target graph; archive hashes and notice filename inventory only. Not complete attribution or final app reachability.",
+  "packageRevision": "230c3174f1515898f24599147ad61c2a277d0dc2",
+  "packageSnapshotSHA256": "63580b8e40f60ef3d2984c0ea9e72840cdd2a2e0d09899bde7e8ca81633f12f5",
+  "archives": [
+    {
+      "target": "Libmpv-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libmpv-GPL.xcframework.zip",
+      "pinnedSHA256": "cfabdb70615205e8cb3c9f55dc6491194d900c42012b673f4e2819af8d216216",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libmpv_GPL_xcframework_zip",
+      "cachedSHA256": "cfabdb70615205e8cb3c9f55dc6491194d900c42012b673f4e2819af8d216216",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "297e246b1268df9de97d1ac57752ac832fd929177532ef195b878cca6d2def14"
+    },
+    {
+      "target": "Libavcodec-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libavcodec-GPL.xcframework.zip",
+      "pinnedSHA256": "b8bfd580f325995072a78bd9b8ec139781010955a96b09897a4cc202d80d17cf",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libavcodec_GPL_xcframework_zip",
+      "cachedSHA256": "b8bfd580f325995072a78bd9b8ec139781010955a96b09897a4cc202d80d17cf",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "9869548c9edbb6779856099cc62d095d8f80d8c4eec281f1f36d8537e8d96934"
+    },
+    {
+      "target": "Libavdevice-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libavdevice-GPL.xcframework.zip",
+      "pinnedSHA256": "5eeb5485d9f2cf5b63f5d31aa65a06c07eb3b53c2b30ae95edde71af1c055658",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libavdevice_GPL_xcframework_zip",
+      "cachedSHA256": "5eeb5485d9f2cf5b63f5d31aa65a06c07eb3b53c2b30ae95edde71af1c055658",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "1cc72652e76212d26571daa4e7444621a3b75808da680be1552aeff994dbd39a"
+    },
+    {
+      "target": "Libavformat-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libavformat-GPL.xcframework.zip",
+      "pinnedSHA256": "d8631fe273bb52326bb09e30e4f7dddfb197d656dc8072d7db117c5a618a832a",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libavformat_GPL_xcframework_zip",
+      "cachedSHA256": "d8631fe273bb52326bb09e30e4f7dddfb197d656dc8072d7db117c5a618a832a",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "5038775e7ba5875240d85957336317f8d8e598f02233161e489299994fb82db9"
+    },
+    {
+      "target": "Libavfilter-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libavfilter-GPL.xcframework.zip",
+      "pinnedSHA256": "7be6453e2146b1c3d99fd52e45d19566e7044bbf335799fc960f53a81e8e0b8f",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libavfilter_GPL_xcframework_zip",
+      "cachedSHA256": "7be6453e2146b1c3d99fd52e45d19566e7044bbf335799fc960f53a81e8e0b8f",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "3b0503c4e0682bc9a3ef84b62ce589c2d56652104c32f904dd144617d148e2b4"
+    },
+    {
+      "target": "Libavutil-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libavutil-GPL.xcframework.zip",
+      "pinnedSHA256": "c86a89424fde74caec2da4e56035050e7bad1e844465ce07b8a2b190d8d41fca",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libavutil_GPL_xcframework_zip",
+      "cachedSHA256": "c86a89424fde74caec2da4e56035050e7bad1e844465ce07b8a2b190d8d41fca",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "89039c04961cf481b21031d26917c2b6e844dd5e10aad9d0ae7d7f3a8b34cf65"
+    },
+    {
+      "target": "Libswresample-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libswresample-GPL.xcframework.zip",
+      "pinnedSHA256": "5f0cf2dcf0c2f83c5ad734def64c042391803211dfda7bd31755adbef565b869",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libswresample_GPL_xcframework_zip",
+      "cachedSHA256": "5f0cf2dcf0c2f83c5ad734def64c042391803211dfda7bd31755adbef565b869",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "fd0e984b8cfb0716cfa7b891ab5080aa47f171db0947184a8910e7c9f4d240fc"
+    },
+    {
+      "target": "Libswscale-GPL",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.0.0-n8.1.2/Libswscale-GPL.xcframework.zip",
+      "pinnedSHA256": "0d1cb7d97b511bc34cbd1c49a3dd350ff3eecda8373265b221b3a20de92f82ff",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_aagedal_MPVKit_releases_download_aagedal_1_0_0_n8_1_2_Libswscale_GPL_xcframework_zip",
+      "cachedSHA256": "0d1cb7d97b511bc34cbd1c49a3dd350ff3eecda8373265b221b3a20de92f82ff",
+      "cacheMatchesPin": true,
+      "noticePaths": [],
+      "siblingDistArchiveSHA256": "3302ae7a4b10ff428f923ca3d07827d65ddba8548269a0c19b978a0f3daa8974"
+    },
+    {
+      "target": "Libcrypto",
+      "url": "https://github.com/mpvkit/openssl-build/releases/download/3.3.5/Libcrypto.xcframework.zip",
+      "pinnedSHA256": "593283be2a90f7fd66f6e6ed331b2f099cf403e0926fe3b4ac09a7062b793965",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_openssl_build_releases_download_3_3_5_Libcrypto_xcframework_zip",
+      "cachedSHA256": "593283be2a90f7fd66f6e6ed331b2f099cf403e0926fe3b4ac09a7062b793965",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libssl",
+      "url": "https://github.com/mpvkit/openssl-build/releases/download/3.3.5/Libssl.xcframework.zip",
+      "pinnedSHA256": "ff5ffd43d015d7285fd37e4a3145b25cbd8d2842740bd629a711c299a20e226a",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_openssl_build_releases_download_3_3_5_Libssl_xcframework_zip",
+      "cachedSHA256": "ff5ffd43d015d7285fd37e4a3145b25cbd8d2842740bd629a711c299a20e226a",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "gmp",
+      "url": "https://github.com/mpvkit/gnutls-build/releases/download/3.8.11/gmp.xcframework.zip",
+      "pinnedSHA256": "ad33c7a08f4cdcb9924c8f0e6d9a054dad33d7794b97667bf8b6fb2b236ae585",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_gnutls_build_releases_download_3_8_11_gmp_xcframework_zip",
+      "cachedSHA256": "ad33c7a08f4cdcb9924c8f0e6d9a054dad33d7794b97667bf8b6fb2b236ae585",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "nettle",
+      "url": "https://github.com/mpvkit/gnutls-build/releases/download/3.8.11/nettle.xcframework.zip",
+      "pinnedSHA256": "0fdf3ebf8bd7b8bc8eee837cf27261cb4c52ae520b6576a2f468656aa1691e02",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_gnutls_build_releases_download_3_8_11_nettle_xcframework_zip",
+      "cachedSHA256": "0fdf3ebf8bd7b8bc8eee837cf27261cb4c52ae520b6576a2f468656aa1691e02",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "hogweed",
+      "url": "https://github.com/mpvkit/gnutls-build/releases/download/3.8.11/hogweed.xcframework.zip",
+      "pinnedSHA256": "25727c9fa67287fa0a4f4722f88bb8be669b23cd7e837e2d00870eb8a25d3f27",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_gnutls_build_releases_download_3_8_11_hogweed_xcframework_zip",
+      "cachedSHA256": "25727c9fa67287fa0a4f4722f88bb8be669b23cd7e837e2d00870eb8a25d3f27",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "gnutls",
+      "url": "https://github.com/mpvkit/gnutls-build/releases/download/3.8.11/gnutls.xcframework.zip",
+      "pinnedSHA256": "3dbec5809339189bf9679e218c6cff387ebf8fb72745927835afc2678f5c9f4d",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_gnutls_build_releases_download_3_8_11_gnutls_xcframework_zip",
+      "cachedSHA256": "3dbec5809339189bf9679e218c6cff387ebf8fb72745927835afc2678f5c9f4d",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libunibreak",
+      "url": "https://github.com/mpvkit/libass-build/releases/download/0.17.5/Libunibreak.xcframework.zip",
+      "pinnedSHA256": "940d9833cf4477d0a260d9f2b4066125bc0ff7bbc111ac3c90e774765b77a559",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libass_build_releases_download_0_17_5_Libunibreak_xcframework_zip",
+      "cachedSHA256": "940d9833cf4477d0a260d9f2b4066125bc0ff7bbc111ac3c90e774765b77a559",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libfreetype",
+      "url": "https://github.com/mpvkit/libass-build/releases/download/0.17.5/Libfreetype.xcframework.zip",
+      "pinnedSHA256": "496ca62488530e14b1e4624d20ee2b237c0bd675cd70c19da578a5768302d02d",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libass_build_releases_download_0_17_5_Libfreetype_xcframework_zip",
+      "cachedSHA256": "496ca62488530e14b1e4624d20ee2b237c0bd675cd70c19da578a5768302d02d",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libfribidi",
+      "url": "https://github.com/mpvkit/libass-build/releases/download/0.17.5/Libfribidi.xcframework.zip",
+      "pinnedSHA256": "bc15e097b892f2f90424e4a27ba287070cc2f98a74a4da10e6d2481d15cf5ff9",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libass_build_releases_download_0_17_5_Libfribidi_xcframework_zip",
+      "cachedSHA256": "bc15e097b892f2f90424e4a27ba287070cc2f98a74a4da10e6d2481d15cf5ff9",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libharfbuzz",
+      "url": "https://github.com/mpvkit/libass-build/releases/download/0.17.5/Libharfbuzz.xcframework.zip",
+      "pinnedSHA256": "aa8e0b9ca0387dac74e3e93c86e34d11982bb013b28022d0e6966a8427a35b2e",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libass_build_releases_download_0_17_5_Libharfbuzz_xcframework_zip",
+      "cachedSHA256": "aa8e0b9ca0387dac74e3e93c86e34d11982bb013b28022d0e6966a8427a35b2e",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libass",
+      "url": "https://github.com/mpvkit/libass-build/releases/download/0.17.5/Libass.xcframework.zip",
+      "pinnedSHA256": "3f4c576d2818ceb4544aa2a20e1f55846511c5e706fd19adc3ea9fd842270498",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libass_build_releases_download_0_17_5_Libass_xcframework_zip",
+      "cachedSHA256": "3f4c576d2818ceb4544aa2a20e1f55846511c5e706fd19adc3ea9fd842270498",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libsmbclient",
+      "url": "https://github.com/mpvkit/libsmbclient-build/releases/download/4.15.13-2512/Libsmbclient.xcframework.zip",
+      "pinnedSHA256": "3a53375fab11bc888cc553664ea5dd902208d04f0cc21ec746302bf356246b6f",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libsmbclient_build_releases_download_4_15_13_2512_Libsmbclient_xcframework_zip",
+      "cachedSHA256": "3a53375fab11bc888cc553664ea5dd902208d04f0cc21ec746302bf356246b6f",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libbluray",
+      "url": "https://github.com/mpvkit/libbluray-build/releases/download/1.4.0/Libbluray.xcframework.zip",
+      "pinnedSHA256": "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libbluray_build_releases_download_1_4_0_Libbluray_xcframework_zip",
+      "cachedSHA256": "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libuavs3d",
+      "url": "https://github.com/mpvkit/libuavs3d-build/releases/download/1.2.1-fix/Libuavs3d.xcframework.zip",
+      "pinnedSHA256": "bd5256081486d16c51c868d755bf70266c424b54c895269580de44ec6707f789",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libuavs3d_build_releases_download_1_2_1_fix_Libuavs3d_xcframework_zip",
+      "cachedSHA256": "bd5256081486d16c51c868d755bf70266c424b54c895269580de44ec6707f789",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libdovi",
+      "url": "https://github.com/mpvkit/libdovi-build/releases/download/3.3.2/Libdovi.xcframework.zip",
+      "pinnedSHA256": "e693e239808350868e79c5448ef9f02e2716bc822dd8632a41a368a1eae5ca7d",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libdovi_build_releases_download_3_3_2_Libdovi_xcframework_zip",
+      "cachedSHA256": "e693e239808350868e79c5448ef9f02e2716bc822dd8632a41a368a1eae5ca7d",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "MoltenVK",
+      "url": "https://github.com/mpvkit/moltenvk-build/releases/download/1.4.2/MoltenVK.xcframework.zip",
+      "pinnedSHA256": "aee189c54ad7c62bf734a3dc51eb4cfad5685d1d63b0ec519ecd1b437c332418",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_moltenvk_build_releases_download_1_4_2_MoltenVK_xcframework_zip",
+      "cachedSHA256": "aee189c54ad7c62bf734a3dc51eb4cfad5685d1d63b0ec519ecd1b437c332418",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libshaderc_combined",
+      "url": "https://github.com/mpvkit/libshaderc-build/releases/download/2025.5.0/Libshaderc_combined.xcframework.zip",
+      "pinnedSHA256": "758047b615708575b580eb960a2d083f760a29dc462d6eaa360416c946ce433b",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libshaderc_build_releases_download_2025_5_0_Libshaderc_combined_xcframework_zip",
+      "cachedSHA256": "758047b615708575b580eb960a2d083f760a29dc462d6eaa360416c946ce433b",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "lcms2",
+      "url": "https://github.com/mpvkit/lcms2-build/releases/download/2.17.0/lcms2.xcframework.zip",
+      "pinnedSHA256": "dc0dce0606f6ab6841a8ec5a6bd4448e2f3ef00661a050460f806c9393dc6982",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_lcms2_build_releases_download_2_17_0_lcms2_xcframework_zip",
+      "cachedSHA256": "dc0dce0606f6ab6841a8ec5a6bd4448e2f3ef00661a050460f806c9393dc6982",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libplacebo",
+      "url": "https://github.com/mpvkit/libplacebo-build/releases/download/7.360.1/Libplacebo.xcframework.zip",
+      "pinnedSHA256": "2fa3d54cb81f302d6f11c7b2f509af30944381c3b11ee9d35096eb4637a6e2dd",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libplacebo_build_releases_download_7_360_1_Libplacebo_xcframework_zip",
+      "cachedSHA256": "2fa3d54cb81f302d6f11c7b2f509af30944381c3b11ee9d35096eb4637a6e2dd",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libdav1d",
+      "url": "https://github.com/mpvkit/libdav1d-build/releases/download/1.5.3/Libdav1d.xcframework.zip",
+      "pinnedSHA256": "d1a32ae6a1f0193e9f05c44c9176844af7f6d2a58cb33843f6f1b8dfd9224083",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libdav1d_build_releases_download_1_5_3_Libdav1d_xcframework_zip",
+      "cachedSHA256": "d1a32ae6a1f0193e9f05c44c9176844af7f6d2a58cb33843f6f1b8dfd9224083",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    },
+    {
+      "target": "Libuchardet",
+      "url": "https://github.com/mpvkit/libuchardet-build/releases/download/0.0.8/Libuchardet.xcframework.zip",
+      "pinnedSHA256": "ea4f548a230a755e059144657cc9e2ff563c1cdeae03974c38f8b6e1a40303fb",
+      "cachedArchivePath": "/Users/truls.aagedal/Library/Caches/org.swift.swiftpm/artifacts/https___github_com_mpvkit_libuchardet_build_releases_download_0_0_8_Libuchardet_xcframework_zip",
+      "cachedSHA256": "ea4f548a230a755e059144657cc9e2ff563c1cdeae03974c38f8b6e1a40303fb",
+      "cacheMatchesPin": true,
+      "noticePaths": []
+    }
+  ]
+}

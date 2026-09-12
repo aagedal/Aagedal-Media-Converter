@@ -574,10 +574,12 @@ extension AudioRoutingConfig: Codable {
         inputTracks = try container.decode([AudioTrackInfo].self, forKey: .inputTracks)
         channelOperation = try container.decodeIfPresent(ChannelOperation.self, forKey: .channelOperation)
 
-        // Try new format first (outputTracks)
-        if let tracks = try? container.decode([OutputTrack].self, forKey: .outputTracks) {
-            outputTracks = tracks
-        } else if let indices = try? container.decode([Int].self, forKey: .outputTrackIndices) {
+        // Only migrate an absent schema key. A damaged modern route must not
+        // silently restore legacy tracks or default to every source track.
+        if container.contains(.outputTracks) {
+            outputTracks = try container.decode([OutputTrack].self, forKey: .outputTracks)
+        } else if container.contains(.outputTrackIndices) {
+            let indices = try container.decode([Int].self, forKey: .outputTrackIndices)
             // Migrate from legacy format (outputTrackIndices as [Int])
             outputTracks = indices.map { OutputTrack(streamIndex: $0) }
         } else {

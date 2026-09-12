@@ -7,7 +7,6 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import AVFoundation
 import Cocoa
 import OSLog
 
@@ -137,33 +136,48 @@ struct VideoFileUtils: Sendable {
         return AppConstants.supportedVideoExtensions.contains(fileExtension)
     }
 
-    static func createVideoItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") async -> VideoItem? {
-        guard var placeholder = makePlaceholderItem(from: url, outputFolder: outputFolder, preset: preset, comment: comment) else {
+    static func createVideoItem(
+        from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "",
+        settings: VideoImportSettings = VideoImportSettings(),
+        namingSettings: VideoImportNamingSettings? = nil,
+        reserveCounter: @MainActor @Sendable () -> Int? = {
+            FileNameProcessor.nextCounterValue()
+        },
+        detailsLoader: @Sendable (URL, String?, ExportPreset, Int?, VideoImportNamingSettings) async -> VideoItemDetails = { url, folder, preset, counter, naming in
+            await loadDetails(for: url, outputFolder: folder, preset: preset, counter: counter, namingSettings: naming)
+        }
+    ) async -> VideoItem? {
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
+        guard var placeholder = await makePlaceholderItem(
+            from: url, outputFolder: outputFolder, preset: preset, comment: comment, settings: settings, namingSettings: namingSettings, reserveCounter: reserveCounter
+        ) else {
             return nil
         }
 
-        let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset, counter: placeholder.customCounterValue)
+        let details = await detailsLoader(url, outputFolder, preset, placeholder.customCounterValue, namingSettings)
         placeholder.apply(details: details)
         placeholder.detailsLoaded = true
         logger.debug("[createVideoItem] VideoItem created successfully: \(placeholder.name, privacy: .public)")
         return placeholder
     }
 
-    static func makePlaceholderItem(from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "") -> VideoItem? {
+    @MainActor
+    static func makePlaceholderItem(
+        from url: URL, outputFolder: String? = nil, preset: ExportPreset = .videoLoop, comment: String = "",
+        settings: VideoImportSettings = VideoImportSettings(),
+        namingSettings: VideoImportNamingSettings? = nil,
+        reserveCounter: @MainActor @Sendable () -> Int? = {
+            FileNameProcessor.nextCounterValue()
+        }
+    ) -> VideoItem? {
         guard isVideoFile(url: url) else { return nil }
 
         // If this URL was just enumerated from an IMF package, prefer the CPL-derived
         // virtual-track name (e.g. "Main Audio 1") over the UUID-based MXF filename.
         let name = IMFNameOverrides.consume(for: url) ?? url.lastPathComponent
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-        let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
-
-        let waveformEnabledDefault = UserDefaults.standard.bool(forKey: AppConstants.audioWaveformVideoDefaultEnabledKey)
-
-        // Initialize timecode config based on user defaults
-        let defaultTimecodeConfig = getDefaultTimecodeConfig()
-
-        let counter = FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
+        let counter = namingSettings.fileName.customTemplateUsesCounter ? reserveCounter() : nil
 
         var placeholder = VideoItem(
             url: url,
@@ -175,13 +189,13 @@ struct VideoFileUtils: Sendable {
             status: .waiting,
             progress: 0.0,
             eta: nil,
-            outputURL: makeOutputURL(for: url, outputFolder: outputFolder, preset: preset, counter: counter),
+            outputURL: makeOutputURL(for: url, outputFolder: outputFolder, preset: preset, counter: counter, namingSettings: namingSettings),
             comment: comment,
-            includeDateTag: includeDateTagByDefault,
+            includeDateTag: settings.includeDateTag,
             metadata: nil,
             detailsLoaded: false,
-            waveformVideoEnabled: waveformEnabledDefault,
-            timecodeConfig: defaultTimecodeConfig
+            waveformVideoEnabled: settings.waveformVideoEnabled,
+            timecodeConfig: settings.timecode
         )
         placeholder.customCounterValue = counter
         placeholder.refreshOutputFileCache()
@@ -190,10 +204,16 @@ struct VideoFileUtils: Sendable {
     }
 
     /// Create a placeholder VideoItem from a detected image sequence
+    @MainActor
     static func makePlaceholderItem(
         fromImageSequence config: ImageSequenceConfig,
         outputFolder: String? = nil,
-        preset: ExportPreset = .videoLoop
+        preset: ExportPreset = .videoLoop,
+        settings: VideoImportSettings = VideoImportSettings(),
+        namingSettings: VideoImportNamingSettings? = nil,
+        reserveCounter: @MainActor @Sendable () -> Int? = {
+            FileNameProcessor.nextCounterValue()
+        }
     ) -> VideoItem {
         let frameCountStr = config.frameCount == 1 ? "1 frame" : "\(config.frameCount) frames"
         let name = "\(config.pattern) (\(config.imageFormat.rawValue), \(frameCountStr))"
@@ -201,14 +221,15 @@ struct VideoFileUtils: Sendable {
         let durationSeconds = config.durationSeconds
         let duration = formatDuration(seconds: durationSeconds)
 
-        let includeDateTagByDefault = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
-        let defaultTimecodeConfig = getDefaultTimecodeConfig()
-
         // Generate thumbnail from the first frame
         let thumbnailData = generateImageSequenceThumbnail(from: config.firstFrameURL)
 
-        let counter = FileNameProcessor.customTemplateUsesCounter ? FileNameProcessor.nextCounterValue() : nil
-        let outputURL = makeOutputURL(for: config.directory, outputFolder: outputFolder, preset: preset, counter: counter)
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
+        let counter = namingSettings.fileName.customTemplateUsesCounter ? reserveCounter() : nil
+        let outputURL = makeOutputURL(
+            for: config.directory, outputFolder: outputFolder, preset: preset, counter: counter,
+            imageSequenceFrameRate: config.frameRate, namingSettings: namingSettings
+        )
 
         var item = VideoItem(
             url: config.directory,
@@ -221,10 +242,10 @@ struct VideoFileUtils: Sendable {
             progress: 0.0,
             eta: nil,
             outputURL: outputURL,
-            includeDateTag: includeDateTagByDefault,
+            includeDateTag: settings.includeDateTag,
             metadata: nil,
             detailsLoaded: true,
-            timecodeConfig: defaultTimecodeConfig,
+            timecodeConfig: settings.timecode,
             imageSequenceConfig: config
         )
         item.customCounterValue = counter
@@ -261,18 +282,8 @@ struct VideoFileUtils: Sendable {
     }
 
     /// Get the default timecode configuration from user preferences
-    static func getDefaultTimecodeConfig() -> TimecodeConfig? {
-        let defaultModeRaw = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeModeKey) ?? AppConstants.defaultTimecodeModeRaw
-        let defaultValue = UserDefaults.standard.string(forKey: AppConstants.defaultTimecodeValueKey) ?? AppConstants.defaultTimecodeValue
-
-        switch defaultModeRaw {
-        case "preserveSource":
-            return TimecodeConfig(mode: .preserveSource)
-        case "manual":
-            return TimecodeConfig(mode: .manual(defaultValue))
-        default: // "disabled"
-            return nil
-        }
+    static func getDefaultTimecodeConfig(settings: VideoImportSettings = VideoImportSettings()) -> TimecodeConfig? {
+        settings.timecode
     }
 
     static func loadDetails(
@@ -280,8 +291,10 @@ struct VideoFileUtils: Sendable {
         outputFolder: String? = nil,
         preset: ExportPreset = .videoLoop,
         generateRowThumbnailIfMissing: Bool = true,
-        counter: Int? = nil
+        counter: Int? = nil,
+        namingSettings: VideoImportNamingSettings? = nil
     ) async -> VideoItemDetails {
+        let namingSettings = namingSettings ?? VideoImportNamingSettings(preset: preset)
         // Skip if file doesn't exist (e.g., scheduled downloads)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return VideoItemDetails(
@@ -296,8 +309,6 @@ struct VideoFileUtils: Sendable {
         }
 
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-        let outputURL = makeOutputURL(for: url, outputFolder: outputFolder, preset: preset, counter: counter)
-
         // Run the full metadata probe in parallel with thumbnail generation. The metadata
         // service's `inFlightRawVideo` map dedups concurrent SwiftExif reads internally, so
         // even when several files import together we don't pay for redundant parses.
@@ -329,6 +340,10 @@ struct VideoFileUtils: Sendable {
             hasVideoStream = false
         }
 
+        let outputURL = makeOutputURL(
+            for: url, outputFolder: outputFolder, preset: preset, counter: counter,
+            imageSequenceFrameRate: metadata?.primaryVideoStream?.frameRate?.value, namingSettings: namingSettings
+        )
         return VideoItemDetails(
             size: size,
             duration: formatDuration(seconds: durationSec),
@@ -387,27 +402,36 @@ struct VideoFileUtils: Sendable {
         preset: ExportPreset = .videoLoop,
         completion: @MainActor @escaping (VideoItemDetails) -> Void
     ) {
+        let namingSettings = VideoImportNamingSettings(preset: preset)
         Task.detached(priority: .utility) {
-            let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset)
+            let details = await loadDetails(for: url, outputFolder: outputFolder, preset: preset, namingSettings: namingSettings)
             await completion(details)
         }
     }
 
-    private static func makeOutputURL(for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil) -> URL? {
-        let resolvedOutputFolder = resolveOutputFolder(for: url, defaultOutputFolder: outputFolder, preset: preset)
+    static func makeOutputURL(
+        for url: URL, outputFolder: String?, preset: ExportPreset, counter: Int? = nil,
+        imageSequenceFrameRate: Double? = nil, namingSettings: VideoImportNamingSettings,
+        override: String? = nil
+    ) -> URL? {
+        let resolvedOutputFolder = namingSettings.destination.resolveFolder(
+            for: url, defaultOutputFolder: outputFolder, presetSuffix: namingSettings.context.presetSuffix
+        )
         guard let resolvedOutputFolder else { return nil }
-        let sanitizedBaseName = FileNameProcessor.processFileName(url.deletingPathExtension().lastPathComponent)
-        let templatedBaseName = FileNameProcessor.applyCustomTemplate(sourceName: sanitizedBaseName, counter: counter)
-        let resolvedExtension = preset.outputExtension(for: url)
-        let suffixPart = FileNameProcessor.includePresetSuffix ? preset.fileSuffix : ""
+        let nameParts = FileNameProcessor.outputNameParts(
+            inputURL: url, override: override, counter: counter, preset: preset, settings: namingSettings.fileName,
+            context: namingSettings.namingContext(preset: preset, imageSequenceFrameRate: imageSequenceFrameRate),
+            date: namingSettings.date
+        )
+        let resolvedExtension = namingSettings.outputExtension(for: url)
 
         // Use FileSafetyUtils to prevent overwriting the input file
         let outputFolderURL = URL(fileURLWithPath: resolvedOutputFolder)
         return FileSafetyUtils.safeOutputURL(
             inputURL: url,
             outputFolder: outputFolderURL,
-            baseName: templatedBaseName,
-            suffix: suffixPart,
+            baseName: nameParts.baseName,
+            suffix: nameParts.suffix,
             fileExtension: resolvedExtension
         )
     }
@@ -416,35 +440,9 @@ struct VideoFileUtils: Sendable {
     /// If "save next to original" is enabled, returns the source file's directory (with optional subfolder).
     /// Otherwise, returns the default output folder.
     static func resolveOutputFolder(for sourceURL: URL, defaultOutputFolder: String?, preset: ExportPreset) -> String? {
-        let saveNextToOriginal = UserDefaults.standard.bool(forKey: AppConstants.saveNextToOriginalKey)
-
-        if saveNextToOriginal {
-            var outputDirectory = sourceURL.deletingLastPathComponent()
-
-            let useSubfolder = UserDefaults.standard.bool(forKey: AppConstants.saveNextToOriginalSubfolderKey)
-            if useSubfolder {
-                let subfolderMode = UserDefaults.standard.string(forKey: AppConstants.saveNextToOriginalSubfolderModeKey)
-                    ?? AppConstants.defaultSaveNextToOriginalSubfolderMode
-
-                let subfolderName: String
-                if subfolderMode == "presetSuffix" {
-                    // Use the preset's file suffix without the leading underscore
-                    subfolderName = String(preset.fileSuffix.dropFirst(preset.fileSuffix.hasPrefix("_") ? 1 : 0))
-                } else {
-                    // Use custom folder name
-                    subfolderName = UserDefaults.standard.string(forKey: AppConstants.saveNextToOriginalSubfolderNameKey)
-                        ?? AppConstants.defaultSaveNextToOriginalSubfolderName
-                }
-
-                if !subfolderName.isEmpty {
-                    outputDirectory = outputDirectory.appendingPathComponent(subfolderName)
-                }
-            }
-
-            return outputDirectory.path
-        } else {
-            return defaultOutputFolder
-        }
+        OutputDestinationSettings().resolveFolder(
+            for: sourceURL, defaultOutputFolder: defaultOutputFolder, presetSuffix: preset.fileSuffix
+        )
     }
     
     /// Fetches metadata for a video item in the background
@@ -486,6 +484,12 @@ struct VideoFileUtils: Sendable {
     static func fetchC2PAMetadata(
         for url: URL,
         timeout: Duration = .seconds(15),
+        startAccess: @escaping @Sendable (URL) -> SecurityScopedAccess = {
+            SecurityScopedBookmarkManager.shared.startAccessing(url: $0)
+        },
+        stopAccess: @escaping @Sendable (SecurityScopedAccess) -> Void = {
+            SecurityScopedBookmarkManager.shared.stopAccessing($0)
+        },
         metadataProbe: @escaping @Sendable (URL) async throws -> C2PAMetadata? = {
             try await SwiftExifMetadataService.shared.getC2PAMetadata(for: $0)
         }
@@ -502,7 +506,15 @@ struct VideoFileUtils: Sendable {
 
         do {
             let c2paMetadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
-                try await metadataProbe(url)
+                try Task.checkCancellation()
+                // A timed-out parser may keep reading after the metadata view closes.
+                // Retain independent access until that worker actually finishes.
+                let access = startAccess(url)
+                defer { stopAccess(access) }
+                try Task.checkCancellation()
+                let metadata = try await metadataProbe(url)
+                try Task.checkCancellation()
+                return metadata
             }
             if c2paMetadata != nil {
                 logger.debug("[fetchC2PAMetadata] Found C2PA metadata for: \(fileName, privacy: .public)")
@@ -526,6 +538,12 @@ struct VideoFileUtils: Sendable {
     static func fetchCameraMetadata(
         for url: URL,
         timeout: Duration = .seconds(15),
+        startAccess: @escaping @Sendable (URL) -> SecurityScopedAccess = {
+            SecurityScopedBookmarkManager.shared.startAccessing(url: $0)
+        },
+        stopAccess: @escaping @Sendable (SecurityScopedAccess) -> Void = {
+            SecurityScopedBookmarkManager.shared.stopAccessing($0)
+        },
         metadataProbe: @escaping @Sendable (URL) async throws -> CameraMetadata? = {
             try await SwiftExifMetadataService.shared.getCameraMetadata(for: $0)
         }
@@ -542,7 +560,15 @@ struct VideoFileUtils: Sendable {
 
         do {
             let cameraMetadata = try await NonJoiningTaskDeadline.run(timeout: timeout) {
-                try await metadataProbe(url)
+                try Task.checkCancellation()
+                // A timed-out parser may keep reading after the metadata view closes.
+                // Retain independent access until that worker actually finishes.
+                let access = startAccess(url)
+                defer { stopAccess(access) }
+                try Task.checkCancellation()
+                let metadata = try await metadataProbe(url)
+                try Task.checkCancellation()
+                return metadata
             }
             if cameraMetadata != nil {
                 logger.debug("[fetchCameraMetadata] Found camera metadata for: \(fileName, privacy: .public)")
@@ -574,33 +600,6 @@ struct VideoFileUtils: Sendable {
         }
     }
     
-    /// Lightweight duration fetch: cache → AVFoundation → lightweight ffprobe.
-    /// Does NOT trigger the heavy full-metadata probe.
-    static func getQuickDuration(for url: URL) async -> Double {
-        // Check cache first
-        if let cached = await VideoMetadataService.shared.cachedDuration(for: url), cached > 0 {
-            return cached
-        }
-
-        let avFoundationUnsupportedExtensions: Set<String> = [
-            "avi", "asf", "dv", "flv", "gxf", "mkv", "mk3d", "mxf",
-            "ogv", "ogm", "ogg", "oga", "rm", "rmvb", "roq", "ts",
-            "mts", "m2ts", "m2t", "trp", "vob", "webm", "wmv", "wtv", "y4m"
-        ]
-        let ext = url.pathExtension.lowercased()
-
-        if !avFoundationUnsupportedExtensions.contains(ext) {
-            let asset = AVURLAsset(url: url)
-            if let cmDuration = try? await asset.load(.duration) {
-                let sec = CMTimeGetSeconds(cmDuration)
-                if sec > 0 { return sec }
-            }
-        }
-
-        // Lightweight ffprobe (duration only, no full stream analysis)
-        return await FFMPEGConverter.getVideoDuration(url: url) ?? 0.0
-    }
-
     static func getVideoDuration(url: URL) async -> String {
         let fileName = url.lastPathComponent
         var duration: Double = 0.0
@@ -722,69 +721,7 @@ struct VideoFileUtils: Sendable {
         }
     }
 
-    private static func isNativelySupported(_ url: URL) async -> Bool {
-        let asset = AVURLAsset(url: url)
-        do {
-            let isPlayable = try await asset.load(.isPlayable)
-            guard isPlayable else { return false }
-            
-            let tracks = try await asset.loadTracks(withMediaType: .video)
-            if tracks.isEmpty { return true }
-            
-            for track in tracks {
-                let formats = try await track.load(.formatDescriptions) as [CMFormatDescription]
-                for desc in formats {
-                    let codec = CMFormatDescriptionGetMediaSubType(desc)
-                    let codecBytes: [UInt8] = [
-                        UInt8((codec >> 24) & 0xFF),
-                        UInt8((codec >> 16) & 0xFF),
-                        UInt8((codec >> 8) & 0xFF),
-                        UInt8(codec & 0xFF)
-                    ]
-                    if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters) {
-                        if fourCC == "apv1" || fourCC == "apvx" { return false }
-                    }
-                }
-            }
-            return true
-        } catch {
-            return false
-        }
-    }
-    
-    private static func isVLCSupported(_ url: URL) async -> Bool {
-        // VLC supports most formats that AVPlayer doesn't, EXCEPT APV
-        // Check if it's APV first (APV needs chunk fallback)
-        let asset = AVURLAsset(url: url)
-        do {
-            let tracks = try await asset.loadTracks(withMediaType: .video)
-            for track in tracks {
-                let formats = try await track.load(.formatDescriptions) as [CMFormatDescription]
-                for desc in formats {
-                    let codec = CMFormatDescriptionGetMediaSubType(desc)
-                    let codecBytes: [UInt8] = [
-                        UInt8((codec >> 24) & 0xFF),
-                        UInt8((codec >> 16) & 0xFF),
-                        UInt8((codec >> 8) & 0xFF),
-                        UInt8(codec & 0xFF)
-                    ]
-                   if let fourCC = String(bytes: codecBytes, encoding: .ascii)?.trimmingCharacters(in: .controlCharacters) {
-                        // APV is NOT supported by VLC
-                        if fourCC == "apv1" || fourCC == "apvx" {
-                            return false
-                        }
-                    }
-                }
-            }
-        } catch {
-            // If we can't inspect, assume VLC can handle it
-            return true
-        }
-        
-        // If it's not natively supported and not APV, VLC can likely play it
-        let isNative = await isNativelySupported(url)
-        return !isNative
-    }
+
 }
 
 /// Configuration for timecode preservation or manual override
@@ -904,6 +841,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var uploadSourceFile: Bool = false
     /// Current upload status
     var uploadStatus: UploadStatus = .notQueued
+    /// Identity of the upload attempt allowed to publish into this row.
+    var uploadOperationID: UUID? = nil
     /// Upload progress (0.0 to 1.0)
     var uploadProgress: Double = 0.0
     /// Upload speed (e.g., "5.2 MiB/s")
@@ -936,6 +875,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var analyticsStatus: AnalyticsStatus = .notQueued
     /// Analytics progress (0.0 to 1.0)
     var analyticsProgress: Double = 0.0
+    /// Per-attempt identity shared by manual and post-conversion analytics.
+    var analyticsOperationID: UUID? = nil
     /// Computed analytics results
     var analyticsResults: AnalyticsResults? = nil
 
@@ -992,12 +933,22 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         analyticsResults = nil
         analyticsStatus = .notQueued
         analyticsProgress = 0.0
+        analyticsOperationID = nil
         analyticsEnabled = false
+        // Re-encoding replaces the output, while an independent source-file upload
+        // can continue against the unchanged input.
+        if !uploadSourceFile {
+            uploadOperationID = nil
+            uploadStatus = .notQueued
+            uploadProgress = 0
+            uploadSpeed = nil
+            uploadedRemotePath = nil
+        }
     }
 
     /// Clears user-configured per-item settings (trim, crop, audio routing, mute, comment, etc.).
     /// Pass `resetNameOverride: true` to also clear the output filename override and waveform background.
-    mutating func clearUserSettings(resetNameOverride: Bool = false) {
+    mutating func clearUserSettings(resetNameOverride: Bool = false, settings: VideoImportSettings = VideoImportSettings()) {
         audioRoutingConfig = nil
         cropConfig = nil
         timecodeConfig = nil
@@ -1005,7 +956,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         trimEnd = nil
         isMuted = false
         comment = ""
-        includeDateTag = UserDefaults.standard.bool(forKey: AppConstants.includeDateTagPreferenceKey)
+        includeDateTag = settings.includeDateTag
         if resetNameOverride {
             outputFileNameOverride = nil
             waveformBackgroundImageURL = nil

@@ -12,7 +12,7 @@ import ImageIO
 import Darwin
 
 /// Screenshot format options for still image capture
-enum ScreenshotFormat: String, CaseIterable, Identifiable, Codable {
+enum ScreenshotFormat: String, CaseIterable, Identifiable, Codable, Sendable {
     case jpeg = "JPEG"
     case jpegXL = "JPEG XL"
     case avif = "AVIF"
@@ -42,7 +42,7 @@ enum ScreenshotFormat: String, CaseIterable, Identifiable, Codable {
 }
 
 /// Alpha channel handling preference for screenshots
-enum ScreenshotAlphaHandling: String, CaseIterable, Identifiable, Codable {
+enum ScreenshotAlphaHandling: String, CaseIterable, Identifiable, Codable, Sendable {
     case auto = "auto"
     case useSelectedFormat = "useSelectedFormat"
 
@@ -53,6 +53,36 @@ enum ScreenshotAlphaHandling: String, CaseIterable, Identifiable, Codable {
         case .auto: return "Auto (Use PNG or JPEG XL)"
         case .useSelectedFormat: return "Use selected format (discard alpha if unsupported)"
         }
+    }
+}
+
+/// Immutable screenshot preferences captured before an asynchronous capture begins.
+struct ScreenshotSettings: Sendable {
+    let eightBitFormat: ScreenshotFormat
+    let tenBitFormat: ScreenshotFormat
+    let highBitFormat: ScreenshotFormat
+    let alphaHandling: ScreenshotAlphaHandling
+
+    init(defaults: UserDefaults = .standard) {
+        func format(forKey key: String) -> ScreenshotFormat {
+            ScreenshotFormat(rawValue: defaults.string(forKey: key) ?? AppConstants.defaultScreenshotFormat)
+                ?? .jpegXL
+        }
+        eightBitFormat = format(forKey: AppConstants.screenshot8BitFormatKey)
+        tenBitFormat = format(forKey: AppConstants.screenshot10BitFormatKey)
+        highBitFormat = format(forKey: AppConstants.screenshotHighBitFormatKey)
+        alphaHandling = ScreenshotAlphaHandling(
+            rawValue: defaults.string(forKey: AppConstants.screenshotAlphaHandlingKey)
+                ?? AppConstants.defaultScreenshotAlphaHandling
+        ) ?? .auto
+    }
+
+    func format(bitDepth: Int, hasAlpha: Bool) -> ScreenshotFormat {
+        let selected = bitDepth > 10 ? highBitFormat : (bitDepth == 10 ? tenBitFormat : eightBitFormat)
+        if hasAlpha && alphaHandling == .auto && !selected.supportsAlpha {
+            return .png
+        }
+        return selected
     }
 }
 
@@ -241,7 +271,7 @@ extension PreviewPlayerController {
     
     // MARK: - Screenshot Capture
     
-    func captureScreenshot(to directory: URL) async throws -> URL {
+    func captureScreenshot(to directory: URL, settings: ScreenshotSettings = ScreenshotSettings()) async throws -> URL {
         guard !isCapturingScreenshot else {
             throw ScreenshotError.captureInProgress
         }
@@ -259,7 +289,7 @@ extension PreviewPlayerController {
 
         let captureTime = getCurrentTime() ?? videoItem.effectiveTrimStart
 
-        let parameters = screenshotParameters(for: videoItem.metadata?.primaryVideoStream)
+        let parameters = screenshotParameters(for: videoItem.metadata?.primaryVideoStream, settings: settings)
         let sanitizedBaseName = FileNameProcessor.processFileName(videoItem.url.deletingPathExtension().lastPathComponent)
         let timestamp = Self.screenshotDateFormatter.string(from: Date())
         let timeComponent = String(format: "%.3f", captureTime).replacingOccurrences(of: ".", with: "-")
@@ -446,47 +476,17 @@ extension PreviewPlayerController {
 
     // MARK: - Format Detection
 
-    func screenshotParameters(for stream: VideoMetadata.VideoStream?) -> ScreenshotParameters {
+    func screenshotParameters(
+        for stream: VideoMetadata.VideoStream?,
+        settings: ScreenshotSettings = ScreenshotSettings()
+    ) -> ScreenshotParameters {
         let bitDepth = stream?.bitDepth ?? 8
         let hasAlpha = stream?.hasAlpha ?? false
-
         Logger(subsystem: "com.aagedal.MediaConverter", category: "Screenshots")
             .debug("Screenshot format detection - bitDepth: \(bitDepth), hasAlpha: \(hasAlpha)")
 
-        // Get user-selected format based on bit depth
-        let formatRawValue: String
-        if bitDepth > 10 {
-            formatRawValue = UserDefaults.standard.string(forKey: AppConstants.screenshotHighBitFormatKey) ?? AppConstants.defaultScreenshotFormat
-        } else if bitDepth == 10 {
-            formatRawValue = UserDefaults.standard.string(forKey: AppConstants.screenshot10BitFormatKey) ?? AppConstants.defaultScreenshotFormat
-        } else {
-            formatRawValue = UserDefaults.standard.string(forKey: AppConstants.screenshot8BitFormatKey) ?? AppConstants.defaultScreenshotFormat
-        }
-
-        guard let format = ScreenshotFormat(rawValue: formatRawValue) else {
-            // Fallback to JPEG XL if invalid
-            return formatParameters(for: .jpegXL, bitDepth: bitDepth, hasAlpha: hasAlpha)
-        }
-
-        // Handle alpha channel based on preference
-        if hasAlpha {
-            let alphaHandling = UserDefaults.standard.string(forKey: AppConstants.screenshotAlphaHandlingKey) ?? AppConstants.defaultScreenshotAlphaHandling
-
-            if alphaHandling == ScreenshotAlphaHandling.auto.rawValue {
-                // Auto: Use PNG or JPEG XL if selected, otherwise fallback to PNG
-                if format.supportsAlpha {
-                    return formatParameters(for: format, bitDepth: bitDepth, hasAlpha: true)
-                } else {
-                    // Fallback to PNG for alpha support
-                    return formatParameters(for: .png, bitDepth: bitDepth, hasAlpha: true)
-                }
-            } else {
-                // useSelectedFormat: Use selected format, discard alpha if not supported
-                return formatParameters(for: format, bitDepth: bitDepth, hasAlpha: format.supportsAlpha)
-            }
-        }
-
-        return formatParameters(for: format, bitDepth: bitDepth, hasAlpha: false)
+        let format = settings.format(bitDepth: bitDepth, hasAlpha: hasAlpha)
+        return formatParameters(for: format, bitDepth: bitDepth, hasAlpha: hasAlpha && format.supportsAlpha)
     }
 
     private func formatParameters(for format: ScreenshotFormat, bitDepth: Int, hasAlpha: Bool) -> ScreenshotParameters {

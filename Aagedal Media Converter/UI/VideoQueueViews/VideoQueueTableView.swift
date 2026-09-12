@@ -1317,6 +1317,9 @@ struct VideoQueueTableView: NSViewRepresentable {
                     } else if let gIdx = parent.encodingGroups.firstIndex(where: {
                         $0.items.contains(where: { $0.id == itemID })
                     }), let iIdx = parent.encodingGroups[gIdx].items.firstIndex(where: { $0.id == itemID }) {
+                        if let operationID = parent.encodingGroups[gIdx].items[iIdx].analyticsOperationID {
+                            Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                        }
                         parent.encodingGroups[gIdx].items.remove(at: iIdx)
                     }
                 }
@@ -1385,10 +1388,14 @@ struct VideoQueueTableView: NSViewRepresentable {
                     }
                 }
             case .cancelAnalytics:
-                Task { await AnalyticsService.shared.cancelAnalysis() }
                 if let idx = droppedFilesIndex[itemID] {
-                    parent.droppedFiles[idx].analyticsStatus = .notQueued
+                    let operationID = parent.droppedFiles[idx].analyticsOperationID
+                    parent.droppedFiles[idx].analyticsOperationID = nil
+                    parent.droppedFiles[idx].analyticsStatus = parent.droppedFiles[idx].analyticsResults == nil ? .notQueued : .completed
                     parent.droppedFiles[idx].analyticsProgress = 0
+                    if let operationID {
+                        Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                    }
                 }
             case .encodeNow(let optionPressed):
                 if optionPressed {

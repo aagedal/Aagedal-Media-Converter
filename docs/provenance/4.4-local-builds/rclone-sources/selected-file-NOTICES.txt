@@ -1,0 +1,3602 @@
+[1] github.com/IBM/go-sdk-core/v5@v5.21.2/core/authentication_error.go (and 8 other selected files; see selected-file-review.json)
+
+// (C) Copyright IBM Corp. 2024.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[2] github.com/IBM/go-sdk-core/v5@v5.21.2/core/authenticator.go (and 8 other selected files; see selected-file-review.json)
+
+// (C) Copyright IBM Corp. 2019.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[3] github.com/IBM/go-sdk-core/v5@v5.21.2/core/authenticator_factory.go (and 1 other selected files; see selected-file-review.json)
+
+// (C) Copyright IBM Corp. 2019, 2025.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[4] github.com/IBM/go-sdk-core/v5@v5.21.2/core/base_service.go (and 3 other selected files; see selected-file-review.json)
+
+// (C) Copyright IBM Corp. 2019, 2024.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[5] github.com/IBM/go-sdk-core/v5@v5.21.2/core/container_authenticator.go
+
+// (C) Copyright IBM Corp. 2021, 2025.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[6] github.com/IBM/go-sdk-core/v5@v5.21.2/core/datetime.go (and 1 other selected files; see selected-file-review.json)
+
+/**
+ * (C) Copyright IBM Corp. 2020.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+[7] github.com/IBM/go-sdk-core/v5@v5.21.2/core/file_with_metadata.go (and 2 other selected files; see selected-file-review.json)
+
+// (C) Copyright IBM Corp. 2021.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[8] github.com/IBM/go-sdk-core/v5@v5.21.2/core/gzip.go
+
+// (C) Copyright IBM Corp. 2020.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[9] github.com/IBM/go-sdk-core/v5@v5.21.2/core/log.go
+
+// (C) Copyright IBM Corp. 2020, 2021.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[10] github.com/IBM/go-sdk-core/v5@v5.21.2/core/mcsp_v1_authenticator.go
+
+// (C) Copyright IBM Corp. 2023, 2024.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[11] github.com/IBM/go-sdk-core/v5@v5.21.2/core/mcsp_v2_authenticator.go
+
+// (C) Copyright IBM Corp. 2025.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[12] github.com/IBM/go-sdk-core/v5@v5.21.2/core/vpc_instance_authenticator.go
+
+// (C) Copyright IBM Corp. 2021, 2024.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[13] github.com/ProtonMail/go-crypto@v1.4.1/bitcurves/bitcurve.go
+
+// Copyright 2010 The Go Authors. All rights reserved.
+// Copyright 2011 ThePiachu. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[14] github.com/ProtonMail/go-crypto@v1.4.1/eax/eax.go (and 5 other selected files; see selected-file-review.json)
+
+// Copyright (C) 2019 ProtonTech AG
+
+[15] github.com/ProtonMail/go-crypto@v1.4.1/internal/byteutil/byteutil.go
+
+// Copyright (C) 2019 ProtonTech AG
+// This file contains necessary tools for the aex and ocb packages.
+//
+// These functions SHOULD NOT be used elsewhere, since they are optimized for
+// specific input nature in the EAX and OCB modes of operation.
+
+[16] github.com/ProtonMail/go-crypto@v1.4.1/openpgp/aes/keywrap/keywrap.go
+
+// Copyright 2014 Matthew Endsley
+// All rights reserved
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted providing that the following conditions
+// are met:
+// 1. Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+// 2. Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+//
+// THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+// IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+// ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+// DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+// OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+// HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+// STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+// IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+// POSSIBILITY OF SUCH DAMAGE.
+
+[17] github.com/ProtonMail/go-crypto@v1.4.1/openpgp/packet/symmetrically_encrypted_aead.go
+
+// Copyright 2023 Proton AG. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[18] github.com/aalpar/deheap@v1.1.2/deheap.go (and 1 other selected files; see selected-file-review.json)
+
+//
+// Copyright 2019-2026 Aaron H. Alpar
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files
+// (the "Software"), to deal in the Software without restriction,
+// including without limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of the Software,
+// and to permit persons to whom the Software is furnished to do so,
+// subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+
+[19] github.com/andybalholm/brotli@v1.2.0/backward_references.go (and 22 other selected files; see selected-file-review.json)
+
+/* Copyright 2013 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/
+
+[20] github.com/andybalholm/brotli@v1.2.0/bitwriter.go (and 6 other selected files; see selected-file-review.json)
+
+/* Copyright 2010 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/
+
+[21] github.com/andybalholm/brotli@v1.2.0/compress_fragment.go (and 6 other selected files; see selected-file-review.json)
+
+/* Copyright 2015 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/
+
+[22] github.com/andybalholm/brotli@v1.2.0/constants.go (and 4 other selected files; see selected-file-review.json)
+
+/* Copyright 2016 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/
+
+[23] github.com/andybalholm/brotli@v1.2.0/hash_composite.go (and 1 other selected files; see selected-file-review.json)
+
+/* Copyright 2018 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/
+
+[24] github.com/andybalholm/brotli@v1.2.0/metablock.go
+
+/* Copyright 2014 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/
+
+[25] github.com/andybalholm/brotli@v1.2.0/params.go (and 1 other selected files; see selected-file-review.json)
+
+/* Copyright 2017 Google Inc. All Rights Reserved.
+
+   Distributed under MIT license.
+   See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+*/
+
+[26] github.com/atotto/clipboard@v0.1.4/clipboard.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2013 @atotto. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[27] github.com/cloudsoda/go-smb2@v0.0.0-20250228001242-d4c70e6251cc/all.go
+
+// Original: src/os/path.go
+//
+// Copyright 2009 The Go Authors. All rights reserved.
+// Portions Copyright 2016 Hiroshi Ioka. All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//    * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//    * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+[28] github.com/cloudsoda/go-smb2@v0.0.0-20250228001242-d4c70e6251cc/filepath.go
+
+// Original: src/path/filepath/match.go
+//
+// Copyright 2010 The Go Authors. All rights reserved.
+// Portions Copyright 2021 Hiroshi Ioka. All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//    * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//    * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+[29] github.com/cloudsoda/go-smb2@v0.0.0-20250228001242-d4c70e6251cc/internal/crypto/ccm/util.go
+
+// Copyright 2016 The Go Authors. All rights reserved.
+// Portions Copyright 2016 Hiroshi Ioka. All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//    * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//    * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+[30] github.com/cloudsoda/go-smb2@v0.0.0-20250228001242-d4c70e6251cc/internal/crypto/cmac/cmac.go
+
+// Copyright 2009 The Go Authors. All rights reserved.
+// Portions Copyright 2016 Hiroshi Ioka. All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//    * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//    * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//    * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+[31] github.com/coreos/go-semver@v0.3.1/semver/semver.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2013-2015 CoreOS, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[32] github.com/coreos/go-systemd/v22@v22.6.0/activation/files_unix.go (and 4 other selected files; see selected-file-review.json)
+
+// Copyright 2015 CoreOS, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[33] github.com/coreos/go-systemd/v22@v22.6.0/daemon/sdnotify.go
+
+// Copyright 2014 Docker, Inc.
+// Copyright 2015-2018 CoreOS, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+[34] github.com/coreos/go-systemd/v22@v22.6.0/daemon/watchdog.go
+
+// Copyright 2016 CoreOS, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[35] github.com/dsnet/compress@v0.0.2-0.20230904184137-39efe44ab707/bzip2/internal/sais/common.go (and 19 other selected files; see selected-file-review.json)
+
+// Copyright 2015, Joe Tsai. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE.md file.
+
+[36] github.com/dsnet/compress@v0.0.2-0.20230904184137-39efe44ab707/bzip2/internal/sais/sais_byte.go (and 1 other selected files; see selected-file-review.json)
+
+// ====================================================
+// Copyright (c) 2008-2010 Yuta Mori All Rights Reserved.
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use,
+// copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
+// ====================================================
+
+[37] github.com/dsnet/compress@v0.0.2-0.20230904184137-39efe44ab707/bzip2/prefix.go
+
+	// Since there is no formal definition for the BZip2 format, there is no
+	// specification that says that the code lengths must form a complete
+	// prefix tree (IE: it is neither over-subscribed nor under-subscribed).
+	// Thus, the original C implementation becomes the reference for how prefix
+	// decoding is done in these edge cases. Unfortunately, the C version does
+	// not error when an invalid tree is used, but rather allows decoding to
+	// continue and only errors if some bit pattern happens to cause an error.
+	// Thus, it is possible for an invalid tree to end up decoding an input
+	// "properly" so long as invalid bit patterns are not present. In order to
+	// replicate this non-specified behavior, we use a ported version of the
+	// C code to generate the codes as a valid canonical tree by substituting
+	// invalid nodes with invalid symbols.
+	//
+	// ====================================================
+	// This program, "bzip2", the associated library "libbzip2", and all
+	// documentation, are copyright (C) 1996-2010 Julian R Seward.  All
+	// rights reserved.
+	//
+	// Redistribution and use in source and binary forms, with or without
+	// modification, are permitted provided that the following conditions
+	// are met:
+	//
+	// 1. Redistributions of source code must retain the above copyright
+	//    notice, this list of conditions and the following disclaimer.
+	//
+	// 2. The origin of this software must not be misrepresented; you must
+	//    not claim that you wrote the original software.  If you use this
+	//    software in a product, an acknowledgment in the product
+	//    documentation would be appreciated but is not required.
+	//
+	// 3. Altered source versions must be plainly marked as such, and must
+	//    not be misrepresented as being the original software.
+	//
+	// 4. The name of the author may not be used to endorse or promote
+	//    products derived from this software without specific prior written
+	//    permission.
+	//
+	// THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS
+	// OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+	// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+	// ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+	// DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+	// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+	// GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+	// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+	// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+	// NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+	// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+	//
+	// Julian Seward, jseward@bzip.org
+	// bzip2/libbzip2 version 1.0.6 of 6 September 2010
+	// ====================================================
+
+[38] github.com/dsnet/compress@v0.0.2-0.20230904184137-39efe44ab707/internal/errors/errors.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2016, Joe Tsai. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE.md file.
+
+[39] github.com/ebitengine/purego@v0.10.0/dlerror.go (and 1 other selected files; see selected-file-review.json)
+
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2023 The Ebitengine Authors
+
+[40] github.com/ebitengine/purego@v0.10.0/internal/fakecgo/doc.go (and 20 other selected files; see selected-file-review.json)
+
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2022 The Ebitengine Authors
+
+[41] github.com/ebitengine/purego@v0.10.0/internal/fakecgo/fakecgo.go (and 2 other selected files; see selected-file-review.json)
+
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 The Ebitengine Authors
+
+[42] github.com/ebitengine/purego@v0.10.0/struct_arm64.go
+
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2024 The Ebitengine Authors
+
+[43] github.com/ebitengine/purego@v0.10.0/syscall_sysv_others.go
+
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Ebitengine Authors
+
+[44] github.com/gdamore/encoding@v1.0.1/ascii.go (and 5 other selected files; see selected-file-review.json)
+
+// Copyright 2015 Garrett D'Amore
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[45] github.com/gdamore/encoding@v1.0.1/charmap.go
+
+// Copyright 2024 Garrett D'Amore
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[46] github.com/gdamore/tcell/v2@v2.13.8/charset_unix.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2016 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[47] github.com/gdamore/tcell/v2@v2.13.8/color.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2023 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[48] github.com/gdamore/tcell/v2@v2.13.8/console_stub.go (and 5 other selected files; see selected-file-review.json)
+
+// Copyright 2015 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[49] github.com/gdamore/tcell/v2@v2.13.8/doc.go
+
+// Copyright 2018 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[50] github.com/gdamore/tcell/v2@v2.13.8/encoding.go
+
+// Copyright 2022 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[51] github.com/gdamore/tcell/v2@v2.13.8/terminfo/base/base.go
+
+// Copyright 2020 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[52] github.com/gdamore/tcell/v2@v2.13.8/terminfo/extended/extended.go (and 5 other selected files; see selected-file-review.json)
+
+// Copyright 2024 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[53] github.com/gdamore/tcell/v2@v2.13.8/terminfo/terminfo.go (and 7 other selected files; see selected-file-review.json)
+
+// Copyright 2025 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[54] github.com/gdamore/tcell/v2@v2.13.8/terminfo/x/xterm/direct.go (and 6 other selected files; see selected-file-review.json)
+
+// Copyright 2021 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[55] github.com/gdamore/tcell/v2@v2.13.8/terms_default.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2019 The TCell Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use file except in compliance with the License.
+// You may obtain a copy of the license at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[56] github.com/go-chi/chi/v5@v5.2.5/tree.go
+
+// Radix tree implementation below is a based on the original work by
+// Armon Dadgar in https://github.com/armon/go-radix/blob/master/radix.go
+// (MIT licensed). It's been heavily modified for use as a HTTP routing tree.
+
+[57] github.com/go-openapi/errors@v0.22.6/api.go (and 17 other selected files; see selected-file-review.json)
+
+// SPDX-FileCopyrightText: Copyright 2015-2025 go-swagger maintainers
+// SPDX-License-Identifier: Apache-2.0
+
+[58] github.com/google/uuid@v1.6.0/dce.go (and 9 other selected files; see selected-file-review.json)
+
+// Copyright 2016 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[59] github.com/google/uuid@v1.6.0/node_net.go
+
+// Copyright 2017 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[60] github.com/google/uuid@v1.6.0/null.go
+
+// Copyright 2021 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[61] github.com/google/uuid@v1.6.0/uuid.go
+
+// Copyright 2018 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[62] github.com/google/uuid@v1.6.0/version6.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2023 Google Inc.  All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[63] github.com/hashicorp/go-retryablehttp@v0.7.8/cert_error_go120.go (and 7 other selected files; see selected-file-review.json)
+
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
+[64] github.com/hashicorp/golang-lru/v2@v2.0.7/internal/list.go
+
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE_list file.
+
+[65] github.com/jcmturner/gokrb5/v8@v8.4.4/crypto/rfc3961/nfold.go
+
+/* Credits
+This golang implementation of nfold used the following project for help with implementation detail.
+Although their source is in java it was helpful as a reference implementation of the RFC.
+You can find the source code of their open source project along with license information below.
+We acknowledge and are grateful to these developers for their contributions to open source
+
+Project: Apache Directory (http://http://directory.apache.org/)
+https://svn.apache.org/repos/asf/directory/apacheds/tags/1.5.1/kerberos-shared/src/main/java/org/apache/directory/server/kerberos/shared/crypto/encryption/NFold.java
+License: http://www.apache.org/licenses/LICENSE-2.0
+*/
+
+[66] github.com/jzelinskie/whirlpool@v0.0.0-20201016144138-0675e54bb004/const.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2012 Jimmy Zelinskie. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[67] github.com/klauspost/compress@v1.18.5/flate/deflate.go
+
+// Copyright 2009 The Go Authors. All rights reserved.
+// Copyright (c) 2015 Klaus Post
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[68] github.com/klauspost/compress@v1.18.5/flate/fast_encoder.go
+
+// Copyright 2011 The Snappy-Go Authors. All rights reserved.
+// Modified for deflate by Klaus Post (c) 2015.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[69] github.com/klauspost/compress@v1.18.5/flate/matchlen_generic.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright 2019+ Klaus Post. All rights reserved.
+// License information can be found in the LICENSE file.
+
+[70] github.com/klauspost/compress@v1.18.5/fse/bitreader.go (and 7 other selected files; see selected-file-review.json)
+
+// Copyright 2018 Klaus Post. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+// Based on work Copyright (c) 2013, Yann Collet, released under BSD License.
+
+[71] github.com/klauspost/compress@v1.18.5/internal/snapref/decode.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright 2011 The Snappy-Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[72] github.com/klauspost/compress@v1.18.5/internal/snapref/decode_other.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2016 The Snappy-Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[73] github.com/klauspost/compress@v1.18.5/s2/decode.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright 2011 The Snappy-Go Authors. All rights reserved.
+// Copyright (c) 2019 Klaus Post. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[74] github.com/klauspost/compress@v1.18.5/s2/decode_asm.go (and 3 other selected files; see selected-file-review.json)
+
+// Copyright 2016 The Snappy-Go Authors. All rights reserved.
+// Copyright (c) 2019 Klaus Post. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[75] github.com/klauspost/compress@v1.18.5/s2/dict.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright (c) 2022+ Klaus Post. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[76] github.com/klauspost/compress@v1.18.5/s2/lz4convert.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright (c) 2022 Klaus Post. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[77] github.com/klauspost/compress@v1.18.5/s2/reader.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2011 The Snappy-Go Authors. All rights reserved.
+// Copyright (c) 2019+ Klaus Post. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[78] github.com/klauspost/compress@v1.18.5/zstd/bitreader.go (and 21 other selected files; see selected-file-review.json)
+
+// Copyright 2019+ Klaus Post. All rights reserved.
+// License information can be found in the LICENSE file.
+// Based on work by Yann Collet, released under BSD License.
+
+[79] github.com/klauspost/compress@v1.18.5/zstd/decodeheader.go
+
+// Copyright 2020+ Klaus Post. All rights reserved.
+// License information can be found in the LICENSE file.
+
+[80] github.com/klauspost/compress@v1.18.5/zstd/simple_go124.go
+
+// Copyright 2025+ Klaus Post. All rights reserved.
+// License information can be found in the LICENSE file.
+
+[81] github.com/klauspost/cpuid/v2@v2.3.0/cpuid.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright (c) 2015 Klaus Post, released under MIT License. See LICENSE file.
+
+[82] github.com/klauspost/cpuid/v2@v2.3.0/os_darwin_arm64.go
+
+// Copyright (c) 2020 Klaus Post, released under MIT License. See LICENSE file.
+
+[83] github.com/lucasb-eyer/go-colorful@v1.3.0/hsluv.go
+
+// Source: https://github.com/hsluv/hsluv-go
+// Under MIT License
+// Modified so that Saturation and Luminance are in [0..1] instead of [0..100].
+
+[84] github.com/mikelolasagasti/xz@v1.0.1/dec_bcj.go
+
+/*
+ * Branch/Call/Jump (BCJ) filter decoders
+ *
+ * Authors: Lasse Collin <lasse.collin@tukaani.org>
+ *          Igor Pavlov <http://7-zip.org/>
+ *
+ * Translation to Go: Michael Cross <https://github.com/xi2>
+ *
+ * This file has been put into the public domain.
+ * You can do whatever you want with this file.
+ */
+
+[85] github.com/mikelolasagasti/xz@v1.0.1/dec_delta.go
+
+/*
+ * Delta decoder
+ *
+ * Author: Lasse Collin <lasse.collin@tukaani.org>
+ *
+ * Translation to Go: Michael Cross <https://github.com/xi2>
+ *
+ * This file has been put into the public domain.
+ * You can do whatever you want with this file.
+ */
+
+[86] github.com/mikelolasagasti/xz@v1.0.1/dec_lzma2.go
+
+/*
+ * LZMA2 decoder
+ *
+ * Authors: Lasse Collin <lasse.collin@tukaani.org>
+ *          Igor Pavlov <http://7-zip.org/>
+ *
+ * Translation to Go: Michael Cross <https://github.com/xi2>
+ *
+ * This file has been put into the public domain.
+ * You can do whatever you want with this file.
+ */
+
+[87] github.com/mikelolasagasti/xz@v1.0.1/dec_stream.go
+
+/*
+ * .xz Stream decoder
+ *
+ * Author: Lasse Collin <lasse.collin@tukaani.org>
+ *
+ * Translation to Go: Michael Cross <https://github.com/xi2>
+ *
+ * This file has been put into the public domain.
+ * You can do whatever you want with this file.
+ */
+
+[88] github.com/mikelolasagasti/xz@v1.0.1/dec_util.go
+
+/*
+ * XZ decompressor utility functions
+ *
+ * Author: Michael Cross <https://github.com/xi2>
+ *
+ * This file has been put into the public domain.
+ * You can do whatever you want with this file.
+ */
+
+[89] github.com/mikelolasagasti/xz@v1.0.1/dec_xz.go
+
+/*
+ * XZ decompressor
+ *
+ * Authors: Lasse Collin <lasse.collin@tukaani.org>
+ *          Igor Pavlov <http://7-zip.org/>
+ *
+ * Translation to Go: Michael Cross <https://github.com/xi2>
+ *
+ * This file has been put into the public domain.
+ * You can do whatever you want with this file.
+ */
+
+[90] github.com/mikelolasagasti/xz@v1.0.1/reader.go
+
+/*
+ * Package xz Go Reader API
+ *
+ * Author: Michael Cross <https://github.com/xi2>
+ *
+ * This file has been put into the public domain.
+ * You can do whatever you want with this file.
+ */
+
+[91] github.com/minio/minlz@v1.0.1/asm_none.go (and 13 other selected files; see selected-file-review.json)
+
+// Copyright 2025 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[92] github.com/munnerz/goautoneg@v0.0.0-20191010083416-a7dc8b61c822/autoneg.go
+
+/*
+HTTP Content-Type Autonegotiation.
+
+The functions in this package implement the behaviour specified in
+http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
+
+Copyright (c) 2011, Open Knowledge Foundation Ltd.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+    Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+    Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+
+    Neither the name of the Open Knowledge Foundation Ltd. nor the
+    names of its contributors may be used to endorse or promote
+    products derived from this software without specific prior written
+    permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+[93] github.com/oklog/ulid@v1.3.1/ulid.go
+
+// Copyright 2016 The Oklog Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[94] github.com/prometheus/client_golang@v1.23.2/internal/github.com/golang/gddo/httputil/header/header.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2013 The Go Authors. All rights reserved.
+//
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file or at
+// https://developers.google.com/open-source/licenses/bsd.
+
+[95] github.com/prometheus/client_golang@v1.23.2/prometheus/collectorfunc.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2025 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[96] github.com/prometheus/client_golang@v1.23.2/prometheus/desc.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright 2016 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[97] github.com/prometheus/client_golang@v1.23.2/prometheus/internal/almost_equal.go
+
+// Copyright (c) 2015 Björn Rabenstein
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+// The code in this package is copy/paste to avoid a dependency. Hence this file
+// carries the copyright of the original repo.
+// https://github.com/beorn7/floats
+
+[98] github.com/prometheus/client_golang@v1.23.2/prometheus/internal/difflib.go
+
+// Copyright 2022 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// It provides tools to compare sequences of strings and generate textual diffs.
+//
+// Maintaining `GetUnifiedDiffString` here because original repository
+// (https://github.com/pmezard/go-difflib) is no longer maintained.
+
+[99] github.com/prometheus/client_golang@v1.23.2/prometheus/internal/go_collector_options.go (and 3 other selected files; see selected-file-review.json)
+
+// Copyright 2021 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[100] github.com/prometheus/client_golang@v1.23.2/prometheus/internal/metric.go (and 5 other selected files; see selected-file-review.json)
+
+// Copyright 2018 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[101] github.com/prometheus/client_golang@v1.23.2/prometheus/observer.go (and 3 other selected files; see selected-file-review.json)
+
+// Copyright 2017 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[102] github.com/prometheus/client_golang@v1.23.2/prometheus/vnext.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2022 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[103] github.com/prometheus/client_model@v0.6.2/go/metrics.pb.go
+
+// Copyright 2013 Prometheus Team
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[104] github.com/prometheus/common@v0.67.5/expfmt/openmetrics_create.go
+
+// Copyright 2020 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[105] github.com/prometheus/common@v0.67.5/model/alert.go (and 10 other selected files; see selected-file-review.json)
+
+// Copyright 2013 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[106] github.com/prometheus/common@v0.67.5/model/fnv.go (and 7 other selected files; see selected-file-review.json)
+
+// Copyright 2015 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[107] github.com/prometheus/common@v0.67.5/model/labelset_string.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright 2024 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[108] github.com/prometheus/common@v0.67.5/model/metadata.go
+
+// Copyright 2023 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[109] github.com/prometheus/common@v0.67.5/model/signature.go (and 13 other selected files; see selected-file-review.json)
+
+// Copyright 2014 The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[110] github.com/rasky/go-xdr@v0.0.0-20170124162913-1a41d1a06c93/xdr2/decode.go (and 4 other selected files; see selected-file-review.json)
+
+/*
+ * Copyright (c) 2012-2014 Dave Collins <dave@davec.name>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+[111] github.com/rivo/uniseg@v0.4.7/eastasianwidth.go
+
+// eastAsianWidth are taken from
+// https://www.unicode.org/Public/15.0.0/ucd/EastAsianWidth.txt
+// and
+// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
+// ("Extended_Pictographic" only)
+// on September 5, 2023. See https://www.unicode.org/license.html for the Unicode
+// license agreement.
+
+[112] github.com/rivo/uniseg@v0.4.7/emojipresentation.go
+
+// emojiPresentation are taken from
+//
+// and
+// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
+// ("Extended_Pictographic" only)
+// on September 5, 2023. See https://www.unicode.org/license.html for the Unicode
+// license agreement.
+
+[113] github.com/rivo/uniseg@v0.4.7/graphemeproperties.go
+
+// graphemeCodePoints are taken from
+// https://www.unicode.org/Public/15.0.0/ucd/auxiliary/GraphemeBreakProperty.txt
+// and
+// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
+// ("Extended_Pictographic" only)
+// on September 5, 2023. See https://www.unicode.org/license.html for the Unicode
+// license agreement.
+
+[114] github.com/rivo/uniseg@v0.4.7/lineproperties.go
+
+// lineBreakCodePoints are taken from
+// https://www.unicode.org/Public/15.0.0/ucd/LineBreak.txt
+// and
+// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
+// ("Extended_Pictographic" only)
+// on September 5, 2023. See https://www.unicode.org/license.html for the Unicode
+// license agreement.
+
+[115] github.com/rivo/uniseg@v0.4.7/sentenceproperties.go
+
+// sentenceBreakCodePoints are taken from
+// https://www.unicode.org/Public/15.0.0/ucd/auxiliary/SentenceBreakProperty.txt
+// and
+// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
+// ("Extended_Pictographic" only)
+// on September 5, 2023. See https://www.unicode.org/license.html for the Unicode
+// license agreement.
+
+[116] github.com/rivo/uniseg@v0.4.7/wordproperties.go
+
+// workBreakCodePoints are taken from
+// https://www.unicode.org/Public/15.0.0/ucd/auxiliary/WordBreakProperty.txt
+// and
+// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
+// ("Extended_Pictographic" only)
+// on September 5, 2023. See https://www.unicode.org/license.html for the Unicode
+// license agreement.
+
+[117] github.com/russross/blackfriday/v2@v2.1.0/block.go (and 3 other selected files; see selected-file-review.json)
+
+//
+// Blackfriday Markdown Processor
+// Available at http://github.com/russross/blackfriday
+//
+// Copyright © 2011 Russ Ross <russ@russross.com>.
+// Distributed under the Simplified BSD License.
+// See README.md for details.
+//
+
+[118] github.com/russross/blackfriday/v2@v2.1.0/markdown.go
+
+// Blackfriday Markdown Processor
+// Available at http://github.com/russross/blackfriday
+//
+// Copyright © 2011 Russ Ross <russ@russross.com>.
+// Distributed under the Simplified BSD License.
+// See README.md for details.
+
+[119] github.com/shirou/gopsutil/v4@v4.26.3/common/env.go (and 10 other selected files; see selected-file-review.json)
+
+// SPDX-License-Identifier: BSD-3-Clause
+
+[120] github.com/shirou/gopsutil/v4@v4.26.3/cpu/cpu_darwin_arm64.go (and 2 other selected files; see selected-file-review.json)
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build darwin && arm64
+
+[121] github.com/shirou/gopsutil/v4@v4.26.3/disk/disk_unix.go
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build freebsd || linux || darwin
+
+[122] github.com/shirou/gopsutil/v4@v4.26.3/host/host_bsd.go
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build darwin || freebsd || openbsd || netbsd
+
+[123] github.com/shirou/gopsutil/v4@v4.26.3/host/host_posix.go
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build linux || freebsd || openbsd || netbsd || darwin || solaris
+
+[124] github.com/shirou/gopsutil/v4@v4.26.3/internal/common/common_darwin.go (and 6 other selected files; see selected-file-review.json)
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build darwin
+
+[125] github.com/shirou/gopsutil/v4@v4.26.3/internal/common/common_unix.go
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build linux || freebsd || darwin || openbsd
+
+[126] github.com/shirou/gopsutil/v4@v4.26.3/internal/common/endian.go
+
+// IsLittleEndian checks if the current platform uses little-endian.
+// copied from https://github.com/ntrrg/ntgo/blob/v0.8.0/runtime/infrastructure.go#L16 (MIT License)
+
+[127] github.com/shirou/gopsutil/v4@v4.26.3/net/net_unix.go
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build freebsd || darwin
+
+[128] github.com/shirou/gopsutil/v4@v4.26.3/process/process_bsd.go
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build darwin || freebsd || openbsd
+
+[129] github.com/shirou/gopsutil/v4@v4.26.3/process/process_posix.go
+
+// SPDX-License-Identifier: BSD-3-Clause
+//go:build linux || freebsd || openbsd || darwin || solaris
+
+[130] github.com/sorairolake/lzip-go@v0.3.8/error.go (and 3 other selected files; see selected-file-review.json)
+
+// SPDX-FileCopyrightText: 2024 Shun Sakai
+//
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+[131] github.com/spf13/afero@v1.15.0/afero.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright © 2014 Steve Francia <spf@spf13.com>.
+// Copyright 2013 tsuru authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[132] github.com/spf13/afero@v1.15.0/const_bsds.go
+
+// Copyright © 2016 Steve Francia <spf@spf13.com>.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[133] github.com/spf13/afero@v1.15.0/internal/common/adapters.go
+
+// Copyright © 2022 Steve Francia <spf@spf13.com>.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[134] github.com/spf13/afero@v1.15.0/ioutil.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright ©2015 The Go Authors
+// Copyright ©2015 Steve Francia <spf@spf13.com>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[135] github.com/spf13/afero@v1.15.0/lstater.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright © 2018 Steve Francia <spf@spf13.com>.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[136] github.com/spf13/afero@v1.15.0/match.go
+
+// Copyright © 2014 Steve Francia <spf@spf13.com>.
+// Copyright 2009 The Go Authors. All rights reserved.
+
+[137] github.com/spf13/afero@v1.15.0/match.go
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[138] github.com/spf13/afero@v1.15.0/mem/dir.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright © 2014 Steve Francia <spf@spf13.com>.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[139] github.com/spf13/afero@v1.15.0/mem/dirmap.go
+
+// Copyright © 2015 Steve Francia <spf@spf13.com>.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[140] github.com/spf13/afero@v1.15.0/mem/file.go
+
+// Copyright © 2015 Steve Francia <spf@spf13.com>.
+// Copyright 2013 tsuru authors. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[141] github.com/spf13/afero@v1.15.0/util.go
+
+// Copyright ©2015 Steve Francia <spf@spf13.com>
+// Portions Copyright ©2015 The Hugo Authors
+// Portions Copyright 2016-present Bjørn Erik Pedersen <bjorn.erik.pedersen@gmail.com>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[142] github.com/spf13/cobra@v1.10.2/active_help.go (and 17 other selected files; see selected-file-review.json)
+
+// Copyright 2013-2023 The Cobra Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[143] github.com/tklauser/go-sysconf@v0.3.16/sysconf.go (and 3 other selected files; see selected-file-review.json)
+
+// Copyright 2018 Tobias Klauser. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[144] github.com/tklauser/go-sysconf@v0.3.16/sysconf_generic.go
+
+// Copyright 2021 Tobias Klauser. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[145] github.com/ulikunitz/xz@v0.5.15/internal/hash/cyclic_poly.go (and 38 other selected files; see selected-file-review.json)
+
+// Copyright 2014-2022 Ulrich Kunitz. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[146] github.com/unknwon/goconfig@v1.0.0/conf.go (and 3 other selected files; see selected-file-review.json)
+
+// Copyright 2013 Unknwon
+//
+// Licensed under the Apache License, Version 2.0 (the "License"): you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+// WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+// License for the specific language governing permissions and limitations
+// under the License.
+
+[147] github.com/willscott/go-nfs-client@v0.0.0-20251022144359-801f10d98886/nfs/util/log.go
+
+// Copyright © 2017 VMware, Inc. All Rights Reserved.
+// SPDX-License-Identifier: BSD-2-Clause
+//
+// Copyright 2016 VMware, Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[148] github.com/willscott/go-nfs-client@v0.0.0-20251022144359-801f10d98886/nfs/xdr/decode.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright © 2017 VMware, Inc. All Rights Reserved.
+// SPDX-License-Identifier: BSD-2-Clause
+
+[149] github.com/willscott/go-nfs-client@v0.0.0-20251022144359-801f10d98886/nfs/xdr/encode.go (and 3 other selected files; see selected-file-review.json)
+
+// Copyright © 2017 VMware, Inc. All Rights Reserved.
+// SPDX-License-Identifier: BSD-2-Clause
+//
+
+[150] github.com/xanzy/ssh-agent@v0.3.3/sshagent.go
+
+//
+// Copyright 2015, Sander van Harmelen
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+[151] go.mongodb.org/mongo-driver@v1.17.9/bson/bsonoptions/byte_slice_codec_options.go (and 59 other selected files; see selected-file-review.json)
+
+// Copyright (C) MongoDB, Inc. 2017-present.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+[152] go.mongodb.org/mongo-driver@v1.17.9/bson/bsonoptions/doc.go (and 3 other selected files; see selected-file-review.json)
+
+// Copyright (C) MongoDB, Inc. 2022-present.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+[153] go.mongodb.org/mongo-driver@v1.17.9/bson/primitive/decimal.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright (C) MongoDB, Inc. 2017-present.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+//
+// Based on gopkg.in/mgo.v2/bson by Gustavo Niemeyer
+// See THIRD-PARTY-NOTICES for original license terms.
+
+[154] go.mongodb.org/mongo-driver@v1.17.9/x/bsonx/bsoncore/tables.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright (C) MongoDB, Inc. 2017-present.
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may
+// not use this file except in compliance with the License. You may obtain
+// a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+//
+// Based on github.com/golang/go by The Go Authors
+// See THIRD-PARTY-NOTICES for original license terms.
+
+[155] go1.26.2/src/crypto/internal/fips140/aes/aes_generic.go
+
+// This Go implementation is derived in part from the reference
+// ANSI C implementation, which carries the following notice:
+//
+//	rijndael-alg-fst.c
+//
+//	@version 3.0 (December 2000)
+//
+//	Optimised ANSI C code for the Rijndael cipher (now AES)
+//
+//	@author Vincent Rijmen <vincent.rijmen@esat.kuleuven.ac.be>
+//	@author Antoon Bosselaers <antoon.bosselaers@esat.kuleuven.ac.be>
+//	@author Paulo Barreto <paulo.barreto@terra.com.br>
+//
+//	This code is hereby placed in the public domain.
+//
+//	THIS SOFTWARE IS PROVIDED BY THE AUTHORS ''AS IS'' AND ANY EXPRESS
+//	OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+//	WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+//	ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE
+//	LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+//	CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+//	SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+//	BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+//	WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+//	OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+//	EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// See FIPS 197 for specification, and see Daemen and Rijmen's Rijndael submission
+// for implementation details.
+//	https://csrc.nist.gov/csrc/media/publications/fips/197/final/documents/fips-197.pdf
+//	https://csrc.nist.gov/archive/aes/rijndael/Rijndael-ammended.pdf
+
+[156] go1.26.2/src/crypto/internal/fips140/edwards25519/doc.go
+
+// Copyright (c) 2021 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[157] go1.26.2/src/crypto/internal/fips140/edwards25519/field/fe.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright (c) 2017 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[158] go1.26.2/src/crypto/internal/fips140/edwards25519/field/fe_amd64_noasm.go (and 2 other selected files; see selected-file-review.json)
+
+// Copyright (c) 2019 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[159] go1.26.2/src/crypto/internal/fips140/edwards25519/scalar.go
+
+// Copyright (c) 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[160] go1.26.2/src/crypto/internal/fips140/edwards25519/scalar.go
+
+// The field implementation in scalar_fiat.go is generated by the fiat-crypto
+// project (https://github.com/mit-plv/fiat-crypto) at version v0.0.9 (23d2dbc)
+// from a formally verified model.
+//
+// fiat-crypto code comes under the following license.
+//
+//     Copyright (c) 2015-2020 The fiat-crypto Authors. All rights reserved.
+//
+//     Redistribution and use in source and binary forms, with or without
+//     modification, are permitted provided that the following conditions are
+//     met:
+//
+//         1. Redistributions of source code must retain the above copyright
+//         notice, this list of conditions and the following disclaimer.
+//
+//     THIS SOFTWARE IS PROVIDED BY the fiat-crypto authors "AS IS"
+//     AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+//     THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+//     PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL Berkeley Software Design,
+//     Inc. BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+//     EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+//     PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+//     PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+//     LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+//     NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+//     SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+
+[161] go1.26.2/src/crypto/md5/md5block_arm64.s
+
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+//
+// ARM64 version of md5block.go
+// derived from crypto/md5/md5block_amd64.s
+
+[162] go1.26.2/src/debug/elf/elf.go
+
+/*
+ * ELF constants and data structures
+ *
+ * Derived from:
+ * $FreeBSD: src/sys/sys/elf32.h,v 1.8.14.1 2005/12/30 22:13:58 marcel Exp $
+ * $FreeBSD: src/sys/sys/elf64.h,v 1.10.14.1 2005/12/30 22:13:58 marcel Exp $
+ * $FreeBSD: src/sys/sys/elf_common.h,v 1.15.8.1 2005/12/30 22:13:58 marcel Exp $
+ * $FreeBSD: src/sys/alpha/include/elf.h,v 1.14 2003/09/25 01:10:22 peter Exp $
+ * $FreeBSD: src/sys/amd64/include/elf.h,v 1.18 2004/08/03 08:21:48 dfr Exp $
+ * $FreeBSD: src/sys/arm/include/elf.h,v 1.5.2.1 2006/06/30 21:42:52 cognet Exp $
+ * $FreeBSD: src/sys/i386/include/elf.h,v 1.16 2004/08/02 19:12:17 dfr Exp $
+ * $FreeBSD: src/sys/powerpc/include/elf.h,v 1.7 2004/11/02 09:47:01 ssouhlal Exp $
+ * $FreeBSD: src/sys/sparc64/include/elf.h,v 1.12 2003/09/25 01:10:26 peter Exp $
+ * "System V ABI" (http://www.sco.com/developers/gabi/latest/ch4.eheader.html)
+ * "ELF for the ARM® 64-bit Architecture (AArch64)" (ARM IHI 0056B)
+ * "RISC-V ELF psABI specification" (https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc)
+ * llvm/BinaryFormat/ELF.h - ELF constants and structures
+ *
+ * Copyright (c) 1996-1998 John D. Polstra.  All rights reserved.
+ * Copyright (c) 2001 David E. O'Brien
+ * Portions Copyright 2009 The Go Authors. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+[163] go1.26.2/src/internal/abi/abi.go (and 55 other selected files; see selected-file-review.json)
+
+// Copyright 2020 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[164] go1.26.2/src/internal/abi/bounds.go (and 77 other selected files; see selected-file-review.json)
+
+// Copyright 2025 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[165] go1.26.2/src/internal/abi/compiletype.go (and 88 other selected files; see selected-file-review.json)
+
+// Copyright 2023 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[166] go1.26.2/src/internal/abi/escape.go (and 157 other selected files; see selected-file-review.json)
+
+// Copyright 2024 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[167] go1.26.2/src/internal/bytealg/bytealg.go (and 127 other selected files; see selected-file-review.json)
+
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[168] go1.26.2/src/internal/bytealg/equal_generic.go (and 99 other selected files; see selected-file-review.json)
+
+// Copyright 2019 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[169] go1.26.2/src/internal/coverage/rtcov/rtcov.go (and 69 other selected files; see selected-file-review.json)
+
+// Copyright 2022 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[170] go1.26.2/src/internal/cpu/cpu.go (and 89 other selected files; see selected-file-review.json)
+
+// Copyright 2017 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[171] go1.26.2/src/internal/goarch/goarch.go (and 50 other selected files; see selected-file-review.json)
+
+// Copyright 2021 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[172] go1.26.2/src/internal/goarch/goarch_arm64.go (and 102 other selected files; see selected-file-review.json)
+
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[173] go1.26.2/src/internal/goos/goos.go (and 74 other selected files; see selected-file-review.json)
+
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[174] go1.26.2/src/internal/poll/fstatat_unix.go (and 5 other selected files; see selected-file-review.json)
+
+// Copyright 2026 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[175] go1.26.2/src/internal/profile/graph.go
+
+// Copyright 2014 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[176] go1.26.2/src/internal/runtime/sys/intrinsics.go (and 80 other selected files; see selected-file-review.json)
+
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[177] go1.26.2/src/math/acosh.go
+
+// The original C code, the long comment, and the constants
+// below are from FreeBSD's /usr/src/lib/msun/src/e_acosh.c
+// and came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+//
+// __ieee754_acosh(x)
+// Method :
+//	Based on
+//	        acosh(x) = log [ x + sqrt(x*x-1) ]
+//	we have
+//	        acosh(x) := log(x)+ln2,	if x is large; else
+//	        acosh(x) := log(2x-1/(sqrt(x*x-1)+x)) if x>2; else
+//	        acosh(x) := log1p(t+sqrt(2.0*t+t*t)); where t=x-1.
+//
+// Special cases:
+//	acosh(x) is NaN with signal if x<1.
+//	acosh(NaN) is NaN without signal.
+//
+
+[178] go1.26.2/src/math/asinh.go
+
+// The original C code, the long comment, and the constants
+// below are from FreeBSD's /usr/src/lib/msun/src/s_asinh.c
+// and came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+//
+// asinh(x)
+// Method :
+//	Based on
+//	        asinh(x) = sign(x) * log [ |x| + sqrt(x*x+1) ]
+//	we have
+//	asinh(x) := x  if  1+x*x=1,
+//	         := sign(x)*(log(x)+ln2) for large |x|, else
+//	         := sign(x)*log(2|x|+1/(|x|+sqrt(x*x+1))) if|x|>2, else
+//	         := sign(x)*log1p(|x| + x**2/(1 + sqrt(1+x**2)))
+//
+
+[179] go1.26.2/src/math/atan.go
+
+// The original C code, the long comment, and the constants below were
+// from http://netlib.sandia.gov/cephes/cmath/atan.c, available from
+// http://www.netlib.org/cephes/cmath.tgz.
+// The go code is a version of the original C.
+//
+// atan.c
+// Inverse circular tangent (arctangent)
+//
+// SYNOPSIS:
+// double x, y, atan();
+// y = atan( x );
+//
+// DESCRIPTION:
+// Returns radian angle between -pi/2 and +pi/2 whose tangent is x.
+//
+// Range reduction is from three intervals into the interval from zero to 0.66.
+// The approximant uses a rational function of degree 4/5 of the form
+// x + x**3 P(x)/Q(x).
+//
+// ACCURACY:
+//                      Relative error:
+// arithmetic   domain    # trials  peak     rms
+//    DEC       -10, 10   50000     2.4e-17  8.3e-18
+//    IEEE      -10, 10   10^6      1.8e-16  5.0e-17
+//
+// Cephes Math Library Release 2.8:  June, 2000
+// Copyright 1984, 1987, 1989, 1992, 2000 by Stephen L. Moshier
+//
+// The readme file at http://netlib.sandia.gov/cephes/ says:
+//    Some software in this archive may be from the book _Methods and
+// Programs for Mathematical Functions_ (Prentice-Hall or Simon & Schuster
+// International, 1989) or from the Cephes Mathematical Library, a
+// commercial product. In either event, it is copyrighted by the author.
+// What you see here may be used freely but it comes with no support or
+// guarantee.
+//
+//   The two known misprints in the book are repaired here in the
+// source listings for the gamma function and the incomplete beta
+// integral.
+//
+//   Stephen L. Moshier
+//   moshier@na-net.ornl.gov
+
+[180] go1.26.2/src/math/atanh.go
+
+// The original C code, the long comment, and the constants
+// below are from FreeBSD's /usr/src/lib/msun/src/e_atanh.c
+// and came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+//
+// __ieee754_atanh(x)
+// Method :
+//	1. Reduce x to positive by atanh(-x) = -atanh(x)
+//	2. For x>=0.5
+//	            1              2x                          x
+//	atanh(x) = --- * log(1 + -------) = 0.5 * log1p(2 * --------)
+//	            2             1 - x                      1 - x
+//
+//	For x<0.5
+//	atanh(x) = 0.5*log1p(2x+2x*x/(1-x))
+//
+// Special cases:
+//	atanh(x) is NaN if |x| > 1 with signal;
+//	atanh(NaN) is that NaN with no signal;
+//	atanh(+-1) is +-INF with signal.
+//
+
+[181] go1.26.2/src/math/cbrt.go
+
+// The go code is a modified version of the original C code from
+// http://www.netlib.org/fdlibm/s_cbrt.c and came with this notice.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunSoft, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+
+[182] go1.26.2/src/math/erf.go
+
+// The original C code and the long comment below are
+// from FreeBSD's /usr/src/lib/msun/src/s_erf.c and
+// came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+//
+// double erf(double x)
+// double erfc(double x)
+//                           x
+//                    2      |\
+//     erf(x)  =  ---------  | exp(-t*t)dt
+//                 sqrt(pi) \|
+//                           0
+//
+//     erfc(x) =  1-erf(x)
+//  Note that
+//              erf(-x) = -erf(x)
+//              erfc(-x) = 2 - erfc(x)
+//
+// Method:
+//      1. For |x| in [0, 0.84375]
+//          erf(x)  = x + x*R(x**2)
+//          erfc(x) = 1 - erf(x)           if x in [-.84375,0.25]
+//                  = 0.5 + ((0.5-x)-x*R)  if x in [0.25,0.84375]
+//         where R = P/Q where P is an odd poly of degree 8 and
+//         Q is an odd poly of degree 10.
+//                                               -57.90
+//                      | R - (erf(x)-x)/x | <= 2
+//
+//
+//         Remark. The formula is derived by noting
+//          erf(x) = (2/sqrt(pi))*(x - x**3/3 + x**5/10 - x**7/42 + ....)
+//         and that
+//          2/sqrt(pi) = 1.128379167095512573896158903121545171688
+//         is close to one. The interval is chosen because the fix
+//         point of erf(x) is near 0.6174 (i.e., erf(x)=x when x is
+//         near 0.6174), and by some experiment, 0.84375 is chosen to
+//         guarantee the error is less than one ulp for erf.
+//
+//      2. For |x| in [0.84375,1.25], let s = |x| - 1, and
+//         c = 0.84506291151 rounded to single (24 bits)
+//              erf(x)  = sign(x) * (c  + P1(s)/Q1(s))
+//              erfc(x) = (1-c)  - P1(s)/Q1(s) if x > 0
+//                        1+(c+P1(s)/Q1(s))    if x < 0
+//              |P1/Q1 - (erf(|x|)-c)| <= 2**-59.06
+//         Remark: here we use the taylor series expansion at x=1.
+//              erf(1+s) = erf(1) + s*Poly(s)
+//                       = 0.845.. + P1(s)/Q1(s)
+//         That is, we use rational approximation to approximate
+//                      erf(1+s) - (c = (single)0.84506291151)
+//         Note that |P1/Q1|< 0.078 for x in [0.84375,1.25]
+//         where
+//              P1(s) = degree 6 poly in s
+//              Q1(s) = degree 6 poly in s
+//
+//      3. For x in [1.25,1/0.35(~2.857143)],
+//              erfc(x) = (1/x)*exp(-x*x-0.5625+R1/S1)
+//              erf(x)  = 1 - erfc(x)
+//         where
+//              R1(z) = degree 7 poly in z, (z=1/x**2)
+//              S1(z) = degree 8 poly in z
+//
+//      4. For x in [1/0.35,28]
+//              erfc(x) = (1/x)*exp(-x*x-0.5625+R2/S2) if x > 0
+//                      = 2.0 - (1/x)*exp(-x*x-0.5625+R2/S2) if -6<x<0
+//                      = 2.0 - tiny            (if x <= -6)
+//              erf(x)  = sign(x)*(1.0 - erfc(x)) if x < 6, else
+//              erf(x)  = sign(x)*(1.0 - tiny)
+//         where
+//              R2(z) = degree 6 poly in z, (z=1/x**2)
+//              S2(z) = degree 7 poly in z
+//
+//      Note1:
+//         To compute exp(-x*x-0.5625+R/S), let s be a single
+//         precision number and s := x; then
+//              -x*x = -s*s + (s-x)*(s+x)
+//              exp(-x*x-0.5626+R/S) =
+//                      exp(-s*s-0.5625)*exp((s-x)*(s+x)+R/S);
+//      Note2:
+//         Here 4 and 5 make use of the asymptotic series
+//                        exp(-x*x)
+//              erfc(x) ~ ---------- * ( 1 + Poly(1/x**2) )
+//                        x*sqrt(pi)
+//         We use rational approximation to approximate
+//              g(s)=f(1/x**2) = log(erfc(x)*x) - x*x + 0.5625
+//         Here is the error bound for R1/S1 and R2/S2
+//              |R1/S1 - f(x)|  < 2**(-62.57)
+//              |R2/S2 - f(x)|  < 2**(-61.52)
+//
+//      5. For inf > x >= 28
+//              erf(x)  = sign(x) *(1 - tiny)  (raise inexact)
+//              erfc(x) = tiny*tiny (raise underflow) if x > 0
+//                      = 2 - tiny if x<0
+//
+//      7. Special case:
+//              erf(0)  = 0, erf(inf)  = 1, erf(-inf) = -1,
+//              erfc(0) = 1, erfc(inf) = 0, erfc(-inf) = 2,
+//              erfc/erf(NaN) is NaN
+
+[183] go1.26.2/src/math/exp.go
+
+// The original C code, the long comment, and the constants
+// below are from FreeBSD's /usr/src/lib/msun/src/e_exp.c
+// and came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 2004 by Sun Microsystems, Inc. All rights reserved.
+//
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+//
+// exp(x)
+// Returns the exponential of x.
+//
+// Method
+//   1. Argument reduction:
+//      Reduce x to an r so that |r| <= 0.5*ln2 ~ 0.34658.
+//      Given x, find r and integer k such that
+//
+//               x = k*ln2 + r,  |r| <= 0.5*ln2.
+//
+//      Here r will be represented as r = hi-lo for better
+//      accuracy.
+//
+//   2. Approximation of exp(r) by a special rational function on
+//      the interval [0,0.34658]:
+//      Write
+//          R(r**2) = r*(exp(r)+1)/(exp(r)-1) = 2 + r*r/6 - r**4/360 + ...
+//      We use a special Remez algorithm on [0,0.34658] to generate
+//      a polynomial of degree 5 to approximate R. The maximum error
+//      of this polynomial approximation is bounded by 2**-59. In
+//      other words,
+//          R(z) ~ 2.0 + P1*z + P2*z**2 + P3*z**3 + P4*z**4 + P5*z**5
+//      (where z=r*r, and the values of P1 to P5 are listed below)
+//      and
+//          |                  5          |     -59
+//          | 2.0+P1*z+...+P5*z   -  R(z) | <= 2
+//          |                             |
+//      The computation of exp(r) thus becomes
+//                             2*r
+//              exp(r) = 1 + -------
+//                            R - r
+//                                 r*R1(r)
+//                     = 1 + r + ----------- (for better accuracy)
+//                                2 - R1(r)
+//      where
+//                               2       4             10
+//              R1(r) = r - (P1*r  + P2*r  + ... + P5*r   ).
+//
+//   3. Scale back to obtain exp(x):
+//      From step 1, we have
+//         exp(x) = 2**k * exp(r)
+//
+// Special cases:
+//      exp(INF) is INF, exp(NaN) is NaN;
+//      exp(-INF) is 0, and
+//      for finite argument, only exp(0)=1 is exact.
+//
+// Accuracy:
+//      according to an error analysis, the error is always less than
+//      1 ulp (unit in the last place).
+//
+// Misc. info.
+//      For IEEE double
+//          if x >  7.09782712893383973096e+02 then exp(x) overflow
+//          if x < -7.45133219101941108420e+02 then exp(x) underflow
+//
+// Constants:
+// The hexadecimal values are the intended ones for the following
+// constants. The decimal values may be used, provided that the
+// compiler will convert from decimal to binary accurately enough
+// to produce the hexadecimal values shown.
+
+[184] go1.26.2/src/math/expm1.go
+
+// The original C code, the long comment, and the constants
+// below are from FreeBSD's /usr/src/lib/msun/src/s_expm1.c
+// and came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// expm1(x)
+// Returns exp(x)-1, the exponential of x minus 1.
+//
+// Method
+//   1. Argument reduction:
+//      Given x, find r and integer k such that
+//
+//               x = k*ln2 + r,  |r| <= 0.5*ln2 ~ 0.34658
+//
+//      Here a correction term c will be computed to compensate
+//      the error in r when rounded to a floating-point number.
+//
+//   2. Approximating expm1(r) by a special rational function on
+//      the interval [0,0.34658]:
+//      Since
+//          r*(exp(r)+1)/(exp(r)-1) = 2+ r**2/6 - r**4/360 + ...
+//      we define R1(r*r) by
+//          r*(exp(r)+1)/(exp(r)-1) = 2+ r**2/6 * R1(r*r)
+//      That is,
+//          R1(r**2) = 6/r *((exp(r)+1)/(exp(r)-1) - 2/r)
+//                   = 6/r * ( 1 + 2.0*(1/(exp(r)-1) - 1/r))
+//                   = 1 - r**2/60 + r**4/2520 - r**6/100800 + ...
+//      We use a special Reme algorithm on [0,0.347] to generate
+//      a polynomial of degree 5 in r*r to approximate R1. The
+//      maximum error of this polynomial approximation is bounded
+//      by 2**-61. In other words,
+//          R1(z) ~ 1.0 + Q1*z + Q2*z**2 + Q3*z**3 + Q4*z**4 + Q5*z**5
+//      where   Q1  =  -1.6666666666666567384E-2,
+//              Q2  =   3.9682539681370365873E-4,
+//              Q3  =  -9.9206344733435987357E-6,
+//              Q4  =   2.5051361420808517002E-7,
+//              Q5  =  -6.2843505682382617102E-9;
+//      (where z=r*r, and the values of Q1 to Q5 are listed below)
+//      with error bounded by
+//          |                  5           |     -61
+//          | 1.0+Q1*z+...+Q5*z   -  R1(z) | <= 2
+//          |                              |
+//
+//      expm1(r) = exp(r)-1 is then computed by the following
+//      specific way which minimize the accumulation rounding error:
+//                             2     3
+//                            r     r    [ 3 - (R1 + R1*r/2)  ]
+//            expm1(r) = r + --- + --- * [--------------------]
+//                            2     2    [ 6 - r*(3 - R1*r/2) ]
+//
+//      To compensate the error in the argument reduction, we use
+//              expm1(r+c) = expm1(r) + c + expm1(r)*c
+//                         ~ expm1(r) + c + r*c
+//      Thus c+r*c will be added in as the correction terms for
+//      expm1(r+c). Now rearrange the term to avoid optimization
+//      screw up:
+//                      (      2                                    2 )
+//                      ({  ( r    [ R1 -  (3 - R1*r/2) ]  )  }    r  )
+//       expm1(r+c)~r - ({r*(--- * [--------------------]-c)-c} - --- )
+//                      ({  ( 2    [ 6 - r*(3 - R1*r/2) ]  )  }    2  )
+//                      (                                             )
+//
+//                 = r - E
+//   3. Scale back to obtain expm1(x):
+//      From step 1, we have
+//         expm1(x) = either 2**k*[expm1(r)+1] - 1
+//                  = or     2**k*[expm1(r) + (1-2**-k)]
+//   4. Implementation notes:
+//      (A). To save one multiplication, we scale the coefficient Qi
+//           to Qi*2**i, and replace z by (x**2)/2.
+//      (B). To achieve maximum accuracy, we compute expm1(x) by
+//        (i)   if x < -56*ln2, return -1.0, (raise inexact if x!=inf)
+//        (ii)  if k=0, return r-E
+//        (iii) if k=-1, return 0.5*(r-E)-0.5
+//        (iv)  if k=1 if r < -0.25, return 2*((r+0.5)- E)
+//                     else          return  1.0+2.0*(r-E);
+//        (v)   if (k<-2||k>56) return 2**k(1-(E-r)) - 1 (or exp(x)-1)
+//        (vi)  if k <= 20, return 2**k((1-2**-k)-(E-r)), else
+//        (vii) return 2**k(1-((E+2**-k)-r))
+//
+// Special cases:
+//      expm1(INF) is INF, expm1(NaN) is NaN;
+//      expm1(-INF) is -1, and
+//      for finite argument, only expm1(0)=0 is exact.
+//
+// Accuracy:
+//      according to an error analysis, the error is always less than
+//      1 ulp (unit in the last place).
+//
+// Misc. info.
+//      For IEEE double
+//          if x >  7.09782712893383973096e+02 then expm1(x) overflow
+//
+// Constants:
+// The hexadecimal values are the intended ones for the following
+// constants. The decimal values may be used, provided that the
+// compiler will convert from decimal to binary accurately enough
+// to produce the hexadecimal values shown.
+//
+
+[185] go1.26.2/src/math/gamma.go
+
+// The original C code, the long comment, and the constants
+// below are from http://netlib.sandia.gov/cephes/cprob/gamma.c.
+// The go code is a simplified version of the original C.
+//
+//      tgamma.c
+//
+//      Gamma function
+//
+// SYNOPSIS:
+//
+// double x, y, tgamma();
+// extern int signgam;
+//
+// y = tgamma( x );
+//
+// DESCRIPTION:
+//
+// Returns gamma function of the argument. The result is
+// correctly signed, and the sign (+1 or -1) is also
+// returned in a global (extern) variable named signgam.
+// This variable is also filled in by the logarithmic gamma
+// function lgamma().
+//
+// Arguments |x| <= 34 are reduced by recurrence and the function
+// approximated by a rational function of degree 6/7 in the
+// interval (2,3).  Large arguments are handled by Stirling's
+// formula. Large negative arguments are made positive using
+// a reflection formula.
+//
+// ACCURACY:
+//
+//                      Relative error:
+// arithmetic   domain     # trials      peak         rms
+//    DEC      -34, 34      10000       1.3e-16     2.5e-17
+//    IEEE    -170,-33      20000       2.3e-15     3.3e-16
+//    IEEE     -33,  33     20000       9.4e-16     2.2e-16
+//    IEEE      33, 171.6   20000       2.3e-15     3.2e-16
+//
+// Error for arguments outside the test range will be larger
+// owing to error amplification by the exponential function.
+//
+// Cephes Math Library Release 2.8:  June, 2000
+// Copyright 1984, 1987, 1989, 1992, 2000 by Stephen L. Moshier
+//
+// The readme file at http://netlib.sandia.gov/cephes/ says:
+//    Some software in this archive may be from the book _Methods and
+// Programs for Mathematical Functions_ (Prentice-Hall or Simon & Schuster
+// International, 1989) or from the Cephes Mathematical Library, a
+// commercial product. In either event, it is copyrighted by the author.
+// What you see here may be used freely but it comes with no support or
+// guarantee.
+//
+//   The two known misprints in the book are repaired here in the
+// source listings for the gamma function and the incomplete beta
+// integral.
+//
+//   Stephen L. Moshier
+//   moshier@na-net.ornl.gov
+
+[186] go1.26.2/src/math/j0.go
+
+// The original C code and the long comment below are
+// from FreeBSD's /usr/src/lib/msun/src/e_j0.c and
+// came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// __ieee754_j0(x), __ieee754_y0(x)
+// Bessel function of the first and second kinds of order zero.
+// Method -- j0(x):
+//      1. For tiny x, we use j0(x) = 1 - x**2/4 + x**4/64 - ...
+//      2. Reduce x to |x| since j0(x)=j0(-x),  and
+//         for x in (0,2)
+//              j0(x) = 1-z/4+ z**2*R0/S0,  where z = x*x;
+//         (precision:  |j0-1+z/4-z**2R0/S0 |<2**-63.67 )
+//         for x in (2,inf)
+//              j0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)-q0(x)*sin(x0))
+//         where x0 = x-pi/4. It is better to compute sin(x0),cos(x0)
+//         as follow:
+//              cos(x0) = cos(x)cos(pi/4)+sin(x)sin(pi/4)
+//                      = 1/sqrt(2) * (cos(x) + sin(x))
+//              sin(x0) = sin(x)cos(pi/4)-cos(x)sin(pi/4)
+//                      = 1/sqrt(2) * (sin(x) - cos(x))
+//         (To avoid cancellation, use
+//              sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+//         to compute the worse one.)
+//
+//      3 Special cases
+//              j0(nan)= nan
+//              j0(0) = 1
+//              j0(inf) = 0
+//
+// Method -- y0(x):
+//      1. For x<2.
+//         Since
+//              y0(x) = 2/pi*(j0(x)*(ln(x/2)+Euler) + x**2/4 - ...)
+//         therefore y0(x)-2/pi*j0(x)*ln(x) is an even function.
+//         We use the following function to approximate y0,
+//              y0(x) = U(z)/V(z) + (2/pi)*(j0(x)*ln(x)), z= x**2
+//         where
+//              U(z) = u00 + u01*z + ... + u06*z**6
+//              V(z) = 1  + v01*z + ... + v04*z**4
+//         with absolute approximation error bounded by 2**-72.
+//         Note: For tiny x, U/V = u0 and j0(x)~1, hence
+//              y0(tiny) = u0 + (2/pi)*ln(tiny), (choose tiny<2**-27)
+//      2. For x>=2.
+//              y0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)+q0(x)*sin(x0))
+//         where x0 = x-pi/4. It is better to compute sin(x0),cos(x0)
+//         by the method mentioned above.
+//      3. Special cases: y0(0)=-inf, y0(x<0)=NaN, y0(inf)=0.
+//
+
+[187] go1.26.2/src/math/j1.go
+
+// The original C code and the long comment below are
+// from FreeBSD's /usr/src/lib/msun/src/e_j1.c and
+// came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// __ieee754_j1(x), __ieee754_y1(x)
+// Bessel function of the first and second kinds of order one.
+// Method -- j1(x):
+//      1. For tiny x, we use j1(x) = x/2 - x**3/16 + x**5/384 - ...
+//      2. Reduce x to |x| since j1(x)=-j1(-x),  and
+//         for x in (0,2)
+//              j1(x) = x/2 + x*z*R0/S0,  where z = x*x;
+//         (precision:  |j1/x - 1/2 - R0/S0 |<2**-61.51 )
+//         for x in (2,inf)
+//              j1(x) = sqrt(2/(pi*x))*(p1(x)*cos(x1)-q1(x)*sin(x1))
+//              y1(x) = sqrt(2/(pi*x))*(p1(x)*sin(x1)+q1(x)*cos(x1))
+//         where x1 = x-3*pi/4. It is better to compute sin(x1),cos(x1)
+//         as follow:
+//              cos(x1) =  cos(x)cos(3pi/4)+sin(x)sin(3pi/4)
+//                      =  1/sqrt(2) * (sin(x) - cos(x))
+//              sin(x1) =  sin(x)cos(3pi/4)-cos(x)sin(3pi/4)
+//                      = -1/sqrt(2) * (sin(x) + cos(x))
+//         (To avoid cancellation, use
+//              sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+//         to compute the worse one.)
+//
+//      3 Special cases
+//              j1(nan)= nan
+//              j1(0) = 0
+//              j1(inf) = 0
+//
+// Method -- y1(x):
+//      1. screen out x<=0 cases: y1(0)=-inf, y1(x<0)=NaN
+//      2. For x<2.
+//         Since
+//              y1(x) = 2/pi*(j1(x)*(ln(x/2)+Euler)-1/x-x/2+5/64*x**3-...)
+//         therefore y1(x)-2/pi*j1(x)*ln(x)-1/x is an odd function.
+//         We use the following function to approximate y1,
+//              y1(x) = x*U(z)/V(z) + (2/pi)*(j1(x)*ln(x)-1/x), z= x**2
+//         where for x in [0,2] (abs err less than 2**-65.89)
+//              U(z) = U0[0] + U0[1]*z + ... + U0[4]*z**4
+//              V(z) = 1  + v0[0]*z + ... + v0[4]*z**5
+//         Note: For tiny x, 1/x dominate y1 and hence
+//              y1(tiny) = -2/pi/tiny, (choose tiny<2**-54)
+//      3. For x>=2.
+//               y1(x) = sqrt(2/(pi*x))*(p1(x)*sin(x1)+q1(x)*cos(x1))
+//         where x1 = x-3*pi/4. It is better to compute sin(x1),cos(x1)
+//         by method mentioned above.
+
+[188] go1.26.2/src/math/jn.go
+
+// The original C code and the long comment below are
+// from FreeBSD's /usr/src/lib/msun/src/e_jn.c and
+// came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// __ieee754_jn(n, x), __ieee754_yn(n, x)
+// floating point Bessel's function of the 1st and 2nd kind
+// of order n
+//
+// Special cases:
+//      y0(0)=y1(0)=yn(n,0) = -inf with division by zero signal;
+//      y0(-ve)=y1(-ve)=yn(n,-ve) are NaN with invalid signal.
+// Note 2. About jn(n,x), yn(n,x)
+//      For n=0, j0(x) is called,
+//      for n=1, j1(x) is called,
+//      for n<x, forward recursion is used starting
+//      from values of j0(x) and j1(x).
+//      for n>x, a continued fraction approximation to
+//      j(n,x)/j(n-1,x) is evaluated and then backward
+//      recursion is used starting from a supposed value
+//      for j(n,x). The resulting value of j(0,x) is
+//      compared with the actual value to correct the
+//      supposed value of j(n,x).
+//
+//      yn(n,x) is similar in all respects, except
+//      that forward recursion is used for all
+//      values of n>1.
+
+[189] go1.26.2/src/math/lgamma.go
+
+// The original C code and the long comment below are
+// from FreeBSD's /usr/src/lib/msun/src/e_lgamma_r.c and
+// came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// __ieee754_lgamma_r(x, signgamp)
+// Reentrant version of the logarithm of the Gamma function
+// with user provided pointer for the sign of Gamma(x).
+//
+// Method:
+//   1. Argument Reduction for 0 < x <= 8
+//      Since gamma(1+s)=s*gamma(s), for x in [0,8], we may
+//      reduce x to a number in [1.5,2.5] by
+//              lgamma(1+s) = log(s) + lgamma(s)
+//      for example,
+//              lgamma(7.3) = log(6.3) + lgamma(6.3)
+//                          = log(6.3*5.3) + lgamma(5.3)
+//                          = log(6.3*5.3*4.3*3.3*2.3) + lgamma(2.3)
+//   2. Polynomial approximation of lgamma around its
+//      minimum (ymin=1.461632144968362245) to maintain monotonicity.
+//      On [ymin-0.23, ymin+0.27] (i.e., [1.23164,1.73163]), use
+//              Let z = x-ymin;
+//              lgamma(x) = -1.214862905358496078218 + z**2*poly(z)
+//              poly(z) is a 14 degree polynomial.
+//   2. Rational approximation in the primary interval [2,3]
+//      We use the following approximation:
+//              s = x-2.0;
+//              lgamma(x) = 0.5*s + s*P(s)/Q(s)
+//      with accuracy
+//              |P/Q - (lgamma(x)-0.5s)| < 2**-61.71
+//      Our algorithms are based on the following observation
+//
+//                             zeta(2)-1    2    zeta(3)-1    3
+// lgamma(2+s) = s*(1-Euler) + --------- * s  -  --------- * s  + ...
+//                                 2                 3
+//
+//      where Euler = 0.5772156649... is the Euler constant, which
+//      is very close to 0.5.
+//
+//   3. For x>=8, we have
+//      lgamma(x)~(x-0.5)log(x)-x+0.5*log(2pi)+1/(12x)-1/(360x**3)+....
+//      (better formula:
+//         lgamma(x)~(x-0.5)*(log(x)-1)-.5*(log(2pi)-1) + ...)
+//      Let z = 1/x, then we approximation
+//              f(z) = lgamma(x) - (x-0.5)(log(x)-1)
+//      by
+//                                  3       5             11
+//              w = w0 + w1*z + w2*z  + w3*z  + ... + w6*z
+//      where
+//              |w - f(z)| < 2**-58.74
+//
+//   4. For negative x, since (G is gamma function)
+//              -x*G(-x)*G(x) = pi/sin(pi*x),
+//      we have
+//              G(x) = pi/(sin(pi*x)*(-x)*G(-x))
+//      since G(-x) is positive, sign(G(x)) = sign(sin(pi*x)) for x<0
+//      Hence, for x<0, signgam = sign(sin(pi*x)) and
+//              lgamma(x) = log(|Gamma(x)|)
+//                        = log(pi/(|x*sin(pi*x)|)) - lgamma(-x);
+//      Note: one should avoid computing pi*(-x) directly in the
+//            computation of sin(pi*(-x)).
+//
+//   5. Special Cases
+//              lgamma(2+s) ~ s*(1-Euler) for tiny s
+//              lgamma(1)=lgamma(2)=0
+//              lgamma(x) ~ -log(x) for tiny x
+//              lgamma(0) = lgamma(inf) = inf
+//              lgamma(-integer) = +-inf
+//
+//
+
+[190] go1.26.2/src/math/log.go
+
+// The original C code, the long comment, and the constants
+// below are from FreeBSD's /usr/src/lib/msun/src/e_log.c
+// and came with this notice. The go code is a simpler
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// __ieee754_log(x)
+// Return the logarithm of x
+//
+// Method :
+//   1. Argument Reduction: find k and f such that
+//			x = 2**k * (1+f),
+//	   where  sqrt(2)/2 < 1+f < sqrt(2) .
+//
+//   2. Approximation of log(1+f).
+//	Let s = f/(2+f) ; based on log(1+f) = log(1+s) - log(1-s)
+//		 = 2s + 2/3 s**3 + 2/5 s**5 + .....,
+//	     	 = 2s + s*R
+//      We use a special Reme algorithm on [0,0.1716] to generate
+//	a polynomial of degree 14 to approximate R.  The maximum error
+//	of this polynomial approximation is bounded by 2**-58.45. In
+//	other words,
+//		        2      4      6      8      10      12      14
+//	    R(z) ~ L1*s +L2*s +L3*s +L4*s +L5*s  +L6*s  +L7*s
+//	(the values of L1 to L7 are listed in the program) and
+//	    |      2          14          |     -58.45
+//	    | L1*s +...+L7*s    -  R(z) | <= 2
+//	    |                             |
+//	Note that 2s = f - s*f = f - hfsq + s*hfsq, where hfsq = f*f/2.
+//	In order to guarantee error in log below 1ulp, we compute log by
+//		log(1+f) = f - s*(f - R)		(if f is not too large)
+//		log(1+f) = f - (hfsq - s*(hfsq+R)).	(better accuracy)
+//
+//	3. Finally,  log(x) = k*Ln2 + log(1+f).
+//			    = k*Ln2_hi+(f-(hfsq-(s*(hfsq+R)+k*Ln2_lo)))
+//	   Here Ln2 is split into two floating point number:
+//			Ln2_hi + Ln2_lo,
+//	   where n*Ln2_hi is always exact for |n| < 2000.
+//
+// Special cases:
+//	log(x) is NaN with signal if x < 0 (including -INF) ;
+//	log(+INF) is +INF; log(0) is -INF with signal;
+//	log(NaN) is that NaN with no signal.
+//
+// Accuracy:
+//	according to an error analysis, the error is always less than
+//	1 ulp (unit in the last place).
+//
+// Constants:
+// The hexadecimal values are the intended ones for the following
+// constants. The decimal values may be used, provided that the
+// compiler will convert from decimal to binary accurately enough
+// to produce the hexadecimal values shown.
+
+[191] go1.26.2/src/math/log1p.go
+
+// The original C code, the long comment, and the constants
+// below are from FreeBSD's /usr/src/lib/msun/src/s_log1p.c
+// and came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+//
+// double log1p(double x)
+//
+// Method :
+//   1. Argument Reduction: find k and f such that
+//                      1+x = 2**k * (1+f),
+//         where  sqrt(2)/2 < 1+f < sqrt(2) .
+//
+//      Note. If k=0, then f=x is exact. However, if k!=0, then f
+//      may not be representable exactly. In that case, a correction
+//      term is need. Let u=1+x rounded. Let c = (1+x)-u, then
+//      log(1+x) - log(u) ~ c/u. Thus, we proceed to compute log(u),
+//      and add back the correction term c/u.
+//      (Note: when x > 2**53, one can simply return log(x))
+//
+//   2. Approximation of log1p(f).
+//      Let s = f/(2+f) ; based on log(1+f) = log(1+s) - log(1-s)
+//               = 2s + 2/3 s**3 + 2/5 s**5 + .....,
+//               = 2s + s*R
+//      We use a special Reme algorithm on [0,0.1716] to generate
+//      a polynomial of degree 14 to approximate R The maximum error
+//      of this polynomial approximation is bounded by 2**-58.45. In
+//      other words,
+//                      2      4      6      8      10      12      14
+//          R(z) ~ Lp1*s +Lp2*s +Lp3*s +Lp4*s +Lp5*s  +Lp6*s  +Lp7*s
+//      (the values of Lp1 to Lp7 are listed in the program)
+//      and
+//          |      2          14          |     -58.45
+//          | Lp1*s +...+Lp7*s    -  R(z) | <= 2
+//          |                             |
+//      Note that 2s = f - s*f = f - hfsq + s*hfsq, where hfsq = f*f/2.
+//      In order to guarantee error in log below 1ulp, we compute log
+//      by
+//              log1p(f) = f - (hfsq - s*(hfsq+R)).
+//
+//   3. Finally, log1p(x) = k*ln2 + log1p(f).
+//                        = k*ln2_hi+(f-(hfsq-(s*(hfsq+R)+k*ln2_lo)))
+//      Here ln2 is split into two floating point number:
+//                   ln2_hi + ln2_lo,
+//      where n*ln2_hi is always exact for |n| < 2000.
+//
+// Special cases:
+//      log1p(x) is NaN with signal if x < -1 (including -INF) ;
+//      log1p(+INF) is +INF; log1p(-1) is -INF with signal;
+//      log1p(NaN) is that NaN with no signal.
+//
+// Accuracy:
+//      according to an error analysis, the error is always less than
+//      1 ulp (unit in the last place).
+//
+// Constants:
+// The hexadecimal values are the intended ones for the following
+// constants. The decimal values may be used, provided that the
+// compiler will convert from decimal to binary accurately enough
+// to produce the hexadecimal values shown.
+//
+// Note: Assuming log() return accurate answer, the following
+//       algorithm can be used to compute log1p(x) to within a few ULP:
+//
+//              u = 1+x;
+//              if(u==1.0) return x ; else
+//                         return log(u)*(x/(u-1.0));
+//
+//       See HP-15C Advanced Functions Handbook, p.193.
+
+[192] go1.26.2/src/math/mod.go
+
+// Copyright 2009-2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[193] go1.26.2/src/math/remainder.go
+
+// The original C code and the comment below are from
+// FreeBSD's /usr/src/lib/msun/src/e_remainder.c and came
+// with this notice. The go code is a simplified version of
+// the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// __ieee754_remainder(x,y)
+// Return :
+//      returns  x REM y  =  x - [x/y]*y  as if in infinite
+//      precision arithmetic, where [x/y] is the (infinite bit)
+//      integer nearest x/y (in half way cases, choose the even one).
+// Method :
+//      Based on Mod() returning  x - [x/y]chopped * y  exactly.
+
+[194] go1.26.2/src/math/sin.go
+
+// The original C code, the long comment, and the constants
+// below were from http://netlib.sandia.gov/cephes/cmath/sin.c,
+// available from http://www.netlib.org/cephes/cmath.tgz.
+// The go code is a simplified version of the original C.
+//
+//      sin.c
+//
+//      Circular sine
+//
+// SYNOPSIS:
+//
+// double x, y, sin();
+// y = sin( x );
+//
+// DESCRIPTION:
+//
+// Range reduction is into intervals of pi/4.  The reduction error is nearly
+// eliminated by contriving an extended precision modular arithmetic.
+//
+// Two polynomial approximating functions are employed.
+// Between 0 and pi/4 the sine is approximated by
+//      x  +  x**3 P(x**2).
+// Between pi/4 and pi/2 the cosine is represented as
+//      1  -  x**2 Q(x**2).
+//
+// ACCURACY:
+//
+//                      Relative error:
+// arithmetic   domain      # trials      peak         rms
+//    DEC       0, 10       150000       3.0e-17     7.8e-18
+//    IEEE -1.07e9,+1.07e9  130000       2.1e-16     5.4e-17
+//
+// Partial loss of accuracy begins to occur at x = 2**30 = 1.074e9.  The loss
+// is not gradual, but jumps suddenly to about 1 part in 10e7.  Results may
+// be meaningless for x > 2**49 = 5.6e14.
+//
+//      cos.c
+//
+//      Circular cosine
+//
+// SYNOPSIS:
+//
+// double x, y, cos();
+// y = cos( x );
+//
+// DESCRIPTION:
+//
+// Range reduction is into intervals of pi/4.  The reduction error is nearly
+// eliminated by contriving an extended precision modular arithmetic.
+//
+// Two polynomial approximating functions are employed.
+// Between 0 and pi/4 the cosine is approximated by
+//      1  -  x**2 Q(x**2).
+// Between pi/4 and pi/2 the sine is represented as
+//      x  +  x**3 P(x**2).
+//
+// ACCURACY:
+//
+//                      Relative error:
+// arithmetic   domain      # trials      peak         rms
+//    IEEE -1.07e9,+1.07e9  130000       2.1e-16     5.4e-17
+//    DEC        0,+1.07e9   17000       3.0e-17     7.2e-18
+//
+// Cephes Math Library Release 2.8:  June, 2000
+// Copyright 1984, 1987, 1989, 1992, 2000 by Stephen L. Moshier
+//
+// The readme file at http://netlib.sandia.gov/cephes/ says:
+//    Some software in this archive may be from the book _Methods and
+// Programs for Mathematical Functions_ (Prentice-Hall or Simon & Schuster
+// International, 1989) or from the Cephes Mathematical Library, a
+// commercial product. In either event, it is copyrighted by the author.
+// What you see here may be used freely but it comes with no support or
+// guarantee.
+//
+//   The two known misprints in the book are repaired here in the
+// source listings for the gamma function and the incomplete beta
+// integral.
+//
+//   Stephen L. Moshier
+//   moshier@na-net.ornl.gov
+
+[195] go1.26.2/src/math/sqrt.go
+
+// The original C code and the long comment below are
+// from FreeBSD's /usr/src/lib/msun/src/e_sqrt.c and
+// came with this notice. The go code is a simplified
+// version of the original C.
+//
+// ====================================================
+// Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+//
+// Developed at SunPro, a Sun Microsystems, Inc. business.
+// Permission to use, copy, modify, and distribute this
+// software is freely granted, provided that this notice
+// is preserved.
+// ====================================================
+//
+// __ieee754_sqrt(x)
+// Return correctly rounded sqrt.
+//           -----------------------------------------
+//           | Use the hardware sqrt if you have one |
+//           -----------------------------------------
+// Method:
+//   Bit by bit method using integer arithmetic. (Slow, but portable)
+//   1. Normalization
+//      Scale x to y in [1,4) with even powers of 2:
+//      find an integer k such that  1 <= (y=x*2**(2k)) < 4, then
+//              sqrt(x) = 2**k * sqrt(y)
+//   2. Bit by bit computation
+//      Let q  = sqrt(y) truncated to i bit after binary point (q = 1),
+//           i                                                   0
+//                                     i+1         2
+//          s  = 2*q , and      y  =  2   * ( y - q  ).          (1)
+//           i      i            i                 i
+//
+//      To compute q    from q , one checks whether
+//                  i+1       i
+//
+//                            -(i+1) 2
+//                      (q + 2      )  <= y.                     (2)
+//                        i
+//                                                            -(i+1)
+//      If (2) is false, then q   = q ; otherwise q   = q  + 2      .
+//                             i+1   i             i+1   i
+//
+//      With some algebraic manipulation, it is not difficult to see
+//      that (2) is equivalent to
+//                             -(i+1)
+//                      s  +  2       <= y                       (3)
+//                       i                i
+//
+//      The advantage of (3) is that s  and y  can be computed by
+//                                    i      i
+//      the following recurrence formula:
+//          if (3) is false
+//
+//          s     =  s  ,       y    = y   ;                     (4)
+//           i+1      i          i+1    i
+//
+//      otherwise,
+//                         -i                      -(i+1)
+//          s     =  s  + 2  ,  y    = y  -  s  - 2              (5)
+//           i+1      i          i+1    i     i
+//
+//      One may easily use induction to prove (4) and (5).
+//      Note. Since the left hand side of (3) contain only i+2 bits,
+//            it is not necessary to do a full (53-bit) comparison
+//            in (3).
+//   3. Final rounding
+//      After generating the 53 bits result, we compute one more bit.
+//      Together with the remainder, we can decide whether the
+//      result is exact, bigger than 1/2ulp, or less than 1/2ulp
+//      (it will never equal to 1/2ulp).
+//      The rounding mode can be detected by checking whether
+//      huge + tiny is equal to huge, and whether huge - tiny is
+//      equal to huge for some floating point number "huge" and "tiny".
+//
+//
+// Notes:  Rounding mode detection omitted. The constants "mask", "shift",
+// and "bias" are found in src/math/bits.go
+
+[196] go1.26.2/src/math/tan.go
+
+// The original C code, the long comment, and the constants
+// below were from http://netlib.sandia.gov/cephes/cmath/sin.c,
+// available from http://www.netlib.org/cephes/cmath.tgz.
+// The go code is a simplified version of the original C.
+//
+//      tan.c
+//
+//      Circular tangent
+//
+// SYNOPSIS:
+//
+// double x, y, tan();
+// y = tan( x );
+//
+// DESCRIPTION:
+//
+// Returns the circular tangent of the radian argument x.
+//
+// Range reduction is modulo pi/4.  A rational function
+//       x + x**3 P(x**2)/Q(x**2)
+// is employed in the basic interval [0, pi/4].
+//
+// ACCURACY:
+//                      Relative error:
+// arithmetic   domain     # trials      peak         rms
+//    DEC      +-1.07e9      44000      4.1e-17     1.0e-17
+//    IEEE     +-1.07e9      30000      2.9e-16     8.1e-17
+//
+// Partial loss of accuracy begins to occur at x = 2**30 = 1.074e9.  The loss
+// is not gradual, but jumps suddenly to about 1 part in 10e7.  Results may
+// be meaningless for x > 2**49 = 5.6e14.
+// [Accuracy loss statement from sin.go comments.]
+//
+// Cephes Math Library Release 2.8:  June, 2000
+// Copyright 1984, 1987, 1989, 1992, 2000 by Stephen L. Moshier
+//
+// The readme file at http://netlib.sandia.gov/cephes/ says:
+//    Some software in this archive may be from the book _Methods and
+// Programs for Mathematical Functions_ (Prentice-Hall or Simon & Schuster
+// International, 1989) or from the Cephes Mathematical Library, a
+// commercial product. In either event, it is copyrighted by the author.
+// What you see here may be used freely but it comes with no support or
+// guarantee.
+//
+//   The two known misprints in the book are repaired here in the
+// source listings for the gamma function and the incomplete beta
+// integral.
+//
+//   Stephen L. Moshier
+//   moshier@na-net.ornl.gov
+
+[197] go1.26.2/src/math/tanh.go
+
+// The original C code, the long comment, and the constants
+// below were from http://netlib.sandia.gov/cephes/cmath/sin.c,
+// available from http://www.netlib.org/cephes/cmath.tgz.
+// The go code is a simplified version of the original C.
+//      tanh.c
+//
+//      Hyperbolic tangent
+//
+// SYNOPSIS:
+//
+// double x, y, tanh();
+//
+// y = tanh( x );
+//
+// DESCRIPTION:
+//
+// Returns hyperbolic tangent of argument in the range MINLOG to MAXLOG.
+//      MAXLOG = 8.8029691931113054295988e+01 = log(2**127)
+//      MINLOG = -8.872283911167299960540e+01 = log(2**-128)
+//
+// A rational function is used for |x| < 0.625.  The form
+// x + x**3 P(x)/Q(x) of Cody & Waite is employed.
+// Otherwise,
+//      tanh(x) = sinh(x)/cosh(x) = 1  -  2/(exp(2x) + 1).
+//
+// ACCURACY:
+//
+//                      Relative error:
+// arithmetic   domain     # trials      peak         rms
+//    IEEE      -2,2        30000       2.5e-16     5.8e-17
+//
+// Cephes Math Library Release 2.8:  June, 2000
+// Copyright 1984, 1987, 1989, 1992, 2000 by Stephen L. Moshier
+//
+// The readme file at http://netlib.sandia.gov/cephes/ says:
+//    Some software in this archive may be from the book _Methods and
+// Programs for Mathematical Functions_ (Prentice-Hall or Simon & Schuster
+// International, 1989) or from the Cephes Mathematical Library, a
+// commercial product. In either event, it is copyrighted by the author.
+// What you see here may be used freely but it comes with no support or
+// guarantee.
+//
+//   The two known misprints in the book are repaired here in the
+// source listings for the gamma function and the incomplete beta
+// integral.
+//
+//   Stephen L. Moshier
+//   moshier@na-net.ornl.gov
+//
+
+[198] go1.26.2/src/mime/multipart/multipart.go
+
+// Copyright 2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+//
+
+[199] go1.26.2/src/runtime/cgocallback.go (and 168 other selected files; see selected-file-review.json)
+
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[200] go1.26.2/src/runtime/compiler.go (and 62 other selected files; see selected-file-review.json)
+
+// Copyright 2012 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[201] go1.26.2/src/runtime/complex.go (and 96 other selected files; see selected-file-review.json)
+
+// Copyright 2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[202] go1.26.2/src/runtime/netpoll.go (and 67 other selected files; see selected-file-review.json)
+
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[203] go1.26.2/src/syscall/syscall_darwin.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2009,2010 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[204] go1.26.2/src/unsafe/unsafe.go (and 283 other selected files; see selected-file-review.json)
+
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+[205] go1.26.2/src/vendor/golang.org/x/crypto/chacha20/xor.go (and 1 other selected files; see selected-file-review.json)
+
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found src the LICENSE file.
+
+[206] go4.org@v0.0.0-20260112195520-a5071408f32f/readerutil/bufreaderat.go
+
+/*
+Copyright 2018 The go4 Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+[207] go4.org@v0.0.0-20260112195520-a5071408f32f/readerutil/countingreader.go
+
+/*
+Copyright 2011 The Go4 Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+[208] go4.org@v0.0.0-20260112195520-a5071408f32f/readerutil/fakeseeker.go
+
+/*
+Copyright 2014 The Perkeep Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+[209] go4.org@v0.0.0-20260112195520-a5071408f32f/readerutil/multireaderat.go (and 1 other selected files; see selected-file-review.json)
+
+/*
+Copyright 2016 The go4 Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+[210] go4.org@v0.0.0-20260112195520-a5071408f32f/readerutil/readersize.go
+
+/*
+Copyright 2012 The Go4 Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+[211] goftp.io/server/v2@v2.0.2/auth.go (and 10 other selected files; see selected-file-review.json)
+
+// Copyright 2018 The goftp Authors. All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+[212] goftp.io/server/v2@v2.0.2/ratelimit/limiter.go (and 4 other selected files; see selected-file-review.json)
+
+// Copyright 2020 The goftp Authors. All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+[213] golang.org/x/sys@v0.42.0/unix/endian_little.go
+
+// Copyright 2016 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+//
+//go:build 386 || amd64 || amd64p32 || alpha || arm || arm64 || loong64 || mipsle || mips64le || mips64p32le || nios2 || ppc64le || riscv || riscv64 || sh
+
+[214] golang.org/x/text@v0.36.0/encoding/internal/identifier/mib.go
+
+	// VenturaUS is the MIB identifier with IANA name Ventura-US.
+	//
+	// Ventura US.  ASCII plus characters typically used in
+	// publishing, like pilcrow, copyright, registered, trade mark,
+	// section, dagger, and double dagger in the range A0 (hex)
+	// to FF (hex).
+	// PCL Symbol Set id: 14J
+
+[215] google.golang.org/protobuf@v1.36.11/types/known/timestamppb/timestamp.pb.go
+
+// Protocol Buffers - Google's data interchange format
+// Copyright 2008 Google Inc.  All rights reserved.
+// https://developers.google.com/protocol-buffers/
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//     * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//     * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+[216] gopkg.in/yaml.v3@v3.0.1/apic.go (and 3 other selected files; see selected-file-review.json)
+
+// 
+// Copyright (c) 2011-2019 Canonical Ltd
+// Copyright (c) 2006-2010 Kirill Simonov
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+[217] gopkg.in/yaml.v3@v3.0.1/decode.go (and 9 other selected files; see selected-file-review.json)
+
+//
+// Copyright (c) 2011-2019 Canonical Ltd
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+[218] gopkg.in/yaml.v3@v3.0.1/emitterc.go (and 11 other selected files; see selected-file-review.json)
+
+//
+// Copyright (c) 2011-2019 Canonical Ltd
+// Copyright (c) 2006-2010 Kirill Simonov
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+[219] rclone/cmd/bisync/cmd.go (and 2 other selected files; see selected-file-review.json)
+
+// Package bisync implements bisync
+// Copyright (c) 2017-2020 Chris Nelson
+
+[220] rclone/cmd/bisync/operations.go
+
+// Package bisync implements bisync
+// Copyright (c) 2017-2020 Chris Nelson
+// Contributions to original python version: Hildo G. Jr., e2t, kalemas, silenceleaf
+
+[221] sigs.k8s.io/yaml@v1.6.0/goyaml.v2/yaml_aliases.go
+
+/*
+Copyright 2025 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/

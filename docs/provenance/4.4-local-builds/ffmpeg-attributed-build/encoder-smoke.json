@@ -1,0 +1,58 @@
+[
+  {
+    "encoder": "libx264",
+    "result": "passed"
+  },
+  {
+    "encoder": "libx265",
+    "result": "passed"
+  },
+  {
+    "encoder": "libsvtav1",
+    "result": "passed"
+  },
+  {
+    "encoder": "libaom-av1",
+    "result": "passed"
+  },
+  {
+    "encoder": "libvvenc",
+    "result": "passed"
+  },
+  {
+    "encoder": "libvpx-vp9",
+    "result": "passed"
+  },
+  {
+    "encoder": "libjxl",
+    "result": "passed"
+  },
+  {
+    "encoder": "libopenjpeg",
+    "result": "passed"
+  },
+  {
+    "encoder": "prores_ks",
+    "result": "passed"
+  },
+  {
+    "encoder": "libopus",
+    "result": "passed"
+  },
+  {
+    "encoder": "libvorbis",
+    "result": "passed"
+  },
+  {
+    "encoder": "libmp3lame",
+    "result": "passed"
+  },
+  {
+    "encoder": "aac",
+    "result": "passed"
+  },
+  {
+    "encoder": "flac",
+    "result": "passed"
+  }
+]

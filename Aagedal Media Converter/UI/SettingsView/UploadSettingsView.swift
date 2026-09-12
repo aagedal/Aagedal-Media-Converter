@@ -19,6 +19,7 @@ struct UploadSettingsView: View {
 
     // Profiles
     @State private var profiles: [UploadProfile] = UploadProfileStore.loadProfiles()
+    @State private var profileStoreUnreadable = (try? UploadProfileStore.loadProfilesForEditing()) == nil
     @AppStorage(AppConstants.uploadSelectedProfileIDKey) private var selectedProfileID = ""
 
     // Upload behavior
@@ -31,6 +32,7 @@ struct UploadSettingsView: View {
     @State private var hasStoredPassword = false
     @State private var s3SecretKey = ""
     @State private var hasStoredS3SecretKey = false
+    @State private var sshKeySelectionError: String?
 
     // FileZilla import
     @State private var fileZillaSites: [FileZillaSite] = []
@@ -69,9 +71,16 @@ struct UploadSettingsView: View {
     var body: some View {
         Form {
             rcloneStatusSection
-            profileSection
-            uploadBehaviorSection
-            testConnectionSection
+            if profileStoreUnreadable {
+                Section {
+                    Text("Saved upload profiles could not be read. Your saved data has been preserved. Restore a settings backup or repair the saved profiles, then reopen Settings.")
+                        .foregroundStyle(.red)
+                }
+            } else {
+                profileSection
+                uploadBehaviorSection
+                testConnectionSection
+            }
         }
         .formStyle(.grouped)
         .task { await loadInitialState() }
@@ -80,6 +89,7 @@ struct UploadSettingsView: View {
             refreshCredentialState()
             UploadManager.shared.refreshConfiguredStatus()
             testResult = nil
+            sshKeySelectionError = nil
         }
         .onChange(of: focusedField) { oldValue, newValue in
             // Save credentials when focus leaves the password/secret field,
@@ -420,6 +430,11 @@ struct UploadSettingsView: View {
                         Button("Browse...") { selectSSHKeyFile() }
                     }
                 }
+                if let sshKeySelectionError {
+                    Text(sshKeySelectionError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             } else {
                 passwordField
             }
@@ -722,6 +737,10 @@ struct UploadSettingsView: View {
                 guard let index = selectedProfileIndex else { return }
                 profiles[index][keyPath: keyPath] = newValue
                 UploadProfileStore.saveProfiles(profiles)
+                if keyPath == \UploadProfile.keyFilePath {
+                    sshKeySelectionError = nil
+                    testResult = nil
+                }
                 // Credentials are keyed by (server, username) / access key — refresh when those change.
                 if keyPath == \UploadProfile.server || keyPath == \UploadProfile.username || keyPath == \UploadProfile.accessKeyID {
                     refreshCredentialState()
@@ -747,6 +766,14 @@ struct UploadSettingsView: View {
     private func loadInitialState() async {
         rcloneCustomPath = RcloneUpdateService.shared.getCustomPath() ?? ""
         await refreshRcloneStatus()
+
+        do {
+            profiles = try UploadProfileStore.loadProfilesForEditing()
+            profileStoreUnreadable = false
+        } catch {
+            profileStoreUnreadable = true
+            return
+        }
 
         if profiles.isEmpty {
             // First-run: create a default FTP profile so the view always has something to show.
@@ -1125,8 +1152,15 @@ struct UploadSettingsView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             guard let index = selectedProfileIndex else { return }
-            profiles[index].keyFilePath = url.path
-            UploadProfileStore.saveProfiles(profiles)
+            do {
+                try profiles[index].selectSSHKeyFile(url)
+                UploadProfileStore.saveProfiles(profiles)
+                sshKeySelectionError = nil
+                testResult = nil
+                UploadManager.shared.refreshConfiguredStatus()
+            } catch {
+                sshKeySelectionError = error.localizedDescription
+            }
         }
     }
 

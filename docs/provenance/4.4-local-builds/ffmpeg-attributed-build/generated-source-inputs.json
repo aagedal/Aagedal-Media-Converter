@@ -1,0 +1,122 @@
+{
+  "archive": {
+    "component": "FFmpeg generated inputs",
+    "path": "build/attribution/ffmpeg-9.0.1-generated-inputs.tar.gz",
+    "bytes": 93452,
+    "sha256": "0e18c9471ded3960d40ce59d7b2a37963423a9e1002449982ab65271a7b55869"
+  },
+  "files": [
+    {
+      "path": "sources/libaom-3.14.1/build/config/aom_config.c",
+      "sha256": "3634284c7de9466d9f07baf75e8f9216d9ba8814e3c8a2ccb10ee2a8ff1dbbc0"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/config/aom_config.h",
+      "sha256": "a1d9f6eefe506bfb3c17dad64b4d93b63e684d8da81d90226484134bda572fe5"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/config/aom_dsp_rtcd.h",
+      "sha256": "af4228b6e883f16a9ae929b6d12d84bc596245564d91e4e6977770e4a2536b39"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/config/aom_scale_rtcd.h",
+      "sha256": "c570ff0504c001c33925ffb1897c9f45812db2d3dcb800c144d1fb5e8101d12c"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/config/aom_version.h",
+      "sha256": "897b7d20c297655d550d9a643cc8534a18a90dbc9fea6109d5a9dd58675fa5e7"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/config/av1_rtcd.h",
+      "sha256": "00c0ced211e38530f7569d0580ccb6b011d999ed3f2bffb1259e13232c0b1a78"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/gen_src/aom_av1_no_op.c",
+      "sha256": "9103a1a2d13a5f7fa6419ca7264ddb50cbb0ba02d1f59bce553dcde58e528056"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/gen_src/aom_dsp_no_op.c",
+      "sha256": "ab9502f1bb299bfa619ba2f99b424b34be5602f5029355d0136e6899e7e43c1c"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/gen_src/aom_pc_no_op.c",
+      "sha256": "9103a1a2d13a5f7fa6419ca7264ddb50cbb0ba02d1f59bce553dcde58e528056"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/gen_src/aom_version_no_op.c",
+      "sha256": "285da5d4ada165d048409e951906d13552fc451a81d761ac525f282c23079f7b"
+    },
+    {
+      "path": "sources/libaom-3.14.1/build/gen_src/usage_exit.c",
+      "sha256": "a67099af6637051c3de4f6d449ecaa8b5389e4eee2dd178ab6e614956995c7e5"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/cms.h",
+      "sha256": "f9fab00a2ad226eada1eb25e398516dd8a653039e775e764beaf3b0697743f4a"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/cms_interface.h",
+      "sha256": "8babe9fee6a4434f3562490ed4d5cbf8b445431ac640e92e9e55f2ac984850bf"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/codestream_header.h",
+      "sha256": "a300b9d1880b2de47553ab56e0ace0df203d6bfb12160542e980493d18228c1f"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/color_encoding.h",
+      "sha256": "c08460784dd671a83e199c434aafddae032c531aa219ad87d1739dc00963d6ea"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/decode.h",
+      "sha256": "b589ebfe7366a47e607bd19998ecc4ec6082e164030b116ef88e827c85b35a0f"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/encode.h",
+      "sha256": "dcef8b08c430d4c15b10268eb9f6d328a8145ba8ea27435826908622f3cbead5"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/jxl_cms_export.h",
+      "sha256": "36849d1ca4338e07ac0e759d2012c54c974b552395b004f14b1022316ac1168b"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/jxl_export.h",
+      "sha256": "9ec7d7de9f4796c5175a635a0dd7de096a2d0e1d73f619963ca10c3841078c72"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/jxl_threads_export.h",
+      "sha256": "e3593c3c611230eac1b0401ddfa0e33175b83ca16a0451fed3874aeae764f8ee"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/memory_manager.h",
+      "sha256": "82967b8fd6b827f3e9be839d648ac6cc29e107a9ac048808e9a472adf64c5302"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/parallel_runner.h",
+      "sha256": "88cc126a10a72c781f9b731ed3a841560d452405c78b90ce4816b1eab978275b"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/stats.h",
+      "sha256": "f09c82588c77f5e779c2844e2ea0a9f2cb636f404554cf3e0b888f1674dc280c"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/types.h",
+      "sha256": "317bf87d55b133c073b7fa48436c8e2ab3a7c48a2263f26f4eaa407090f93f6d"
+    },
+    {
+      "path": "sources/libjxl-0.12.0/build/lib/include/jxl/version.h",
+      "sha256": "9dee4cae6874ca7aba84e3215c8467793e1960fa9e950b169d4c420ed97850a2"
+    },
+    {
+      "path": "sources/vvenc-1.14.0/build/vvenc/version.h",
+      "sha256": "b751bdf8b9042d053d5b120f457ecb3c226f3a37dc1c8d93d0a7a69d6b9e483e"
+    },
+    {
+      "path": "sources/vvenc-1.14.0/build/vvenc/vvenc.h",
+      "sha256": "fe10452ebe121eb81447fef403186bd7eef94eb45cf3d5657d2fc6bf58f35134"
+    },
+    {
+      "path": "sources/x265-4.2/build/x265_config.h",
+      "sha256": "bc22f9789a8153c029dc0d9f2e5fb29ecb7702672e7b91fcd613a68be1ab4490"
+    }
+  ]
+}

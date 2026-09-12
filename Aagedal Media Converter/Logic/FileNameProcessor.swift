@@ -10,7 +10,7 @@
 import Foundation
 
 /// How aggressively to strip "special" characters when sanitizing a filename.
-enum SpecialCharacterRemovalMode: String, CaseIterable, Identifiable {
+enum SpecialCharacterRemovalMode: String, CaseIterable, Identifiable, Sendable {
     /// Preserve every character — no removal step at all.
     case off
     /// Strip only filesystem-unsafe punctuation (`/ \ : * ? " < > |`) and control characters.
@@ -43,13 +43,11 @@ struct FileNameProcessor {
     /// - Returns: A sanitized version of the input string with spaces replaced by underscores,
     ///   special characters removed, and other sanitization applied. If filename processing is disabled
     ///   in user preferences, returns the input unchanged.
-    static func processFileName(_ input: String) -> String {
-        let isEnabled = UserDefaults.standard.object(forKey: AppConstants.enableFileNameProcessingKey) as? Bool ?? true
-        guard isEnabled else { return input }
-
-        let replaceSpaces = UserDefaults.standard.object(forKey: AppConstants.fileNameReplaceSpacesKey) as? Bool ?? AppConstants.defaultFileNameReplaceSpaces
-        let replaceScandinavianChars = UserDefaults.standard.object(forKey: AppConstants.fileNameReplaceScandinavianCharsKey) as? Bool ?? AppConstants.defaultFileNameReplaceScandinavianChars
-        let mode = specialCharRemovalMode
+    static func processFileName(_ input: String, settings: FileNamePreferences = FileNameSettings().snapshot) -> String {
+        guard settings.isEnabled else { return input }
+        let replaceSpaces = settings.replaceSpaces
+        let replaceScandinavianChars = settings.replaceScandinavianCharacters
+        let mode = settings.specialCharacterRemovalMode
 
         var cleanedName = input
 
@@ -90,40 +88,39 @@ struct FileNameProcessor {
         return cleanedName.isEmpty ? "unnamed" : cleanedName
     }
 
-    /// Returns whether preset suffixes should be included in output filenames.
-    static var includePresetSuffix: Bool {
-        UserDefaults.standard.object(forKey: AppConstants.fileNameIncludePresetSuffixKey) as? Bool ?? AppConstants.defaultFileNameIncludePresetSuffix
+    /// Compatibility accessors for individual UI actions.
+    static var includePresetSuffix: Bool { FileNameSettings().snapshot.includePresetSuffix }
+    static var customTemplateEnabled: Bool { FileNameSettings().snapshot.customTemplateEnabled }
+    static var customTemplateUsesCounter: Bool { FileNameSettings().snapshot.customTemplateUsesCounter }
+    static var customTemplateUsesPresetSuffix: Bool { FileNameSettings().snapshot.customTemplateUsesPresetSuffix }
+
+    @MainActor
+    static func nextCounterValue() -> Int { FileNameSettings().nextCounterValue() }
+
+    /// Shared by import, the queue preview, and conversion execution.
+    static func outputBaseName(
+        inputURL: URL, override: String? = nil, counter: Int? = nil, preset: ExportPreset,
+        settings: FileNamePreferences = FileNameSettings().snapshot,
+        context: FileNameTemplateContext? = nil, date: Date = Date()
+    ) -> String {
+        let parts = outputNameParts(inputURL: inputURL, override: override, counter: counter, preset: preset,
+                                    settings: settings, context: context, date: date)
+        return parts.baseName + parts.suffix
     }
 
-    /// Whether the custom filename template is enabled.
-    static var customTemplateEnabled: Bool {
-        UserDefaults.standard.object(forKey: AppConstants.enableCustomFileNameTemplateKey) as? Bool ?? AppConstants.defaultEnableCustomFileNameTemplate
-    }
-
-    /// Whether the configured template references the `{counter}` variable.
-    static var customTemplateUsesCounter: Bool {
-        guard customTemplateEnabled else { return false }
-        let template = UserDefaults.standard.string(forKey: AppConstants.customFileNameTemplateKey)
-            ?? AppConstants.defaultCustomFileNameTemplate
-        return template.contains("{counter}")
-    }
-
-    /// Whether the configured template explicitly includes the preset suffix variable.
-    /// When true, callers should suppress the global "include preset suffix" auto-append to avoid
-    /// duplicating the suffix.
-    static var customTemplateUsesPresetSuffix: Bool {
-        guard customTemplateEnabled else { return false }
-        let template = UserDefaults.standard.string(forKey: AppConstants.customFileNameTemplateKey)
-            ?? AppConstants.defaultCustomFileNameTemplate
-        return template.contains("{presetSuffix}")
-    }
-
-    /// Atomically reads and increments the persisted counter value, returning the value before increment.
-    static func nextCounterValue() -> Int {
-        let stored = UserDefaults.standard.object(forKey: AppConstants.customFileNameCounterValueKey) as? Int
-            ?? AppConstants.defaultCustomFileNameCounterValue
-        UserDefaults.standard.set(stored + 1, forKey: AppConstants.customFileNameCounterValueKey)
-        return stored
+    static func outputNameParts(
+        inputURL: URL, override: String? = nil, counter: Int? = nil, preset: ExportPreset,
+        settings: FileNamePreferences = FileNameSettings().snapshot,
+        context: FileNameTemplateContext? = nil, date: Date = Date()
+    ) -> (baseName: String, suffix: String) {
+        if let override = override?.trimmingCharacters(in: .whitespacesAndNewlines), !override.isEmpty {
+            return (processFileName((override as NSString).deletingPathExtension, settings: settings), "")
+        }
+        let context = context ?? FileNameTemplateContext(preset: preset)
+        let sourceName = processFileName(inputURL.deletingPathExtension().lastPathComponent, settings: settings)
+        let templated = applyCustomTemplate(sourceName: sourceName, counter: counter, settings: settings, context: context, date: date)
+        let suffix = settings.includePresetSuffix && !settings.customTemplateUsesPresetSuffix ? context.presetSuffix : ""
+        return (templated, suffix)
     }
 
     /// Applies the user's custom filename template to a sanitized source name.
@@ -133,28 +130,28 @@ struct FileNameProcessor {
     ///   - preset: Active export preset, used to resolve `{presetSuffix}`, `{resolution}`, `{framerate}`.
     ///     Pass nil to substitute those variables with empty strings.
     /// - Returns: The templated name, re-sanitized through the active filename rules.
-    static func applyCustomTemplate(sourceName: String, counter: Int? = nil, preset: ExportPreset? = nil) -> String {
-        guard customTemplateEnabled else { return sourceName }
-
-        let template = UserDefaults.standard.string(forKey: AppConstants.customFileNameTemplateKey)
-            ?? AppConstants.defaultCustomFileNameTemplate
-        guard !template.isEmpty else { return sourceName }
-
-        let dateFormat = UserDefaults.standard.string(forKey: AppConstants.customFileNameDateFormatKey)
-            ?? AppConstants.defaultCustomFileNameDateFormat
-        let padding = UserDefaults.standard.object(forKey: AppConstants.customFileNameCounterPaddingKey) as? Int
-            ?? AppConstants.defaultCustomFileNameCounterPadding
-
+    static func applyCustomTemplate(
+        sourceName: String, counter: Int? = nil, preset: ExportPreset? = nil,
+        settings: FileNamePreferences = FileNameSettings().snapshot,
+        context: FileNameTemplateContext? = nil, date: Date = Date()
+    ) -> String {
+        guard settings.customTemplateEnabled, !settings.template.isEmpty else { return sourceName }
+        let template = settings.template
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = dateFormat
-        let dateString = formatter.string(from: Date())
+        formatter.dateFormat = settings.dateFormat
+        let dateString = formatter.string(from: date)
 
-        let counterString = String(format: "%0\(max(1, padding))d", counter ?? 1)
-
-        let presetSuffix = preset?.fileSuffix ?? ""
-        let resolution = preset?.resolutionLabel ?? ""
-        let framerate = preset?.framerateLabel ?? ""
+        // Preserve the full Swift integer instead of truncating it through C's %d.
+        let value = counter ?? 1
+        let digits = String(value.magnitude)
+        let sign = value < 0 ? "-" : ""
+        let padding = min(6, max(1, settings.counterPadding))
+        let counterString = sign + String(repeating: "0", count: max(0, padding - sign.count - digits.count)) + digits
+        let context = context ?? FileNameTemplateContext(preset: preset)
+        let presetSuffix = context.presetSuffix
+        let resolution = context.resolution
+        let framerate = context.framerate
 
         let substituted = template
             .replacingOccurrences(of: "{sourceName}", with: sourceName)
@@ -164,6 +161,6 @@ struct FileNameProcessor {
             .replacingOccurrences(of: "{resolution}", with: resolution)
             .replacingOccurrences(of: "{framerate}", with: framerate)
 
-        return processFileName(substituted)
+        return processFileName(substituted, settings: settings)
     }
 }

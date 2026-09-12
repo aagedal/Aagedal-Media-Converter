@@ -60,7 +60,10 @@ enum AudioRoutingService {
             let trackInfo = AudioTrackInfo(
                 streamIndex: audioRelativeIndex,
                 channels: basicStream.channels ?? detailedStream?.channels,
-                channelLayout: basicStream.channelLayout ?? detailedStream?.channelLayout,
+                // Apply the same presentation policy as the metadata panel: the Matroska
+                // reader's count-derived layout must not become a known speaker label.
+                channelLayout: detailedStream != nil ? detailedStream?.channelLayout
+                    : (["mkv", "webm"].contains(url.pathExtension.lowercased()) ? nil : basicStream.channelLayout),
                 codec: detailedStream?.codec,
                 codecLongName: detailedStream?.codecLongName,
                 sampleRate: detailedStream?.sampleRate,
@@ -111,154 +114,39 @@ enum AudioRoutingService {
         return candidate
     }
     
-    /// Builds FFmpeg arguments based on audio routing configuration
-    /// Returns either simple -map arguments or complex filter graph
-    /// - Parameter config: The audio routing configuration
-    /// - Returns: Array of FFmpeg arguments for audio routing
-    static func buildFFmpegMapArguments(config: AudioRoutingConfig) -> [String] {
-        // If channel operation exists, use filter_complex
+    /// Resolves routing decisions before serializing FFmpeg arguments. Output order,
+    /// duplicates, and filter ownership are retained in one immutable value.
+    static func makePlan(config: AudioRoutingConfig) -> AudioRoutingPlan {
+        let fallback = AudioRoutingPlan.tracks(config.outputTracks.map {
+            AudioRoutingPlan.Track(streamIndex: $0.streamIndex, downmixToStereo: false)
+        })
         if let operation = config.channelOperation {
-            return buildChannelOperationArguments(operation: operation, config: config)
+            switch operation {
+            case .mergeToStereo(let indices):
+                guard indices.count >= 2 else { return fallback }
+                return .mergeToStereo(streamIndices: indices)
+            case .splitToMono(let index):
+                guard let track = config.trackInfo(for: index), track.channels == 2 else { return fallback }
+                return .splitToMono(streamIndex: index, layout: track.channelLayout ?? "stereo")
+            case .swapChannels(let index):
+                guard config.trackInfo(for: index)?.channels == 2 else { return fallback }
+                return .swapChannels(streamIndex: index)
+            case .extractChannel(let index, let channel, _):
+                guard let channels = config.trackInfo(for: index)?.channels,
+                      channel >= 0, channel < channels else { return fallback }
+                return .extractChannel(streamIndex: index, channelIndex: channel)
+            }
         }
-
-        // Check if any tracks need downmix
-        let needsDownmix = config.outputTracks.contains { $0.downmixToStereo }
-
-        if needsDownmix {
-            return buildDownmixArguments(config: config)
-        }
-
-        // Otherwise use simple -map arguments
-        var arguments: [String] = []
-
-        for outputTrack in config.outputTracks {
-            arguments.append(contentsOf: ["-map", "0:a:\(outputTrack.streamIndex)"])
-        }
-
-        logger.debug("Generated FFmpeg map arguments: \(arguments.joined(separator: " "))")
-        return arguments
+        return .tracks(config.outputTracks.map {
+            AudioRoutingPlan.Track(streamIndex: $0.streamIndex, downmixToStereo: $0.downmixToStereo)
+        })
     }
 
-    /// Builds FFmpeg filter_complex arguments for per-track stereo downmix
-    /// - Parameter config: The audio routing configuration
-    /// - Returns: Array of FFmpeg arguments including filter_complex
-    private static func buildDownmixArguments(config: AudioRoutingConfig) -> [String] {
-        var filterParts: [String] = []
-        var mapArgs: [String] = []
-
-        for (index, outputTrack) in config.outputTracks.enumerated() {
-            let inputLabel = "[0:a:\(outputTrack.streamIndex)]"
-            let outputLabel = "[aout\(index)]"
-
-            if outputTrack.downmixToStereo {
-                // Use aresample with stereo channel layout for downmix
-                // This handles any input channel layout and produces stereo output
-                filterParts.append("\(inputLabel)aresample=ochl=stereo\(outputLabel)")
-            } else {
-                // Pass through without modification using anull filter
-                filterParts.append("\(inputLabel)anull\(outputLabel)")
-            }
-
-            mapArgs.append(contentsOf: ["-map", outputLabel])
-        }
-
-        let filterGraph = filterParts.joined(separator: ";")
-        var arguments = ["-filter_complex", filterGraph]
-        arguments.append(contentsOf: mapArgs)
-
-        logger.debug("Generated downmix filter_complex: \(filterGraph)")
-        return arguments
+    /// Compatibility boundary for callers assembling the rest of the conversion.
+    static func buildFFmpegMapArguments(config: AudioRoutingConfig) -> [String] {
+        makePlan(config: config).ffmpegArguments
     }
-    
-    /// Builds FFmpeg filter_complex arguments for channel-level operations
-    /// - Parameters:
-    ///   - operation: The channel operation to perform
-    ///   - config: The audio routing configuration
-    /// - Returns: Array of FFmpeg arguments including filter_complex
-    private static func buildChannelOperationArguments(
-        operation: ChannelOperation,
-        config: AudioRoutingConfig
-    ) -> [String] {
-        var arguments: [String] = []
-        
-        switch operation {
-        case .mergeToStereo(let trackIndices):
-            // Example: [0:a:0][0:a:1]amerge=inputs=2,pan=stereo|c0<c0+c2|c1<c1+c3[aout]
-            guard trackIndices.count >= 2 else {
-                logger.warning("mergeToStereo requires at least 2 tracks, got \(trackIndices.count)")
-                return buildFallbackArguments(config: config)
-            }
-            
-            let inputs = trackIndices.map { "[0:a:\($0)]" }.joined()
-            let filter: String
-            
-            if trackIndices.count == 2 {
-                // Simple stereo merge: combine two mono tracks
-                filter = "\(inputs)amerge=inputs=2,pan=stereo|c0<c0+c2|c1<c1+c3[aout]"
-            } else {
-                // Multiple tracks: merge all into multi-channel, then downmix to stereo
-                filter = "\(inputs)amerge=inputs=\(trackIndices.count),pan=stereo|c0<c0|c1<c1[aout]"
-            }
-            
-            arguments = ["-filter_complex", filter, "-map", "[aout]"]
-            logger.debug("Generated merge-to-stereo filter: \(filter)")
-            
-        case .splitToMono(let trackIndex):
-            // Normalize FFmpeg's named FL/FR outputs to the generic mono layout so encoders such
-            // as AAC accept both streams.
-            guard let trackInfo = config.trackInfo(for: trackIndex),
-                  let channels = trackInfo.channels, channels == 2 else {
-                logger.warning("splitToMono requires a stereo track")
-                return buildFallbackArguments(config: config)
-            }
 
-            let layout = trackInfo.channelLayout ?? "stereo"
-            let filter = "[0:a:\(trackIndex)]channelsplit=channel_layout=\(layout)[splitL][splitR];" +
-                "[splitL]aformat=channel_layouts=mono[L];[splitR]aformat=channel_layouts=mono[R]"
-            
-            arguments = ["-filter_complex", filter, "-map", "[L]", "-map", "[R]"]
-            logger.debug("Generated split-to-mono filter: \(filter)")
-            
-        case .swapChannels(let trackIndex):
-            // Example: [0:a:0]pan=stereo|c0=c1|c1=c0[aout]
-            guard let trackInfo = config.trackInfo(for: trackIndex),
-                  let channels = trackInfo.channels, channels == 2 else {
-                logger.warning("swapChannels requires a stereo track")
-                return buildFallbackArguments(config: config)
-            }
-            
-            let filter = "[0:a:\(trackIndex)]pan=stereo|c0=c1|c1=c0[aout]"
-            
-            arguments = ["-filter_complex", filter, "-map", "[aout]"]
-            logger.debug("Generated swap-channels filter: \(filter)")
-            
-        case .extractChannel(let trackIndex, let channelIndex, _):
-            // Example: [0:a:0]pan=mono|c0=c0[aout] (extract left channel)
-            guard let trackInfo = config.trackInfo(for: trackIndex),
-                  let channels = trackInfo.channels, channelIndex < channels else {
-                logger.warning("extractChannel: invalid track or channel index")
-                return buildFallbackArguments(config: config)
-            }
-            
-            let filter = "[0:a:\(trackIndex)]pan=mono|c0=c\(channelIndex)[aout]"
-            
-            arguments = ["-filter_complex", filter, "-map", "[aout]"]
-            logger.debug("Generated extract-channel filter: \(filter)")
-        }
-        
-        return arguments
-    }
-    
-    /// Fallback to simple mapping when operation fails
-    private static func buildFallbackArguments(config: AudioRoutingConfig) -> [String] {
-        var arguments: [String] = []
-        for streamIndex in config.outputTrackIndices {
-            arguments.append(contentsOf: ["-map", "0:a:\(streamIndex)"])
-        }
-        logger.warning("Using fallback simple mapping due to invalid operation")
-        return arguments
-    }
-    
     /// Validates routing configuration against preset requirements
     /// - Parameters:
     ///   - config: The audio routing configuration
@@ -334,5 +222,59 @@ enum AudioRoutingService {
         }
         
         return preview
+    }
+}
+
+/// Typed audio portion of a conversion plan. A filtered plan owns both its graph
+/// and output maps, so their ordering cannot diverge during command construction.
+enum AudioRoutingPlan: Equatable, Sendable {
+    struct Track: Equatable, Sendable {
+        let streamIndex: Int
+        let downmixToStereo: Bool
+    }
+
+    case tracks([Track])
+    case mergeToStereo(streamIndices: [Int])
+    case splitToMono(streamIndex: Int, layout: String)
+    case swapChannels(streamIndex: Int)
+    case extractChannel(streamIndex: Int, channelIndex: Int)
+
+    var outputStreamCount: Int {
+        switch self {
+        case .tracks(let tracks): tracks.count
+        case .splitToMono: 2
+        case .mergeToStereo, .swapChannels, .extractChannel: 1
+        }
+    }
+
+    var ffmpegArguments: [String] {
+        switch self {
+        case .tracks(let tracks):
+            guard tracks.contains(where: \.downmixToStereo) else {
+                return tracks.flatMap { ["-map", "0:a:\($0.streamIndex)"] }
+            }
+            let filters = tracks.enumerated().map { index, track in
+                let filter = track.downmixToStereo ? "aresample=ochl=stereo" : "anull"
+                return "[0:a:\(track.streamIndex)]\(filter)[aout\(index)]"
+            }
+            return Self.filtered(filters.joined(separator: ";"), outputs: tracks.indices.map { "aout\($0)" })
+        case .mergeToStereo(let indices):
+            let inputs = indices.map { "[0:a:\($0)]" }.joined()
+            let pan = indices.count == 2 ? "pan=stereo|c0<c0+c2|c1<c1+c3" : "pan=stereo|c0<c0|c1<c1"
+            return Self.filtered("\(inputs)amerge=inputs=\(indices.count),\(pan)[aout]", outputs: ["aout"])
+        case .splitToMono(let index, let layout):
+            // Normalize FL/FR to generic mono layouts accepted by AAC encoders.
+            let graph = "[0:a:\(index)]channelsplit=channel_layout=\(layout)[splitL][splitR];" +
+                "[splitL]aformat=channel_layouts=mono[L];[splitR]aformat=channel_layouts=mono[R]"
+            return Self.filtered(graph, outputs: ["L", "R"])
+        case .swapChannels(let index):
+            return Self.filtered("[0:a:\(index)]pan=stereo|c0=c1|c1=c0[aout]", outputs: ["aout"])
+        case .extractChannel(let index, let channel):
+            return Self.filtered("[0:a:\(index)]pan=mono|c0=c\(channel)[aout]", outputs: ["aout"])
+        }
+    }
+
+    private static func filtered(_ graph: String, outputs: [String]) -> [String] {
+        ["-filter_complex", graph] + outputs.flatMap { ["-map", "[\($0)]"] }
     }
 }

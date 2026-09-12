@@ -1,0 +1,12 @@
+diff --git a/libavcodec/videotoolbox.c b/libavcodec/videotoolbox.c
+index 2cd22cb..85749ab 100644
+--- a/libavcodec/videotoolbox.c
++++ b/libavcodec/videotoolbox.c
+@@ -822,6 +822,7 @@ static CFDictionaryRef videotoolbox_buffer_attributes_create(int width,
+ #else
+     CFDictionarySetValue(buffer_attributes, kCVPixelBufferIOSurfaceOpenGLTextureCompatibilityKey, kCFBooleanTrue);
+ #endif
++    CFDictionarySetValue(buffer_attributes, kCVPixelBufferMetalCompatibilityKey, kCFBooleanTrue);
+ 
+     CFRelease(io_surface_properties);
+     CFRelease(cv_pix_fmt);

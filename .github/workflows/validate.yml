@@ -3,6 +3,10 @@ name: Validate
 on:
   pull_request:
   push:
+    branches:
+      - main
+    tags:
+      - "*"
   workflow_dispatch:
   schedule:
     - cron: "17 4 * * 1"
@@ -64,11 +68,15 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/Unit-Tests.xcresult" \
             -disableAutomaticPackageResolution \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 60 \
+            -maximum-test-execution-time-allowance 120 \
             -only-testing:"Aagedal Media ConverterTests" \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Upload diagnostics
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: debug-xcresults-${{ github.run_attempt }}

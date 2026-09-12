@@ -14,33 +14,28 @@ actor ParakeetService {
     private let audioExtractor: ParakeetAudioExtractor
     private let parakeetPathProvider: @Sendable () -> String?
     private let ffmpegPathProvider: @Sendable () -> String?
-    private let chunkDurationProvider: @Sendable () -> Int
-    private let overlapDurationProvider: @Sendable () -> Int
+    private let settingsProvider: @Sendable () -> ParakeetSettingsSnapshot
 
     private var activeRunIDs: Set<UUID> = []
+    private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
     private var cancelledRunIDs: Set<UUID> = []
     private var cancelledOperationIDs: Set<UUID> = []
     private var runIDsByOperationID: [UUID: Set<UUID>] = [:]
     private var currentGenerationTasks: [UUID: Task<Void, Error>] = [:]
-    private var reservedOutputPaths: Set<String> = []
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         parakeetPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.parakeetMlxPath },
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
-        chunkDurationProvider: @escaping @Sendable () -> Int = {
-            UserDefaults.standard.integer(forKey: AppConstants.parakeetChunkDurationKey)
-        },
-        overlapDurationProvider: @escaping @Sendable () -> Int = {
-            UserDefaults.standard.integer(forKey: AppConstants.parakeetOverlapDurationKey)
+        settingsProvider: @escaping @Sendable () -> ParakeetSettingsSnapshot = {
+            ParakeetSettingsSnapshot(defaults: .standard)
         }
     ) {
         transcriber = ParakeetCLITranscriber(subprocessRunner: subprocessRunner)
         audioExtractor = ParakeetAudioExtractor(subprocessRunner: subprocessRunner)
         self.parakeetPathProvider = parakeetPathProvider
         self.ffmpegPathProvider = ffmpegPathProvider
-        self.chunkDurationProvider = chunkDurationProvider
-        self.overlapDurationProvider = overlapDurationProvider
+        self.settingsProvider = settingsProvider
     }
 
     func generateSubtitles(
@@ -50,13 +45,15 @@ actor ParakeetService {
         language: String?,
         operationID: UUID,
         audioStreamIndex: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws -> URL {
         let runID = UUID()
-        registerRun(runID, operationID: operationID)
+        let publication = registerRun(runID, operationID: operationID)
         defer { finishRun(runID, operationID: operationID) }
         guard !cancelledRunIDs.contains(runID) else { throw ParakeetServiceError.cancelled }
 
+        let settings = settingsProvider()
         guard let parakeetPath = parakeetPathProvider() else {
             throw ParakeetServiceError.binaryNotFound
         }
@@ -70,9 +67,11 @@ actor ParakeetService {
             ffmpegPath = ffmpegPathProvider()
         }
 
-        let baseName = inputFile.deletingPathExtension().lastPathComponent
-        let finalSRT = reserveOutputURL(directory: outputDirectory, baseName: baseName)
-        defer { reservedOutputPaths.remove(finalSRT.path) }
+        let reservation = SubtitleSRTNaming.shared.reserve(
+            directory: outputDirectory, sourceFile: inputFile, method: .parakeet
+        )
+        defer { reservation.release() }
+        let finalSRT = reservation.url
 
         let stagingDirectory = outputDirectory.appendingPathComponent(
             ".parakeet-\(runID.uuidString)", isDirectory: true
@@ -87,8 +86,6 @@ actor ParakeetService {
         logger.info("Starting Parakeet transcription with \(model.displayName, privacy: .public), language setting: \(language ?? "default", privacy: .public)")
         progress(ParakeetProgress(stage: .transcribing, percentage: 0, message: "Starting transcription..."))
 
-        let chunkDuration = chunkDurationProvider()
-        let overlapDuration = overlapDurationProvider()
         let transcriber = self.transcriber
         let audioExtractor = self.audioExtractor
         let generationTask = Task {
@@ -122,8 +119,7 @@ actor ParakeetService {
                 parakeetPath: parakeetPath,
                 ffmpegPath: ffmpegPath,
                 modelID: model.id,
-                chunkDuration: chunkDuration,
-                overlapDuration: overlapDuration,
+                settings: settings,
                 progress: progress
             )
         }
@@ -153,7 +149,13 @@ actor ParakeetService {
             throw ParakeetServiceError.srtGenerationFailed
         }
         do {
-            try publish(stagedSRT, to: finalSRT)
+            try await publication.publish(
+                stagedURL: stagedSRT,
+                reservation: reservation,
+                isCurrent: publicationIsCurrent
+            )
+        } catch is CancellationError {
+            throw ParakeetServiceError.cancelled
         } catch {
             throw ParakeetServiceError.transcriptionFailed("Could not publish subtitle output")
         }
@@ -169,6 +171,7 @@ actor ParakeetService {
         language: String?,
         operationID: UUID,
         audioStreamIndex: Int? = nil,
+        publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws -> URL {
         try await generateSubtitles(
@@ -178,6 +181,7 @@ actor ParakeetService {
             language: language,
             operationID: operationID,
             audioStreamIndex: audioStreamIndex,
+            publicationIsCurrent: publicationIsCurrent,
             progress: progress
         )
     }
@@ -186,12 +190,14 @@ actor ParakeetService {
         cancelledOperationIDs.insert(operationID)
         let runIDs = runIDsByOperationID[operationID] ?? []
         cancelledRunIDs.formUnion(runIDs)
+        for runID in runIDs { publicationsByRunID[runID]?.cancel() }
         for runID in runIDs { currentGenerationTasks[runID]?.cancel() }
         logger.info("Parakeet subtitle generation cancelled")
     }
 
     func cancelAllGeneration() {
         cancelledRunIDs.formUnion(activeRunIDs)
+        for publication in publicationsByRunID.values { publication.cancel() }
         for task in currentGenerationTasks.values { task.cancel() }
         logger.info("All Parakeet subtitle generation cancelled")
     }
@@ -203,13 +209,20 @@ actor ParakeetService {
         return .installed(version: "parakeet-mlx")
     }
 
-    private func registerRun(_ runID: UUID, operationID: UUID) {
+    private func registerRun(_ runID: UUID, operationID: UUID) -> SubtitleSRTPublication {
+        let publication = SubtitleSRTPublication()
+        publicationsByRunID[runID] = publication
         activeRunIDs.insert(runID)
         runIDsByOperationID[operationID, default: []].insert(runID)
-        if cancelledOperationIDs.contains(operationID) { cancelledRunIDs.insert(runID) }
+        if cancelledOperationIDs.contains(operationID) {
+            cancelledRunIDs.insert(runID)
+            publication.cancel()
+        }
+        return publication
     }
 
     private func finishRun(_ runID: UUID, operationID: UUID) {
+        publicationsByRunID.removeValue(forKey: runID)
         currentGenerationTasks.removeValue(forKey: runID)?.cancel()
         activeRunIDs.remove(runID)
         cancelledRunIDs.remove(runID)
@@ -220,47 +233,7 @@ actor ParakeetService {
         }
     }
 
-    private func reserveOutputURL(directory: URL, baseName: String) -> URL {
-        let preferred = SubtitleSRTNaming.outputURL(directory: directory, baseName: baseName, method: .parakeet)
-        if !reservedOutputPaths.contains(preferred.path) {
-            reservedOutputPaths.insert(preferred.path)
-            return preferred
-        }
 
-        let methodSpecific = outputCandidate(directory: directory, baseName: baseName, suffix: ".parakeet")
-        if !reservedOutputPaths.contains(methodSpecific.path),
-           !FileManager.default.fileExists(atPath: methodSpecific.path) {
-            reservedOutputPaths.insert(methodSpecific.path)
-            return methodSpecific
-        }
-
-        var suffix = 2
-        while true {
-            let candidate = outputCandidate(directory: directory, baseName: baseName, suffix: ".parakeet-\(suffix)")
-            if !reservedOutputPaths.contains(candidate.path),
-               !FileManager.default.fileExists(atPath: candidate.path) {
-                reservedOutputPaths.insert(candidate.path)
-                return candidate
-            }
-            suffix += 1
-        }
-    }
-
-    private func outputCandidate(directory: URL, baseName: String, suffix: String) -> URL {
-        let ending = suffix + ".srt"
-        let maximumBaseBytes = max(255 - ending.utf8.count, 1)
-        var shortenedBase = baseName
-        while shortenedBase.utf8.count > maximumBaseBytes { shortenedBase.removeLast() }
-        return directory.appendingPathComponent(shortenedBase + ending)
-    }
-
-    private func publish(_ stagedURL: URL, to destinationURL: URL) throws {
-        if FileManager.default.fileExists(atPath: destinationURL.path) {
-            _ = try FileManager.default.replaceItemAt(destinationURL, withItemAt: stagedURL)
-        } else {
-            try FileManager.default.moveItem(at: stagedURL, to: destinationURL)
-        }
-    }
 }
 
 /// FFmpeg boundary used when one specific audio stream must be handed to Parakeet.
@@ -329,8 +302,7 @@ struct ParakeetCLITranscriber: Sendable {
         parakeetPath: String,
         ffmpegPath: String?,
         modelID: String,
-        chunkDuration: Int,
-        overlapDuration: Int,
+        settings: ParakeetSettingsSnapshot,
         progress: @escaping @Sendable (ParakeetProgress) -> Void
     ) async throws {
         try Task.checkCancellation()
@@ -338,12 +310,7 @@ struct ParakeetCLITranscriber: Sendable {
             inputFile.path, "--output-format", "srt", "--output-dir", outputDirectory.path,
             "--model", modelID
         ]
-        if chunkDuration > 0, chunkDuration != AppConstants.defaultParakeetChunkDuration {
-            arguments += ["--chunk-duration", "\(chunkDuration)"]
-        }
-        if overlapDuration > 0, overlapDuration != AppConstants.defaultParakeetOverlapDuration {
-            arguments += ["--overlap-duration", "\(overlapDuration)"]
-        }
+        arguments += settings.arguments
 
         let extraPathEntries = ffmpegPath.map { [($0 as NSString).deletingLastPathComponent] } ?? []
         let configuration = HomebrewPythonExecutor.pythonToolExecutionConfiguration(
