@@ -1477,6 +1477,7 @@
 			);
 			name = "Copy and Sign Media Helpers";
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/SignedMediaHelpers",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/ffmpeg",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rclone",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/tesseract",

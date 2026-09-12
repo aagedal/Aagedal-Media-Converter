@@ -75,7 +75,7 @@ extension PreviewPlayerController {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self, weak item] _ in
             Task { @MainActor [weak self, weak item] in
                 guard let self, let item, self.player?.currentItem === item, self.loopObserverID == observerID else { return }
                 self.handlePlaybackEnded()

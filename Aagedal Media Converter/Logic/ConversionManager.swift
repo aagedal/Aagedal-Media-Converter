@@ -871,7 +871,7 @@ actor ConversionManager: Sendable {
                     )
                 }
             },
-            completion: { success, errorReason in
+            completion: { [weak self] success, errorReason in
                 Task { [weak self] in
                     guard let self else { return }
                     await self.handleMergeCompletion(
