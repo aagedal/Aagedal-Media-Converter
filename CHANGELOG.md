@@ -1,7 +1,5 @@
 # v.4.4.0
 
-> In development. Release validation is still in progress.
-
 This release focuses on conversion correctness, reliable cancellation, saved-state recovery, and recording improvements.
 
 ## Conversion

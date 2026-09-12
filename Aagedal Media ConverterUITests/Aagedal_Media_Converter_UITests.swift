@@ -279,6 +279,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
 
     @MainActor
     func testMainWindowAndEverySettingsPaneInBothLanguages() throws {
+        executionTimeAllowance = 300
         let panes = [
             ("general", "General", "Generelt"),
             ("encoding", "Encoding Groups", "Kodingsgrupper"),
@@ -640,7 +641,15 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         previewContainer: String? = nil
     ) {
         app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale, "-ffmpegBinarySource", "app", "-defaultExportPreset", defaultPreset]
+        app.launchArguments += [
+            "-AppleLanguages", "(\(language))",
+            "-AppleLocale", locale,
+            // The installed app and UI-test host share a bundle identifier. Do not
+            // inherit a persisted state in which every main window was closed.
+            "-ApplePersistenceIgnoreState", "YES",
+            "-ffmpegBinarySource", "app",
+            "-defaultExportPreset", defaultPreset
+        ]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
         if let previewContainer {

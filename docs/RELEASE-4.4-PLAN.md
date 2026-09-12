@@ -1,10 +1,10 @@
 # 4.4 release plan — Stabilization and release readiness
 
-Status: stabilization in progress; no release readiness claimed.
+Status: automated candidate validation complete; signed and installed-distribution validation pending.
 Created: 2026-09-11.
 
-4.3 is stable; 4.4 is in development. Ship the improvements already implemented
-once the finite gates below are satisfied. Do not wait for every item in
+4.3 is stable; 4.4 is the current release candidate. Ship the improvements already
+implemented once the finite gates below are satisfied. Do not wait for every item in
 IMPROVEMENT_PLAN.md, and do not start MCP or broad architectural refactoring as
 part of release closure. Agent access is proposed for 4.5.
 
@@ -70,7 +70,7 @@ Completing the entire typed-plan or concurrency audit is not a gate.
 - [ ] Import → preset → convert → inspect output, including trim/crop, timecode,
   multichannel audio, existing-output collisions, and cancel/retry. Use a small
   representative matrix of the branches changed since stable 4.3.
-- [ ] Native and MPV preview, seeking, audio playback, and screenshots.
+- [x] Native and MPV preview, seeking, playback progression, screenshots, and reopen.
 - [ ] Shortcuts with the app closed and open; no missing or duplicated submissions.
 - [ ] Output/watch-folder grant renewal, denied access, unavailable volumes, and
   restart; verify cleanup preserves files when access is insufficient.
@@ -225,6 +225,25 @@ now have reproducible evidence checks; neither tool's complete attribution is
 claimed. UI tests could not initialize because macOS authentication was active
 on both attempts; a fresh post-cleanup UI run remains pending. No public feed,
 version, or release artifact was changed.
+
+## Final automated release check — 2026-09-12
+
+[Final validation](4.4-validation-final-2026-09-12.md) supersedes the pending UI
+and attribution status above for the current candidate. The strict dependency and
+license gate, localization audit, **74 release-script tests**, **869 unit tests**,
+and **21 UI tests** pass without failures or skips. The unsigned Release build has
+no warnings and its audit verifies version **4.4.0 (576)**, 44 arm64 Mach-O images,
+resolved bundled libraries and all **12 packaged notices**.
+
+UI launches now ignore persisted window-restoration state, so another installed
+copy with the same bundle identifier cannot cause the test host to reopen without
+a main window. The bilingual all-Settings audit has an explicit five-minute
+allowance because its verified runtime exceeds two minutes.
+
+These results close the automated candidate gate. Signing, notarization, final
+archive validation, clean installation/Homebrew/update testing and the remaining
+hands-on device, permission, VoiceOver and upgrade checks above are still required
+before publication. No tag, public release or appcast entry has been created.
 
 ## What can wait for 4.5
 
