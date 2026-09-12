@@ -34,6 +34,7 @@ struct ConversionToolbarView: ToolbarContent {
     let onResetAll: (_ optionKeyPressed: Bool) -> Void
     let hasResettableItems: Bool
     let onClear: () -> Void
+    let onShowSettings: () -> Void
 
     // A saved default or an App Intent can select a hidden preset. Keep that
     // selection represented so the menu can display the actual conversion mode.
@@ -120,7 +121,7 @@ struct ConversionToolbarView: ToolbarContent {
             .foregroundColor(.primary)
             .help("Select export preset for all files")
 
-            SettingsLink {
+            Button(action: onShowSettings) {
                 Image(systemName: "gear")
                     .foregroundStyle(.blue)
             }

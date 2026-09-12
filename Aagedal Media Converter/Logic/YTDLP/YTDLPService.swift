@@ -560,6 +560,7 @@ actor YTDLPService {
             "--progress",
             "--verbose",  // Enable verbose output to ensure we get stderr
             forceOverwrite ? "--force-overwrites" : "--no-overwrites",
+            "--print", "before_dl:\(YTDLPProgressParser.liveStatusPrefix)%(live_status)s",
             "--print", "after_move:filepath",
             "-o", "%(title)s.%(ext)s",
             // "--" ends flag parsing so a URL that somehow starts with "-" can't be
@@ -665,6 +666,13 @@ actor YTDLPService {
                     logger.debug("First yt-dlp stdout after \(String(format: "%.3f", delta))s")
                 }
                 logger.debug("stdout: \(request.redactedDiagnostic(trimmed), privacy: .public)")
+            }
+
+            // Use extractor metadata as the source of truth. Fragmented HLS/DASH
+            // and ffmpeg-backed VOD downloads otherwise look deceptively live in
+            // yt-dlp's human-readable progress output.
+            if YTDLPProgressParser.parseLiveStatus(trimmed) == true {
+                progress(0.1, nil, true)
             }
 
             // Parse progress from either stream

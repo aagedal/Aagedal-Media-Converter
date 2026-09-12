@@ -7385,7 +7385,36 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertEqual(request.currentDirectoryURL, temporaryDirectory)
         XCTAssertTrue(request.arguments.containsAdjacent("--", "https://example.com/watch?v=private"))
+        XCTAssertTrue(
+            request.arguments.containsAdjacent(
+                "--print",
+                "before_dl:\(YTDLPProgressParser.liveStatusPrefix)%(live_status)s"
+            )
+        )
         XCTAssertFalse(request.redactedCommandDescription.contains("example.com"))
+    }
+
+    func testYTDLPProgressDoesNotMistakeFragmentedVODForLiveStream() throws {
+        let vodLines = [
+            "[download] 12.3MiB at 2.1MiB/s",
+            "[download] Downloading fragment 4 of 20",
+            "[debug] Invoking ffmpeg downloader on https://example.com/video.m3u8",
+            "[youtube] abc123: Downloading m3u8 information",
+        ]
+
+        for line in vodLines {
+            let info = try XCTUnwrap(YTDLPProgressParser.parse(line), line)
+            XCTAssertFalse(info.isLiveStream, line)
+        }
+    }
+
+    func testYTDLPLiveStatusMarkerOnlyTreatsCurrentBroadcastAsLive() {
+        let prefix = YTDLPProgressParser.liveStatusPrefix
+        XCTAssertEqual(YTDLPProgressParser.parseLiveStatus("\(prefix)is_live"), true)
+        XCTAssertEqual(YTDLPProgressParser.parseLiveStatus("\(prefix)not_live"), false)
+        XCTAssertEqual(YTDLPProgressParser.parseLiveStatus("\(prefix)was_live"), false)
+        XCTAssertEqual(YTDLPProgressParser.parseLiveStatus("\(prefix)post_live"), false)
+        XCTAssertEqual(YTDLPProgressParser.parseLiveStatus("unrelated output"), nil)
     }
 
     func testYTDLPDownloadControlMapsUserCancellation() async throws {

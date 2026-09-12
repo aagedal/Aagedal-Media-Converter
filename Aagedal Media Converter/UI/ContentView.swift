@@ -2046,7 +2046,8 @@ struct ContentView: View {
             onShowCapture: { CaptureOverlayWindowController.shared.showCaptureOverlay() },
             onResetAll: resetAllFiles,
             hasResettableItems: hasResettableItems,
-            onClear: clearAllFiles
+            onClear: clearAllFiles,
+            onShowSettings: { openSettings() }
         )
     }
     

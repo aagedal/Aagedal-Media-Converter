@@ -6,8 +6,10 @@ import Foundation
 
 /// Parses yt-dlp output for progress information
 struct YTDLPProgressParser: Sendable {
+    static let liveStatusPrefix = "__AMC_LIVE_STATUS__="
+
     struct ProgressInfo: Sendable {
-        let progress: Double      // 0.0 to 1.0 (0.5 for live streams with unknown total)
+        let progress: Double      // 0.0 to 1.0 (0.5 for downloads with unknown total)
         let speed: String?        // e.g., "5.2MiB/s"
         let eta: String?          // e.g., "01:23"
         let downloaded: String?   // e.g., "45.2MiB"
@@ -43,11 +45,11 @@ struct YTDLPProgressParser: Sendable {
             }
         }
 
-        // For live streams: [download] 234.5MiB at 2.3MiB/s (no percentage)
-        // Also matches fragment downloads
-        let livePattern = #"\[download\]\s+([\d.]+\s*\w+iB)\s+at\s+([\d.]+\s*\w+/s)"#
-        if let liveMatch = line.range(of: livePattern, options: .regularExpression) {
-            let matchStr = String(line[liveMatch])
+        // A total is not always available for ordinary VOD downloads, so a size and
+        // speed without a percentage is indeterminate progress, not proof of a live stream.
+        let indeterminatePattern = #"\[download\]\s+([\d.]+\s*\w+iB)\s+at\s+([\d.]+\s*\w+/s)"#
+        if let indeterminateMatch = line.range(of: indeterminatePattern, options: .regularExpression) {
+            let matchStr = String(line[indeterminateMatch])
             let speed = extractSpeed(from: line)
             // Extract downloaded size
             let sizePattern = #"([\d.]+\s*\w+iB)"#
@@ -56,16 +58,16 @@ struct YTDLPProgressParser: Sendable {
                 downloaded = String(matchStr[sizeMatch])
             }
             return ProgressInfo(
-                progress: 0.5,  // Indeterminate progress for live
+                progress: 0.5,  // Indeterminate progress when no total is available
                 speed: speed,
                 eta: nil,
                 downloaded: downloaded,
                 total: nil,
-                isLiveStream: true
+                isLiveStream: false
             )
         }
 
-        // Fragment downloading for live streams: [download] Downloading fragment X of Y
+        // Fragment downloads are also used for fixed-length HLS/DASH videos.
         if line.contains("[download]") && (line.contains("fragment") || line.contains("Fragment")) {
             let speed = extractSpeed(from: line)
             return ProgressInfo(
@@ -74,7 +76,7 @@ struct YTDLPProgressParser: Sendable {
                 eta: nil,
                 downloaded: nil,
                 total: nil,
-                isLiveStream: true
+                isLiveStream: false
             )
         }
 
@@ -87,7 +89,7 @@ struct YTDLPProgressParser: Sendable {
                 eta: nil,
                 downloaded: nil,
                 total: nil,
-                isLiveStream: line.contains("live") || line.contains("stream")
+                isLiveStream: false
             )
         }
 
@@ -103,8 +105,8 @@ struct YTDLPProgressParser: Sendable {
             )
         }
 
-        // Detect ffmpeg being invoked for HLS/live stream downloads
-        // This is a strong indicator of live stream recording since yt-dlp uses ffmpeg for HLS
+        // yt-dlp uses ffmpeg and m3u8 playlists for ordinary HLS VODs too. Live
+        // classification comes from the explicit live_status marker instead.
         if line.contains("Invoking ffmpeg downloader") || line.contains("yt_live_broadcast") {
             return ProgressInfo(
                 progress: 0.5,
@@ -112,11 +114,11 @@ struct YTDLPProgressParser: Sendable {
                 eta: nil,
                 downloaded: nil,
                 total: nil,
-                isLiveStream: true
+                isLiveStream: false
             )
         }
 
-        // Detect HLS/m3u8 download which indicates streaming content
+        // HLS/m3u8 describes transport, not whether the source is currently live.
         if line.contains("Downloading m3u8") || line.contains("playlist_type/DVR") {
             return ProgressInfo(
                 progress: 0.3,
@@ -124,11 +126,28 @@ struct YTDLPProgressParser: Sendable {
                 eta: nil,
                 downloaded: nil,
                 total: nil,
-                isLiveStream: true
+                isLiveStream: false
             )
         }
 
         return nil
+    }
+
+    /// Parses the marker emitted by yt-dlp's `before_dl` print template.
+    /// A recording is live only while yt-dlp reports `is_live`; archived and
+    /// post-live videos are finite VOD downloads.
+    static func parseLiveStatus(_ line: String) -> Bool? {
+        guard line.hasPrefix(liveStatusPrefix) else { return nil }
+        let status = String(line.dropFirst(liveStatusPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        switch status {
+        case "is_live":
+            return true
+        case "not_live", "is_upcoming", "was_live", "post_live":
+            return false
+        default:
+            return nil
+        }
     }
 
     private static func extractSpeed(from line: String) -> String? {

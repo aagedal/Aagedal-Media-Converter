@@ -654,12 +654,6 @@ class DownloadManager {
             let actualDownloadStartTime = Date()
             logger.info("[TIMING] Starting download immediately for: \(urlString)")
 
-            updateItem(itemID) { item in
-                if liveFromStart {
-                    item.isLiveStreamRecording = true
-                }
-            }
-
             let result = try await ytdlpService.download(
                 url: urlString,
                 outputFolder: outputFolder,
