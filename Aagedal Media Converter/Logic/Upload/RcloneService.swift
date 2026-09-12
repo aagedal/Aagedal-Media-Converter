@@ -642,22 +642,10 @@ final class RemoteUploadLease: Sendable {
             appropriateFor: nil, create: true
         ).appendingPathComponent("Aagedal Media Converter/UploadLocks", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        // Do not include credentials, profile IDs or usernames: two profiles may
-        // address the same remote object through different accounts. Case folding
-        // conservatively serializes names on case-insensitive servers as well.
-        let endpoint: [String]
-        switch config.backendType {
-        case .s3:
-            endpoint = [config.s3Endpoint ?? "", config.s3Bucket ?? ""]
-        case .smb:
-            endpoint = [config.server, String(config.port), config.smbShare ?? ""]
-        case .ftp, .sftp, .gdrive:
-            endpoint = [config.server, String(config.port)]
-        }
-        let components = ([config.backendType.rawValue] + endpoint + [
-            NSString(string: "/" + config.remotePath).standardizingPath, fileName
-        ]).map { $0.precomposedStringWithCanonicalMapping.lowercased() }
-        let digest = SHA256.hash(data: try JSONEncoder().encode(components))
+        // Queue ordering and cross-process exclusion must agree on equivalent
+        // destinations, including hostname and S3 endpoint normalization.
+        let identity = UploadDestinationIdentity(config: config, fileName: fileName)
+        let digest = SHA256.hash(data: try JSONEncoder().encode(identity.coordinationKeyComponents))
             .map { String(format: "%02x", $0) }.joined()
         let path = directory.appendingPathComponent(digest + ".lock").path
         let descriptor = open(path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)

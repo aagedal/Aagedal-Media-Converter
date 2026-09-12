@@ -103,17 +103,28 @@ struct UploadConfig: Codable, Sendable, Equatable {
     }
 }
 
-/// A conservative identity for one remote file written by an in-app upload.
+/// A conservative identity for one remote file written by a cooperating app upload.
 /// Credentials do not separate destinations: different accounts can share files.
 /// Filesystem backends also fold case, since the remote filesystem may do so.
-/// This cannot identify server aliases, symlinks, or writers outside this process.
+/// This cannot identify server aliases, symlinks, or unrelated remote writers.
 struct UploadDestinationIdentity: Hashable, Sendable {
     private let backend: UploadBackendType
     private let endpoint: String
     private let port: Int
     private let filePath: [String]
 
+    /// Fixed-order components keep the on-disk lease key stable across processes.
+    /// Canonical Unicode matches Swift string equality without collapsing S3 case.
+    var coordinationKeyComponents: [String] {
+        ([backend.rawValue, endpoint, String(port)] + filePath)
+            .map { $0.precomposedStringWithCanonicalMapping }
+    }
+
     init(config: UploadConfig, localFile: URL) {
+        self.init(config: config, fileName: localFile.lastPathComponent)
+    }
+
+    init(config: UploadConfig, fileName: String) {
         backend = config.backendType
         switch config.backendType {
         case .s3:
@@ -121,13 +132,13 @@ struct UploadDestinationIdentity: Hashable, Sendable {
             endpoint = Self.normalizedS3Endpoint(config.s3Endpoint)
             port = 0
             filePath = Self.normalizedPath(
-                "\(config.s3Bucket ?? "")/\(config.remotePath)/\(localFile.lastPathComponent)"
+                "\(config.s3Bucket ?? "")/\(config.remotePath)/\(fileName)"
             )
         case .ftp, .sftp, .smb, .gdrive:
             endpoint = Self.normalizedHost(config.server)
             port = config.port > 0 ? config.port : config.backendType.defaultPort
             let share = config.backendType == .smb ? config.smbShare ?? "" : ""
-            filePath = Self.normalizedPath("\(share)/\(config.remotePath)/\(localFile.lastPathComponent)")
+            filePath = Self.normalizedPath("\(share)/\(config.remotePath)/\(fileName)")
                 .map { $0.lowercased() }
         }
     }

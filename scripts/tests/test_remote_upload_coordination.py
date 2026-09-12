@@ -1,7 +1,8 @@
 """Run the production remote upload lease in separate macOS processes.
 
-The lease is extracted verbatim from RcloneService.swift; only its model/error
-adapters are supplied here to avoid linking the full app and its dependencies.
+The lease and destination identity are extracted verbatim from production sources.
+Only their model/error adapters are supplied here to avoid linking the full app
+and its dependencies.
 """
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,14 +24,30 @@ class RemoteUploadProcessTests(unittest.TestCase):
         marker = "final class RemoteUploadLease: Sendable {"
         if source.count(marker) != 1:
             raise AssertionError("Update the harness extraction for the production lease declaration")
+        models = service.with_name("UploadModels.swift").read_text()
+        identity_marker = "struct UploadDestinationIdentity: Hashable, Sendable {"
+        if models.count(identity_marker) != 1:
+            raise AssertionError("Update the harness extraction for the destination identity")
+        identity = models.split(identity_marker, 1)[1].split("// MARK: - Upload Profiles", 1)[0]
         lease = cls.root / "RemoteUploadLease.swift"
         lease.write_text("import Foundation\nimport CryptoKit\nimport Darwin\nimport os\n" +
+                         identity_marker + identity +
                          marker + source.split(marker, 1)[1])
         driver = cls.root / "main.swift"
         driver.write_text('''import Foundation
 import Darwin
 
-enum UploadBackendType: String { case ftp, sftp, smb, s3, gdrive }
+enum UploadBackendType: String {
+    case ftp, sftp, smb, s3, gdrive
+    var defaultPort: Int {
+        switch self {
+        case .ftp: return 21
+        case .sftp: return 22
+        case .smb: return 445
+        case .s3, .gdrive: return 0
+        }
+    }
+}
 struct UploadConfig {
     var backendType: UploadBackendType = .sftp
     var server = "media.example"
@@ -45,8 +62,20 @@ enum UploadError: Error { case uploadFailed(String) }
 let directory = URL(fileURLWithPath: CommandLine.arguments[1])
 let fileName = CommandLine.arguments[2]
 let mode = CommandLine.arguments[3]
+var config = UploadConfig()
+switch CommandLine.arguments[4] {
+case "sftp-host-alias":
+    config.server = "MEDIA.EXAMPLE."
+case "sftp-port-alias":
+    config.port = 0
+case "s3", "s3-alias":
+    config.backendType = .s3
+    config.s3Bucket = "media"
+    config.s3Endpoint = CommandLine.arguments[4] == "s3" ? "https://s3.example" : "HTTPS://S3.EXAMPLE.:443/"
+default: break
+}
 do {
-    let lease = try RemoteUploadLease(config: UploadConfig(), fileName: fileName, lockDirectory: directory)
+    let lease = try RemoteUploadLease(config: config, fileName: fileName, lockDirectory: directory)
     FileHandle.standardOutput.write(Data("acquired\\n".utf8))
     if mode == "hold" { _ = readLine() }
     lease.release()
@@ -59,13 +88,13 @@ do {
                         str(lease), str(driver), "-o", str(cls.executable)],
                        check=True, capture_output=True, text=True)
 
-    def acquire(self, directory, name="clip.mov"):
-        return subprocess.run([str(self.executable), str(directory), name, "once"],
+    def acquire(self, directory, name="clip.mov", config="sftp"):
+        return subprocess.run([str(self.executable), str(directory), name, "once", config],
                               capture_output=True, text=True, timeout=10)
 
     @contextmanager
-    def holder(self, directory, name="clip.mov"):
-        process = subprocess.Popen([str(self.executable), str(directory), name, "hold"],
+    def holder(self, directory, name="clip.mov", config="sftp"):
+        process = subprocess.Popen([str(self.executable), str(directory), name, "hold", config],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, text=True)
         try:
@@ -89,6 +118,23 @@ do {
                 self.assertEqual(holder.returncode, 0)
                 self.assertEqual(self.acquire(directory).returncode, 0)
             self.assertEqual(len(list(Path(directory).glob("*.lock"))), 1)
+
+    def test_equivalent_endpoints_contend_across_processes(self):
+        variants = (("sftp", "sftp-host-alias"), ("sftp", "sftp-port-alias"), ("s3", "s3-alias"))
+        for backend, alias in variants:
+            with self.subTest(alias=alias), tempfile.TemporaryDirectory() as directory:
+                with self.holder(directory, config=backend):
+                    result = self.acquire(directory, config=alias)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(result.stdout.strip(), "rejected")
+                self.assertEqual(self.acquire(directory, config=alias).returncode, 0)
+                self.assertEqual(len(list(Path(directory).glob("*.lock"))), 1)
+
+    def test_s3_case_distinct_objects_can_upload_concurrently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.holder(directory, "Clip.mov", config="s3"):
+                result = self.acquire(directory, "clip.mov", config="s3")
+                self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_distinct_files_can_be_held_by_separate_processes(self):
         with tempfile.TemporaryDirectory() as directory:
