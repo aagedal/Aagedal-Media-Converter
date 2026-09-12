@@ -1,0 +1,15 @@
+{
+  "version": "2.9.6",
+  "revision": "ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a",
+  "archiveBytes": 11577555,
+  "archiveSHA256": "8d5fb41d960b43f4a68aa14126bf62b098544ec8d191cdcc73eb14e63a8e7606",
+  "licenseBytes": 6154,
+  "licenseSHA256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe",
+  "verification": [
+    "Cached checkout HEAD matches the resolved revision.",
+    "Cached release archive checksum matches the pinned Package.swift checksum.",
+    "Root LICENSE, archive LICENSE and Ed25519 notice match retained attribution snapshots.",
+    "Source diff from 2.9.3 to 2.9.6 changes 25 files without new license/header material; vendor bspatch changes retain its notice."
+  ],
+  "packagedNoticeChanged": false
+}
