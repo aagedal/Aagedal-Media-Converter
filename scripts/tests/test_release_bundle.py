@@ -45,6 +45,25 @@ class ReleaseBundleTests(unittest.TestCase):
         source = "int main(void) { return 0; }" if library is None else "int fixture(void); int main(void) { return fixture(); }"
         self.compile(self.main, source, *([str(library)] if library else []), *flags)
 
+    def test_hardened_runtime_required_for_resource_helpers_too(self):
+        self.executable()
+        resources = self.app / "Contents/Resources"
+        resources.mkdir()
+        helper = resources / "ffmpeg"
+        self.compile(helper, "int main(void) { return 0; }")
+        # A valid ad-hoc signature is insufficient without the runtime flag.
+        subprocess.run(["codesign", "--force", "--sign", "-", str(helper)],
+                       check=True, capture_output=True)
+        subprocess.run(["codesign", "--force", "--sign", "-", "--options", "runtime",
+                        "--timestamp=none", str(self.app)], check=True, capture_output=True)
+        with self.assertRaisesRegex(ValueError, "ffmpeg.*Hardened Runtime"):
+            validator.verify(self.app, require_hardened_runtime=True)
+        subprocess.run(["codesign", "--force", "--sign", "-", "--options", "runtime",
+                        "--timestamp=none", str(helper)], check=True, capture_output=True)
+        subprocess.run(["codesign", "--force", "--sign", "-", "--options", "runtime",
+                        "--timestamp=none", str(self.app)], check=True, capture_output=True)
+        self.assertEqual(validator.verify(self.app, require_hardened_runtime=True), 2)
+
     def test_system_paths_are_lexical_shared_cache_locations(self):
         self.assertTrue(validator.is_system("/System/Library/Frameworks/WebKit.framework/Versions/A/WebKit"))
         self.assertTrue(validator.is_system("/usr/lib/libSystem.B.dylib"))

@@ -97,7 +97,6 @@
 		66640AFCC00F8F761237556B /* MetadataWindowContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DB61275F62951C0011F36D8 /* MetadataWindowContent.swift */; };
 		67BAE582711E2F5E020591AA /* ConversionRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67BAE582711E2F5E020591A9 /* ConversionRequest.swift */; };
 		69E06BBF03A135EC5011AF14 /* RcloneProgressParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5B904C1C7B34D8CE907E7B /* RcloneProgressParser.swift */; };
-		6FEB07F32A610D999000F78C /* mxf2raw in Resources */ = {isa = PBXBuildFile; fileRef = D8EBD41EE1711E209C16F57C /* mxf2raw */; };
 		7E5111202605110001A03A01 /* InstallSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E5111202605110001A03A02 /* InstallSource.swift */; };
 		7E5111202605110002A03A01 /* SparkleUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E5111202605110002A03A02 /* SparkleUpdater.swift */; };
 		7ECCCED958C0A9560D4FE7F0 /* FileSafetyUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = F317F243C3CAA85CE1E5E929 /* FileSafetyUtils.swift */; };
@@ -125,7 +124,6 @@
 		8E2C6BBD2E05EA3B00A9379F /* VideoFileRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E2C6BBC2E05EA3B00A9379F /* VideoFileRowView.swift */; };
 		8E2C6BBF2E084BC200A9379F /* SecurityScopedBookmarkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E2C6BBE2E084BC200A9379F /* SecurityScopedBookmarkManager.swift */; };
 		8E37A8C2E5334343AD98BD43 /* ShortcutsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E13CD4050F24D1788FD6C8C /* ShortcutsSettingsView.swift */; };
-		8E3D35652F9F91EB00160565 /* rclone in Resources */ = {isa = PBXBuildFile; fileRef = 8E3D35642F9F91EB00160565 /* rclone */; };
 		8E4DF26D2ECBACFC007B6277 /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4DF26C2ECBACF8007B6277 /* GeneralSettingsView.swift */; };
 		8E4DF26F2ECBAD35007B6277 /* PresetSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4DF26E2ECBAD30007B6277 /* PresetSettingsView.swift */; };
 		8E4DF2712ECBAD4B007B6277 /* WaveformSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4DF2702ECBAD46007B6277 /* WaveformSettingsView.swift */; };
@@ -160,10 +158,8 @@
 		8EA25FE62F82A75C0087B1F1 /* TesseractService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA25FE12F82A75C0087B1F1 /* TesseractService.swift */; };
 		8EA25FE72F82A75C0087B1F1 /* VOBSUBParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA25FE22F82A75C0087B1F1 /* VOBSUBParser.swift */; };
 		8EA25FE92F82A7BA0087B1F1 /* TesseractSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA25FE82F82A7BA0087B1F1 /* TesseractSettingsView.swift */; };
-		8EA25FEB2F82D6730087B1F1 /* tesseract in Resources */ = {isa = PBXBuildFile; fileRef = 8EA25FEA2F82D6730087B1F1 /* tesseract */; };
 		8EA260042F865E430087B1F1 /* ParakeetSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA260022F865E430087B1F1 /* ParakeetSettingsView.swift */; };
 		8EA260052F865E430087B1F1 /* TranscriptionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EA260032F865E430087B1F1 /* TranscriptionSettingsView.swift */; };
-		8EA817D42F71840E00F9F10C /* asdcp-wrap in Resources */ = {isa = PBXBuildFile; fileRef = 8EA817D32F71840E00F9F10C /* asdcp-wrap */; };
 		8EA817D62F7184AA00F9F10C /* asdcplib-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8EA817D52F7184AA00F9F10C /* asdcplib-LICENSE.txt */; };
 		8EBD10212EBE8B3C00377649 /* Aagedal_Media_Converter_UITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBD101F2EBE8B3C00377649 /* Aagedal_Media_Converter_UITests.swift */; };
 		8EBD10222EBE8B3C00377649 /* Aagedal_Media_Converter_UITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EBD10202EBE8B3C00377649 /* Aagedal_Media_Converter_UITestsLaunchTests.swift */; };
@@ -187,8 +183,6 @@
 		8ED369F12F8CEFFC00FB9A33 /* SwiftMediaMetadata in Frameworks */ = {isa = PBXBuildFile; productRef = 8ED369F02F8CEFFC00FB9A33 /* SwiftMediaMetadata */; };
 		8EE0BB9C2E0892B70096171D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE0BB9B2E0892B70096171D /* SettingsView.swift */; };
 		8EE0BB9E2E089F520096171D /* DockProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE0BB9D2E089F520096171D /* DockProgressView.swift */; };
-		8EE424DF2FAB6AB600AE0A1E /* bmxparse in Resources */ = {isa = PBXBuildFile; fileRef = 8EE424DD2FAB6AB600AE0A1E /* bmxparse */; };
-		8EE424E02FAB6AB600AE0A1E /* raw2bmx in Resources */ = {isa = PBXBuildFile; fileRef = 8EE424DE2FAB6AB600AE0A1E /* raw2bmx */; };
 		8EE6EE9A2C31FC6B007B629D /* Aagedal_Media_Converter_App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE6EE992C31FC6B007B629D /* Aagedal_Media_Converter_App.swift */; };
 		8EE6EE9C2C31FC6B007B629D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE6EE9B2C31FC6B007B629D /* ContentView.swift */; };
 		F91B05A915ED428282EC1B31 /* ContentViewNotificationHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86056A96CF0F4A76B6FA9438 /* ContentViewNotificationHandlers.swift */; };
@@ -205,7 +199,6 @@
 		8EEE453B2EC13E8C0049F017 /* ConversionToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE453A2EC13E840049F017 /* ConversionToolbarView.swift */; };
 		8EEE453D2EC13E960049F017 /* OverallProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE453C2EC13E8F0049F017 /* OverallProgressView.swift */; };
 		8EEE453F2EC13EA00049F017 /* WatchFolderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE453E2EC13E9E0049F017 /* WatchFolderCoordinator.swift */; };
-		8EFBDA922EA56F8E005ADDCF /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = 8EFBDA8F2EA56F8E005ADDCF /* ffmpeg */; };
 		978C1F6A9DF43EE4E1E9FDD4 /* WaveformPCMDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9609862A8EC6964A0A45885F /* WaveformPCMDecoder.swift */; };
 		9CB662C7C4CE637DA85D46A2 /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2285544DA98D92593F5F73 /* DownloadManager.swift */; };
 		A14336D5FE72B1741AE6C2E2 /* RcloneService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B40739097F270F27C5045E /* RcloneService.swift */; };
@@ -215,10 +208,8 @@
 		A872D919C52C4AC59BD31CA6 /* VisionOCREngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3133DAB4DB1E47E29DFC6CF4 /* VisionOCREngine.swift */; };
 		AA1D4C3E2F10B56789000002 /* TrackPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1D4C3E2F10B56789000001 /* TrackPickerSheet.swift */; };
 		AA51AC0E2FAE0FB1A09B0124 /* SubtitleSRTNaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA51AC0D2FAE0FB1A09B0123 /* SubtitleSRTNaming.swift */; };
-		AF21AF21AF21AF21AF21AF21 /* avmenc in Resources */ = {isa = PBXBuildFile; fileRef = AF20AF20AF20AF20AF20AF20 /* avmenc */; };
 		AF23AF23AF23AF23AF23AF23 /* AV2CommandBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF22AF22AF22AF22AF22AF22 /* AV2CommandBuilder.swift */; };
 		94BB782C3556462DA5325475 /* AV2TrimPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9315E73973904E2E92CE7C22 /* AV2TrimPlan.swift */; };
-		AF25AF25AF25AF25AF25AF25 /* avmdec in Resources */ = {isa = PBXBuildFile; fileRef = AF24AF24AF24AF24AF24AF24 /* avmdec */; };
 		AF27AF27AF27AF27AF27AF27 /* IVFHeaderParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF26AF26AF26AF26AF26AF26 /* IVFHeaderParser.swift */; };
 		AF29AF29AF29AF29AF29AF29 /* IVFConcatenator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF28AF28AF28AF28AF28AF28 /* IVFConcatenator.swift */; };
 		AF2BAF2BAF2BAF2BAF2BAF2B /* MatroskaMuxer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2AAF2AAF2AAF2AAF2AAF2A /* MatroskaMuxer.swift */; };
@@ -248,7 +239,6 @@
 		DC0001A1DCP0000100000005 /* DCPMetadataView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC0001A1DCP0000100000006 /* DCPMetadataView.swift */; };
 		DCAB5042D7F99ED919EF7D29 /* WaveformFramePipeWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1F6F70AFCCF6F2348370C3A /* WaveformFramePipeWriter.swift */; };
 		DLHIST001SERV00000001 /* DownloadHistoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLHIST001SERV00000002 /* DownloadHistoryService.swift */; };
-		E22C3CB47572F41BA23EAF92 /* bmxtranswrap in Resources */ = {isa = PBXBuildFile; fileRef = 8488177BC5403EC6637A5C25 /* bmxtranswrap */; };
 		E69050ED114BBF6B493BE257 /* URLInputOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACBB08166226F6F3A57F015C /* URLInputOverlay.swift */; };
 		ENCGRP00000000001 /* EncodingGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCGRP00000000002 /* EncodingGroup.swift */; };
 		ENCGRPCELL00000001 /* EncodingGroupHeaderCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ENCGRPCELL00000002 /* EncodingGroupHeaderCellView.swift */; };
@@ -1325,6 +1315,7 @@
 				8EE6EE942C31FC6B007B629D /* Resources */,
 				8E1477562ECF959E00C805AA /* CopyFiles */,
 				608E2E35809FD3AAA29E3747 /* Embed Frameworks */,
+				A90612000000000000000001 /* Copy and Sign Media Helpers */,
 			);
 			buildRules = (
 			);
@@ -1432,8 +1423,6 @@
 			files = (
 				8E0556A82F2774B200BCFB49 /* Localizable.xcstrings in Resources */,
 				8E501CFD2EF1807000717373 /* done.mp3 in Resources */,
-				8EA25FEB2F82D6730087B1F1 /* tesseract in Resources */,
-				8EA817D42F71840E00F9F10C /* asdcp-wrap in Resources */,
 				8E501CFE2EF1807000717373 /* error.mp3 in Resources */,
 				8EA817D62F7184AA00F9F10C /* asdcplib-LICENSE.txt in Resources */,
 				A90606000000000000000105 /* sparkle-LICENSE.txt in Resources */,
@@ -1448,14 +1437,6 @@
 				A90606000000000000000101 /* ffmpeg-LICENSE.txt in Resources */,
 				A90606000000000000000100 /* LICENSE in Resources */,
 				8EE6EEA02C31FC6F007B629D /* Assets.xcassets in Resources */,
-				8EFBDA922EA56F8E005ADDCF /* ffmpeg in Resources */,
-				8E3D35652F9F91EB00160565 /* rclone in Resources */,
-				8EE424DF2FAB6AB600AE0A1E /* bmxparse in Resources */,
-				8EE424E02FAB6AB600AE0A1E /* raw2bmx in Resources */,
-				E22C3CB47572F41BA23EAF92 /* bmxtranswrap in Resources */,
-				AF21AF21AF21AF21AF21AF21 /* avmenc in Resources */,
-				AF25AF25AF25AF25AF25AF25 /* avmdec in Resources */,
-				6FEB07F32A610D999000F78C /* mxf2raw in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1474,6 +1455,44 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A90612000000000000000001 /* Copy and Sign Media Helpers */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = (
+				"$(SRCROOT)/scripts/copy-sign-media-helpers.sh",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/ffmpeg",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/rclone",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/tesseract",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/asdcp-wrap",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/bmxparse",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/raw2bmx",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/bmxtranswrap",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/avmenc",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/avmdec",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/mxf2raw",
+			);
+			name = "Copy and Sign Media Helpers";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/ffmpeg",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rclone",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/tesseract",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/asdcp-wrap",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/bmxparse",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/raw2bmx",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/bmxtranswrap",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/avmenc",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/avmdec",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/mxf2raw",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash \"$SRCROOT/scripts/copy-sign-media-helpers.sh\"";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		8EE6EE922C31FC6B007B629D /* Sources */ = {
