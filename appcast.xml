@@ -234,5 +234,80 @@
                 </ul>
             ]]></description>
         </item>
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.4.0</title>
+            <pubDate>Sat, 12 Sep 2026 23:01:20 +0200</pubDate>
+            <sparkle:version>576</sparkle:version>
+            <sparkle:shortVersionString>4.4.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.4.0/Aagedal_Media_Converter_4-4-0.zip"
+                length="112419846"
+                type="application/octet-stream"
+                sparkle:edSignature="4bIlwUOtvw0L8QGOYO/LVdtL70T11249O2mERNog8OraP3UAK6/BpEly0DBLMJe+m/DYaldd0SsutVnqtBbMDw==" />
+            <description><![CDATA[
+                <p>This release focuses on conversion correctness, reliable cancellation, saved-state recovery, and recording improvements.</p>
+                <h2>Conversion</h2>
+                <ul>
+                <li><strong>Trim and crop validation catches invalid requests before encoding.</strong> Anamorphic sources, odd dimensions, image sequences with companion audio, and custom filter ordering receive corrected geometry and timing.</li>
+                <li><strong>Export settings stay consistent throughout each job</strong>, including filenames, destinations, track routing, codecs, subtitles, metadata, timecode, and generated video.</li>
+                <li><strong>Ambiguous numeric custom filters fail with guidance before automatic cropping or stream remapping</strong>, preventing the app from silently overriding the wrong filter.</li>
+                <li><strong>Matroska metadata shows channel counts without guessing speaker layouts</strong>, and AVC-Intra mono splitting preserves channels by position.</li>
+                <li><strong>Audio routing preserves track order and intentional duplication</strong>, with fixes for channel operations, subtitle-container compatibility, and Stream Copy track metadata.</li>
+                <li><strong>AV2 Matroska exports preserve audio timing and padding</strong>, including delayed tracks, trims, AAC preroll, and Opus codec delay. Additional AAC channel layouts are supported.</li>
+                <li><strong>AV2 assembly rejects damaged or incompatible segments.</strong> Invalid trims and unsupported generated-video combinations report errors instead of producing incomplete output.</li>
+                <li><strong>DCP frame preparation reports damaged frames and write failures</strong> before wrapping a package.</li>
+                <li><strong>IMF export is temporarily unavailable</strong> while package descriptors and standards conformance are validated. Existing IMF settings are preserved.</li>
+                <li><strong>Failed and cancelled conversions clean up their partial outputs</strong>, while existing files and source media remain protected from replacement.</li>
+                </ul>
+                <h2>Cancellation and recovery</h2>
+                <ul>
+                <li><strong>External helpers share bounded execution and process-tree cancellation.</strong> Conversion, downloads, uploads, transcription, analytics, and metadata probes report launch failures, timeouts, and tool errors.</li>
+                <li><strong>Deno and yt-dlp update retries wait for the previous update to drain</strong>, including extraction and checksum work.</li>
+                <li><strong>Stopped live downloads recover only their reported destination</strong>, preventing an unrelated recent recording in the same folder from being adopted or renamed.</li>
+                <li><strong>Download retries wait for the cancelled attempt to finish</strong>, including rapid retries and forced re-downloads. Cancelling a playlist also cancels its current attempt and leaves later entries cancelled.</li>
+                <li><strong>Retries wait for cancelled helpers to finish</strong>, with stale callbacks prevented from changing newer jobs. Conversion cancellation also drains native waveform and package preparation.</li>
+                <li><strong>Subtitle jobs stage their results before publishing</strong>, reserve separate names, and preserve unrelated or edited subtitle files when retrying. Publication is coordinated across app processes.</li>
+                <li><strong>Uploads to the same remote destination run in queue order within the app.</strong> Overlapping uploads from another app process on the same Mac report a retryable error. Retries wait for cancelled transfers, and file access remains open until each transfer finishes.</li>
+                <li><strong>Transcription captures settings once per run</strong>, and Parakeet rejects invalid chunk durations or overlap settings that cannot advance through the source.</li>
+                </ul>
+                <h2>Saved settings and file access</h2>
+                <ul>
+                <li><strong>Damaged download history and schedules are preserved</strong>, with recovery guidance and an explicit reset action.</li>
+                <li><strong>Unreadable upload profiles and saved-access records are preserved.</strong> Opening Upload Settings cannot replace damaged profiles with an empty default, and a malformed bookmark entry no longer prevents other saved locations from resolving.</li>
+                <li><strong>Malformed settings imports and audio routes are rejected</strong> instead of silently changing saved preferences. Legacy audio presets and upload-profile upgrades preserve newer choices.</li>
+                <li><strong>Watch-folder access can be renewed from Settings.</strong> Scan, access, and Trash failures provide recovery guidance; cleanup pauses when access is insufficient.</li>
+                <li><strong>Automatic output cleanup supports folders selected through symbolic links</strong>, retaining the selected location and its saved access.</li>
+                <li><strong>SSH keys selected with Browse retain sandbox access across launches</strong>, with guidance when access must be granted again.</li>
+                <li><strong>Imports retain their filename and destination settings while metadata loads</strong>, including camera-card groups and image sequences.</li>
+                </ul>
+                <h2>Recording and preview</h2>
+                <ul>
+                <li><strong>Growing recordings support Auto, 25, 29.97, 50, 59.94, and 60 fps</strong>, with rational timing and drop-frame timecode at the two NTSC rates. Non-growing recording presets retain variable frame rate.</li>
+                <li><strong>Stopping growing recordings drains final frames and timecode</strong>, including immediate-stop recordings, and reports writer failures.</li>
+                <li><strong>Screen, window, microphone, and audio-meter setup can time out or be cancelled</strong>, preventing late callbacks from restarting stopped work.</li>
+                <li><strong>Preview and thumbnail operations have bounded waits</strong>, and replaced players ignore stale setup and seek callbacks.</li>
+                <li><strong>Screenshots use consistent format and transparency settings</strong>, including recovery from an invalid saved alpha preference.</li>
+                </ul>
+                <h2>Shortcuts</h2>
+                <ul>
+                <li><strong>Cold-launch requests remain available until a window accepts them</strong>, and a submission is handled by only one receiving window.</li>
+                <li><strong>File-bearing Shortcuts conversions run in submission order</strong>, retaining each request’s preset and destination while importing and converting.</li>
+                </ul>
+                <h2>Interface and diagnostics</h2>
+                <ul>
+                <li><strong>Tool Diagnostics in Settings checks bundled helpers and selected transcription models</strong>, with paths, architecture, executable status, and recovery guidance.</li>
+                <li><strong>Norwegian translations cover more Settings, downloads, recording, and Shortcuts controls</strong>, including all previously untranslated App Intent strings.</li>
+                <li><strong>Accessibility names and keyboard access are improved</strong> for Settings, crop and trim controls, folder actions, and screenshots.</li>
+                <li><strong>The conversion toolbar stays disabled when no files are waiting.</strong></li>
+                </ul>
+                <h2>Dependencies and release checks</h2>
+                <ul>
+                <li><strong>Bundled FFmpeg updated to 9.0.1</strong>, MPVKit updated for preview playback, and SwiftMediaMetadata updated to 3.0.0.</li>
+                <li><strong>Release checks verify bundled dependency inventories and packaged notice contents</strong>, and block publication while attribution or source review is incomplete, or FFmpeg’s reported license disagrees with its attribution or notice.</li>
+                </ul>
+            ]]></description>
+        </item>
+
     </channel>
 </rss>
