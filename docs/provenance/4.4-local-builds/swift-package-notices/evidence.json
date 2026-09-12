@@ -1,0 +1,45 @@
+[
+  {
+    "package": "Sparkle",
+    "sourcePath": "Package.swift",
+    "snapshot": "docs/provenance/4.4-local-builds/swift-package-notices/Sparkle-Package.swift",
+    "sha256": "54eb87d69cb725b9226cb6dab11b5c35e8cd78d421b1f6001774b642e3751497"
+  },
+  {
+    "package": "Sparkle",
+    "sourcePath": "LICENSE",
+    "snapshot": "docs/provenance/4.4-local-builds/swift-package-notices/Sparkle-LICENSE",
+    "sha256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe"
+  },
+  {
+    "package": "Sparkle",
+    "sourcePath": "Vendor/ed25519-sparkle/license.txt",
+    "snapshot": "docs/provenance/4.4-local-builds/swift-package-notices/Sparkle-Vendor-ed25519-sparkle-license.txt",
+    "sha256": "f68d76b9c1c2271422e55134ea94cf71f2ac3fc3ed6a7ec6b83a1a0538753214"
+  },
+  {
+    "package": "SwiftMediaMetadata",
+    "sourcePath": "Package.swift",
+    "snapshot": "docs/provenance/4.4-local-builds/swift-package-notices/SwiftMediaMetadata-Package.swift",
+    "sha256": "fdebfd8b2faf5698be56b02aafc16cf55d4bdbab675b6b378ac0d0f47642b0ce"
+  },
+  {
+    "package": "SwiftMediaMetadata",
+    "sourcePath": "README.md",
+    "snapshot": "docs/provenance/4.4-local-builds/swift-package-notices/SwiftMediaMetadata-README.md",
+    "sha256": "0643469debb72244548f9e1efef3ee76e62fc857e32a4346f61059c7aa03c068"
+  },
+  {
+    "package": "Sparkle",
+    "archiveURL": "https://github.com/sparkle-project/Sparkle/releases/download/2.9.3/Sparkle-for-Swift-Package-Manager.zip",
+    "archiveSHA256": "3a5d7fd698acc39c122e75764ed3614b472b284cc483f32ae7006d86c513370c",
+    "noticeMember": "LICENSE",
+    "noticeSHA256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe"
+  },
+  {
+    "package": "SwiftMediaMetadata",
+    "resource": "Sources/SwiftMediaMetadata/Resources/GeoLocationDatabase.bin",
+    "bytes": 1107517,
+    "sha256": "1c0d66422b009340135398674ec93d69366776917be9e9ef179cf1457cceb26b"
+  }
+]

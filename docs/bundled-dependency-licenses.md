@@ -22,11 +22,14 @@ it cannot establish that an assignment or a notice is legally sufficient.
 
 ## Remaining attribution and packaging work
 
-As of 2026-09-05 the inventory contains 10 tools and 96 dylibs. Seven tools refer
-to existing notices. `avmdec`, `avmenc`, and `rclone` have no local notice, and all
-96 dylibs retain `NOASSERTION` pending evidence for their exact bundled builds.
-The publication gate therefore currently fails for 99 entries. The exact paths
-are in `summary.entriesMissingLocalLicenseFile` and in the gate's diagnostics.
+As of 2026-09-12 the inventory contains 10 tools and no source dylibs. Seven tools
+refer to existing notices. `avmdec`, `avmenc`, and `rclone` still have no complete
+local notice, so the publication gate fails for three entries plus FFmpeg's
+explicit pending source/static-dependency review. The 96 unused legacy dylibs
+were removed after checking the current build graph, runtime lookups, every
+helper's load dependencies, and the Release bundle. Their identities and scope
+are preserved in [the packaging review](4.4-dylib-packaging-review.md). This is
+removal of unused files, not attribution of historical copies or package binaries.
 
 The repository also includes an mpv notice, which is inventoried even though no
 entry currently references it. The presence of a project's generic license text
@@ -43,7 +46,8 @@ Before publishing:
    transitive dependencies, downloaded components, and package frameworks beyond
    this manifest's Binaries/Frameworks scope separately.
 3. Keep new notices included in app resources and the About > Licenses viewer.
-   The six current notices are packaged and readable offline. Exported-bundle,
+   The nine current notices are packaged and readable offline, including Sparkle,
+   SwiftMediaMetadata, and its GeoNames acknowledgement. Exported-bundle,
    final-ZIP, and Release CI validation now checks their byte sizes and SHA-256
    against the manifest using `verify-release-bundle.py --manifest BundledDependencies.json`.
    This checks packaging, not completeness of attribution.

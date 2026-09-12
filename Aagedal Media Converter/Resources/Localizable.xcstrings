@@ -9037,12 +9037,12 @@
         }
       }
     },
-    "FFMPEG version: 8.1" : {
+    "FFMPEG version: 9.0.1" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "FFMPEG-versjon: 8.1"
+            "value" : "FFMPEG-versjon: 9.0.1"
           }
         }
       }

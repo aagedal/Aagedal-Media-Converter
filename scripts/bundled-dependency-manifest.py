@@ -210,9 +210,7 @@ def tool_version(path: Path, metadata: dict[str, Any]) -> str | None:
     pattern = metadata.get("versionPattern")
     if not arguments or not pattern:
         return None
-    environment = dict(os.environ)
-    environment["DYLD_LIBRARY_PATH"] = str(APP_ROOT / "Frameworks")
-    output = command_output([str(path), *arguments], environment=environment)
+    output = command_output([str(path), *arguments])
     match = re.search(pattern, output)
     return match.group(1).strip() if match else None
 

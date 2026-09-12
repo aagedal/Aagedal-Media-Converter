@@ -40,7 +40,7 @@ struct AboutView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
 
-            Text("FFMPEG version: 8.1")
+            Text("FFMPEG version: 9.0.1")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
@@ -87,7 +87,10 @@ private struct BundledLicensesView: View {
         ("mpv", "mpv-LICENSE.txt"),
         ("tesseract", "tesseract-LICENSE.txt"),
         ("asdcplib", "asdcplib-LICENSE.txt"),
-        ("bmx", "bmx-LICENSE.txt")
+        ("bmx", "bmx-LICENSE.txt"),
+        ("Sparkle", "sparkle-LICENSE.txt"),
+        ("SwiftMediaMetadata", "swiftmediametadata-LICENSE.txt"),
+        ("GeoNames", "geonames-LICENSE.txt")
     ]
 
     private var noticeText: String? {
