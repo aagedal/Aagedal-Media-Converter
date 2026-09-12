@@ -1,3 +1,21 @@
+# v.4.5.0 (Development)
+
+4.5 development has started with the shared application boundary needed for
+local agent access. The transport, setup flow, and complete MCP tool surface
+remain subject to the feasibility milestone.
+
+## Local agent access
+
+- Added stable identifiers for the initial H.264, HEVC, ProRes, Proxy, Audio Only,
+  and Stream Copy agent preset subset.
+- Added a versioned conversion submission and job record contract with explicit
+  manual, App Intent, and local-agent origins.
+- Added actor-owned job registration, requester-scoped idempotency, stable error
+  codes, lifecycle transitions, cancellation acknowledgement, and explicit
+  restart interruption.
+- Made the disabled IMF export explanation release-neutral so it remains accurate
+  while conformance work is deferred.
+
 # v.4.4.0
 
 This release focuses on conversion correctness, reliable cancellation, saved-state recovery, and recording improvements.

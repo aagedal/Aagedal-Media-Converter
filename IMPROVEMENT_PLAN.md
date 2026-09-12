@@ -8,9 +8,9 @@ issue link when it starts.
 
 ## Release split and completion rule
 
-4.3 is stable. **4.4 is the stabilization release in development; 4.5 is the
-proposed local agent-access release.** The release plans below govern remaining
-scope; the numbered sections retain implementation evidence and history.
+4.4.0 is stable. **4.5 is the local agent-access release in development.** The
+release plans below govern remaining scope; the numbered sections retain
+implementation evidence and history.
 
 - [4.4 release plan](docs/RELEASE-4.4-PLAN.md): a finite release checklist covering
   concrete correctness issues, live regression validation, dependency attribution,

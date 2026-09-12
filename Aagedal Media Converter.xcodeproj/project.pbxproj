@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A45000000000000000000003 /* ApplicationJobContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45000000000000000000001 /* ApplicationJobContract.swift */; };
+		A45000000000000000000004 /* ApplicationJobContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45000000000000000000002 /* ApplicationJobContractTests.swift */; };
 		7A33AB1A44DF44149B983E60 /* YTDLPWarmUpDrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */; };
 		57105645EB2B47EE9B17F716 /* YTDLPUpdateOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */; };
 		E1ACF6BCCBB0485C81D569A9 /* DenoExtractionDrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */; };
@@ -336,6 +338,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A45000000000000000000001 /* ApplicationJobContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationJobContract.swift; sourceTree = "<group>"; };
+		A45000000000000000000002 /* ApplicationJobContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationJobContractTests.swift; sourceTree = "<group>"; };
 		993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPWarmUpDrainTests.swift; sourceTree = "<group>"; };
 		CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPUpdateOwnershipTests.swift; sourceTree = "<group>"; };
 		758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DenoExtractionDrainTests.swift; sourceTree = "<group>"; };
@@ -795,6 +799,7 @@
 		8E0CA7A92C34171300EA7C37 /* Logic */ = {
 			isa = PBXGroup;
 			children = (
+				A45000000000000000000005 /* AgentAccess */,
 				7DE49AB8D27E4B9CBE7324A4 /* PostConversionSettings.swift */,
 				E16F395023624188805714C2 /* FileNameSettings.swift */,
 				D9F1FE3FF9C94704A970D379 /* StartupSettingsMigration.swift */,
@@ -846,6 +851,14 @@
 				8EA25FFE2F865E1F0087B1F1 /* Parakeet */,
 			);
 			path = Logic;
+			sourceTree = "<group>";
+		};
+		A45000000000000000000005 /* AgentAccess */ = {
+			isa = PBXGroup;
+			children = (
+				A45000000000000000000001 /* ApplicationJobContract.swift */,
+			);
+			path = AgentAccess;
 			sourceTree = "<group>";
 		};
 		8E2C6BAE2E059AFC00A9379F /* Utils */ = {
@@ -1009,6 +1022,7 @@
 		8EE6EEAC2C31FC6F007B629D /* Aagedal Media ConverterTests */ = {
 			isa = PBXGroup;
 			children = (
+				A45000000000000000000002 /* ApplicationJobContractTests.swift */,
 				06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */,
 				56C8D0547D524C448BA478BB /* SubtitleSRTPublicationTests.swift */,
 				301B064EB8BC47D39D4BDA44 /* ToolDiagnosticsTests.swift */,
@@ -1520,6 +1534,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A45000000000000000000003 /* ApplicationJobContract.swift in Sources */,
 				A3209450F7A948BBB7B75086 /* SubtitleSRTPublication.swift in Sources */,
 				B15C008BDFBA4E8893B1C380 /* ToolDiagnosticsSettingsView.swift in Sources */,
 				D8A2F88E52D7450387CA54AD /* ToolDiagnostics.swift in Sources */,
@@ -1744,6 +1759,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A45000000000000000000004 /* ApplicationJobContractTests.swift in Sources */,
 				24CB417957434AF98E564C83 /* UploadLifecycleTests.swift in Sources */,
 				368FA5664CC4494EA5ED2D8A /* SubtitleSRTPublicationTests.swift in Sources */,
 				30AE39FAAA1D4E5AA89C4C74 /* ToolDiagnosticsTests.swift in Sources */,
@@ -1989,7 +2005,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 576;
+				CURRENT_PROJECT_VERSION = 577;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
@@ -2019,7 +2035,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 4.4.0;
+				MARKETING_VERSION = 4.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2046,7 +2062,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 576;
+				CURRENT_PROJECT_VERSION = 577;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
@@ -2076,7 +2092,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 4.4.0;
+				MARKETING_VERSION = 4.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

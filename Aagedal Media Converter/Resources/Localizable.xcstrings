@@ -8461,13 +8461,13 @@
         }
       }
     },
-    "IMF export is unavailable in 4.4 because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool." : {
+    "IMF export is temporarily unavailable because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool." : {
       "comment" : "Release restriction on IMF exports until package conformance is established. IMF import remains available.",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IMF-eksport er ikke tilgjengelig i 4.4 fordi pakkebeskrivelser og samsvar med standarden ikke er validert. Bruk en annen eksportforhåndsinnstilling og et validert verktøy for IMF-mastering."
+            "value" : "IMF-eksport er midlertidig utilgjengelig fordi pakkebeskrivelser og samsvar med standarden ikke er validert. Bruk en annen eksportforhåndsinnstilling og et validert verktøy for IMF-mastering."
           }
         }
       }

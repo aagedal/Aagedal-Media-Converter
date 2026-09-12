@@ -485,7 +485,7 @@ struct PresetsSettingsView: View {
 
         if selectedPreset == .imfJ2K || selectedPreset == .imfProRes {
             settingsCard {
-                Text("IMF export is unavailable in 4.4 because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.")
+                Text("IMF export is temporarily unavailable because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.")
                     .foregroundStyle(.secondary)
             }
         }

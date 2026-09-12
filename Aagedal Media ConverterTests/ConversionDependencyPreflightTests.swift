@@ -33,7 +33,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
                 progressUpdate: { _, _ in XCTFail("No encoding should start") },
                 completion: { success, reason in
                     XCTAssertFalse(success)
-                    XCTAssertTrue(reason?.contains("IMF export is unavailable in 4.4") == true)
+                    XCTAssertTrue(reason?.contains("IMF export is temporarily unavailable") == true)
                     XCTAssertTrue(reason?.contains("validated IMF mastering tool") == true)
                     completed.fulfill()
                 }
@@ -58,7 +58,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
                 progressUpdate: { _, _ in XCTFail("Disabled export must not start") },
                 completion: { success, reason in
                     XCTAssertFalse(success)
-                    XCTAssertTrue(reason?.contains("IMF export is unavailable") == true)
+                    XCTAssertTrue(reason?.contains("IMF export is temporarily unavailable") == true)
                 }
             )
             XCTAssertEqual(try Data(contentsOf: output), original)

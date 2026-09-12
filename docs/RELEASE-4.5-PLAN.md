@@ -1,18 +1,39 @@
 # Proposed 4.5 release — Local agent access
 
-Status: planning only; implementation has not started.
+Status: implementation started on `codex/release-4.5`; feasibility decision pending.
 Created: 2026-09-11.
 
 ## Release context
 
-- 4.3 is the current stable release.
-- 4.4 is the stabilization version in development; its release gates are in the
-  [4.4 release plan](RELEASE-4.4-PLAN.md).
-- 4.5 is the proposed target for an initial local MCP interface.
+- 4.4.0 is the current stable release.
+- 4.5 is the development target for an initial local MCP interface.
 - No release date is committed. Confirm scope after the feasibility milestone.
 
-These release roles reflect the product plan. The checked-in Xcode marketing
-version and changelog currently still say 4.3.0; this document does not change them.
+The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
+signed release candidate.
+
+## Implementation progress — 2026-09-12
+
+The first shared-boundary increment is implemented without selecting an IPC
+transport prematurely:
+
+- stable wire identifiers for the initial H.264, HEVC, ProRes, Proxy, Audio Only,
+  and Stream Copy subset;
+- a Codable, versioned conversion request and job record with explicit manual,
+  App Intent, and local-agent origins;
+- actor-owned acceptance with requester-scoped idempotency and conflict detection;
+- stable machine-readable error codes for boundary validation and lifecycle errors;
+- explicit queued, running, cancelling, succeeded, failed, cancelled, and
+  interrupted transitions; and
+- restart handling that marks incomplete records interrupted instead of silently
+  restarting them.
+
+Ten focused unit tests cover serialization, validation, stable error codes,
+concurrent retry deduplication, requester isolation, cancellation, lifecycle
+ownership, and restart semantics. This is foundation for milestone 2, not
+completion of milestone 1 or a claim that the existing UI/App Intent conversion
+paths use the service yet. See the
+[foundation validation record](4.5-foundation-validation-2026-09-12.md).
 
 ## Intended outcome
 

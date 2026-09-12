@@ -554,7 +554,7 @@ actor FFMPEGConverter {
         // The current writer cannot provide descriptors linked to the encoded MXF essence.
         // Reject all entry paths (including saved presets and Shortcuts) before any work or output.
         if preset == .imfJ2K || preset == .imfProRes {
-            completion(false, String(localized: "IMF export is unavailable in 4.4 because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.", comment: "Release restriction on IMF exports until package conformance is established. IMF import remains available."))
+            completion(false, String(localized: "IMF export is temporarily unavailable because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.", comment: "Release restriction on IMF exports until package conformance is established. IMF import remains available."))
             return
         }
         let trimPreparationError = preset == .av2
