@@ -37,7 +37,8 @@ Key findings:
 
 Fingerprint method: unfold backslash-newline continuations in `.o.d` files, split
 on whitespace, and keep existing absolute source-file paths under the recorded
-AVM root. Deduplicate and sort paths, grouping `third_party/<name>` and
+AVM root. Deduplicate and sort paths by their pathlib path components (not raw string
+order), grouping `third_party/<name>` and
 `build_arm64/<name>` (excluding generated `config` and `gen_src`). For each group,
 hash the UTF-8 concatenation of `relative-path`, TAB, file SHA-256, LF. The overall
 compiler-record fingerprint uses that same construction for sorted `.o.d` paths.
@@ -51,3 +52,37 @@ component reachability, inspect nested/file-level notices, and authenticate the
 unversioned retained source directories against exact upstream sources and local
 patches. Then assemble notices and any required source material, package them
 for offline viewing, and validate the strict release gate.
+
+## Reproducible integrity check (2026-09-12)
+
+`compiler-inputs.json` now enumerates the relative path and SHA-256 for all 1,744
+referenced dependency inputs. Each of the 17 groups reproduces the previously
+retained aggregate digest and count exactly. This makes later source comparisons
+possible at individual-file granularity, including header-only inputs, without
+relying on the continued availability of the sibling checkout.
+
+Run the offline integrity check from the app repository:
+
+```sh
+python3 scripts/verify-avm-evidence.py
+```
+
+Optionally also check the retained local sources, original notice bytes, and all
+858 compiler dependency records:
+
+```sh
+python3 scripts/verify-avm-evidence.py --source-root /Users/truls.aagedal/Developer/avm
+```
+
+Both checks passed on 2026-09-12. Six regression tests verify matching evidence,
+notice line-ending corruption, individual source drift, added compiler records,
+path ordering and root containment. The checker reports a changed input by path
+rather than merely reporting a changed group digest. The source index is a
+fingerprint of the retained bytes matching the earlier inventory, not a claim
+that those bytes have been authenticated against upstream or remained unchanged
+since the build. No notices have been approved or packaged by this check.
+
+A further local search found no libyuv `LICENSE`, `PATENTS`, or `AUTHORS` copy in
+sibling development projects, and no AVM Git history for those three paths.
+The missing libyuv material and the source-authentication, reachability and
+file-level review work above remain release blockers.
