@@ -23,9 +23,11 @@ the shared subprocess runner are recorded as complete. Preserve those gains.
 
 ### 1. Close dependency attribution and packaging gaps
 
-- [ ] Resolve the 99 outstanding source-inventory attributions recorded by the
-  plan: avmenc, avmdec, rclone, and 96 dylibs. Establish actual build provenance,
-  add the appropriate notices/material, and verify packaged notice coverage.
+- [ ] Resolve the three remaining source-inventory attributions: avmenc, avmdec,
+  and rclone, plus explicit FFmpeg source/static-dependency review. The 96 unused
+  legacy dylibs were removed with packaging/runtime evidence on 2026-09-12.
+  Establish actual build provenance, add the appropriate notices/material, and
+  verify packaged notice coverage.
 - [ ] Pass the existing complete-license gate and inventory freshness check.
   Do not bypass the gate or infer licenses from filenames. If removing a dependency
   is necessary, prove it is unused, update packaging/inventory, and validate it.
@@ -206,6 +208,26 @@ checksums, retaining 197 module notice candidates plus main-source/runtime
 notices. These narrow source recovery work but do not replace build selection,
 file-level/embedded-asset review or offline packaging. **99 missing notices plus
 explicit FFmpeg source/static-dependency review still block publication.**
+
+## Packaging and coordination continuation — 2026-09-12
+
+[Validation](4.4-validation-packaging-2026-09-12.md) records 867 passing unit
+and 63 passing script tests. The [dylib review](4.4-dylib-packaging-review.md)
+removes 96 unused source libraries (83.16 MiB) and obsolete search paths after
+checking app packaging, helper dependencies, and runtime references. This leaves
+**three missing source-tool notices plus explicit FFmpeg source/static-dependency
+review**, without weakening the gate. Package/transitive attribution remains a
+separate blocker. [Swift package notices](4.4-swift-package-notices-review.md)
+adds Sparkle, SwiftMediaMetadata and GeoNames to the offline viewer/resources.
+The final unsigned Release passes its 44-image audit and all nine notice checks.
+
+[Upload coordination](4.4-upload-recovery-review.md) now uses the queue's same
+normalized destination identity for cross-process exclusion, closing equivalent
+SFTP/S3 endpoint overlaps. AVM compiler inputs and rclone package/embed selection
+now have reproducible evidence checks; neither tool's complete attribution is
+claimed. UI tests could not initialize because macOS authentication was active
+on both attempts; a fresh post-cleanup UI run remains pending. No public feed,
+version, or release artifact was changed.
 
 ## What can wait for 4.5
 
