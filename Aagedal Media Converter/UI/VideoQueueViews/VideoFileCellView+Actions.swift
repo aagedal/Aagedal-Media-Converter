@@ -441,7 +441,7 @@ extension VideoFileCellView {
     @objc private func ctxIMFMetadata() { actionHandler?(.showIMFMetadata) }
     @objc private func ctxAudioRouting() { actionHandler?(.showAudioRouting) }
     @objc private func ctxAttachSubtitle() { actionHandler?(.attachSubtitleFile) }
-    @objc private func ctxRename() { actionHandler?(.beginRename) }
+    @objc private func ctxRename() { beginOutputNameEditing() }
     @objc private func ctxReset() { actionHandler?(.reset(optionKeyPressed: false)) }
     @objc private func ctxRemove() { actionHandler?(.delete) }
 }

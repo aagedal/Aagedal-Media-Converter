@@ -70,6 +70,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     private let arrowLabel = NSTextField(labelWithString: "→")
     private let outputNameLabel = NSTextField(labelWithString: "")
     private let outputNameField = NSTextField() // editable, hidden by default
+    private var isEditingOutputName = false
+    private var shouldCommitOutputNameOnEndEditing = true
     private let mergeIndicator = NSImageView()
     private let finderButton = NSButton()
     private let downloadedFinderButton = NSButton()
@@ -510,12 +512,17 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         outputNameLabel.lineBreakMode = .byTruncatingMiddle
         outputNameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         outputNameLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        outputNameLabel.setAccessibilityIdentifier("queue.item.outputName")
 
         // Editable output name field (hidden by default)
         outputNameField.font = .systemFont(ofSize: 13, weight: .semibold)
         outputNameField.isHidden = true
         outputNameField.delegate = self
         outputNameField.translatesAutoresizingMaskIntoConstraints = false
+        outputNameField.placeholderString = String(localized: "Output filename")
+        outputNameField.setAccessibilityIdentifier("queue.item.outputNameEditor")
+        outputNameField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        outputNameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         // Merge indicator
         mergeIndicator.image = NSImage(systemSymbolName: "link", accessibilityDescription: "Merge")
@@ -1230,6 +1237,10 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        isEditingOutputName = false
+        shouldCommitOutputNameOnEndEditing = true
+        outputNameField.isHidden = true
+        outputNameLabel.isHidden = false
         errorDetailsPopover?.performClose(nil)
         errorDetailsPopover = nil
         displayedDiagnosticReport = nil
@@ -1583,7 +1594,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         }
     }
 
-    // MARK: - NSTextFieldDelegate (comment field)
+    // MARK: - NSTextFieldDelegate
 
     func controlTextDidChange(_ obj: Notification) {
         guard let field = obj.object as? NSTextField, field === commentField else { return }
@@ -1604,8 +1615,12 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
-        guard let field = obj.object as? NSTextField, field === commentField else { return }
-        actionHandler?(.commentFocusChanged(false))
+        guard let field = obj.object as? NSTextField else { return }
+        if field === outputNameField {
+            finishOutputNameEditing(commit: shouldCommitOutputNameOnEndEditing)
+        } else if field === commentField {
+            actionHandler?(.commentFocusChanged(false))
+        }
     }
 
     /// NSTextFieldDelegate entry point for special keys. NSTextField inside an
@@ -1614,6 +1629,27 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     /// Shift-Tab here so the coordinator can hand focus to the next row's
     /// comment field (same behavior as the SwiftUI queue rows had).
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if control === outputNameField {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)):
+                shouldCommitOutputNameOnEndEditing = true
+                window?.makeFirstResponder(nil)
+                if isEditingOutputName {
+                    finishOutputNameEditing(commit: true)
+                }
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                shouldCommitOutputNameOnEndEditing = false
+                window?.makeFirstResponder(nil)
+                if isEditingOutputName {
+                    finishOutputNameEditing(commit: false)
+                }
+                return true
+            default:
+                return false
+            }
+        }
+
         guard control === commentField else { return false }
         switch commandSelector {
         case #selector(NSResponder.insertTab(_:)):
@@ -1632,6 +1668,45 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             return true
         default:
             return false
+        }
+    }
+
+    /// Switches the output filename label to the inline editor. Both the
+    /// double-click and context-menu entry points use this method so their
+    /// focus, commit, and cancellation behavior cannot drift apart.
+    func beginOutputNameEditing() {
+        guard let config = currentConfig, config.status == .waiting else { return }
+
+        outputNameField.stringValue = displayOutputFilename(config: config)
+        shouldCommitOutputNameOnEndEditing = true
+        isEditingOutputName = true
+        outputNameLabel.isHidden = true
+        outputNameField.isHidden = false
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+
+        let itemID = config.itemID
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.isEditingOutputName,
+                  self.currentConfig?.itemID == itemID else { return }
+            self.window?.makeFirstResponder(self.outputNameField)
+            self.outputNameField.currentEditor()?.selectAll(nil)
+        }
+    }
+
+    private func finishOutputNameEditing(commit: Bool) {
+        guard isEditingOutputName else { return }
+        let draft = outputNameField.stringValue
+        isEditingOutputName = false
+        shouldCommitOutputNameOnEndEditing = true
+        outputNameField.isHidden = true
+        outputNameLabel.isHidden = false
+        needsLayout = true
+
+        if commit {
+            let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            actionHandler?(.commitRename(trimmed.isEmpty ? nil : trimmed))
         }
     }
 
@@ -1659,7 +1734,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
         // Double-click on the output filename → begin rename
         if event.clickCount == 2 && labelContains(outputNameLabel, point: location) {
-            actionHandler?(.beginRename)
+            beginOutputNameEditing()
             return
         }
 

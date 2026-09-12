@@ -497,6 +497,35 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testRenamesOutputFromDoubleClickAndContextMenu() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC")
+        defer { terminateAndCleanFixtures() }
+
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
+        let outputName = element("queue.item.outputName")
+        XCTAssertTrue(outputName.waitForExistence(timeout: 5))
+
+        outputName.doubleClick()
+        let editor = element("queue.item.outputNameEditor")
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeKey("a", modifierFlags: .command)
+        editor.typeText("double-click-name.mp4")
+        editor.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitForValue("double-click-name.mp4", of: outputName, timeout: 5))
+
+        queueItem.rightClick()
+        let rename = app.menuItems["Rename Output"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        rename.click()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeKey("a", modifierFlags: .command)
+        editor.typeText("context-menu-name.mp4")
+        editor.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitForValue("context-menu-name.mp4", of: outputName, timeout: 5))
+    }
+
+    @MainActor
     func testStartsAndCancelsConversion() throws {
         launchApp(
             generatedFixture: true,

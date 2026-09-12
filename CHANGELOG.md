@@ -13,8 +13,17 @@ remain subject to the feasibility milestone.
 - Added actor-owned job registration, requester-scoped idempotency, stable error
   codes, lifecycle transitions, cancellation acknowledgement, and explicit
   restart interruption.
+- Added immutable, Codable snapshots of the resolved codec, container, audio,
+  metadata, subtitle, and filename settings for every preset in the initial agent
+  subset. Accepted retries now reject a changed settings snapshot instead of
+  silently inheriting newer preferences.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
+
+## Interface fixes
+
+- Restored inline output filename renaming from both double-click and the queue
+  context menu, including grouped queue items.
 
 # v.4.4.0
 

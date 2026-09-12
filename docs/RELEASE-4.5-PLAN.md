@@ -35,6 +35,15 @@ completion of milestone 1 or a claim that the existing UI/App Intent conversion
 paths use the service yet. See the
 [foundation validation record](4.5-foundation-validation-2026-09-12.md).
 
+The next shared-boundary increment captures the resolved settings for all six
+initial presets in each request. Stable semantic identifiers cover the output
+container, encoder, video profile, audio codec, quality/rate controls, resolution,
+metadata/subtitle policy, and filename rules. These snapshots round-trip through
+the versioned contract and participate in idempotency comparison, so a settings
+change cannot mutate accepted work or turn a retry into a different conversion.
+Focused coverage is recorded in the
+[settings-capture validation record](4.5-settings-capture-validation-2026-09-12.md).
+
 ## Intended outcome
 
 An agent on the user's Mac can inspect media, discover the user's presets, plan

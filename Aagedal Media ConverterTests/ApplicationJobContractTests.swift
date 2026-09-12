@@ -33,6 +33,82 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(ApplicationJobID.self, from: idData), id)
     }
 
+    func testRequestCapturesResolvedPresetAndNamingSettings() throws {
+        let defaults = try makeDefaults()
+        defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
+        defaults.set(CodecContainer.mkv.rawValue, forKey: AppConstants.h264ContainerKey)
+        defaults.set(CodecQualityLevel.high.rawValue, forKey: AppConstants.h264QualityKey)
+        defaults.set(EncodingSpeed.slow.rawValue, forKey: AppConstants.h264SpeedKey)
+        defaults.set(CodecResolutionLimit.r720.rawValue, forKey: AppConstants.h264ResolutionLimitKey)
+        defaults.set(CodecAudioFormat.opus.rawValue, forKey: AppConstants.h264AudioFormatKey)
+        defaults.set(AudioBitrate.k256.rawValue, forKey: AppConstants.h264AudioBitrateKey)
+        defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
+        defaults.set(true, forKey: AppConstants.keepSubtitlesKey)
+        defaults.set(false, forKey: AppConstants.fileNameReplaceSpacesKey)
+
+        let request = makeRequest(defaults: defaults)
+        XCTAssertEqual(request.presetSettings.containerID, .mkv)
+        XCTAssertEqual(request.presetSettings.video?.encoderID, .libx264)
+        XCTAssertEqual(request.presetSettings.video?.quality, 18)
+        XCTAssertEqual(request.presetSettings.video?.speed, "slow")
+        XCTAssertEqual(request.presetSettings.video?.maximumHeight, 720)
+        XCTAssertEqual(request.presetSettings.audio, ApplicationAudioSettings(codecID: .opus, bitrate: "256k"))
+        XCTAssertTrue(request.presetSettings.preserveMetadata)
+        XCTAssertTrue(request.presetSettings.keepSubtitles)
+        XCTAssertFalse(request.presetSettings.fileName.replaceSpaces)
+
+        defaults.set(CodecQualityLevel.veryLow.rawValue, forKey: AppConstants.h264QualityKey)
+        defaults.set(CodecAudioFormat.aac.rawValue, forKey: AppConstants.h264AudioFormatKey)
+        XCTAssertEqual(request.presetSettings.video?.quality, 18)
+        XCTAssertEqual(request.presetSettings.audio?.codecID, .opus)
+
+        let roundTrip = try JSONDecoder().decode(
+            ApplicationConversionRequest.self,
+            from: JSONEncoder().encode(request)
+        )
+        XCTAssertEqual(roundTrip, request)
+    }
+
+    func testSupportedPresetSnapshotsUseStableResolvedValues() throws {
+        let defaults = try makeDefaults()
+        defaults.set(ProResProfile.hq.rawValue, forKey: AppConstants.proResProfileKey)
+        defaults.set(ProxyCodec.dnxhd.rawValue, forKey: AppConstants.proxyCodecKey)
+        defaults.set(ProxyResolutionLimit.r480.rawValue, forKey: AppConstants.proxyResolutionLimitKey)
+        defaults.set(AudioOnlyFormat.flac.rawValue, forKey: AppConstants.audioOnlyFormatKey)
+        defaults.set(StreamCopyContainer.keepCurrent.rawValue, forKey: AppConstants.streamCopyContainerKey)
+
+        let proRes = ApplicationPresetSettings(presetID: .proRes, defaults: defaults)
+        XCTAssertEqual(proRes.containerID, .mov)
+        XCTAssertEqual(proRes.video?.profileID, .proResHQ)
+        XCTAssertEqual(proRes.audio?.codecID, .pcm24)
+
+        let proxy = ApplicationPresetSettings(presetID: .proxy, defaults: defaults)
+        XCTAssertEqual(proxy.containerID, .mxf)
+        XCTAssertEqual(proxy.video?.encoderID, .dnxhd)
+        XCTAssertEqual(proxy.video?.profileID, .dnxhrLB)
+        XCTAssertEqual(proxy.video?.maximumHeight, 480)
+
+        let audioOnly = ApplicationPresetSettings(presetID: .audioOnly, defaults: defaults)
+        XCTAssertNil(audioOnly.video)
+        XCTAssertEqual(audioOnly.containerID, .flac)
+        XCTAssertEqual(audioOnly.audio?.codecID, .flac)
+
+        let streamCopy = ApplicationPresetSettings(presetID: .streamCopy, defaults: defaults)
+        XCTAssertEqual(streamCopy.containerID, .source)
+        XCTAssertEqual(streamCopy.video?.encoderID, .streamCopy)
+        XCTAssertEqual(streamCopy.audio?.codecID, .streamCopy)
+        XCTAssertFalse(streamCopy.keepSubtitles)
+    }
+
+    func testMalformedH265QualityUsesTheExecutionFallback() throws {
+        let defaults = try makeDefaults()
+        defaults.set("not-a-quality", forKey: AppConstants.h265QualityKey)
+
+        let settings = ApplicationPresetSettings(presetID: .hevc, defaults: defaults)
+
+        XCTAssertEqual(settings.video?.quality, CodecQualityLevel.balanced.crfValue)
+    }
+
     func testAcceptanceCreatesStableQueuedRecordAndPreservesOrder() async throws {
         let registry = ApplicationJobRegistry()
         let first = try await registry.accept(makeRequest(idempotencyKey: nil))
@@ -79,6 +155,24 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testIdempotencyRejectsAChangedCapturedPresetSnapshot() async throws {
+        let defaults = try makeDefaults()
+        defaults.set(CodecQualityLevel.good.rawValue, forKey: AppConstants.h264QualityKey)
+        let first = makeRequest(idempotencyKey: "same-settings-key", defaults: defaults)
+
+        defaults.set(CodecQualityLevel.low.rawValue, forKey: AppConstants.h264QualityKey)
+        let changed = makeRequest(idempotencyKey: "same-settings-key", defaults: defaults)
+        let registry = ApplicationJobRegistry()
+        _ = try await registry.accept(first)
+
+        do {
+            _ = try await registry.accept(changed)
+            XCTFail("Expected changed captured settings to conflict")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .idempotencyConflict)
+        }
+    }
+
     func testValidationRejectsUnsupportedOrUnsafeBoundaryValues() async {
         let cases: [(ApplicationConversionRequest, ApplicationJobError)] = [
             (makeRequest(schemaVersion: 2), .unsupportedSchema(2)),
@@ -89,7 +183,11 @@ final class ApplicationJobContractTests: XCTestCase {
              .nonFileURL(URL(string: "https://example.com/input.mov")!)),
             (makeRequest(destinationFolderURL: URL(string: "https://example.com/output")!),
              .nonFileURL(URL(string: "https://example.com/output")!)),
-            (makeRequest(idempotencyKey: " bad-key "), .invalidIdempotencyKey)
+            (makeRequest(idempotencyKey: " bad-key "), .invalidIdempotencyKey),
+            (makeRequest(
+                presetID: .h264,
+                presetSettings: ApplicationPresetSettings(presetID: .hevc)
+            ), .presetSettingsMismatch)
         ]
 
         for (request, expectedError) in cases {
@@ -106,6 +204,7 @@ final class ApplicationJobContractTests: XCTestCase {
     func testErrorsExposeStableWireCodes() {
         XCTAssertEqual(ApplicationJobError.unsupportedSchema(99).code.rawValue, "unsupported_schema")
         XCTAssertEqual(ApplicationJobError.idempotencyConflict.code.rawValue, "idempotency_conflict")
+        XCTAssertEqual(ApplicationJobError.presetSettingsMismatch.code.rawValue, "preset_settings_mismatch")
         XCTAssertEqual(
             ApplicationJobError.invalidTransition(from: .queued, to: .succeeded).code.rawValue,
             "invalid_transition"
@@ -138,7 +237,11 @@ final class ApplicationJobContractTests: XCTestCase {
         let progress = try await registry.updateProgress(record.id, progress: 0.5, stage: "Encoding")
         XCTAssertEqual(progress.progress, 0.5)
         XCTAssertEqual(progress.stage, "Encoding")
-        _ = try await registry.transition(record.id, to: .succeeded, outputURLs: [destination.appendingPathComponent("output.mp4")])
+        _ = try await registry.transition(
+            record.id,
+            to: .succeeded,
+            outputURLs: [destination.appendingPathComponent("output.mp4")]
+        )
 
         do {
             _ = try await registry.transition(record.id, to: .running)
@@ -178,8 +281,10 @@ final class ApplicationJobContractTests: XCTestCase {
         sourceURLs: [URL]? = nil,
         destinationFolderURL: URL? = nil,
         presetID: ApplicationPresetID = .h264,
+        presetSettings: ApplicationPresetSettings? = nil,
         idempotencyKey: String? = "request-1",
-        capturedAt: Date = Date(timeIntervalSince1970: 1_800_000_000)
+        capturedAt: Date = Date(timeIntervalSince1970: 1_800_000_000),
+        defaults: UserDefaults = .standard
     ) -> ApplicationConversionRequest {
         ApplicationConversionRequest(
             schemaVersion: schemaVersion,
@@ -189,8 +294,18 @@ final class ApplicationJobContractTests: XCTestCase {
             sourceURLs: sourceURLs ?? [source],
             destinationFolderURL: destinationFolderURL ?? destination,
             presetID: presetID,
+            presetSettings: presetSettings,
             idempotencyKey: idempotencyKey,
-            capturedAt: capturedAt
+            capturedAt: capturedAt,
+            defaults: defaults
         )
+    }
+
+    private func makeDefaults() throws -> UserDefaults {
+        let suiteName = "ApplicationJobContractTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        addTeardownBlock { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
+        return defaults
     }
 }

@@ -1499,8 +1499,6 @@ struct VideoQueueTableView: NSViewRepresentable {
                 }
             case .tabCommentField(let forward):
                 parent.onTabCommentField?(forward)
-            case .beginRename:
-                parent.onRenameOutputFileName?(itemID, nil)
             case .commitRename(let name):
                 parent.onRenameOutputFileName?(itemID, name)
             case .showPreview:

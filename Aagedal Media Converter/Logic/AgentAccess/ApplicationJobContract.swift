@@ -32,6 +32,383 @@ enum ApplicationJobOrigin: String, Codable, Sendable {
     case localAgent = "local_agent"
 }
 
+/// Stable, transport-facing identifiers for the resolved settings that affect an
+/// accepted conversion. They deliberately do not reuse localized UI raw values.
+enum ApplicationContainerID: String, Codable, Sendable {
+    case source
+    case mp4
+    case mov
+    case mkv
+    case mxf
+    case wav
+    case m4a
+    case flac
+}
+
+enum ApplicationVideoEncoderID: String, Codable, Sendable {
+    case libx264
+    case libx265
+    case h264VideoToolbox = "h264_videotoolbox"
+    case hevcVideoToolbox = "hevc_videotoolbox"
+    case proResVideoToolbox = "prores_videotoolbox"
+    case dnxhd
+    case streamCopy = "stream_copy"
+}
+
+enum ApplicationVideoProfileID: String, Codable, Sendable {
+    case h264High = "h264_high"
+    case hevcMain10 = "hevc_main10"
+    case proResProxy = "prores_proxy"
+    case proResLT = "prores_lt"
+    case proRes422 = "prores_422"
+    case proResHQ = "prores_hq"
+    case proRes4444 = "prores_4444"
+    case proRes4444XQ = "prores_4444_xq"
+    case dnxhrLB = "dnxhr_lb"
+}
+
+enum ApplicationAudioCodecID: String, Codable, Sendable {
+    case aac
+    case opus
+    case pcm16 = "pcm_s16le"
+    case pcm24 = "pcm_s24le"
+    case pcm32 = "pcm_s32le"
+    case flac
+    case streamCopy = "stream_copy"
+}
+
+enum ApplicationSpecialCharacterRemovalModeID: String, Codable, Sendable {
+    case off
+    case loose
+    case strict
+}
+
+struct ApplicationVideoSettings: Codable, Equatable, Sendable {
+    let encoderID: ApplicationVideoEncoderID
+    let profileID: ApplicationVideoProfileID?
+    let quality: Int?
+    let bitrate: String?
+    let speed: String?
+    let maximumHeight: Int?
+}
+
+struct ApplicationAudioSettings: Codable, Equatable, Sendable {
+    let codecID: ApplicationAudioCodecID
+    let bitrate: String?
+}
+
+struct ApplicationFileNameSettings: Codable, Equatable, Sendable {
+    let processingEnabled: Bool
+    let replaceSpaces: Bool
+    let replaceScandinavianCharacters: Bool
+    let specialCharacterRemovalMode: ApplicationSpecialCharacterRemovalModeID
+    let includePresetSuffix: Bool
+    let customTemplateEnabled: Bool
+    let template: String
+    let dateFormat: String
+    let counterPadding: Int
+    let presetSuffix: String
+
+    init(preset: ExportPreset, defaults: UserDefaults) {
+        let settings = FileNameSettings(defaults: defaults).snapshot
+        let context = FileNameTemplateContext(preset: preset, defaults: defaults)
+        processingEnabled = settings.isEnabled
+        replaceSpaces = settings.replaceSpaces
+        replaceScandinavianCharacters = settings.replaceScandinavianCharacters
+        specialCharacterRemovalMode = switch settings.specialCharacterRemovalMode {
+        case .off: .off
+        case .loose: .loose
+        case .strict: .strict
+        }
+        includePresetSuffix = settings.includePresetSuffix
+        customTemplateEnabled = settings.customTemplateEnabled
+        template = settings.template
+        dateFormat = settings.dateFormat
+        counterPadding = settings.counterPadding
+        presetSuffix = context.presetSuffix
+    }
+}
+
+/// An immutable semantic snapshot of the mutable preferences behind a supported
+/// preset. A request keeps this value through planning and execution, so a later
+/// Settings change cannot silently alter already accepted work.
+struct ApplicationPresetSettings: Codable, Equatable, Sendable {
+    let presetID: ApplicationPresetID
+    let containerID: ApplicationContainerID
+    let video: ApplicationVideoSettings?
+    let audio: ApplicationAudioSettings?
+    let preserveMetadata: Bool
+    let keepSubtitles: Bool
+    let fileName: ApplicationFileNameSettings
+
+    init(presetID: ApplicationPresetID, defaults: UserDefaults = .standard) {
+        let preset = presetID.exportPreset
+        self.presetID = presetID
+        preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+        keepSubtitles = preset != .streamCopy
+            && preset != .audioOnly
+            && defaults.bool(forKey: AppConstants.keepSubtitlesKey)
+        fileName = ApplicationFileNameSettings(preset: preset, defaults: defaults)
+
+        switch presetID {
+        case .h264:
+            let container = Self.codecContainer(
+                defaults.string(forKey: AppConstants.h264ContainerKey),
+                fallback: AppConstants.defaultH264Container
+            )
+            let encoder = H264Encoder(
+                rawValue: defaults.string(forKey: AppConstants.h264EncoderKey)
+                    ?? AppConstants.defaultH264Encoder
+            ) ?? .software
+            let resolution = CodecResolutionLimit(
+                rawValue: defaults.string(forKey: AppConstants.h264ResolutionLimitKey)
+                    ?? AppConstants.defaultH264ResolutionLimit
+            ) ?? .unlimited
+            let audio = Self.codecAudio(
+                formatRaw: defaults.string(forKey: AppConstants.h264AudioFormatKey),
+                fallbackFormat: AppConstants.defaultH264AudioFormat,
+                bitrateRaw: defaults.string(forKey: AppConstants.h264AudioBitrateKey),
+                fallbackBitrate: AppConstants.defaultH264AudioBitrate,
+                container: container
+            )
+            containerID = Self.containerID(container)
+            video = ApplicationVideoSettings(
+                encoderID: encoder == .hardware ? .h264VideoToolbox : .libx264,
+                profileID: .h264High,
+                quality: encoder == .software ? Self.codecQuality(
+                    defaults.string(forKey: AppConstants.h264QualityKey),
+                    fallback: AppConstants.defaultH264Quality
+                ).crfValue : nil,
+                bitrate: encoder == .hardware
+                    ? defaults.string(forKey: AppConstants.h264BitrateKey) ?? AppConstants.defaultH264Bitrate
+                    : nil,
+                speed: encoder == .software
+                    ? Self.encodingSpeed(
+                        defaults.string(forKey: AppConstants.h264SpeedKey),
+                        fallback: AppConstants.defaultH264Speed
+                    ).ffmpegPreset
+                    : nil,
+                maximumHeight: resolution.maxHeight
+            )
+            self.audio = audio
+        case .hevc:
+            let container = Self.codecContainer(
+                defaults.string(forKey: AppConstants.h265ContainerKey),
+                fallback: AppConstants.defaultH265Container
+            )
+            let encoder = H265Encoder(
+                rawValue: defaults.string(forKey: AppConstants.h265EncoderKey)
+                    ?? AppConstants.defaultH265Encoder
+            ) ?? .software
+            let resolution = CodecResolutionLimit(
+                rawValue: defaults.string(forKey: AppConstants.h265ResolutionLimitKey)
+                    ?? AppConstants.defaultH265ResolutionLimit
+            ) ?? .unlimited
+            let audio = Self.codecAudio(
+                formatRaw: defaults.string(forKey: AppConstants.h265AudioFormatKey),
+                fallbackFormat: AppConstants.defaultH265AudioFormat,
+                bitrateRaw: defaults.string(forKey: AppConstants.h265AudioBitrateKey),
+                fallbackBitrate: AppConstants.defaultH265AudioBitrate,
+                container: container
+            )
+            containerID = Self.containerID(container)
+            video = ApplicationVideoSettings(
+                encoderID: encoder == .hardware ? .hevcVideoToolbox : .libx265,
+                profileID: .hevcMain10,
+                quality: encoder == .software ? Self.codecQuality(
+                    defaults.string(forKey: AppConstants.h265QualityKey),
+                    fallback: AppConstants.defaultH265Quality
+                ).crfValue : nil,
+                bitrate: encoder == .hardware
+                    ? defaults.string(forKey: AppConstants.h265BitrateKey) ?? AppConstants.defaultH265Bitrate
+                    : nil,
+                speed: encoder == .software
+                    ? Self.encodingSpeed(
+                        defaults.string(forKey: AppConstants.h265SpeedKey),
+                        fallback: AppConstants.defaultH265Speed
+                    ).ffmpegPreset
+                    : nil,
+                maximumHeight: resolution.maxHeight
+            )
+            self.audio = audio
+        case .proRes:
+            let profile = ProResProfile(
+                rawValue: defaults.string(forKey: AppConstants.proResProfileKey)
+                    ?? ProResProfile.standard.rawValue
+            ) ?? .standard
+            containerID = .mov
+            video = ApplicationVideoSettings(
+                encoderID: .proResVideoToolbox,
+                profileID: Self.proResProfileID(profile),
+                quality: nil,
+                bitrate: nil,
+                speed: nil,
+                maximumHeight: nil
+            )
+            audio = ApplicationAudioSettings(codecID: .pcm24, bitrate: nil)
+        case .proxy:
+            let codec = ProxyCodec(
+                rawValue: defaults.string(forKey: AppConstants.proxyCodecKey)
+                    ?? AppConstants.defaultProxyCodec
+            ) ?? .hevc
+            let resolution = ProxyResolutionLimit(
+                rawValue: defaults.string(forKey: AppConstants.proxyResolutionLimitKey)
+                    ?? AppConstants.defaultProxyResolutionLimit
+            ) ?? .r1080
+            containerID = codec == .dnxhd ? .mxf : .mov
+            video = ApplicationVideoSettings(
+                encoderID: Self.proxyEncoderID(codec),
+                profileID: Self.proxyProfileID(codec),
+                quality: nil,
+                bitrate: codec == .hevc ? resolution.bitrate : nil,
+                speed: nil,
+                maximumHeight: resolution.maxHeight
+            )
+            audio = ApplicationAudioSettings(codecID: .pcm24, bitrate: nil)
+        case .audioOnly:
+            let settings = AudioOnlySettings(defaults: defaults)
+            containerID = Self.audioContainerID(settings.format)
+            video = nil
+            audio = Self.audioOnlySettings(settings)
+        case .streamCopy:
+            let container = StreamCopyContainer(
+                rawValue: defaults.string(forKey: AppConstants.streamCopyContainerKey)
+                    ?? AppConstants.defaultStreamCopyContainer
+            ) ?? .keepCurrent
+            containerID = Self.streamCopyContainerID(container)
+            video = ApplicationVideoSettings(
+                encoderID: .streamCopy,
+                profileID: nil,
+                quality: nil,
+                bitrate: nil,
+                speed: nil,
+                maximumHeight: nil
+            )
+            audio = ApplicationAudioSettings(codecID: .streamCopy, bitrate: nil)
+        }
+    }
+
+    private static func codecContainer(_ raw: String?, fallback: String) -> CodecContainer {
+        CodecContainer(rawValue: raw ?? fallback) ?? .mp4
+    }
+
+    private static func containerID(_ container: CodecContainer) -> ApplicationContainerID {
+        switch container {
+        case .mp4: .mp4
+        case .mov: .mov
+        case .mkv: .mkv
+        }
+    }
+
+    private static func codecQuality(_ raw: String?, fallback: String) -> CodecQualityLevel {
+        CodecQualityLevel(rawValue: raw ?? fallback)
+            ?? CodecQualityLevel(rawValue: fallback)
+            ?? .good
+    }
+
+    private static func encodingSpeed(_ raw: String?, fallback: String) -> EncodingSpeed {
+        EncodingSpeed(rawValue: raw ?? fallback) ?? .medium
+    }
+
+    private static func codecAudio(
+        formatRaw: String?,
+        fallbackFormat: String,
+        bitrateRaw: String?,
+        fallbackBitrate: String,
+        container: CodecContainer
+    ) -> ApplicationAudioSettings {
+        var format = CodecAudioFormat(rawValue: formatRaw ?? fallbackFormat) ?? .aac
+        if format == .opus && container != .mkv { format = .aac }
+        let bitrate = AudioBitrate(rawValue: bitrateRaw ?? fallbackBitrate) ?? .k192
+        return ApplicationAudioSettings(
+            codecID: audioCodecID(format),
+            bitrate: format.requiresBitrate ? bitrate.ffmpegValue : nil
+        )
+    }
+
+    private static func audioCodecID(_ format: CodecAudioFormat) -> ApplicationAudioCodecID {
+        switch format {
+        case .aac: .aac
+        case .opus: .opus
+        case .pcm16: .pcm16
+        case .pcm24: .pcm24
+        case .pcm32: .pcm32
+        }
+    }
+
+    private static func proResProfileID(_ profile: ProResProfile) -> ApplicationVideoProfileID {
+        switch profile {
+        case .proxy: .proResProxy
+        case .lt: .proResLT
+        case .standard: .proRes422
+        case .hq: .proResHQ
+        case .fourFourFourFour: .proRes4444
+        case .fourFourFourFourXQ: .proRes4444XQ
+        }
+    }
+
+    private static func proxyEncoderID(_ codec: ProxyCodec) -> ApplicationVideoEncoderID {
+        switch codec {
+        case .hevc: .hevcVideoToolbox
+        case .prores: .proResVideoToolbox
+        case .dnxhd: .dnxhd
+        }
+    }
+
+    private static func proxyProfileID(_ codec: ProxyCodec) -> ApplicationVideoProfileID {
+        switch codec {
+        case .hevc: .hevcMain10
+        case .prores: .proResProxy
+        case .dnxhd: .dnxhrLB
+        }
+    }
+
+    private static func audioContainerID(_ format: AudioOnlyFormat) -> ApplicationContainerID {
+        switch format {
+        case .wav: .wav
+        case .aac: .m4a
+        case .mp4: .mp4
+        case .flac: .flac
+        }
+    }
+
+    private static func audioOnlySettings(_ settings: AudioOnlySettings) -> ApplicationAudioSettings {
+        switch settings.format {
+        case .wav:
+            let codec: ApplicationAudioCodecID = switch settings.bitDepth {
+            case .pcm16: .pcm16
+            case .pcm24: .pcm24
+            case .pcm32: .pcm32
+            }
+            return ApplicationAudioSettings(codecID: codec, bitrate: nil)
+        case .aac:
+            return ApplicationAudioSettings(codecID: .aac, bitrate: settings.aacBitrate.ffmpegValue)
+        case .mp4:
+            let codec: ApplicationAudioCodecID = switch settings.mp4Codec {
+            case .aac: .aac
+            case .pcm16: .pcm16
+            case .pcm24: .pcm24
+            case .pcm32: .pcm32
+            }
+            return ApplicationAudioSettings(
+                codecID: codec,
+                bitrate: settings.mp4Codec.requiresBitrate ? settings.mp4Bitrate.ffmpegValue : nil
+            )
+        case .flac:
+            return ApplicationAudioSettings(codecID: .flac, bitrate: nil)
+        }
+    }
+
+    private static func streamCopyContainerID(_ container: StreamCopyContainer) -> ApplicationContainerID {
+        switch container {
+        case .keepCurrent: .source
+        case .mov: .mov
+        case .mp4: .mp4
+        case .mkv: .mkv
+        }
+    }
+}
+
 struct ApplicationJobID: Hashable, Codable, Sendable, CustomStringConvertible {
     let rawValue: UUID
 
@@ -71,6 +448,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
     let sourceURLs: [URL]
     let destinationFolderURL: URL
     let presetID: ApplicationPresetID
+    let presetSettings: ApplicationPresetSettings
     let idempotencyKey: String?
     let capturedAt: Date
 
@@ -82,8 +460,10 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         sourceURLs: [URL],
         destinationFolderURL: URL,
         presetID: ApplicationPresetID,
+        presetSettings: ApplicationPresetSettings? = nil,
         idempotencyKey: String? = nil,
-        capturedAt: Date = Date()
+        capturedAt: Date = Date(),
+        defaults: UserDefaults = .standard
     ) {
         self.schemaVersion = schemaVersion
         self.requestID = requestID
@@ -92,6 +472,8 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         self.sourceURLs = sourceURLs
         self.destinationFolderURL = destinationFolderURL
         self.presetID = presetID
+        self.presetSettings = presetSettings
+            ?? ApplicationPresetSettings(presetID: presetID, defaults: defaults)
         self.idempotencyKey = idempotencyKey
         self.capturedAt = capturedAt
     }
@@ -103,6 +485,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
             && sourceURLs == other.sourceURLs
             && destinationFolderURL == other.destinationFolderURL
             && presetID == other.presetID
+            && presetSettings == other.presetSettings
     }
 }
 
@@ -148,6 +531,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
     case duplicateSource(URL)
     case nonFileURL(URL)
     case invalidIdempotencyKey
+    case presetSettingsMismatch
     case idempotencyConflict
     case unknownJob(ApplicationJobID)
     case invalidTransition(from: ApplicationJobState, to: ApplicationJobState)
@@ -161,6 +545,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
         case .duplicateSource: .duplicateSource
         case .nonFileURL: .nonFileURL
         case .invalidIdempotencyKey: .invalidIdempotencyKey
+        case .presetSettingsMismatch: .presetSettingsMismatch
         case .idempotencyConflict: .idempotencyConflict
         case .unknownJob: .unknownJob
         case .invalidTransition: .invalidTransition
@@ -178,6 +563,7 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case duplicateSource = "duplicate_source"
     case nonFileURL = "non_file_url"
     case invalidIdempotencyKey = "invalid_idempotency_key"
+    case presetSettingsMismatch = "preset_settings_mismatch"
     case idempotencyConflict = "idempotency_conflict"
     case unknownJob = "unknown_job"
     case invalidTransition = "invalid_transition"
@@ -361,6 +747,9 @@ actor ApplicationJobRegistry {
         }
         guard request.destinationFolderURL.isFileURL else {
             throw ApplicationJobError.nonFileURL(request.destinationFolderURL)
+        }
+        guard request.presetID == request.presetSettings.presetID else {
+            throw ApplicationJobError.presetSettingsMismatch
         }
         if let key = request.idempotencyKey {
             let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)

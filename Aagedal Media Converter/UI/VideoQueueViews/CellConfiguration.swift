@@ -307,7 +307,6 @@ enum CellAction {
     case tabCommentField(forward: Bool)
 
     // Output filename
-    case beginRename
     case commitRename(String?)
 
     // Sheet/popover requests

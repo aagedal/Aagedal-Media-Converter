@@ -1991,15 +1991,34 @@ struct ContentView: View {
     }
 
     private func handleOutputFileNameOverride(itemID: UUID, newName: String?) {
-        guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }) else { return }
         let trimmed = newName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if trimmed.isEmpty {
-            droppedFiles[index].outputFileNameOverride = nil
+        let outputFileNameOverride: String? = if trimmed.isEmpty {
+            nil
         } else {
-            let baseName = (trimmed as NSString).deletingPathExtension
-            droppedFiles[index].outputFileNameOverride = FileNameProcessor.processFileName(baseName)
+            FileNameProcessor.processFileName((trimmed as NSString).deletingPathExtension)
         }
-        droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
+
+        if let index = droppedFiles.firstIndex(where: { $0.id == itemID }) {
+            droppedFiles[index].outputFileNameOverride = outputFileNameOverride
+            droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
+            return
+        }
+
+        for groupIndex in encodingGroups.indices {
+            guard let itemIndex = encodingGroups[groupIndex].items.firstIndex(where: { $0.id == itemID }) else {
+                continue
+            }
+            let groupPreset = encodingGroups[groupIndex].preset ?? selectedPreset
+            encodingGroups[groupIndex].items[itemIndex].outputFileNameOverride = outputFileNameOverride
+            let importContext = VideoGroupImportContext(
+                preset: groupPreset,
+                outputFolder: currentOutputFolder.path
+            )
+            encodingGroups[groupIndex].items[itemIndex].outputURL = importContext.outputURL(
+                for: encodingGroups[groupIndex].items[itemIndex]
+            )
+            return
+        }
     }
 
     private var toolbarPresetBinding: Binding<ExportPreset> {
