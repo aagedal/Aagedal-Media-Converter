@@ -1,0 +1,1137 @@
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/tsocket.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   Copyright (C) Stefan Metzmacher 2009
+
+     ** NOTE! The following LGPL license applies to the tsocket
+     ** library. This does NOT imply that all of Samba is released
+     ** under the LGPL
+
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 3 of the License, or (at your option) any later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Lesser General Public License for more details.
+
+   You should have received a copy of the GNU Lesser General Public
+   License along with this library; if not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/smbconf.h =====
+
+/*
+ *  Unix SMB/CIFS implementation.
+ *  libsmbconf - Samba configuration library
+ *  Copyright (C) Michael Adam 2008
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/libsmbclient.h =====
+
+/*=====================================================================
+  Unix SMB/Netbios implementation.
+  SMB client library API definitions
+  Copyright (C) Andrew Tridgell 1998
+  Copyright (C) Richard Sharpe 2000
+  Copyright (C) John Terpsra 2000
+  Copyright (C) Tom Jansen (Ninja ISD) 2002
+  Copyright (C) Derrell Lipman 2003-2008
+
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, see <http://www.gnu.org/licenses/>.
+  =====================================================================*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/core/error.h =====
+
+/* 
+   Unix SMB/CIFS implementation.   
+   Error handling code
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/core/ntstatus.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   NT error code constants
+   Copyright (C) Andrew Tridgell              1992-2000
+   Copyright (C) John H Terpstra              1996-2000
+   Copyright (C) Luke Kenneth Casson Leighton 1996-2000
+   Copyright (C) Paul Ashton                  1998-2000
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/core/hresult.h =====
+
+/*
+ * Unix SMB/CIFS implementation.
+ *
+ * HRESULT Error definitions
+ *
+ * Copyright (C) Noel Power <noel.power@suse.com> 2014
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/core/werror.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   SMB parameters and setup, plus a whole lot more.
+   
+   Copyright (C) Andrew Tridgell              2001
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/core/doserr.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   DOS error code constants
+   Copyright (C) Andrew Tridgell              1992-2000
+   Copyright (C) John H Terpstra              1996-2000
+   Copyright (C) Luke Kenneth Casson Leighton 1996-2000
+   Copyright (C) Paul Ashton                  1998-2000
+   Copyright (C) Gerald (Jerry) Carter        2005
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/time.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   time utility functions
+
+   Copyright (C) Andrew Tridgell 		1992-2004
+   Copyright (C) Stefan (metze) Metzmacher	2002
+   Copyright (C) Jeremy Allison			2007
+   Copyright (C) Andrew Bartlett                2011
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/tevent_werror.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   Wrap win32 errors around tevent_req
+   Copyright (C) Kai Blin 2010
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/idtree_random.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   very efficient functions to manage mapping a id (such as a fnum) to
+   a pointer. This is used for fnum and search id allocation.
+
+   Copyright (C) Andrew Tridgell 2004
+
+   This code is derived from lib/idr.c in the 2.6 Linux kernel, which was
+   written by Jim Houston jim.houston@ccur.com, and is
+   Copyright (C) 2002 by Concurrent Computer Corporation
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/attr.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   Samba utility functions
+   Copyright (C) Jelmer Vernooij <jelmer@samba.org> 2007
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/debug.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   SMB debug stuff
+   Copyright (C) Andrew Tridgell 1992-1998
+   Copyright (C) John H Terpstra 1996-1998
+   Copyright (C) Luke Kenneth Casson Leighton 1996-1998
+   Copyright (C) Paul Ashton 1998
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/data_blob.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   DATA BLOB
+
+   Copyright (C) Andrew Tridgell 2001
+   Copyright (C) Andrew Bartlett 2001
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/fault.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   Critical Fault handling
+   Copyright (C) Andrew Tridgell 1992-1998
+   Copyright (C) Tim Prouty 2009
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/genrand.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   Functions to create reasonable random numbers for crypto use.
+
+   Copyright (C) Jeremy Allison 2001
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/signal.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   signal handling functions
+
+   Copyright (C) Andrew Tridgell 1998
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/blocking.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   Samba utility functions
+   Copyright (C) Andrew Tridgell 1992-1998
+   Copyright (C) Jeremy Allison 2001-2002
+   Copyright (C) Simo Sorce 2001
+   Copyright (C) Jim McDonough (jmcd@us.ibm.com)  2003.
+   Copyright (C) James J Myers 2003
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/tevent_ntstatus.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   Wrap unix errno around tevent_req
+   Copyright (C) Volker Lendecke 2009
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/discard.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   Samba utility functions
+   Copyright (C) Andrew Tridgell 1992-1999
+   Copyright (C) Jelmer Vernooij <jelmer@samba.org> 2008
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/tevent_unix.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   Wrap unix errno around tevent_req
+   Copyright (C) Volker Lendecke 2009
+
+     ** NOTE! The following LGPL license applies to the tevent_unix
+     ** helper library. This does NOT imply that all of Samba is released
+     ** under the LGPL
+
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 3 of the License, or (at your option) any later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Library General Public License for more details.
+
+   You should have received a copy of the GNU Lesser General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/substitute.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   Samba utility functions
+
+   Copyright (C) Andrew Tridgell 1992-2001
+   Copyright (C) Simo Sorce      2001-2002
+   Copyright (C) Martin Pool     2003
+   Copyright (C) James Peach	 2005
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util/tfork.h =====
+
+/*
+   fork on steroids to avoid SIGCHLD and waitpid
+
+   Copyright (C) Stefan Metzmacher 2010
+   Copyright (C) Ralph Boehme 2017
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/dcesrv_core.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   server side dcerpc defines
+
+   Copyright (C) Andrew Tridgell 2003-2005
+   Copyright (C) Stefan (metze) Metzmacher 2004-2005
+   Copyright (C) Samuel Cabrero <scabrero@samba.org> 2019
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/dcerpc.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+
+   DCERPC client side interface structures
+
+   Copyright (C) Tim Potter 2003
+   Copyright (C) Andrew Tridgell 2003-2005
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/charset.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   charset defines
+   Copyright (C) Andrew Tridgell 2001
+   Copyright (C) Jelmer Vernooij 2002
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/domain_credentials.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+
+   code to manipulate domain credentials
+
+   Copyright (C) Andrew Tridgell 2004
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/tdr.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   TDR definitions
+   Copyright (C) Jelmer Vernooij 2005
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ndr.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   rpc interface definitions
+
+   Copyright (C) Andrew Tridgell 2003
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/param.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   Generic parameter parsing interface
+   Copyright (C) Jelmer Vernooij					  2005
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/netapi.h =====
+
+/*
+ *  Unix SMB/CIFS implementation.
+ *  NetApi Support
+ *  Copyright (C) Guenther Deschner 2007-2009
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/samba/session.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   Process and provide the logged on user's authorization token
+   Copyright (C) Andrew Bartlett   2001
+   Copyright (C) Stefan Metzmacher 2005
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/share.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   
+   Modular services configuration
+   
+   Copyright (C) Simo Sorce	2006
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/util_ldb.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   common share info functions
+
+   Copyright (C) Andrew Tridgell 2004
+   Copyright (C) Tim Potter 2004
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/lookup_sid.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+   uid/user handling
+   Copyright (C) Andrew Tridgell         1992-1998
+   Copyright (C) Gerald (Jerry) Carter   2003
+   Copyright (C) Volker Lendecke	 2005
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/credentials.h =====
+
+/* 
+   samba -- Unix SMB/CIFS implementation.
+
+   Client credentials structure
+
+   Copyright (C) Jelmer Vernooij 2004-2006
+   Copyright (C) Andrew Bartlett <abartlet@samba.org> 2005
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ldb_wrap.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+
+   database wrap headers
+
+   Copyright (C) Andrew Tridgell 2004
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+   
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+   
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/wbclient.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   Winbind client API
+
+   Copyright (C) Gerald (Jerry) Carter 2007
+   Copyright (C) Volker Lendecke 2009
+   Copyright (C) Matthew Newton 2015
+
+   This library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 3 of the License, or (at your option) any later version.
+
+   This library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Library General Public License for more details.
+
+   You should have received a copy of the GNU Lesser General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ndr/ndr_drsuapi.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   routines for printing some linked list structs in DRSUAPI
+
+   Copyright (C) Stefan (metze) Metzmacher 2005-2006
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ndr/ndr_krb5pac.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   routines for marshalling/unmarshalling spoolss subcontext buffer structures
+
+   Copyright (C) Stefan Metzmacher 2005
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ndr/ndr_svcctl.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   routines for marshalling/unmarshalling special svcctl types
+
+   Copyright (C) Guenther Deschner 2009
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ndr/ndr_drsblobs.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   Manually parsed structures found in the DRS protocol
+
+   Copyright (C) Andrew Bartlett <abartlet@samba.org> 2008
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ndr/ndr_nbt.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   routines for marshalling/unmarshalling special netlogon types
+
+   Copyright (C) Andrew Tridgell 2005
+   Copyright (C) Andrew Bartlett <abartlet@samba.org> 2008
+   Copyright (C) Guenther Deschner 2011
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/ndr/ndr_dcerpc.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   Manually parsed structures found in the DCERPC protocol
+
+   Copyright (C) Stefan Metzmacher 2014
+   Copyright (C) Gregor Beck 2014
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/machine_sid.h =====
+
+/*
+ *  Unix SMB/CIFS implementation.
+ *  Password and authentication handling
+ *  Copyright (C) Jeremy Allison 		1996-2002
+ *  Copyright (C) Andrew Tridgell		2002
+ *  Copyright (C) Gerald (Jerry) Carter		2000
+ *  Copyright (C) Stefan (metze) Metzmacher	2002
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/rpc_common.h =====
+
+/*
+   Unix SMB/CIFS implementation.
+
+   Copyright (C) Stefan Metzmacher 2010-2011
+   Copyright (C) Andrew Tridgell 2010-2011
+   Copyright (C) Simo Sorce 2010
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+===== pinned-archive-header; Libsmbclient.xcframework/macos-arm64_x86_64/Libsmbclient.framework/Headers/samba-4.0/passdb.h =====
+
+/* 
+   Unix SMB/CIFS implementation.
+   passdb structures and parameters
+   Copyright (C) Gerald Carter 2001
+   Copyright (C) Luke Kenneth Casson Leighton 1998 - 2000
+   Copyright (C) Andrew Bartlett 2002
+   Copyright (C) Simo Sorce 2003
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+

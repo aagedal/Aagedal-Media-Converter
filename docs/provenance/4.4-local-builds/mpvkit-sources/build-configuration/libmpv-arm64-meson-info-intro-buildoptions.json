@@ -1,0 +1,2100 @@
+[
+  {
+    "name": "auto_features",
+    "value": "auto",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Override value of all 'auto' features"
+  },
+  {
+    "name": "backend",
+    "value": "ninja",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "ninja",
+      "vs",
+      "vs2010",
+      "vs2012",
+      "vs2013",
+      "vs2015",
+      "vs2017",
+      "vs2019",
+      "vs2022",
+      "vs2026",
+      "xcode",
+      "none"
+    ],
+    "type": "combo",
+    "description": "Backend to use"
+  },
+  {
+    "name": "genvslite",
+    "value": "vs2022",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "vs2022",
+      "vs2026"
+    ],
+    "type": "combo",
+    "description": "Setup multiple buildtype-suffixed ninja-backend build directories, and a [builddir]_vs containing a Visual Studio meta-backend with multiple configurations that calls into them"
+  },
+  {
+    "name": "buildtype",
+    "value": "release",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "plain",
+      "debug",
+      "debugoptimized",
+      "release",
+      "minsize",
+      "custom"
+    ],
+    "type": "combo",
+    "description": "Build type to use"
+  },
+  {
+    "name": "debug",
+    "value": false,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Enable debug symbols and other information"
+  },
+  {
+    "name": "default_library",
+    "value": "static",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "shared",
+      "static",
+      "both"
+    ],
+    "type": "combo",
+    "description": "Default library type"
+  },
+  {
+    "name": "default_both_libraries",
+    "value": "shared",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "shared",
+      "static",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Default library type for both_libraries"
+  },
+  {
+    "name": "install_umask",
+    "value": 18,
+    "section": "core",
+    "machine": "any",
+    "type": "integer",
+    "description": "Default umask to apply on permissions of installed files"
+  },
+  {
+    "name": "layout",
+    "value": "mirror",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "mirror",
+      "flat"
+    ],
+    "type": "combo",
+    "description": "Build directory layout"
+  },
+  {
+    "name": "optimization",
+    "value": "3",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "plain",
+      "0",
+      "g",
+      "1",
+      "2",
+      "3",
+      "s"
+    ],
+    "type": "combo",
+    "description": "Optimization level"
+  },
+  {
+    "name": "prefer_static",
+    "value": false,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Whether to try static linking before shared linking"
+  },
+  {
+    "name": "strip",
+    "value": false,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Strip targets on install"
+  },
+  {
+    "name": "unity",
+    "value": "off",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "on",
+      "off",
+      "subprojects"
+    ],
+    "type": "combo",
+    "description": "Unity build"
+  },
+  {
+    "name": "unity_size",
+    "value": 4,
+    "section": "core",
+    "machine": "any",
+    "type": "integer",
+    "description": "Unity block size"
+  },
+  {
+    "name": "warning_level",
+    "value": "2",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "everything"
+    ],
+    "type": "combo",
+    "description": "Compiler warning level to use"
+  },
+  {
+    "name": "werror",
+    "value": false,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Treat warnings as errors"
+  },
+  {
+    "name": "wrap_mode",
+    "value": "default",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "default",
+      "nofallback",
+      "nodownload",
+      "forcefallback",
+      "nopromote"
+    ],
+    "type": "combo",
+    "description": "Wrap mode"
+  },
+  {
+    "name": "force_fallback_for",
+    "value": [],
+    "section": "core",
+    "machine": "any",
+    "type": "array",
+    "description": "Force fallback for those subprojects"
+  },
+  {
+    "name": "vsenv",
+    "value": false,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Activate Visual Studio environment"
+  },
+  {
+    "name": "os2_emxomf",
+    "value": false,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Use OMF format on OS/2"
+  },
+  {
+    "name": "pkgconfig.relocatable",
+    "value": false,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Generate pkgconfig files as relocatable"
+  },
+  {
+    "name": "python.bytecompile",
+    "value": 0,
+    "section": "core",
+    "machine": "any",
+    "type": "integer",
+    "description": "Whether to compile bytecode"
+  },
+  {
+    "name": "python.install_env",
+    "value": "prefix",
+    "section": "core",
+    "machine": "any",
+    "choices": [
+      "auto",
+      "prefix",
+      "system",
+      "venv"
+    ],
+    "type": "combo",
+    "description": "Which python environment to install to"
+  },
+  {
+    "name": "python.platlibdir",
+    "value": "",
+    "section": "core",
+    "machine": "any",
+    "type": "string",
+    "description": "Directory for site-specific, platform-specific files."
+  },
+  {
+    "name": "python.purelibdir",
+    "value": "",
+    "section": "core",
+    "machine": "any",
+    "type": "string",
+    "description": "Directory for site-specific, non-platform-specific files."
+  },
+  {
+    "name": "python.allow_limited_api",
+    "value": true,
+    "section": "core",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Whether to allow use of the Python Limited API"
+  },
+  {
+    "name": "python.build_config",
+    "value": "",
+    "section": "core",
+    "machine": "any",
+    "type": "string",
+    "description": "Config file containing the build details for the target Python installation."
+  },
+  {
+    "name": "build.pkg_config_path",
+    "value": [],
+    "section": "core",
+    "machine": "build",
+    "type": "array",
+    "description": "List of additional paths for pkg-config to search"
+  },
+  {
+    "name": "build.cmake_prefix_path",
+    "value": [],
+    "section": "core",
+    "machine": "build",
+    "type": "array",
+    "description": "List of additional prefixes for cmake to search"
+  },
+  {
+    "name": "pkg_config_path",
+    "value": [],
+    "section": "core",
+    "machine": "host",
+    "type": "array",
+    "description": "List of additional paths for pkg-config to search"
+  },
+  {
+    "name": "cmake_prefix_path",
+    "value": [],
+    "section": "core",
+    "machine": "host",
+    "type": "array",
+    "description": "List of additional prefixes for cmake to search"
+  },
+  {
+    "name": "backend_max_links",
+    "value": 16,
+    "section": "backend",
+    "machine": "any",
+    "type": "integer",
+    "description": "Maximum number of linker processes to run or 0 for no limit"
+  },
+  {
+    "name": "b_lto_mode",
+    "value": "default",
+    "section": "base",
+    "machine": "any",
+    "choices": [
+      "default",
+      "thin"
+    ],
+    "type": "combo",
+    "description": "Select between different LTO modes."
+  },
+  {
+    "name": "b_lundef",
+    "value": false,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Use -Wl,--no-undefined when linking"
+  },
+  {
+    "name": "b_colorout",
+    "value": "always",
+    "section": "base",
+    "machine": "any",
+    "choices": [
+      "auto",
+      "always",
+      "never"
+    ],
+    "type": "combo",
+    "description": "Use colored output"
+  },
+  {
+    "name": "b_lto_threads",
+    "value": 0,
+    "section": "base",
+    "machine": "any",
+    "type": "integer",
+    "description": "Use multiple threads for Link Time Optimization"
+  },
+  {
+    "name": "b_sanitize",
+    "value": [],
+    "section": "base",
+    "machine": "any",
+    "type": "array",
+    "description": "Code sanitizer to use"
+  },
+  {
+    "name": "b_ndebug",
+    "value": "false",
+    "section": "base",
+    "machine": "any",
+    "choices": [
+      "true",
+      "false",
+      "if-release"
+    ],
+    "type": "combo",
+    "description": "Disable asserts"
+  },
+  {
+    "name": "b_pgo",
+    "value": "off",
+    "section": "base",
+    "machine": "any",
+    "choices": [
+      "off",
+      "generate",
+      "use"
+    ],
+    "type": "combo",
+    "description": "Use profile guided optimization"
+  },
+  {
+    "name": "b_asneeded",
+    "value": true,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Use -Wl,--as-needed when linking"
+  },
+  {
+    "name": "b_thinlto_cache_dir",
+    "value": "",
+    "section": "base",
+    "machine": "any",
+    "type": "string",
+    "description": "Directory to store ThinLTO cache objects"
+  },
+  {
+    "name": "b_thinlto_cache",
+    "value": false,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Use LLVM ThinLTO caching for faster incremental builds"
+  },
+  {
+    "name": "b_coverage",
+    "value": false,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Enable coverage tracking."
+  },
+  {
+    "name": "b_staticpic",
+    "value": true,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Build static libraries as position independent"
+  },
+  {
+    "name": "b_pie",
+    "value": false,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Build executables as position independent"
+  },
+  {
+    "name": "b_lto",
+    "value": false,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Use link time optimization"
+  },
+  {
+    "name": "b_pch",
+    "value": true,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Use precompiled headers"
+  },
+  {
+    "name": "b_bitcode",
+    "value": false,
+    "section": "base",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Generate and embed bitcode (only macOS/iOS/tvOS)"
+  },
+  {
+    "name": "build.c_args",
+    "value": [],
+    "section": "compiler",
+    "machine": "build",
+    "type": "array",
+    "description": "Extra arguments passed to the c compiler"
+  },
+  {
+    "name": "build.c_link_args",
+    "value": [],
+    "section": "compiler",
+    "machine": "build",
+    "type": "array",
+    "description": "Extra arguments passed to the c linker"
+  },
+  {
+    "name": "build.c_std",
+    "value": "none",
+    "section": "compiler",
+    "machine": "build",
+    "choices": [
+      "none",
+      "c89",
+      "c99",
+      "c11",
+      "c17",
+      "c18",
+      "c2x",
+      "c23",
+      "c2y",
+      "gnu89",
+      "gnu99",
+      "gnu11",
+      "gnu17",
+      "gnu18",
+      "gnu2x",
+      "gnu23",
+      "gnu2y"
+    ],
+    "type": "combo",
+    "description": "c language standard to use"
+  },
+  {
+    "name": "c_args",
+    "value": [
+      "-arch",
+      "arm64",
+      "-isysroot",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-target",
+      "arm64-apple-macos12.0",
+      "-mmacosx-version-min=12.0",
+      "-I/Users/truls.aagedal/Developer/MPVKit/dist/gmp/macos/thin/arm64/include",
+      "-I/Users/truls.aagedal/Developer/MPVKit/dist/libsmbclient/macos/thin/arm64/include"
+    ],
+    "section": "compiler",
+    "machine": "host",
+    "type": "array",
+    "description": "Extra arguments passed to the c compiler"
+  },
+  {
+    "name": "c_link_args",
+    "value": [
+      "-lc++",
+      "-arch",
+      "arm64",
+      "-isysroot",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-target",
+      "arm64-apple-macos12.0",
+      "-mmacosx-version-min=12.0",
+      "-L/Users/truls.aagedal/Developer/MPVKit/dist/gmp/macos/thin/arm64/lib",
+      "-lgmp",
+      "-L/Users/truls.aagedal/Developer/MPVKit/dist/libsmbclient/macos/thin/arm64/lib",
+      "-lsmbclient"
+    ],
+    "section": "compiler",
+    "machine": "host",
+    "type": "array",
+    "description": "Extra arguments passed to the c linker"
+  },
+  {
+    "name": "c_std",
+    "value": "c11",
+    "section": "compiler",
+    "machine": "host",
+    "choices": [
+      "none",
+      "c89",
+      "c99",
+      "c11",
+      "c17",
+      "c18",
+      "c2x",
+      "c23",
+      "c2y",
+      "gnu89",
+      "gnu99",
+      "gnu11",
+      "gnu17",
+      "gnu18",
+      "gnu2x",
+      "gnu23",
+      "gnu2y"
+    ],
+    "type": "combo",
+    "description": "c language standard to use"
+  },
+  {
+    "name": "objc_args",
+    "value": [
+      "-arch",
+      "arm64",
+      "-isysroot",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-target",
+      "arm64-apple-macos12.0",
+      "-mmacosx-version-min=12.0",
+      "-I/Users/truls.aagedal/Developer/MPVKit/dist/gmp/macos/thin/arm64/include",
+      "-I/Users/truls.aagedal/Developer/MPVKit/dist/libsmbclient/macos/thin/arm64/include"
+    ],
+    "section": "compiler",
+    "machine": "host",
+    "type": "array",
+    "description": "Extra arguments passed to the objc compiler"
+  },
+  {
+    "name": "objc_link_args",
+    "value": [
+      "-lc++",
+      "-arch",
+      "arm64",
+      "-isysroot",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk",
+      "-target",
+      "arm64-apple-macos12.0",
+      "-mmacosx-version-min=12.0",
+      "-L/Users/truls.aagedal/Developer/MPVKit/dist/gmp/macos/thin/arm64/lib",
+      "-lgmp",
+      "-L/Users/truls.aagedal/Developer/MPVKit/dist/libsmbclient/macos/thin/arm64/lib",
+      "-lsmbclient"
+    ],
+    "section": "compiler",
+    "machine": "host",
+    "type": "array",
+    "description": "Extra arguments passed to the objc linker"
+  },
+  {
+    "name": "prefix",
+    "value": "/Users/truls.aagedal/Developer/MPVKit/dist/libmpv/macos/thin/arm64",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Installation prefix"
+  },
+  {
+    "name": "bindir",
+    "value": "bin",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Executable directory"
+  },
+  {
+    "name": "datadir",
+    "value": "share",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Data file directory"
+  },
+  {
+    "name": "includedir",
+    "value": "include",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Header file directory"
+  },
+  {
+    "name": "infodir",
+    "value": "share/info",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Info page directory"
+  },
+  {
+    "name": "libdir",
+    "value": "lib",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Library directory"
+  },
+  {
+    "name": "licensedir",
+    "value": "",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Licenses directory"
+  },
+  {
+    "name": "libexecdir",
+    "value": "libexec",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Library executable directory"
+  },
+  {
+    "name": "localedir",
+    "value": "share/locale",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Locale data directory"
+  },
+  {
+    "name": "localstatedir",
+    "value": "var",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Localstate data directory"
+  },
+  {
+    "name": "mandir",
+    "value": "share/man",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Manual page directory"
+  },
+  {
+    "name": "sbindir",
+    "value": "sbin",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "System executable directory"
+  },
+  {
+    "name": "sharedstatedir",
+    "value": "com",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Architecture-independent data directory"
+  },
+  {
+    "name": "sysconfdir",
+    "value": "etc",
+    "section": "directory",
+    "machine": "any",
+    "type": "string",
+    "description": "Sysconf data directory"
+  },
+  {
+    "name": "gpl",
+    "value": true,
+    "section": "user",
+    "machine": "any",
+    "type": "boolean",
+    "description": "GPL (version 2 or later) build"
+  },
+  {
+    "name": "cplayer",
+    "value": true,
+    "section": "user",
+    "machine": "any",
+    "type": "boolean",
+    "description": "mpv CLI player"
+  },
+  {
+    "name": "libmpv",
+    "value": true,
+    "section": "user",
+    "machine": "any",
+    "type": "boolean",
+    "description": "libmpv library"
+  },
+  {
+    "name": "build-date",
+    "value": true,
+    "section": "user",
+    "machine": "any",
+    "type": "boolean",
+    "description": "include compile timestamp in binary"
+  },
+  {
+    "name": "tests",
+    "value": false,
+    "section": "user",
+    "machine": "any",
+    "type": "boolean",
+    "description": "meson unit tests"
+  },
+  {
+    "name": "fuzzers",
+    "value": false,
+    "section": "user",
+    "machine": "any",
+    "type": "boolean",
+    "description": "fuzzer binaries"
+  },
+  {
+    "name": "disable-packet-pool",
+    "value": false,
+    "section": "user",
+    "machine": "any",
+    "type": "boolean",
+    "description": "disable packet pool (development only)"
+  },
+  {
+    "name": "cdda",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "cdda support (libcdio)"
+  },
+  {
+    "name": "cplugins",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "C plugins"
+  },
+  {
+    "name": "dvbin",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "DVB input module"
+  },
+  {
+    "name": "dvdnav",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "dvdnav support"
+  },
+  {
+    "name": "iconv",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "iconv"
+  },
+  {
+    "name": "javascript",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Javascript (MuJS backend)"
+  },
+  {
+    "name": "jpeg",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "libjpeg image writer"
+  },
+  {
+    "name": "lcms2",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "LCMS2 support"
+  },
+  {
+    "name": "libarchive",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "libarchive wrapper for reading zip files and more"
+  },
+  {
+    "name": "libavdevice",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "libavdevice"
+  },
+  {
+    "name": "libbluray",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Bluray support"
+  },
+  {
+    "name": "lua",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "lua",
+      "lua52",
+      "lua5.2",
+      "lua-5.2",
+      "luajit",
+      "lua51",
+      "lua5.1",
+      "lua-5.1",
+      "auto",
+      "enabled",
+      "disabled"
+    ],
+    "type": "combo",
+    "description": "Lua"
+  },
+  {
+    "name": "pthread-debug",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "pthread runtime debugging wrappers"
+  },
+  {
+    "name": "rubberband",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "librubberband support"
+  },
+  {
+    "name": "sdl2-gamepad",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "SDL2 gamepad input"
+  },
+  {
+    "name": "uchardet",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "uchardet support"
+  },
+  {
+    "name": "uwp",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Universal Windows Platform"
+  },
+  {
+    "name": "vapoursynth",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VapourSynth filter bridge"
+  },
+  {
+    "name": "vector",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "GCC vector instructions"
+  },
+  {
+    "name": "win32-threads",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "win32 native threading"
+  },
+  {
+    "name": "x11-clipboard",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "X11 clipboard backend"
+  },
+  {
+    "name": "zimg",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "libzimg support (high quality software scaler)"
+  },
+  {
+    "name": "zlib",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "zlib"
+  },
+  {
+    "name": "alsa",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "ALSA audio output"
+  },
+  {
+    "name": "audiounit",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "AudioUnit output (iOS)"
+  },
+  {
+    "name": "coreaudio",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "CoreAudio audio output"
+  },
+  {
+    "name": "avfoundation",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "AVFoundation audio output"
+  },
+  {
+    "name": "jack",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "JACK audio output"
+  },
+  {
+    "name": "openal",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenAL audio output"
+  },
+  {
+    "name": "audiotrack",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Android AudioTrack audio output"
+  },
+  {
+    "name": "aaudio",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Android AAudio audio output"
+  },
+  {
+    "name": "opensles",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenSL ES audio output"
+  },
+  {
+    "name": "oss-audio",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OSSv4 audio output"
+  },
+  {
+    "name": "pipewire",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "PipeWire audio output"
+  },
+  {
+    "name": "pulse",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "PulseAudio audio output"
+  },
+  {
+    "name": "sdl2-audio",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "SDL2 audio output"
+  },
+  {
+    "name": "sndio",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "sndio audio output"
+  },
+  {
+    "name": "wasapi",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "WASAPI audio output"
+  },
+  {
+    "name": "caca",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "CACA"
+  },
+  {
+    "name": "cocoa",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Cocoa"
+  },
+  {
+    "name": "d3d11",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Direct3D 11 video output"
+  },
+  {
+    "name": "direct3d",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Direct3D support"
+  },
+  {
+    "name": "dmabuf-wayland",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "dmabuf-wayland video output"
+  },
+  {
+    "name": "drm",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Direct Rendering Manager (DRM)"
+  },
+  {
+    "name": "egl",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "EGL 1.4"
+  },
+  {
+    "name": "egl-android",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Android EGL support"
+  },
+  {
+    "name": "egl-angle",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL ANGLE headers"
+  },
+  {
+    "name": "egl-angle-lib",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL Win32 ANGLE library"
+  },
+  {
+    "name": "egl-angle-win32",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL Win32 ANGLE backend"
+  },
+  {
+    "name": "egl-drm",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL DRM EGL backend"
+  },
+  {
+    "name": "egl-wayland",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL Wayland backend"
+  },
+  {
+    "name": "egl-x11",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL X11 EGL backend"
+  },
+  {
+    "name": "gbm",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Generic Buffer Manager (GBM)"
+  },
+  {
+    "name": "gl",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL context support"
+  },
+  {
+    "name": "gl-cocoa",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL Cocoa backend"
+  },
+  {
+    "name": "gl-dxinterop",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL/DirectX Interop backend"
+  },
+  {
+    "name": "gl-win32",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL Win32 backend"
+  },
+  {
+    "name": "gl-x11",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL X11/GLX (deprecated/legacy)"
+  },
+  {
+    "name": "sdl2-video",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "SDL2 video output"
+  },
+  {
+    "name": "shaderc",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "libshaderc SPIR-V compiler"
+  },
+  {
+    "name": "sixel",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Sixel video output"
+  },
+  {
+    "name": "spirv-cross",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "SPIRV-Cross SPIR-V shader converter"
+  },
+  {
+    "name": "plain-gl",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL without platform-specific code (e.g. for libmpv)"
+  },
+  {
+    "name": "vdpau",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VDPAU acceleration"
+  },
+  {
+    "name": "vdpau-gl-x11",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VDPAU with OpenGL/X11"
+  },
+  {
+    "name": "vaapi",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VAAPI acceleration"
+  },
+  {
+    "name": "vaapi-drm",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VAAPI (DRM support)"
+  },
+  {
+    "name": "vaapi-wayland",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VAAPI (Wayland support)"
+  },
+  {
+    "name": "vaapi-win32",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VAAPI (Windows support)"
+  },
+  {
+    "name": "vaapi-x11",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "VAAPI (X11 support)"
+  },
+  {
+    "name": "vulkan",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Vulkan context support"
+  },
+  {
+    "name": "wayland",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Wayland"
+  },
+  {
+    "name": "x11",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "X11"
+  },
+  {
+    "name": "xv",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Xv video output"
+  },
+  {
+    "name": "android-media-ndk",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Android Media APIs"
+  },
+  {
+    "name": "cuda-hwaccel",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "CUDA acceleration"
+  },
+  {
+    "name": "cuda-interop",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "CUDA with graphics interop"
+  },
+  {
+    "name": "d3d-hwaccel",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "D3D11VA hwaccel"
+  },
+  {
+    "name": "d3d9-hwaccel",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "DXVA2 hwaccel"
+  },
+  {
+    "name": "gl-dxinterop-d3d9",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "OpenGL/DirectX DXVA2 hwaccel"
+  },
+  {
+    "name": "ios-gl",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "iOS OpenGL ES interop support"
+  },
+  {
+    "name": "videotoolbox-gl",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Videotoolbox with OpenGL"
+  },
+  {
+    "name": "videotoolbox-pl",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Videotoolbox with libplacebo"
+  },
+  {
+    "name": "moltenvk",
+    "value": "enabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Moltenvk context"
+  },
+  {
+    "name": "macos-10-15-4-features",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS 10.15.4 SDK Features"
+  },
+  {
+    "name": "macos-11-features",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS 11 SDK Features"
+  },
+  {
+    "name": "macos-11-3-features",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS 11.3 SDK Features"
+  },
+  {
+    "name": "macos-12-features",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS 12 SDK Features"
+  },
+  {
+    "name": "macos-cocoa-cb",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS libmpv backend"
+  },
+  {
+    "name": "macos-media-player",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS Media Player support"
+  },
+  {
+    "name": "macos-touchbar",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS Touch Bar support"
+  },
+  {
+    "name": "macos-bundle-category",
+    "value": "video",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "video",
+      "games"
+    ],
+    "type": "combo",
+    "description": "macOS bundle category"
+  },
+  {
+    "name": "swift-build",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "macOS Swift build tools"
+  },
+  {
+    "name": "swift-flags",
+    "value": "-sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -target arm64-apple-macos12.0",
+    "section": "user",
+    "machine": "any",
+    "type": "string",
+    "description": "Optional Swift compiler flags"
+  },
+  {
+    "name": "win32-smtc",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "Enable Media Control support"
+  },
+  {
+    "name": "win32-subsystem",
+    "value": "windows",
+    "section": "user",
+    "machine": "any",
+    "type": "string",
+    "description": "Windows subsystem to use for mpv.exe"
+  },
+  {
+    "name": "html-build",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "HTML manual generation"
+  },
+  {
+    "name": "manpage-build",
+    "value": "auto",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "manpage generation"
+  },
+  {
+    "name": "pdf-build",
+    "value": "disabled",
+    "section": "user",
+    "machine": "any",
+    "choices": [
+      "enabled",
+      "disabled",
+      "auto"
+    ],
+    "type": "combo",
+    "description": "PDF manual generation"
+  },
+  {
+    "name": "errorlogs",
+    "value": true,
+    "section": "test",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Whether to print the logs from failing tests"
+  },
+  {
+    "name": "stdsplit",
+    "value": true,
+    "section": "test",
+    "machine": "any",
+    "type": "boolean",
+    "description": "Split stdout and stderr in test logs"
+  }
+]

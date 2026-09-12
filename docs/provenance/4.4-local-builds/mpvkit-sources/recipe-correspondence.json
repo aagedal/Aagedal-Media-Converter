@@ -1,0 +1,149 @@
+[
+  {
+    "target": "Libcrypto",
+    "archiveSHA256": "593283be2a90f7fd66f6e6ed331b2f099cf403e0926fe3b4ac09a7062b793965",
+    "recipeArchive": "build/attribution/mpvkit/openssl-build-3.3.5.tar.gz",
+    "packageSHA256": "3d3417262eacd5f9cd1acc38d53cf8878d7fc2d5ea4b5e348f5ac30bd78db345",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libssl",
+    "archiveSHA256": "ff5ffd43d015d7285fd37e4a3145b25cbd8d2842740bd629a711c299a20e226a",
+    "recipeArchive": "build/attribution/mpvkit/openssl-build-3.3.5.tar.gz",
+    "packageSHA256": "3d3417262eacd5f9cd1acc38d53cf8878d7fc2d5ea4b5e348f5ac30bd78db345",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "gmp",
+    "archiveSHA256": "ad33c7a08f4cdcb9924c8f0e6d9a054dad33d7794b97667bf8b6fb2b236ae585",
+    "recipeArchive": "build/attribution/mpvkit/gnutls-build-3.8.11.tar.gz",
+    "packageSHA256": "3d4f676c58f6bee181379c97508d1410fa5e7db0e449423c3b2b7c7d055703ef",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "nettle",
+    "archiveSHA256": "0fdf3ebf8bd7b8bc8eee837cf27261cb4c52ae520b6576a2f468656aa1691e02",
+    "recipeArchive": "build/attribution/mpvkit/gnutls-build-3.8.11.tar.gz",
+    "packageSHA256": "3d4f676c58f6bee181379c97508d1410fa5e7db0e449423c3b2b7c7d055703ef",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "hogweed",
+    "archiveSHA256": "25727c9fa67287fa0a4f4722f88bb8be669b23cd7e837e2d00870eb8a25d3f27",
+    "recipeArchive": "build/attribution/mpvkit/gnutls-build-3.8.11.tar.gz",
+    "packageSHA256": "3d4f676c58f6bee181379c97508d1410fa5e7db0e449423c3b2b7c7d055703ef",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "gnutls",
+    "archiveSHA256": "3dbec5809339189bf9679e218c6cff387ebf8fb72745927835afc2678f5c9f4d",
+    "recipeArchive": "build/attribution/mpvkit/gnutls-build-3.8.11.tar.gz",
+    "packageSHA256": "3d4f676c58f6bee181379c97508d1410fa5e7db0e449423c3b2b7c7d055703ef",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libunibreak",
+    "archiveSHA256": "940d9833cf4477d0a260d9f2b4066125bc0ff7bbc111ac3c90e774765b77a559",
+    "recipeArchive": "build/attribution/mpvkit/libass-build-0.17.5.tar.gz",
+    "packageSHA256": "6b949455d1ebb12b348407db67a8a62dbae299170919b50afab9e8b9ba2e445a",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libfreetype",
+    "archiveSHA256": "496ca62488530e14b1e4624d20ee2b237c0bd675cd70c19da578a5768302d02d",
+    "recipeArchive": "build/attribution/mpvkit/libass-build-0.17.5.tar.gz",
+    "packageSHA256": "6b949455d1ebb12b348407db67a8a62dbae299170919b50afab9e8b9ba2e445a",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libfribidi",
+    "archiveSHA256": "bc15e097b892f2f90424e4a27ba287070cc2f98a74a4da10e6d2481d15cf5ff9",
+    "recipeArchive": "build/attribution/mpvkit/libass-build-0.17.5.tar.gz",
+    "packageSHA256": "6b949455d1ebb12b348407db67a8a62dbae299170919b50afab9e8b9ba2e445a",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libharfbuzz",
+    "archiveSHA256": "aa8e0b9ca0387dac74e3e93c86e34d11982bb013b28022d0e6966a8427a35b2e",
+    "recipeArchive": "build/attribution/mpvkit/libass-build-0.17.5.tar.gz",
+    "packageSHA256": "6b949455d1ebb12b348407db67a8a62dbae299170919b50afab9e8b9ba2e445a",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libass",
+    "archiveSHA256": "3f4c576d2818ceb4544aa2a20e1f55846511c5e706fd19adc3ea9fd842270498",
+    "recipeArchive": "build/attribution/mpvkit/libass-build-0.17.5.tar.gz",
+    "packageSHA256": "6b949455d1ebb12b348407db67a8a62dbae299170919b50afab9e8b9ba2e445a",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libsmbclient",
+    "archiveSHA256": "3a53375fab11bc888cc553664ea5dd902208d04f0cc21ec746302bf356246b6f",
+    "recipeArchive": "build/attribution/mpvkit/libsmbclient-build-4.15.13-2512.tar.gz",
+    "packageSHA256": "5eb89d337b1ff74f22922d2822582ddbaa28c3c6c1d87ea3a1077d3577dbbbf4",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libbluray",
+    "archiveSHA256": "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d",
+    "recipeArchive": "build/attribution/mpvkit/libbluray-build-1.4.0.tar.gz",
+    "packageSHA256": "97873e7bde7265e315d33b66be56fd21efa89fd47dac6c213e8b471c03e8ee2e",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libuavs3d",
+    "archiveSHA256": "bd5256081486d16c51c868d755bf70266c424b54c895269580de44ec6707f789",
+    "recipeArchive": "build/attribution/mpvkit/libuavs3d-build-1.2.1-fix.tar.gz",
+    "packageSHA256": "9dfb7f98d36cc31bf2c61307d92ebae9d8a0cefcfd9074b419d787e051977f7a",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libdovi",
+    "archiveSHA256": "e693e239808350868e79c5448ef9f02e2716bc822dd8632a41a368a1eae5ca7d",
+    "recipeArchive": "build/attribution/mpvkit/libdovi-build-3.3.2.tar.gz",
+    "packageSHA256": "f89dd47f07603514827aa9050dff0247d4329f2d76450cff22b313513ea9de2d",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "MoltenVK",
+    "archiveSHA256": "aee189c54ad7c62bf734a3dc51eb4cfad5685d1d63b0ec519ecd1b437c332418",
+    "recipeArchive": "build/attribution/mpvkit/moltenvk-build-1.4.2.tar.gz",
+    "packageSHA256": "f8d9a938f43cd0669ca9a08e66f8d9ec9b5093aafbcdc3d6453dbdfbfe4e95cf",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libshaderc_combined",
+    "archiveSHA256": "758047b615708575b580eb960a2d083f760a29dc462d6eaa360416c946ce433b",
+    "recipeArchive": "build/attribution/mpvkit/libshaderc-build-2025.5.0.tar.gz",
+    "packageSHA256": "6dfd9faaf54857c72cc22a062adb4f2442c5f3caec6e1c30bf3e3d197a36224a",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "lcms2",
+    "archiveSHA256": "dc0dce0606f6ab6841a8ec5a6bd4448e2f3ef00661a050460f806c9393dc6982",
+    "recipeArchive": "build/attribution/mpvkit/lcms2-build-2.17.0.tar.gz",
+    "packageSHA256": "83a439c3f94f72c4100bf690350ea8af4a6041013445a65c4e35704b473b4e65",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libplacebo",
+    "archiveSHA256": "2fa3d54cb81f302d6f11c7b2f509af30944381c3b11ee9d35096eb4637a6e2dd",
+    "recipeArchive": "build/attribution/mpvkit/libplacebo-build-7.360.1.tar.gz",
+    "packageSHA256": "aaf5a0eefcd39ed0bde20e9764d4a875a52b1fc57483d94aab56fd0d5a702611",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libdav1d",
+    "archiveSHA256": "d1a32ae6a1f0193e9f05c44c9176844af7f6d2a58cb33843f6f1b8dfd9224083",
+    "recipeArchive": "build/attribution/mpvkit/libdav1d-build-1.5.3.tar.gz",
+    "packageSHA256": "182a9148744cd3bae590bbb5b792ff2c85aa2b67ad17144d3298db916bd4bf5e",
+    "recipeChecksumMatchesPin": true
+  },
+  {
+    "target": "Libuchardet",
+    "archiveSHA256": "ea4f548a230a755e059144657cc9e2ff563c1cdeae03974c38f8b6e1a40303fb",
+    "recipeArchive": "build/attribution/mpvkit/libuchardet-build-0.0.8.tar.gz",
+    "packageSHA256": "725ed237f000a7b91fdaa9e0307d55b95f3e49080579b8c1a38583d0e74c3df8",
+    "recipeChecksumMatchesPin": true
+  }
+]

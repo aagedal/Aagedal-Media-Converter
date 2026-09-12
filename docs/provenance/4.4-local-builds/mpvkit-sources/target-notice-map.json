@@ -1,0 +1,225 @@
+{
+  "Libmpv-GPL": {
+    "archiveSHA256": "cfabdb70615205e8cb3c9f55dc6491194d900c42012b673f4e2819af8d216216",
+    "noticeCollections": [
+      "MPVKit",
+      "mpv"
+    ]
+  },
+  "Libavcodec-GPL": {
+    "archiveSHA256": "b8bfd580f325995072a78bd9b8ec139781010955a96b09897a4cc202d80d17cf",
+    "noticeCollections": [
+      "FFmpeg"
+    ]
+  },
+  "Libavdevice-GPL": {
+    "archiveSHA256": "5eeb5485d9f2cf5b63f5d31aa65a06c07eb3b53c2b30ae95edde71af1c055658",
+    "noticeCollections": [
+      "FFmpeg"
+    ]
+  },
+  "Libavformat-GPL": {
+    "archiveSHA256": "d8631fe273bb52326bb09e30e4f7dddfb197d656dc8072d7db117c5a618a832a",
+    "noticeCollections": [
+      "FFmpeg"
+    ]
+  },
+  "Libavfilter-GPL": {
+    "archiveSHA256": "7be6453e2146b1c3d99fd52e45d19566e7044bbf335799fc960f53a81e8e0b8f",
+    "noticeCollections": [
+      "FFmpeg"
+    ]
+  },
+  "Libavutil-GPL": {
+    "archiveSHA256": "c86a89424fde74caec2da4e56035050e7bad1e844465ce07b8a2b190d8d41fca",
+    "noticeCollections": [
+      "FFmpeg"
+    ]
+  },
+  "Libswresample-GPL": {
+    "archiveSHA256": "5f0cf2dcf0c2f83c5ad734def64c042391803211dfda7bd31755adbef565b869",
+    "noticeCollections": [
+      "FFmpeg"
+    ]
+  },
+  "Libswscale-GPL": {
+    "archiveSHA256": "0d1cb7d97b511bc34cbd1c49a3dd350ff3eecda8373265b221b3a20de92f82ff",
+    "noticeCollections": [
+      "FFmpeg"
+    ]
+  },
+  "Libcrypto": {
+    "archiveSHA256": "593283be2a90f7fd66f6e6ed331b2f099cf403e0926fe3b4ac09a7062b793965",
+    "noticeCollections": [
+      "openssl"
+    ]
+  },
+  "Libssl": {
+    "archiveSHA256": "ff5ffd43d015d7285fd37e4a3145b25cbd8d2842740bd629a711c299a20e226a",
+    "noticeCollections": [
+      "openssl"
+    ]
+  },
+  "gmp": {
+    "archiveSHA256": "ad33c7a08f4cdcb9924c8f0e6d9a054dad33d7794b97667bf8b6fb2b236ae585",
+    "noticeCollections": [
+      "gmp"
+    ]
+  },
+  "nettle": {
+    "archiveSHA256": "0fdf3ebf8bd7b8bc8eee837cf27261cb4c52ae520b6576a2f468656aa1691e02",
+    "noticeCollections": [
+      "nettle"
+    ]
+  },
+  "hogweed": {
+    "archiveSHA256": "25727c9fa67287fa0a4f4722f88bb8be669b23cd7e837e2d00870eb8a25d3f27",
+    "noticeCollections": [
+      "nettle"
+    ]
+  },
+  "gnutls": {
+    "archiveSHA256": "3dbec5809339189bf9679e218c6cff387ebf8fb72745927835afc2678f5c9f4d",
+    "noticeCollections": [
+      "gnutls",
+      "gnutls-gnulib",
+      "gnutls-libtasn1",
+      "gnutls-nettle"
+    ]
+  },
+  "Libunibreak": {
+    "archiveSHA256": "940d9833cf4477d0a260d9f2b4066125bc0ff7bbc111ac3c90e774765b77a559",
+    "noticeCollections": [
+      "libunibreak"
+    ]
+  },
+  "Libfreetype": {
+    "archiveSHA256": "496ca62488530e14b1e4624d20ee2b237c0bd675cd70c19da578a5768302d02d",
+    "noticeCollections": [
+      "freetype"
+    ]
+  },
+  "Libfribidi": {
+    "archiveSHA256": "bc15e097b892f2f90424e4a27ba287070cc2f98a74a4da10e6d2481d15cf5ff9",
+    "noticeCollections": [
+      "fribidi"
+    ]
+  },
+  "Libharfbuzz": {
+    "archiveSHA256": "aa8e0b9ca0387dac74e3e93c86e34d11982bb013b28022d0e6966a8427a35b2e",
+    "noticeCollections": [
+      "harfbuzz"
+    ]
+  },
+  "Libass": {
+    "archiveSHA256": "3f4c576d2818ceb4544aa2a20e1f55846511c5e706fd19adc3ea9fd842270498",
+    "noticeCollections": [
+      "libass"
+    ]
+  },
+  "Libsmbclient": {
+    "archiveSHA256": "3a53375fab11bc888cc553664ea5dd902208d04f0cc21ec746302bf356246b6f",
+    "noticeCollections": [
+      "samba"
+    ]
+  },
+  "Libbluray": {
+    "archiveSHA256": "bc037d34e2b0b5ab7f202fb371f5fb298136cc66fdf406c2172185d06f53f18d",
+    "noticeCollections": [
+      "libbluray"
+    ]
+  },
+  "Libuavs3d": {
+    "archiveSHA256": "bd5256081486d16c51c868d755bf70266c424b54c895269580de44ec6707f789",
+    "noticeCollections": [
+      "Pinned Libuavs3d headers"
+    ]
+  },
+  "Libdovi": {
+    "archiveSHA256": "e693e239808350868e79c5448ef9f02e2716bc822dd8632a41a368a1eae5ca7d",
+    "noticeCollections": [
+      "libdovi",
+      "Rust",
+      "Rust standard-library complete copyright document",
+      "libdovi-crate-addr2line-0.25.1",
+      "libdovi-crate-anyhow-1.0.98",
+      "libdovi-crate-bitstream-io-2.6.0",
+      "libdovi-crate-bitvec-1.0.1",
+      "libdovi-crate-bitvec_helpers-3.1.6",
+      "libdovi-crate-crc-3.3.0",
+      "libdovi-crate-crc-catalog-2.4.0",
+      "libdovi-crate-funty-2.0.0",
+      "libdovi-crate-gimli-0.32.3",
+      "libdovi-crate-hashbrown-0.16.1",
+      "libdovi-crate-libc-0.2.172",
+      "libdovi-crate-memchr-2.7.6",
+      "libdovi-crate-miniz_oxide-0.8.9",
+      "libdovi-crate-object-0.37.3",
+      "libdovi-crate-proc-macro2-1.0.95",
+      "libdovi-crate-quote-1.0.40",
+      "libdovi-crate-radium-0.7.0",
+      "libdovi-crate-rustc-demangle-0.1.26",
+      "libdovi-crate-serde-1.0.219",
+      "libdovi-crate-serde_derive-1.0.219",
+      "libdovi-crate-syn-2.0.101",
+      "libdovi-crate-tap-1.0.1",
+      "libdovi-crate-tinyvec-1.9.0",
+      "libdovi-crate-unicode-ident-1.0.18",
+      "libdovi-crate-wyz-0.5.1"
+    ]
+  },
+  "MoltenVK": {
+    "archiveSHA256": "aee189c54ad7c62bf734a3dc51eb4cfad5685d1d63b0ec519ecd1b437c332418",
+    "noticeCollections": [
+      "MoltenVK",
+      "MoltenVK-SPIRV-Cross",
+      "MoltenVK-SPIRV-Headers",
+      "MoltenVK-SPIRV-Tools",
+      "MoltenVK-Vulkan-Headers",
+      "MoltenVK-cereal"
+    ]
+  },
+  "Libshaderc_combined": {
+    "archiveSHA256": "758047b615708575b580eb960a2d083f760a29dc462d6eaa360416c946ce433b",
+    "noticeCollections": [
+      "shaderc",
+      "shaderc-abseil",
+      "shaderc-effcee",
+      "shaderc-glslang",
+      "shaderc-googletest",
+      "shaderc-re2",
+      "shaderc-spirv_headers",
+      "shaderc-spirv_tools"
+    ]
+  },
+  "lcms2": {
+    "archiveSHA256": "dc0dce0606f6ab6841a8ec5a6bd4448e2f3ef00661a050460f806c9393dc6982",
+    "noticeCollections": [
+      "lcms2"
+    ]
+  },
+  "Libplacebo": {
+    "archiveSHA256": "2fa3d54cb81f302d6f11c7b2f509af30944381c3b11ee9d35096eb4637a6e2dd",
+    "noticeCollections": [
+      "libplacebo",
+      "libplacebo-Vulkan-Headers",
+      "libplacebo-fast_float",
+      "libplacebo-glad",
+      "libplacebo-jinja",
+      "libplacebo-markupsafe",
+      "spirv-cross"
+    ]
+  },
+  "Libdav1d": {
+    "archiveSHA256": "d1a32ae6a1f0193e9f05c44c9176844af7f6d2a58cb33843f6f1b8dfd9224083",
+    "noticeCollections": [
+      "dav1d"
+    ]
+  },
+  "Libuchardet": {
+    "archiveSHA256": "ea4f548a230a755e059144657cc9e2ff563c1cdeae03974c38f8b6e1a40303fb",
+    "noticeCollections": [
+      "uchardet"
+    ]
+  }
+}

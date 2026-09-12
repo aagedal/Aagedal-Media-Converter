@@ -1,0 +1,15 @@
+{
+  "treeSHA": "b841c70e101311f5711ad9fd5d24d33684c2c76d",
+  "submodules": {
+    "cligen": "59911854af60377b045ec8db88ae969b5bad1f66",
+    "devel/abi-dump": "b847a0ff4dcd9be6ab6decdeb342431256d09888",
+    "devel/libtasn1": "6b45b25e94ea538192cc0f97e9ad57171d1c6374",
+    "devel/nettle": "40178e78ae73ec2a8cda8cd53664df9c73ac1961",
+    "devel/openssl": "a7e992847de83aa36be0c399c89db3fb827b0be2",
+    "gnulib": "05c63bc908a67a316fea29ddf4c702d89cf5bdec",
+    "tests/suite/tls-fuzzer/python-ecdsa": "c8802e5c4f20557b674ef3d724985d40b5ff0537",
+    "tests/suite/tls-fuzzer/tlsfuzzer": "4216d2ca4b017a893cc7681c2baa1635dbdf3f0f",
+    "tests/suite/tls-fuzzer/tlslite-ng": "b6dd1c2bd3b3dc05bf1d794344ad4c2e4a0e20d9",
+    "tests/suite/tls-interoperability": "20233dc815b05a10f34e5f67850d4d83f8409cab"
+  }
+}
