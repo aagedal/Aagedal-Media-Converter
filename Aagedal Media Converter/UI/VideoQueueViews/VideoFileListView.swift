@@ -46,6 +46,7 @@ struct VideoFileListView: View {
     var onDoubleClick: () -> Void
     var onDelete: (IndexSet) -> Void
     var onReset: (Int, Bool) -> Void
+    var onCancelApplicationJob: ((ApplicationJobID) -> Void)? = nil
     var preset: ExportPreset
     var mergeClipsEnabled: Bool
     var mergeClipsAvailable: Bool
@@ -232,6 +233,7 @@ struct VideoFileListView: View {
                     },
                     onDelete: onDelete,
                     onReset: onReset,
+                    onCancelApplicationJob: onCancelApplicationJob,
                     onOpenTrim: onOpenTrim,
                     onOpenTrimWithCrop: onOpenTrimWithCrop,
                     onOpenTimecode: onOpenTimecode,

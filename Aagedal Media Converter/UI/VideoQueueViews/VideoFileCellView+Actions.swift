@@ -179,7 +179,9 @@ extension VideoFileCellView {
             deleteButton.toolTip = "Remove from list"
             // Hide rather than disable so we don't carry a faded icon next to the
             // strong delete one. Stack order is [reset, delete] so delete stays put.
-            resetButton.isHidden = config.status == .converting || config.status == .waiting
+            resetButton.isHidden = config.applicationJobID != nil
+                || config.status == .converting
+                || config.status == .waiting
             resetButton.toolTip = "Reset status"
         }
     }
@@ -423,7 +425,9 @@ extension VideoFileCellView {
 
         let resetItem = menu.addItem(withTitle: "Reset", action: #selector(ctxReset), keyEquivalent: "")
         resetItem.target = self
-        resetItem.isEnabled = config.status != .waiting && config.status != .converting
+        resetItem.isEnabled = config.applicationJobID == nil
+            && config.status != .waiting
+            && config.status != .converting
 
         let removeItem = menu.addItem(withTitle: "Remove", action: #selector(ctxRemove), keyEquivalent: "")
         removeItem.target = self

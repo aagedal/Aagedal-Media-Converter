@@ -215,6 +215,29 @@ final class ConversionQueueStateTests: XCTestCase {
         XCTAssertNil(ConversionQueueState.nextItem(in: [done, cancelled], allowedItemIDs: nil))
     }
 
+    func testLegacyQueueDoesNotClaimCancelOrCountSharedApplicationJobs() {
+        var shared = item(status: .converting, duration: 1_000, progress: 0.9)
+        shared.applicationJobID = ApplicationJobID()
+        shared.applicationJobOrigin = .localAgent
+        let manual = item(status: .waiting, duration: 100, progress: 0)
+
+        XCTAssertEqual(
+            ConversionQueueState.nextItem(in: [shared, manual], allowedItemIDs: nil)?.id,
+            manual.id
+        )
+        XCTAssertEqual(
+            ConversionQueueState.overallProgress(for: [shared, manual]),
+            0,
+            accuracy: 0.000001
+        )
+
+        let originalShared = shared
+        var items = [shared, manual]
+        ConversionQueueState.cancel(&items, scope: .waitingAndConverting)
+        XCTAssertEqual(items[0], originalShared)
+        XCTAssertEqual(items[1].status, .cancelled)
+    }
+
     func testProgressUsesTrimmedDurationsAndExcludesUnsuccessfulItems() {
         var completed = item(status: .done, duration: 100, progress: 0)
         completed.trimStart = 10

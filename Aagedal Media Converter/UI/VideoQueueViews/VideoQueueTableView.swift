@@ -144,6 +144,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     // Callbacks
     var onDelete: (IndexSet) -> Void
     var onReset: (Int, Bool) -> Void
+    var onCancelApplicationJob: ((ApplicationJobID) -> Void)? = nil
     var onOpenTrim: ((UUID) -> Void)?
     var onOpenTrimWithCrop: ((UUID) -> Void)?
     var onOpenTimecode: ((UUID) -> Void)?
@@ -1018,6 +1019,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 eta: item.eta,
                 statusMessage: item.statusMessage,
                 conversionError: item.conversionError,
+                applicationJobID: item.applicationJobID,
+                applicationJobOrigin: item.applicationJobOrigin,
                 comment: item.comment,
                 includeDateTag: item.includeDateTag,
                 outputURL: item.outputURL,
@@ -1029,7 +1032,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 showCommentField: isGroupItem ? false : parent.showCommentField,
                 showDateTagButton: isGroupItem ? false : parent.showDateTagButton,
                 isFocusedComment: parent.focusedCommentID == item.id,
-                preset: parent.preset,
+                preset: item.applicationPresetID?.exportPreset ?? parent.preset,
                 mergeClipsEnabled: isGroupItem ? false : parent.mergeClipsEnabled,
                 mergeClipsAvailable: isGroupItem ? false : parent.mergeClipsAvailable,
                 outputFileExists: item.outputFileExists,
@@ -1334,7 +1337,12 @@ struct VideoQueueTableView: NSViewRepresentable {
                     }
                 }
             case .cancel:
-                Task { await ConversionManager.shared.cancelItem(with: itemID) }
+                if let item = parent.droppedFiles.first(where: { $0.id == itemID }),
+                   let jobID = item.applicationJobID {
+                    parent.onCancelApplicationJob?(jobID)
+                } else {
+                    Task { await ConversionManager.shared.cancelItem(with: itemID) }
+                }
             case .cancelDownload:
                 DownloadManager.shared.cancelDownload(itemID: itemID)
             case .stopLiveRecording:

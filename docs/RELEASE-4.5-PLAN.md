@@ -1,7 +1,8 @@
 # Proposed 4.5 release — Local agent access
 
-Status: signed local transport prototype implemented on `codex/release-4.5`;
-feasibility decision pending final-client and Release-package validation.
+Status: signed local transport and visible shared-job queue projection implemented
+on `codex/release-4.5`; feasibility decision pending final-client and
+Release-package validation.
 Created: 2026-09-11.
 
 ## Release context
@@ -89,10 +90,15 @@ Unrepresentable snapshots fail before FFmpeg launches instead of silently fallin
 back. Focused adapter coverage and the full unit result are recorded in the
 [FFmpeg adapter validation record](4.5-ffmpeg-adapter-validation-2026-09-13.md).
 
-This completes the concrete engine plug-in for shared jobs, but not shared queue
-adoption: the visible manual queue and App Intent entry points still run through
-`ConversionManager`. They must join the application boundary before concurrent
-manual and agent work can claim one authoritative queue.
+Shared-service records now stream into the existing visible queue as one row per
+source. Rows preserve the accepted output location, follow live and terminal
+state, identify Agent or Shortcut origin plus a stable job ID, and route
+cancellation back to the service. Legacy manual selection, bulk cancellation,
+and dock progress explicitly exclude service-owned rows, preventing the old
+manager from claiming or mutating them. The manual and App Intent entry points
+still start work through `ConversionManager`, so cross-origin serialization and
+full shared-boundary adoption remain open. See the
+[visible queue validation record](4.5-visible-queue-validation-2026-09-13.md).
 
 The six proposed agent operations now have a transport-neutral, typed workflow:
 media inspection, preset discovery, conversion planning and submission, job
@@ -120,8 +126,9 @@ MCP and returned all six resolved presets through a running app. See the
 This is still a prototype rather than a completed feasibility decision. The
 current direct-distribution target has App Sandbox disabled, two named MCP
 clients have not been exercised, and a Developer ID Release archive has not
-completed signing/notarization validation. Shared visible queue adoption,
-origin labels, and App Intent routing also remain open.
+completed signing/notarization validation. Manual and App Intent submission,
+cross-boundary queue serialization, and immutable accepted-settings inspection
+in the queue also remain open.
 
 ## Intended outcome
 

@@ -171,6 +171,49 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(roundTrip, plan)
     }
 
+    func testVisibleQueueUpdatesPublishAcceptedAndCancelledJobsWithPlannedOutputs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+
+        let service = ApplicationJobService(
+            planLifetime: 1,
+            fileAccessAuthorizer: .unrestricted
+        )
+        let updates = await service.recordUpdates()
+        var iterator = updates.makeAsyncIterator()
+        let initialRecords = await iterator.next()
+        XCTAssertEqual(initialRecords, [])
+
+        let request = makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory
+        )
+        let acceptedAt = Date(timeIntervalSince1970: 10_000)
+        let plan = try await service.plan(request, now: acceptedAt)
+        let acceptance = try await service.submit(planID: plan.id, now: acceptedAt)
+
+        let nextAcceptedRecords = await iterator.next()
+        let acceptedRecords = try XCTUnwrap(nextAcceptedRecords)
+        XCTAssertEqual(acceptedRecords.map(\.id), [acceptance.record.id])
+        XCTAssertEqual(acceptedRecords.first?.state, .queued)
+        let outputURLs = try await service.plannedOutputURLs(for: acceptance.record.id)
+        XCTAssertEqual(outputURLs, plan.outputs.map(\.outputURL))
+
+        // A submitted plan can age out while a long job is still visible. Its
+        // immutable accepted request must continue to resolve the same output.
+        _ = try await service.plan(request, now: acceptedAt.addingTimeInterval(2))
+        let reconstructedOutputURLs = try await service.plannedOutputURLs(for: acceptance.record.id)
+        XCTAssertEqual(reconstructedOutputURLs, plan.outputs.map(\.outputURL))
+
+        _ = try await service.requestCancellation(acceptance.record.id)
+        let nextCancelledRecords = await iterator.next()
+        let cancelledRecords = try XCTUnwrap(nextCancelledRecords)
+        XCTAssertEqual(cancelledRecords.first?.state, .cancelled)
+    }
+
     func testPlanningRequiresApprovedReadAndWriteScopes() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")

@@ -2,7 +2,7 @@
 
 4.5 development has started with the shared application boundary and signed
 local transport needed for agent access. Final client compatibility, shared
-visible queue adoption, and Release-package validation remain open.
+manual/App Intent queue ownership, and Release-package validation remain open.
 
 ## Local agent access
 
@@ -51,6 +51,10 @@ visible queue adoption, and Release-package validation remain open.
   configuration, helper discovery, approved-folder guidance, and an explicit
   policy that disabling access stops new requests without cancelling accepted
   jobs.
+- Projected shared-service jobs into the existing visible queue with live state
+  and progress, accepted output locations, origin and stable job-ID labels, and
+  per-job cancellation. Legacy manual queue selection, bulk cancellation, and
+  dock progress now leave shared-service rows under their authoritative owner.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

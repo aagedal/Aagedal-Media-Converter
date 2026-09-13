@@ -31,6 +31,8 @@ struct VideoFileCellConfiguration: Equatable {
     /// When set, takes visual precedence over `eta` in the progress label.
     let statusMessage: String?
     let conversionError: String?
+    let applicationJobID: ApplicationJobID?
+    let applicationJobOrigin: ApplicationJobOrigin?
     let comment: String
     let includeDateTag: Bool
     let outputURL: URL?

@@ -31,6 +31,14 @@ enum ApplicationJobOrigin: String, Codable, Sendable {
     case manual
     case appIntent = "app_intent"
     case localAgent = "local_agent"
+
+    var displayName: String {
+        switch self {
+        case .manual: "Manual"
+        case .appIntent: "Shortcut"
+        case .localAgent: "Agent"
+        }
+    }
 }
 
 /// Stable, transport-facing identifiers for the resolved settings that affect an
@@ -1709,6 +1717,7 @@ actor ApplicationJobService {
     private var isExecutionDraining = false
     private var activeExecutionJobID: ApplicationJobID?
     private var cancellationSignals: Set<ApplicationJobID> = []
+    private var recordObservers: [UUID: AsyncStream<[ApplicationJobRecord]>.Continuation] = [:]
 
     init(
         registry: ApplicationJobRegistry = ApplicationJobRegistry(),
@@ -1784,7 +1793,25 @@ actor ApplicationJobService {
         )
         await removeExpiredState(now: now)
         try await persist()
+        await publishRecords()
         return interrupted
+    }
+
+    /// Publishes the authoritative application queue to UI observers. A newest-only
+    /// buffer keeps progress updates from building an unbounded backlog when the UI
+    /// is temporarily busy or no window is visible.
+    func recordUpdates() async -> AsyncStream<[ApplicationJobRecord]> {
+        let observerID = UUID()
+        let (stream, continuation) = AsyncStream.makeStream(
+            of: [ApplicationJobRecord].self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        recordObservers[observerID] = continuation
+        continuation.onTermination = { @Sendable [weak self] _ in
+            Task { await self?.removeRecordObserver(observerID) }
+        }
+        continuation.yield(await registry.allRecords())
+        return stream
     }
 
     func plan(
@@ -1885,6 +1912,7 @@ actor ApplicationJobService {
         submittedPlans[planID] = accepted
         try await persist()
         enqueueExecution(jobID: accepted.record.id, plan: plan)
+        await publishRecords()
         return accepted
     }
 
@@ -1909,6 +1937,22 @@ actor ApplicationJobService {
         return await registry.allRecords()
     }
 
+    /// Resolves the accepted output list for queue presentation without exposing a
+    /// mutable plan or consulting current preferences. Submitted plans are preferred;
+    /// an expired plan can be reconstructed from the immutable accepted request.
+    func plannedOutputURLs(
+        for jobID: ApplicationJobID,
+        now: Date = Date()
+    ) async throws -> [URL] {
+        try await ensureRestored(now: now)
+        if let planID = submittedPlans.first(where: { $0.value.record.id == jobID })?.key,
+           let plan = plans[planID] {
+            return plan.outputs.map(\.outputURL)
+        }
+        guard let record = await registry.record(for: jobID) else { return [] }
+        return try Self.plannedOutputs(for: record.request).map(\.outputURL)
+    }
+
     @discardableResult
     func transition(
         _ jobID: ApplicationJobID,
@@ -1925,6 +1969,7 @@ actor ApplicationJobService {
             releaseOutputReservations(for: jobID)
         }
         try await persist()
+        await publishRecords()
         return record
     }
 
@@ -1947,6 +1992,7 @@ actor ApplicationJobService {
             }
         }
         try await persist()
+        await publishRecords()
         return record
     }
 
@@ -1958,7 +2004,9 @@ actor ApplicationJobService {
         now: Date = Date()
     ) async throws -> ApplicationJobRecord {
         try await ensureRestored(now: now)
-        return try await registry.updateProgress(jobID, progress: progress, stage: stage, now: now)
+        let record = try await registry.updateProgress(jobID, progress: progress, stage: stage, now: now)
+        await publishRecords()
+        return record
     }
 
     @discardableResult
@@ -1972,7 +2020,20 @@ actor ApplicationJobService {
             releaseOutputReservations(for: record.id)
         }
         try await persist()
+        await publishRecords()
         return interrupted
+    }
+
+    private func removeRecordObserver(_ observerID: UUID) {
+        recordObservers.removeValue(forKey: observerID)
+    }
+
+    private func publishRecords() async {
+        guard !recordObservers.isEmpty else { return }
+        let records = await registry.allRecords()
+        for continuation in recordObservers.values {
+            continuation.yield(records)
+        }
     }
 
     /// Removes expired plans and terminal records older than the documented

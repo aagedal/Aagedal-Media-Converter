@@ -117,6 +117,8 @@ struct ContentView: View {
     
     @State private var encodingGroups: [EncodingGroup] = []
     @State private var queueOrder: [UUID] = []
+    @State private var dismissedApplicationJobIDs = Set<ApplicationJobID>()
+    @State private var applicationJobVisibilityStart = Date().addingTimeInterval(-60)
 
     @StateObject private var updateChecker = UpdateChecker.shared
     @State private var showUpdateNotification = false
@@ -154,7 +156,7 @@ struct ContentView: View {
     
     // Only allow starting conversion when at least one item is still waiting
     private var canStartConversion: Bool {
-        droppedFiles.contains { $0.status == .waiting }
+        droppedFiles.contains { $0.status == .waiting && $0.applicationJobID == nil }
         || encodingGroups.contains { $0.items.contains { $0.status == .waiting } }
     }
 
@@ -279,6 +281,9 @@ struct ContentView: View {
             onDoubleClick: { isFileImporterPresented = true },
             onDelete: handleFileDeletion,
             onReset: handleFileReset,
+            onCancelApplicationJob: { jobID in
+                Task { _ = try? await ApplicationJobService.shared.requestCancellation(jobID) }
+            },
             preset: selectedPreset,
             mergeClipsEnabled: mergeClipsEnabled,
             mergeClipsAvailable: mergeClipsAvailable,
@@ -459,6 +464,10 @@ struct ContentView: View {
         }
 
         for item in itemsToRemove {
+            if let jobID = item.applicationJobID {
+                dismissedApplicationJobIDs.insert(jobID)
+                Task { _ = try? await ApplicationJobService.shared.requestCancellation(jobID) }
+            }
             if item.isDownloading {
                 DownloadManager.shared.cancelDownload(itemID: item.id)
             } else if let _ = item.scheduledDownloadTime {
@@ -486,6 +495,7 @@ struct ContentView: View {
 
     private func handleFileReset(_ index: Int, optionKeyPressed: Bool = false) {
         if index < droppedFiles.count {
+            guard droppedFiles[index].applicationJobID == nil else { return }
             if let operationID = droppedFiles[index].analyticsOperationID {
                 Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
             }
@@ -551,6 +561,13 @@ struct ContentView: View {
                 handleWatchFolderToggle: handleWatchFolderToggle,
                 scheduleAutoEncode: scheduleAutoEncode
             ))
+            .task {
+                let updates = await ApplicationJobService.shared.recordUpdates()
+                for await records in updates {
+                    guard !Task.isCancelled else { return }
+                    await synchronizeApplicationJobs(records)
+                }
+            }
             .onChange(of: droppedFiles) { _, _ in
                 // Keep the display-order array in sync with the source list.
                 // Without this, items appended outside the drag-drop path (e.g.
@@ -1769,6 +1786,117 @@ struct ContentView: View {
             }
         }
     }
+
+    /// Mirrors shared-service work into the existing visible queue. The service
+    /// remains authoritative: rows only project its state and cancellation is
+    /// routed back by stable job identity.
+    @MainActor
+    private func synchronizeApplicationJobs(_ records: [ApplicationJobRecord]) async {
+        let visibleRecords = records.filter { record in
+            guard !dismissedApplicationJobIDs.contains(record.id) else { return false }
+            return !record.state.isTerminal || record.updatedAt >= applicationJobVisibilityStart
+        }
+
+        for record in visibleRecords {
+            let plannedOutputs = (try? await ApplicationJobService.shared.plannedOutputURLs(for: record.id)) ?? []
+            for (sourceIndex, sourceURL) in record.request.sourceURLs.enumerated() {
+                let outputURL = record.outputURLs.indices.contains(sourceIndex)
+                    ? record.outputURLs[sourceIndex]
+                    : (plannedOutputs.indices.contains(sourceIndex) ? plannedOutputs[sourceIndex] : nil)
+
+                if let itemIndex = droppedFiles.firstIndex(where: {
+                    $0.applicationJobID == record.id && $0.applicationJobSourceIndex == sourceIndex
+                }) {
+                    applyApplicationJob(
+                        record,
+                        sourceIndex: sourceIndex,
+                        outputURL: outputURL,
+                        to: &droppedFiles[itemIndex]
+                    )
+                    continue
+                }
+
+                let preset = record.request.presetID.exportPreset
+                var item = VideoFileUtils.makePlaceholderItem(
+                    from: sourceURL,
+                    outputFolder: record.request.destinationFolderURL.path,
+                    preset: preset
+                ) ?? VideoItem(
+                    url: sourceURL,
+                    name: sourceURL.lastPathComponent,
+                    size: 0,
+                    duration: "--:--",
+                    status: .waiting,
+                    progress: 0,
+                    eta: nil
+                )
+                applyApplicationJob(record, sourceIndex: sourceIndex, outputURL: outputURL, to: &item)
+                droppedFiles.append(item)
+                queueOrder.append(item.id)
+                let itemID = item.id
+
+                Task(priority: .utility) {
+                    let details = await VideoFileUtils.loadDetails(
+                        for: sourceURL,
+                        outputFolder: record.request.destinationFolderURL.path,
+                        preset: preset,
+                        generateRowThumbnailIfMissing: false
+                    )
+                    await MainActor.run {
+                        guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }),
+                              droppedFiles[index].applicationJobID == record.id else { return }
+                        droppedFiles[index].apply(details: details)
+                        droppedFiles[index].detailsLoaded = true
+                        droppedFiles[index].outputURL = outputURL
+                        if droppedFiles[index].status == .done {
+                            droppedFiles[index].refreshOutputFileCache()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func applyApplicationJob(
+        _ record: ApplicationJobRecord,
+        sourceIndex: Int,
+        outputURL: URL?,
+        to item: inout VideoItem
+    ) {
+        item.applicationJobID = record.id
+        item.applicationJobSourceIndex = sourceIndex
+        item.applicationJobOrigin = record.request.origin
+        item.applicationPresetID = record.request.presetID
+        item.outputURL = outputURL
+        item.progress = record.progress ?? 0
+        item.eta = nil
+        item.statusMessage = switch record.state {
+        case .queued: "Queued"
+        case .running: record.stage ?? "Encoding"
+        case .cancelling: "Cancelling"
+        case .succeeded: nil
+        case .failed: "Shared job failed"
+        case .cancelled: nil
+        case .interrupted: "Interrupted after app restart"
+        }
+        item.conversionError = switch record.state {
+        case .failed, .interrupted: record.diagnostic
+        default: nil
+        }
+        item.status = switch record.state {
+        // Treat queued shared jobs as active in the legacy row model. This keeps
+        // manual encode actions from claiming work already owned by the service.
+        case .queued, .running, .cancelling: .converting
+        case .succeeded: .done
+        case .failed, .interrupted: .failed
+        case .cancelled: .cancelled
+        }
+        if item.status == .done {
+            item.progress = 1
+            item.refreshOutputFileCache()
+        }
+    }
     
     @MainActor
     private func startConversion() async {
@@ -1825,7 +1953,10 @@ struct ContentView: View {
                 // Consecutive ungrouped items — collect IDs for this batch
                 var batchIDs = Set<UUID>()
                 while i < queueOrder.count && !encodingGroups.contains(where: { $0.id == queueOrder[i] }) {
-                    batchIDs.insert(queueOrder[i])
+                    let itemID = queueOrder[i]
+                    if droppedFiles.first(where: { $0.id == itemID })?.applicationJobID == nil {
+                        batchIDs.insert(itemID)
+                    }
                     i += 1
                 }
                 if droppedFiles.contains(where: { $0.status == .waiting && batchIDs.contains($0.id) }) {
@@ -1849,7 +1980,9 @@ struct ContentView: View {
     @MainActor
     private func encodeOnlyItem(itemID: UUID) async {
         guard !isConverting else { return }
-        guard droppedFiles.contains(where: { $0.id == itemID && $0.status == .waiting }) else { return }
+        guard droppedFiles.contains(where: {
+            $0.id == itemID && $0.status == .waiting && $0.applicationJobID == nil
+        }) else { return }
         isConverting = true
         dockProgressUpdater.updateProgress(0.0)
         await ConversionManager.shared.startConversion(
@@ -1931,7 +2064,8 @@ struct ContentView: View {
     }
     
     private func refreshExpectedOutputURLs(for preset: ExportPreset) {
-        for index in droppedFiles.indices where droppedFiles[index].status == .waiting {
+        for index in droppedFiles.indices
+            where droppedFiles[index].status == .waiting && droppedFiles[index].applicationJobID == nil {
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: preset)
         }
     }

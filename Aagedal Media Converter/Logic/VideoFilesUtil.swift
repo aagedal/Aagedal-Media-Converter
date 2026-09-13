@@ -788,6 +788,12 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var conversionError: String? = nil
     /// Transient status message for multi-phase operations (e.g. "Conforming...", "Merging...")
     var statusMessage: String? = nil
+    /// Identity and origin when this row is owned by the shared application job
+    /// service instead of the legacy view-owned conversion path.
+    var applicationJobID: ApplicationJobID? = nil
+    var applicationJobSourceIndex: Int? = nil
+    var applicationJobOrigin: ApplicationJobOrigin? = nil
+    var applicationPresetID: ApplicationPresetID? = nil
     /// Whether audio should be muted (removed) in the output
     var isMuted: Bool = false
     /// Image sequence configuration (nil for regular video/audio files)

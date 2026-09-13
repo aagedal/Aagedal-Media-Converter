@@ -70,6 +70,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     private let arrowLabel = NSTextField(labelWithString: "→")
     private let outputNameLabel = NSTextField(labelWithString: "")
     private let outputNameField = NSTextField() // editable, hidden by default
+    private let jobOriginLabel = NSTextField(labelWithString: "")
     private var isEditingOutputName = false
     private var shouldCommitOutputNameOnEndEditing = true
     private let mergeIndicator = NSImageView()
@@ -514,6 +515,13 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         outputNameLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         outputNameLabel.setAccessibilityIdentifier("queue.item.outputName")
 
+        configureLabel(jobOriginLabel, font: .systemFont(ofSize: 10, weight: .semibold))
+        jobOriginLabel.textColor = .secondaryLabelColor
+        jobOriginLabel.isHidden = true
+        jobOriginLabel.setContentHuggingPriority(.required, for: .horizontal)
+        jobOriginLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        jobOriginLabel.setAccessibilityIdentifier("queue.item.jobOrigin")
+
         // Editable output name field (hidden by default)
         outputNameField.font = .systemFont(ofSize: 13, weight: .semibold)
         outputNameField.isHidden = true
@@ -599,7 +607,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // keep their natural width instead of being force-equalized (which created a
         // big gap when one filename was much longer than the other).
         filenameStack.setViews(
-            [inputNameLabel, arrowLabel, outputNameLabel, outputNameField, mergeIndicator],
+            [jobOriginLabel, inputNameLabel, arrowLabel, outputNameLabel, outputNameField, mergeIndicator],
             in: .leading
         )
         filenameStack.setViews(
@@ -971,6 +979,23 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
                 tip += "\n\nSource: \(source)"
             }
             inputNameLabel.toolTip = tip
+        }
+        if isFirstConfigure
+            || prev?.applicationJobID != config.applicationJobID
+            || prev?.applicationJobOrigin != config.applicationJobOrigin {
+            if let jobID = config.applicationJobID,
+               let origin = config.applicationJobOrigin {
+                let shortID = jobID.description.prefix(8).uppercased()
+                jobOriginLabel.stringValue = "\(origin.displayName.uppercased()) · \(shortID)"
+                jobOriginLabel.toolTip = "\(origin.displayName) job \(jobID.description)"
+                jobOriginLabel.isHidden = false
+                jobOriginLabel.setAccessibilityLabel("\(origin.displayName) job")
+                jobOriginLabel.setAccessibilityValue(jobID.description)
+            } else {
+                jobOriginLabel.stringValue = ""
+                jobOriginLabel.toolTip = nil
+                jobOriginLabel.isHidden = true
+            }
         }
         // Also re-render when name changes — for yt-dlp downloads the output name
         // is derived from item.name (e.g. "Fetching info..." → YouTube title), so
