@@ -107,7 +107,22 @@ struct ApplicationFileNameSettings: Codable, Equatable, Sendable {
     let template: String
     let dateFormat: String
     let counterPadding: Int
+    let counterStart: Int
     let presetSuffix: String
+
+    private enum CodingKeys: String, CodingKey {
+        case processingEnabled
+        case replaceSpaces
+        case replaceScandinavianCharacters
+        case specialCharacterRemovalMode
+        case includePresetSuffix
+        case customTemplateEnabled
+        case template
+        case dateFormat
+        case counterPadding
+        case counterStart
+        case presetSuffix
+    }
 
     init(preset: ExportPreset, defaults: UserDefaults) {
         let settings = FileNameSettings(defaults: defaults).snapshot
@@ -125,7 +140,47 @@ struct ApplicationFileNameSettings: Codable, Equatable, Sendable {
         template = settings.template
         dateFormat = settings.dateFormat
         counterPadding = settings.counterPadding
+        counterStart = defaults.object(forKey: AppConstants.customFileNameCounterValueKey) as? Int
+            ?? AppConstants.defaultCustomFileNameCounterValue
         presetSuffix = context.presetSuffix
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        processingEnabled = try values.decode(Bool.self, forKey: .processingEnabled)
+        replaceSpaces = try values.decode(Bool.self, forKey: .replaceSpaces)
+        replaceScandinavianCharacters = try values.decode(Bool.self, forKey: .replaceScandinavianCharacters)
+        specialCharacterRemovalMode = try values.decode(
+            ApplicationSpecialCharacterRemovalModeID.self,
+            forKey: .specialCharacterRemovalMode
+        )
+        includePresetSuffix = try values.decode(Bool.self, forKey: .includePresetSuffix)
+        customTemplateEnabled = try values.decode(Bool.self, forKey: .customTemplateEnabled)
+        template = try values.decode(String.self, forKey: .template)
+        dateFormat = try values.decode(String.self, forKey: .dateFormat)
+        counterPadding = try values.decode(Int.self, forKey: .counterPadding)
+        counterStart = try values.decodeIfPresent(Int.self, forKey: .counterStart)
+            ?? AppConstants.defaultCustomFileNameCounterValue
+        presetSuffix = try values.decode(String.self, forKey: .presetSuffix)
+    }
+
+    fileprivate var fileNamePreferences: FileNamePreferences {
+        let removalMode: SpecialCharacterRemovalMode = switch specialCharacterRemovalMode {
+        case .off: .off
+        case .loose: .loose
+        case .strict: .strict
+        }
+        return FileNamePreferences(
+            isEnabled: processingEnabled,
+            replaceSpaces: replaceSpaces,
+            replaceScandinavianCharacters: replaceScandinavianCharacters,
+            specialCharacterRemovalMode: removalMode,
+            includePresetSuffix: includePresetSuffix,
+            customTemplateEnabled: customTemplateEnabled,
+            template: template,
+            dateFormat: dateFormat,
+            counterPadding: counterPadding
+        )
     }
 }
 
@@ -536,6 +591,13 @@ enum ApplicationJobError: Error, Equatable, Sendable {
     case unknownJob(ApplicationJobID)
     case invalidTransition(from: ApplicationJobState, to: ApplicationJobState)
     case invalidProgress(Double)
+    case unknownPlan(ApplicationPlanID)
+    case expiredPlan(ApplicationPlanID)
+    case sourceUnavailable(URL)
+    case sourceChanged(URL)
+    case unsupportedSourceExtension(URL)
+    case duplicateOutput(URL)
+    case outputCollision(URL)
 
     var code: ApplicationJobErrorCode {
         switch self {
@@ -550,6 +612,13 @@ enum ApplicationJobError: Error, Equatable, Sendable {
         case .unknownJob: .unknownJob
         case .invalidTransition: .invalidTransition
         case .invalidProgress: .invalidProgress
+        case .unknownPlan: .unknownPlan
+        case .expiredPlan: .expiredPlan
+        case .sourceUnavailable: .sourceUnavailable
+        case .sourceChanged: .sourceChanged
+        case .unsupportedSourceExtension: .unsupportedSourceExtension
+        case .duplicateOutput: .duplicateOutput
+        case .outputCollision: .outputCollision
         }
     }
 }
@@ -568,6 +637,13 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case unknownJob = "unknown_job"
     case invalidTransition = "invalid_transition"
     case invalidProgress = "invalid_progress"
+    case unknownPlan = "unknown_plan"
+    case expiredPlan = "expired_plan"
+    case sourceUnavailable = "source_unavailable"
+    case sourceChanged = "source_changed"
+    case unsupportedSourceExtension = "unsupported_source_extension"
+    case duplicateOutput = "duplicate_output"
+    case outputCollision = "output_collision"
 }
 
 /// Owns stable identities and lifecycle state before work is attached to a view.
@@ -594,17 +670,8 @@ actor ApplicationJobRegistry {
     ) throws -> ApplicationJobAcceptance {
         try Self.validate(request)
 
-        if let key = request.idempotencyKey {
-            let identity = IdempotencyIdentity(requesterID: request.requesterID, key: key)
-            if let accepted = acceptedRequests[identity] {
-                guard accepted.request.hasSamePayload(as: request) else {
-                    throw ApplicationJobError.idempotencyConflict
-                }
-                guard let record = records[accepted.jobID] else {
-                    preconditionFailure("An idempotency record must reference an accepted job.")
-                }
-                return ApplicationJobAcceptance(record: record, wasAlreadyAccepted: true)
-            }
+        if let record = try acceptedRecord(for: request) {
+            return ApplicationJobAcceptance(record: record, wasAlreadyAccepted: true)
         }
 
         let jobID = ApplicationJobID()
@@ -627,6 +694,20 @@ actor ApplicationJobRegistry {
                 AcceptedRequest(jobID: jobID, request: request)
         }
         return ApplicationJobAcceptance(record: record, wasAlreadyAccepted: false)
+    }
+
+    func acceptedRecord(for request: ApplicationConversionRequest) throws -> ApplicationJobRecord? {
+        try Self.validate(request)
+        guard let key = request.idempotencyKey else { return nil }
+        let identity = IdempotencyIdentity(requesterID: request.requesterID, key: key)
+        guard let accepted = acceptedRequests[identity] else { return nil }
+        guard accepted.request.hasSamePayload(as: request) else {
+            throw ApplicationJobError.idempotencyConflict
+        }
+        guard let record = records[accepted.jobID] else {
+            preconditionFailure("An idempotency record must reference an accepted job.")
+        }
+        return record
     }
 
     func record(for jobID: ApplicationJobID) -> ApplicationJobRecord? {
@@ -725,7 +806,7 @@ actor ApplicationJobRegistry {
         return interrupted
     }
 
-    private static func validate(_ request: ApplicationConversionRequest) throws {
+    static func validate(_ request: ApplicationConversionRequest) throws {
         guard request.schemaVersion == ApplicationConversionRequest.currentSchemaVersion else {
             throw ApplicationJobError.unsupportedSchema(request.schemaVersion)
         }
@@ -774,6 +855,321 @@ actor ApplicationJobRegistry {
             true
         default:
             false
+        }
+    }
+}
+
+struct ApplicationPlanID: Hashable, Codable, Sendable, CustomStringConvertible {
+    let rawValue: UUID
+
+    init(_ rawValue: UUID = UUID()) {
+        self.rawValue = rawValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        guard let value = UUID(uuidString: try container.decode(String.self)) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Expected a UUID plan identifier."
+            )
+        }
+        self.init(value)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue.uuidString.lowercased())
+    }
+
+    var description: String { rawValue.uuidString.lowercased() }
+}
+
+struct ApplicationSourceIdentity: Codable, Equatable, Sendable {
+    let url: URL
+    let fileSize: Int64
+    let modificationDate: Date?
+    let fileIdentifier: String?
+}
+
+struct ApplicationPlannedOutput: Codable, Equatable, Sendable {
+    let sourceURL: URL
+    let outputURL: URL
+}
+
+enum ApplicationPlanWarningCode: String, Codable, Sendable {
+    case outputAlreadyExists = "output_already_exists"
+}
+
+struct ApplicationPlanWarning: Codable, Equatable, Sendable {
+    let code: ApplicationPlanWarningCode
+    let url: URL
+}
+
+struct ApplicationConversionPlan: Codable, Equatable, Sendable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    let id: ApplicationPlanID
+    let request: ApplicationConversionRequest
+    let createdAt: Date
+    let expiresAt: Date
+    let sources: [ApplicationSourceIdentity]
+    let outputs: [ApplicationPlannedOutput]
+    let warnings: [ApplicationPlanWarning]
+}
+
+/// Owns transport-neutral plans, submit-time validation, output reservations, and
+/// job lifecycle state. Conversion execution remains a separate adapter so this
+/// boundary can be exercised without SwiftUI bindings or helper processes.
+actor ApplicationJobService {
+    typealias SourceIdentityProvider = @Sendable (URL) throws -> ApplicationSourceIdentity
+    typealias ItemExistsProvider = @Sendable (URL) -> Bool
+
+    static let shared = ApplicationJobService()
+
+    private let registry: ApplicationJobRegistry
+    private let sourceIdentityProvider: SourceIdentityProvider
+    private let itemExists: ItemExistsProvider
+    private let planLifetime: TimeInterval
+    private var plans: [ApplicationPlanID: ApplicationConversionPlan] = [:]
+    private var submittedPlans: [ApplicationPlanID: ApplicationJobAcceptance] = [:]
+    private var reservedOutputs: [URL: ApplicationJobID] = [:]
+    private var outputsByJob: [ApplicationJobID: Set<URL>] = [:]
+
+    init(
+        registry: ApplicationJobRegistry = ApplicationJobRegistry(),
+        planLifetime: TimeInterval = 15 * 60,
+        sourceIdentityProvider: SourceIdentityProvider? = nil,
+        itemExists: @escaping ItemExistsProvider = { FileManager.default.fileExists(atPath: $0.path) }
+    ) {
+        self.registry = registry
+        self.planLifetime = planLifetime
+        self.sourceIdentityProvider = sourceIdentityProvider ?? Self.liveSourceIdentity
+        self.itemExists = itemExists
+    }
+
+    func plan(
+        _ request: ApplicationConversionRequest,
+        now: Date = Date()
+    ) throws -> ApplicationConversionPlan {
+        try ApplicationJobRegistry.validate(request)
+        let sources = try request.sourceURLs.map { try sourceIdentityProvider($0.standardizedFileURL) }
+        let outputs = try Self.plannedOutputs(for: request)
+
+        var uniqueOutputs = Set<URL>()
+        for output in outputs {
+            let normalized = output.outputURL.standardizedFileURL
+            guard uniqueOutputs.insert(normalized).inserted else {
+                throw ApplicationJobError.duplicateOutput(output.outputURL)
+            }
+        }
+
+        let warnings = outputs.compactMap { output in
+            itemExists(output.outputURL)
+                ? ApplicationPlanWarning(code: .outputAlreadyExists, url: output.outputURL)
+                : nil
+        }
+        let plan = ApplicationConversionPlan(
+            schemaVersion: ApplicationConversionPlan.currentSchemaVersion,
+            id: ApplicationPlanID(),
+            request: request,
+            createdAt: now,
+            expiresAt: now.addingTimeInterval(planLifetime),
+            sources: sources,
+            outputs: outputs,
+            warnings: warnings
+        )
+        plans[plan.id] = plan
+        return plan
+    }
+
+    /// Rechecks source identity and output ownership immediately before accepting
+    /// work. Retrying a plan that was already submitted returns its original job.
+    func submit(
+        planID: ApplicationPlanID,
+        now: Date = Date()
+    ) async throws -> ApplicationJobAcceptance {
+        if let accepted = submittedPlans[planID] {
+            let currentRecord = await registry.record(for: accepted.record.id) ?? accepted.record
+            return ApplicationJobAcceptance(record: currentRecord, wasAlreadyAccepted: true)
+        }
+        guard let plan = plans[planID] else {
+            throw ApplicationJobError.unknownPlan(planID)
+        }
+        if let record = try await registry.acceptedRecord(for: plan.request) {
+            let accepted = ApplicationJobAcceptance(record: record, wasAlreadyAccepted: true)
+            submittedPlans[planID] = accepted
+            return accepted
+        }
+        guard now <= plan.expiresAt else {
+            throw ApplicationJobError.expiredPlan(planID)
+        }
+
+        for captured in plan.sources {
+            let current: ApplicationSourceIdentity
+            do {
+                current = try sourceIdentityProvider(captured.url)
+            } catch {
+                throw ApplicationJobError.sourceUnavailable(captured.url)
+            }
+            guard current == captured else {
+                throw ApplicationJobError.sourceChanged(captured.url)
+            }
+        }
+
+        for output in plan.outputs {
+            let normalized = output.outputURL.standardizedFileURL
+            guard !itemExists(output.outputURL), reservedOutputs[normalized] == nil else {
+                throw ApplicationJobError.outputCollision(output.outputURL)
+            }
+        }
+
+        let accepted = try await registry.accept(plan.request, now: now)
+        let normalizedOutputs = Set(plan.outputs.map { $0.outputURL.standardizedFileURL })
+        for output in normalizedOutputs {
+            reservedOutputs[output] = accepted.record.id
+        }
+        outputsByJob[accepted.record.id, default: []].formUnion(normalizedOutputs)
+        submittedPlans[planID] = accepted
+        return accepted
+    }
+
+    func plan(for planID: ApplicationPlanID) -> ApplicationConversionPlan? {
+        plans[planID]
+    }
+
+    func record(for jobID: ApplicationJobID) async -> ApplicationJobRecord? {
+        await registry.record(for: jobID)
+    }
+
+    func allRecords() async -> [ApplicationJobRecord] {
+        await registry.allRecords()
+    }
+
+    @discardableResult
+    func transition(
+        _ jobID: ApplicationJobID,
+        to state: ApplicationJobState,
+        outputURLs: [URL] = [],
+        diagnostic: String? = nil,
+        now: Date = Date()
+    ) async throws -> ApplicationJobRecord {
+        let record = try await registry.transition(
+            jobID, to: state, outputURLs: outputURLs, diagnostic: diagnostic, now: now
+        )
+        if state.isTerminal {
+            releaseOutputReservations(for: jobID)
+        }
+        return record
+    }
+
+    @discardableResult
+    func requestCancellation(
+        _ jobID: ApplicationJobID,
+        now: Date = Date()
+    ) async throws -> ApplicationJobRecord {
+        let record = try await registry.requestCancellation(jobID, now: now)
+        if record.state.isTerminal {
+            releaseOutputReservations(for: jobID)
+        }
+        return record
+    }
+
+    @discardableResult
+    func updateProgress(
+        _ jobID: ApplicationJobID,
+        progress: Double?,
+        stage: String?,
+        now: Date = Date()
+    ) async throws -> ApplicationJobRecord {
+        try await registry.updateProgress(jobID, progress: progress, stage: stage, now: now)
+    }
+
+    @discardableResult
+    func interruptInFlightJobs(
+        diagnostic: String,
+        now: Date = Date()
+    ) async -> [ApplicationJobRecord] {
+        let interrupted = await registry.interruptInFlightJobs(diagnostic: diagnostic, now: now)
+        for record in interrupted {
+            releaseOutputReservations(for: record.id)
+        }
+        return interrupted
+    }
+
+    private func releaseOutputReservations(for jobID: ApplicationJobID) {
+        guard let outputs = outputsByJob.removeValue(forKey: jobID) else { return }
+        for output in outputs where reservedOutputs[output] == jobID {
+            reservedOutputs.removeValue(forKey: output)
+        }
+    }
+
+    private static func plannedOutputs(
+        for request: ApplicationConversionRequest
+    ) throws -> [ApplicationPlannedOutput] {
+        let naming = request.presetSettings.fileName
+        let preferences = naming.fileNamePreferences
+        let context = FileNameTemplateContext(
+            presetSuffix: naming.presetSuffix,
+            resolution: request.presetSettings.video?.maximumHeight.map { "\($0)p" } ?? "",
+            framerate: ""
+        )
+
+        return try request.sourceURLs.enumerated().map { index, sourceURL in
+            let counterResult = naming.counterStart.addingReportingOverflow(index)
+            let counter = counterResult.overflow ? Int.max : counterResult.partialValue
+            let baseName = FileNameProcessor.outputBaseName(
+                inputURL: sourceURL,
+                counter: counter,
+                preset: request.presetID.exportPreset,
+                settings: preferences,
+                context: context,
+                date: request.capturedAt
+            )
+            let fileExtension = try outputExtension(
+                for: request.presetSettings.containerID,
+                sourceURL: sourceURL
+            )
+            let fileName = fileExtension.isEmpty ? baseName : "\(baseName).\(fileExtension)"
+            return ApplicationPlannedOutput(
+                sourceURL: sourceURL,
+                outputURL: request.destinationFolderURL.appendingPathComponent(fileName)
+            )
+        }
+    }
+
+    private static func outputExtension(
+        for containerID: ApplicationContainerID,
+        sourceURL: URL
+    ) throws -> String {
+        guard containerID == .source else { return containerID.rawValue }
+        let sourceExtension = sourceURL.pathExtension.lowercased()
+        guard !sourceExtension.isEmpty else {
+            throw ApplicationJobError.unsupportedSourceExtension(sourceURL)
+        }
+        return sourceExtension
+    }
+
+    private static func liveSourceIdentity(for url: URL) throws -> ApplicationSourceIdentity {
+        do {
+            let values = try url.resourceValues(forKeys: [
+                .isRegularFileKey, .fileSizeKey, .contentModificationDateKey,
+                .fileResourceIdentifierKey
+            ])
+            guard values.isRegularFile == true, let fileSize = values.fileSize else {
+                throw ApplicationJobError.sourceUnavailable(url)
+            }
+            return ApplicationSourceIdentity(
+                url: url.standardizedFileURL,
+                fileSize: Int64(fileSize),
+                modificationDate: values.contentModificationDate,
+                fileIdentifier: values.fileResourceIdentifier.map { String(describing: $0) }
+            )
+        } catch let error as ApplicationJobError {
+            throw error
+        } catch {
+            throw ApplicationJobError.sourceUnavailable(url)
         }
     }
 }

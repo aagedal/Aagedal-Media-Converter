@@ -69,6 +69,23 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(roundTrip, request)
     }
 
+    func testRequestDecodesSnapshotsCreatedBeforeCounterCapture() throws {
+        let encoded = try JSONEncoder().encode(makeRequest())
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var presetSettings = try XCTUnwrap(root["presetSettings"] as? [String: Any])
+        var fileName = try XCTUnwrap(presetSettings["fileName"] as? [String: Any])
+        fileName.removeValue(forKey: "counterStart")
+        presetSettings["fileName"] = fileName
+        root["presetSettings"] = presetSettings
+
+        let legacyData = try JSONSerialization.data(withJSONObject: root)
+        let decoded = try JSONDecoder().decode(ApplicationConversionRequest.self, from: legacyData)
+        XCTAssertEqual(
+            decoded.presetSettings.fileName.counterStart,
+            AppConstants.defaultCustomFileNameCounterValue
+        )
+    }
+
     func testSupportedPresetSnapshotsUseStableResolvedValues() throws {
         let defaults = try makeDefaults()
         defaults.set(ProResProfile.hq.rawValue, forKey: AppConstants.proResProfileKey)
@@ -107,6 +124,196 @@ final class ApplicationJobContractTests: XCTestCase {
         let settings = ApplicationPresetSettings(presetID: .hevc, defaults: defaults)
 
         XCTAssertEqual(settings.video?.quality, CodecQualityLevel.balanced.crfValue)
+    }
+
+    func testPlanningCapturesDeterministicOutputsAndCollisionWarnings() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let firstSource = directory.appendingPathComponent("First Clip.mov")
+        let secondSource = directory.appendingPathComponent("Second Clip.mov")
+        try Data("first".utf8).write(to: firstSource)
+        try Data("second".utf8).write(to: secondSource)
+
+        let defaults = try makeDefaults()
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("{sourceName}_{counter}{presetSuffix}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set(3, forKey: AppConstants.customFileNameCounterPaddingKey)
+        defaults.set(7, forKey: AppConstants.customFileNameCounterValueKey)
+        defaults.set(true, forKey: AppConstants.fileNameIncludePresetSuffixKey)
+        defaults.set(CodecContainer.mkv.rawValue, forKey: AppConstants.h264ContainerKey)
+        let request = makeRequest(
+            sourceURLs: [firstSource, secondSource],
+            destinationFolderURL: outputDirectory,
+            defaults: defaults
+        )
+        defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
+        let existingOutput = outputDirectory.appendingPathComponent("First_Clip_007_h264.mkv")
+        try Data().write(to: existingOutput)
+
+        let service = ApplicationJobService()
+        let now = Date(timeIntervalSince1970: 1_800_000_100)
+        let plan = try await service.plan(request, now: now)
+
+        XCTAssertEqual(plan.createdAt, now)
+        XCTAssertEqual(plan.expiresAt, now.addingTimeInterval(15 * 60))
+        XCTAssertEqual(plan.sources.map(\.fileSize), [5, 6])
+        XCTAssertEqual(plan.outputs.map { $0.outputURL.lastPathComponent }, [
+            "First_Clip_007_h264.mkv", "Second_Clip_008_h264.mkv"
+        ])
+        XCTAssertEqual(plan.warnings, [
+            ApplicationPlanWarning(code: .outputAlreadyExists, url: existingOutput)
+        ])
+        let roundTrip = try JSONDecoder().decode(
+            ApplicationConversionPlan.self,
+            from: JSONEncoder().encode(plan)
+        )
+        XCTAssertEqual(roundTrip, plan)
+    }
+
+    func testSubmitRejectsExpiredPlansAndChangedSources() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("before".utf8).write(to: sourceURL)
+        let request = makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: directory,
+            idempotencyKey: nil
+        )
+        let now = Date(timeIntervalSince1970: 1_800_000_200)
+
+        let expiringService = ApplicationJobService(planLifetime: 10)
+        let expiredPlan = try await expiringService.plan(request, now: now)
+        do {
+            _ = try await expiringService.submit(planID: expiredPlan.id, now: now.addingTimeInterval(11))
+            XCTFail("Expected an expired plan to be rejected")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .expiredPlan(expiredPlan.id))
+        }
+
+        let changedSourceService = ApplicationJobService()
+        let changedPlan = try await changedSourceService.plan(request, now: now)
+        try Data("after-change".utf8).write(to: sourceURL)
+        do {
+            _ = try await changedSourceService.submit(planID: changedPlan.id, now: now)
+            XCTFail("Expected a changed source to be rejected")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceChanged(sourceURL))
+        }
+    }
+
+    func testSubmissionReservesOutputsAndPlanRetryReturnsOriginalJob() async throws {
+        let directory = try makeTemporaryDirectory()
+        let firstDirectory = directory.appendingPathComponent("first", isDirectory: true)
+        let secondDirectory = directory.appendingPathComponent("second", isDirectory: true)
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        for folder in [firstDirectory, secondDirectory, outputDirectory] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let firstSource = firstDirectory.appendingPathComponent("clip.mov")
+        let secondSource = secondDirectory.appendingPathComponent("clip.mov")
+        try Data("one".utf8).write(to: firstSource)
+        try Data("two".utf8).write(to: secondSource)
+
+        let service = ApplicationJobService()
+        let firstPlan = try await service.plan(makeRequest(
+            sourceURLs: [firstSource], destinationFolderURL: outputDirectory, idempotencyKey: nil
+        ))
+        let secondPlan = try await service.plan(makeRequest(
+            sourceURLs: [secondSource], destinationFolderURL: outputDirectory, idempotencyKey: nil
+        ))
+        let firstAcceptance = try await service.submit(planID: firstPlan.id)
+        let retry = try await service.submit(planID: firstPlan.id)
+        XCTAssertEqual(retry.record.id, firstAcceptance.record.id)
+        XCTAssertTrue(retry.wasAlreadyAccepted)
+
+        do {
+            _ = try await service.submit(planID: secondPlan.id)
+            XCTFail("Expected the accepted output reservation to reject a competing plan")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .outputCollision(secondPlan.outputs[0].outputURL))
+        }
+
+        _ = try await service.transition(firstAcceptance.record.id, to: .running)
+        _ = try await service.transition(firstAcceptance.record.id, to: .succeeded)
+        let secondAcceptance = try await service.submit(planID: secondPlan.id)
+        XCTAssertNotEqual(secondAcceptance.record.id, firstAcceptance.record.id)
+    }
+
+    func testIdempotentRetryThroughANewPlanReturnsOriginalReservedJob() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: sourceURL)
+        let service = ApplicationJobService()
+        let firstRequest = makeRequest(
+            requestID: UUID(),
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            idempotencyKey: "network-retry"
+        )
+        let retryRequest = makeRequest(
+            requestID: UUID(),
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            idempotencyKey: "network-retry"
+        )
+
+        let firstPlan = try await service.plan(firstRequest)
+        let firstAcceptance = try await service.submit(planID: firstPlan.id)
+        let retryPlan = try await service.plan(retryRequest)
+        let retryAcceptance = try await service.submit(planID: retryPlan.id)
+
+        XCTAssertEqual(retryAcceptance.record.id, firstAcceptance.record.id)
+        XCTAssertTrue(retryAcceptance.wasAlreadyAccepted)
+        let records = await service.allRecords()
+        XCTAssertEqual(records.count, 1)
+    }
+
+    func testSubmitRejectsAnOutputCreatedAfterPlanning() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let service = ApplicationJobService()
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: directory, idempotencyKey: nil
+        ))
+        let outputURL = try XCTUnwrap(plan.outputs.first?.outputURL)
+        try Data("occupied".utf8).write(to: outputURL)
+
+        do {
+            _ = try await service.submit(planID: plan.id)
+            XCTFail("Expected a submit-time output collision")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .outputCollision(outputURL))
+        }
+    }
+
+    func testPlanningRejectsTwoSourcesThatResolveToTheSameOutput() async throws {
+        let directory = try makeTemporaryDirectory()
+        let firstDirectory = directory.appendingPathComponent("first", isDirectory: true)
+        let secondDirectory = directory.appendingPathComponent("second", isDirectory: true)
+        for folder in [firstDirectory, secondDirectory] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let firstSource = firstDirectory.appendingPathComponent("same.mov")
+        let secondSource = secondDirectory.appendingPathComponent("same.mov")
+        try Data("first".utf8).write(to: firstSource)
+        try Data("second".utf8).write(to: secondSource)
+        let request = makeRequest(
+            sourceURLs: [firstSource, secondSource],
+            destinationFolderURL: directory,
+            idempotencyKey: nil
+        )
+
+        do {
+            _ = try await ApplicationJobService().plan(request)
+            XCTFail("Expected duplicate proposed output names to be rejected")
+        } catch {
+            let expected = directory.appendingPathComponent("same_h264.mp4")
+            XCTAssertEqual(error as? ApplicationJobError, .duplicateOutput(expected))
+        }
     }
 
     func testAcceptanceCreatesStableQueuedRecordAndPreservesOrder() async throws {
@@ -205,6 +412,8 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(ApplicationJobError.unsupportedSchema(99).code.rawValue, "unsupported_schema")
         XCTAssertEqual(ApplicationJobError.idempotencyConflict.code.rawValue, "idempotency_conflict")
         XCTAssertEqual(ApplicationJobError.presetSettingsMismatch.code.rawValue, "preset_settings_mismatch")
+        XCTAssertEqual(ApplicationJobError.outputCollision(destination).code.rawValue, "output_collision")
+        XCTAssertEqual(ApplicationJobError.sourceChanged(source).code.rawValue, "source_changed")
         XCTAssertEqual(
             ApplicationJobError.invalidTransition(from: .queued, to: .succeeded).code.rawValue,
             "invalid_transition"
@@ -307,5 +516,13 @@ final class ApplicationJobContractTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
         addTeardownBlock { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
         return defaults
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ApplicationJobContractTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return directory
     }
 }

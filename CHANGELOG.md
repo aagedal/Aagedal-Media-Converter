@@ -17,6 +17,11 @@ remain subject to the feasibility milestone.
   metadata, subtitle, and filename settings for every preset in the initial agent
   subset. Accepted retries now reject a changed settings snapshot instead of
   silently inheriting newer preferences.
+- Added versioned conversion plans with deterministic output names, source
+  identity capture, expiry, collision warnings, submit-time stale-source and
+  collision rejection, and actor-owned output reservations. Retrying either the
+  same plan or a newly planned request with the same idempotency key returns the
+  original accepted job.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

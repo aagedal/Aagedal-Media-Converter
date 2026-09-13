@@ -12,7 +12,7 @@ Created: 2026-09-11.
 The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
 signed release candidate.
 
-## Implementation progress — 2026-09-12
+## Implementation progress — through 2026-09-13
 
 The first shared-boundary increment is implemented without selecting an IPC
 transport prematurely:
@@ -43,6 +43,16 @@ the versioned contract and participate in idempotency comparison, so a settings
 change cannot mutate accepted work or turn a retry into a different conversion.
 Focused coverage is recorded in the
 [settings-capture validation record](4.5-settings-capture-validation-2026-09-12.md).
+
+The shared service now also creates versioned, expiring conversion plans with
+captured file identities and deterministic output locations. Planning reports
+existing outputs and rejects duplicate names within a batch. Submission rechecks
+source identity and disk collisions, reserves output names across concurrent
+jobs, and retains idempotency across both same-plan retries and equivalent newly
+created plans. Terminal transitions release in-memory reservations. This remains
+a transport-neutral boundary; execution and persistence adapters are not yet
+connected. See the
+[planning validation record](4.5-planning-validation-2026-09-13.md).
 
 ## Intended outcome
 
