@@ -1888,7 +1888,9 @@ struct ContentView: View {
         item.applicationJobSourceIndex = sourceIndex
         item.applicationJobOrigin = record.request.origin
         item.applicationPresetID = record.request.presetID
-        item.applicationJobSettingsSummary = record.request.acceptedSettingsSummary
+        item.applicationJobSettingsSummary = record.request.acceptedSettingsSummary(
+            sourceIndex: sourceIndex
+        )
         item.outputURL = outputURL
         item.progress = record.progress ?? 0
         item.eta = nil

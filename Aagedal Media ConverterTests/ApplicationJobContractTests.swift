@@ -73,6 +73,7 @@ final class ApplicationJobContractTests: XCTestCase {
         let encoded = try JSONEncoder().encode(makeRequest())
         var root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         root.removeValue(forKey: "executionSettings")
+        root.removeValue(forKey: "sourceSettings")
         var presetSettings = try XCTUnwrap(root["presetSettings"] as? [String: Any])
         var fileName = try XCTUnwrap(presetSettings["fileName"] as? [String: Any])
         fileName.removeValue(forKey: "counterStart")
@@ -86,6 +87,7 @@ final class ApplicationJobContractTests: XCTestCase {
             AppConstants.defaultCustomFileNameCounterValue
         )
         XCTAssertNil(decoded.executionSettings)
+        XCTAssertNil(decoded.sourceSettings)
     }
 
     func testSupportedPresetSnapshotsUseStableResolvedValues() throws {
@@ -554,7 +556,27 @@ final class ApplicationJobContractTests: XCTestCase {
             (makeRequest(
                 presetID: .h264,
                 presetSettings: ApplicationPresetSettings(presetID: .hevc)
-            ), .presetSettingsMismatch)
+            ), .presetSettingsMismatch),
+            (makeRequest(sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: URL(fileURLWithPath: "/fixtures/different.mov"),
+                includeDateTag: false,
+                timecodeConfig: nil
+            )]), .invalidSourceSettings(source)),
+            (makeRequest(sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: source,
+                includeDateTag: false,
+                timecodeConfig: nil,
+                trimStart: 4,
+                trimEnd: 2
+            )]), .invalidSourceSettings(source)),
+            (makeRequest(sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: source,
+                includeDateTag: false,
+                timecodeConfig: nil,
+                cropConfig: CropConfig(
+                    normalizedRect: CropRect(x: 0.5, y: 0, width: 0.75, height: 1)
+                )
+            )]), .invalidSourceSettings(source))
         ]
 
         for (request, expectedError) in cases {
@@ -572,6 +594,7 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(ApplicationJobError.unsupportedSchema(99).code.rawValue, "unsupported_schema")
         XCTAssertEqual(ApplicationJobError.idempotencyConflict.code.rawValue, "idempotency_conflict")
         XCTAssertEqual(ApplicationJobError.presetSettingsMismatch.code.rawValue, "preset_settings_mismatch")
+        XCTAssertEqual(ApplicationJobError.invalidSourceSettings(source).code.rawValue, "invalid_source_settings")
         XCTAssertEqual(ApplicationJobError.outputCollision(destination).code.rawValue, "output_collision")
         XCTAssertEqual(ApplicationJobError.sourceChanged(source).code.rawValue, "source_changed")
         XCTAssertEqual(ApplicationJobError.sourceAccessDenied(source).code.rawValue, "source_access_denied")
@@ -1020,7 +1043,9 @@ final class ApplicationJobContractTests: XCTestCase {
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         let sourceURL = directory.appendingPathComponent("captured.mov")
+        let secondSourceURL = directory.appendingPathComponent("captured-2.mov")
         try Data("source".utf8).write(to: sourceURL)
+        try Data("source-2".utf8).write(to: secondSourceURL)
         let defaults = try makeDefaults()
         defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
         defaults.set(CodecQualityLevel.high.rawValue, forKey: AppConstants.h264QualityKey)
@@ -1033,6 +1058,23 @@ final class ApplicationJobContractTests: XCTestCase {
         defaults.set("10:11:12:13", forKey: AppConstants.defaultTimecodeValueKey)
         defaults.set("Original", forKey: AppConstants.commentPrefixKey)
         let executionSettings = ApplicationRequestExecutionSettings(appIntentDefaults: defaults)
+        let sourceSettings = ApplicationSourceExecutionSettings(
+            sourceURL: sourceURL,
+            comment: "Per-file comment",
+            includeDateTag: false,
+            timecodeConfig: TimecodeConfig(mode: .manual("02:03:04:05")),
+            trimStart: 1.25,
+            trimEnd: 4.5,
+            cropConfig: CropConfig(
+                normalizedRect: CropRect(x: 0.1, y: 0.2, width: 0.8, height: 0.6)
+            ),
+            isMuted: true
+        )
+        let secondSourceSettings = ApplicationSourceExecutionSettings(
+            sourceURL: secondSourceURL,
+            includeDateTag: true,
+            timecodeConfig: nil
+        )
 
         let harness = ApplicationFFmpegRunnerHarness()
         let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
@@ -1046,10 +1088,11 @@ final class ApplicationJobContractTests: XCTestCase {
             executor: adapter.jobExecutor
         )
         let plan = try await service.plan(makeRequest(
-            sourceURLs: [sourceURL],
+            sourceURLs: [sourceURL, secondSourceURL],
             destinationFolderURL: outputDirectory,
             presetID: .h264,
             executionSettings: executionSettings,
+            sourceSettings: [sourceSettings, secondSourceSettings],
             idempotencyKey: nil,
             defaults: defaults
         ))
@@ -1064,6 +1107,7 @@ final class ApplicationJobContractTests: XCTestCase {
         _ = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
 
         let capturedSnapshots = await harness.snapshots()
+        XCTAssertEqual(capturedSnapshots.count, 2)
         let snapshot = try XCTUnwrap(capturedSnapshots.first)
         XCTAssertEqual(snapshot.outputURL.pathExtension, "mov")
         XCTAssertTrue(snapshot.ffmpegArguments.contains("libx264"))
@@ -1072,9 +1116,17 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(snapshot.ffmpegArguments.contains("pcm_s24le"))
         XCTAssertFalse(snapshot.ffmpegArguments.contains("h264_videotoolbox"))
         XCTAssertFalse(snapshot.ffmpegArguments.contains("50M"))
-        XCTAssertTrue(snapshot.includeDateTag)
-        XCTAssertEqual(snapshot.manualTimecode, "10:11:12:13")
+        XCTAssertFalse(snapshot.includeDateTag)
+        XCTAssertEqual(snapshot.manualTimecode, "02:03:04:05")
+        XCTAssertEqual(snapshot.comment, "Per-file comment")
+        XCTAssertEqual(snapshot.trimStart, 1.25)
+        XCTAssertEqual(snapshot.trimEnd, 4.5)
+        XCTAssertEqual(snapshot.cropConfig, sourceSettings.cropConfig)
+        XCTAssertTrue(snapshot.isMuted)
         XCTAssertEqual(snapshot.commentPrefix, "Original")
+        XCTAssertTrue(capturedSnapshots[1].includeDateTag)
+        XCTAssertNil(capturedSnapshots[1].manualTimecode)
+        XCTAssertEqual(capturedSnapshots[1].comment, "")
     }
 
     func testFFmpegAdapterCancellationSignalsOnlyItsActiveRunner() async throws {
@@ -1532,6 +1584,7 @@ final class ApplicationJobContractTests: XCTestCase {
         presetID: ApplicationPresetID = .h264,
         presetSettings: ApplicationPresetSettings? = nil,
         executionSettings: ApplicationRequestExecutionSettings? = nil,
+        sourceSettings: [ApplicationSourceExecutionSettings]? = nil,
         idempotencyKey: String? = "request-1",
         capturedAt: Date = Date(timeIntervalSince1970: 1_800_000_000),
         defaults: UserDefaults = .standard
@@ -1546,6 +1599,7 @@ final class ApplicationJobContractTests: XCTestCase {
             presetID: presetID,
             presetSettings: presetSettings,
             executionSettings: executionSettings,
+            sourceSettings: sourceSettings,
             idempotencyKey: idempotencyKey,
             capturedAt: capturedAt,
             defaults: defaults
@@ -1618,6 +1672,11 @@ private actor ApplicationFFmpegRunnerHarness {
         let keepsSubtitles: Bool
         let includeDateTag: Bool
         let manualTimecode: String?
+        let comment: String
+        let trimStart: Double?
+        let trimEnd: Double?
+        let cropConfig: CropConfig?
+        let isMuted: Bool
         let commentPrefix: String?
     }
 
@@ -1650,6 +1709,11 @@ private actor ApplicationFFmpegRunnerHarness {
             keepsSubtitles: conversion.subtitleSettings.keepSubtitles,
             includeDateTag: conversion.request.includeDateTag,
             manualTimecode: manualTimecode,
+            comment: conversion.request.comment,
+            trimStart: conversion.request.trimStart,
+            trimEnd: conversion.request.trimEnd,
+            cropConfig: conversion.request.cropConfig,
+            isMuted: conversion.request.isMuted,
             commentPrefix: conversion.commentSettings?.prefix
         ))
         progress.send(0.5, status: "Encoding")

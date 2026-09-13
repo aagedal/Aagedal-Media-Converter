@@ -1,9 +1,9 @@
 # Proposed 4.5 release — Local agent access
 
 Status: signed local transport, visible shared-job queue projection, initial
-Shortcut submission, and ordinary manual shared-queue submission implemented on
-`codex/release-4.5`; feasibility decision pending final-client, specialized-path,
-and Release-package validation.
+Shortcut submission, and ordinary plus common per-file manual shared-queue
+submission implemented on `codex/release-4.5`; feasibility decision pending
+final-client, remaining specialized-path, and Release-package validation.
 Created: 2026-09-11.
 
 ## Release context
@@ -121,6 +121,15 @@ inspector rendered from its immutable accepted request rather than current
 preferences. See the
 [manual handoff validation record](4.5-manual-handoff-validation-2026-09-13.md).
 
+The manual handoff now also captures per-source comments, trim ranges, crop,
+mute, date-tag, and timecode choices in a backward-compatible optional request
+snapshot. Acceptance validates source alignment and bounded trim/crop values,
+the FFmpeg adapter applies each source's immutable choices, and the queue
+inspector shows the settings for its exact row. Audio routing, custom names,
+groups/merge, generated waveform behavior, post-actions, and per-source
+destinations remain on the legacy path. See the
+[per-source handoff validation record](4.5-per-source-handoff-validation-2026-09-13.md).
+
 The six proposed agent operations now have a transport-neutral, typed workflow:
 media inspection, preset discovery, conversion planning and submission, job
 lookup, and cancellation. Inspection requires an existing user-approved read
@@ -147,10 +156,11 @@ MCP and returned all six resolved presets through a running app. See the
 This is still a prototype rather than a completed feasibility decision. The
 current direct-distribution target has App Sandbox disabled, two named MCP
 clients have not been exercised, and a Developer ID Release archive has not
-completed signing/notarization validation. Specialized manual jobs and
-unsupported or per-source-destination App Intent cases still use the legacy
-executor, so full cross-boundary serialization remains open. Localization and
-the packaged end-to-end acceptance matrix also remain open.
+completed signing/notarization validation. Manual audio routing, custom names,
+groups/merge, generated waveform behavior, post-actions, and unsupported or
+per-source-destination App Intent cases still use the legacy executor, so full
+cross-boundary serialization remains open. Localization and the packaged
+end-to-end acceptance matrix also remain open.
 
 ## Intended outcome
 

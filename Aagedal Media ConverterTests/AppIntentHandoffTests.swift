@@ -156,6 +156,7 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertEqual(request.executionSettings?.includeDateTag, false)
         XCTAssertEqual(request.executionSettings?.timecodeMode, .manual)
         XCTAssertEqual(request.executionSettings?.manualTimecode, "01:02:03:04")
+        XCTAssertEqual(request.sourceSettings?.map(\.sourceURL), [second, first])
         XCTAssertNil(request.idempotencyKey)
         XCTAssertEqual(request.capturedAt, capturedAt)
 
@@ -164,6 +165,45 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertTrue(summary.contains("Container: MOV"))
         XCTAssertTrue(summary.contains("Timecode: 01:02:03:04"))
         XCTAssertTrue(summary.contains("Destination: /outputs"))
+    }
+
+    func testManualBridgeCapturesPerSourceAdjustments() throws {
+        let defaults = try makeIsolatedDefaults()
+        var firstItem = makeItem(url: first)
+        firstItem.comment = "First shot"
+        firstItem.trimStart = 1
+        firstItem.trimEnd = 4
+        firstItem.cropConfig = CropConfig(
+            normalizedRect: CropRect(x: 0.1, y: 0.2, width: 0.8, height: 0.6)
+        )
+        firstItem.isMuted = true
+
+        var secondItem = makeItem(url: second)
+        secondItem.includeDateTag.toggle()
+        secondItem.timecodeConfig = TimecodeConfig(mode: .manual("02:03:04:05"))
+
+        let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
+            items: [firstItem, secondItem], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        let sourceSettings = try XCTUnwrap(request.sourceSettings)
+        XCTAssertEqual(sourceSettings.count, 2)
+        XCTAssertEqual(sourceSettings[0].comment, "First shot")
+        XCTAssertEqual(sourceSettings[0].trimStart, 1)
+        XCTAssertEqual(sourceSettings[0].trimEnd, 4)
+        XCTAssertEqual(sourceSettings[0].cropConfig, firstItem.cropConfig)
+        XCTAssertTrue(sourceSettings[0].isMuted)
+        XCTAssertEqual(sourceSettings[1].includeDateTag, secondItem.includeDateTag)
+        XCTAssertEqual(sourceSettings[1].timecodeMode, .manual)
+        XCTAssertEqual(sourceSettings[1].manualTimecode, "02:03:04:05")
+
+        let summary = request.acceptedSettingsSummary(sourceIndex: 0)
+        XCTAssertTrue(summary.contains("Comment: First shot"))
+        XCTAssertTrue(summary.contains("Trim start: 1 s"))
+        XCTAssertTrue(summary.contains("Trim end: 4 s"))
+        XCTAssertTrue(summary.contains("Crop: On"))
+        XCTAssertTrue(summary.contains("Audio: Muted"))
     }
 
     func testManualBridgeFallsBackWhenBehaviorCannotBeRepresented() throws {
@@ -180,17 +220,19 @@ final class AppIntentHandoffTests: XCTestCase {
         ))
 
         var customized = ordinary
-        customized.trimStart = 1
+        customized.audioRoutingConfig = AudioRoutingConfig(inputTracks: [])
         XCTAssertNil(ManualApplicationJobBridge.makeRequest(
             items: [customized], destinationFolderURL: folder, preset: .h264,
             mergeClipsEnabled: false, defaults: defaults
         ))
 
-        var differentExecutionSettings = makeItem(url: second)
-        differentExecutionSettings.includeDateTag.toggle()
+        var streamCopyCrop = ordinary
+        streamCopyCrop.cropConfig = CropConfig(
+            normalizedRect: CropRect(x: 0, y: 0, width: 0.5, height: 1)
+        )
         XCTAssertNil(ManualApplicationJobBridge.makeRequest(
-            items: [ordinary, differentExecutionSettings], destinationFolderURL: folder,
-            preset: .h264, mergeClipsEnabled: false, defaults: defaults
+            items: [streamCopyCrop], destinationFolderURL: folder,
+            preset: .streamCopy, mergeClipsEnabled: false, defaults: defaults
         ))
     }
 

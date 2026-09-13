@@ -115,7 +115,7 @@ enum ManualApplicationJobBridge {
               let presetID = ApplicationPresetID(exportPreset: preset),
               !OutputDestinationSettings(defaults: defaults).saveNextToOriginal,
               !items.isEmpty,
-              items.allSatisfy(isRepresentable) else {
+              items.allSatisfy({ isRepresentable($0, preset: preset) }) else {
             return nil
         }
 
@@ -124,13 +124,7 @@ enum ManualApplicationJobBridge {
             return nil
         }
 
-        guard let first = items.first,
-              items.allSatisfy({
-                  $0.includeDateTag == first.includeDateTag
-                      && $0.timecodeConfig == first.timecodeConfig
-              }) else {
-            return nil
-        }
+        guard let first = items.first else { return nil }
 
         let settings = ApplicationPresetSettings(presetID: presetID, defaults: defaults)
         if settings.fileName.fileNamePreferences.customTemplateUsesCounter {
@@ -154,24 +148,35 @@ enum ManualApplicationJobBridge {
                 timecodeConfig: first.timecodeConfig,
                 defaults: defaults
             ),
+            sourceSettings: items.map {
+                ApplicationSourceExecutionSettings(
+                    sourceURL: $0.url,
+                    comment: $0.comment,
+                    includeDateTag: $0.includeDateTag,
+                    timecodeConfig: $0.timecodeConfig,
+                    trimStart: $0.trimStart,
+                    trimEnd: $0.trimEnd,
+                    cropConfig: $0.cropConfig,
+                    isMuted: $0.isMuted
+                )
+            },
             capturedAt: capturedAt,
             defaults: defaults
         )
     }
 
-    private static func isRepresentable(_ item: VideoItem) -> Bool {
-        item.status == .waiting
+    private static func isRepresentable(_ item: VideoItem, preset: ExportPreset) -> Bool {
+        let hasActiveCrop = item.cropConfig?.isActive == true
+        return item.status == .waiting
             && item.applicationJobID == nil
             && item.isEncodable
             && !item.isImageSequence
-            && item.trimStart == nil
-            && item.trimEnd == nil
             && item.audioRoutingConfig == nil
-            && item.cropConfig == nil
-            && !item.isMuted
+            && (!hasActiveCrop || preset.outputsVisualFrames)
+            && (!item.isMuted || (preset.outputsVideoTrack && preset != .streamCopy))
+            && (preset != .streamCopy || !hasActiveCrop)
             && !item.waveformVideoEnabled
             && item.waveformBackgroundImageURL == nil
-            && item.comment.isEmpty
             && item.outputFileNameOverride == nil
             && !item.uploadEnabled
             && !item.subtitleEnabled

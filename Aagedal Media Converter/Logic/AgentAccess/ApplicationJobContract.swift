@@ -297,6 +297,67 @@ struct ApplicationRequestExecutionSettings: Codable, Equatable, Sendable {
     }
 }
 
+/// Immutable per-source choices captured by first-party queue entry points.
+/// This remains optional so schema-v1 agent requests and persisted jobs created
+/// before per-file handoff support continue to decode with their original
+/// batch-wide behavior.
+struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
+    let sourceURL: URL
+    let comment: String
+    let includeDateTag: Bool
+    let timecodeMode: ApplicationTimecodeModeID
+    let manualTimecode: String?
+    let trimStart: Double?
+    let trimEnd: Double?
+    let cropConfig: CropConfig?
+    let isMuted: Bool
+
+    init(
+        sourceURL: URL,
+        comment: String = "",
+        includeDateTag: Bool,
+        timecodeConfig: TimecodeConfig?,
+        trimStart: Double? = nil,
+        trimEnd: Double? = nil,
+        cropConfig: CropConfig? = nil,
+        isMuted: Bool = false
+    ) {
+        self.sourceURL = sourceURL
+        self.comment = comment
+        self.includeDateTag = includeDateTag
+        switch timecodeConfig?.mode {
+        case .preserveSource?:
+            timecodeMode = .preserveSource
+            manualTimecode = nil
+        case .manual(let value)?:
+            timecodeMode = .manual
+            manualTimecode = value
+        case nil:
+            timecodeMode = .disabled
+            manualTimecode = nil
+        }
+        self.trimStart = trimStart
+        self.trimEnd = trimEnd
+        self.cropConfig = cropConfig
+        self.isMuted = isMuted
+    }
+
+    fileprivate var timecodeConfig: TimecodeConfig? {
+        switch timecodeMode {
+        case .disabled:
+            nil
+        case .preserveSource:
+            TimecodeConfig(mode: .preserveSource)
+        case .manual:
+            manualTimecode.map { TimecodeConfig(mode: .manual($0)) }
+        }
+    }
+
+    fileprivate var hasVisibleAdjustment: Bool {
+        !comment.isEmpty || trimStart != nil || trimEnd != nil || cropConfig?.isActive == true || isMuted
+    }
+}
+
 /// An immutable semantic snapshot of the mutable preferences behind a supported
 /// preset. A request keeps this value through planning and execution, so a later
 /// Settings change cannot silently alter already accepted work.
@@ -636,6 +697,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
     let presetID: ApplicationPresetID
     let presetSettings: ApplicationPresetSettings
     let executionSettings: ApplicationRequestExecutionSettings?
+    let sourceSettings: [ApplicationSourceExecutionSettings]?
     let idempotencyKey: String?
     let capturedAt: Date
 
@@ -649,6 +711,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         presetID: ApplicationPresetID,
         presetSettings: ApplicationPresetSettings? = nil,
         executionSettings: ApplicationRequestExecutionSettings? = nil,
+        sourceSettings: [ApplicationSourceExecutionSettings]? = nil,
         idempotencyKey: String? = nil,
         capturedAt: Date = Date(),
         defaults: UserDefaults = .standard
@@ -663,6 +726,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         self.presetSettings = presetSettings
             ?? ApplicationPresetSettings(presetID: presetID, defaults: defaults)
         self.executionSettings = executionSettings
+        self.sourceSettings = sourceSettings
         self.idempotencyKey = idempotencyKey
         self.capturedAt = capturedAt
     }
@@ -676,11 +740,16 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
             && presetID == other.presetID
             && presetSettings == other.presetSettings
             && executionSettings == other.executionSettings
+            && sourceSettings == other.sourceSettings
     }
 
     /// Human-readable projection of the immutable settings stored with an
     /// accepted job. The queue uses this snapshot instead of current defaults.
     var acceptedSettingsSummary: String {
+        acceptedSettingsSummary(sourceIndex: nil)
+    }
+
+    func acceptedSettingsSummary(sourceIndex: Int?) -> String {
         let settings = presetSettings
         var lines = [
             "Preset: \(presetID.exportPreset.displayName)",
@@ -703,14 +772,42 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         }
         lines.append("Preserve metadata: \(settings.preserveMetadata ? "Yes" : "No")")
         lines.append("Keep subtitles: \(settings.keepSubtitles ? "Yes" : "No")")
-        if let executionSettings {
-            lines.append("Date tag: \(executionSettings.includeDateTag ? "Yes" : "No")")
-            let timecode = switch executionSettings.timecodeMode {
+        let sourceExecutionSettings = sourceIndex.flatMap { index in
+            sourceSettings?.indices.contains(index) == true ? sourceSettings?[index] : nil
+        }
+        if sourceIndex == nil,
+           sourceSettings?.contains(where: \ApplicationSourceExecutionSettings.hasVisibleAdjustment) == true {
+            lines.append("Per-file adjustments: On")
+        }
+        if let includeDateTag = sourceExecutionSettings?.includeDateTag
+            ?? executionSettings?.includeDateTag {
+            lines.append("Date tag: \(includeDateTag ? "Yes" : "No")")
+            let timecodeMode = sourceExecutionSettings?.timecodeMode
+                ?? executionSettings?.timecodeMode
+                ?? .disabled
+            let manualTimecode = sourceExecutionSettings?.manualTimecode
+                ?? executionSettings?.manualTimecode
+            let timecode = switch timecodeMode {
             case .disabled: "Disabled"
             case .preserveSource: "Preserve source"
-            case .manual: executionSettings.manualTimecode ?? "Manual"
+            case .manual: manualTimecode ?? "Manual"
             }
             lines.append("Timecode: \(timecode)")
+            if let sourceExecutionSettings, !sourceExecutionSettings.comment.isEmpty {
+                lines.append("Comment: \(sourceExecutionSettings.comment)")
+            }
+            if let trimStart = sourceExecutionSettings?.trimStart {
+                lines.append("Trim start: \(trimStart.formatted()) s")
+            }
+            if let trimEnd = sourceExecutionSettings?.trimEnd {
+                lines.append("Trim end: \(trimEnd.formatted()) s")
+            }
+            if sourceExecutionSettings?.cropConfig?.isActive == true {
+                lines.append("Crop: On")
+            }
+            if sourceExecutionSettings?.isMuted == true {
+                lines.append("Audio: Muted")
+            }
         }
         let filename = settings.fileName
         lines.append("Filename processing: \(filename.processingEnabled ? "On" : "Off")")
@@ -766,6 +863,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
     case nonFileURL(URL)
     case invalidIdempotencyKey
     case presetSettingsMismatch
+    case invalidSourceSettings(URL)
     case idempotencyConflict
     case unknownJob(ApplicationJobID)
     case invalidTransition(from: ApplicationJobState, to: ApplicationJobState)
@@ -791,6 +889,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
         case .nonFileURL: .nonFileURL
         case .invalidIdempotencyKey: .invalidIdempotencyKey
         case .presetSettingsMismatch: .presetSettingsMismatch
+        case .invalidSourceSettings: .invalidSourceSettings
         case .idempotencyConflict: .idempotencyConflict
         case .unknownJob: .unknownJob
         case .invalidTransition: .invalidTransition
@@ -820,6 +919,7 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case nonFileURL = "non_file_url"
     case invalidIdempotencyKey = "invalid_idempotency_key"
     case presetSettingsMismatch = "preset_settings_mismatch"
+    case invalidSourceSettings = "invalid_source_settings"
     case idempotencyConflict = "idempotency_conflict"
     case unknownJob = "unknown_job"
     case invalidTransition = "invalid_transition"
@@ -1135,6 +1235,22 @@ actor ApplicationJobRegistry {
         guard request.presetID == request.presetSettings.presetID else {
             throw ApplicationJobError.presetSettingsMismatch
         }
+        if let sourceSettings = request.sourceSettings {
+            guard sourceSettings.count == request.sourceURLs.count else {
+                throw ApplicationJobError.invalidSourceSettings(
+                    sourceSettings.first?.sourceURL ?? request.sourceURLs[0]
+                )
+            }
+            for (sourceURL, settings) in zip(request.sourceURLs, sourceSettings) {
+                guard settings.sourceURL == sourceURL,
+                      Self.validTrim(start: settings.trimStart, end: settings.trimEnd),
+                      Self.validCrop(settings.cropConfig),
+                      settings.timecodeMode != .manual
+                        || settings.manualTimecode?.isEmpty == false else {
+                    throw ApplicationJobError.invalidSourceSettings(sourceURL)
+                }
+            }
+        }
         if let key = request.idempotencyKey {
             let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
             guard key == trimmed,
@@ -1144,6 +1260,29 @@ actor ApplicationJobRegistry {
                 throw ApplicationJobError.invalidIdempotencyKey
             }
         }
+    }
+
+    private static func validTrim(start: Double?, end: Double?) -> Bool {
+        guard start?.isFinite != false, end?.isFinite != false,
+              start.map({ $0 >= 0 }) != false,
+              end.map({ $0 >= 0 }) != false else {
+            return false
+        }
+        if let start, let end {
+            return end > start
+        }
+        return true
+    }
+
+    private static func validCrop(_ config: CropConfig?) -> Bool {
+        guard let config else { return true }
+        let rect = config.normalizedRect
+        return rect.x.isFinite && rect.y.isFinite
+            && rect.width.isFinite && rect.height.isFinite
+            && rect.x >= 0 && rect.y >= 0
+            && rect.width > 0 && rect.height > 0
+            && rect.x + rect.width <= 1.000_001
+            && rect.y + rect.height <= 1.000_001
     }
 
     private static func canTransition(
@@ -1446,14 +1585,25 @@ actor ApplicationFFmpegJobExecutor {
     ) throws -> ApplicationFFmpegConversion {
         let settings = plan.request.presetSettings
         let executionSettings = plan.request.executionSettings
+        let sourceSettings = plan.request.sourceSettings?.first {
+            $0.sourceURL == output.sourceURL
+        }
         let defaults = try ApplicationExecutionDefaults(settings: settings)
         return ApplicationFFmpegConversion(
             request: ConversionRequest(
                 inputURL: output.sourceURL,
                 outputURL: output.outputURL,
                 preset: plan.request.presetID.exportPreset,
-                includeDateTag: executionSettings?.includeDateTag ?? false,
-                timecodeConfig: executionSettings?.timecodeConfig
+                comment: sourceSettings?.comment ?? "",
+                includeDateTag: sourceSettings?.includeDateTag
+                    ?? executionSettings?.includeDateTag
+                    ?? false,
+                trimStart: sourceSettings?.trimStart,
+                trimEnd: sourceSettings?.trimEnd,
+                cropConfig: sourceSettings?.cropConfig,
+                timecodeConfig: sourceSettings.map(\.timecodeConfig)
+                    ?? executionSettings?.timecodeConfig,
+                isMuted: sourceSettings?.isMuted ?? false
             ),
             audioOnlySettings: plan.request.presetID == .audioOnly
                 ? AudioOnlySettings(defaults: defaults.value) : nil,
@@ -2833,6 +2983,8 @@ private extension ApplicationJobError {
             "The idempotency key is empty or invalid."
         case .presetSettingsMismatch:
             "The captured settings do not match the requested preset."
+        case .invalidSourceSettings(let url):
+            "The per-file settings are invalid for \(url.lastPathComponent)."
         case .idempotencyConflict:
             "The idempotency key is already associated with a different request."
         case .unknownJob(let id):
