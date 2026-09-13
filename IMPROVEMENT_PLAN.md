@@ -50,16 +50,17 @@ trim, crop, mute, routing, custom names, and “save next to original” destina
 through the application-owned planner and executor. Effective destinations are
 authorized per source, while old schema-v1 snapshots remain readable. Initial
 Norwegian coverage now includes Agent Access setup, status, shared-job origin,
-and inspector controls.
+and every value label in the immutable accepted-settings inspector, with
+locale-aware number and date formatting.
 
-The full unit target passes **927 tests**, all **74 release-script tests** pass,
-localization and bundled-manifest checks pass, and a Release build passes its
+The full unit target passes **928 tests**, all **74 release-script tests** pass,
+the 1,616-entry localization catalog audit passes, and the preceding Release build passes its
 45-image arm64/Hardened Runtime and 12-notice bundle audit. This is not a signed
 distribution candidate: two named MCP clients, cold launch/reconnect/restart,
 permission loss, real output/playback, Norwegian visual review, the App Sandbox
 scope decision, and Developer ID archive/notarization remain open. See the
 [4.5 release plan](docs/RELEASE-4.5-PLAN.md) and the latest
-[validation record](docs/4.5-destination-localization-validation-2026-09-13.md).
+[validation record](docs/4.5-accepted-settings-localization-validation-2026-09-13.md).
 
 ## 4.4 workflow continuation — 2026-09-11
 

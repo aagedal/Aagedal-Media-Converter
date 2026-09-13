@@ -174,15 +174,22 @@ an explicit disabling policy. A packaged Debug helper successfully negotiated
 MCP and returned all six resolved presets through a running app. See the
 [MCP transport validation record](4.5-mcp-transport-validation-2026-09-13.md).
 
+The immutable accepted-settings summary now uses the string catalog for every
+label and state, with locale-aware numbers and capture dates. Norwegian coverage
+includes preset, codec, metadata, subtitle, filename, destination, timecode,
+trim, crop, mute, routing, and custom-name details, and the packaged Norwegian
+catalog is exercised directly by the focused handoff suite. See the
+[accepted-settings localization validation record](4.5-accepted-settings-localization-validation-2026-09-13.md).
+
 This is still a prototype rather than a completed feasibility decision. The
 current direct-distribution target has App Sandbox disabled, two named MCP
 clients have not been exercised, and a Developer ID Release archive has not
 completed signing/notarization validation. Groups/merge, generated waveform
 behavior, post-actions, and unsupported or per-source-destination App Intent
 cases still use the legacy executor, so full
-cross-boundary serialization remains open. The Agent Access surface has initial
-Norwegian coverage, but the accepted-settings inspector and the packaged
-end-to-end acceptance matrix still need localization and visual review.
+cross-boundary serialization remains open. The Agent Access surface and
+accepted-settings inspector now have Norwegian catalog coverage, but bilingual
+visual review and the packaged end-to-end acceptance matrix remain open.
 
 ## Intended outcome
 

@@ -246,6 +246,75 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertFalse(request.acceptedSettingsSummary.contains("Destination: /outputs"))
     }
 
+    func testAcceptedSettingsSummaryHasNorwegianCatalogCoverageAndFormatting() throws {
+        let defaults = try makeIsolatedDefaults()
+        var item = makeItem(url: first)
+        item.comment = "Første opptak"
+        item.trimStart = 1.5
+        item.cropConfig = CropConfig(
+            normalizedRect: CropRect(x: 0, y: 0, width: 0.5, height: 1)
+        )
+        item.isMuted = true
+        item.outputFileNameOverride = "scene-one"
+
+        let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
+            items: [item], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+        let summary = request.acceptedSettingsSummary(
+            sourceIndex: 0,
+            locale: Locale(identifier: "nb")
+        )
+        XCTAssertTrue(summary.contains("Trim start: 1,5 s"), summary)
+        XCTAssertTrue(summary.contains("13. sep."), summary)
+
+        let norwegianPath = try XCTUnwrap(
+            Bundle.main.path(forResource: "nb", ofType: "lproj")
+        )
+        let norwegianBundle = try XCTUnwrap(Bundle(path: norwegianPath))
+        let expectedTranslations = [
+            "Audio routing: %@": "Lydruting: %@",
+            "Audio: %@": "Lyd: %@",
+            "Audio: Muted": "Lyd: Dempet",
+            "Captured: %@": "Innstillinger hentet: %@",
+            "Comment: %@": "Kommentar: %@",
+            "Container: %@": "Konteiner: %@",
+            "Crop: %@": "Beskjæring: %@",
+            "Custom tracks": "Egendefinerte spor",
+            "Date tag: %@": "Datomerking: %@",
+            "Destination: %@": "Målmappe: %@",
+            "Destination: Per source": "Målmappe: Per kilde",
+            "Encoding speed: %@": "Kodehastighet: %@",
+            "Extract %@": "Trekk ut %@",
+            "Filename processing: %@": "Filnavnbehandling: %@",
+            "Filename template: %@": "Filnavnmal: %@",
+            "Keep subtitles: %@": "Behold undertekster: %@",
+            "Maximum height: %@p": "Maksimal høyde: %@p",
+            "Merge to Stereo": "Slå sammen til stereo",
+            "Output name: %@": "Utdatanavn: %@",
+            "Per-file adjustments: %@": "Justeringer per fil: %@",
+            "Preset: %@": "Forhåndsinnstilling: %@",
+            "Preserve metadata: %@": "Ta vare på metadata: %@",
+            "Preserve source": "Behold fra kilde",
+            "Quality: %@": "Kvalitet: %@",
+            "Split to Mono": "Del til mono",
+            "Swap L/R": "Bytt V/H",
+            "Timecode: %@": "Tidskode: %@",
+            "Trim end: %@ s": "Sluttpunkt: %@ s",
+            "Trim start: %@ s": "Startpunkt: %@ s",
+            "Video bitrate: %@": "Videobitrate: %@",
+            "Video encoder: %@": "Videokoder: %@",
+            "Video profile: %@": "Videoprofil: %@"
+        ]
+        for (key, expected) in expectedTranslations {
+            XCTAssertEqual(
+                norwegianBundle.localizedString(forKey: key, value: nil, table: "Localizable"),
+                expected,
+                key
+            )
+        }
+    }
+
     func testManualBridgeFallsBackWhenBehaviorCannotBeRepresented() throws {
         let defaults = try makeIsolatedDefaults()
         let ordinary = makeItem(url: first)

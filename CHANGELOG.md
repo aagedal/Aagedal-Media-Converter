@@ -76,7 +76,8 @@ localization, and Release-package validation are still open.
   including codecs, container, quality/rate controls, metadata, subtitles,
   filename policy, destination, and capture time.
 - Added Norwegian translations for Agent Access setup and connection states,
-  shared-job origin labels, and the accepted-settings control.
+  shared-job origin labels, and the complete accepted-settings inspector,
+  including locale-aware numbers, dates, destinations, and per-file adjustments.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

@@ -760,29 +760,55 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         acceptedSettingsSummary(sourceIndex: nil)
     }
 
-    func acceptedSettingsSummary(sourceIndex: Int?) -> String {
+    func acceptedSettingsSummary(
+        sourceIndex: Int?,
+        locale: Locale = .current
+    ) -> String {
         let settings = presetSettings
+        let on = String(localized: "On", locale: locale)
+        let off = String(localized: "Off", locale: locale)
+        let yes = String(localized: "Yes", locale: locale)
+        let no = String(localized: "No", locale: locale)
         var lines = [
-            "Preset: \(presetID.exportPreset.displayName)",
-            "Container: \(settings.containerID.rawValue.uppercased())"
+            String(localized: "Preset: \(presetID.exportPreset.displayName)", locale: locale,
+                   comment: "Accepted conversion settings summary: selected preset."),
+            String(localized: "Container: \(settings.containerID.rawValue.uppercased())", locale: locale,
+                   comment: "Accepted conversion settings summary: output container.")
         ]
         if let video = settings.video {
-            lines.append("Video encoder: \(video.encoderID.rawValue)")
-            if let profile = video.profileID { lines.append("Video profile: \(profile.rawValue)") }
-            if let quality = video.quality { lines.append("Quality: \(quality)") }
-            if let bitrate = video.bitrate { lines.append("Video bitrate: \(bitrate)") }
-            if let speed = video.speed { lines.append("Encoding speed: \(speed)") }
+            lines.append(String(localized: "Video encoder: \(video.encoderID.rawValue)", locale: locale,
+                                comment: "Accepted conversion settings summary: video encoder."))
+            if let profile = video.profileID {
+                lines.append(String(localized: "Video profile: \(profile.rawValue)", locale: locale,
+                                    comment: "Accepted conversion settings summary: video profile."))
+            }
+            if let quality = video.quality {
+                lines.append(String(localized: "Quality: \(String(quality))", locale: locale,
+                                    comment: "Accepted conversion settings summary: numeric quality."))
+            }
+            if let bitrate = video.bitrate {
+                lines.append(String(localized: "Video bitrate: \(bitrate)", locale: locale,
+                                    comment: "Accepted conversion settings summary: video bitrate."))
+            }
+            if let speed = video.speed {
+                lines.append(String(localized: "Encoding speed: \(speed)", locale: locale,
+                                    comment: "Accepted conversion settings summary: encoding speed."))
+            }
             if let maximumHeight = video.maximumHeight {
-                lines.append("Maximum height: \(maximumHeight)p")
+                lines.append(String(localized: "Maximum height: \(String(maximumHeight))p", locale: locale,
+                                    comment: "Accepted conversion settings summary: maximum video height in pixels."))
             }
         }
         if let audio = settings.audio {
             var value = audio.codecID.rawValue
             if let bitrate = audio.bitrate { value += " · \(bitrate)" }
-            lines.append("Audio: \(value)")
+            lines.append(String(localized: "Audio: \(value)", locale: locale,
+                                comment: "Accepted conversion settings summary: audio codec and bitrate."))
         }
-        lines.append("Preserve metadata: \(settings.preserveMetadata ? "Yes" : "No")")
-        lines.append("Keep subtitles: \(settings.keepSubtitles ? "Yes" : "No")")
+        lines.append(String(localized: "Preserve metadata: \(settings.preserveMetadata ? yes : no)", locale: locale,
+                            comment: "Accepted conversion settings summary: metadata preservation."))
+        lines.append(String(localized: "Keep subtitles: \(settings.keepSubtitles ? yes : no)", locale: locale,
+                            comment: "Accepted conversion settings summary: subtitle preservation."))
         let sourceExecutionSettings = sourceIndex.flatMap { index in
             sourceSettings?.indices.contains(index) == true ? sourceSettings?[index] : nil
         }
@@ -791,57 +817,91 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         } == true
         if sourceIndex == nil,
            sourceSettings?.contains(where: \ApplicationSourceExecutionSettings.hasVisibleAdjustment) == true {
-            lines.append("Per-file adjustments: On")
+            lines.append(String(localized: "Per-file adjustments: \(on)", locale: locale,
+                                comment: "Accepted conversion settings summary: per-file adjustments are enabled."))
         }
         if let includeDateTag = sourceExecutionSettings?.includeDateTag
             ?? executionSettings?.includeDateTag {
-            lines.append("Date tag: \(includeDateTag ? "Yes" : "No")")
+            lines.append(String(localized: "Date tag: \(includeDateTag ? yes : no)", locale: locale,
+                                comment: "Accepted conversion settings summary: filename date tag."))
             let timecodeMode = sourceExecutionSettings?.timecodeMode
                 ?? executionSettings?.timecodeMode
                 ?? .disabled
             let manualTimecode = sourceExecutionSettings?.manualTimecode
                 ?? executionSettings?.manualTimecode
             let timecode = switch timecodeMode {
-            case .disabled: "Disabled"
-            case .preserveSource: "Preserve source"
-            case .manual: manualTimecode ?? "Manual"
+            case .disabled: String(localized: "Disabled", locale: locale)
+            case .preserveSource: String(localized: "Preserve source", locale: locale)
+            case .manual: manualTimecode ?? String(localized: "Manual", locale: locale)
             }
-            lines.append("Timecode: \(timecode)")
+            lines.append(String(localized: "Timecode: \(timecode)", locale: locale,
+                                comment: "Accepted conversion settings summary: timecode behavior or value."))
             if let sourceExecutionSettings, !sourceExecutionSettings.comment.isEmpty {
-                lines.append("Comment: \(sourceExecutionSettings.comment)")
+                lines.append(String(localized: "Comment: \(sourceExecutionSettings.comment)", locale: locale,
+                                    comment: "Accepted conversion settings summary: embedded comment."))
             }
             if let trimStart = sourceExecutionSettings?.trimStart {
-                lines.append("Trim start: \(trimStart.formatted()) s")
+                let value = trimStart.formatted(.number.locale(locale))
+                lines.append(String(localized: "Trim start: \(value) s", locale: locale,
+                                    comment: "Accepted conversion settings summary: trim start in seconds."))
             }
             if let trimEnd = sourceExecutionSettings?.trimEnd {
-                lines.append("Trim end: \(trimEnd.formatted()) s")
+                let value = trimEnd.formatted(.number.locale(locale))
+                lines.append(String(localized: "Trim end: \(value) s", locale: locale,
+                                    comment: "Accepted conversion settings summary: trim end in seconds."))
             }
             if sourceExecutionSettings?.cropConfig?.isActive == true {
-                lines.append("Crop: On")
+                lines.append(String(localized: "Crop: \(on)", locale: locale,
+                                    comment: "Accepted conversion settings summary: crop is enabled."))
             }
             if sourceExecutionSettings?.isMuted == true {
-                lines.append("Audio: Muted")
+                lines.append(String(localized: "Audio: Muted", locale: locale,
+                                    comment: "Accepted conversion settings summary: audio is muted."))
             } else if let routing = sourceExecutionSettings?.audioRoutingConfig {
-                lines.append("Audio routing: \(routing.channelOperation?.shortLabel ?? "Custom tracks")")
+                let routingValue = switch routing.channelOperation {
+                case .mergeToStereo?:
+                    String(localized: "Merge to Stereo", locale: locale)
+                case .splitToMono?:
+                    String(localized: "Split to Mono", locale: locale)
+                case .swapChannels?:
+                    String(localized: "Swap L/R", locale: locale)
+                case .extractChannel(_, _, let channelName)?:
+                    String(localized: "Extract \(channelName)", locale: locale,
+                           comment: "Accepted conversion settings summary: extract the named audio channel.")
+                case nil:
+                    String(localized: "Custom tracks", locale: locale)
+                }
+                lines.append(String(localized: "Audio routing: \(routingValue)", locale: locale,
+                                    comment: "Accepted conversion settings summary: audio routing operation."))
             }
             if let outputBaseNameOverride = sourceExecutionSettings?.outputBaseNameOverride {
-                lines.append("Output name: \(outputBaseNameOverride)")
+                lines.append(String(localized: "Output name: \(outputBaseNameOverride)", locale: locale,
+                                    comment: "Accepted conversion settings summary: custom output name."))
             }
             if let destinationFolderURL = sourceExecutionSettings?.destinationFolderURL {
-                lines.append("Destination: \(destinationFolderURL.path)")
+                lines.append(String(localized: "Destination: \(destinationFolderURL.path)", locale: locale,
+                                    comment: "Accepted conversion settings summary: output folder."))
             }
         }
         let filename = settings.fileName
-        lines.append("Filename processing: \(filename.processingEnabled ? "On" : "Off")")
+        lines.append(String(localized: "Filename processing: \(filename.processingEnabled ? on : off)", locale: locale,
+                            comment: "Accepted conversion settings summary: filename processing."))
         if filename.customTemplateEnabled {
-            lines.append("Filename template: \(filename.template)")
+            lines.append(String(localized: "Filename template: \(filename.template)", locale: locale,
+                                comment: "Accepted conversion settings summary: filename template."))
         }
         if sourceIndex == nil, hasPerSourceDestination {
-            lines.append("Destination: Per source")
+            lines.append(String(localized: "Destination: Per source", locale: locale,
+                                comment: "Accepted conversion settings summary: each source has its own output folder."))
         } else if sourceExecutionSettings?.destinationFolderURL == nil {
-            lines.append("Destination: \(destinationFolderURL.path)")
+            lines.append(String(localized: "Destination: \(destinationFolderURL.path)", locale: locale,
+                                comment: "Accepted conversion settings summary: output folder."))
         }
-        lines.append("Captured: \(capturedAt.formatted(date: .abbreviated, time: .standard))")
+        let captured = capturedAt.formatted(
+            Date.FormatStyle(date: .abbreviated, time: .standard).locale(locale)
+        )
+        lines.append(String(localized: "Captured: \(captured)", locale: locale,
+                            comment: "Accepted conversion settings summary: time the immutable settings were captured."))
         return lines.joined(separator: "\n")
     }
 }

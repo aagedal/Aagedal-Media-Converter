@@ -1,6 +1,326 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Audio routing: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lydruting: %@"
+          }
+        }
+      }
+    },
+    "Audio: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyd: %@"
+          }
+        }
+      }
+    },
+    "Audio: Muted" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyd: Dempet"
+          }
+        }
+      }
+    },
+    "Captured: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Innstillinger hentet: %@"
+          }
+        }
+      }
+    },
+    "Comment: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kommentar: %@"
+          }
+        }
+      }
+    },
+    "Container: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konteiner: %@"
+          }
+        }
+      }
+    },
+    "Crop: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beskjæring: %@"
+          }
+        }
+      }
+    },
+    "Custom tracks" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Egendefinerte spor"
+          }
+        }
+      }
+    },
+    "Date tag: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datomerking: %@"
+          }
+        }
+      }
+    },
+    "Destination: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Målmappe: %@"
+          }
+        }
+      }
+    },
+    "Destination: Per source" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Målmappe: Per kilde"
+          }
+        }
+      }
+    },
+    "Encoding speed: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodehastighet: %@"
+          }
+        }
+      }
+    },
+    "Extract %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trekk ut %@"
+          }
+        }
+      }
+    },
+    "Filename processing: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filnavnbehandling: %@"
+          }
+        }
+      }
+    },
+    "Filename template: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filnavnmal: %@"
+          }
+        }
+      }
+    },
+    "Keep subtitles: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold undertekster: %@"
+          }
+        }
+      }
+    },
+    "Maximum height: %@p" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maksimal høyde: %@p"
+          }
+        }
+      }
+    },
+    "Merge to Stereo" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå sammen til stereo"
+          }
+        }
+      }
+    },
+    "Output name: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utdatanavn: %@"
+          }
+        }
+      }
+    },
+    "Per-file adjustments: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Justeringer per fil: %@"
+          }
+        }
+      }
+    },
+    "Preset: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forhåndsinnstilling: %@"
+          }
+        }
+      }
+    },
+    "Preserve metadata: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta vare på metadata: %@"
+          }
+        }
+      }
+    },
+    "Preserve source" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold fra kilde"
+          }
+        }
+      }
+    },
+    "Quality: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kvalitet: %@"
+          }
+        }
+      }
+    },
+    "Split to Mono" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del til mono"
+          }
+        }
+      }
+    },
+    "Swap L/R" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bytt V/H"
+          }
+        }
+      }
+    },
+    "Timecode: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidskode: %@"
+          }
+        }
+      }
+    },
+    "Trim end: %@ s" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sluttpunkt: %@ s"
+          }
+        }
+      }
+    },
+    "Trim start: %@ s" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startpunkt: %@ s"
+          }
+        }
+      }
+    },
+    "Video bitrate: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videobitrate: %@"
+          }
+        }
+      }
+    },
+    "Video encoder: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videokoder: %@"
+          }
+        }
+      }
+    },
+    "Video profile: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videoprofil: %@"
+          }
+        }
+      }
+    },
     "Add this stdio server to a local MCP client. Keep the app installed at the same location after configuring the client." : {
       "localizations" : {
         "nb" : {
