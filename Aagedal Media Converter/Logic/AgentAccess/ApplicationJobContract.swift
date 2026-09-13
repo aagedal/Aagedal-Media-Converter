@@ -196,6 +196,24 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
     let keepSubtitles: Bool
     let fileName: ApplicationFileNameSettings
 
+    init(
+        presetID: ApplicationPresetID,
+        containerID: ApplicationContainerID,
+        video: ApplicationVideoSettings?,
+        audio: ApplicationAudioSettings?,
+        preserveMetadata: Bool,
+        keepSubtitles: Bool,
+        fileName: ApplicationFileNameSettings
+    ) {
+        self.presetID = presetID
+        self.containerID = containerID
+        self.video = video
+        self.audio = audio
+        self.preserveMetadata = preserveMetadata
+        self.keepSubtitles = keepSubtitles
+        self.fileName = fileName
+    }
+
     init(presetID: ApplicationPresetID, defaults: UserDefaults = .standard) {
         let preset = presetID.exportPreset
         self.presetID = presetID
@@ -1056,12 +1074,550 @@ struct ApplicationJobExecutor: Sendable {
     typealias Execute = @Sendable (
         ApplicationJobID,
         ApplicationConversionPlan,
-        ProgressHandler
+        ApplicationJobProgressReporter
     ) async -> ApplicationJobExecutionResult
     typealias Cancel = @Sendable (ApplicationJobID) async -> Void
 
     let execute: Execute
     let cancel: Cancel
+}
+
+final class ApplicationJobProgressReporter: @unchecked Sendable {
+    private let handler: ApplicationJobExecutor.ProgressHandler
+
+    init(handler: @escaping ApplicationJobExecutor.ProgressHandler) {
+        self.handler = handler
+    }
+
+    func report(_ update: ApplicationJobProgressUpdate) async {
+        await handler(update)
+    }
+}
+
+/// A single planned source/output conversion with every mutable preference
+/// resolved into the existing immutable execution settings.
+struct ApplicationFFmpegConversion: Sendable {
+    let request: ConversionRequest
+    let audioOnlySettings: AudioOnlySettings?
+    let codecSettings: CodecExportSettings?
+    let subtitleSettings: SubtitleExportSettings
+}
+
+/// Injectable wrapper around the concrete FFmpeg actor. Tests can exercise the
+/// application adapter without launching a bundled helper process.
+struct ApplicationFFmpegRunner: Sendable {
+    typealias ProgressHandler = @Sendable (Double, String?) -> Void
+    typealias Run = @Sendable (
+        ApplicationFFmpegConversion,
+        ApplicationFFmpegProgressSink
+    ) async -> ApplicationFFmpegRunResult
+
+    let run: Run
+    let cancel: @Sendable () async -> Void
+
+    static func live(converter: FFMPEGConverter = FFMPEGConverter()) -> Self {
+        Self(
+            run: { conversion, progress in
+                let completion = ApplicationFFmpegCompletion()
+                await converter.convert(
+                    request: conversion.request,
+                    audioOnlySettings: conversion.audioOnlySettings,
+                    codecSettings: conversion.codecSettings,
+                    subtitleSettings: conversion.subtitleSettings,
+                    progressUpdate: { value, status in
+                        progress.send(value, status: status)
+                    }
+                ) { success, diagnostic in
+                    completion.resolve(success: success, diagnostic: diagnostic)
+                }
+                return completion.result
+                    ?? .failed("FFmpeg returned without reporting a conversion result.")
+            },
+            cancel: {
+                await converter.cancelConversion()
+            }
+        )
+    }
+}
+
+final class ApplicationFFmpegProgressSink: @unchecked Sendable {
+    private let handler: ApplicationFFmpegRunner.ProgressHandler
+
+    init(handler: @escaping ApplicationFFmpegRunner.ProgressHandler) {
+        self.handler = handler
+    }
+
+    func send(_ progress: Double, status: String?) {
+        handler(progress, status)
+    }
+}
+
+enum ApplicationFFmpegRunResult: Equatable, Sendable {
+    case succeeded
+    case failed(String)
+}
+
+private final class ApplicationFFmpegCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedResult: ApplicationFFmpegRunResult?
+
+    var result: ApplicationFFmpegRunResult? {
+        lock.withLock { storedResult }
+    }
+
+    func resolve(success: Bool, diagnostic: String?) {
+        lock.withLock {
+            guard storedResult == nil else { return }
+            storedResult = success
+                ? .succeeded
+                : .failed(diagnostic ?? "FFmpeg conversion failed without a diagnostic.")
+        }
+    }
+}
+
+/// Converts accepted application plans with the existing bundled FFmpeg engine.
+/// The job service owns inter-job ordering; this actor owns the active engine
+/// call and prevents a cancellation for one job from reaching another job.
+actor ApplicationFFmpegJobExecutor {
+    static let shared = ApplicationFFmpegJobExecutor(runner: .live())
+
+    private let runner: ApplicationFFmpegRunner
+    private var activeJobID: ApplicationJobID?
+    private var cancellationRequested: Set<ApplicationJobID> = []
+
+    init(runner: ApplicationFFmpegRunner) {
+        self.runner = runner
+    }
+
+    nonisolated var jobExecutor: ApplicationJobExecutor {
+        ApplicationJobExecutor(
+            execute: { [self] jobID, plan, progress in
+                await execute(jobID: jobID, plan: plan, progress: progress)
+            },
+            cancel: { [self] jobID in
+                await cancel(jobID: jobID)
+            }
+        )
+    }
+
+    private func execute(
+        jobID: ApplicationJobID,
+        plan: ApplicationConversionPlan,
+        progress: ApplicationJobProgressReporter
+    ) async -> ApplicationJobExecutionResult {
+        guard activeJobID == nil else {
+            return .failed(diagnostic: "The FFmpeg execution adapter was already busy.")
+        }
+        activeJobID = jobID
+        cancellationRequested.remove(jobID)
+        defer {
+            if activeJobID == jobID { activeJobID = nil }
+            cancellationRequested.remove(jobID)
+        }
+
+        guard !plan.outputs.isEmpty else {
+            return .failed(diagnostic: "The accepted conversion plan had no outputs.")
+        }
+
+        let outputCount = Double(plan.outputs.count)
+        for (index, output) in plan.outputs.enumerated() {
+            guard activeJobID == jobID, !cancellationRequested.contains(jobID) else {
+                return .cancelled(diagnostic: "Conversion cancelled.")
+            }
+
+            let conversion: ApplicationFFmpegConversion
+            do {
+                conversion = try Self.makeConversion(plan: plan, output: output)
+            } catch {
+                return .failed(diagnostic: error.localizedDescription)
+            }
+
+            let itemIndex = Double(index)
+            let fallbackStage = plan.outputs.count == 1
+                ? "Converting"
+                : "Converting file \(index + 1) of \(plan.outputs.count)"
+            await progress.report(ApplicationJobProgressUpdate(
+                progress: itemIndex / outputCount,
+                stage: fallbackStage
+            ))
+            let progressSink = ApplicationFFmpegProgressSink { itemProgress, status in
+                let boundedProgress = min(max(itemProgress, 0), 1)
+                Task {
+                    await progress.report(ApplicationJobProgressUpdate(
+                        progress: (itemIndex + boundedProgress) / outputCount,
+                        stage: status ?? fallbackStage
+                    ))
+                }
+            }
+            let result = await runner.run(conversion, progressSink)
+
+            if cancellationRequested.contains(jobID) {
+                return .cancelled(diagnostic: "Conversion cancelled.")
+            }
+            switch result {
+            case .succeeded:
+                break
+            case .failed(let diagnostic):
+                return .failed(diagnostic: diagnostic)
+            }
+        }
+
+        return .succeeded(outputURLs: plan.outputs.map(\.outputURL))
+    }
+
+    private func cancel(jobID: ApplicationJobID) async {
+        guard activeJobID == jobID, !cancellationRequested.contains(jobID) else { return }
+        cancellationRequested.insert(jobID)
+        await runner.cancel()
+    }
+
+    private static func makeConversion(
+        plan: ApplicationConversionPlan,
+        output: ApplicationPlannedOutput
+    ) throws -> ApplicationFFmpegConversion {
+        let settings = plan.request.presetSettings
+        let defaults = try ApplicationExecutionDefaults(settings: settings)
+        return ApplicationFFmpegConversion(
+            request: ConversionRequest(
+                inputURL: output.sourceURL,
+                outputURL: output.outputURL,
+                preset: plan.request.presetID.exportPreset,
+                includeDateTag: false
+            ),
+            audioOnlySettings: plan.request.presetID == .audioOnly
+                ? AudioOnlySettings(defaults: defaults.value) : nil,
+            codecSettings: CodecExportSettings(
+                preset: plan.request.presetID.exportPreset,
+                defaults: defaults.value
+            ),
+            subtitleSettings: SubtitleExportSettings(defaults: defaults.value)
+        )
+    }
+}
+
+private final class ApplicationExecutionDefaults {
+    let value: UserDefaults
+    private let suiteName: String
+
+    init(settings: ApplicationPresetSettings) throws {
+        let suiteName = "ApplicationFFmpegJobExecutor.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            throw ApplicationExecutionSettingsError.defaultsUnavailable
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        self.suiteName = suiteName
+
+        defaults.set(settings.preserveMetadata, forKey: AppConstants.preserveMetadataPreferenceKey)
+        defaults.set(settings.keepSubtitles, forKey: AppConstants.keepSubtitlesKey)
+        try Self.populatePresetSettings(settings, defaults: defaults)
+        value = defaults
+    }
+
+    deinit {
+        value.removePersistentDomain(forName: suiteName)
+    }
+
+    private static func populatePresetSettings(
+        _ settings: ApplicationPresetSettings,
+        defaults: UserDefaults
+    ) throws {
+        switch settings.presetID {
+        case .h264:
+            try populateCodecSettings(
+                settings, defaults: defaults,
+                containerKey: AppConstants.h264ContainerKey,
+                encoderKey: AppConstants.h264EncoderKey,
+                qualityKey: AppConstants.h264QualityKey,
+                bitrateKey: AppConstants.h264BitrateKey,
+                speedKey: AppConstants.h264SpeedKey,
+                resolutionKey: AppConstants.h264ResolutionLimitKey,
+                audioFormatKey: AppConstants.h264AudioFormatKey,
+                audioBitrateKey: AppConstants.h264AudioBitrateKey
+            )
+        case .hevc:
+            try populateCodecSettings(
+                settings, defaults: defaults,
+                containerKey: AppConstants.h265ContainerKey,
+                encoderKey: AppConstants.h265EncoderKey,
+                qualityKey: AppConstants.h265QualityKey,
+                bitrateKey: AppConstants.h265BitrateKey,
+                speedKey: AppConstants.h265SpeedKey,
+                resolutionKey: AppConstants.h265ResolutionLimitKey,
+                audioFormatKey: AppConstants.h265AudioFormatKey,
+                audioBitrateKey: AppConstants.h265AudioBitrateKey
+            )
+        case .proRes:
+            guard let video = settings.video,
+                  video.encoderID == .proResVideoToolbox,
+                  video.quality == nil,
+                  video.bitrate == nil,
+                  video.speed == nil,
+                  video.maximumHeight == nil,
+                  let profileID = video.profileID,
+                  let profile = proResProfile(for: profileID),
+                  settings.containerID == .mov,
+                  settings.audio?.codecID == .pcm24,
+                  settings.audio?.bitrate == nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(profile.rawValue, forKey: AppConstants.proResProfileKey)
+        case .proxy:
+            guard let video = settings.video,
+                  let codec = proxyCodec(for: video.encoderID),
+                  let resolution = proxyResolution(maximumHeight: video.maximumHeight),
+                  settings.containerID == (codec == .dnxhd ? .mxf : .mov),
+                  video.profileID == proxyProfile(for: codec),
+                  video.quality == nil,
+                  video.speed == nil,
+                  video.bitrate == (codec == .hevc ? resolution.bitrate : nil),
+                  settings.audio?.codecID == .pcm24,
+                  settings.audio?.bitrate == nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(codec.rawValue, forKey: AppConstants.proxyCodecKey)
+            defaults.set(resolution.rawValue, forKey: AppConstants.proxyResolutionLimitKey)
+        case .audioOnly:
+            try populateAudioOnlySettings(settings, defaults: defaults)
+        case .streamCopy:
+            guard settings.video?.encoderID == .streamCopy,
+                  settings.video?.profileID == nil,
+                  settings.video?.quality == nil,
+                  settings.video?.bitrate == nil,
+                  settings.video?.speed == nil,
+                  settings.video?.maximumHeight == nil,
+                  settings.audio?.codecID == .streamCopy,
+                  settings.audio?.bitrate == nil,
+                  let container = streamCopyContainer(for: settings.containerID) else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(container.rawValue, forKey: AppConstants.streamCopyContainerKey)
+        }
+    }
+
+    private static func populateCodecSettings(
+        _ settings: ApplicationPresetSettings,
+        defaults: UserDefaults,
+        containerKey: String,
+        encoderKey: String,
+        qualityKey: String,
+        bitrateKey: String,
+        speedKey: String,
+        resolutionKey: String,
+        audioFormatKey: String,
+        audioBitrateKey: String
+    ) throws {
+        guard let video = settings.video,
+              let audio = settings.audio,
+              let container = codecContainer(for: settings.containerID),
+              let resolution = CodecResolutionLimit.allCases.first(where: {
+                  $0.maxHeight == video.maximumHeight
+              }),
+              let audioFormat = codecAudioFormat(for: audio.codecID),
+              video.profileID == (settings.presetID == .h264 ? .h264High : .hevcMain10),
+              audioFormat != .opus || container == .mkv else {
+            throw ApplicationExecutionSettingsError.invalidPresetSettings
+        }
+        defaults.set(container.rawValue, forKey: containerKey)
+        defaults.set(resolution.rawValue, forKey: resolutionKey)
+        defaults.set(audioFormat.rawValue, forKey: audioFormatKey)
+
+        if audioFormat.requiresBitrate {
+            guard let bitrate = audio.bitrate,
+                  let resolvedBitrate = audioBitrate(for: bitrate) else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(resolvedBitrate.rawValue, forKey: audioBitrateKey)
+        } else if audio.bitrate != nil {
+            throw ApplicationExecutionSettingsError.invalidPresetSettings
+        }
+
+        switch video.encoderID {
+        case .libx264, .libx265:
+            let expectedEncoder: ApplicationVideoEncoderID = settings.presetID == .h264
+                ? .libx264 : .libx265
+            guard video.encoderID == expectedEncoder,
+                  let quality = video.quality,
+                  let resolvedQuality = CodecQualityLevel.allCases.first(where: {
+                      $0.crfValue == quality
+                  }),
+                  let speed = video.speed,
+                  let resolvedSpeed = EncodingSpeed.allCases.first(where: {
+                      $0.ffmpegPreset == speed
+                  }),
+                  video.bitrate == nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(
+                settings.presetID == .h264 ? H264Encoder.software.rawValue : H265Encoder.software.rawValue,
+                forKey: encoderKey
+            )
+            defaults.set(resolvedQuality.rawValue, forKey: qualityKey)
+            defaults.set(resolvedSpeed.rawValue, forKey: speedKey)
+        case .h264VideoToolbox, .hevcVideoToolbox:
+            let expectedEncoder: ApplicationVideoEncoderID = settings.presetID == .h264
+                ? .h264VideoToolbox : .hevcVideoToolbox
+            guard video.encoderID == expectedEncoder,
+                  let bitrate = video.bitrate,
+                  video.quality == nil,
+                  video.speed == nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(
+                settings.presetID == .h264 ? H264Encoder.hardware.rawValue : H265Encoder.hardware.rawValue,
+                forKey: encoderKey
+            )
+            defaults.set(bitrate, forKey: bitrateKey)
+        default:
+            throw ApplicationExecutionSettingsError.invalidPresetSettings
+        }
+    }
+
+    private static func populateAudioOnlySettings(
+        _ settings: ApplicationPresetSettings,
+        defaults: UserDefaults
+    ) throws {
+        guard settings.video == nil, let audio = settings.audio else {
+            throw ApplicationExecutionSettingsError.invalidPresetSettings
+        }
+        let format: AudioOnlyFormat
+        switch settings.containerID {
+        case .wav:
+            format = .wav
+            guard let depth = audioBitDepth(for: audio.codecID), audio.bitrate == nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(depth.rawValue, forKey: AppConstants.audioOnlyBitDepthKey)
+        case .m4a:
+            format = .aac
+            guard audio.codecID == .aac,
+                  let bitrate = audio.bitrate.flatMap(audioBitrate(for:)) else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(bitrate.rawValue, forKey: AppConstants.audioOnlyAACBitrateKey)
+        case .mp4:
+            format = .mp4
+            guard let codec = audioOnlyMP4Codec(for: audio.codecID) else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+            defaults.set(codec.rawValue, forKey: AppConstants.audioOnlyMP4CodecKey)
+            if codec.requiresBitrate {
+                guard let bitrate = audio.bitrate.flatMap(audioBitrate(for:)) else {
+                    throw ApplicationExecutionSettingsError.invalidPresetSettings
+                }
+                defaults.set(bitrate.rawValue, forKey: AppConstants.audioOnlyMP4BitrateKey)
+            } else if audio.bitrate != nil {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+        case .flac:
+            format = .flac
+            guard audio.codecID == .flac, audio.bitrate == nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+        default:
+            throw ApplicationExecutionSettingsError.invalidPresetSettings
+        }
+        defaults.set(format.rawValue, forKey: AppConstants.audioOnlyFormatKey)
+    }
+
+    private static func codecContainer(for id: ApplicationContainerID) -> CodecContainer? {
+        switch id {
+        case .mp4: .mp4
+        case .mov: .mov
+        case .mkv: .mkv
+        default: nil
+        }
+    }
+
+    private static func codecAudioFormat(for id: ApplicationAudioCodecID) -> CodecAudioFormat? {
+        switch id {
+        case .aac: .aac
+        case .opus: .opus
+        case .pcm16: .pcm16
+        case .pcm24: .pcm24
+        case .pcm32: .pcm32
+        default: nil
+        }
+    }
+
+    private static func audioBitrate(for ffmpegValue: String) -> AudioBitrate? {
+        AudioBitrate.allCases.first { $0.ffmpegValue == ffmpegValue }
+    }
+
+    private static func audioBitDepth(for id: ApplicationAudioCodecID) -> AudioOnlyBitDepth? {
+        switch id {
+        case .pcm16: .pcm16
+        case .pcm24: .pcm24
+        case .pcm32: .pcm32
+        default: nil
+        }
+    }
+
+    private static func audioOnlyMP4Codec(for id: ApplicationAudioCodecID) -> AudioOnlyMP4Codec? {
+        switch id {
+        case .aac: .aac
+        case .pcm16: .pcm16
+        case .pcm24: .pcm24
+        case .pcm32: .pcm32
+        default: nil
+        }
+    }
+
+    private static func proResProfile(for id: ApplicationVideoProfileID) -> ProResProfile? {
+        switch id {
+        case .proResProxy: .proxy
+        case .proResLT: .lt
+        case .proRes422: .standard
+        case .proResHQ: .hq
+        case .proRes4444: .fourFourFourFour
+        case .proRes4444XQ: .fourFourFourFourXQ
+        default: nil
+        }
+    }
+
+    private static func proxyCodec(for id: ApplicationVideoEncoderID) -> ProxyCodec? {
+        switch id {
+        case .hevcVideoToolbox: .hevc
+        case .proResVideoToolbox: .prores
+        case .dnxhd: .dnxhd
+        default: nil
+        }
+    }
+
+    private static func proxyProfile(for codec: ProxyCodec) -> ApplicationVideoProfileID {
+        switch codec {
+        case .hevc: .hevcMain10
+        case .prores: .proResProxy
+        case .dnxhd: .dnxhrLB
+        }
+    }
+
+    private static func proxyResolution(maximumHeight: Int?) -> ProxyResolutionLimit? {
+        ProxyResolutionLimit.allCases.first { $0.maxHeight == maximumHeight }
+    }
+
+    private static func streamCopyContainer(for id: ApplicationContainerID) -> StreamCopyContainer? {
+        switch id {
+        case .source: .keepCurrent
+        case .mov: .mov
+        case .mp4: .mp4
+        case .mkv: .mkv
+        default: nil
+        }
+    }
+}
+
+private enum ApplicationExecutionSettingsError: LocalizedError {
+    case defaultsUnavailable
+    case invalidPresetSettings
+
+    var errorDescription: String? {
+        switch self {
+        case .defaultsUnavailable:
+            "Unable to create isolated conversion settings."
+        case .invalidPresetSettings:
+            "The accepted preset settings cannot be represented by the conversion engine."
+        }
+    }
 }
 
 enum ApplicationFileAccessMode: Equatable, Sendable {
@@ -1124,7 +1680,10 @@ actor ApplicationJobService {
     typealias SourceIdentityProvider = @Sendable (URL) throws -> ApplicationSourceIdentity
     typealias ItemExistsProvider = @Sendable (URL) -> Bool
 
-    static let shared = ApplicationJobService(store: .live)
+    static let shared = ApplicationJobService(
+        store: .live,
+        executor: ApplicationFFmpegJobExecutor.shared.jobExecutor
+    )
 
     private let registry: ApplicationJobRegistry
     private let sourceIdentityProvider: SourceIdentityProvider
@@ -1519,13 +2078,14 @@ actor ApplicationJobService {
         }
         activeExecutionJobID = pending.jobID
 
-        let result = await executor.execute(pending.jobID, pending.plan) { update in
+        let progressReporter = ApplicationJobProgressReporter { update in
             _ = try? await self.updateProgress(
                 pending.jobID,
                 progress: update.progress,
                 stage: update.stage
             )
         }
+        let result = await executor.execute(pending.jobID, pending.plan, progressReporter)
 
         activeExecutionJobID = nil
         cancellationSignals.remove(pending.jobID)

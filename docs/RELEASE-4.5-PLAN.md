@@ -79,6 +79,20 @@ outputs must match the accepted plan. The concrete FFmpeg adapter is still open;
 this increment establishes and tests the lifecycle it will plug into. See the
 [execution-handoff validation record](4.5-execution-handoff-validation-2026-09-13.md).
 
+The live shared service is now connected to the bundled `FFMPEGConverter` through
+an app-owned adapter. It reconstructs the exact captured H.264, HEVC, ProRes,
+Proxy, Audio Only, and Stream Copy settings without consulting current user
+preferences, converts every planned source/output pair in order, aggregates batch
+progress, stops on the first failure, and fences cancellation to the active job.
+Unrepresentable snapshots fail before FFmpeg launches instead of silently falling
+back. Focused adapter coverage and the full unit result are recorded in the
+[FFmpeg adapter validation record](4.5-ffmpeg-adapter-validation-2026-09-13.md).
+
+This completes the concrete engine plug-in for shared jobs, but not shared queue
+adoption: the visible manual queue and App Intent entry points still run through
+`ConversionManager`. They must join the application boundary before concurrent
+manual and agent work can claim one authoritative queue.
+
 ## Intended outcome
 
 An agent on the user's Mac can inspect media, discover the user's presets, plan

@@ -860,7 +860,7 @@ final class ApplicationJobContractTests: XCTestCase {
         let executor = ApplicationJobExecutor(
             execute: { _, plan, progress in
                 XCTAssertEqual(leaseState.activeCount, 2)
-                await progress(ApplicationJobProgressUpdate(progress: 0.5, stage: "Encoding"))
+                await progress.report(ApplicationJobProgressUpdate(progress: 0.5, stage: "Encoding"))
                 XCTAssertEqual(leaseState.activeCount, 2)
                 return .succeeded(outputURLs: plan.outputs.map(\.outputURL))
             },
@@ -882,6 +882,206 @@ final class ApplicationJobContractTests: XCTestCase {
         )
         XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
         XCTAssertEqual(leaseState.activeCount, 0)
+    }
+
+    func testFFmpegAdapterBuildsExecutableSettingsForAllSupportedPresets() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let defaults = try makeDefaults()
+        defaults.set(true, forKey: AppConstants.keepSubtitlesKey)
+
+        let harness = ApplicationFFmpegRunnerHarness()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+
+        for presetID in ApplicationPresetID.allCases {
+            let sourceURL = directory.appendingPathComponent("\(presetID.rawValue).mov")
+            try Data(presetID.rawValue.utf8).write(to: sourceURL)
+            let request = makeRequest(
+                sourceURLs: [sourceURL],
+                destinationFolderURL: outputDirectory,
+                presetID: presetID,
+                idempotencyKey: presetID.rawValue,
+                defaults: defaults
+            )
+            let plan = try await service.plan(request)
+            let accepted = try await service.submit(planID: plan.id)
+            _ = try await waitForRecord(
+                service: service,
+                jobID: accepted.record.id,
+                state: .succeeded
+            )
+        }
+
+        let snapshots = await harness.snapshots()
+        XCTAssertEqual(snapshots.map(\.preset), [.h264, .h265, .prores, .proxy, .audioOnly, .streamCopy])
+        XCTAssertEqual(Set(snapshots.map(\.outputURL)).count, ApplicationPresetID.allCases.count)
+        XCTAssertTrue(snapshots[0].ffmpegArguments.contains("libx264"))
+        XCTAssertTrue(snapshots[1].ffmpegArguments.contains("libx265"))
+        XCTAssertTrue(snapshots[2].ffmpegArguments.contains("prores_videotoolbox"))
+        XCTAssertTrue(snapshots[3].ffmpegArguments.contains("hevc_videotoolbox"))
+        XCTAssertEqual(snapshots[4].audioOnlyFormat, .wav)
+        XCTAssertTrue(snapshots[4].ffmpegArguments.contains("pcm_s24le"))
+        XCTAssertTrue(snapshots[5].ffmpegArguments.contains("copy"))
+        XCTAssertEqual(snapshots[0].keepsSubtitles, true)
+        XCTAssertEqual(snapshots[4].keepsSubtitles, false)
+    }
+
+    func testFFmpegAdapterExecutesCapturedSettingsAfterDefaultsChange() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("captured.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let defaults = try makeDefaults()
+        defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
+        defaults.set(CodecQualityLevel.high.rawValue, forKey: AppConstants.h264QualityKey)
+        defaults.set(EncodingSpeed.slow.rawValue, forKey: AppConstants.h264SpeedKey)
+        defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
+        defaults.set(CodecResolutionLimit.r720.rawValue, forKey: AppConstants.h264ResolutionLimitKey)
+        defaults.set(CodecAudioFormat.pcm24.rawValue, forKey: AppConstants.h264AudioFormatKey)
+
+        let harness = ApplicationFFmpegRunnerHarness()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            presetID: .h264,
+            idempotencyKey: nil,
+            defaults: defaults
+        ))
+
+        defaults.set(H264Encoder.hardware.rawValue, forKey: AppConstants.h264EncoderKey)
+        defaults.set("50M", forKey: AppConstants.h264BitrateKey)
+        defaults.set(CodecContainer.mkv.rawValue, forKey: AppConstants.h264ContainerKey)
+        let accepted = try await service.submit(planID: plan.id)
+        _ = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+
+        let capturedSnapshots = await harness.snapshots()
+        let snapshot = try XCTUnwrap(capturedSnapshots.first)
+        XCTAssertEqual(snapshot.outputURL.pathExtension, "mov")
+        XCTAssertTrue(snapshot.ffmpegArguments.contains("libx264"))
+        XCTAssertTrue(snapshot.ffmpegArguments.contains("18"))
+        XCTAssertTrue(snapshot.ffmpegArguments.contains("slow"))
+        XCTAssertTrue(snapshot.ffmpegArguments.contains("pcm_s24le"))
+        XCTAssertFalse(snapshot.ffmpegArguments.contains("h264_videotoolbox"))
+        XCTAssertFalse(snapshot.ffmpegArguments.contains("50M"))
+    }
+
+    func testFFmpegAdapterCancellationSignalsOnlyItsActiveRunner() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("cancel.mov")
+        try Data("source".utf8).write(to: sourceURL)
+
+        let harness = ApplicationFFmpegRunnerHarness(blocksFirstRun: true)
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            idempotencyKey: nil
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        _ = try await waitForRecord(service: service, jobID: accepted.record.id, state: .running)
+
+        _ = try await service.requestCancellation(accepted.record.id)
+        let cancelled = try await waitForRecord(
+            service: service,
+            jobID: accepted.record.id,
+            state: .cancelled
+        )
+
+        XCTAssertEqual(cancelled.diagnostic, "Conversion cancelled.")
+        let cancelCount = await harness.cancelCount()
+        let runCount = await harness.runCount()
+        XCTAssertEqual(cancelCount, 1)
+        XCTAssertEqual(runCount, 1)
+    }
+
+    func testFFmpegAdapterRejectsUnrepresentableCapturedSettingsBeforeLaunching() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("invalid.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let defaults = try makeDefaults()
+        let captured = ApplicationPresetSettings(presetID: .h264, defaults: defaults)
+        let invalid = ApplicationPresetSettings(
+            presetID: .h264,
+            containerID: .mp4,
+            video: ApplicationVideoSettings(
+                encoderID: .libx264,
+                profileID: .hevcMain10,
+                quality: 23,
+                bitrate: nil,
+                speed: "medium",
+                maximumHeight: nil
+            ),
+            audio: captured.audio,
+            preserveMetadata: captured.preserveMetadata,
+            keepSubtitles: captured.keepSubtitles,
+            fileName: captured.fileName
+        )
+
+        let harness = ApplicationFFmpegRunnerHarness()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            presetID: .h264,
+            presetSettings: invalid,
+            idempotencyKey: nil
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let failed = try await waitForRecord(
+            service: service,
+            jobID: accepted.record.id,
+            state: .failed
+        )
+
+        XCTAssertEqual(
+            failed.diagnostic,
+            "The accepted preset settings cannot be represented by the conversion engine."
+        )
+        let runCount = await harness.runCount()
+        XCTAssertEqual(runCount, 0)
     }
 
     private func makeRequest(
@@ -961,6 +1161,71 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 }
 
+private actor ApplicationFFmpegRunnerHarness {
+    struct Snapshot: Sendable {
+        let preset: ExportPreset
+        let outputURL: URL
+        let ffmpegArguments: [String]
+        let audioOnlyFormat: AudioOnlyFormat?
+        let keepsSubtitles: Bool
+    }
+
+    private let blocksFirstRun: Bool
+    private var recordedSnapshots: [Snapshot] = []
+    private var cancellationCount = 0
+    private var cancellationRequested = false
+    private var firstRunContinuation: CheckedContinuation<Void, Never>?
+
+    init(blocksFirstRun: Bool = false) {
+        self.blocksFirstRun = blocksFirstRun
+    }
+
+    func run(
+        conversion: ApplicationFFmpegConversion,
+        progress: ApplicationFFmpegProgressSink
+    ) async -> ApplicationFFmpegRunResult {
+        recordedSnapshots.append(Snapshot(
+            preset: conversion.request.preset,
+            outputURL: conversion.request.outputURL,
+            ffmpegArguments: conversion.audioOnlySettings?.ffmpegArguments
+                ?? conversion.codecSettings?.ffmpegArguments
+                ?? [],
+            audioOnlyFormat: conversion.audioOnlySettings?.format,
+            keepsSubtitles: conversion.subtitleSettings.keepSubtitles
+        ))
+        progress.send(0.5, status: "Encoding")
+        if blocksFirstRun, recordedSnapshots.count == 1, !cancellationRequested {
+            await withCheckedContinuation { continuation in
+                if cancellationRequested {
+                    continuation.resume()
+                } else {
+                    firstRunContinuation = continuation
+                }
+            }
+        }
+        return cancellationRequested ? .failed("Conversion cancelled") : .succeeded
+    }
+
+    func cancel() {
+        cancellationCount += 1
+        cancellationRequested = true
+        firstRunContinuation?.resume()
+        firstRunContinuation = nil
+    }
+
+    func snapshots() -> [Snapshot] {
+        recordedSnapshots
+    }
+
+    func cancelCount() -> Int {
+        cancellationCount
+    }
+
+    func runCount() -> Int {
+        recordedSnapshots.count
+    }
+}
+
 private actor ApplicationJobExecutorHarness {
     struct Snapshot: Sendable {
         let startedIDs: [ApplicationJobID]
@@ -983,12 +1248,12 @@ private actor ApplicationJobExecutorHarness {
     func execute(
         jobID: ApplicationJobID,
         plan: ApplicationConversionPlan,
-        progress: ApplicationJobExecutor.ProgressHandler
+        progress: ApplicationJobProgressReporter
     ) async -> ApplicationJobExecutionResult {
         startedIDs.append(jobID)
         activeExecutions += 1
         maximumConcurrentExecutions = max(maximumConcurrentExecutions, activeExecutions)
-        await progress(ApplicationJobProgressUpdate(progress: 0.5, stage: "Encoding"))
+        await progress.report(ApplicationJobProgressUpdate(progress: 0.5, stage: "Encoding"))
         if blocksFirstExecution, startedIDs.count == 1 {
             await withCheckedContinuation { continuation in
                 if firstExecutionReleaseRequested || cancelledIDs.contains(jobID) {

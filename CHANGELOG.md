@@ -33,6 +33,10 @@ remain subject to the feasibility milestone.
   approved file access alive through execution, rechecks queued inputs before
   launch, publishes progress and terminal results, enforces planned outputs, and
   routes cancellation only to the active job owner.
+- Connected the shared job service to the bundled FFmpeg conversion engine. The
+  adapter reconstructs all six supported presets from the immutable settings
+  snapshot, aggregates batch progress, stops on the first failed file, rejects
+  settings it cannot represent faithfully, and drains targeted cancellation.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 
