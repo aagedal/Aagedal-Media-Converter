@@ -93,6 +93,20 @@ adoption: the visible manual queue and App Intent entry points still run through
 `ConversionManager`. They must join the application boundary before concurrent
 manual and agent work can claim one authoritative queue.
 
+The six proposed agent operations now have a transport-neutral, typed workflow:
+media inspection, preset discovery, conversion planning and submission, job
+lookup, and cancellation. Inspection requires an existing user-approved read
+grant and returns structured video, audio, subtitle, timecode, and exact rational
+rate metadata. Preset discovery captures the current resolved settings for the
+six supported stable preset IDs, while planning records local-agent ownership and
+uses the same persisted service as execution. Codable success and stable,
+path-safe failure payloads are covered by the
+[agent tools validation record](4.5-agent-tools-validation-2026-09-13.md).
+
+This implements the operation logic, not an externally reachable MCP surface.
+The bundled helper, app/helper IPC, reconnect behavior, client compatibility,
+and setup UX remain subject to the feasibility milestone.
+
 ## Intended outcome
 
 An agent on the user's Mac can inspect media, discover the user's presets, plan

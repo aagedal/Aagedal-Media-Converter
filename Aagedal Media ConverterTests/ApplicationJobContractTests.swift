@@ -1084,6 +1084,269 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(runCount, 0)
     }
 
+    func testAgentToolsAdvertiseOnlySupportedPresetsWithCapturedSettings() throws {
+        let defaults = try makeDefaults()
+        defaults.set(CodecContainer.mkv.rawValue, forKey: AppConstants.h264ContainerKey)
+        defaults.set(AudioOnlyFormat.flac.rawValue, forKey: AppConstants.audioOnlyFormatKey)
+        let defaultsFixture = ApplicationAgentDefaultsFixture(defaults)
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: .unrestricted,
+            presetSettingsProvider: {
+                ApplicationPresetSettings(presetID: $0, defaults: defaultsFixture.value)
+            }
+        )
+
+        let presets = tools.listPresets()
+
+        XCTAssertEqual(presets.map(\.id), ApplicationPresetID.allCases)
+        XCTAssertEqual(presets.map(\.displayName), [
+            "H.264 / AVC", "H.265 / HEVC", "ProRes", "Proxy", "Audio Only", "Stream Copy"
+        ])
+        XCTAssertTrue(presets.allSatisfy { $0.supportedOverrides.isEmpty })
+        XCTAssertEqual(presets.first { $0.id == .h264 }?.settings.containerID, .mkv)
+        XCTAssertEqual(presets.first { $0.id == .audioOnly }?.settings.containerID, .flac)
+        XCTAssertNoThrow(try JSONDecoder().decode(
+            [ApplicationPresetDescriptor].self,
+            from: JSONEncoder().encode(presets)
+        ))
+    }
+
+    func testAgentToolsInspectionRetainsAccessAndReturnsCodableMetadata() async throws {
+        let sourceURL = URL(fileURLWithPath: "/approved/clip.mov")
+        let leaseState = ApplicationJobLeaseState()
+        let expected = ApplicationMediaInspection(
+            sourceURL: sourceURL,
+            durationSeconds: 12.5,
+            formatName: "mov",
+            containerName: "QuickTime",
+            sizeBytes: 4_096,
+            bitRate: 2_000_000,
+            timecode: "01:00:00:00",
+            timecodes: [],
+            frameCount: 300,
+            warnings: ["fixture warning"],
+            videoStreams: [ApplicationMediaVideoStream(
+                index: 0,
+                codec: "h264",
+                profile: "High",
+                width: 1920,
+                height: 1080,
+                pixelFormat: "yuv420p",
+                hasAlpha: false,
+                pixelAspectRatio: nil,
+                displayAspectRatio: nil,
+                frameRate: ApplicationMediaRational(numerator: 24_000, denominator: 1_001, value: 23.976),
+                bitDepth: 8,
+                bitRate: 1_800_000,
+                durationSeconds: 12.5,
+                chromaSubsampling: "4:2:0",
+                colorPrimaries: "bt709",
+                colorTransfer: "bt709",
+                colorSpace: "bt709",
+                colorRange: "tv",
+                fieldOrder: "progressive",
+                isInterlaced: false,
+                title: nil,
+                isDefault: true,
+                isForced: false
+            )],
+            audioStreams: [],
+            subtitleStreams: []
+        )
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: ApplicationFileAccessAuthorizer { url, mode in
+                guard url == sourceURL, mode == .read else { return nil }
+                return leaseState.acquire()
+            },
+            mediaInspector: ApplicationMediaInspector { url in
+                XCTAssertEqual(url, sourceURL)
+                XCTAssertEqual(leaseState.activeCount, 1)
+                return expected
+            }
+        )
+
+        let inspection = try await tools.inspectMedia(at: sourceURL)
+
+        XCTAssertEqual(inspection, expected)
+        XCTAssertEqual(leaseState.activeCount, 0)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                ApplicationMediaInspection.self,
+                from: JSONEncoder().encode(inspection)
+            ),
+            expected
+        )
+    }
+
+    func testMediaInspectionMapsProbeStreamsAndExactFrameRate() throws {
+        let sourceURL = URL(fileURLWithPath: "/approved/clip.mov")
+        let metadata = VideoMetadata(
+            duration: 10,
+            formatName: "mov",
+            containerLongName: "QuickTime",
+            sizeBytes: 1_024,
+            bitRate: 900_000,
+            comment: nil,
+            timecode: "10:00:00:00",
+            timecodes: [TimecodeEntry(value: "10:00:00:00", source: .tmcdTrack, frameRate: 23.976)],
+            frameCount: 240,
+            containerCreationDate: nil,
+            containerModificationDate: nil,
+            title: nil,
+            artist: nil,
+            gpsLatitude: nil,
+            gpsLongitude: nil,
+            gpsAltitude: nil,
+            warnings: [],
+            videoStreams: [VideoMetadata.VideoStream(
+                codec: "h264",
+                codecLongName: "H.264",
+                profile: "High",
+                width: 1920,
+                height: 1080,
+                pixelFormat: "yuv420p",
+                hasAlpha: false,
+                pixelAspectRatio: VideoMetadata.Ratio(numerator: 1, denominator: 1),
+                displayAspectRatio: VideoMetadata.Ratio(numerator: 16, denominator: 9),
+                frameRate: VideoMetadata.FrameRate(frameRateString: "24000/1001"),
+                bitDepth: 8,
+                bitRate: 800_000,
+                duration: 10,
+                chromaSubsampling: "4:2:0",
+                colorPrimaries: "bt709",
+                colorTransfer: "bt709",
+                colorSpace: "bt709",
+                colorRange: "tv",
+                chromaLocation: "left",
+                fieldOrder: "progressive",
+                isInterlaced: false,
+                title: "Picture",
+                isDefault: true,
+                isForced: false
+            )],
+            audioStreams: [VideoMetadata.AudioStream(
+                index: 1,
+                languageCode: "eng",
+                title: "Main",
+                codec: "aac",
+                codecLongName: "AAC",
+                profile: "LC",
+                sampleRate: 48_000,
+                channels: 2,
+                channelLayout: "stereo",
+                bitDepth: nil,
+                bitRate: 96_000,
+                isDefault: true
+            )],
+            subtitleStreams: [VideoMetadata.SubtitleStream(
+                index: 2,
+                languageCode: "nor",
+                title: "Norsk",
+                codec: "mov_text",
+                codecLongName: "MOV text",
+                isDefault: false,
+                isForced: true,
+                isHearingImpaired: false,
+                duration: 9.5
+            )]
+        )
+
+        let inspection = ApplicationMediaInspection(sourceURL: sourceURL, metadata: metadata)
+
+        XCTAssertEqual(inspection.videoStreams[0].frameRate?.numerator, 24_000)
+        XCTAssertEqual(inspection.videoStreams[0].frameRate?.denominator, 1_001)
+        XCTAssertEqual(inspection.videoStreams[0].displayAspectRatio?.value, 16.0 / 9.0)
+        XCTAssertEqual(inspection.videoStreams[0].width, 1920)
+        XCTAssertEqual(inspection.audioStreams[0].channelLayout, "stereo")
+        XCTAssertEqual(inspection.subtitleStreams[0].languageCode, "nor")
+        XCTAssertEqual(inspection.timecodes, metadata.timecodes)
+    }
+
+    func testAgentToolsInspectionRejectsMissingApprovalAndMapsFailures() async throws {
+        let sourceURL = URL(fileURLWithPath: "/not-approved/clip.mov")
+        let unknownJob = ApplicationJobID(
+            UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        )
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: ApplicationFileAccessAuthorizer { _, _ in nil },
+            mediaInspector: ApplicationMediaInspector { _ in
+                XCTFail("Inspection must not run without an approved bookmark")
+                throw CancellationError()
+            }
+        )
+
+        do {
+            _ = try await tools.inspectMedia(at: sourceURL)
+            XCTFail("Expected source access rejection")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceAccessDenied(sourceURL))
+            XCTAssertEqual(
+                ApplicationAgentToolFailure(error: error),
+                ApplicationAgentToolFailure(
+                    code: .sourceAccessDenied,
+                    message: "Access to the source has not been approved in the app: clip.mov."
+                )
+            )
+        }
+
+        XCTAssertEqual(
+            ApplicationAgentToolFailure(error: ApplicationJobError.unknownJob(unknownJob)).code,
+            .unknownJob
+        )
+        XCTAssertEqual(
+            ApplicationAgentToolFailure(error: CocoaError(.fileReadUnknown)).code,
+            .internalError
+        )
+    }
+
+    func testAgentToolsPlanSubmitGetAndCancelUseSharedJobService() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: sourceURL)
+        let instant = Date(timeIntervalSince1970: 1_800_123_456)
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let tools = ApplicationAgentTools(
+            jobService: service,
+            fileAccessAuthorizer: .unrestricted,
+            now: { instant }
+        )
+        let input = ApplicationPlanConversionInput(
+            requesterID: "mcp-client",
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            presetID: .hevc,
+            idempotencyKey: "agent-request-1"
+        )
+
+        let plan = try await tools.planConversion(input)
+        XCTAssertEqual(plan.request.origin, .localAgent)
+        XCTAssertEqual(plan.request.requesterID, "mcp-client")
+        XCTAssertEqual(plan.request.capturedAt, instant)
+        XCTAssertEqual(plan.createdAt, instant)
+        XCTAssertEqual(plan.request.presetSettings.presetID, .hevc)
+
+        let accepted = try await tools.submitConversion(planID: plan.id)
+        let acceptedRecord = try await tools.getJob(jobID: accepted.record.id)
+        XCTAssertEqual(acceptedRecord, accepted.record)
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                ApplicationJobAcceptance.self,
+                from: JSONEncoder().encode(accepted)
+            ),
+            accepted
+        )
+
+        let cancelled = try await tools.cancelJob(jobID: accepted.record.id)
+        XCTAssertEqual(cancelled.state, .cancelled)
+        let cancelledRecord = try await tools.getJob(jobID: accepted.record.id)
+        XCTAssertEqual(cancelledRecord.state, .cancelled)
+    }
+
     private func makeRequest(
         schemaVersion: Int = ApplicationConversionRequest.currentSchemaVersion,
         requestID: UUID = UUID(),
@@ -1158,6 +1421,14 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTFail("Timed out waiting for job \(jobID) to reach \(state.rawValue)")
         let lastRecord = try await service.record(for: jobID)
         return try XCTUnwrap(lastRecord)
+    }
+}
+
+private final class ApplicationAgentDefaultsFixture: @unchecked Sendable {
+    let value: UserDefaults
+
+    init(_ value: UserDefaults) {
+        self.value = value
     }
 }
 

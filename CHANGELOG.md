@@ -1,7 +1,7 @@
 # v.4.5.0 (Development)
 
 4.5 development has started with the shared application boundary needed for
-local agent access. The transport, setup flow, and complete MCP tool surface
+local agent access. The external transport, setup flow, and client integration
 remain subject to the feasibility milestone.
 
 ## Local agent access
@@ -37,6 +37,11 @@ remain subject to the feasibility milestone.
   adapter reconstructs all six supported presets from the immutable settings
   snapshot, aggregates batch progress, stops on the first failed file, rejects
   settings it cannot represent faithfully, and drains targeted cancellation.
+- Added transport-neutral implementations of the six proposed agent operations:
+  inspect media, list presets, plan and submit conversions, get a job, and cancel
+  a job. Their Codable payloads include structured stream/timecode metadata,
+  captured preset settings, local-agent request ownership, and stable path-safe
+  errors; an MCP/helper transport is not connected yet.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

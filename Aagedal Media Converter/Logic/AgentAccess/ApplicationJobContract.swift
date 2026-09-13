@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import SwiftMediaMetadata
 
 /// Versioned identifiers exposed at the application boundary. These values stay
 /// independent of localized preset names and mutable user-facing labels.
@@ -592,7 +593,7 @@ struct ApplicationJobRecord: Codable, Equatable, Sendable {
     var diagnostic: String?
 }
 
-struct ApplicationJobAcceptance: Equatable, Sendable {
+struct ApplicationJobAcceptance: Codable, Equatable, Sendable {
     let record: ApplicationJobRecord
     let wasAlreadyAccepted: Bool
 }
@@ -619,6 +620,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
     case unsupportedSourceExtension(URL)
     case duplicateOutput(URL)
     case outputCollision(URL)
+    case mediaInspectionFailed(URL)
 
     var code: ApplicationJobErrorCode {
         switch self {
@@ -643,6 +645,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
         case .unsupportedSourceExtension: .unsupportedSourceExtension
         case .duplicateOutput: .duplicateOutput
         case .outputCollision: .outputCollision
+        case .mediaInspectionFailed: .mediaInspectionFailed
         }
     }
 }
@@ -671,6 +674,9 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case unsupportedSourceExtension = "unsupported_source_extension"
     case duplicateOutput = "duplicate_output"
     case outputCollision = "output_collision"
+    case mediaInspectionFailed = "media_inspection_failed"
+    case cancelled
+    case internalError = "internal_error"
 }
 
 enum ApplicationJobPersistenceError: Error, Equatable, Sendable {
@@ -2256,5 +2262,473 @@ actor ApplicationJobService {
         } catch {
             throw ApplicationJobError.sourceUnavailable(url)
         }
+    }
+}
+
+// MARK: - Local agent tool workflow
+
+/// Stable wire representation of a rational value reported by the media probe.
+struct ApplicationMediaRational: Codable, Equatable, Sendable {
+    let numerator: Int
+    let denominator: Int
+    let value: Double
+}
+
+struct ApplicationMediaVideoStream: Codable, Equatable, Sendable {
+    let index: Int
+    let codec: String?
+    let profile: String?
+    let width: Int?
+    let height: Int?
+    let pixelFormat: String?
+    let hasAlpha: Bool
+    let pixelAspectRatio: ApplicationMediaRational?
+    let displayAspectRatio: ApplicationMediaRational?
+    let frameRate: ApplicationMediaRational?
+    let bitDepth: Int?
+    let bitRate: Int64?
+    let durationSeconds: Double?
+    let chromaSubsampling: String?
+    let colorPrimaries: String?
+    let colorTransfer: String?
+    let colorSpace: String?
+    let colorRange: String?
+    let fieldOrder: String?
+    let isInterlaced: Bool?
+    let title: String?
+    let isDefault: Bool
+    let isForced: Bool
+}
+
+struct ApplicationMediaAudioStream: Codable, Equatable, Sendable {
+    let index: Int?
+    let languageCode: String?
+    let title: String?
+    let codec: String?
+    let profile: String?
+    let sampleRate: Int?
+    let channels: Int?
+    let channelLayout: String?
+    let bitDepth: Int?
+    let bitRate: Int64?
+    let isDefault: Bool
+}
+
+struct ApplicationMediaSubtitleStream: Codable, Equatable, Sendable {
+    let index: Int?
+    let languageCode: String?
+    let title: String?
+    let codec: String?
+    let isDefault: Bool
+    let isForced: Bool
+    let isHearingImpaired: Bool
+    let durationSeconds: Double?
+}
+
+/// Structured result returned by `inspect_media`. It intentionally exposes
+/// factual source metadata rather than the app's display-formatted strings.
+struct ApplicationMediaInspection: Codable, Equatable, Sendable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    let sourceURL: URL
+    let durationSeconds: Double?
+    let formatName: String?
+    let containerName: String?
+    let sizeBytes: Int64?
+    let bitRate: Int64?
+    let timecode: String?
+    let timecodes: [TimecodeEntry]
+    let frameCount: Int?
+    let warnings: [String]
+    let videoStreams: [ApplicationMediaVideoStream]
+    let audioStreams: [ApplicationMediaAudioStream]
+    let subtitleStreams: [ApplicationMediaSubtitleStream]
+
+    init(
+        schemaVersion: Int = currentSchemaVersion,
+        sourceURL: URL,
+        durationSeconds: Double?,
+        formatName: String?,
+        containerName: String?,
+        sizeBytes: Int64?,
+        bitRate: Int64?,
+        timecode: String?,
+        timecodes: [TimecodeEntry],
+        frameCount: Int?,
+        warnings: [String],
+        videoStreams: [ApplicationMediaVideoStream],
+        audioStreams: [ApplicationMediaAudioStream],
+        subtitleStreams: [ApplicationMediaSubtitleStream]
+    ) {
+        self.schemaVersion = schemaVersion
+        self.sourceURL = sourceURL
+        self.durationSeconds = durationSeconds
+        self.formatName = formatName
+        self.containerName = containerName
+        self.sizeBytes = sizeBytes
+        self.bitRate = bitRate
+        self.timecode = timecode
+        self.timecodes = timecodes
+        self.frameCount = frameCount
+        self.warnings = warnings
+        self.videoStreams = videoStreams
+        self.audioStreams = audioStreams
+        self.subtitleStreams = subtitleStreams
+    }
+
+    init(sourceURL: URL, metadata: VideoMetadata) {
+        self.init(
+            sourceURL: sourceURL.standardizedFileURL,
+            durationSeconds: metadata.duration,
+            formatName: metadata.formatName,
+            containerName: metadata.containerLongName,
+            sizeBytes: metadata.sizeBytes,
+            bitRate: metadata.bitRate,
+            timecode: metadata.timecode,
+            timecodes: metadata.timecodes,
+            frameCount: metadata.frameCount,
+            warnings: metadata.warnings,
+            videoStreams: metadata.videoStreams.enumerated().map { index, stream in
+                ApplicationMediaVideoStream(
+                    index: index,
+                    codec: stream.codec,
+                    profile: stream.profile,
+                    width: stream.width,
+                    height: stream.height,
+                    pixelFormat: stream.pixelFormat,
+                    hasAlpha: stream.hasAlpha,
+                    pixelAspectRatio: stream.pixelAspectRatio.map(ApplicationMediaRational.init),
+                    displayAspectRatio: stream.displayAspectRatio.map(ApplicationMediaRational.init),
+                    frameRate: stream.frameRate.map(ApplicationMediaRational.init),
+                    bitDepth: stream.bitDepth,
+                    bitRate: stream.bitRate,
+                    durationSeconds: stream.duration,
+                    chromaSubsampling: stream.chromaSubsampling,
+                    colorPrimaries: stream.colorPrimaries,
+                    colorTransfer: stream.colorTransfer,
+                    colorSpace: stream.colorSpace,
+                    colorRange: stream.colorRange,
+                    fieldOrder: stream.fieldOrder,
+                    isInterlaced: stream.isInterlaced,
+                    title: stream.title,
+                    isDefault: stream.isDefault,
+                    isForced: stream.isForced
+                )
+            },
+            audioStreams: metadata.audioStreams.map { stream in
+                ApplicationMediaAudioStream(
+                    index: stream.index,
+                    languageCode: stream.languageCode,
+                    title: stream.title,
+                    codec: stream.codec,
+                    profile: stream.profile,
+                    sampleRate: stream.sampleRate,
+                    channels: stream.channels,
+                    channelLayout: stream.channelLayout,
+                    bitDepth: stream.bitDepth,
+                    bitRate: stream.bitRate,
+                    isDefault: stream.isDefault
+                )
+            },
+            subtitleStreams: metadata.subtitleStreams.map { stream in
+                ApplicationMediaSubtitleStream(
+                    index: stream.index,
+                    languageCode: stream.languageCode,
+                    title: stream.title,
+                    codec: stream.codec,
+                    isDefault: stream.isDefault,
+                    isForced: stream.isForced,
+                    isHearingImpaired: stream.isHearingImpaired,
+                    durationSeconds: stream.duration
+                )
+            }
+        )
+    }
+
+    init(sourceURL: URL, audioMetadata: SwiftMediaMetadata.AudioMetadata) {
+        let fileSize = try? sourceURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        self.init(
+            sourceURL: sourceURL.standardizedFileURL,
+            durationSeconds: audioMetadata.duration,
+            formatName: audioMetadata.format.rawValue,
+            containerName: audioMetadata.format.rawValue,
+            sizeBytes: fileSize.map(Int64.init),
+            bitRate: audioMetadata.bitrate.map(Int64.init),
+            timecode: nil,
+            timecodes: [],
+            frameCount: nil,
+            warnings: audioMetadata.warnings,
+            videoStreams: [],
+            audioStreams: [ApplicationMediaAudioStream(
+                index: 0,
+                languageCode: nil,
+                title: audioMetadata.title,
+                codec: audioMetadata.codec,
+                profile: audioMetadata.codecName,
+                sampleRate: audioMetadata.sampleRate,
+                channels: audioMetadata.channels,
+                channelLayout: audioMetadata.channelLayout,
+                bitDepth: audioMetadata.bitDepth,
+                bitRate: audioMetadata.bitrate.map(Int64.init),
+                isDefault: true
+            )],
+            subtitleStreams: []
+        )
+    }
+}
+
+private extension ApplicationMediaRational {
+    init(_ ratio: VideoMetadata.Ratio) {
+        self.init(
+            numerator: ratio.numerator,
+            denominator: ratio.denominator,
+            value: ratio.doubleValue ?? 0
+        )
+    }
+
+    init(_ frameRate: VideoMetadata.FrameRate) {
+        self.init(
+            numerator: frameRate.numerator,
+            denominator: frameRate.denominator,
+            value: frameRate.value ?? 0
+        )
+    }
+}
+
+struct ApplicationMediaInspector: Sendable {
+    typealias Inspect = @Sendable (URL) async throws -> ApplicationMediaInspection
+
+    let inspect: Inspect
+
+    static let live = ApplicationMediaInspector { url in
+        do {
+            let metadata = try await BoundedVideoMetadataProbe.metadata(for: url)
+            return ApplicationMediaInspection(sourceURL: url, metadata: metadata)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            let audioMetadata = try await SwiftExifMediaProbe.readAudio(url)
+            return ApplicationMediaInspection(sourceURL: url, audioMetadata: audioMetadata)
+        }
+    }
+}
+
+/// Stable identifiers reserved for the first per-file overrides. Preset
+/// descriptors advertise none until the immutable request contract can execute
+/// them faithfully.
+enum ApplicationConversionOverrideID: String, Codable, Sendable {
+    case trimStartSeconds = "trim_start_seconds"
+    case trimEndSeconds = "trim_end_seconds"
+    case muted
+    case outputBaseName = "output_base_name"
+}
+
+struct ApplicationPresetDescriptor: Codable, Equatable, Sendable {
+    let id: ApplicationPresetID
+    let displayName: String
+    let settings: ApplicationPresetSettings
+    let supportedOverrides: [ApplicationConversionOverrideID]
+}
+
+struct ApplicationPlanConversionInput: Codable, Equatable, Sendable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    let requestID: UUID
+    let requesterID: String
+    let sourceURLs: [URL]
+    let destinationFolderURL: URL
+    let presetID: ApplicationPresetID
+    let idempotencyKey: String?
+
+    init(
+        schemaVersion: Int = currentSchemaVersion,
+        requestID: UUID = UUID(),
+        requesterID: String,
+        sourceURLs: [URL],
+        destinationFolderURL: URL,
+        presetID: ApplicationPresetID,
+        idempotencyKey: String? = nil
+    ) {
+        self.schemaVersion = schemaVersion
+        self.requestID = requestID
+        self.requesterID = requesterID
+        self.sourceURLs = sourceURLs
+        self.destinationFolderURL = destinationFolderURL
+        self.presetID = presetID
+        self.idempotencyKey = idempotencyKey
+    }
+}
+
+/// Transport-ready error payload. Unknown implementation errors deliberately do
+/// not expose paths, command lines, or other potentially sensitive diagnostics.
+struct ApplicationAgentToolFailure: Codable, Equatable, Sendable {
+    let code: ApplicationJobErrorCode
+    let message: String
+
+    init(code: ApplicationJobErrorCode, message: String) {
+        self.code = code
+        self.message = message
+    }
+
+    init(error: Error) {
+        if let jobError = error as? ApplicationJobError {
+            code = jobError.code
+            message = jobError.agentMessage
+        } else if error is CancellationError {
+            code = .cancelled
+            message = "The operation was cancelled."
+        } else {
+            code = .internalError
+            message = "The operation failed inside Aagedal Media Converter."
+        }
+    }
+}
+
+private extension ApplicationJobError {
+    var agentMessage: String {
+        switch self {
+        case .unsupportedSchema(let version):
+            "Schema version \(version) is not supported."
+        case .invalidRequesterID:
+            "The requester identifier is empty or invalid."
+        case .noSources:
+            "At least one source file is required."
+        case .duplicateSource(let url):
+            "The source file appears more than once: \(url.lastPathComponent)."
+        case .nonFileURL:
+            "Only local file URLs are supported."
+        case .invalidIdempotencyKey:
+            "The idempotency key is empty or invalid."
+        case .presetSettingsMismatch:
+            "The captured settings do not match the requested preset."
+        case .idempotencyConflict:
+            "The idempotency key is already associated with a different request."
+        case .unknownJob(let id):
+            "No job exists with identifier \(id)."
+        case .invalidTransition(let current, let requested):
+            "The job cannot move from \(current.rawValue) to \(requested.rawValue)."
+        case .invalidProgress:
+            "Job progress must be between zero and one."
+        case .unknownPlan(let id):
+            "No conversion plan exists with identifier \(id)."
+        case .expiredPlan:
+            "The conversion plan expired. Create a new plan before submitting."
+        case .sourceUnavailable(let url):
+            "The source file is unavailable: \(url.lastPathComponent)."
+        case .sourceAccessDenied(let url):
+            "Access to the source has not been approved in the app: \(url.lastPathComponent)."
+        case .sourceChanged(let url):
+            "The source changed after planning: \(url.lastPathComponent)."
+        case .destinationUnavailable:
+            "The destination folder is unavailable or not writable."
+        case .destinationAccessDenied:
+            "Writable access to the destination has not been approved in the app."
+        case .unsupportedSourceExtension(let url):
+            "The source has no usable extension for stream copy: \(url.lastPathComponent)."
+        case .duplicateOutput(let url):
+            "The plan would create the same output more than once: \(url.lastPathComponent)."
+        case .outputCollision(let url):
+            "The output already exists or is reserved: \(url.lastPathComponent)."
+        case .mediaInspectionFailed(let url):
+            "Media inspection failed for \(url.lastPathComponent)."
+        }
+    }
+}
+
+/// Implements the proposed six-tool contract without assuming MCP, XPC, or any
+/// other transport. A future helper only decodes input, calls these methods, and
+/// encodes either the returned Codable value or `ApplicationAgentToolFailure`.
+struct ApplicationAgentTools: Sendable {
+    typealias PresetSettingsProvider = @Sendable (ApplicationPresetID) -> ApplicationPresetSettings
+    typealias NowProvider = @Sendable () -> Date
+
+    static let shared = ApplicationAgentTools(jobService: .shared)
+
+    private let jobService: ApplicationJobService
+    private let fileAccessAuthorizer: ApplicationFileAccessAuthorizer
+    private let mediaInspector: ApplicationMediaInspector
+    private let presetSettingsProvider: PresetSettingsProvider
+    private let now: NowProvider
+
+    init(
+        jobService: ApplicationJobService,
+        fileAccessAuthorizer: ApplicationFileAccessAuthorizer = .live,
+        mediaInspector: ApplicationMediaInspector = .live,
+        presetSettingsProvider: @escaping PresetSettingsProvider = {
+            ApplicationPresetSettings(presetID: $0, defaults: .standard)
+        },
+        now: @escaping NowProvider = Date.init
+    ) {
+        self.jobService = jobService
+        self.fileAccessAuthorizer = fileAccessAuthorizer
+        self.mediaInspector = mediaInspector
+        self.presetSettingsProvider = presetSettingsProvider
+        self.now = now
+    }
+
+    func inspectMedia(at sourceURL: URL) async throws -> ApplicationMediaInspection {
+        guard sourceURL.isFileURL else { throw ApplicationJobError.nonFileURL(sourceURL) }
+        guard let lease = fileAccessAuthorizer.acquire(sourceURL, .read) else {
+            throw ApplicationJobError.sourceAccessDenied(sourceURL)
+        }
+        defer { lease.release() }
+        do {
+            return try await mediaInspector.inspect(sourceURL)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as ApplicationJobError {
+            throw error
+        } catch {
+            throw ApplicationJobError.mediaInspectionFailed(sourceURL)
+        }
+    }
+
+    func listPresets() -> [ApplicationPresetDescriptor] {
+        ApplicationPresetID.allCases.map { presetID in
+            ApplicationPresetDescriptor(
+                id: presetID,
+                displayName: presetID.exportPreset.rawValue,
+                settings: presetSettingsProvider(presetID),
+                supportedOverrides: []
+            )
+        }
+    }
+
+    func planConversion(
+        _ input: ApplicationPlanConversionInput
+    ) async throws -> ApplicationConversionPlan {
+        let capturedAt = now()
+        let request = ApplicationConversionRequest(
+            schemaVersion: input.schemaVersion,
+            requestID: input.requestID,
+            origin: .localAgent,
+            requesterID: input.requesterID,
+            sourceURLs: input.sourceURLs,
+            destinationFolderURL: input.destinationFolderURL,
+            presetID: input.presetID,
+            presetSettings: presetSettingsProvider(input.presetID),
+            idempotencyKey: input.idempotencyKey,
+            capturedAt: capturedAt
+        )
+        return try await jobService.plan(request, now: capturedAt)
+    }
+
+    func submitConversion(
+        planID: ApplicationPlanID
+    ) async throws -> ApplicationJobAcceptance {
+        try await jobService.submit(planID: planID, now: now())
+    }
+
+    func getJob(jobID: ApplicationJobID) async throws -> ApplicationJobRecord {
+        guard let record = try await jobService.record(for: jobID, now: now()) else {
+            throw ApplicationJobError.unknownJob(jobID)
+        }
+        return record
+    }
+
+    func cancelJob(jobID: ApplicationJobID) async throws -> ApplicationJobRecord {
+        try await jobService.requestCancellation(jobID, now: now())
     }
 }
