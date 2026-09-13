@@ -1,6 +1,226 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Add this stdio server to a local MCP client. Keep the app installed at the same location after configuring the client." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til denne stdio-serveren i en lokal MCP-klient. La appen være installert på samme sted etter at klienten er konfigurert."
+          }
+        }
+      }
+    },
+    "Agent" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent"
+          }
+        }
+      }
+    },
+    "Agent Access" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agenttilgang"
+          }
+        }
+      }
+    },
+    "Allow local MCP clients to use Aagedal Media Converter" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tillat lokale MCP-klienter å bruke Aagedal Media Converter"
+          }
+        }
+      }
+    },
+    "Connection" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilkobling"
+          }
+        }
+      }
+    },
+    "Copy Configuration" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopier konfigurasjon"
+          }
+        }
+      }
+    },
+    "Could not start" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke starte"
+          }
+        }
+      }
+    },
+    "Disabled" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deaktivert"
+          }
+        }
+      }
+    },
+    "File access and disabling" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtilgang og deaktivering"
+          }
+        }
+      }
+    },
+    "Import source files and choose output folders in the app before an agent uses them. Agent requests cannot grant or expand file access." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer kildefiler og velg utdatamapper i appen før en agent bruker dem. Agentforespørsler kan ikke gi eller utvide filtilgang."
+          }
+        }
+      }
+    },
+    "Local Agent Access" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokal agenttilgang"
+          }
+        }
+      }
+    },
+    "Local agent access" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokal agenttilgang"
+          }
+        }
+      }
+    },
+    "MCP client setup" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oppsett av MCP-klient"
+          }
+        }
+      }
+    },
+    "Not connected" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke tilkoblet"
+          }
+        }
+      }
+    },
+    "Not tested" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke testet"
+          }
+        }
+      }
+    },
+    "Request failed" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forespørselen mislyktes"
+          }
+        }
+      }
+    },
+    "Shortcut" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snarvei"
+          }
+        }
+      }
+    },
+    "Show accepted settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis godkjente innstillinger"
+          }
+        }
+      }
+    },
+    "Show Helper in Finder" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis hjelpeverktøy i Finder"
+          }
+        }
+      }
+    },
+    "Testing…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tester …"
+          }
+        }
+      }
+    },
+    "Turning access off rejects new connections. Jobs already accepted by the app continue and remain available in job history." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når tilgangen slås av, avvises nye tilkoblinger. Jobber som appen allerede har godtatt, fortsetter og forblir tilgjengelige i jobbhistorikken."
+          }
+        }
+      }
+    },
+    "When enabled, the signed helper accepts requests from local MCP clients and sends them to this app. The app remains the owner of every accepted conversion." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når dette er aktivert, tar det signerte hjelpeverktøyet imot forespørsler fra lokale MCP-klienter og sender dem til denne appen. Appen forblir eier av hver godkjente konvertering."
+          }
+        }
+      }
+    },
     "Optional tool — not installed": {
       "localizations": {
         "nb": {
@@ -15093,7 +15313,7 @@
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Test kobling"
+            "value" : "Test tilkobling"
           }
         }
       }

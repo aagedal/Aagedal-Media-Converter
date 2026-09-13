@@ -2,8 +2,8 @@
 
 4.5 development has started with the shared application boundary and signed
 local transport needed for agent access. Final client compatibility, shared
-ownership for specialized manual jobs, wider Shortcut coverage, localization,
-and Release-package validation remain open.
+ownership for specialized manual jobs, wider Shortcut coverage, remaining
+localization, and Release-package validation are still open.
 
 ## Local agent access
 
@@ -60,18 +60,23 @@ and Release-package validation remain open.
   Shortcut conversions through the same persisted planner and serialized
   executor as agent work. The handoff preserves request identity, approved file
   access, and captured preset, naming, date-tag, timecode, and comment settings;
-  wider presets and per-source destinations retain their established path.
+  wider presets and per-source Shortcut destinations retain their established
+  path.
 - Routed ordinary ungrouped manual conversions for the same six presets through
   the persisted application planner and serialized executor. Manual batches keep
   their existing visible rows and preserve per-file comments, trim, crop, mute,
   audio routing, custom output names, date-tag, and timecode choices. Those
   settings are validated, persisted, shown in each row's accepted-settings
   inspector, and applied without re-reading the queue or current preferences.
-  Groups, generated waveform behavior, post-actions, and per-source destinations
-  still fall back before submission.
+  “Save next to original” destinations, including per-source custom subfolders,
+  are captured and authorized for each row without granting an unused batch
+  destination. Groups, generated waveform behavior, and post-actions still fall
+  back before submission.
 - Added a queue inspector for every shared job's immutable accepted settings,
   including codecs, container, quality/rate controls, metadata, subtitles,
   filename policy, destination, and capture time.
+- Added Norwegian translations for Agent Access setup and connection states,
+  shared-job origin labels, and the accepted-settings control.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

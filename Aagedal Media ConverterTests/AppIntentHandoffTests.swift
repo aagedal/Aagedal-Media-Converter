@@ -217,6 +217,35 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertTrue(summary.contains("Output name: first-custom"))
     }
 
+    func testManualBridgeCapturesSaveNextToOriginalDestinations() throws {
+        let defaults = try makeIsolatedDefaults()
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalKey)
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalSubfolderKey)
+        defaults.set("custom", forKey: AppConstants.saveNextToOriginalSubfolderModeKey)
+        defaults.set("Converted", forKey: AppConstants.saveNextToOriginalSubfolderNameKey)
+        let firstItem = makeItem(url: URL(fileURLWithPath: "/sources/one/first.mov"))
+        let secondItem = makeItem(url: URL(fileURLWithPath: "/sources/two/second.mov"))
+
+        let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
+            items: [firstItem, secondItem],
+            destinationFolderURL: folder,
+            preset: .h264,
+            mergeClipsEnabled: false,
+            defaults: defaults
+        ))
+
+        XCTAssertEqual(request.sourceSettings?.map(\.destinationFolderURL), [
+            URL(fileURLWithPath: "/sources/one/Converted", isDirectory: true),
+            URL(fileURLWithPath: "/sources/two/Converted", isDirectory: true)
+        ])
+        XCTAssertTrue(
+            request.acceptedSettingsSummary(sourceIndex: 1)
+                .contains("Destination: /sources/two/Converted")
+        )
+        XCTAssertTrue(request.acceptedSettingsSummary.contains("Destination: Per source"))
+        XCTAssertFalse(request.acceptedSettingsSummary.contains("Destination: /outputs"))
+    }
+
     func testManualBridgeFallsBackWhenBehaviorCannotBeRepresented() throws {
         let defaults = try makeIsolatedDefaults()
         let ordinary = makeItem(url: first)
@@ -282,6 +311,70 @@ final class AppIntentHandoffTests: XCTestCase {
             containing: folder.appendingPathComponent("output.mov"),
             requiresWriteAccess: true
         ) else { return XCTFail("Expected the destination write grant") }
+    }
+
+    @MainActor
+    func testManualBridgePersistsEveryPerSourceDestinationGrant() throws {
+        let defaults = try makeIsolatedDefaults()
+        let temporaryRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+        let firstDestination = temporaryRoot.appendingPathComponent("first", isDirectory: true)
+        let secondDestination = temporaryRoot.appendingPathComponent("second", isDirectory: true)
+        let unusedDestination = temporaryRoot.appendingPathComponent("unused", isDirectory: true)
+        let request = ApplicationConversionRequest(
+            origin: .manual,
+            requesterID: ManualApplicationJobBridge.requesterID,
+            sourceURLs: [first, second],
+            destinationFolderURL: unusedDestination,
+            presetID: .h264,
+            sourceSettings: [
+                ApplicationSourceExecutionSettings(
+                    sourceURL: first,
+                    destinationFolderURL: firstDestination,
+                    includeDateTag: false,
+                    timecodeConfig: nil
+                ),
+                ApplicationSourceExecutionSettings(
+                    sourceURL: second,
+                    destinationFolderURL: secondDestination,
+                    includeDateTag: false,
+                    timecodeConfig: nil
+                )
+            ],
+            defaults: defaults
+        )
+        let bookmarks = SecurityScopedBookmarkManager(
+            defaults: defaults,
+            createBookmark: { url, _ in Data(url.absoluteString.utf8) },
+            resolveData: { data in
+                let value = String(decoding: data, as: UTF8.self)
+                return (try XCTUnwrap(URL(string: value)), false)
+            },
+            startScope: { _ in true },
+            stopScope: { _ in }
+        )
+
+        ManualApplicationJobBridge.persistFileAccess(for: request, bookmarks: bookmarks)
+
+        for destination in [firstDestination, secondDestination] {
+            var isDirectory: ObjCBool = false
+            XCTAssertTrue(FileManager.default.fileExists(
+                atPath: destination.path,
+                isDirectory: &isDirectory
+            ))
+            XCTAssertTrue(isDirectory.boolValue)
+            guard case .bookmark = bookmarks.startAccessingStoredBookmark(
+                containing: destination.appendingPathComponent("output.mov"),
+                requiresWriteAccess: true
+            ) else { return XCTFail("Expected a writable grant for \(destination.path)") }
+        }
+        guard case .none = bookmarks.startAccessingStoredBookmark(
+            containing: unusedDestination.appendingPathComponent("output.mov"),
+            requiresWriteAccess: true
+        ) else { return XCTFail("The unused batch destination should not be persisted") }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: unusedDestination.path))
     }
 
     private func makeItem(url: URL) -> VideoItem {

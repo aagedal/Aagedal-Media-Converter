@@ -1,9 +1,10 @@
 # Proposed 4.5 release — Local agent access
 
 Status: signed local transport, visible shared-job queue projection, initial
-Shortcut submission, and ordinary plus common per-file manual shared-queue
-submission implemented on `codex/release-4.5`; feasibility decision pending
-final-client, remaining specialized-path, and Release-package validation.
+Shortcut submission, and ordinary manual shared-queue submission including
+common per-file settings and destinations implemented on `codex/release-4.5`;
+feasibility decision pending final-client, remaining specialized-path, and
+Release-package validation.
 Created: 2026-09-11.
 
 ## Release context
@@ -115,8 +116,8 @@ conversions now plan and execute through the same persisted service. Existing
 manual rows are claimed by exact request/item identity rather than duplicated,
 and batches preserve row order plus captured date-tag, timecode, preset, and
 filename settings. The bridge declines customized rows, merge/group work,
-post-actions, per-source destinations, and other semantics absent from the v1
-contract before changing ownership. Every shared row also exposes a selectable
+post-actions, and other semantics absent from the v1 contract before changing
+ownership. Every shared row also exposes a selectable
 inspector rendered from its immutable accepted request rather than current
 preferences. See the
 [manual handoff validation record](4.5-manual-handoff-validation-2026-09-13.md).
@@ -127,7 +128,7 @@ snapshot. Acceptance validates source alignment and bounded trim/crop values,
 the FFmpeg adapter applies each source's immutable choices, and the queue
 inspector shows the settings for its exact row. Audio routing, custom names,
 groups/merge, generated waveform behavior, post-actions, and per-source
-destinations remain on the legacy path. See the
+destinations were still on the legacy path at this increment. See the
 [per-source handoff validation record](4.5-per-source-handoff-validation-2026-09-13.md).
 
 Per-source snapshots now also carry manual audio routing and custom output base
@@ -136,8 +137,19 @@ out-of-range channel operations, unsupported presets, and MCA options outside
 the six-preset contract. Custom names are bounded and path-safe, participate in
 duplicate-output and collision checks, and remain attached to the exact source
 through execution and queue inspection. Groups/merge, generated waveform
-behavior, post-actions, and per-source destinations remain on the legacy path.
+behavior, post-actions, and per-source destinations were still on the legacy path
+at this increment.
 See the [routing and naming validation record](4.5-routing-naming-validation-2026-09-13.md).
+
+First-party manual requests now also capture an immutable destination for each
+source. This moves “save next to original,” including preset and custom
+subfolders, into the shared planner without authorizing or persisting an unused
+batch fallback folder. Planning, submission, queued execution, collision checks,
+and accepted-settings inspection all use the effective destination for each row.
+Older schema-v1 snapshots decode without the new optional field. The Agent Access
+pane, queue origin labels, connection states, and accepted-settings control now
+have initial Norwegian translations. See the
+[destination and localization validation record](4.5-destination-localization-validation-2026-09-13.md).
 
 The six proposed agent operations now have a transport-neutral, typed workflow:
 media inspection, preset discovery, conversion planning and submission, job
@@ -168,8 +180,9 @@ clients have not been exercised, and a Developer ID Release archive has not
 completed signing/notarization validation. Groups/merge, generated waveform
 behavior, post-actions, and unsupported or per-source-destination App Intent
 cases still use the legacy executor, so full
-cross-boundary serialization remains open. Localization and the packaged
-end-to-end acceptance matrix also remain open.
+cross-boundary serialization remains open. The Agent Access surface has initial
+Norwegian coverage, but the accepted-settings inspector and the packaged
+end-to-end acceptance matrix still need localization and visual review.
 
 ## Intended outcome
 

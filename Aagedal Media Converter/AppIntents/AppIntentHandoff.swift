@@ -99,7 +99,8 @@ enum AppIntentApplicationJobBridge {
 /// Routes the ordinary manual conversions representable by the v1 application
 /// contract through the same serialized executor as Shortcut and agent work.
 /// Items with per-file behavior that the contract cannot preserve stay on the
-/// established ConversionManager path.
+/// established ConversionManager path. First-party snapshots may select a
+/// destination per source while agent requests retain one batch destination.
 enum ManualApplicationJobBridge {
     static let requesterID = "manual-ui"
 
@@ -111,9 +112,9 @@ enum ManualApplicationJobBridge {
         capturedAt: Date = Date(),
         defaults: UserDefaults = .standard
     ) -> ApplicationConversionRequest? {
+        let destinationSettings = OutputDestinationSettings(defaults: defaults)
         guard !mergeClipsEnabled,
               let presetID = ApplicationPresetID(exportPreset: preset),
-              !OutputDestinationSettings(defaults: defaults).saveNextToOriginal,
               !items.isEmpty,
               items.allSatisfy({ isRepresentable($0, preset: preset) }) else {
             return nil
@@ -136,6 +137,34 @@ enum ManualApplicationJobBridge {
             }
         }
 
+        let sourceSettings = items.map { item -> ApplicationSourceExecutionSettings? in
+            let destinationFolder: URL?
+            if destinationSettings.saveNextToOriginal {
+                guard let path = destinationSettings.resolveFolder(
+                    for: item.url,
+                    defaultOutputFolder: destinationFolderURL.path,
+                    presetSuffix: settings.fileName.presetSuffix
+                ) else { return nil }
+                destinationFolder = URL(fileURLWithPath: path, isDirectory: true)
+            } else {
+                destinationFolder = nil
+            }
+            return ApplicationSourceExecutionSettings(
+                sourceURL: item.url,
+                destinationFolderURL: destinationFolder,
+                comment: item.comment,
+                includeDateTag: item.includeDateTag,
+                timecodeConfig: item.timecodeConfig,
+                trimStart: item.trimStart,
+                trimEnd: item.trimEnd,
+                cropConfig: item.cropConfig,
+                isMuted: item.isMuted,
+                audioRoutingConfig: item.audioRoutingConfig,
+                outputBaseNameOverride: item.outputFileNameOverride
+            )
+        }
+        guard sourceSettings.allSatisfy({ $0 != nil }) else { return nil }
+
         let request = ApplicationConversionRequest(
             origin: .manual,
             requesterID: requesterID,
@@ -148,20 +177,7 @@ enum ManualApplicationJobBridge {
                 timecodeConfig: first.timecodeConfig,
                 defaults: defaults
             ),
-            sourceSettings: items.map {
-                ApplicationSourceExecutionSettings(
-                    sourceURL: $0.url,
-                    comment: $0.comment,
-                    includeDateTag: $0.includeDateTag,
-                    timecodeConfig: $0.timecodeConfig,
-                    trimStart: $0.trimStart,
-                    trimEnd: $0.trimEnd,
-                    cropConfig: $0.cropConfig,
-                    isMuted: $0.isMuted,
-                    audioRoutingConfig: $0.audioRoutingConfig,
-                    outputBaseNameOverride: $0.outputFileNameOverride
-                )
-            },
+            sourceSettings: sourceSettings.compactMap { $0 },
             capturedAt: capturedAt,
             defaults: defaults
         )
@@ -198,5 +214,31 @@ enum ManualApplicationJobBridge {
             destinationFolderURL: destinationFolderURL,
             bookmarks: bookmarks
         )
+    }
+
+    @MainActor
+    static func persistFileAccess(
+        for request: ApplicationConversionRequest,
+        bookmarks: SecurityScopedBookmarkManager = .shared
+    ) {
+        for sourceURL in Set(request.sourceURLs.map(\.standardizedFileURL)) {
+            _ = bookmarks.saveBookmark(for: sourceURL)
+        }
+        var destinations = Set<URL>()
+        for index in request.sourceURLs.indices {
+            let sourceDestination = request.sourceSettings?.indices.contains(index) == true
+                ? request.sourceSettings?[index].destinationFolderURL
+                : nil
+            destinations.insert(
+                (sourceDestination ?? request.destinationFolderURL).standardizedFileURL
+            )
+        }
+        for destinationURL in destinations {
+            try? FileManager.default.createDirectory(
+                at: destinationURL,
+                withIntermediateDirectories: true
+            )
+            _ = bookmarks.saveWritableBookmark(for: destinationURL)
+        }
     }
 }

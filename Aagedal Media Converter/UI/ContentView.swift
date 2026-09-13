@@ -2064,10 +2064,7 @@ struct ContentView: View {
             return false
         }
 
-        ManualApplicationJobBridge.persistFileAccess(
-            sourceURLs: request.sourceURLs,
-            destinationFolderURL: request.destinationFolderURL
-        )
+        ManualApplicationJobBridge.persistFileAccess(for: request)
         pendingManualApplicationJobItems[request.requestID] = items.map(\.id)
 
         do {

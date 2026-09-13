@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-11
+Last reviewed: 2026-09-13
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -42,6 +42,24 @@ work writing after cancellation must be fixed or have the affected path explicit
 disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
+
+## 4.5 shared-job continuation — 2026-09-13
+
+Ordinary manual work for the initial six-preset contract now preserves per-file
+trim, crop, mute, routing, custom names, and “save next to original” destinations
+through the application-owned planner and executor. Effective destinations are
+authorized per source, while old schema-v1 snapshots remain readable. Initial
+Norwegian coverage now includes Agent Access setup, status, shared-job origin,
+and inspector controls.
+
+The full unit target passes **927 tests**, all **74 release-script tests** pass,
+localization and bundled-manifest checks pass, and a Release build passes its
+45-image arm64/Hardened Runtime and 12-notice bundle audit. This is not a signed
+distribution candidate: two named MCP clients, cold launch/reconnect/restart,
+permission loss, real output/playback, Norwegian visual review, the App Sandbox
+scope decision, and Developer ID archive/notarization remain open. See the
+[4.5 release plan](docs/RELEASE-4.5-PLAN.md) and the latest
+[validation record](docs/4.5-destination-localization-validation-2026-09-13.md).
 
 ## 4.4 workflow continuation — 2026-09-11
 

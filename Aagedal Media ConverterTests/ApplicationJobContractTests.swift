@@ -90,6 +90,24 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertNil(decoded.sourceSettings)
     }
 
+    func testSourceSettingsDecodeSnapshotsCreatedBeforePerSourceDestinations() throws {
+        let settings = ApplicationSourceExecutionSettings(
+            sourceURL: source,
+            destinationFolderURL: URL(fileURLWithPath: "/other-output", isDirectory: true),
+            includeDateTag: false,
+            timecodeConfig: nil
+        )
+        let encoded = try JSONEncoder().encode(makeRequest(sourceSettings: [settings]))
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var sourceSettings = try XCTUnwrap(root["sourceSettings"] as? [[String: Any]])
+        sourceSettings[0].removeValue(forKey: "destinationFolderURL")
+        root["sourceSettings"] = sourceSettings
+
+        let legacyData = try JSONSerialization.data(withJSONObject: root)
+        let decoded = try JSONDecoder().decode(ApplicationConversionRequest.self, from: legacyData)
+        XCTAssertNil(decoded.sourceSettings?.first?.destinationFolderURL)
+    }
+
     func testSupportedPresetSnapshotsUseStableResolvedValues() throws {
         let defaults = try makeDefaults()
         defaults.set(ProResProfile.hq.rawValue, forKey: AppConstants.proResProfileKey)
@@ -173,6 +191,69 @@ final class ApplicationJobContractTests: XCTestCase {
             from: JSONEncoder().encode(plan)
         )
         XCTAssertEqual(roundTrip, plan)
+    }
+
+    func testPlanningUsesAndAuthorizesPerSourceDestinations() async throws {
+        final class AccessLog: @unchecked Sendable {
+            private let lock = NSLock()
+            private var values: [(URL, ApplicationFileAccessMode)] = []
+
+            func append(_ value: (URL, ApplicationFileAccessMode)) {
+                lock.withLock { values.append(value) }
+            }
+
+            func snapshot() -> [(URL, ApplicationFileAccessMode)] {
+                lock.withLock { values }
+            }
+        }
+
+        let directory = try makeTemporaryDirectory()
+        let globalDestination = directory.appendingPathComponent("unused", isDirectory: true)
+        let firstDestination = directory.appendingPathComponent("first-output", isDirectory: true)
+        let secondDestination = directory.appendingPathComponent("second-output", isDirectory: true)
+        for folder in [globalDestination, firstDestination, secondDestination] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let firstSource = directory.appendingPathComponent("first.mov")
+        let secondSource = directory.appendingPathComponent("second.mov")
+        try Data("first".utf8).write(to: firstSource)
+        try Data("second".utf8).write(to: secondSource)
+        let sourceSettings = [
+            ApplicationSourceExecutionSettings(
+                sourceURL: firstSource,
+                destinationFolderURL: firstDestination,
+                includeDateTag: false,
+                timecodeConfig: nil
+            ),
+            ApplicationSourceExecutionSettings(
+                sourceURL: secondSource,
+                destinationFolderURL: secondDestination,
+                includeDateTag: false,
+                timecodeConfig: nil
+            )
+        ]
+        let log = AccessLog()
+        let service = ApplicationJobService(fileAccessAuthorizer: ApplicationFileAccessAuthorizer {
+            url, mode in
+            log.append((url, mode))
+            guard url != globalDestination else { return nil }
+            return ApplicationFileAccessLease {}
+        })
+
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [firstSource, secondSource],
+            destinationFolderURL: globalDestination,
+            sourceSettings: sourceSettings,
+            idempotencyKey: nil
+        ))
+
+        XCTAssertEqual(plan.outputs.map { $0.outputURL.deletingLastPathComponent() }, [
+            firstDestination, secondDestination
+        ])
+        let accesses = log.snapshot()
+        XCTAssertFalse(accesses.contains { $0.0 == globalDestination })
+        XCTAssertTrue(accesses.contains { $0.0 == firstDestination && $0.1 == .write })
+        XCTAssertTrue(accesses.contains { $0.0 == secondDestination && $0.1 == .write })
     }
 
     func testPlanAndSubmitUsesTheSharedPlanningAndAcceptanceBoundary() async throws {
@@ -596,6 +677,12 @@ final class ApplicationJobContractTests: XCTestCase {
                 includeDateTag: false,
                 timecodeConfig: nil,
                 outputBaseNameOverride: "../outside"
+            )]), .invalidSourceSettings(source)),
+            (makeRequest(sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: source,
+                destinationFolderURL: URL(string: "https://example.com/output")!,
+                includeDateTag: false,
+                timecodeConfig: nil
             )]), .invalidSourceSettings(source))
         ]
 

@@ -46,9 +46,9 @@ enum ApplicationJobOrigin: String, Codable, Sendable {
 
     var displayName: String {
         switch self {
-        case .manual: "Manual"
-        case .appIntent: "Shortcut"
-        case .localAgent: "Agent"
+        case .manual: String(localized: "Manual")
+        case .appIntent: String(localized: "Shortcut")
+        case .localAgent: String(localized: "Agent")
         }
     }
 }
@@ -303,6 +303,7 @@ struct ApplicationRequestExecutionSettings: Codable, Equatable, Sendable {
 /// batch-wide behavior.
 struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
     let sourceURL: URL
+    let destinationFolderURL: URL?
     let comment: String
     let includeDateTag: Bool
     let timecodeMode: ApplicationTimecodeModeID
@@ -316,6 +317,7 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
 
     init(
         sourceURL: URL,
+        destinationFolderURL: URL? = nil,
         comment: String = "",
         includeDateTag: Bool,
         timecodeConfig: TimecodeConfig?,
@@ -327,6 +329,7 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
         outputBaseNameOverride: String? = nil
     ) {
         self.sourceURL = sourceURL
+        self.destinationFolderURL = destinationFolderURL
         self.comment = comment
         self.includeDateTag = includeDateTag
         switch timecodeConfig?.mode {
@@ -362,6 +365,7 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
     fileprivate var hasVisibleAdjustment: Bool {
         !comment.isEmpty || trimStart != nil || trimEnd != nil || cropConfig?.isActive == true
             || isMuted || audioRoutingConfig != nil || outputBaseNameOverride != nil
+            || destinationFolderURL != nil
     }
 }
 
@@ -782,6 +786,9 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         let sourceExecutionSettings = sourceIndex.flatMap { index in
             sourceSettings?.indices.contains(index) == true ? sourceSettings?[index] : nil
         }
+        let hasPerSourceDestination = sourceSettings?.contains {
+            $0.destinationFolderURL != nil
+        } == true
         if sourceIndex == nil,
            sourceSettings?.contains(where: \ApplicationSourceExecutionSettings.hasVisibleAdjustment) == true {
             lines.append("Per-file adjustments: On")
@@ -820,13 +827,20 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
             if let outputBaseNameOverride = sourceExecutionSettings?.outputBaseNameOverride {
                 lines.append("Output name: \(outputBaseNameOverride)")
             }
+            if let destinationFolderURL = sourceExecutionSettings?.destinationFolderURL {
+                lines.append("Destination: \(destinationFolderURL.path)")
+            }
         }
         let filename = settings.fileName
         lines.append("Filename processing: \(filename.processingEnabled ? "On" : "Off")")
         if filename.customTemplateEnabled {
             lines.append("Filename template: \(filename.template)")
         }
-        lines.append("Destination: \(destinationFolderURL.path)")
+        if sourceIndex == nil, hasPerSourceDestination {
+            lines.append("Destination: Per source")
+        } else if sourceExecutionSettings?.destinationFolderURL == nil {
+            lines.append("Destination: \(destinationFolderURL.path)")
+        }
         lines.append("Captured: \(capturedAt.formatted(date: .abbreviated, time: .standard))")
         return lines.joined(separator: "\n")
     }
@@ -1255,6 +1269,7 @@ actor ApplicationJobRegistry {
             }
             for (sourceURL, settings) in zip(request.sourceURLs, sourceSettings) {
                 guard settings.sourceURL == sourceURL,
+                      settings.destinationFolderURL?.isFileURL != false,
                       Self.validTrim(start: settings.trimStart, end: settings.trimEnd),
                       Self.validCrop(settings.cropConfig),
                       Self.validAudioRouting(
@@ -2189,7 +2204,9 @@ actor ApplicationJobService {
         try ApplicationJobRegistry.validate(request)
         let accessLeases = try acquireAccess(for: request)
         defer { accessLeases.forEach { $0.release() } }
-        try Self.validateDestination(request.destinationFolderURL)
+        for destinationURL in Self.destinationFolderURLs(for: request) {
+            try Self.validateDestination(destinationURL)
+        }
         let sources = try request.sourceURLs.map { try sourceIdentityProvider($0.standardizedFileURL) }
         let outputs = try Self.plannedOutputs(for: request)
 
@@ -2249,7 +2266,9 @@ actor ApplicationJobService {
 
         let accessLeases = try acquireAccess(for: plan.request)
         defer { accessLeases.forEach { $0.release() } }
-        try Self.validateDestination(plan.request.destinationFolderURL)
+        for destinationURL in Self.destinationFolderURLs(for: plan.request) {
+            try Self.validateDestination(destinationURL)
+        }
 
         for captured in plan.sources {
             let current: ApplicationSourceIdentity
@@ -2495,7 +2514,9 @@ actor ApplicationJobService {
         let accessLeases: [ApplicationFileAccessLease]
         do {
             accessLeases = try acquireAccess(for: pending.plan.request)
-            try Self.validateDestination(pending.plan.request.destinationFolderURL)
+            for destinationURL in Self.destinationFolderURLs(for: pending.plan.request) {
+                try Self.validateDestination(destinationURL)
+            }
             for capturedSource in pending.plan.sources {
                 let currentSource: ApplicationSourceIdentity
                 do {
@@ -2608,13 +2629,15 @@ actor ApplicationJobService {
                 }
                 leases.append(lease)
             }
-            guard let destinationLease = fileAccessAuthorizer.acquire(
-                request.destinationFolderURL,
-                .write
-            ) else {
-                throw ApplicationJobError.destinationAccessDenied(request.destinationFolderURL)
+            for destinationURL in Self.destinationFolderURLs(for: request) {
+                guard let destinationLease = fileAccessAuthorizer.acquire(
+                    destinationURL,
+                    .write
+                ) else {
+                    throw ApplicationJobError.destinationAccessDenied(destinationURL)
+                }
+                leases.append(destinationLease)
             }
-            leases.append(destinationLease)
             return leases
         } catch {
             leases.forEach { $0.release() }
@@ -2666,8 +2689,33 @@ actor ApplicationJobService {
             let fileName = fileExtension.isEmpty ? baseName : "\(baseName).\(fileExtension)"
             return ApplicationPlannedOutput(
                 sourceURL: sourceURL,
-                outputURL: request.destinationFolderURL.appendingPathComponent(fileName)
+                outputURL: destinationFolderURL(
+                    for: request,
+                    sourceIndex: index
+                ).appendingPathComponent(fileName)
             )
+        }
+    }
+
+    private static func destinationFolderURL(
+        for request: ApplicationConversionRequest,
+        sourceIndex: Int
+    ) -> URL {
+        guard let sourceSettings = request.sourceSettings,
+              sourceSettings.indices.contains(sourceIndex) else {
+            return request.destinationFolderURL
+        }
+        return sourceSettings[sourceIndex].destinationFolderURL ?? request.destinationFolderURL
+    }
+
+    private static func destinationFolderURLs(
+        for request: ApplicationConversionRequest
+    ) -> [URL] {
+        var seen = Set<URL>()
+        return request.sourceURLs.indices.compactMap { index in
+            let destination = destinationFolderURL(for: request, sourceIndex: index)
+                .standardizedFileURL
+            return seen.insert(destination).inserted ? destination : nil
         }
     }
 
