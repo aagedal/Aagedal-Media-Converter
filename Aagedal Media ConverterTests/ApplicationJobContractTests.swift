@@ -267,7 +267,7 @@ final class ApplicationJobContractTests: XCTestCase {
 
         XCTAssertEqual(retryAcceptance.record.id, firstAcceptance.record.id)
         XCTAssertTrue(retryAcceptance.wasAlreadyAccepted)
-        let records = await service.allRecords()
+        let records = try await service.allRecords()
         XCTAssertEqual(records.count, 1)
     }
 
@@ -480,6 +480,96 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(interrupted.allSatisfy { $0.state == .interrupted })
         let retainedFinished = await registry.record(for: finished.id)
         XCTAssertEqual(retainedFinished?.state, .succeeded)
+    }
+
+    func testPersistedPlansAndJobsRestoreIdempotencyAndInterruptIncompleteWork() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: sourceURL)
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let request = makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            idempotencyKey: "persisted-request"
+        )
+        let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let firstService = ApplicationJobService(store: store)
+        let plan = try await firstService.plan(request, now: createdAt)
+        let accepted = try await firstService.submit(planID: plan.id, now: createdAt)
+        _ = try await firstService.transition(accepted.record.id, to: .running, now: createdAt)
+
+        let restoredService = ApplicationJobService(store: store)
+        let restartDate = createdAt.addingTimeInterval(60)
+        let interrupted = try await restoredService.restorePersistedState(
+            now: restartDate,
+            interruptionDiagnostic: "Restarted"
+        )
+        XCTAssertEqual(interrupted.map(\.id), [accepted.record.id])
+        XCTAssertEqual(interrupted.first?.state, .interrupted)
+        XCTAssertEqual(interrupted.first?.diagnostic, "Restarted")
+
+        let retryPlan = try await restoredService.plan(request, now: restartDate)
+        let retry = try await restoredService.submit(planID: retryPlan.id, now: restartDate)
+        XCTAssertEqual(retry.record.id, accepted.record.id)
+        XCTAssertEqual(retry.record.state, .interrupted)
+        XCTAssertTrue(retry.wasAlreadyAccepted)
+
+        let secondRestore = try await restoredService.restorePersistedState(now: restartDate)
+        XCTAssertTrue(secondRestore.isEmpty)
+    }
+
+    func testPersistenceRetentionRemovesExpiredPlansAndOldTerminalIdempotencyKeys() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: sourceURL)
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let service = ApplicationJobService(
+            planLifetime: 10,
+            recordRetentionLifetime: 20,
+            store: store
+        )
+        let request = makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            idempotencyKey: "retained-request"
+        )
+        let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let plan = try await service.plan(request, now: createdAt)
+        let accepted = try await service.submit(planID: plan.id, now: createdAt)
+        _ = try await service.transition(accepted.record.id, to: .running, now: createdAt)
+        _ = try await service.transition(accepted.record.id, to: .succeeded, now: createdAt)
+
+        let retryDate = createdAt.addingTimeInterval(21)
+        let newPlan = try await service.plan(request, now: retryDate)
+        let removedPlan = try await service.plan(for: plan.id)
+        let removedRecord = try await service.record(for: accepted.record.id)
+        XCTAssertNil(removedPlan)
+        XCTAssertNil(removedRecord)
+
+        let newAcceptance = try await service.submit(planID: newPlan.id, now: retryDate)
+        XCTAssertNotEqual(newAcceptance.record.id, accepted.record.id)
+        XCTAssertFalse(newAcceptance.wasAlreadyAccepted)
+    }
+
+    func testDamagedPersistenceBlocksMutationAndIsNotOverwritten() async throws {
+        let directory = try makeTemporaryDirectory()
+        let stateURL = directory.appendingPathComponent("jobs.json")
+        let damagedData = Data("{not valid json".utf8)
+        try damagedData.write(to: stateURL)
+        let service = ApplicationJobService(store: ApplicationJobStore(fileURL: stateURL))
+
+        do {
+            _ = try await service.plan(makeRequest())
+            XCTFail("Expected damaged persisted state to block a new plan")
+        } catch {
+            XCTAssertTrue(error is DecodingError)
+        }
+        XCTAssertEqual(try Data(contentsOf: stateURL), damagedData)
     }
 
     private func makeRequest(

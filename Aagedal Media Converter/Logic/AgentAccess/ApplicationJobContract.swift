@@ -646,6 +646,67 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case outputCollision = "output_collision"
 }
 
+enum ApplicationJobPersistenceError: Error, Equatable, Sendable {
+    case unsupportedSchema(Int)
+    case duplicateJobID(ApplicationJobID)
+    case duplicatePlanID(ApplicationPlanID)
+    case duplicateIdempotencyIdentity
+    case duplicateSubmittedPlan(ApplicationPlanID)
+    case missingSubmittedPlan(ApplicationPlanID)
+    case missingSubmittedJob(ApplicationJobID)
+}
+
+private struct ApplicationSubmittedPlan: Codable, Equatable, Sendable {
+    let planID: ApplicationPlanID
+    let jobID: ApplicationJobID
+}
+
+private struct ApplicationJobPersistenceSnapshot: Codable, Equatable, Sendable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    let records: [ApplicationJobRecord]
+    let plans: [ApplicationConversionPlan]
+    let submittedPlans: [ApplicationSubmittedPlan]
+}
+
+/// A single versioned file is used so plan/job/idempotency state is published
+/// atomically. A damaged file is surfaced to the caller and is never replaced
+/// implicitly during startup recovery.
+struct ApplicationJobStore: Sendable {
+    let fileURL: URL
+
+    static let live = ApplicationJobStore(fileURL: {
+        let supportDirectory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+        return supportDirectory
+            .appendingPathComponent("AagedalMediaConverter", isDirectory: true)
+            .appendingPathComponent("AgentAccess", isDirectory: true)
+            .appendingPathComponent("application-jobs.json")
+    }())
+
+    fileprivate func load() throws -> ApplicationJobPersistenceSnapshot? {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        return try JSONDecoder().decode(
+            ApplicationJobPersistenceSnapshot.self,
+            from: Data(contentsOf: fileURL)
+        )
+    }
+
+    fileprivate func save(_ snapshot: ApplicationJobPersistenceSnapshot) throws {
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(snapshot).write(to: fileURL, options: .atomic)
+    }
+}
+
 /// Owns stable identities and lifecycle state before work is attached to a view.
 /// Persistence and conversion execution are deliberately separate follow-up
 /// layers; the registry can therefore be tested without starting helper tools.
@@ -716,6 +777,54 @@ actor ApplicationJobRegistry {
 
     func allRecords() -> [ApplicationJobRecord] {
         orderedIDs.compactMap { records[$0] }
+    }
+
+    /// Restores the authoritative ordering and requester-scoped idempotency
+    /// identities. Validation happens before replacing live state so a damaged
+    /// snapshot cannot partially restore.
+    func restore(_ restoredRecords: [ApplicationJobRecord]) throws {
+        var restoredByID: [ApplicationJobID: ApplicationJobRecord] = [:]
+        var restoredIDs: [ApplicationJobID] = []
+        var restoredRequests: [IdempotencyIdentity: AcceptedRequest] = [:]
+
+        for record in restoredRecords {
+            guard record.schemaVersion == ApplicationConversionRequest.currentSchemaVersion else {
+                throw ApplicationJobPersistenceError.unsupportedSchema(record.schemaVersion)
+            }
+            try Self.validate(record.request)
+            guard restoredByID[record.id] == nil else {
+                throw ApplicationJobPersistenceError.duplicateJobID(record.id)
+            }
+            restoredByID[record.id] = record
+            restoredIDs.append(record.id)
+            if let key = record.request.idempotencyKey {
+                let identity = IdempotencyIdentity(requesterID: record.request.requesterID, key: key)
+                guard restoredRequests[identity] == nil else {
+                    throw ApplicationJobPersistenceError.duplicateIdempotencyIdentity
+                }
+                restoredRequests[identity] = AcceptedRequest(jobID: record.id, request: record.request)
+            }
+        }
+
+        records = restoredByID
+        orderedIDs = restoredIDs
+        acceptedRequests = restoredRequests
+    }
+
+    /// Idempotency identities have the same lifetime as their retained record.
+    /// Active work is never removed by retention cleanup.
+    func removeTerminalRecords(updatedBefore cutoff: Date) -> Set<ApplicationJobID> {
+        let removedIDs = Set(orderedIDs.filter { jobID in
+            guard let record = records[jobID] else { return false }
+            return record.state.isTerminal && record.updatedAt < cutoff
+        })
+        guard !removedIDs.isEmpty else { return [] }
+        orderedIDs.removeAll { removedIDs.contains($0) }
+        for jobID in removedIDs {
+            records.removeValue(forKey: jobID)
+        }
+        acceptedRequests = acceptedRequests.filter { !removedIDs.contains($0.value.jobID) }
+        return removedIDs
     }
 
     @discardableResult
@@ -926,12 +1035,15 @@ actor ApplicationJobService {
     typealias SourceIdentityProvider = @Sendable (URL) throws -> ApplicationSourceIdentity
     typealias ItemExistsProvider = @Sendable (URL) -> Bool
 
-    static let shared = ApplicationJobService()
+    static let shared = ApplicationJobService(store: .live)
 
     private let registry: ApplicationJobRegistry
     private let sourceIdentityProvider: SourceIdentityProvider
     private let itemExists: ItemExistsProvider
     private let planLifetime: TimeInterval
+    private let recordRetentionLifetime: TimeInterval
+    private let store: ApplicationJobStore?
+    private var didRestore = false
     private var plans: [ApplicationPlanID: ApplicationConversionPlan] = [:]
     private var submittedPlans: [ApplicationPlanID: ApplicationJobAcceptance] = [:]
     private var reservedOutputs: [URL: ApplicationJobID] = [:]
@@ -940,19 +1052,81 @@ actor ApplicationJobService {
     init(
         registry: ApplicationJobRegistry = ApplicationJobRegistry(),
         planLifetime: TimeInterval = 15 * 60,
+        recordRetentionLifetime: TimeInterval = 30 * 24 * 60 * 60,
+        store: ApplicationJobStore? = nil,
         sourceIdentityProvider: SourceIdentityProvider? = nil,
         itemExists: @escaping ItemExistsProvider = { FileManager.default.fileExists(atPath: $0.path) }
     ) {
         self.registry = registry
         self.planLifetime = planLifetime
+        self.recordRetentionLifetime = recordRetentionLifetime
+        self.store = store
         self.sourceIdentityProvider = sourceIdentityProvider ?? Self.liveSourceIdentity
         self.itemExists = itemExists
+    }
+
+    /// Loads the last atomically published snapshot once per service lifetime.
+    /// Accepted work is not restarted: every queued/running/cancelling record is
+    /// made terminal and remains available to reconnecting clients.
+    @discardableResult
+    func restorePersistedState(
+        now: Date = Date(),
+        interruptionDiagnostic: String = "Application restarted before the conversion completed."
+    ) async throws -> [ApplicationJobRecord] {
+        guard !didRestore else { return [] }
+        guard let store, let snapshot = try store.load() else {
+            didRestore = true
+            return []
+        }
+        guard snapshot.schemaVersion == ApplicationJobPersistenceSnapshot.currentSchemaVersion else {
+            throw ApplicationJobPersistenceError.unsupportedSchema(snapshot.schemaVersion)
+        }
+
+        try await registry.restore(snapshot.records)
+        var restoredPlans: [ApplicationPlanID: ApplicationConversionPlan] = [:]
+        for plan in snapshot.plans {
+            guard plan.schemaVersion == ApplicationConversionPlan.currentSchemaVersion else {
+                throw ApplicationJobPersistenceError.unsupportedSchema(plan.schemaVersion)
+            }
+            try ApplicationJobRegistry.validate(plan.request)
+            guard restoredPlans[plan.id] == nil else {
+                throw ApplicationJobPersistenceError.duplicatePlanID(plan.id)
+            }
+            restoredPlans[plan.id] = plan
+        }
+        plans = restoredPlans
+        submittedPlans.removeAll(keepingCapacity: true)
+        for submitted in snapshot.submittedPlans {
+            guard plans[submitted.planID] != nil else {
+                throw ApplicationJobPersistenceError.missingSubmittedPlan(submitted.planID)
+            }
+            guard submittedPlans[submitted.planID] == nil else {
+                throw ApplicationJobPersistenceError.duplicateSubmittedPlan(submitted.planID)
+            }
+            guard let record = await registry.record(for: submitted.jobID) else {
+                throw ApplicationJobPersistenceError.missingSubmittedJob(submitted.jobID)
+            }
+            submittedPlans[submitted.planID] = ApplicationJobAcceptance(
+                record: record,
+                wasAlreadyAccepted: false
+            )
+        }
+
+        didRestore = true
+        let interrupted = await registry.interruptInFlightJobs(
+            diagnostic: interruptionDiagnostic,
+            now: now
+        )
+        await removeExpiredState(now: now)
+        try await persist()
+        return interrupted
     }
 
     func plan(
         _ request: ApplicationConversionRequest,
         now: Date = Date()
-    ) throws -> ApplicationConversionPlan {
+    ) async throws -> ApplicationConversionPlan {
+        try await ensureRestored(now: now)
         try ApplicationJobRegistry.validate(request)
         let sources = try request.sourceURLs.map { try sourceIdentityProvider($0.standardizedFileURL) }
         let outputs = try Self.plannedOutputs(for: request)
@@ -981,6 +1155,8 @@ actor ApplicationJobService {
             warnings: warnings
         )
         plans[plan.id] = plan
+        await removeExpiredState(now: now)
+        try await persist()
         return plan
     }
 
@@ -990,8 +1166,10 @@ actor ApplicationJobService {
         planID: ApplicationPlanID,
         now: Date = Date()
     ) async throws -> ApplicationJobAcceptance {
+        try await ensureRestored(now: now)
         if let accepted = submittedPlans[planID] {
             let currentRecord = await registry.record(for: accepted.record.id) ?? accepted.record
+            try await persist()
             return ApplicationJobAcceptance(record: currentRecord, wasAlreadyAccepted: true)
         }
         guard let plan = plans[planID] else {
@@ -1000,6 +1178,7 @@ actor ApplicationJobService {
         if let record = try await registry.acceptedRecord(for: plan.request) {
             let accepted = ApplicationJobAcceptance(record: record, wasAlreadyAccepted: true)
             submittedPlans[planID] = accepted
+            try await persist()
             return accepted
         }
         guard now <= plan.expiresAt else {
@@ -1032,19 +1211,29 @@ actor ApplicationJobService {
         }
         outputsByJob[accepted.record.id, default: []].formUnion(normalizedOutputs)
         submittedPlans[planID] = accepted
+        try await persist()
         return accepted
     }
 
-    func plan(for planID: ApplicationPlanID) -> ApplicationConversionPlan? {
-        plans[planID]
+    func plan(
+        for planID: ApplicationPlanID,
+        now: Date = Date()
+    ) async throws -> ApplicationConversionPlan? {
+        try await ensureRestored(now: now)
+        return plans[planID]
     }
 
-    func record(for jobID: ApplicationJobID) async -> ApplicationJobRecord? {
-        await registry.record(for: jobID)
+    func record(
+        for jobID: ApplicationJobID,
+        now: Date = Date()
+    ) async throws -> ApplicationJobRecord? {
+        try await ensureRestored(now: now)
+        return await registry.record(for: jobID)
     }
 
-    func allRecords() async -> [ApplicationJobRecord] {
-        await registry.allRecords()
+    func allRecords(now: Date = Date()) async throws -> [ApplicationJobRecord] {
+        try await ensureRestored(now: now)
+        return await registry.allRecords()
     }
 
     @discardableResult
@@ -1055,12 +1244,14 @@ actor ApplicationJobService {
         diagnostic: String? = nil,
         now: Date = Date()
     ) async throws -> ApplicationJobRecord {
+        try await ensureRestored(now: now)
         let record = try await registry.transition(
             jobID, to: state, outputURLs: outputURLs, diagnostic: diagnostic, now: now
         )
         if state.isTerminal {
             releaseOutputReservations(for: jobID)
         }
+        try await persist()
         return record
     }
 
@@ -1069,10 +1260,12 @@ actor ApplicationJobService {
         _ jobID: ApplicationJobID,
         now: Date = Date()
     ) async throws -> ApplicationJobRecord {
+        try await ensureRestored(now: now)
         let record = try await registry.requestCancellation(jobID, now: now)
         if record.state.isTerminal {
             releaseOutputReservations(for: jobID)
         }
+        try await persist()
         return record
     }
 
@@ -1083,19 +1276,65 @@ actor ApplicationJobService {
         stage: String?,
         now: Date = Date()
     ) async throws -> ApplicationJobRecord {
-        try await registry.updateProgress(jobID, progress: progress, stage: stage, now: now)
+        try await ensureRestored(now: now)
+        return try await registry.updateProgress(jobID, progress: progress, stage: stage, now: now)
     }
 
     @discardableResult
     func interruptInFlightJobs(
         diagnostic: String,
         now: Date = Date()
-    ) async -> [ApplicationJobRecord] {
+    ) async throws -> [ApplicationJobRecord] {
+        try await ensureRestored(now: now)
         let interrupted = await registry.interruptInFlightJobs(diagnostic: diagnostic, now: now)
         for record in interrupted {
             releaseOutputReservations(for: record.id)
         }
+        try await persist()
         return interrupted
+    }
+
+    /// Removes expired plans and terminal records older than the documented
+    /// retention window. Submitted-plan links disappear with either their plan
+    /// or retained job.
+    @discardableResult
+    private func removeExpiredState(now: Date) async -> Int {
+        let expiredPlanIDs = Set(plans.compactMap { planID, plan in
+            plan.expiresAt < now ? planID : nil
+        })
+        for planID in expiredPlanIDs {
+            plans.removeValue(forKey: planID)
+            submittedPlans.removeValue(forKey: planID)
+        }
+
+        let cutoff = now.addingTimeInterval(-recordRetentionLifetime)
+        let removedJobIDs = await registry.removeTerminalRecords(updatedBefore: cutoff)
+        if !removedJobIDs.isEmpty {
+            submittedPlans = submittedPlans.filter { !removedJobIDs.contains($0.value.record.id) }
+            for jobID in removedJobIDs {
+                releaseOutputReservations(for: jobID)
+            }
+        }
+        return expiredPlanIDs.count + removedJobIDs.count
+    }
+
+    private func persist() async throws {
+        guard let store else { return }
+        let records = await registry.allRecords()
+        let snapshot = ApplicationJobPersistenceSnapshot(
+            schemaVersion: ApplicationJobPersistenceSnapshot.currentSchemaVersion,
+            records: records,
+            plans: plans.values.sorted { $0.createdAt < $1.createdAt },
+            submittedPlans: submittedPlans.map { planID, acceptance in
+                ApplicationSubmittedPlan(planID: planID, jobID: acceptance.record.id)
+            }.sorted { $0.planID.description < $1.planID.description }
+        )
+        try store.save(snapshot)
+    }
+
+    private func ensureRestored(now: Date) async throws {
+        guard store != nil, !didRestore else { return }
+        _ = try await restorePersistedState(now: now)
     }
 
     private func releaseOutputReservations(for jobID: ApplicationJobID) {

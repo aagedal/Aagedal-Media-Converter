@@ -50,9 +50,16 @@ existing outputs and rejects duplicate names within a batch. Submission rechecks
 source identity and disk collisions, reserves output names across concurrent
 jobs, and retains idempotency across both same-plan retries and equivalent newly
 created plans. Terminal transitions release in-memory reservations. This remains
-a transport-neutral boundary; execution and persistence adapters are not yet
-connected. See the
+a transport-neutral boundary; execution adapters are not yet connected. See the
 [planning validation record](4.5-planning-validation-2026-09-13.md).
+
+Plans, job records, submitted-plan links, and requester-scoped idempotency
+identities are now atomically persisted in Application Support. Startup restores
+terminal results and marks queued, running, or cancelling work interrupted rather
+than restarting it. Plans expire after 15 minutes and terminal records (including
+their idempotency keys) are retained for 30 days. Corrupt or unsupported snapshots
+are reported and preserved instead of being silently replaced. See the
+[persistence validation record](4.5-persistence-validation-2026-09-13.md).
 
 ## Intended outcome
 

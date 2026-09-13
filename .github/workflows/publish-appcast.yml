@@ -1,4 +1,4 @@
-name: Publish backup appcast
+name: Publish website appcast
 
 on:
   push:
@@ -6,19 +6,19 @@ on:
       - main
     paths:
       - appcast.xml
-      - .github/workflows/publish-backup-appcast.yml
+      - .github/workflows/publish-appcast.yml
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-backup-appcast
+  group: publish-website-appcast
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Upload appcast over FTPS
+    name: Validate and upload appcast over FTPS
     runs-on: ubuntu-latest
     environment: Aagedal Apps
     timeout-minutes: 5
@@ -28,6 +28,17 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Validate appcast
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("appcast.xml").getroot()
+          channel = root.find("channel")
+          if root.tag != "rss" or channel is None or not channel.findall("item"):
+              raise SystemExit("appcast.xml does not contain an RSS channel with release items")
+          PY
 
       - name: Upload appcast
         env:
@@ -48,3 +59,17 @@ jobs:
             --quote "-RNFR ${APPCAST_FILENAME}.tmp" \
             --quote "-RNTO ${APPCAST_FILENAME}" \
             "ftp://${FTP_HOST}:${FTP_PORT}/appcast/${APPCAST_FILENAME}.tmp"
+
+      - name: Verify public appcast
+        env:
+          PUBLIC_APPCAST_URL: https://aagedal.me/apps/appcast/mediaconverter.xml
+        run: |
+          set -euo pipefail
+
+          curl --fail --silent --show-error \
+            --retry 5 \
+            --retry-all-errors \
+            --retry-delay 2 \
+            "${PUBLIC_APPCAST_URL}?revision=${GITHUB_SHA}" \
+            --output published-appcast.xml
+          cmp --silent appcast.xml published-appcast.xml

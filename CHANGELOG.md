@@ -22,6 +22,9 @@ remain subject to the feasibility milestone.
   collision rejection, and actor-owned output reservations. Retrying either the
   same plan or a newly planned request with the same idempotency key returns the
   original accepted job.
+- Persisted versioned plans, job records, and idempotency identities atomically.
+  App restart now restores terminal results, marks unfinished work interrupted,
+  and prunes expired plans and terminal history under explicit retention windows.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 
