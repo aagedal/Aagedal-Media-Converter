@@ -2,7 +2,8 @@
 
 4.5 development has started with the shared application boundary and signed
 local transport needed for agent access. Final client compatibility, shared
-manual/App Intent queue ownership, and Release-package validation remain open.
+manual queue ownership, wider Shortcut coverage, and Release-package validation
+remain open.
 
 ## Local agent access
 
@@ -55,6 +56,11 @@ manual/App Intent queue ownership, and Release-package validation remain open.
   and progress, accepted output locations, origin and stable job-ID labels, and
   per-job cancellation. Legacy manual queue selection, bulk cancellation, and
   dock progress now leave shared-service rows under their authoritative owner.
+- Routed file-bearing H.264, HEVC, ProRes, Proxy, Audio Only, and Stream Copy
+  Shortcut conversions through the same persisted planner and serialized
+  executor as agent work. The handoff preserves request identity, approved file
+  access, and captured preset, naming, date-tag, timecode, and comment settings;
+  wider presets and per-source destinations retain their established path.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

@@ -25,6 +25,18 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
         case .streamCopy: .streamCopy
         }
     }
+
+    init?(exportPreset: ExportPreset) {
+        switch exportPreset {
+        case .h264: self = .h264
+        case .h265: self = .hevc
+        case .prores: self = .proRes
+        case .proxy: self = .proxy
+        case .audioOnly: self = .audioOnly
+        case .streamCopy: self = .streamCopy
+        default: return nil
+        }
+    }
 }
 
 enum ApplicationJobOrigin: String, Codable, Sendable {
@@ -190,6 +202,78 @@ struct ApplicationFileNameSettings: Codable, Equatable, Sendable {
             dateFormat: dateFormat,
             counterPadding: counterPadding
         )
+    }
+}
+
+enum ApplicationTimecodeModeID: String, Codable, Sendable {
+    case disabled
+    case preserveSource = "preserve_source"
+    case manual
+}
+
+struct ApplicationCommentSettings: Codable, Equatable, Sendable {
+    let prefix: String
+    let suffix: String
+    let separator: String
+    let dateFormat: String
+    let dateTagPrefix: String
+
+    init(defaults: UserDefaults) {
+        let settings = CommentSettings(defaults: defaults)
+        prefix = settings.prefix
+        suffix = settings.suffix
+        separator = settings.separator
+        dateFormat = settings.dateFormat
+        dateTagPrefix = settings.dateTagPrefix
+    }
+
+    fileprivate var value: CommentSettings {
+        CommentSettings(
+            prefix: prefix,
+            suffix: suffix,
+            separator: separator,
+            dateFormat: dateFormat,
+            dateTagPrefix: dateTagPrefix
+        )
+    }
+}
+
+/// Optional first-party execution defaults that are not meaningful to an MCP
+/// caller but must survive a Shortcut handoff unchanged. Absence decodes as the
+/// original agent behavior (no date tag and no configured timecode), preserving
+/// compatibility with existing persisted schema-v1 requests.
+struct ApplicationRequestExecutionSettings: Codable, Equatable, Sendable {
+    let includeDateTag: Bool
+    let timecodeMode: ApplicationTimecodeModeID
+    let manualTimecode: String?
+    let comment: ApplicationCommentSettings
+
+    init(appIntentDefaults defaults: UserDefaults) {
+        let importSettings = VideoImportSettings(defaults: defaults)
+        includeDateTag = importSettings.includeDateTag
+        switch importSettings.timecode?.mode {
+        case .preserveSource?:
+            timecodeMode = .preserveSource
+            manualTimecode = nil
+        case .manual(let value)?:
+            timecodeMode = .manual
+            manualTimecode = value
+        case nil:
+            timecodeMode = .disabled
+            manualTimecode = nil
+        }
+        comment = ApplicationCommentSettings(defaults: defaults)
+    }
+
+    fileprivate var timecodeConfig: TimecodeConfig? {
+        switch timecodeMode {
+        case .disabled:
+            nil
+        case .preserveSource:
+            TimecodeConfig(mode: .preserveSource)
+        case .manual:
+            manualTimecode.map { TimecodeConfig(mode: .manual($0)) }
+        }
     }
 }
 
@@ -531,6 +615,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
     let destinationFolderURL: URL
     let presetID: ApplicationPresetID
     let presetSettings: ApplicationPresetSettings
+    let executionSettings: ApplicationRequestExecutionSettings?
     let idempotencyKey: String?
     let capturedAt: Date
 
@@ -543,6 +628,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         destinationFolderURL: URL,
         presetID: ApplicationPresetID,
         presetSettings: ApplicationPresetSettings? = nil,
+        executionSettings: ApplicationRequestExecutionSettings? = nil,
         idempotencyKey: String? = nil,
         capturedAt: Date = Date(),
         defaults: UserDefaults = .standard
@@ -556,6 +642,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         self.presetID = presetID
         self.presetSettings = presetSettings
             ?? ApplicationPresetSettings(presetID: presetID, defaults: defaults)
+        self.executionSettings = executionSettings
         self.idempotencyKey = idempotencyKey
         self.capturedAt = capturedAt
     }
@@ -568,6 +655,7 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
             && destinationFolderURL == other.destinationFolderURL
             && presetID == other.presetID
             && presetSettings == other.presetSettings
+            && executionSettings == other.executionSettings
     }
 }
 
@@ -1116,6 +1204,7 @@ struct ApplicationFFmpegConversion: Sendable {
     let audioOnlySettings: AudioOnlySettings?
     let codecSettings: CodecExportSettings?
     let subtitleSettings: SubtitleExportSettings
+    let commentSettings: CommentSettings?
 }
 
 /// Injectable wrapper around the concrete FFmpeg actor. Tests can exercise the
@@ -1139,6 +1228,7 @@ struct ApplicationFFmpegRunner: Sendable {
                     audioOnlySettings: conversion.audioOnlySettings,
                     codecSettings: conversion.codecSettings,
                     subtitleSettings: conversion.subtitleSettings,
+                    commentSettings: conversion.commentSettings,
                     progressUpdate: { value, status in
                         progress.send(value, status: status)
                     }
@@ -1291,13 +1381,15 @@ actor ApplicationFFmpegJobExecutor {
         output: ApplicationPlannedOutput
     ) throws -> ApplicationFFmpegConversion {
         let settings = plan.request.presetSettings
+        let executionSettings = plan.request.executionSettings
         let defaults = try ApplicationExecutionDefaults(settings: settings)
         return ApplicationFFmpegConversion(
             request: ConversionRequest(
                 inputURL: output.sourceURL,
                 outputURL: output.outputURL,
                 preset: plan.request.presetID.exportPreset,
-                includeDateTag: false
+                includeDateTag: executionSettings?.includeDateTag ?? false,
+                timecodeConfig: executionSettings?.timecodeConfig
             ),
             audioOnlySettings: plan.request.presetID == .audioOnly
                 ? AudioOnlySettings(defaults: defaults.value) : nil,
@@ -1305,7 +1397,8 @@ actor ApplicationFFmpegJobExecutor {
                 preset: plan.request.presetID.exportPreset,
                 defaults: defaults.value
             ),
-            subtitleSettings: SubtitleExportSettings(defaults: defaults.value)
+            subtitleSettings: SubtitleExportSettings(defaults: defaults.value),
+            commentSettings: executionSettings?.comment.value
         )
     }
 }
@@ -1914,6 +2007,17 @@ actor ApplicationJobService {
         enqueueExecution(jobID: accepted.record.id, plan: plan)
         await publishRecords()
         return accepted
+    }
+
+    /// Plans and accepts a first-party request through the same validation and
+    /// persistence boundary used by MCP. Keeping this operation on the actor
+    /// prevents UI and App Intent adapters from reimplementing plan ownership.
+    func planAndSubmit(
+        _ request: ApplicationConversionRequest,
+        now: Date = Date()
+    ) async throws -> ApplicationJobAcceptance {
+        let plan = try await plan(request, now: now)
+        return try await submit(planID: plan.id, now: now)
     }
 
     func plan(

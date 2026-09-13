@@ -60,6 +60,103 @@ final class AppIntentHandoffTests: XCTestCase {
         }
     }
 
+    func testSharedBridgeMapsOnlyInitialSupportedPresets() {
+        let expected: [(ExportPreset, ApplicationPresetID)] = [
+            (.h264, .h264), (.h265, .hevc), (.prores, .proRes),
+            (.proxy, .proxy), (.audioOnly, .audioOnly), (.streamCopy, .streamCopy)
+        ]
+        for (preset, applicationID) in expected {
+            XCTAssertEqual(ApplicationPresetID(exportPreset: preset), applicationID)
+            XCTAssertEqual(applicationID.exportPreset, preset)
+        }
+        XCTAssertNil(ApplicationPresetID(exportPreset: .videoLoop))
+        XCTAssertNil(ApplicationPresetID(exportPreset: .av1))
+        XCTAssertNil(ApplicationPresetID(exportPreset: .dcp))
+        XCTAssertNil(ApplicationPresetID(exportPreset: .custom1))
+    }
+
+    func testSharedBridgeCapturesAppIntentIdentitySettingsAndOrderedUniqueSources() throws {
+        let defaults = try makeIsolatedDefaults()
+        defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
+        defaults.set(true, forKey: AppConstants.includeDateTagPreferenceKey)
+        defaults.set("manual", forKey: AppConstants.defaultTimecodeModeKey)
+        defaults.set("01:02:03:04", forKey: AppConstants.defaultTimecodeValueKey)
+        defaults.set("Shot", forKey: AppConstants.commentPrefixKey)
+        let requestID = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let capturedAt = Date(timeIntervalSince1970: 1234)
+
+        let request = try XCTUnwrap(AppIntentApplicationJobBridge.makeRequest(
+            sourceURLs: [second, first, second],
+            destinationFolderURL: folder,
+            preset: .h264,
+            requestID: requestID,
+            capturedAt: capturedAt,
+            defaults: defaults
+        ))
+
+        XCTAssertEqual(request.requestID, requestID)
+        XCTAssertEqual(request.origin, .appIntent)
+        XCTAssertEqual(request.requesterID, AppIntentApplicationJobBridge.requesterID)
+        XCTAssertEqual(request.sourceURLs, [second, first])
+        XCTAssertEqual(request.destinationFolderURL, folder)
+        XCTAssertEqual(request.presetID, .h264)
+        XCTAssertEqual(request.presetSettings.containerID, .mov)
+        XCTAssertEqual(request.executionSettings?.includeDateTag, true)
+        XCTAssertEqual(request.executionSettings?.timecodeMode, .manual)
+        XCTAssertEqual(request.executionSettings?.manualTimecode, "01:02:03:04")
+        XCTAssertEqual(request.executionSettings?.comment.prefix, "Shot")
+        XCTAssertEqual(request.idempotencyKey, requestID.uuidString.lowercased())
+        XCTAssertEqual(request.capturedAt, capturedAt)
+    }
+
+    func testSharedBridgeRejectsUnsupportedOrEmptySubmissions() throws {
+        let defaults = try makeIsolatedDefaults()
+        XCTAssertNil(AppIntentApplicationJobBridge.makeRequest(
+            sourceURLs: [first], destinationFolderURL: folder,
+            preset: .videoLoop, requestID: UUID(), defaults: defaults
+        ))
+        XCTAssertNil(AppIntentApplicationJobBridge.makeRequest(
+            sourceURLs: [], destinationFolderURL: folder,
+            preset: .h264, requestID: UUID(), defaults: defaults
+        ))
+
+        defaults.set(true, forKey: AppConstants.saveNextToOriginalKey)
+        XCTAssertNil(AppIntentApplicationJobBridge.makeRequest(
+            sourceURLs: [first], destinationFolderURL: folder,
+            preset: .h264, requestID: UUID(), defaults: defaults
+        ))
+    }
+
+    @MainActor
+    func testSharedBridgePersistsReadAndWritableIntentGrants() throws {
+        let defaults = try makeIsolatedDefaults()
+        let bookmarks = SecurityScopedBookmarkManager(
+            defaults: defaults,
+            createBookmark: { url, _ in Data(url.absoluteString.utf8) },
+            resolveData: { data in
+                let value = String(decoding: data, as: UTF8.self)
+                return (try XCTUnwrap(URL(string: value)), false)
+            },
+            startScope: { _ in true },
+            stopScope: { _ in }
+        )
+
+        AppIntentApplicationJobBridge.persistFileAccess(
+            sourceURLs: [first, second, first],
+            destinationFolderURL: folder,
+            bookmarks: bookmarks
+        )
+
+        guard case .bookmark = bookmarks.startAccessingStoredBookmark(
+            containing: first,
+            requiresWriteAccess: false
+        ) else { return XCTFail("Expected the source read grant") }
+        guard case .bookmark = bookmarks.startAccessingStoredBookmark(
+            containing: folder.appendingPathComponent("output.mov"),
+            requiresWriteAccess: true
+        ) else { return XCTFail("Expected the destination write grant") }
+    }
+
     @MainActor
     func testBufferedRequestsReplayInSubmissionOrderOnlyOnce() {
         var received: [Int] = []
@@ -225,6 +322,13 @@ final class AppIntentHandoffTests: XCTestCase {
         queue.enqueue { events.append(2); secondFinished.fulfill() }
         await fulfillment(of: [secondFinished], timeout: 2)
         XCTAssertEqual(events, [1, 2])
+    }
+
+    private func makeIsolatedDefaults() throws -> UserDefaults {
+        let suite = "AppIntentHandoffTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
     }
 
 }

@@ -40,3 +40,58 @@ enum AppIntentHandoff {
         }
     }
 }
+
+/// Builds the first-party App Intent request for presets supported by the 4.5
+/// shared boundary. Unsupported presets continue through the existing queue so
+/// no established Shortcut silently loses settings the v1 contract cannot hold.
+enum AppIntentApplicationJobBridge {
+    static let requesterID = "app-intents"
+
+    static func makeRequest(
+        sourceURLs: [URL],
+        destinationFolderURL: URL,
+        preset: ExportPreset,
+        requestID: UUID?,
+        capturedAt: Date = Date(),
+        defaults: UserDefaults = .standard
+    ) -> ApplicationConversionRequest? {
+        guard let presetID = ApplicationPresetID(exportPreset: preset) else { return nil }
+        // The v1 request has one destination for the whole batch. Preserve the
+        // established per-source output behavior until that is representable.
+        guard !OutputDestinationSettings(defaults: defaults).saveNextToOriginal else { return nil }
+
+        var seen = Set<URL>()
+        let uniqueSources = sourceURLs.filter {
+            seen.insert($0.standardizedFileURL).inserted
+        }
+        guard !uniqueSources.isEmpty else { return nil }
+
+        return ApplicationConversionRequest(
+            requestID: requestID ?? UUID(),
+            origin: .appIntent,
+            requesterID: requesterID,
+            sourceURLs: uniqueSources,
+            destinationFolderURL: destinationFolderURL,
+            presetID: presetID,
+            executionSettings: ApplicationRequestExecutionSettings(appIntentDefaults: defaults),
+            idempotencyKey: requestID?.uuidString.lowercased(),
+            capturedAt: capturedAt,
+            defaults: defaults
+        )
+    }
+
+    /// IntentFile URLs represent an explicit user selection. Persist those
+    /// grants before the asynchronous shared service reopens them for planning,
+    /// execution, or a later reconnect.
+    @MainActor
+    static func persistFileAccess(
+        sourceURLs: [URL],
+        destinationFolderURL: URL,
+        bookmarks: SecurityScopedBookmarkManager = .shared
+    ) {
+        for sourceURL in Set(sourceURLs.map(\.standardizedFileURL)) {
+            _ = bookmarks.saveBookmark(for: sourceURL)
+        }
+        _ = bookmarks.saveWritableBookmark(for: destinationFolderURL.standardizedFileURL)
+    }
+}

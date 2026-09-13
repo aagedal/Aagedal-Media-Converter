@@ -12,6 +12,20 @@ struct CommentSettings: Sendable {
     let dateFormat: String
     let dateTagPrefix: String
 
+    init(
+        prefix: String,
+        suffix: String,
+        separator: String,
+        dateFormat: String,
+        dateTagPrefix: String
+    ) {
+        self.prefix = prefix
+        self.suffix = suffix
+        self.separator = separator
+        self.dateFormat = dateFormat
+        self.dateTagPrefix = dateTagPrefix
+    }
+
     init(defaults: UserDefaults = .standard) {
         prefix = defaults.string(forKey: AppConstants.commentPrefixKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         suffix = defaults.string(forKey: AppConstants.commentSuffixKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

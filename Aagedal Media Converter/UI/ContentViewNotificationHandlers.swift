@@ -136,7 +136,42 @@ struct ContentViewNotificationHandlers: ViewModifier {
 
         guard PendingAppIntentRequests.shared.claim(notification) else { return }
 
+        let requestID = notification.userInfo?[PendingAppIntentRequests.requestIDKey] as? UUID
+
         AppIntentOperationQueue.shared.enqueue {
+            // The six presets exposed by the 4.5 application contract go through
+            // the same persisted planner and serialized executor as agent jobs.
+            // Wider presets retain the established queue path until the contract
+            // can represent their additional settings faithfully.
+            if let request = AppIntentApplicationJobBridge.makeRequest(
+                sourceURLs: fileURLs,
+                destinationFolderURL: folderURL,
+                preset: preset,
+                requestID: requestID
+            ) {
+                currentOutputFolder = folderURL
+                outputFolder = folderURL.path
+                applyPreset(preset)
+                AppIntentApplicationJobBridge.persistFileAccess(
+                    sourceURLs: request.sourceURLs,
+                    destinationFolderURL: folderURL
+                )
+                do {
+                    _ = try await ApplicationJobService.shared.planAndSubmit(request)
+                } catch {
+                    addFailedSharedSubmissionRows(
+                        sourceURLs: request.sourceURLs,
+                        outputFolder: folderURL,
+                        preset: preset,
+                        message: ApplicationAgentToolFailure(error: error).message
+                    )
+                    Self.logger.error(
+                        "Shared App Intent submission failed: \(error.localizedDescription, privacy: .public)"
+                    )
+                }
+                return
+            }
+
             for fileURL in fileURLs {
                 if var videoItem = await VideoFileUtils.createVideoItem(
                     from: fileURL,
@@ -163,5 +198,35 @@ struct ContentViewNotificationHandlers: ViewModifier {
             await startConversion()
         }
     }
-}
 
+    private func addFailedSharedSubmissionRows(
+        sourceURLs: [URL],
+        outputFolder: URL,
+        preset: ExportPreset,
+        message: String
+    ) {
+        for sourceURL in sourceURLs {
+            guard !droppedFiles.contains(where: { $0.url == sourceURL }) else { continue }
+            var item = VideoFileUtils.makePlaceholderItem(
+                from: sourceURL,
+                outputFolder: outputFolder.path,
+                preset: preset
+            ) ?? VideoItem(
+                url: sourceURL,
+                name: sourceURL.lastPathComponent,
+                size: 0,
+                duration: "--:--",
+                status: .failed,
+                progress: 0,
+                eta: nil
+            )
+            item.status = .failed
+            item.progress = 0
+            item.conversionError = message
+            item.applicationJobOrigin = .appIntent
+            item.applicationPresetID = ApplicationPresetID(exportPreset: preset)
+            droppedFiles.append(item)
+            queueOrder.append(item.id)
+        }
+    }
+}

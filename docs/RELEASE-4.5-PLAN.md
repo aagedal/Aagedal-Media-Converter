@@ -1,8 +1,8 @@
 # Proposed 4.5 release — Local agent access
 
-Status: signed local transport and visible shared-job queue projection implemented
-on `codex/release-4.5`; feasibility decision pending final-client and
-Release-package validation.
+Status: signed local transport, visible shared-job queue projection, and the
+initial Shortcut submission path implemented on `codex/release-4.5`; feasibility
+decision pending manual-path, final-client, and Release-package validation.
 Created: 2026-09-11.
 
 ## Release context
@@ -95,10 +95,19 @@ source. Rows preserve the accepted output location, follow live and terminal
 state, identify Agent or Shortcut origin plus a stable job ID, and route
 cancellation back to the service. Legacy manual selection, bulk cancellation,
 and dock progress explicitly exclude service-owned rows, preventing the old
-manager from claiming or mutating them. The manual and App Intent entry points
-still start work through `ConversionManager`, so cross-origin serialization and
-full shared-boundary adoption remain open. See the
+manager from claiming or mutating them. At this validation point, the manual and
+App Intent entry points still started work through `ConversionManager`. See the
 [visible queue validation record](4.5-visible-queue-validation-2026-09-13.md).
+
+File-bearing App Intent conversions for the initial H.264, HEVC, ProRes, Proxy,
+Audio Only, and Stream Copy subset now use the same persisted planner and
+serialized executor as MCP jobs. The handoff captures date-tag, timecode, comment,
+preset, and filename settings before suspension, preserves request identity for
+idempotency, and persists the selected files and destination grants before
+planning. Presets outside the bounded contract and the per-source “save next to
+original” mode continue through the established path rather than silently losing
+semantics. Shared-submission failures become visible failed Shortcut rows. See the
+[App Intent handoff validation record](4.5-app-intent-handoff-validation-2026-09-13.md).
 
 The six proposed agent operations now have a transport-neutral, typed workflow:
 media inspection, preset discovery, conversion planning and submission, job
@@ -126,9 +135,9 @@ MCP and returned all six resolved presets through a running app. See the
 This is still a prototype rather than a completed feasibility decision. The
 current direct-distribution target has App Sandbox disabled, two named MCP
 clients have not been exercised, and a Developer ID Release archive has not
-completed signing/notarization validation. Manual and App Intent submission,
-cross-boundary queue serialization, and immutable accepted-settings inspection
-in the queue also remain open.
+completed signing/notarization validation. Manual submission, unsupported or
+per-source-destination App Intent cases, cross-boundary queue serialization, and
+immutable accepted-settings inspection in the queue also remain open.
 
 ## Intended outcome
 

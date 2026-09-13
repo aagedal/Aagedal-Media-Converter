@@ -72,6 +72,7 @@ final class ApplicationJobContractTests: XCTestCase {
     func testRequestDecodesSnapshotsCreatedBeforeCounterCapture() throws {
         let encoded = try JSONEncoder().encode(makeRequest())
         var root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        root.removeValue(forKey: "executionSettings")
         var presetSettings = try XCTUnwrap(root["presetSettings"] as? [String: Any])
         var fileName = try XCTUnwrap(presetSettings["fileName"] as? [String: Any])
         fileName.removeValue(forKey: "counterStart")
@@ -84,6 +85,7 @@ final class ApplicationJobContractTests: XCTestCase {
             decoded.presetSettings.fileName.counterStart,
             AppConstants.defaultCustomFileNameCounterValue
         )
+        XCTAssertNil(decoded.executionSettings)
     }
 
     func testSupportedPresetSnapshotsUseStableResolvedValues() throws {
@@ -169,6 +171,40 @@ final class ApplicationJobContractTests: XCTestCase {
             from: JSONEncoder().encode(plan)
         )
         XCTAssertEqual(roundTrip, plan)
+    }
+
+    func testPlanAndSubmitUsesTheSharedPlanningAndAcceptanceBoundary() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let defaults = try makeDefaults()
+        let request = makeRequest(
+            origin: .appIntent,
+            requesterID: AppIntentApplicationJobBridge.requesterID,
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory,
+            executionSettings: ApplicationRequestExecutionSettings(appIntentDefaults: defaults),
+            idempotencyKey: "shortcut-request",
+            defaults: defaults
+        )
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let now = Date(timeIntervalSince1970: 1_800_000_200)
+
+        let acceptance = try await service.planAndSubmit(request, now: now)
+
+        XCTAssertFalse(acceptance.wasAlreadyAccepted)
+        XCTAssertEqual(acceptance.record.request.origin, .appIntent)
+        XCTAssertEqual(acceptance.record.state, .queued)
+        let outputURLs = try await service.plannedOutputURLs(
+            for: acceptance.record.id,
+            now: now
+        )
+        XCTAssertEqual(
+            outputURLs,
+            [outputDirectory.appendingPathComponent("input_h264.mp4")]
+        )
     }
 
     func testVisibleQueueUpdatesPublishAcceptedAndCancelledJobsWithPlannedOutputs() async throws {
@@ -992,6 +1028,11 @@ final class ApplicationJobContractTests: XCTestCase {
         defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
         defaults.set(CodecResolutionLimit.r720.rawValue, forKey: AppConstants.h264ResolutionLimitKey)
         defaults.set(CodecAudioFormat.pcm24.rawValue, forKey: AppConstants.h264AudioFormatKey)
+        defaults.set(true, forKey: AppConstants.includeDateTagPreferenceKey)
+        defaults.set("manual", forKey: AppConstants.defaultTimecodeModeKey)
+        defaults.set("10:11:12:13", forKey: AppConstants.defaultTimecodeValueKey)
+        defaults.set("Original", forKey: AppConstants.commentPrefixKey)
+        let executionSettings = ApplicationRequestExecutionSettings(appIntentDefaults: defaults)
 
         let harness = ApplicationFFmpegRunnerHarness()
         let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
@@ -1008,6 +1049,7 @@ final class ApplicationJobContractTests: XCTestCase {
             sourceURLs: [sourceURL],
             destinationFolderURL: outputDirectory,
             presetID: .h264,
+            executionSettings: executionSettings,
             idempotencyKey: nil,
             defaults: defaults
         ))
@@ -1015,6 +1057,9 @@ final class ApplicationJobContractTests: XCTestCase {
         defaults.set(H264Encoder.hardware.rawValue, forKey: AppConstants.h264EncoderKey)
         defaults.set("50M", forKey: AppConstants.h264BitrateKey)
         defaults.set(CodecContainer.mkv.rawValue, forKey: AppConstants.h264ContainerKey)
+        defaults.set(false, forKey: AppConstants.includeDateTagPreferenceKey)
+        defaults.set("disabled", forKey: AppConstants.defaultTimecodeModeKey)
+        defaults.set("Changed", forKey: AppConstants.commentPrefixKey)
         let accepted = try await service.submit(planID: plan.id)
         _ = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
 
@@ -1027,6 +1072,9 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(snapshot.ffmpegArguments.contains("pcm_s24le"))
         XCTAssertFalse(snapshot.ffmpegArguments.contains("h264_videotoolbox"))
         XCTAssertFalse(snapshot.ffmpegArguments.contains("50M"))
+        XCTAssertTrue(snapshot.includeDateTag)
+        XCTAssertEqual(snapshot.manualTimecode, "10:11:12:13")
+        XCTAssertEqual(snapshot.commentPrefix, "Original")
     }
 
     func testFFmpegAdapterCancellationSignalsOnlyItsActiveRunner() async throws {
@@ -1483,6 +1531,7 @@ final class ApplicationJobContractTests: XCTestCase {
         destinationFolderURL: URL? = nil,
         presetID: ApplicationPresetID = .h264,
         presetSettings: ApplicationPresetSettings? = nil,
+        executionSettings: ApplicationRequestExecutionSettings? = nil,
         idempotencyKey: String? = "request-1",
         capturedAt: Date = Date(timeIntervalSince1970: 1_800_000_000),
         defaults: UserDefaults = .standard
@@ -1496,6 +1545,7 @@ final class ApplicationJobContractTests: XCTestCase {
             destinationFolderURL: destinationFolderURL ?? destination,
             presetID: presetID,
             presetSettings: presetSettings,
+            executionSettings: executionSettings,
             idempotencyKey: idempotencyKey,
             capturedAt: capturedAt,
             defaults: defaults
@@ -1566,6 +1616,9 @@ private actor ApplicationFFmpegRunnerHarness {
         let ffmpegArguments: [String]
         let audioOnlyFormat: AudioOnlyFormat?
         let keepsSubtitles: Bool
+        let includeDateTag: Bool
+        let manualTimecode: String?
+        let commentPrefix: String?
     }
 
     private let blocksFirstRun: Bool
@@ -1582,6 +1635,11 @@ private actor ApplicationFFmpegRunnerHarness {
         conversion: ApplicationFFmpegConversion,
         progress: ApplicationFFmpegProgressSink
     ) async -> ApplicationFFmpegRunResult {
+        let manualTimecode: String? = if case .manual(let value)? = conversion.request.timecodeConfig?.mode {
+            value
+        } else {
+            nil
+        }
         recordedSnapshots.append(Snapshot(
             preset: conversion.request.preset,
             outputURL: conversion.request.outputURL,
@@ -1589,7 +1647,10 @@ private actor ApplicationFFmpegRunnerHarness {
                 ?? conversion.codecSettings?.ffmpegArguments
                 ?? [],
             audioOnlyFormat: conversion.audioOnlySettings?.format,
-            keepsSubtitles: conversion.subtitleSettings.keepSubtitles
+            keepsSubtitles: conversion.subtitleSettings.keepSubtitles,
+            includeDateTag: conversion.request.includeDateTag,
+            manualTimecode: manualTimecode,
+            commentPrefix: conversion.commentSettings?.prefix
         ))
         progress.send(0.5, status: "Encoding")
         if blocksFirstRun, recordedSnapshots.count == 1, !cancellationRequested {
