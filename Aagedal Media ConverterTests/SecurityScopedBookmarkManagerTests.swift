@@ -163,6 +163,57 @@ final class SecurityScopedBookmarkManagerTests: XCTestCase {
         XCTAssertFalse(manager.startAccessingSecurityScopedResource(for: original))
         manager.stopAccessingSecurityScopedResource(for: original)
     }
+
+    func testStoredFolderBookmarkAuthorizesDescendantAndBalancesAccess() throws {
+        let defaults = try isolatedDefaults()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("StoredBookmarkTests-\(UUID().uuidString)", isDirectory: true)
+        let child = directory.appendingPathComponent("nested/input.mov")
+        defaults.set([directory.absoluteString: Data([1])], forKey: "securityScopedBookmarks")
+        defaults.set([directory.absoluteString: false], forKey: "securityScopedBookmarksReadOnly")
+        var starts: [URL] = []
+        var stops: [URL] = []
+        let manager = SecurityScopedBookmarkManager(
+            defaults: defaults,
+            resolveData: { _ in (directory, false) },
+            startScope: { starts.append($0); return true },
+            stopScope: { stops.append($0) }
+        )
+
+        let access = manager.startAccessingStoredBookmark(
+            containing: child,
+            requiresWriteAccess: false
+        )
+        guard case .bookmark(let storageURL) = access else {
+            return XCTFail("Expected the ancestor folder bookmark to authorize its descendant")
+        }
+        XCTAssertEqual(storageURL, directory)
+        manager.stopAccessing(access)
+        XCTAssertEqual(starts, [directory])
+        XCTAssertEqual(stops, [directory])
+    }
+
+    func testReadOnlyStoredBookmarkCannotAuthorizeWritableDestination() throws {
+        let defaults = try isolatedDefaults()
+        let directory = URL(fileURLWithPath: "/selected/read-only", isDirectory: true)
+        defaults.set([directory.absoluteString: Data([1])], forKey: "securityScopedBookmarks")
+        defaults.set([directory.absoluteString: true], forKey: "securityScopedBookmarksReadOnly")
+        let manager = SecurityScopedBookmarkManager(
+            defaults: defaults,
+            resolveData: { _ in (directory, false) },
+            startScope: { _ in XCTFail("A read-only grant must be filtered before acquisition"); return true },
+            stopScope: { _ in XCTFail("No access was acquired") }
+        )
+
+        let access = manager.startAccessingStoredBookmark(
+            containing: directory,
+            requiresWriteAccess: true
+        )
+        guard case .none = access else {
+            return XCTFail("Expected writable access to be denied")
+        }
+    }
+
     func testMalformedTopLevelStoresRejectSaveWithoutErasingRecoveryData() throws {
         for key in ["securityScopedBookmarks", "securityScopedBookmarksReadOnly"] {
             for malformed: Any in [Data([0, 1, 2]), "unsupported-schema", ["invalid-array"]] {

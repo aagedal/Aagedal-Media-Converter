@@ -151,7 +151,7 @@ final class ApplicationJobContractTests: XCTestCase {
         let existingOutput = outputDirectory.appendingPathComponent("First_Clip_007_h264.mkv")
         try Data().write(to: existingOutput)
 
-        let service = ApplicationJobService()
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
         let now = Date(timeIntervalSince1970: 1_800_000_100)
         let plan = try await service.plan(request, now: now)
 
@@ -171,6 +171,84 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(roundTrip, plan)
     }
 
+    func testPlanningRequiresApprovedReadAndWriteScopes() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: sourceURL)
+        let request = makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory
+        )
+
+        let sourceDenied = ApplicationJobService(fileAccessAuthorizer: ApplicationFileAccessAuthorizer {
+            url, mode in
+            guard mode == .write, url == outputDirectory else { return nil }
+            return ApplicationFileAccessLease {}
+        })
+        do {
+            _ = try await sourceDenied.plan(request)
+            XCTFail("Expected missing source approval to be rejected")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceAccessDenied(sourceURL))
+        }
+
+        let destinationDenied = ApplicationJobService(fileAccessAuthorizer: ApplicationFileAccessAuthorizer {
+            url, mode in
+            guard mode == .read, url == sourceURL else { return nil }
+            return ApplicationFileAccessLease {}
+        })
+        do {
+            _ = try await destinationDenied.plan(request)
+            XCTFail("Expected missing writable destination approval to be rejected")
+        } catch {
+            XCTAssertEqual(
+                error as? ApplicationJobError,
+                .destinationAccessDenied(outputDirectory)
+            )
+        }
+    }
+
+    func testSubmissionRechecksRevokedFolderAccess() async throws {
+        final class GrantState: @unchecked Sendable {
+            private let lock = NSLock()
+            private var enabled = true
+
+            func revoke() {
+                lock.withLock { enabled = false }
+            }
+
+            func acquire() -> ApplicationFileAccessLease? {
+                lock.withLock { enabled ? ApplicationFileAccessLease {} : nil }
+            }
+        }
+
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try Data("source".utf8).write(to: sourceURL)
+        let grants = GrantState()
+        let service = ApplicationJobService(fileAccessAuthorizer: ApplicationFileAccessAuthorizer {
+            _, _ in grants.acquire()
+        })
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL],
+            destinationFolderURL: outputDirectory
+        ))
+
+        grants.revoke()
+        do {
+            _ = try await service.submit(planID: plan.id)
+            XCTFail("Expected revoked access to be rejected at submission")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceAccessDenied(sourceURL))
+        }
+        let records = try await service.allRecords()
+        XCTAssertTrue(records.isEmpty)
+    }
+
     func testSubmitRejectsExpiredPlansAndChangedSources() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")
@@ -182,7 +260,10 @@ final class ApplicationJobContractTests: XCTestCase {
         )
         let now = Date(timeIntervalSince1970: 1_800_000_200)
 
-        let expiringService = ApplicationJobService(planLifetime: 10)
+        let expiringService = ApplicationJobService(
+            planLifetime: 10,
+            fileAccessAuthorizer: .unrestricted
+        )
         let expiredPlan = try await expiringService.plan(request, now: now)
         do {
             _ = try await expiringService.submit(planID: expiredPlan.id, now: now.addingTimeInterval(11))
@@ -191,7 +272,7 @@ final class ApplicationJobContractTests: XCTestCase {
             XCTAssertEqual(error as? ApplicationJobError, .expiredPlan(expiredPlan.id))
         }
 
-        let changedSourceService = ApplicationJobService()
+        let changedSourceService = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
         let changedPlan = try await changedSourceService.plan(request, now: now)
         try Data("after-change".utf8).write(to: sourceURL)
         do {
@@ -215,7 +296,7 @@ final class ApplicationJobContractTests: XCTestCase {
         try Data("one".utf8).write(to: firstSource)
         try Data("two".utf8).write(to: secondSource)
 
-        let service = ApplicationJobService()
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
         let firstPlan = try await service.plan(makeRequest(
             sourceURLs: [firstSource], destinationFolderURL: outputDirectory, idempotencyKey: nil
         ))
@@ -246,7 +327,7 @@ final class ApplicationJobContractTests: XCTestCase {
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         try Data("source".utf8).write(to: sourceURL)
-        let service = ApplicationJobService()
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
         let firstRequest = makeRequest(
             requestID: UUID(),
             sourceURLs: [sourceURL],
@@ -275,7 +356,7 @@ final class ApplicationJobContractTests: XCTestCase {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")
         try Data("source".utf8).write(to: sourceURL)
-        let service = ApplicationJobService()
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
         let plan = try await service.plan(makeRequest(
             sourceURLs: [sourceURL], destinationFolderURL: directory, idempotencyKey: nil
         ))
@@ -308,7 +389,7 @@ final class ApplicationJobContractTests: XCTestCase {
         )
 
         do {
-            _ = try await ApplicationJobService().plan(request)
+            _ = try await ApplicationJobService(fileAccessAuthorizer: .unrestricted).plan(request)
             XCTFail("Expected duplicate proposed output names to be rejected")
         } catch {
             let expected = directory.appendingPathComponent("same_h264.mp4")
@@ -414,6 +495,11 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(ApplicationJobError.presetSettingsMismatch.code.rawValue, "preset_settings_mismatch")
         XCTAssertEqual(ApplicationJobError.outputCollision(destination).code.rawValue, "output_collision")
         XCTAssertEqual(ApplicationJobError.sourceChanged(source).code.rawValue, "source_changed")
+        XCTAssertEqual(ApplicationJobError.sourceAccessDenied(source).code.rawValue, "source_access_denied")
+        XCTAssertEqual(
+            ApplicationJobError.destinationAccessDenied(destination).code.rawValue,
+            "destination_access_denied"
+        )
         XCTAssertEqual(
             ApplicationJobError.invalidTransition(from: .queued, to: .succeeded).code.rawValue,
             "invalid_transition"
@@ -496,12 +582,12 @@ final class ApplicationJobContractTests: XCTestCase {
         )
         let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
 
-        let firstService = ApplicationJobService(store: store)
+        let firstService = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
         let plan = try await firstService.plan(request, now: createdAt)
         let accepted = try await firstService.submit(planID: plan.id, now: createdAt)
         _ = try await firstService.transition(accepted.record.id, to: .running, now: createdAt)
 
-        let restoredService = ApplicationJobService(store: store)
+        let restoredService = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
         let restartDate = createdAt.addingTimeInterval(60)
         let interrupted = try await restoredService.restorePersistedState(
             now: restartDate,
@@ -531,7 +617,8 @@ final class ApplicationJobContractTests: XCTestCase {
         let service = ApplicationJobService(
             planLifetime: 10,
             recordRetentionLifetime: 20,
-            store: store
+            store: store,
+            fileAccessAuthorizer: .unrestricted
         )
         let request = makeRequest(
             sourceURLs: [sourceURL],
@@ -561,7 +648,10 @@ final class ApplicationJobContractTests: XCTestCase {
         let stateURL = directory.appendingPathComponent("jobs.json")
         let damagedData = Data("{not valid json".utf8)
         try damagedData.write(to: stateURL)
-        let service = ApplicationJobService(store: ApplicationJobStore(fileURL: stateURL))
+        let service = ApplicationJobService(
+            store: ApplicationJobStore(fileURL: stateURL),
+            fileAccessAuthorizer: .unrestricted
+        )
 
         do {
             _ = try await service.plan(makeRequest())

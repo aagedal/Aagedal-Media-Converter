@@ -594,7 +594,10 @@ enum ApplicationJobError: Error, Equatable, Sendable {
     case unknownPlan(ApplicationPlanID)
     case expiredPlan(ApplicationPlanID)
     case sourceUnavailable(URL)
+    case sourceAccessDenied(URL)
     case sourceChanged(URL)
+    case destinationUnavailable(URL)
+    case destinationAccessDenied(URL)
     case unsupportedSourceExtension(URL)
     case duplicateOutput(URL)
     case outputCollision(URL)
@@ -615,7 +618,10 @@ enum ApplicationJobError: Error, Equatable, Sendable {
         case .unknownPlan: .unknownPlan
         case .expiredPlan: .expiredPlan
         case .sourceUnavailable: .sourceUnavailable
+        case .sourceAccessDenied: .sourceAccessDenied
         case .sourceChanged: .sourceChanged
+        case .destinationUnavailable: .destinationUnavailable
+        case .destinationAccessDenied: .destinationAccessDenied
         case .unsupportedSourceExtension: .unsupportedSourceExtension
         case .duplicateOutput: .duplicateOutput
         case .outputCollision: .outputCollision
@@ -640,7 +646,10 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case unknownPlan = "unknown_plan"
     case expiredPlan = "expired_plan"
     case sourceUnavailable = "source_unavailable"
+    case sourceAccessDenied = "source_access_denied"
     case sourceChanged = "source_changed"
+    case destinationUnavailable = "destination_unavailable"
+    case destinationAccessDenied = "destination_access_denied"
     case unsupportedSourceExtension = "unsupported_source_extension"
     case duplicateOutput = "duplicate_output"
     case outputCollision = "output_collision"
@@ -1028,6 +1037,59 @@ struct ApplicationConversionPlan: Codable, Equatable, Sendable {
     let warnings: [ApplicationPlanWarning]
 }
 
+enum ApplicationFileAccessMode: Equatable, Sendable {
+    case read
+    case write
+}
+
+/// A balanced security-scope lease. Planning and submission retain all source
+/// and destination grants for the full filesystem validation operation.
+final class ApplicationFileAccessLease: @unchecked Sendable {
+    private let lock = NSLock()
+    private var releaseAction: (@Sendable () -> Void)?
+
+    init(release: @escaping @Sendable () -> Void) {
+        releaseAction = release
+    }
+
+    func release() {
+        lock.lock()
+        let action = releaseAction
+        releaseAction = nil
+        lock.unlock()
+        action?()
+    }
+
+    deinit {
+        release()
+    }
+}
+
+struct ApplicationFileAccessAuthorizer: Sendable {
+    typealias Acquire = @Sendable (URL, ApplicationFileAccessMode) -> ApplicationFileAccessLease?
+
+    let acquire: Acquire
+
+    static let live = ApplicationFileAccessAuthorizer { url, mode in
+        let access = SecurityScopedBookmarkManager.shared.startAccessingStoredBookmark(
+            containing: url,
+            requiresWriteAccess: mode == .write
+        )
+        guard case .none = access else {
+            return ApplicationFileAccessLease {
+                SecurityScopedBookmarkManager.shared.stopAccessing(access)
+            }
+        }
+        return nil
+    }
+
+    /// Explicit opt-out for isolated tests whose temporary paths do not carry
+    /// App Sandbox bookmarks.
+    static let unrestricted = ApplicationFileAccessAuthorizer { _, _ in
+        ApplicationFileAccessLease {}
+    }
+}
+
 /// Owns transport-neutral plans, submit-time validation, output reservations, and
 /// job lifecycle state. Conversion execution remains a separate adapter so this
 /// boundary can be exercised without SwiftUI bindings or helper processes.
@@ -1040,6 +1102,7 @@ actor ApplicationJobService {
     private let registry: ApplicationJobRegistry
     private let sourceIdentityProvider: SourceIdentityProvider
     private let itemExists: ItemExistsProvider
+    private let fileAccessAuthorizer: ApplicationFileAccessAuthorizer
     private let planLifetime: TimeInterval
     private let recordRetentionLifetime: TimeInterval
     private let store: ApplicationJobStore?
@@ -1054,6 +1117,7 @@ actor ApplicationJobService {
         planLifetime: TimeInterval = 15 * 60,
         recordRetentionLifetime: TimeInterval = 30 * 24 * 60 * 60,
         store: ApplicationJobStore? = nil,
+        fileAccessAuthorizer: ApplicationFileAccessAuthorizer = .live,
         sourceIdentityProvider: SourceIdentityProvider? = nil,
         itemExists: @escaping ItemExistsProvider = { FileManager.default.fileExists(atPath: $0.path) }
     ) {
@@ -1061,6 +1125,7 @@ actor ApplicationJobService {
         self.planLifetime = planLifetime
         self.recordRetentionLifetime = recordRetentionLifetime
         self.store = store
+        self.fileAccessAuthorizer = fileAccessAuthorizer
         self.sourceIdentityProvider = sourceIdentityProvider ?? Self.liveSourceIdentity
         self.itemExists = itemExists
     }
@@ -1128,6 +1193,9 @@ actor ApplicationJobService {
     ) async throws -> ApplicationConversionPlan {
         try await ensureRestored(now: now)
         try ApplicationJobRegistry.validate(request)
+        let accessLeases = try acquireAccess(for: request)
+        defer { accessLeases.forEach { $0.release() } }
+        try Self.validateDestination(request.destinationFolderURL)
         let sources = try request.sourceURLs.map { try sourceIdentityProvider($0.standardizedFileURL) }
         let outputs = try Self.plannedOutputs(for: request)
 
@@ -1184,6 +1252,10 @@ actor ApplicationJobService {
         guard now <= plan.expiresAt else {
             throw ApplicationJobError.expiredPlan(planID)
         }
+
+        let accessLeases = try acquireAccess(for: plan.request)
+        defer { accessLeases.forEach { $0.release() } }
+        try Self.validateDestination(plan.request.destinationFolderURL)
 
         for captured in plan.sources {
             let current: ApplicationSourceIdentity
@@ -1341,6 +1413,45 @@ actor ApplicationJobService {
         guard let outputs = outputsByJob.removeValue(forKey: jobID) else { return }
         for output in outputs where reservedOutputs[output] == jobID {
             reservedOutputs.removeValue(forKey: output)
+        }
+    }
+
+    private func acquireAccess(
+        for request: ApplicationConversionRequest
+    ) throws -> [ApplicationFileAccessLease] {
+        var leases: [ApplicationFileAccessLease] = []
+        do {
+            for sourceURL in request.sourceURLs {
+                guard let lease = fileAccessAuthorizer.acquire(sourceURL, .read) else {
+                    throw ApplicationJobError.sourceAccessDenied(sourceURL)
+                }
+                leases.append(lease)
+            }
+            guard let destinationLease = fileAccessAuthorizer.acquire(
+                request.destinationFolderURL,
+                .write
+            ) else {
+                throw ApplicationJobError.destinationAccessDenied(request.destinationFolderURL)
+            }
+            leases.append(destinationLease)
+            return leases
+        } catch {
+            leases.forEach { $0.release() }
+            throw error
+        }
+    }
+
+    private static func validateDestination(_ url: URL) throws {
+        do {
+            let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+            guard values.isDirectory == true,
+                  FileManager.default.isWritableFile(atPath: url.path) else {
+                throw ApplicationJobError.destinationUnavailable(url)
+            }
+        } catch let error as ApplicationJobError {
+            throw error
+        } catch {
+            throw ApplicationJobError.destinationUnavailable(url)
         }
     }
 

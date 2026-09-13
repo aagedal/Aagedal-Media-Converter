@@ -61,6 +61,14 @@ their idempotency keys) are retained for 30 days. Corrupt or unsupported snapsho
 are reported and preserved instead of being silently replaced. See the
 [persistence validation record](4.5-persistence-validation-2026-09-13.md).
 
+Planning and submission now require persisted user-approved security-scoped
+access for every source and writable access for the destination. The service
+uses the narrowest matching file or ancestor-folder bookmark, retains balanced
+access for the whole filesystem validation operation, and rechecks grants at
+submission so revoked access cannot enqueue work. Stable permission errors
+separate missing source and destination grants. See the
+[folder-authorization validation record](4.5-folder-authorization-validation-2026-09-13.md).
+
 ## Intended outcome
 
 An agent on the user's Mac can inspect media, discover the user's presets, plan

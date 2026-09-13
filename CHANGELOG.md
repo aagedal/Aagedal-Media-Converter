@@ -25,6 +25,10 @@ remain subject to the feasibility milestone.
 - Persisted versioned plans, job records, and idempotency identities atomically.
   App restart now restores terminal results, marks unfinished work interrupted,
   and prunes expired plans and terminal history under explicit retention windows.
+- Required persisted user-approved read access for every planned source and a
+  writable grant for the destination. Planning and submission balance the
+  narrowest matching security-scoped bookmark, and submission rejects access
+  that was revoked after planning with stable permission error codes.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

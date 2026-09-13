@@ -11,7 +11,7 @@ import Foundation
 import OSLog
 
 /// Tracks which security-scoped access method succeeded for correct cleanup.
-enum SecurityScopedAccess {
+enum SecurityScopedAccess: Sendable {
     case none
     case direct(URL)
     case bookmark(URL)
@@ -131,6 +131,63 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         return true
     }
 
+    /// Opens the narrowest persisted security-scoped grant that contains `url`.
+    /// This is used by non-interactive entry points, which must not treat ordinary
+    /// sandbox visibility as user approval. A legacy bookmark without recorded
+    /// access mode is allowed for writes because older app versions only saved
+    /// writable grants for output locations.
+    func startAccessingStoredBookmark(
+        containing url: URL,
+        requiresWriteAccess: Bool
+    ) -> SecurityScopedAccess {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey) else {
+            return .none
+        }
+        let modes = userDefaults.dictionary(forKey: readOnlyKey) ?? [:]
+        let target = url.standardizedFileURL.resolvingSymlinksInPath()
+        var candidates: [(storageURL: URL, resolvedURL: URL)] = []
+
+        for (key, value) in bookmarks {
+            guard value is Data,
+                  let storageURL = URL(string: key),
+                  storageURL.isFileURL,
+                  !(requiresWriteAccess && (modes[key] as? Bool) == true) else { continue }
+            let resolvedURL: URL
+            if let active = activeBookmarks[storageURL] {
+                // Do not resolve again while a borrower owns the old resolution;
+                // its eventual stop must remain paired with that exact URL.
+                resolvedURL = active.url
+            } else if let resolved = resolveBookmark(for: storageURL) {
+                resolvedURL = resolved
+            } else {
+                continue
+            }
+            let resolved = resolvedURL.standardizedFileURL.resolvingSymlinksInPath()
+            guard Self.url(target, isContainedBy: resolved) else { continue }
+            candidates.append((storageURL, resolvedURL))
+        }
+
+        // Prefer an exact file/folder grant, then the closest ancestor folder.
+        candidates.sort {
+            $0.resolvedURL.standardizedFileURL.pathComponents.count
+                > $1.resolvedURL.standardizedFileURL.pathComponents.count
+        }
+        for candidate in candidates {
+            if var active = activeBookmarks[candidate.storageURL] {
+                active.count += 1
+                activeBookmarks[candidate.storageURL] = active
+                return .bookmark(candidate.storageURL)
+            }
+            guard startScope(candidate.resolvedURL) else { continue }
+            activeBookmarks[candidate.storageURL] = (candidate.resolvedURL, 1)
+            return .bookmark(candidate.storageURL)
+        }
+        return .none
+    }
+
     func stopAccessingSecurityScopedResource(for url: URL) {
         lock.lock()
         defer { lock.unlock() }
@@ -158,5 +215,12 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         case .bookmark(let url): stopAccessingSecurityScopedResource(for: url)
         case .none: break
         }
+    }
+
+    private static func url(_ target: URL, isContainedBy scope: URL) -> Bool {
+        let targetComponents = target.pathComponents
+        let scopeComponents = scope.pathComponents
+        guard scopeComponents.count <= targetComponents.count else { return false }
+        return Array(targetComponents.prefix(scopeComponents.count)) == scopeComponents
     }
 }
