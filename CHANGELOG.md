@@ -64,10 +64,11 @@ and Release-package validation remain open.
 - Routed ordinary ungrouped manual conversions for the same six presets through
   the persisted application planner and serialized executor. Manual batches keep
   their existing visible rows and preserve per-file comments, trim, crop, mute,
-  date-tag, and timecode choices. Those settings are validated, persisted, shown
-  in each row's accepted-settings inspector, and applied without re-reading the
-  queue or current preferences. Audio routing, custom names, groups, post-actions,
-  and per-source destinations still fall back before submission.
+  audio routing, custom output names, date-tag, and timecode choices. Those
+  settings are validated, persisted, shown in each row's accepted-settings
+  inspector, and applied without re-reading the queue or current preferences.
+  Groups, generated waveform behavior, post-actions, and per-source destinations
+  still fall back before submission.
 - Added a queue inspector for every shared job's immutable accepted settings,
   including codecs, container, quality/rate controls, metadata, subtitles,
   filename policy, destination, and capture time.

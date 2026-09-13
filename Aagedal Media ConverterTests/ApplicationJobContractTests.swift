@@ -543,6 +543,14 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     func testValidationRejectsUnsupportedOrUnsafeBoundaryValues() async {
+        let audioTrack = AudioTrackInfo(
+            streamIndex: 0, channels: 2, channelLayout: "stereo", codec: "aac",
+            codecLongName: nil, sampleRate: 48_000
+        )
+        var invalidRouting = AudioRoutingConfig(inputTracks: [audioTrack])
+        invalidRouting.channelOperation = .extractChannel(
+            trackIndex: 0, channelIndex: 2, channelName: "out-of-range"
+        )
         let cases: [(ApplicationConversionRequest, ApplicationJobError)] = [
             (makeRequest(schemaVersion: 2), .unsupportedSchema(2)),
             (makeRequest(requesterID: " client "), .invalidRequesterID),
@@ -576,6 +584,18 @@ final class ApplicationJobContractTests: XCTestCase {
                 cropConfig: CropConfig(
                     normalizedRect: CropRect(x: 0.5, y: 0, width: 0.75, height: 1)
                 )
+            )]), .invalidSourceSettings(source)),
+            (makeRequest(sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: source,
+                includeDateTag: false,
+                timecodeConfig: nil,
+                audioRoutingConfig: invalidRouting
+            )]), .invalidSourceSettings(source)),
+            (makeRequest(sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: source,
+                includeDateTag: false,
+                timecodeConfig: nil,
+                outputBaseNameOverride: "../outside"
             )]), .invalidSourceSettings(source))
         ]
 
@@ -1068,12 +1088,20 @@ final class ApplicationJobContractTests: XCTestCase {
             cropConfig: CropConfig(
                 normalizedRect: CropRect(x: 0.1, y: 0.2, width: 0.8, height: 0.6)
             ),
-            isMuted: true
+            isMuted: true,
+            outputBaseNameOverride: "custom-output"
         )
         let secondSourceSettings = ApplicationSourceExecutionSettings(
             sourceURL: secondSourceURL,
             includeDateTag: true,
-            timecodeConfig: nil
+            timecodeConfig: nil,
+            audioRoutingConfig: AudioRoutingConfig(
+                inputTracks: [AudioTrackInfo(
+                    streamIndex: 0, channels: 6, channelLayout: "5.1", codec: "aac",
+                    codecLongName: nil, sampleRate: 48_000
+                )],
+                outputTracks: [OutputTrack(streamIndex: 0, downmixToStereo: true)]
+            )
         )
 
         let harness = ApplicationFFmpegRunnerHarness()
@@ -1123,10 +1151,15 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(snapshot.trimEnd, 4.5)
         XCTAssertEqual(snapshot.cropConfig, sourceSettings.cropConfig)
         XCTAssertTrue(snapshot.isMuted)
+        XCTAssertEqual(snapshot.outputURL.lastPathComponent, "custom-output.mov")
         XCTAssertEqual(snapshot.commentPrefix, "Original")
         XCTAssertTrue(capturedSnapshots[1].includeDateTag)
         XCTAssertNil(capturedSnapshots[1].manualTimecode)
         XCTAssertEqual(capturedSnapshots[1].comment, "")
+        XCTAssertEqual(
+            capturedSnapshots[1].audioRoutingConfig,
+            secondSourceSettings.audioRoutingConfig
+        )
     }
 
     func testFFmpegAdapterCancellationSignalsOnlyItsActiveRunner() async throws {
@@ -1677,6 +1710,7 @@ private actor ApplicationFFmpegRunnerHarness {
         let trimEnd: Double?
         let cropConfig: CropConfig?
         let isMuted: Bool
+        let audioRoutingConfig: AudioRoutingConfig?
         let commentPrefix: String?
     }
 
@@ -1714,6 +1748,7 @@ private actor ApplicationFFmpegRunnerHarness {
             trimEnd: conversion.request.trimEnd,
             cropConfig: conversion.request.cropConfig,
             isMuted: conversion.request.isMuted,
+            audioRoutingConfig: conversion.request.audioRoutingConfig,
             commentPrefix: conversion.commentSettings?.prefix
         ))
         progress.send(0.5, status: "Encoding")

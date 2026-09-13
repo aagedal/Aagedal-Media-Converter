@@ -136,7 +136,7 @@ enum ManualApplicationJobBridge {
             }
         }
 
-        return ApplicationConversionRequest(
+        let request = ApplicationConversionRequest(
             origin: .manual,
             requesterID: requesterID,
             sourceURLs: items.map(\.url),
@@ -157,12 +157,16 @@ enum ManualApplicationJobBridge {
                     trimStart: $0.trimStart,
                     trimEnd: $0.trimEnd,
                     cropConfig: $0.cropConfig,
-                    isMuted: $0.isMuted
+                    isMuted: $0.isMuted,
+                    audioRoutingConfig: $0.audioRoutingConfig,
+                    outputBaseNameOverride: $0.outputFileNameOverride
                 )
             },
             capturedAt: capturedAt,
             defaults: defaults
         )
+        guard (try? ApplicationJobRegistry.validate(request)) != nil else { return nil }
+        return request
     }
 
     private static func isRepresentable(_ item: VideoItem, preset: ExportPreset) -> Bool {
@@ -171,13 +175,13 @@ enum ManualApplicationJobBridge {
             && item.applicationJobID == nil
             && item.isEncodable
             && !item.isImageSequence
-            && item.audioRoutingConfig == nil
+            && (item.audioRoutingConfig == nil
+                || (preset.outputsAudioTrack && preset.appliesAudioRouting))
             && (!hasActiveCrop || preset.outputsVisualFrames)
             && (!item.isMuted || (preset.outputsVideoTrack && preset != .streamCopy))
             && (preset != .streamCopy || !hasActiveCrop)
             && !item.waveformVideoEnabled
             && item.waveformBackgroundImageURL == nil
-            && item.outputFileNameOverride == nil
             && !item.uploadEnabled
             && !item.subtitleEnabled
             && !item.analyticsEnabled

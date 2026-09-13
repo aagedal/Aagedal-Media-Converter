@@ -177,6 +177,14 @@ final class AppIntentHandoffTests: XCTestCase {
             normalizedRect: CropRect(x: 0.1, y: 0.2, width: 0.8, height: 0.6)
         )
         firstItem.isMuted = true
+        firstItem.audioRoutingConfig = AudioRoutingConfig(
+            inputTracks: [AudioTrackInfo(
+                streamIndex: 0, channels: 6, channelLayout: "5.1", codec: "aac",
+                codecLongName: nil, sampleRate: 48_000
+            )],
+            outputTracks: [OutputTrack(streamIndex: 0, downmixToStereo: true)]
+        )
+        firstItem.outputFileNameOverride = "first-custom"
 
         var secondItem = makeItem(url: second)
         secondItem.includeDateTag.toggle()
@@ -194,6 +202,8 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertEqual(sourceSettings[0].trimEnd, 4)
         XCTAssertEqual(sourceSettings[0].cropConfig, firstItem.cropConfig)
         XCTAssertTrue(sourceSettings[0].isMuted)
+        XCTAssertEqual(sourceSettings[0].audioRoutingConfig, firstItem.audioRoutingConfig)
+        XCTAssertEqual(sourceSettings[0].outputBaseNameOverride, "first-custom")
         XCTAssertEqual(sourceSettings[1].includeDateTag, secondItem.includeDateTag)
         XCTAssertEqual(sourceSettings[1].timecodeMode, .manual)
         XCTAssertEqual(sourceSettings[1].manualTimecode, "02:03:04:05")
@@ -204,6 +214,7 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertTrue(summary.contains("Trim end: 4 s"))
         XCTAssertTrue(summary.contains("Crop: On"))
         XCTAssertTrue(summary.contains("Audio: Muted"))
+        XCTAssertTrue(summary.contains("Output name: first-custom"))
     }
 
     func testManualBridgeFallsBackWhenBehaviorCannotBeRepresented() throws {
@@ -219,10 +230,17 @@ final class AppIntentHandoffTests: XCTestCase {
             mergeClipsEnabled: true, defaults: defaults
         ))
 
-        var customized = ordinary
-        customized.audioRoutingConfig = AudioRoutingConfig(inputTracks: [])
+        var unsupportedRouting = ordinary
+        unsupportedRouting.audioRoutingConfig = AudioRoutingConfig(inputTracks: [])
         XCTAssertNil(ManualApplicationJobBridge.makeRequest(
-            items: [customized], destinationFolderURL: folder, preset: .h264,
+            items: [unsupportedRouting], destinationFolderURL: folder, preset: .streamCopy,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        var unsafeName = ordinary
+        unsafeName.outputFileNameOverride = "../outside"
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [unsafeName], destinationFolderURL: folder, preset: .h264,
             mergeClipsEnabled: false, defaults: defaults
         ))
 

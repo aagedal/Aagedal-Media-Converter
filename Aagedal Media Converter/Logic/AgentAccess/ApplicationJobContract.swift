@@ -311,6 +311,8 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
     let trimEnd: Double?
     let cropConfig: CropConfig?
     let isMuted: Bool
+    let audioRoutingConfig: AudioRoutingConfig?
+    let outputBaseNameOverride: String?
 
     init(
         sourceURL: URL,
@@ -320,7 +322,9 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
         trimStart: Double? = nil,
         trimEnd: Double? = nil,
         cropConfig: CropConfig? = nil,
-        isMuted: Bool = false
+        isMuted: Bool = false,
+        audioRoutingConfig: AudioRoutingConfig? = nil,
+        outputBaseNameOverride: String? = nil
     ) {
         self.sourceURL = sourceURL
         self.comment = comment
@@ -340,6 +344,8 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
         self.trimEnd = trimEnd
         self.cropConfig = cropConfig
         self.isMuted = isMuted
+        self.audioRoutingConfig = audioRoutingConfig
+        self.outputBaseNameOverride = outputBaseNameOverride
     }
 
     fileprivate var timecodeConfig: TimecodeConfig? {
@@ -354,7 +360,8 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
     }
 
     fileprivate var hasVisibleAdjustment: Bool {
-        !comment.isEmpty || trimStart != nil || trimEnd != nil || cropConfig?.isActive == true || isMuted
+        !comment.isEmpty || trimStart != nil || trimEnd != nil || cropConfig?.isActive == true
+            || isMuted || audioRoutingConfig != nil || outputBaseNameOverride != nil
     }
 }
 
@@ -807,6 +814,11 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
             }
             if sourceExecutionSettings?.isMuted == true {
                 lines.append("Audio: Muted")
+            } else if let routing = sourceExecutionSettings?.audioRoutingConfig {
+                lines.append("Audio routing: \(routing.channelOperation?.shortLabel ?? "Custom tracks")")
+            }
+            if let outputBaseNameOverride = sourceExecutionSettings?.outputBaseNameOverride {
+                lines.append("Output name: \(outputBaseNameOverride)")
             }
         }
         let filename = settings.fileName
@@ -1245,6 +1257,11 @@ actor ApplicationJobRegistry {
                 guard settings.sourceURL == sourceURL,
                       Self.validTrim(start: settings.trimStart, end: settings.trimEnd),
                       Self.validCrop(settings.cropConfig),
+                      Self.validAudioRouting(
+                          settings.audioRoutingConfig,
+                          for: request.presetID.exportPreset
+                      ),
+                      Self.validOutputBaseNameOverride(settings.outputBaseNameOverride),
                       settings.timecodeMode != .manual
                         || settings.manualTimecode?.isEmpty == false else {
                     throw ApplicationJobError.invalidSourceSettings(sourceURL)
@@ -1283,6 +1300,48 @@ actor ApplicationJobRegistry {
             && rect.width > 0 && rect.height > 0
             && rect.x + rect.width <= 1.000_001
             && rect.y + rect.height <= 1.000_001
+    }
+
+    private static func validOutputBaseNameOverride(_ value: String?) -> Bool {
+        guard let value else { return true }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value == trimmed, !value.isEmpty, value.count <= 240 else { return false }
+        let unsafe = CharacterSet(charactersIn: "/\\:").union(.controlCharacters)
+        return value.unicodeScalars.allSatisfy { !unsafe.contains($0) }
+    }
+
+    private static func validAudioRouting(
+        _ config: AudioRoutingConfig?,
+        for preset: ExportPreset
+    ) -> Bool {
+        guard let config else { return true }
+        guard preset.outputsAudioTrack, preset.appliesAudioRouting else { return false }
+
+        let inputIndices = config.inputTracks.map(\.streamIndex)
+        let inputIndexSet = Set(inputIndices)
+        guard inputIndices.allSatisfy({ $0 >= 0 }), inputIndexSet.count == inputIndices.count,
+              Set(config.outputTracks.map(\.id)).count == config.outputTracks.count,
+              config.outputTracks.allSatisfy({
+                  inputIndexSet.contains($0.streamIndex) && $0.mcaOverride == nil
+              }) else {
+            return false
+        }
+
+        guard let operation = config.channelOperation else { return true }
+        switch operation {
+        case .mergeToStereo(let trackIndices):
+            return trackIndices.count >= 2
+                && Set(trackIndices).count == trackIndices.count
+                && trackIndices.allSatisfy(inputIndexSet.contains)
+        case .splitToMono(let trackIndex), .swapChannels(let trackIndex):
+            return inputIndexSet.contains(trackIndex)
+                && (config.trackInfo(for: trackIndex)?.channels ?? 0) >= 2
+        case .extractChannel(let trackIndex, let channelIndex, let channelName):
+            return inputIndexSet.contains(trackIndex)
+                && channelIndex >= 0
+                && channelIndex < (config.trackInfo(for: trackIndex)?.channels ?? 0)
+                && !channelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     private static func canTransition(
@@ -1600,6 +1659,7 @@ actor ApplicationFFmpegJobExecutor {
                     ?? false,
                 trimStart: sourceSettings?.trimStart,
                 trimEnd: sourceSettings?.trimEnd,
+                audioRoutingConfig: sourceSettings?.audioRoutingConfig,
                 cropConfig: sourceSettings?.cropConfig,
                 timecodeConfig: sourceSettings.map(\.timecodeConfig)
                     ?? executionSettings?.timecodeConfig,
@@ -2592,6 +2652,7 @@ actor ApplicationJobService {
             let counter = counterResult.overflow ? Int.max : counterResult.partialValue
             let baseName = FileNameProcessor.outputBaseName(
                 inputURL: sourceURL,
+                override: request.sourceSettings?[index].outputBaseNameOverride,
                 counter: counter,
                 preset: request.presetID.exportPreset,
                 settings: preferences,

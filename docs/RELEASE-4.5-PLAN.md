@@ -130,6 +130,15 @@ groups/merge, generated waveform behavior, post-actions, and per-source
 destinations remain on the legacy path. See the
 [per-source handoff validation record](4.5-per-source-handoff-validation-2026-09-13.md).
 
+Per-source snapshots now also carry manual audio routing and custom output base
+names. Routing validation rejects unknown or duplicate stream identities,
+out-of-range channel operations, unsupported presets, and MCA options outside
+the six-preset contract. Custom names are bounded and path-safe, participate in
+duplicate-output and collision checks, and remain attached to the exact source
+through execution and queue inspection. Groups/merge, generated waveform
+behavior, post-actions, and per-source destinations remain on the legacy path.
+See the [routing and naming validation record](4.5-routing-naming-validation-2026-09-13.md).
+
 The six proposed agent operations now have a transport-neutral, typed workflow:
 media inspection, preset discovery, conversion planning and submission, job
 lookup, and cancellation. Inspection requires an existing user-approved read
@@ -156,9 +165,9 @@ MCP and returned all six resolved presets through a running app. See the
 This is still a prototype rather than a completed feasibility decision. The
 current direct-distribution target has App Sandbox disabled, two named MCP
 clients have not been exercised, and a Developer ID Release archive has not
-completed signing/notarization validation. Manual audio routing, custom names,
-groups/merge, generated waveform behavior, post-actions, and unsupported or
-per-source-destination App Intent cases still use the legacy executor, so full
+completed signing/notarization validation. Groups/merge, generated waveform
+behavior, post-actions, and unsupported or per-source-destination App Intent
+cases still use the legacy executor, so full
 cross-boundary serialization remains open. Localization and the packaged
 end-to-end acceptance matrix also remain open.
 
