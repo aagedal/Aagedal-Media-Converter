@@ -127,6 +127,73 @@ final class AppIntentHandoffTests: XCTestCase {
         ))
     }
 
+    func testManualBridgeCapturesOrderedRowsAndTheirExecutionSettings() throws {
+        let defaults = try makeIsolatedDefaults()
+        defaults.set(CodecContainer.mov.rawValue, forKey: AppConstants.h264ContainerKey)
+        var firstItem = makeItem(url: second)
+        firstItem.includeDateTag = false
+        firstItem.timecodeConfig = TimecodeConfig(mode: .manual("01:02:03:04"))
+        var secondItem = makeItem(url: first)
+        secondItem.includeDateTag = false
+        secondItem.timecodeConfig = firstItem.timecodeConfig
+        let capturedAt = Date(timeIntervalSince1970: 5678)
+
+        let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
+            items: [firstItem, secondItem],
+            destinationFolderURL: folder,
+            preset: .h264,
+            mergeClipsEnabled: false,
+            capturedAt: capturedAt,
+            defaults: defaults
+        ))
+
+        XCTAssertEqual(request.origin, .manual)
+        XCTAssertEqual(request.requesterID, ManualApplicationJobBridge.requesterID)
+        XCTAssertEqual(request.sourceURLs, [second, first])
+        XCTAssertEqual(request.destinationFolderURL, folder)
+        XCTAssertEqual(request.presetID, .h264)
+        XCTAssertEqual(request.presetSettings.containerID, .mov)
+        XCTAssertEqual(request.executionSettings?.includeDateTag, false)
+        XCTAssertEqual(request.executionSettings?.timecodeMode, .manual)
+        XCTAssertEqual(request.executionSettings?.manualTimecode, "01:02:03:04")
+        XCTAssertNil(request.idempotencyKey)
+        XCTAssertEqual(request.capturedAt, capturedAt)
+
+        defaults.set(CodecContainer.mp4.rawValue, forKey: AppConstants.h264ContainerKey)
+        let summary = request.acceptedSettingsSummary
+        XCTAssertTrue(summary.contains("Container: MOV"))
+        XCTAssertTrue(summary.contains("Timecode: 01:02:03:04"))
+        XCTAssertTrue(summary.contains("Destination: /outputs"))
+    }
+
+    func testManualBridgeFallsBackWhenBehaviorCannotBeRepresented() throws {
+        let defaults = try makeIsolatedDefaults()
+        let ordinary = makeItem(url: first)
+
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [ordinary], destinationFolderURL: folder, preset: .videoLoop,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [ordinary], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: true, defaults: defaults
+        ))
+
+        var customized = ordinary
+        customized.trimStart = 1
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [customized], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        var differentExecutionSettings = makeItem(url: second)
+        differentExecutionSettings.includeDateTag.toggle()
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [ordinary, differentExecutionSettings], destinationFolderURL: folder,
+            preset: .h264, mergeClipsEnabled: false, defaults: defaults
+        ))
+    }
+
     @MainActor
     func testSharedBridgePersistsReadAndWritableIntentGrants() throws {
         let defaults = try makeIsolatedDefaults()
@@ -155,6 +222,18 @@ final class AppIntentHandoffTests: XCTestCase {
             containing: folder.appendingPathComponent("output.mov"),
             requiresWriteAccess: true
         ) else { return XCTFail("Expected the destination write grant") }
+    }
+
+    private func makeItem(url: URL) -> VideoItem {
+        VideoItem(
+            url: url,
+            name: url.lastPathComponent,
+            size: 1,
+            duration: "00:00:01",
+            status: .waiting,
+            progress: 0,
+            eta: nil
+        )
     }
 
     @MainActor

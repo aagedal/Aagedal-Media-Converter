@@ -1021,6 +1021,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 conversionError: item.conversionError,
                 applicationJobID: item.applicationJobID,
                 applicationJobOrigin: item.applicationJobOrigin,
+                applicationJobSettingsSummary: item.applicationJobSettingsSummary,
                 comment: item.comment,
                 includeDateTag: item.includeDateTag,
                 outputURL: item.outputURL,

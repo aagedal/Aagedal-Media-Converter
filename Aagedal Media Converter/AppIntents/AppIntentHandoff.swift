@@ -95,3 +95,99 @@ enum AppIntentApplicationJobBridge {
         _ = bookmarks.saveWritableBookmark(for: destinationFolderURL.standardizedFileURL)
     }
 }
+
+/// Routes the ordinary manual conversions representable by the v1 application
+/// contract through the same serialized executor as Shortcut and agent work.
+/// Items with per-file behavior that the contract cannot preserve stay on the
+/// established ConversionManager path.
+enum ManualApplicationJobBridge {
+    static let requesterID = "manual-ui"
+
+    static func makeRequest(
+        items: [VideoItem],
+        destinationFolderURL: URL,
+        preset: ExportPreset,
+        mergeClipsEnabled: Bool,
+        capturedAt: Date = Date(),
+        defaults: UserDefaults = .standard
+    ) -> ApplicationConversionRequest? {
+        guard !mergeClipsEnabled,
+              let presetID = ApplicationPresetID(exportPreset: preset),
+              !OutputDestinationSettings(defaults: defaults).saveNextToOriginal,
+              !items.isEmpty,
+              items.allSatisfy(isRepresentable) else {
+            return nil
+        }
+
+        var sources = Set<URL>()
+        guard items.allSatisfy({ sources.insert($0.url.standardizedFileURL).inserted }) else {
+            return nil
+        }
+
+        guard let first = items.first,
+              items.allSatisfy({
+                  $0.includeDateTag == first.includeDateTag
+                      && $0.timecodeConfig == first.timecodeConfig
+              }) else {
+            return nil
+        }
+
+        let settings = ApplicationPresetSettings(presetID: presetID, defaults: defaults)
+        if settings.fileName.fileNamePreferences.customTemplateUsesCounter {
+            for (index, item) in items.enumerated() {
+                let expected = settings.fileName.counterStart.addingReportingOverflow(index)
+                guard !expected.overflow, item.customCounterValue == expected.partialValue else {
+                    return nil
+                }
+            }
+        }
+
+        return ApplicationConversionRequest(
+            origin: .manual,
+            requesterID: requesterID,
+            sourceURLs: items.map(\.url),
+            destinationFolderURL: destinationFolderURL,
+            presetID: presetID,
+            presetSettings: settings,
+            executionSettings: ApplicationRequestExecutionSettings(
+                includeDateTag: first.includeDateTag,
+                timecodeConfig: first.timecodeConfig,
+                defaults: defaults
+            ),
+            capturedAt: capturedAt,
+            defaults: defaults
+        )
+    }
+
+    private static func isRepresentable(_ item: VideoItem) -> Bool {
+        item.status == .waiting
+            && item.applicationJobID == nil
+            && item.isEncodable
+            && !item.isImageSequence
+            && item.trimStart == nil
+            && item.trimEnd == nil
+            && item.audioRoutingConfig == nil
+            && item.cropConfig == nil
+            && !item.isMuted
+            && !item.waveformVideoEnabled
+            && item.waveformBackgroundImageURL == nil
+            && item.comment.isEmpty
+            && item.outputFileNameOverride == nil
+            && !item.uploadEnabled
+            && !item.subtitleEnabled
+            && !item.analyticsEnabled
+    }
+
+    @MainActor
+    static func persistFileAccess(
+        sourceURLs: [URL],
+        destinationFolderURL: URL,
+        bookmarks: SecurityScopedBookmarkManager = .shared
+    ) {
+        AppIntentApplicationJobBridge.persistFileAccess(
+            sourceURLs: sourceURLs,
+            destinationFolderURL: destinationFolderURL,
+            bookmarks: bookmarks
+        )
+    }
+}

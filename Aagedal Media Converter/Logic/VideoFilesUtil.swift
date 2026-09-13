@@ -794,6 +794,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var applicationJobSourceIndex: Int? = nil
     var applicationJobOrigin: ApplicationJobOrigin? = nil
     var applicationPresetID: ApplicationPresetID? = nil
+    var applicationJobSettingsSummary: String? = nil
     /// Whether audio should be muted (removed) in the output
     var isMuted: Bool = false
     /// Image sequence configuration (nil for regular video/audio files)

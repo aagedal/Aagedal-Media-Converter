@@ -119,6 +119,7 @@ struct ContentView: View {
     @State private var queueOrder: [UUID] = []
     @State private var dismissedApplicationJobIDs = Set<ApplicationJobID>()
     @State private var applicationJobVisibilityStart = Date().addingTimeInterval(-60)
+    @State private var pendingManualApplicationJobItems: [UUID: [UUID]] = [:]
 
     @StateObject private var updateChecker = UpdateChecker.shared
     @State private var showUpdateNotification = false
@@ -1816,6 +1817,25 @@ struct ContentView: View {
                     continue
                 }
 
+                // Manual shared submissions already have visible queue rows.
+                // Claim the exact row reserved for this request instead of
+                // guessing from a path that may also appear in older history.
+                if record.request.origin == .manual,
+                   let itemIDs = pendingManualApplicationJobItems[record.request.requestID],
+                   itemIDs.indices.contains(sourceIndex),
+                   let itemIndex = droppedFiles.firstIndex(where: {
+                       $0.id == itemIDs[sourceIndex]
+                           && ($0.applicationJobID == nil || $0.applicationJobID == record.id)
+                   }) {
+                    applyApplicationJob(
+                        record,
+                        sourceIndex: sourceIndex,
+                        outputURL: outputURL,
+                        to: &droppedFiles[itemIndex]
+                    )
+                    continue
+                }
+
                 let preset = record.request.presetID.exportPreset
                 var item = VideoFileUtils.makePlaceholderItem(
                     from: sourceURL,
@@ -1868,6 +1888,7 @@ struct ContentView: View {
         item.applicationJobSourceIndex = sourceIndex
         item.applicationJobOrigin = record.request.origin
         item.applicationPresetID = record.request.presetID
+        item.applicationJobSettingsSummary = record.request.acceptedSettingsSummary
         item.outputURL = outputURL
         item.progress = record.progress ?? 0
         item.eta = nil
@@ -1904,6 +1925,29 @@ struct ContentView: View {
         // Initialize dock progress with 0% to show it immediately
         dockProgressUpdater.updateProgress(0.0)
         sanitizeQueueOrder()
+
+        // When every pending row belongs to the ordinary v1 preset subset, hand
+        // the whole manual batch to the application-owned queue. Mixed/grouped or
+        // customized work remains on the legacy path so no setting is discarded.
+        let hasWaitingGroup = encodingGroups.contains {
+            $0.items.contains { $0.status == .waiting }
+        }
+        let orderedWaitingItems = queueOrder.compactMap { id in
+            droppedFiles.first { item in
+                item.id == id && item.status == .waiting && item.applicationJobID == nil
+            }
+        }
+        if !hasWaitingGroup,
+           orderedWaitingItems.count == droppedFiles.filter({
+               $0.status == .waiting && $0.applicationJobID == nil
+           }).count,
+           await submitManualApplicationJobIfSupported(
+               items: orderedWaitingItems,
+               mergeClipsEnabled: mergeClipsEnabled
+           ) {
+            isConverting = false
+            return
+        }
 
         // Convert in queue order: batch consecutive ungrouped items, then groups
         var i = 0
@@ -1985,6 +2029,11 @@ struct ContentView: View {
         }) else { return }
         isConverting = true
         dockProgressUpdater.updateProgress(0.0)
+        if let item = droppedFiles.first(where: { $0.id == itemID }),
+           await submitManualApplicationJobIfSupported(items: [item], mergeClipsEnabled: false) {
+            isConverting = false
+            return
+        }
         await ConversionManager.shared.startConversion(
             droppedFiles: $droppedFiles,
             outputFolder: currentOutputFolder.path,
@@ -1994,6 +2043,64 @@ struct ContentView: View {
         )
         isConverting = false
         SoundManager.shared.playSuccess()
+    }
+
+    /// Returns true once the work was either accepted by the shared service or
+    /// rejected there and made visibly failed. False means the v1 contract could
+    /// not represent the rows and the caller should use the established path.
+    @MainActor
+    private func submitManualApplicationJobIfSupported(
+        items: [VideoItem],
+        mergeClipsEnabled: Bool
+    ) async -> Bool {
+        guard let request = ManualApplicationJobBridge.makeRequest(
+            items: items,
+            destinationFolderURL: currentOutputFolder,
+            preset: selectedPreset,
+            mergeClipsEnabled: mergeClipsEnabled
+        ) else {
+            return false
+        }
+
+        ManualApplicationJobBridge.persistFileAccess(
+            sourceURLs: request.sourceURLs,
+            destinationFolderURL: request.destinationFolderURL
+        )
+        pendingManualApplicationJobItems[request.requestID] = items.map(\.id)
+
+        do {
+            let acceptance = try await ApplicationJobService.shared.planAndSubmit(request)
+            let record = try await ApplicationJobService.shared.record(for: acceptance.record.id)
+                ?? acceptance.record
+            let outputs = try await ApplicationJobService.shared.plannedOutputURLs(for: record.id)
+            for (sourceIndex, item) in items.enumerated() {
+                guard let index = droppedFiles.firstIndex(where: { $0.id == item.id }) else { continue }
+                let outputURL = outputs.indices.contains(sourceIndex) ? outputs[sourceIndex] : nil
+                applyApplicationJob(
+                    record,
+                    sourceIndex: sourceIndex,
+                    outputURL: outputURL,
+                    to: &droppedFiles[index]
+                )
+            }
+            pendingManualApplicationJobItems.removeValue(forKey: request.requestID)
+        } catch {
+            let message = ApplicationAgentToolFailure(error: error).message
+            for item in items {
+                guard let index = droppedFiles.firstIndex(where: {
+                    $0.id == item.id && $0.status == .waiting && $0.applicationJobID == nil
+                }) else { continue }
+                droppedFiles[index].status = .failed
+                droppedFiles[index].progress = 0
+                droppedFiles[index].statusMessage = "Shared job submission failed"
+                droppedFiles[index].conversionError = message
+                droppedFiles[index].applicationJobOrigin = .manual
+                droppedFiles[index].applicationPresetID = ApplicationPresetID(exportPreset: selectedPreset)
+            }
+            pendingManualApplicationJobItems.removeValue(forKey: request.requestID)
+            Self.logger.error("Shared manual submission failed: \(error.localizedDescription, privacy: .public)")
+        }
+        return true
     }
 
     /// Encodes all waiting items in a single group immediately (Option+click on the

@@ -2,8 +2,8 @@
 
 4.5 development has started with the shared application boundary and signed
 local transport needed for agent access. Final client compatibility, shared
-manual queue ownership, wider Shortcut coverage, and Release-package validation
-remain open.
+ownership for specialized manual jobs, wider Shortcut coverage, localization,
+and Release-package validation remain open.
 
 ## Local agent access
 
@@ -61,6 +61,14 @@ remain open.
   executor as agent work. The handoff preserves request identity, approved file
   access, and captured preset, naming, date-tag, timecode, and comment settings;
   wider presets and per-source destinations retain their established path.
+- Routed ordinary ungrouped manual conversions for the same six presets through
+  the persisted application planner and serialized executor. Manual batches keep
+  their existing visible rows, preserve date-tag and timecode choices, and fall
+  back before submission when a per-file option is not representable by the v1
+  contract.
+- Added a queue inspector for every shared job's immutable accepted settings,
+  including codecs, container, quality/rate controls, metadata, subtitles,
+  filename policy, destination, and capture time.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

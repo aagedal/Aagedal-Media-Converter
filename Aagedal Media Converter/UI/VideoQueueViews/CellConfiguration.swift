@@ -33,6 +33,7 @@ struct VideoFileCellConfiguration: Equatable {
     let conversionError: String?
     let applicationJobID: ApplicationJobID?
     let applicationJobOrigin: ApplicationJobOrigin?
+    let applicationJobSettingsSummary: String?
     let comment: String
     let includeDateTag: Bool
     let outputURL: URL?

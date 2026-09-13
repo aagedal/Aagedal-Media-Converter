@@ -71,6 +71,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     private let outputNameLabel = NSTextField(labelWithString: "")
     private let outputNameField = NSTextField() // editable, hidden by default
     private let jobOriginLabel = NSTextField(labelWithString: "")
+    private let jobSettingsButton = NSButton()
+    private var jobSettingsPopover: NSPopover?
     private var isEditingOutputName = false
     private var shouldCommitOutputNameOnEndEditing = true
     private let mergeIndicator = NSImageView()
@@ -522,6 +524,19 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         jobOriginLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         jobOriginLabel.setAccessibilityIdentifier("queue.item.jobOrigin")
 
+        jobSettingsButton.image = NSImage(
+            systemSymbolName: "info.circle",
+            accessibilityDescription: String(localized: "Show accepted settings")
+        )
+        jobSettingsButton.isBordered = false
+        jobSettingsButton.bezelStyle = .inline
+        jobSettingsButton.target = self
+        jobSettingsButton.action = #selector(showAcceptedJobSettings)
+        jobSettingsButton.isHidden = true
+        jobSettingsButton.toolTip = String(localized: "Show accepted settings")
+        jobSettingsButton.setAccessibilityIdentifier("queue.item.acceptedSettings")
+        jobSettingsButton.setContentHuggingPriority(.required, for: .horizontal)
+
         // Editable output name field (hidden by default)
         outputNameField.font = .systemFont(ofSize: 13, weight: .semibold)
         outputNameField.isHidden = true
@@ -607,7 +622,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // keep their natural width instead of being force-equalized (which created a
         // big gap when one filename was much longer than the other).
         filenameStack.setViews(
-            [jobOriginLabel, inputNameLabel, arrowLabel, outputNameLabel, outputNameField, mergeIndicator],
+            [jobOriginLabel, jobSettingsButton, inputNameLabel, arrowLabel, outputNameLabel, outputNameField, mergeIndicator],
             in: .leading
         )
         filenameStack.setViews(
@@ -982,7 +997,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         }
         if isFirstConfigure
             || prev?.applicationJobID != config.applicationJobID
-            || prev?.applicationJobOrigin != config.applicationJobOrigin {
+            || prev?.applicationJobOrigin != config.applicationJobOrigin
+            || prev?.applicationJobSettingsSummary != config.applicationJobSettingsSummary {
             if let jobID = config.applicationJobID,
                let origin = config.applicationJobOrigin {
                 let shortID = jobID.description.prefix(8).uppercased()
@@ -991,11 +1007,15 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
                 jobOriginLabel.isHidden = false
                 jobOriginLabel.setAccessibilityLabel("\(origin.displayName) job")
                 jobOriginLabel.setAccessibilityValue(jobID.description)
+                jobSettingsButton.isHidden = config.applicationJobSettingsSummary == nil
             } else {
                 jobOriginLabel.stringValue = ""
                 jobOriginLabel.toolTip = nil
                 jobOriginLabel.isHidden = true
+                jobSettingsButton.isHidden = true
             }
+            jobSettingsPopover?.performClose(nil)
+            jobSettingsPopover = nil
         }
         // Also re-render when name changes — for yt-dlp downloads the output name
         // is derived from item.name (e.g. "Fetching info..." → YouTube title), so
@@ -1839,6 +1859,47 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         guard let displayedDiagnosticReport else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(displayedDiagnosticReport, forType: .string)
+    }
+
+    @objc private func showAcceptedJobSettings() {
+        guard let summary = currentConfig?.applicationJobSettingsSummary else { return }
+        jobSettingsPopover?.performClose(nil)
+
+        let title = NSTextField(labelWithString: String(localized: "Accepted conversion settings"))
+        title.font = .boldSystemFont(ofSize: 14)
+        let text = NSTextView()
+        text.isEditable = false
+        text.isSelectable = true
+        text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        text.string = summary
+        text.textContainerInset = NSSize(width: 8, height: 8)
+        text.isHorizontallyResizable = false
+        text.autoresizingMask = [.width]
+        text.textContainer?.widthTracksTextView = true
+        text.setAccessibilityIdentifier("queue.acceptedSettings.text")
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        scroll.documentView = text
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        text.frame = NSRect(x: 0, y: 0, width: 400, height: 240)
+        let stack = NSStackView(views: [title, scroll])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        NSLayoutConstraint.activate([
+            scroll.widthAnchor.constraint(equalToConstant: 400),
+            scroll.heightAnchor.constraint(equalToConstant: 240)
+        ])
+        let controller = NSViewController()
+        controller.view = stack
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = controller
+        popover.contentSize = NSSize(width: 432, height: 300)
+        jobSettingsPopover = popover
+        popover.show(relativeTo: jobSettingsButton.bounds, of: jobSettingsButton, preferredEdge: .maxY)
     }
 
 }

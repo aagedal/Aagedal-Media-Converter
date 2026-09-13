@@ -185,7 +185,7 @@ struct ApplicationFileNameSettings: Codable, Equatable, Sendable {
         presetSuffix = try values.decode(String.self, forKey: .presetSuffix)
     }
 
-    fileprivate var fileNamePreferences: FileNamePreferences {
+    var fileNamePreferences: FileNamePreferences {
         let removalMode: SpecialCharacterRemovalMode = switch specialCharacterRemovalMode {
         case .off: .off
         case .loose: .loose
@@ -252,6 +252,26 @@ struct ApplicationRequestExecutionSettings: Codable, Equatable, Sendable {
         let importSettings = VideoImportSettings(defaults: defaults)
         includeDateTag = importSettings.includeDateTag
         switch importSettings.timecode?.mode {
+        case .preserveSource?:
+            timecodeMode = .preserveSource
+            manualTimecode = nil
+        case .manual(let value)?:
+            timecodeMode = .manual
+            manualTimecode = value
+        case nil:
+            timecodeMode = .disabled
+            manualTimecode = nil
+        }
+        comment = ApplicationCommentSettings(defaults: defaults)
+    }
+
+    init(
+        includeDateTag: Bool,
+        timecodeConfig: TimecodeConfig?,
+        defaults: UserDefaults = .standard
+    ) {
+        self.includeDateTag = includeDateTag
+        switch timecodeConfig?.mode {
         case .preserveSource?:
             timecodeMode = .preserveSource
             manualTimecode = nil
@@ -656,6 +676,50 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
             && presetID == other.presetID
             && presetSettings == other.presetSettings
             && executionSettings == other.executionSettings
+    }
+
+    /// Human-readable projection of the immutable settings stored with an
+    /// accepted job. The queue uses this snapshot instead of current defaults.
+    var acceptedSettingsSummary: String {
+        let settings = presetSettings
+        var lines = [
+            "Preset: \(presetID.exportPreset.displayName)",
+            "Container: \(settings.containerID.rawValue.uppercased())"
+        ]
+        if let video = settings.video {
+            lines.append("Video encoder: \(video.encoderID.rawValue)")
+            if let profile = video.profileID { lines.append("Video profile: \(profile.rawValue)") }
+            if let quality = video.quality { lines.append("Quality: \(quality)") }
+            if let bitrate = video.bitrate { lines.append("Video bitrate: \(bitrate)") }
+            if let speed = video.speed { lines.append("Encoding speed: \(speed)") }
+            if let maximumHeight = video.maximumHeight {
+                lines.append("Maximum height: \(maximumHeight)p")
+            }
+        }
+        if let audio = settings.audio {
+            var value = audio.codecID.rawValue
+            if let bitrate = audio.bitrate { value += " · \(bitrate)" }
+            lines.append("Audio: \(value)")
+        }
+        lines.append("Preserve metadata: \(settings.preserveMetadata ? "Yes" : "No")")
+        lines.append("Keep subtitles: \(settings.keepSubtitles ? "Yes" : "No")")
+        if let executionSettings {
+            lines.append("Date tag: \(executionSettings.includeDateTag ? "Yes" : "No")")
+            let timecode = switch executionSettings.timecodeMode {
+            case .disabled: "Disabled"
+            case .preserveSource: "Preserve source"
+            case .manual: executionSettings.manualTimecode ?? "Manual"
+            }
+            lines.append("Timecode: \(timecode)")
+        }
+        let filename = settings.fileName
+        lines.append("Filename processing: \(filename.processingEnabled ? "On" : "Off")")
+        if filename.customTemplateEnabled {
+            lines.append("Filename template: \(filename.template)")
+        }
+        lines.append("Destination: \(destinationFolderURL.path)")
+        lines.append("Captured: \(capturedAt.formatted(date: .abbreviated, time: .standard))")
+        return lines.joined(separator: "\n")
     }
 }
 
