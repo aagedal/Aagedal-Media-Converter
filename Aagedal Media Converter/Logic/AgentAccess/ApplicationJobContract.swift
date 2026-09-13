@@ -1037,6 +1037,33 @@ struct ApplicationConversionPlan: Codable, Equatable, Sendable {
     let warnings: [ApplicationPlanWarning]
 }
 
+struct ApplicationJobProgressUpdate: Equatable, Sendable {
+    let progress: Double?
+    let stage: String?
+}
+
+enum ApplicationJobExecutionResult: Equatable, Sendable {
+    case succeeded(outputURLs: [URL])
+    case failed(diagnostic: String)
+    case cancelled(diagnostic: String?)
+}
+
+/// The shared job service owns ordering and lifecycle state; an adapter owns the
+/// concrete conversion implementation. Keeping this boundary free of SwiftUI
+/// bindings lets manual, App Intent, and local-agent work use the same queue.
+struct ApplicationJobExecutor: Sendable {
+    typealias ProgressHandler = @Sendable (ApplicationJobProgressUpdate) async -> Void
+    typealias Execute = @Sendable (
+        ApplicationJobID,
+        ApplicationConversionPlan,
+        ProgressHandler
+    ) async -> ApplicationJobExecutionResult
+    typealias Cancel = @Sendable (ApplicationJobID) async -> Void
+
+    let execute: Execute
+    let cancel: Cancel
+}
+
 enum ApplicationFileAccessMode: Equatable, Sendable {
     case read
     case write
@@ -1090,9 +1117,9 @@ struct ApplicationFileAccessAuthorizer: Sendable {
     }
 }
 
-/// Owns transport-neutral plans, submit-time validation, output reservations, and
-/// job lifecycle state. Conversion execution remains a separate adapter so this
-/// boundary can be exercised without SwiftUI bindings or helper processes.
+/// Owns transport-neutral plans, submit-time validation, output reservations,
+/// serialized execution handoff, and job lifecycle state. The injected executor
+/// keeps this boundary testable without SwiftUI bindings or helper processes.
 actor ApplicationJobService {
     typealias SourceIdentityProvider = @Sendable (URL) throws -> ApplicationSourceIdentity
     typealias ItemExistsProvider = @Sendable (URL) -> Bool
@@ -1103,6 +1130,7 @@ actor ApplicationJobService {
     private let sourceIdentityProvider: SourceIdentityProvider
     private let itemExists: ItemExistsProvider
     private let fileAccessAuthorizer: ApplicationFileAccessAuthorizer
+    private let executor: ApplicationJobExecutor?
     private let planLifetime: TimeInterval
     private let recordRetentionLifetime: TimeInterval
     private let store: ApplicationJobStore?
@@ -1111,6 +1139,10 @@ actor ApplicationJobService {
     private var submittedPlans: [ApplicationPlanID: ApplicationJobAcceptance] = [:]
     private var reservedOutputs: [URL: ApplicationJobID] = [:]
     private var outputsByJob: [ApplicationJobID: Set<URL>] = [:]
+    private var pendingExecutions: [(jobID: ApplicationJobID, plan: ApplicationConversionPlan)] = []
+    private var isExecutionDraining = false
+    private var activeExecutionJobID: ApplicationJobID?
+    private var cancellationSignals: Set<ApplicationJobID> = []
 
     init(
         registry: ApplicationJobRegistry = ApplicationJobRegistry(),
@@ -1118,6 +1150,7 @@ actor ApplicationJobService {
         recordRetentionLifetime: TimeInterval = 30 * 24 * 60 * 60,
         store: ApplicationJobStore? = nil,
         fileAccessAuthorizer: ApplicationFileAccessAuthorizer = .live,
+        executor: ApplicationJobExecutor? = nil,
         sourceIdentityProvider: SourceIdentityProvider? = nil,
         itemExists: @escaping ItemExistsProvider = { FileManager.default.fileExists(atPath: $0.path) }
     ) {
@@ -1126,6 +1159,7 @@ actor ApplicationJobService {
         self.recordRetentionLifetime = recordRetentionLifetime
         self.store = store
         self.fileAccessAuthorizer = fileAccessAuthorizer
+        self.executor = executor
         self.sourceIdentityProvider = sourceIdentityProvider ?? Self.liveSourceIdentity
         self.itemExists = itemExists
     }
@@ -1284,6 +1318,7 @@ actor ApplicationJobService {
         outputsByJob[accepted.record.id, default: []].formUnion(normalizedOutputs)
         submittedPlans[planID] = accepted
         try await persist()
+        enqueueExecution(jobID: accepted.record.id, plan: plan)
         return accepted
     }
 
@@ -1336,6 +1371,14 @@ actor ApplicationJobService {
         let record = try await registry.requestCancellation(jobID, now: now)
         if record.state.isTerminal {
             releaseOutputReservations(for: jobID)
+        } else if record.state == .cancelling,
+                  activeExecutionJobID == jobID,
+                  !cancellationSignals.contains(jobID),
+                  let executor {
+            cancellationSignals.insert(jobID)
+            Task {
+                await executor.cancel(jobID)
+            }
         }
         try await persist()
         return record
@@ -1414,6 +1457,138 @@ actor ApplicationJobService {
         for output in outputs where reservedOutputs[output] == jobID {
             reservedOutputs.removeValue(forKey: output)
         }
+    }
+
+    private func enqueueExecution(
+        jobID: ApplicationJobID,
+        plan: ApplicationConversionPlan
+    ) {
+        guard executor != nil else { return }
+        pendingExecutions.append((jobID, plan))
+        guard !isExecutionDraining else { return }
+        isExecutionDraining = true
+        Task {
+            await self.drainExecutionQueue()
+        }
+    }
+
+    private func drainExecutionQueue() async {
+        while !pendingExecutions.isEmpty {
+            let pending = pendingExecutions.removeFirst()
+            await execute(pending)
+        }
+        isExecutionDraining = false
+    }
+
+    private func execute(
+        _ pending: (jobID: ApplicationJobID, plan: ApplicationConversionPlan)
+    ) async {
+        guard let executor,
+              let queuedRecord = await registry.record(for: pending.jobID),
+              queuedRecord.state == .queued else { return }
+
+        let accessLeases: [ApplicationFileAccessLease]
+        do {
+            accessLeases = try acquireAccess(for: pending.plan.request)
+            try Self.validateDestination(pending.plan.request.destinationFolderURL)
+            for capturedSource in pending.plan.sources {
+                let currentSource: ApplicationSourceIdentity
+                do {
+                    currentSource = try sourceIdentityProvider(capturedSource.url)
+                } catch {
+                    throw ApplicationJobError.sourceUnavailable(capturedSource.url)
+                }
+                guard currentSource == capturedSource else {
+                    throw ApplicationJobError.sourceChanged(capturedSource.url)
+                }
+            }
+            for output in pending.plan.outputs where itemExists(output.outputURL) {
+                throw ApplicationJobError.outputCollision(output.outputURL)
+            }
+        } catch {
+            let diagnostic = Self.executionDiagnostic(for: error)
+            _ = try? await transition(pending.jobID, to: .failed, diagnostic: diagnostic)
+            return
+        }
+        defer { accessLeases.forEach { $0.release() } }
+
+        do {
+            _ = try await transition(pending.jobID, to: .running)
+        } catch {
+            return
+        }
+        activeExecutionJobID = pending.jobID
+
+        let result = await executor.execute(pending.jobID, pending.plan) { update in
+            _ = try? await self.updateProgress(
+                pending.jobID,
+                progress: update.progress,
+                stage: update.stage
+            )
+        }
+
+        activeExecutionJobID = nil
+        cancellationSignals.remove(pending.jobID)
+        guard let currentRecord = await registry.record(for: pending.jobID) else { return }
+
+        do {
+            if currentRecord.state == .cancelling {
+                let diagnostic: String?
+                if case .cancelled(let executorDiagnostic) = result {
+                    diagnostic = executorDiagnostic
+                } else {
+                    diagnostic = nil
+                }
+                _ = try await transition(
+                    pending.jobID,
+                    to: .cancelled,
+                    diagnostic: diagnostic
+                )
+                return
+            }
+            guard currentRecord.state == .running else { return }
+
+            switch result {
+            case .succeeded(let outputURLs):
+                let expected = pending.plan.outputs.map { $0.outputURL.standardizedFileURL }
+                let actual = outputURLs.map(\.standardizedFileURL)
+                guard actual == expected else {
+                    _ = try await transition(
+                        pending.jobID,
+                        to: .failed,
+                        diagnostic: "Executor outputs did not match the accepted conversion plan."
+                    )
+                    return
+                }
+                _ = try await transition(
+                    pending.jobID,
+                    to: .succeeded,
+                    outputURLs: outputURLs
+                )
+            case .failed(let diagnostic):
+                _ = try await transition(
+                    pending.jobID,
+                    to: .failed,
+                    diagnostic: diagnostic
+                )
+            case .cancelled(let diagnostic):
+                _ = try await transition(
+                    pending.jobID,
+                    to: .cancelled,
+                    diagnostic: diagnostic
+                )
+            }
+        } catch {
+            // Persistence or a competing terminal transition is authoritative;
+            // never revive or rewrite a record from a late executor callback.
+        }
+    }
+
+    private static func executionDiagnostic(for error: Error) -> String {
+        if let error = error as? ApplicationJobError {
+            return error.code.rawValue
+        }
+        return error.localizedDescription
     }
 
     private func acquireAccess(

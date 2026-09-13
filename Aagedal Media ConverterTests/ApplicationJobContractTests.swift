@@ -662,6 +662,228 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: stateURL), damagedData)
     }
 
+    func testSubmittedJobsExecuteSeriallyAndPublishProgressAndOutputs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let firstSource = directory.appendingPathComponent("first.mov")
+        let secondSource = directory.appendingPathComponent("second.mov")
+        try Data("first".utf8).write(to: firstSource)
+        try Data("second".utf8).write(to: secondSource)
+
+        let harness = ApplicationJobExecutorHarness(blocksFirstExecution: true)
+        let service = makeExecutingService(harness: harness)
+        let firstPlan = try await service.plan(makeRequest(
+            origin: .manual,
+            requesterID: "main-window",
+            sourceURLs: [firstSource],
+            destinationFolderURL: outputDirectory,
+            idempotencyKey: "manual-1"
+        ))
+        let secondPlan = try await service.plan(makeRequest(
+            origin: .localAgent,
+            requesterID: "codex",
+            sourceURLs: [secondSource],
+            destinationFolderURL: outputDirectory,
+            idempotencyKey: "agent-1"
+        ))
+        let first = try await service.submit(planID: firstPlan.id)
+        let second = try await service.submit(planID: secondPlan.id)
+
+        _ = try await waitForRecord(service: service, jobID: first.record.id, state: .running)
+        let queuedSecond = try await service.record(for: second.record.id)
+        XCTAssertEqual(queuedSecond?.state, .queued)
+        let blockedSnapshot = await harness.snapshot()
+        XCTAssertEqual(blockedSnapshot.startedIDs, [first.record.id])
+        XCTAssertEqual(blockedSnapshot.maximumConcurrentExecutions, 1)
+
+        await harness.releaseFirstExecution()
+        let completedFirst = try await waitForRecord(
+            service: service, jobID: first.record.id, state: .succeeded
+        )
+        let completedSecond = try await waitForRecord(
+            service: service, jobID: second.record.id, state: .succeeded
+        )
+
+        XCTAssertEqual(completedFirst.progress, 1)
+        XCTAssertEqual(completedFirst.stage, "Encoding")
+        XCTAssertEqual(completedFirst.outputURLs, firstPlan.outputs.map(\.outputURL))
+        XCTAssertEqual(completedSecond.outputURLs, secondPlan.outputs.map(\.outputURL))
+        XCTAssertEqual(completedFirst.request.origin, .manual)
+        XCTAssertEqual(completedSecond.request.origin, .localAgent)
+        let completedSnapshot = await harness.snapshot()
+        XCTAssertEqual(completedSnapshot.startedIDs, [first.record.id, second.record.id])
+        XCTAssertEqual(completedSnapshot.maximumConcurrentExecutions, 1)
+    }
+
+    func testCancellationSkipsQueuedJobAndSignalsRunningExecutor() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let firstSource = directory.appendingPathComponent("first.mov")
+        let secondSource = directory.appendingPathComponent("second.mov")
+        try Data("first".utf8).write(to: firstSource)
+        try Data("second".utf8).write(to: secondSource)
+
+        let harness = ApplicationJobExecutorHarness(blocksFirstExecution: true)
+        let service = makeExecutingService(harness: harness)
+        let firstPlan = try await service.plan(makeRequest(
+            sourceURLs: [firstSource], destinationFolderURL: outputDirectory, idempotencyKey: "first"
+        ))
+        let secondPlan = try await service.plan(makeRequest(
+            sourceURLs: [secondSource], destinationFolderURL: outputDirectory, idempotencyKey: "second"
+        ))
+        let first = try await service.submit(planID: firstPlan.id)
+        let second = try await service.submit(planID: secondPlan.id)
+        _ = try await waitForRecord(service: service, jobID: first.record.id, state: .running)
+
+        let queuedCancellation = try await service.requestCancellation(second.record.id)
+        XCTAssertEqual(queuedCancellation.state, .cancelled)
+        let runningCancellation = try await service.requestCancellation(first.record.id)
+        XCTAssertEqual(runningCancellation.state, .cancelling)
+
+        _ = try await waitForRecord(service: service, jobID: first.record.id, state: .cancelled)
+        let snapshot = await harness.snapshot()
+        XCTAssertEqual(snapshot.startedIDs, [first.record.id])
+        XCTAssertEqual(snapshot.cancelledIDs, [first.record.id])
+        XCTAssertFalse(snapshot.startedIDs.contains(second.record.id))
+    }
+
+    func testExecutionRechecksSourceIdentityAfterWaitingInQueue() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let firstSource = directory.appendingPathComponent("first.mov")
+        let secondSource = directory.appendingPathComponent("second.mov")
+        try Data("first".utf8).write(to: firstSource)
+        try Data("second".utf8).write(to: secondSource)
+
+        let harness = ApplicationJobExecutorHarness(blocksFirstExecution: true)
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: ApplicationJobExecutor(
+                execute: { jobID, plan, progress in
+                    await harness.execute(jobID: jobID, plan: plan, progress: progress)
+                },
+                cancel: { jobID in
+                    await harness.cancel(jobID: jobID)
+                }
+            ),
+            sourceIdentityProvider: { url in
+                ApplicationSourceIdentity(
+                    url: url.standardizedFileURL,
+                    fileSize: Int64(try Data(contentsOf: url).count),
+                    modificationDate: nil,
+                    fileIdentifier: nil
+                )
+            }
+        )
+        let firstPlan = try await service.plan(makeRequest(
+            sourceURLs: [firstSource], destinationFolderURL: outputDirectory, idempotencyKey: "first"
+        ))
+        let secondPlan = try await service.plan(makeRequest(
+            sourceURLs: [secondSource], destinationFolderURL: outputDirectory, idempotencyKey: "second"
+        ))
+        let first = try await service.submit(planID: firstPlan.id)
+        let second = try await service.submit(planID: secondPlan.id)
+        _ = try await waitForRecord(service: service, jobID: first.record.id, state: .running)
+
+        try Data("changed while queued".utf8).write(to: secondSource)
+        await harness.releaseFirstExecution()
+        _ = try await waitForRecord(service: service, jobID: first.record.id, state: .succeeded)
+        let failed = try await waitForRecord(
+            service: service, jobID: second.record.id, state: .failed
+        )
+
+        XCTAssertEqual(failed.diagnostic, ApplicationJobErrorCode.sourceChanged.rawValue)
+        let snapshot = await harness.snapshot()
+        XCTAssertEqual(snapshot.startedIDs, [first.record.id])
+    }
+
+    func testExecutorFailureAndOutputMismatchBecomeTerminalFailures() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let failedSource = directory.appendingPathComponent("failed.mov")
+        let mismatchedSource = directory.appendingPathComponent("mismatched.mov")
+        try Data("failed".utf8).write(to: failedSource)
+        try Data("mismatched".utf8).write(to: mismatchedSource)
+
+        let failedExecutor = ApplicationJobExecutor(
+            execute: { _, _, _ in .failed(diagnostic: "Encoder unavailable") },
+            cancel: { _ in }
+        )
+        let failedService = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: failedExecutor
+        )
+        let failedPlan = try await failedService.plan(makeRequest(
+            sourceURLs: [failedSource], destinationFolderURL: outputDirectory, idempotencyKey: nil
+        ))
+        let failed = try await failedService.submit(planID: failedPlan.id)
+        let failedRecord = try await waitForRecord(
+            service: failedService, jobID: failed.record.id, state: .failed
+        )
+        XCTAssertEqual(failedRecord.diagnostic, "Encoder unavailable")
+
+        let mismatchExecutor = ApplicationJobExecutor(
+            execute: { _, _, _ in
+                .succeeded(outputURLs: [outputDirectory.appendingPathComponent("unexpected.mp4")])
+            },
+            cancel: { _ in }
+        )
+        let mismatchService = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: mismatchExecutor
+        )
+        let mismatchPlan = try await mismatchService.plan(makeRequest(
+            sourceURLs: [mismatchedSource], destinationFolderURL: outputDirectory, idempotencyKey: nil
+        ))
+        let mismatch = try await mismatchService.submit(planID: mismatchPlan.id)
+        let mismatchRecord = try await waitForRecord(
+            service: mismatchService, jobID: mismatch.record.id, state: .failed
+        )
+        XCTAssertEqual(
+            mismatchRecord.diagnostic,
+            "Executor outputs did not match the accepted conversion plan."
+        )
+    }
+
+    func testExecutionRetainsAllAccessLeasesUntilExecutorCompletes() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+
+        let leaseState = ApplicationJobLeaseState()
+        let executor = ApplicationJobExecutor(
+            execute: { _, plan, progress in
+                XCTAssertEqual(leaseState.activeCount, 2)
+                await progress(ApplicationJobProgressUpdate(progress: 0.5, stage: "Encoding"))
+                XCTAssertEqual(leaseState.activeCount, 2)
+                return .succeeded(outputURLs: plan.outputs.map(\.outputURL))
+            },
+            cancel: { _ in }
+        )
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: ApplicationFileAccessAuthorizer { _, _ in
+                leaseState.acquire()
+            },
+            executor: executor
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: outputDirectory, idempotencyKey: nil
+        ))
+        XCTAssertEqual(leaseState.activeCount, 0)
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(
+            service: service, jobID: accepted.record.id, state: .succeeded
+        )
+        XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+        XCTAssertEqual(leaseState.activeCount, 0)
+    }
+
     private func makeRequest(
         schemaVersion: Int = ApplicationConversionRequest.currentSchemaVersion,
         requestID: UUID = UUID(),
@@ -704,5 +926,118 @@ final class ApplicationJobContractTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         return directory
+    }
+
+    private func makeExecutingService(
+        harness: ApplicationJobExecutorHarness
+    ) -> ApplicationJobService {
+        ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: ApplicationJobExecutor(
+                execute: { jobID, plan, progress in
+                    await harness.execute(jobID: jobID, plan: plan, progress: progress)
+                },
+                cancel: { jobID in
+                    await harness.cancel(jobID: jobID)
+                }
+            )
+        )
+    }
+
+    private func waitForRecord(
+        service: ApplicationJobService,
+        jobID: ApplicationJobID,
+        state: ApplicationJobState
+    ) async throws -> ApplicationJobRecord {
+        for _ in 0..<200 {
+            if let record = try await service.record(for: jobID), record.state == state {
+                return record
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Timed out waiting for job \(jobID) to reach \(state.rawValue)")
+        let lastRecord = try await service.record(for: jobID)
+        return try XCTUnwrap(lastRecord)
+    }
+}
+
+private actor ApplicationJobExecutorHarness {
+    struct Snapshot: Sendable {
+        let startedIDs: [ApplicationJobID]
+        let cancelledIDs: Set<ApplicationJobID>
+        let maximumConcurrentExecutions: Int
+    }
+
+    private let blocksFirstExecution: Bool
+    private var startedIDs: [ApplicationJobID] = []
+    private var cancelledIDs: Set<ApplicationJobID> = []
+    private var activeExecutions = 0
+    private var maximumConcurrentExecutions = 0
+    private var firstExecutionContinuation: CheckedContinuation<Void, Never>?
+    private var firstExecutionReleaseRequested = false
+
+    init(blocksFirstExecution: Bool) {
+        self.blocksFirstExecution = blocksFirstExecution
+    }
+
+    func execute(
+        jobID: ApplicationJobID,
+        plan: ApplicationConversionPlan,
+        progress: ApplicationJobExecutor.ProgressHandler
+    ) async -> ApplicationJobExecutionResult {
+        startedIDs.append(jobID)
+        activeExecutions += 1
+        maximumConcurrentExecutions = max(maximumConcurrentExecutions, activeExecutions)
+        await progress(ApplicationJobProgressUpdate(progress: 0.5, stage: "Encoding"))
+        if blocksFirstExecution, startedIDs.count == 1 {
+            await withCheckedContinuation { continuation in
+                if firstExecutionReleaseRequested || cancelledIDs.contains(jobID) {
+                    continuation.resume()
+                } else {
+                    firstExecutionContinuation = continuation
+                }
+            }
+        }
+        activeExecutions -= 1
+        if cancelledIDs.contains(jobID) {
+            return .cancelled(diagnostic: "Cancelled by requester")
+        }
+        return .succeeded(outputURLs: plan.outputs.map(\.outputURL))
+    }
+
+    func cancel(jobID: ApplicationJobID) {
+        cancelledIDs.insert(jobID)
+        firstExecutionContinuation?.resume()
+        firstExecutionContinuation = nil
+    }
+
+    func releaseFirstExecution() {
+        firstExecutionReleaseRequested = true
+        firstExecutionContinuation?.resume()
+        firstExecutionContinuation = nil
+    }
+
+    func snapshot() -> Snapshot {
+        Snapshot(
+            startedIDs: startedIDs,
+            cancelledIDs: cancelledIDs,
+            maximumConcurrentExecutions: maximumConcurrentExecutions
+        )
+    }
+}
+
+private final class ApplicationJobLeaseState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var activeCount: Int {
+        lock.withLock { count }
+    }
+
+    func acquire() -> ApplicationFileAccessLease {
+        lock.withLock { count += 1 }
+        return ApplicationFileAccessLease { [weak self] in
+            self?.lock.withLock { self?.count -= 1 }
+        }
     }
 }

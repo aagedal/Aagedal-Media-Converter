@@ -69,6 +69,16 @@ submission so revoked access cannot enqueue work. Stable permission errors
 separate missing source and destination grants. See the
 [folder-authorization validation record](4.5-folder-authorization-validation-2026-09-13.md).
 
+Submitted jobs can now hand off to an injected app-owned executor without giving
+the transport or a SwiftUI view ownership of conversion tasks. The service
+serializes manual, App Intent, and local-agent work, publishes progress and
+terminal results through the shared record, retains every security-scoped lease
+until execution finishes, rechecks queued sources and output collisions before
+launch, and signals only the active job's executor during cancellation. Executor
+outputs must match the accepted plan. The concrete FFmpeg adapter is still open;
+this increment establishes and tests the lifecycle it will plug into. See the
+[execution-handoff validation record](4.5-execution-handoff-validation-2026-09-13.md).
+
 ## Intended outcome
 
 An agent on the user's Mac can inspect media, discover the user's presets, plan

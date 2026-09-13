@@ -29,6 +29,10 @@ remain subject to the feasibility milestone.
   writable grant for the destination. Planning and submission balance the
   narrowest matching security-scoped bookmark, and submission rejects access
   that was revoked after planning with stable permission error codes.
+- Added an app-owned, serialized executor handoff for accepted jobs. It keeps
+  approved file access alive through execution, rechecks queued inputs before
+  launch, publishes progress and terminal results, enforces planned outputs, and
+  routes cancellation only to the active job owner.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 
