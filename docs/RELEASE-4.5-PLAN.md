@@ -1,6 +1,7 @@
 # Proposed 4.5 release — Local agent access
 
-Status: implementation started on `codex/release-4.5`; feasibility decision pending.
+Status: signed local transport prototype implemented on `codex/release-4.5`;
+feasibility decision pending final-client and Release-package validation.
 Created: 2026-09-11.
 
 ## Release context
@@ -103,9 +104,24 @@ uses the same persisted service as execution. Codable success and stable,
 path-safe failure payloads are covered by the
 [agent tools validation record](4.5-agent-tools-validation-2026-09-13.md).
 
-This implements the operation logic, not an externally reachable MCP surface.
-The bundled helper, app/helper IPC, reconnect behavior, client compatibility,
-and setup UX remain subject to the feasibility milestone.
+The six operations are now reachable through a runtime-free stdio MCP helper
+that Xcode builds as a separate Hardened Runtime command-line target and embeds
+with Code Sign On Copy. A versioned `CFMessagePort` boundary carries typed JSON
+requests to the app, while the helper negotiates the current MCP protocol,
+publishes the six bounded schemas, launches the enclosing app when needed, and
+returns structured tool results. The app endpoint remains off by default.
+
+Settings now include an Agent Access pane with opt-in control, connection test,
+copyable client configuration, helper discovery, approved-folder guidance, and
+an explicit disabling policy. A packaged Debug helper successfully negotiated
+MCP and returned all six resolved presets through a running app. See the
+[MCP transport validation record](4.5-mcp-transport-validation-2026-09-13.md).
+
+This is still a prototype rather than a completed feasibility decision. The
+current direct-distribution target has App Sandbox disabled, two named MCP
+clients have not been exercised, and a Developer ID Release archive has not
+completed signing/notarization validation. Shared visible queue adoption,
+origin labels, and App Intent routing also remain open.
 
 ## Intended outcome
 

@@ -675,6 +675,7 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case duplicateOutput = "duplicate_output"
     case outputCollision = "output_collision"
     case mediaInspectionFailed = "media_inspection_failed"
+    case invalidArguments = "invalid_arguments"
     case cancelled
     case internalError = "internal_error"
 }

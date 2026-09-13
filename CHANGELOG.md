@@ -1,8 +1,8 @@
 # v.4.5.0 (Development)
 
-4.5 development has started with the shared application boundary needed for
-local agent access. The external transport, setup flow, and client integration
-remain subject to the feasibility milestone.
+4.5 development has started with the shared application boundary and signed
+local transport needed for agent access. Final client compatibility, shared
+visible queue adoption, and Release-package validation remain open.
 
 ## Local agent access
 
@@ -41,7 +41,16 @@ remain subject to the feasibility milestone.
   inspect media, list presets, plan and submit conversions, get a job, and cancel
   a job. Their Codable payloads include structured stream/timecode metadata,
   captured preset settings, local-agent request ownership, and stable path-safe
-  errors; an MCP/helper transport is not connected yet.
+  errors.
+- Added a runtime-free stdio MCP helper as a separate Hardened Runtime Xcode
+  target, embedded and signed with the app. It exposes the six bounded tool
+  schemas, forwards versioned typed JSON over a local app-owned message port,
+  launches the enclosing app when needed, and leaves accepted jobs app-owned
+  after the client disconnects.
+- Added opt-in Agent Access settings with a connection test, copyable MCP client
+  configuration, helper discovery, approved-folder guidance, and an explicit
+  policy that disabling access stops new requests without cancelling accepted
+  jobs.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
 

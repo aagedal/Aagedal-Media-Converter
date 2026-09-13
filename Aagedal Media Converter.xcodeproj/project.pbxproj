@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		A45000000000000000000003 /* ApplicationJobContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45000000000000000000001 /* ApplicationJobContract.swift */; };
 		A45000000000000000000004 /* ApplicationJobContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45000000000000000000002 /* ApplicationJobContractTests.swift */; };
+		A45100000000000000000003 /* ApplicationAgentTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45100000000000000000001 /* ApplicationAgentTransport.swift */; };
+		A45200000000000000000003 /* AgentAccessSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45200000000000000000001 /* AgentAccessSettingsView.swift */; };
+		A45310000000000000000003 /* AagedalMediaConverterMCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45310000000000000000001 /* AagedalMediaConverterMCP.swift */; };
+		A45310000000000000000004 /* aagedal-media-converter-mcp in Embed MCP Helper */ = {isa = PBXBuildFile; fileRef = A45310000000000000000002 /* aagedal-media-converter-mcp */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		7A33AB1A44DF44149B983E60 /* YTDLPWarmUpDrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */; };
 		57105645EB2B47EE9B17F716 /* YTDLPUpdateOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */; };
 		E1ACF6BCCBB0485C81D569A9 /* DenoExtractionDrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */; };
@@ -313,6 +317,13 @@
 			remoteGlobalIDString = 8EE6EE952C31FC6B007B629D;
 			remoteInfo = "Aagedal VideoLoop Converter";
 		};
+		A4531000000000000000000D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8EE6EE8E2C31FC6B007B629D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A45310000000000000000006;
+			remoteInfo = "Aagedal Media Converter MCP";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -335,11 +346,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A4531000000000000000000E /* Embed MCP Helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "Contents/Helpers";
+			dstSubfolderSpec = 1;
+			files = (
+				A45310000000000000000004 /* aagedal-media-converter-mcp in Embed MCP Helper */,
+			);
+			name = "Embed MCP Helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A45000000000000000000001 /* ApplicationJobContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationJobContract.swift; sourceTree = "<group>"; };
 		A45000000000000000000002 /* ApplicationJobContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationJobContractTests.swift; sourceTree = "<group>"; };
+		A45100000000000000000001 /* ApplicationAgentTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationAgentTransport.swift; sourceTree = "<group>"; };
+		A45200000000000000000001 /* AgentAccessSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAccessSettingsView.swift; sourceTree = "<group>"; };
+		A45310000000000000000001 /* AagedalMediaConverterMCP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AagedalMediaConverterMCP.swift; sourceTree = "<group>"; };
+		A45310000000000000000002 /* aagedal-media-converter-mcp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "aagedal-media-converter-mcp"; sourceTree = BUILT_PRODUCTS_DIR; };
 		993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPWarmUpDrainTests.swift; sourceTree = "<group>"; };
 		CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPUpdateOwnershipTests.swift; sourceTree = "<group>"; };
 		758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DenoExtractionDrainTests.swift; sourceTree = "<group>"; };
@@ -678,6 +704,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A45310000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -857,6 +890,7 @@
 			isa = PBXGroup;
 			children = (
 				A45000000000000000000001 /* ApplicationJobContract.swift */,
+				A45100000000000000000001 /* ApplicationAgentTransport.swift */,
 			);
 			path = AgentAccess;
 			sourceTree = "<group>";
@@ -968,6 +1002,7 @@
 		8EE6EE8D2C31FC6B007B629D = {
 			isa = PBXGroup;
 			children = (
+				A45310000000000000000005 /* AgentHelper */,
 				8E0C32D02E09FC5100F22B21 /* Licenses */,
 				8EE6EE982C31FC6B007B629D /* Aagedal Media Converter */,
 				8EE6EEAC2C31FC6F007B629D /* Aagedal Media ConverterTests */,
@@ -986,10 +1021,19 @@
 			isa = PBXGroup;
 			children = (
 				8EE6EE962C31FC6B007B629D /* Aagedal Media Converter.app */,
+				A45310000000000000000002 /* aagedal-media-converter-mcp */,
 				8EE6EEA92C31FC6F007B629D /* Aagedal Media ConverterTests.xctest */,
 				8EE6EEB32C31FC6F007B629D /* Aagedal Media ConverterUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A45310000000000000000005 /* AgentHelper */ = {
+			isa = PBXGroup;
+			children = (
+				A45310000000000000000001 /* AagedalMediaConverterMCP.swift */,
+			);
+			path = AgentHelper;
 			sourceTree = "<group>";
 		};
 		8EE6EE982C31FC6B007B629D /* Aagedal Media Converter */ = {
@@ -1169,6 +1213,7 @@
 		8EEE45362EC13AE90049F017 /* SettingsView */ = {
 			isa = PBXGroup;
 			children = (
+				A45200000000000000000001 /* AgentAccessSettingsView.swift */,
 				A95007ED7B0349E3B626F1BE /* ToolDiagnosticsSettingsView.swift */,
 				8EA25FE82F82A7BA0087B1F1 /* TesseractSettingsView.swift */,
 				8E4DF2702ECBAD46007B6277 /* WaveformSettingsView.swift */,
@@ -1330,10 +1375,12 @@
 				8E1477562ECF959E00C805AA /* CopyFiles */,
 				608E2E35809FD3AAA29E3747 /* Embed Frameworks */,
 				A90612000000000000000001 /* Copy and Sign Media Helpers */,
+				A4531000000000000000000E /* Embed MCP Helper */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A4531000000000000000000C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				8EA25FED2F82D6B00087B1F1 /* tessdata */,
@@ -1343,6 +1390,22 @@
 			productName = "Aagedal VideoLoop Converter";
 			productReference = 8EE6EE962C31FC6B007B629D /* Aagedal Media Converter.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A45310000000000000000006 /* Aagedal Media Converter MCP */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A45310000000000000000009 /* Build configuration list for PBXNativeTarget "Aagedal Media Converter MCP" */;
+			buildPhases = (
+				A45310000000000000000007 /* Sources */,
+				A45310000000000000000008 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Aagedal Media Converter MCP";
+			productName = "aagedal-media-converter-mcp";
+			productReference = A45310000000000000000002 /* aagedal-media-converter-mcp */;
+			productType = "com.apple.product-type.tool";
 		};
 		8EE6EEA82C31FC6F007B629D /* Aagedal Media ConverterTests */ = {
 			isa = PBXNativeTarget;
@@ -1390,6 +1453,9 @@
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					A45310000000000000000006 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					8EE6EE952C31FC6B007B629D = {
 						CreatedOnToolsVersion = 16.0;
 					};
@@ -1424,6 +1490,7 @@
 			projectRoot = "";
 			targets = (
 				8EE6EE952C31FC6B007B629D /* Aagedal Media Converter */,
+				A45310000000000000000006 /* Aagedal Media Converter MCP */,
 				8EE6EEA82C31FC6F007B629D /* Aagedal Media ConverterTests */,
 				8EE6EEB22C31FC6F007B629D /* Aagedal Media ConverterUITests */,
 			);
@@ -1534,6 +1601,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A45100000000000000000003 /* ApplicationAgentTransport.swift in Sources */,
+				A45200000000000000000003 /* AgentAccessSettingsView.swift in Sources */,
 				A45000000000000000000003 /* ApplicationJobContract.swift in Sources */,
 				A3209450F7A948BBB7B75086 /* SubtitleSRTPublication.swift in Sources */,
 				B15C008BDFBA4E8893B1C380 /* ToolDiagnosticsSettingsView.swift in Sources */,
@@ -1821,6 +1890,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A45310000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A45310000000000000000003 /* AagedalMediaConverterMCP.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1833,6 +1910,11 @@
 			isa = PBXTargetDependency;
 			target = 8EE6EE952C31FC6B007B629D /* Aagedal Media Converter */;
 			targetProxy = 8EE6EEB42C31FC6F007B629D /* PBXContainerItemProxy */;
+		};
+		A4531000000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A45310000000000000000006 /* Aagedal Media Converter MCP */;
+			targetProxy = A4531000000000000000000D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -2179,6 +2261,48 @@
 			};
 			name = Release;
 		};
+		A4531000000000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_CODE_COVERAGE = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3R5QGG9DW6;
+				ENABLE_CODE_COVERAGE = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter.mcp";
+				PRODUCT_NAME = "aagedal-media-converter-mcp";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A4531000000000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_CODE_COVERAGE = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 3R5QGG9DW6;
+				ENABLE_CODE_COVERAGE = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter.mcp";
+				PRODUCT_NAME = "aagedal-media-converter-mcp";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -2214,6 +2338,15 @@
 			buildConfigurations = (
 				8EE6EEC42C31FC6F007B629D /* Debug */,
 				8EE6EEC52C31FC6F007B629D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A45310000000000000000009 /* Build configuration list for PBXNativeTarget "Aagedal Media Converter MCP" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A4531000000000000000000A /* Debug */,
+				A4531000000000000000000B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

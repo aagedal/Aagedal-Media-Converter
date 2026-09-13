@@ -85,6 +85,18 @@ struct Aagedal_Media_Converter_App: App {
                     category: "AgentAccess"
                 ).error("Failed to restore application jobs: \(error.localizedDescription, privacy: .public)")
             }
+
+            guard UserDefaults.standard.bool(forKey: AppConstants.localAgentAccessEnabledKey) else {
+                return
+            }
+            do {
+                try ApplicationAgentIPCServer.shared.start()
+            } catch {
+                Logger(
+                    subsystem: Bundle.main.bundleIdentifier ?? "AagedalMediaConverter",
+                    category: "AgentAccess"
+                ).error("Failed to start local agent access: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

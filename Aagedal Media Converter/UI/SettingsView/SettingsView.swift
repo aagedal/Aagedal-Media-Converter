@@ -10,6 +10,7 @@ struct SettingsView: View {
 
     private enum SettingsTab: String, CaseIterable, Hashable {
         case general
+        case agentAccess
         case tools
         case encoding
         case fileNames
@@ -31,6 +32,7 @@ struct SettingsView: View {
         var label: String {
             switch self {
             case .general: return String(localized: "General", comment: "Settings sidebar tab.")
+            case .agentAccess: return String(localized: "Agent Access", comment: "Settings sidebar tab.")
             case .encoding: return String(localized: "Encoding Groups", comment: "Settings sidebar tab.")
             case .fileNames: return String(localized: "File Names", comment: "Settings sidebar tab.")
             case .metadata: return String(localized: "Metadata", comment: "Settings sidebar tab.")
@@ -54,6 +56,7 @@ struct SettingsView: View {
         var icon: String {
             switch self {
             case .general: return "gearshape"
+            case .agentAccess: return "network"
             case .encoding: return "rectangle.stack"
             case .fileNames: return "textformat"
             case .metadata: return "info.circle"
@@ -84,6 +87,7 @@ struct SettingsView: View {
     private var contentView: some View {
         switch selectedTab {
         case .general: GeneralSettingsView()
+        case .agentAccess: AgentAccessSettingsView()
         case .encoding: EncodingSettingsView()
         case .fileNames: FileNameSettingsView()
         case .metadata: MetadataSettingsView()

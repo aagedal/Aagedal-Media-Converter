@@ -35,6 +35,9 @@ enum AppConstants {
     // Settings window tab to open (used for opening Settings to a specific tab from main window)
     static let settingsTabToOpenKey = "settingsTabToOpen"
 
+    // Local MCP access remains off until the user explicitly enables it.
+    static let localAgentAccessEnabledKey = "localAgentAccessEnabled"
+
     static let defaultScreenshotDirectory: URL = {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         let fallback = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)

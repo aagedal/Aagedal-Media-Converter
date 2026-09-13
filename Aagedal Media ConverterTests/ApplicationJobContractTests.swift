@@ -1347,6 +1347,90 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(cancelledRecord.state, .cancelled)
     }
 
+    func testAgentTransportDispatchesTypedToolsAndRejectsInvalidArguments() async throws {
+        let dispatcher = ApplicationAgentRequestDispatcher(
+            tools: ApplicationAgentTools(
+                jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+                fileAccessAuthorizer: .unrestricted
+            )
+        )
+        let listRequest = ApplicationAgentIPCRequest(tool: .listPresets)
+        let listResponse = await dispatcher.response(to: listRequest)
+
+        XCTAssertEqual(listResponse.requestID, listRequest.requestID)
+        XCTAssertNil(listResponse.failure)
+        guard case .array(let presets)? = listResponse.result else {
+            return XCTFail("Expected a preset array")
+        }
+        XCTAssertEqual(presets.count, ApplicationPresetID.allCases.count)
+
+        let invalidRequest = ApplicationAgentIPCRequest(
+            tool: .inspectMedia,
+            arguments: ["source_path": .string("relative.mov")]
+        )
+        let invalidResponse = await dispatcher.response(to: invalidRequest)
+        XCTAssertNil(invalidResponse.result)
+        XCTAssertEqual(invalidResponse.failure?.code, .invalidArguments)
+        XCTAssertEqual(
+            invalidResponse.failure?.message,
+            "source_path must be an absolute local path."
+        )
+
+        let unexpectedArgumentResponse = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .listPresets,
+            arguments: ["ignored": .bool(true)]
+        ))
+        XCTAssertEqual(unexpectedArgumentResponse.failure?.code, .invalidArguments)
+        XCTAssertEqual(
+            unexpectedArgumentResponse.failure?.message,
+            "Unexpected argument: ignored."
+        )
+
+        let encoded = try JSONEncoder().encode(listResponse)
+        XCTAssertEqual(
+            try JSONDecoder().decode(ApplicationAgentIPCResponse.self, from: encoded),
+            listResponse
+        )
+    }
+
+    func testAgentMessagePortRoundTripKeepsRequestIdentity() throws {
+        let portName = "com.aagedal.tests.agent.\(UUID().uuidString)"
+        let server = ApplicationAgentIPCServer(
+            portName: portName,
+            dispatcher: ApplicationAgentRequestDispatcher(
+                tools: ApplicationAgentTools(
+                    jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+                    fileAccessAuthorizer: .unrestricted
+                )
+            )
+        )
+        try server.start()
+        defer { server.stop() }
+
+        let request = ApplicationAgentIPCRequest(tool: .listPresets)
+        let response = try ApplicationAgentIPCClient(portName: portName).send(
+            request,
+            receiveTimeout: 10
+        )
+
+        XCTAssertEqual(response.requestID, request.requestID)
+        XCTAssertNil(response.failure)
+        guard case .array(let presets)? = response.result else {
+            return XCTFail("Expected a preset array")
+        }
+        XCTAssertEqual(presets.count, ApplicationPresetID.allCases.count)
+
+        server.stop()
+        XCTAssertFalse(server.isRunning)
+        try server.start()
+        let restartedResponse = try ApplicationAgentIPCClient(portName: portName).send(
+            request,
+            receiveTimeout: 10
+        )
+        XCTAssertEqual(restartedResponse.requestID, request.requestID)
+        XCTAssertNil(restartedResponse.failure)
+    }
+
     private func makeRequest(
         schemaVersion: Int = ApplicationConversionRequest.currentSchemaVersion,
         requestID: UUID = UUID(),
