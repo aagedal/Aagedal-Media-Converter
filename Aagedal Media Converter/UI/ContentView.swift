@@ -120,6 +120,7 @@ struct ContentView: View {
     @State private var dismissedApplicationJobIDs = Set<ApplicationJobID>()
     @State private var applicationJobVisibilityStart = Date().addingTimeInterval(-60)
     @State private var pendingManualApplicationJobItems: [UUID: [UUID]] = [:]
+    @State private var activeApplicationJobIDs = Set<ApplicationJobID>()
 
     @StateObject private var updateChecker = UpdateChecker.shared
     @State private var showUpdateNotification = false
@@ -161,8 +162,15 @@ struct ContentView: View {
         || encodingGroups.contains { $0.items.contains { $0.status == .waiting } }
     }
 
+    /// The legacy manager and the application job service publish activity
+    /// independently. Present them as one conversion owner to the toolbar so a
+    /// handed-off manual, Shortcut, or agent job remains cancellable.
+    private var isAnyConversionActive: Bool {
+        isConverting || !activeApplicationJobIDs.isEmpty
+    }
+
     private var hasResettableItems: Bool {
-        droppedFiles.contains { $0.status != .waiting }
+        droppedFiles.contains { $0.status != .waiting && $0.applicationJobID == nil }
         || encodingGroups.contains { $0.items.contains { $0.status != .waiting } }
     }
 
@@ -382,7 +390,7 @@ struct ContentView: View {
                 Task { await addFilesToGroup(groupID: groupID) }
             },
             onResetGroup: { groupID in
-                guard !isConverting else { return }
+                guard !isAnyConversionActive else { return }
                 if let gi = encodingGroups.firstIndex(where: { $0.id == groupID }) {
                     for ii in encodingGroups[gi].items.indices where encodingGroups[gi].items[ii].status != .waiting {
                         if let operationID = encodingGroups[gi].items[ii].analyticsOperationID {
@@ -552,7 +560,7 @@ struct ContentView: View {
                 isFileImporterPresented: $isFileImporterPresented,
                 mergeClipsEnabled: mergeClipsEnabled,
                 watchFolderModeEnabled: watchFolderModeEnabled,
-                isConverting: isConverting,
+                isConverting: isAnyConversionActive,
                 droppedFilesCount: droppedFiles.count,
                 updateChecker: updateChecker,
                 outputFolder: outputFolder,
@@ -780,7 +788,7 @@ struct ContentView: View {
                 }
                 .background(LiquidGlassToolbarConfigurator())
 
-            if isConverting {
+            if isAnyConversionActive {
                 OverallProgressView(
                     progress: computedOverallProgress,
                     currentFileName: currentConvertingItem?.name,
@@ -895,7 +903,7 @@ struct ContentView: View {
         DownloadManager.shared.onAutoEncode = { [self] _ in
             Task { @MainActor in
                 // Only start if not already converting
-                if !isConverting {
+                if !isAnyConversionActive {
                     await startConversion()
                 }
             }
@@ -1793,6 +1801,7 @@ struct ContentView: View {
     /// routed back by stable job identity.
     @MainActor
     private func synchronizeApplicationJobs(_ records: [ApplicationJobRecord]) async {
+        activeApplicationJobIDs = Set(records.lazy.filter { !$0.state.isTerminal }.map(\.id))
         let visibleRecords = records.filter { record in
             guard !dismissedApplicationJobIDs.contains(record.id) else { return false }
             return !record.state.isTerminal || record.updatedAt >= applicationJobVisibilityStart
@@ -2025,7 +2034,7 @@ struct ContentView: View {
     /// Encodes a single item immediately (Option+click on encode button).
     @MainActor
     private func encodeOnlyItem(itemID: UUID) async {
-        guard !isConverting else { return }
+        guard !isAnyConversionActive else { return }
         guard droppedFiles.contains(where: {
             $0.id == itemID && $0.status == .waiting && $0.applicationJobID == nil
         }) else { return }
@@ -2071,6 +2080,9 @@ struct ContentView: View {
             let acceptance = try await ApplicationJobService.shared.planAndSubmit(request)
             let record = try await ApplicationJobService.shared.record(for: acceptance.record.id)
                 ?? acceptance.record
+            if !record.state.isTerminal {
+                activeApplicationJobIDs.insert(record.id)
+            }
             let outputs = try await ApplicationJobService.shared.plannedOutputURLs(for: record.id)
             for (sourceIndex, item) in items.enumerated() {
                 guard let index = droppedFiles.firstIndex(where: { $0.id == item.id }) else { continue }
@@ -2107,7 +2119,7 @@ struct ContentView: View {
     /// `convertGroup` so concat/sequential-naming/conformance settings are honoured.
     @MainActor
     private func encodeOnlyGroup(groupID: UUID) async {
-        guard !isConverting else { return }
+        guard !isAnyConversionActive else { return }
         guard let groupIndex = encodingGroups.firstIndex(where: { $0.id == groupID }) else { return }
         guard encodingGroups[groupIndex].items.contains(where: { $0.status == .waiting }) else { return }
 
@@ -2152,6 +2164,10 @@ struct ContentView: View {
 
     @MainActor
     private func cancelConversion() async {
+        let applicationJobIDs = activeApplicationJobIDs
+        for jobID in applicationJobIDs {
+            _ = try? await ApplicationJobService.shared.requestCancellation(jobID)
+        }
         await ConversionManager.shared.cancelAllConversions()
 
         // Cancel waiting group items too (they won't be reached since isConverting is cleared)
@@ -2289,7 +2305,7 @@ struct ContentView: View {
 
     private var conversionToolbar: some ToolbarContent {
         ConversionToolbarView(
-            isConverting: isConverting,
+            isConverting: isAnyConversionActive,
             canStartConversion: canStartConversion,
             hasFiles: !droppedFiles.isEmpty || !encodingGroups.isEmpty,
             watchFolderModeEnabled: $watchFolderModeEnabled,
@@ -2357,7 +2373,7 @@ struct ContentView: View {
     private func scheduleAutoEncode() {
         Task { @MainActor in
             watchFolderCoordinator.scheduleAutoEncode {
-                let shouldStart = await MainActor.run { !isConverting && canStartConversion }
+                let shouldStart = await MainActor.run { !isAnyConversionActive && canStartConversion }
                 if shouldStart {
                     await evaluateMergeClipsState()
                     await startConversion()
@@ -2376,7 +2392,7 @@ struct ContentView: View {
     private func evaluateMergeClipsState() async {
         await Task.yield()
 
-        if isConverting {
+        if isAnyConversionActive {
             mergeClipsAvailable = false
             mergeClipsEnabled = false
             mergeClipsTooltip = "Cannot toggle merging while conversion is running."
@@ -2417,7 +2433,7 @@ struct ContentView: View {
 
     private func handleConversionToggle(_ optionKeyPressed: Bool) {
         Task { @MainActor in
-            if isConverting {
+            if isAnyConversionActive {
                 await cancelConversion()
                 return
             }
@@ -2601,13 +2617,13 @@ struct ContentView: View {
 
     @MainActor
     private func clearAllFiles() {
-        guard !isConverting else { return }
+        guard !isAnyConversionActive else { return }
 
         Task { @MainActor in
             // Invalidate manager-owned mux attempts before removing their rows so a
             // completed-but-not-yet-published subtitle embed cannot replace a file late.
             await ConversionManager.shared.cancelAllSubtitleEmbeddings()
-            guard !isConverting else { return }
+            guard !isAnyConversionActive else { return }
             clearAllFilesAfterEmbeddingCancellation()
         }
     }
@@ -2662,14 +2678,16 @@ struct ContentView: View {
     }
 
     private func resetAllFiles(optionKeyPressed: Bool = false) {
-        guard !isConverting else { return }
+        guard !isAnyConversionActive else { return }
 
         // Determine whether to clear settings based on preference and Option key
         let resetClearsSettings = UserDefaults.standard.bool(forKey: AppConstants.resetClearsSettingsKey)
         let shouldClearSettings = optionKeyPressed ? !resetClearsSettings : resetClearsSettings
 
         var didReset = false
-        for index in droppedFiles.indices where droppedFiles[index].status != .waiting {
+        for index in droppedFiles.indices
+            where droppedFiles[index].status != .waiting
+                && droppedFiles[index].applicationJobID == nil {
             if let operationID = droppedFiles[index].analyticsOperationID {
                 Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
             }
@@ -3198,6 +3216,9 @@ enum UITestFixtureConfiguration {
         arguments[AppConstants.uploadProfilesKey] = try? JSONEncoder().encode([profile])
         arguments[AppConstants.uploadSelectedProfileIDKey] = profile.id.uuidString
         arguments[AppConstants.uploadProfileMigrationV2Key] = true
+        if environment["AMC_UI_TEST_RESET_AGENT_ACCESS"] == "1" {
+            UserDefaults.standard.set(false, forKey: AppConstants.localAgentAccessEnabledKey)
+        }
         UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
         if environment["AMC_UI_TEST_CLEANUP_FIXTURES"] == "1" {
             // Runs in App.init, before XCUIApplication.launch() returns.

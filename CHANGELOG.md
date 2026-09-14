@@ -37,7 +37,8 @@ localization, and Release-package validation are still open.
 - Connected the shared job service to the bundled FFmpeg conversion engine. The
   adapter reconstructs all six supported presets from the immutable settings
   snapshot, aggregates batch progress, stops on the first failed file, rejects
-  settings it cannot represent faithfully, and drains targeted cancellation.
+  settings it cannot represent faithfully, waits for the converter's asynchronous
+  completion and output validation, and drains targeted cancellation.
 - Added transport-neutral implementations of the six proposed agent operations:
   inspect media, list presets, plan and submit conversions, get a job, and cancel
   a job. Their Codable payloads include structured stream/timecode metadata,
@@ -51,7 +52,8 @@ localization, and Release-package validation are still open.
 - Added opt-in Agent Access settings with a connection test, copyable MCP client
   configuration, helper discovery, approved-folder guidance, and an explicit
   policy that disabling access stops new requests without cancelling accepted
-  jobs.
+  jobs. Endpoint startup and shutdown run away from the UI thread, and the complete
+  opt-in/diagnostic/disable flow is covered in English and Norwegian.
 - Projected shared-service jobs into the existing visible queue with live state
   and progress, accepted output locations, origin and stable job-ID labels, and
   per-job cancellation. Legacy manual queue selection, bulk cancellation, and
@@ -71,7 +73,11 @@ localization, and Release-package validation are still open.
   “Save next to original” destinations, including per-source custom subfolders,
   are captured and authorized for each row without granting an unused batch
   destination. Groups, generated waveform behavior, and post-actions still fall
-  back before submission.
+  back before submission. Dormant waveform preferences on ordinary video no
+  longer force that fallback.
+- Kept the main conversion toolbar, bulk actions, auto-encode, and merge controls
+  synchronized with service-owned work after manual handoff. Shared jobs remain
+  visibly active and the main Cancel action now targets their stable job IDs.
 - Added a queue inspector for every shared job's immutable accepted settings,
   including codecs, container, quality/rate controls, metadata, subtitles,
   filename policy, destination, and capture time.

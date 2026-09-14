@@ -356,7 +356,16 @@ extension JSONDecoder {
 /// The opt-in preference controls whether the endpoint exists at all.
 final class ApplicationAgentIPCServer: @unchecked Sendable {
     static let defaultPortName = "com.aagedal.Aagedal-Media-Converter.agent.v1"
-    static let shared = ApplicationAgentIPCServer()
+    static var runtimePortName: String {
+#if DEBUG
+        if let identifier = ProcessInfo.processInfo.environment["AMC_UI_TEST_AGENT_PORT_ID"],
+           UUID(uuidString: identifier) != nil {
+            return "com.aagedal.tests.agent.\(identifier)"
+        }
+#endif
+        return defaultPortName
+    }
+    static let shared = ApplicationAgentIPCServer(portName: runtimePortName)
 
     private let portName: String
     private let dispatcher: ApplicationAgentRequestDispatcher
@@ -534,7 +543,7 @@ private final class ApplicationAgentLockedResult<Value>: @unchecked Sendable {
 struct ApplicationAgentIPCClient: Sendable {
     let portName: String
 
-    init(portName: String = ApplicationAgentIPCServer.defaultPortName) {
+    init(portName: String = ApplicationAgentIPCServer.runtimePortName) {
         self.portName = portName
     }
 

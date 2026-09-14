@@ -282,6 +282,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         executionTimeAllowance = 300
         let panes = [
             ("general", "General", "Generelt"),
+            ("agentAccess", "Agent Access", "Agenttilgang"),
             ("encoding", "Encoding Groups", "Kodingsgrupper"),
             ("fileNames", "File Names", "Filnavn"),
             ("metadata", "Metadata", "Metadata"),
@@ -336,6 +337,63 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
                 XCTAssertTrue(waitForSelection(of: row, timeout: 5))
                 attachWindowScreenshot(named: "Locale audit - \(language) - \(identifier)")
             }
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testAgentAccessOptInAndConnectionDiagnosticInBothLanguages() throws {
+        for (language, locale, ready, disabled) in [
+            ("en", "en_US", "Ready", "Disabled"),
+            ("nb", "nb_NO", "Klar", "Deaktivert")
+        ] {
+            launchApp(
+                language: language,
+                locale: locale,
+                resetAgentAccess: true
+            )
+            defer { app.terminate() }
+
+            XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+            app.activate()
+            element("toolbar.settings").click()
+            XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+            let agentAccessTab = element("settings.tab.agentAccess")
+            let agentAccessRow = app.outlineRows.containing(
+                .any,
+                identifier: "settings.tab.agentAccess"
+            ).firstMatch
+            agentAccessTab.click()
+            if !waitForSelection(of: agentAccessRow, timeout: 3) {
+                app.activate()
+                agentAccessTab.click()
+            }
+            XCTAssertTrue(waitForSelection(of: agentAccessRow, timeout: 5))
+
+            let accessToggle = element("settings.agentAccess.enabled")
+            let status = element("settings.agentAccess.connectionStatus")
+            let connectionTest = element("settings.agentAccess.test")
+            XCTAssertTrue(accessToggle.waitForExistence(timeout: 5))
+            XCTAssertTrue(status.waitForExistence(timeout: 5))
+            XCTAssertFalse(connectionTest.isEnabled)
+
+            accessToggle.click()
+            XCTAssertTrue(waitForEnabled(true, of: connectionTest, timeout: 10))
+            XCTAssertTrue(
+                waitForLabelOrValue(ready, of: status, timeout: 10),
+                status.debugDescription
+            )
+            connectionTest.click()
+            XCTAssertTrue(
+                waitForLabelOrValue(ready, of: status, timeout: 10),
+                status.debugDescription
+            )
+            XCTAssertTrue(element("settings.agentAccess.configuration").exists)
+            attachWindowScreenshot(named: "Agent Access ready - \(language)")
+
+            accessToggle.click()
+            XCTAssertTrue(waitForLabelOrValue(disabled, of: status, timeout: 5))
+            XCTAssertFalse(connectionTest.isEnabled)
             app.terminate()
         }
     }
@@ -543,7 +601,13 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(conversionButton.isEnabled)
         conversionButton.click()
 
-        XCTAssertTrue(waitForValue("converting", of: queueItem, timeout: 10))
+        XCTAssertTrue(
+            waitForValue("converting", of: queueItem, timeout: 10),
+            queueItem.debugDescription
+        )
+        let jobOrigin = element("queue.item.jobOrigin")
+        XCTAssertTrue(jobOrigin.waitForExistence(timeout: 5))
+        XCTAssertEqual(jobOrigin.label, "Manual job")
         XCTAssertTrue(waitForLabel("Cancel Conversion", of: conversionButton, timeout: 5))
         conversionButton.click()
 
@@ -602,7 +666,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(conversionButton.waitForExistence(timeout: 5))
         conversionButton.click()
 
-        XCTAssertTrue(waitForValue("done", of: queueItem, timeout: 20))
+        XCTAssertTrue(element("queue.item.acceptedSettings").waitForExistence(timeout: 10))
+        element("queue.item.acceptedSettings").click()
+        let acceptedSettings = element("queue.acceptedSettings.text")
+        XCTAssertTrue(acceptedSettings.waitForExistence(timeout: 5))
+        XCTAssertTrue((acceptedSettings.value as? String ?? "").contains("Preset: H.264"))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForValue("done", of: queueItem, timeout: 20),
+            queueItem.debugDescription
+        )
         XCTAssertTrue(waitForLabel("Start Conversion", of: conversionButton, timeout: 5))
         XCTAssertTrue(waitForEnabled(false, of: conversionButton, timeout: 5))
     }
@@ -667,7 +740,8 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         additionalArguments: [String] = [],
         damagedSchedules: Bool = false,
         damagedHistory: Bool = false,
-        previewContainer: String? = nil
+        previewContainer: String? = nil,
+        resetAgentAccess: Bool = false
     ) {
         app = XCUIApplication()
         app.launchArguments += [
@@ -681,6 +755,11 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         ]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        app.launchEnvironment["AMC_UI_TEST_APPLICATION_JOB_STORE_ID"] = UUID().uuidString
+        app.launchEnvironment["AMC_UI_TEST_AGENT_PORT_ID"] = UUID().uuidString
+        if resetAgentAccess {
+            app.launchEnvironment["AMC_UI_TEST_RESET_AGENT_ACCESS"] = "1"
+        }
         if let previewContainer {
             app.launchEnvironment["AMC_UI_TEST_PREVIEW_CONTAINER"] = previewContainer
         }
@@ -733,6 +812,17 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     @MainActor
     private func waitForLabel(_ label: String, of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let predicate = NSPredicate(format: "label == %@", label)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func waitForLabelOrValue(
+        _ text: String,
+        of element: XCUIElement,
+        timeout: TimeInterval
+    ) -> Bool {
+        let predicate = NSPredicate(format: "label == %@ OR value == %@", text, text)
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }

@@ -259,7 +259,9 @@ final class AppIntentHandoffTests: XCTestCase {
 
         let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
             items: [item], destinationFolderURL: folder, preset: .h264,
-            mergeClipsEnabled: false, defaults: defaults
+            mergeClipsEnabled: false,
+            capturedAt: Date(timeIntervalSince1970: 1_789_300_800),
+            defaults: defaults
         ))
         let summary = request.acceptedSettingsSummary(
             sourceIndex: 0,
@@ -349,6 +351,26 @@ final class AppIntentHandoffTests: XCTestCase {
         XCTAssertNil(ManualApplicationJobBridge.makeRequest(
             items: [streamCopyCrop], destinationFolderURL: folder,
             preset: .streamCopy, mergeClipsEnabled: false, defaults: defaults
+        ))
+
+        var audioWaveform = ordinary
+        audioWaveform.hasVideoStream = false
+        audioWaveform.waveformVideoEnabled = true
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [audioWaveform], destinationFolderURL: folder,
+            preset: .h264, mergeClipsEnabled: false, defaults: defaults
+        ))
+    }
+
+    func testManualBridgeIgnoresDormantWaveformPreferenceForVideoSources() throws {
+        let defaults = try makeIsolatedDefaults()
+        var video = makeItem(url: first)
+        video.hasVideoStream = true
+        video.waveformVideoEnabled = true
+
+        XCTAssertNotNil(ManualApplicationJobBridge.makeRequest(
+            items: [video], destinationFolderURL: folder,
+            preset: .h264, mergeClipsEnabled: false, defaults: defaults
         ))
     }
 

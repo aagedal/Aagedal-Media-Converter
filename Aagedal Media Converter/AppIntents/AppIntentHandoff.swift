@@ -196,8 +196,11 @@ enum ManualApplicationJobBridge {
             && (!hasActiveCrop || preset.outputsVisualFrames)
             && (!item.isMuted || (preset.outputsVideoTrack && preset != .streamCopy))
             && (preset != .streamCopy || !hasActiveCrop)
-            && !item.waveformVideoEnabled
-            && item.waveformBackgroundImageURL == nil
+            // The waveform preference is captured on every imported row, but
+            // it only changes execution for audio-only sources. Do not force
+            // ordinary video back onto the legacy path because the dormant
+            // preference happens to be enabled.
+            && !item.requiresWaveformVideo
             && !item.uploadEnabled
             && !item.subtitleEnabled
             && !item.analyticsEnabled

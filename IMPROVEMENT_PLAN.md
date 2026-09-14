@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-13
+Last reviewed: 2026-09-14
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -43,7 +43,23 @@ disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
 
-## 4.5 shared-job continuation — 2026-09-13
+## 4.5 shared-job continuation — through 2026-09-14
+
+The 2026-09-14 continuation closes the first live manual ownership loop. Ordinary
+video is no longer excluded by a dormant waveform preference; the toolbar keeps
+service jobs visibly active and cancels their authoritative job IDs; and the live
+FFmpeg adapter waits for the converter's asynchronous completion instead of
+reporting a false immediate failure. Successful output inspection and active
+cancellation now pass as macOS UI tests. Agent Access opt-in, loopback diagnostics,
+configuration, disabling, and localized status pass in both English and Norwegian.
+The full unit target passes **929 tests**, all **74 release-script tests** pass, and
+the **1,616-entry** localization audit passes. The Release configuration builds
+and its static audit passes for 45 arm64 Mach-O images and 12 notices, while strict
+verification still encounters the recorded local Apple Development trust-chain
+failure. Named MCP clients, packaged
+cold-launch/reconnect/restart, access loss, the six-preset output/playback matrix,
+App Sandbox scope, and Developer ID archive/notarization remain beta gates. See the
+[shared UI ownership validation record](docs/4.5-shared-ui-ownership-validation-2026-09-14.md).
 
 Ordinary manual work for the initial six-preset contract now preserves per-file
 trim, crop, mute, routing, custom names, and “save next to original” destinations

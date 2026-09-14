@@ -1057,6 +1057,14 @@ struct ApplicationJobStore: Sendable {
     let fileURL: URL
 
     static let live = ApplicationJobStore(fileURL: {
+#if DEBUG
+        if let identifier = ProcessInfo.processInfo.environment["AMC_UI_TEST_APPLICATION_JOB_STORE_ID"],
+           UUID(uuidString: identifier) != nil {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("AagedalMediaConverterUITestFixtures", isDirectory: true)
+                .appendingPathComponent("application-jobs-\(identifier).json")
+        }
+#endif
         let supportDirectory = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
@@ -1572,8 +1580,12 @@ struct ApplicationFFmpegRunner: Sendable {
                 ) { success, diagnostic in
                     completion.resolve(success: success, diagnostic: diagnostic)
                 }
-                return completion.result
-                    ?? .failed("FFmpeg returned without reporting a conversion result.")
+                // `FFMPEGConverter.convert` starts a joinable subprocess task and
+                // returns before its completion callback fires. Keep the shared
+                // job running until that callback reports the authoritative
+                // outcome instead of turning every real encode into a false
+                // terminal failure immediately after launch.
+                return await completion.waitForResult()
             },
             cancel: {
                 await converter.cancelConversion()
@@ -1602,17 +1614,35 @@ enum ApplicationFFmpegRunResult: Equatable, Sendable {
 private final class ApplicationFFmpegCompletion: @unchecked Sendable {
     private let lock = NSLock()
     private var storedResult: ApplicationFFmpegRunResult?
-
-    var result: ApplicationFFmpegRunResult? {
-        lock.withLock { storedResult }
-    }
+    private var continuation: CheckedContinuation<ApplicationFFmpegRunResult, Never>?
 
     func resolve(success: Bool, diagnostic: String?) {
+        let result: ApplicationFFmpegRunResult = success
+            ? .succeeded
+            : .failed(diagnostic ?? "FFmpeg conversion failed without a diagnostic.")
+        var waitingContinuation: CheckedContinuation<ApplicationFFmpegRunResult, Never>?
         lock.withLock {
             guard storedResult == nil else { return }
-            storedResult = success
-                ? .succeeded
-                : .failed(diagnostic ?? "FFmpeg conversion failed without a diagnostic.")
+            storedResult = result
+            waitingContinuation = continuation
+            continuation = nil
+        }
+        waitingContinuation?.resume(returning: result)
+    }
+
+    func waitForResult() async -> ApplicationFFmpegRunResult {
+        await withCheckedContinuation { newContinuation in
+            var immediateResult: ApplicationFFmpegRunResult?
+            lock.withLock {
+                if let storedResult {
+                    immediateResult = storedResult
+                } else {
+                    continuation = newContinuation
+                }
+            }
+            if let immediateResult {
+                newContinuation.resume(returning: immediateResult)
+            }
         }
     }
 }
@@ -1723,23 +1753,32 @@ actor ApplicationFFmpegJobExecutor {
             $0.sourceURL == output.sourceURL
         }
         let defaults = try ApplicationExecutionDefaults(settings: settings)
+        var conversionRequest = ConversionRequest(
+            inputURL: output.sourceURL,
+            outputURL: output.outputURL,
+            preset: plan.request.presetID.exportPreset,
+            comment: sourceSettings?.comment ?? "",
+            includeDateTag: sourceSettings?.includeDateTag
+                ?? executionSettings?.includeDateTag
+                ?? false,
+            trimStart: sourceSettings?.trimStart,
+            trimEnd: sourceSettings?.trimEnd,
+            audioRoutingConfig: sourceSettings?.audioRoutingConfig,
+            cropConfig: sourceSettings?.cropConfig,
+            timecodeConfig: sourceSettings.map(\.timecodeConfig)
+                ?? executionSettings?.timecodeConfig,
+            isMuted: sourceSettings?.isMuted ?? false
+        )
+#if DEBUG
+        // Keep the shared-service cancellation UI test on a real subprocess
+        // while preventing its small generated fixture from completing before
+        // automation can issue the cancellation request.
+        if ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1" {
+            conversionRequest.customInputArguments = ["-re", "-i", output.sourceURL.path]
+        }
+#endif
         return ApplicationFFmpegConversion(
-            request: ConversionRequest(
-                inputURL: output.sourceURL,
-                outputURL: output.outputURL,
-                preset: plan.request.presetID.exportPreset,
-                comment: sourceSettings?.comment ?? "",
-                includeDateTag: sourceSettings?.includeDateTag
-                    ?? executionSettings?.includeDateTag
-                    ?? false,
-                trimStart: sourceSettings?.trimStart,
-                trimEnd: sourceSettings?.trimEnd,
-                audioRoutingConfig: sourceSettings?.audioRoutingConfig,
-                cropConfig: sourceSettings?.cropConfig,
-                timecodeConfig: sourceSettings.map(\.timecodeConfig)
-                    ?? executionSettings?.timecodeConfig,
-                isMuted: sourceSettings?.isMuted ?? false
-            ),
+            request: conversionRequest,
             audioOnlySettings: plan.request.presetID == .audioOnly
                 ? AudioOnlySettings(defaults: defaults.value) : nil,
             codecSettings: CodecExportSettings(

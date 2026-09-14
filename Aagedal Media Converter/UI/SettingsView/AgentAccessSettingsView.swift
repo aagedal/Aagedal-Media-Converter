@@ -9,6 +9,7 @@ struct AgentAccessSettingsView: View {
     @AppStorage(AppConstants.localAgentAccessEnabledKey) private var accessEnabled = false
     @State private var connectionStatus = String(localized: "Not tested")
     @State private var isTesting = false
+    @State private var isUpdatingAccess = false
 
     private var helperURL: URL {
         Bundle.main.bundleURL
@@ -30,14 +31,25 @@ struct AgentAccessSettingsView: View {
         return String(decoding: data, as: UTF8.self)
     }
 
+    private var accessEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { accessEnabled },
+            set: { enabled in
+                accessEnabled = enabled
+                apply(enabled: enabled)
+            }
+        )
+    }
+
     var body: some View {
         Form {
             Section("Local agent access") {
-                Toggle("Allow local MCP clients to use Aagedal Media Converter", isOn: $accessEnabled)
+                Toggle(
+                    "Allow local MCP clients to use Aagedal Media Converter",
+                    isOn: accessEnabledBinding
+                )
+                    .disabled(isUpdatingAccess)
                     .accessibilityIdentifier("settings.agentAccess.enabled")
-                    .onChange(of: accessEnabled) { _, enabled in
-                        apply(enabled: enabled)
-                    }
 
                 Text("When enabled, the signed helper accepts requests from local MCP clients and sends them to this app. The app remains the owner of every accepted conversion.")
                     .font(.callout)
@@ -47,8 +59,11 @@ struct AgentAccessSettingsView: View {
                     HStack {
                         Text(connectionStatus)
                             .foregroundStyle(.secondary)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(connectionStatus)
+                            .accessibilityIdentifier("settings.agentAccess.connectionStatus")
                         Button("Test Connection") { testConnection() }
-                            .disabled(!accessEnabled || isTesting)
+                            .disabled(!accessEnabled || isTesting || isUpdatingAccess)
                             .accessibilityIdentifier("settings.agentAccess.test")
                     }
                 }
@@ -65,6 +80,7 @@ struct AgentAccessSettingsView: View {
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                    .accessibilityIdentifier("settings.agentAccess.configuration")
 
                 HStack {
                     Button("Copy Configuration") {
@@ -91,23 +107,55 @@ struct AgentAccessSettingsView: View {
         .navigationTitle("Local Agent Access")
         .padding(.horizontal, 12)
         .onAppear {
-            connectionStatus = accessEnabled && ApplicationAgentIPCServer.shared.isRunning
-                ? String(localized: "Ready")
-                : String(localized: "Not connected")
+            if accessEnabled {
+                if ApplicationAgentIPCServer.shared.isRunning {
+                    connectionStatus = String(localized: "Ready")
+                } else {
+                    // The pane can appear before the app-launch task has started
+                    // the endpoint. Starting is idempotent, so reconcile the
+                    // visible toggle with the actual transport instead of
+                    // reporting a stale "Not connected" state.
+                    apply(enabled: true)
+                }
+            } else {
+                connectionStatus = String(localized: "Not connected")
+            }
         }
     }
 
     private func apply(enabled: Bool) {
         if enabled {
-            do {
-                try ApplicationAgentIPCServer.shared.start()
-                connectionStatus = String(localized: "Ready")
-            } catch {
-                connectionStatus = String(localized: "Could not start")
+            isUpdatingAccess = true
+            connectionStatus = String(localized: "Testing…")
+            Task {
+                defer { isUpdatingAccess = false }
+                do {
+                    try await Task.detached(priority: .userInitiated) {
+                        try ApplicationAgentIPCServer.shared.start()
+                    }.value
+
+                    guard accessEnabled else {
+                        await Task.detached {
+                            ApplicationAgentIPCServer.shared.stop()
+                        }.value
+                        return
+                    }
+                    connectionStatus = String(localized: "Ready")
+                } catch {
+                    guard accessEnabled else { return }
+                    connectionStatus = String(localized: "Could not start")
+                        + ": " + error.localizedDescription
+                }
             }
         } else {
-            ApplicationAgentIPCServer.shared.stop()
+            isUpdatingAccess = true
             connectionStatus = String(localized: "Disabled")
+            Task {
+                await Task.detached(priority: .userInitiated) {
+                    ApplicationAgentIPCServer.shared.stop()
+                }.value
+                isUpdatingAccess = false
+            }
         }
     }
 
@@ -128,6 +176,7 @@ struct AgentAccessSettingsView: View {
                     : String(localized: "Request failed")
             } catch {
                 connectionStatus = String(localized: "Not connected")
+                    + ": " + error.localizedDescription
             }
         }
     }

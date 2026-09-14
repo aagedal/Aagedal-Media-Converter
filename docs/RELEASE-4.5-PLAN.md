@@ -3,8 +3,9 @@
 Status: signed local transport, visible shared-job queue projection, initial
 Shortcut submission, and ordinary manual shared-queue submission including
 common per-file settings and destinations implemented on `codex/release-4.5`;
-feasibility decision pending final-client, remaining specialized-path, and
-Release-package validation.
+live manual success/cancellation and bilingual Agent Access diagnostics now pass.
+Beta readiness still depends on named-client, access-loss, output-matrix, sandbox
+scope, and Release-package validation.
 Created: 2026-09-11.
 
 ## Release context
@@ -16,7 +17,7 @@ Created: 2026-09-11.
 The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
 signed release candidate.
 
-## Implementation progress — through 2026-09-13
+## Implementation progress — through 2026-09-14
 
 The first shared-boundary increment is implemented without selecting an IPC
 transport prematurely:
@@ -181,7 +182,22 @@ trim, crop, mute, routing, and custom-name details, and the packaged Norwegian
 catalog is exercised directly by the focused handoff suite. See the
 [accepted-settings localization validation record](4.5-accepted-settings-localization-validation-2026-09-13.md).
 
-This is still a prototype rather than a completed feasibility decision. The
+Live manual shared-queue UI coverage now verifies both successful H.264 output
+and cancellation of a running FFmpeg subprocess. This closed three integration
+gaps: dormant waveform preferences no longer divert ordinary video to the legacy
+path, global UI activity/cancellation follows service-owned jobs after handoff,
+and the FFmpeg adapter awaits the converter's asynchronous completion callback.
+Agent Access also starts and stops its endpoint off the main thread and passes an
+English/Norwegian opt-in plus loopback diagnostic test. The full unit target now
+passes 929 tests, all 74 release-script tests pass, and the 1,616-entry catalog
+audit remains green. A Release build passes static validation for 45 arm64 Mach-O
+images and 12 packaged notices; strict helper signature verification remains
+blocked by the recorded local Apple Development trust-chain failure and does not
+replace Developer ID archive/notarization. See the
+[shared UI ownership validation record](4.5-shared-ui-ownership-validation-2026-09-14.md).
+
+This is still a beta candidate under construction rather than a completed
+feasibility decision. The
 current direct-distribution target has App Sandbox disabled, two named MCP
 clients have not been exercised, and a Developer ID Release archive has not
 completed signing/notarization validation. Groups/merge, generated waveform
