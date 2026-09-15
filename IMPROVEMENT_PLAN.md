@@ -43,6 +43,15 @@ disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
 
+## 4.5 unavailable-source continuation — 2026-09-15
+
+Approved sources missing at request time now return `source_unavailable` from
+both `inspect_media` and `plan_conversion`, including through the typed IPC
+boundary. This gives a client an actionable lost-drive result before work is
+accepted; live bookmarked external-drive recovery remains in the packaged
+acceptance matrix. See the
+[unavailable-source validation record](docs/4.5-unavailable-source-validation-2026-09-15.md).
+
 ## 4.5 Agent Access lifecycle continuation — 2026-09-15
 
 App startup and the Settings opt-in toggle now serialize endpoint transitions

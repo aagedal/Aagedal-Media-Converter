@@ -2306,7 +2306,14 @@ actor ApplicationJobService {
         for destinationURL in Self.destinationFolderURLs(for: request) {
             try Self.validateDestination(destinationURL)
         }
-        let sources = try request.sourceURLs.map { try sourceIdentityProvider($0.standardizedFileURL) }
+        let sources = try request.sourceURLs.map { sourceURL in
+            let normalized = sourceURL.standardizedFileURL
+            do {
+                return try sourceIdentityProvider(normalized)
+            } catch {
+                throw ApplicationJobError.sourceUnavailable(normalized)
+            }
+        }
         let outputs = try Self.plannedOutputs(for: request)
 
         var uniqueOutputs = Set<URL>()
@@ -3264,6 +3271,9 @@ struct ApplicationAgentTools: Sendable {
             throw ApplicationJobError.sourceAccessDenied(sourceURL)
         }
         defer { lease.release() }
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+            throw ApplicationJobError.sourceUnavailable(sourceURL)
+        }
         do {
             return try await mediaInspector.inspect(sourceURL)
         } catch is CancellationError {

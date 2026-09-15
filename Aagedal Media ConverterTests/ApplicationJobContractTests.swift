@@ -389,6 +389,25 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testPlanningReportsUnavailableApprovedSource() async throws {
+        let directory = try makeTemporaryDirectory()
+        let missingSource = directory.appendingPathComponent("unmounted.mov")
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+
+        do {
+            _ = try await service.plan(makeRequest(
+                sourceURLs: [missingSource],
+                destinationFolderURL: directory
+            ))
+            XCTFail("Expected an unavailable source to be rejected during planning")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceUnavailable(missingSource))
+            XCTAssertEqual((error as? ApplicationJobError)?.code.rawValue, "source_unavailable")
+        }
+        let records = try await service.allRecords()
+        XCTAssertTrue(records.isEmpty)
+    }
+
     func testSubmissionRechecksRevokedFolderAccess() async throws {
         final class GrantState: @unchecked Sendable {
             private let lock = NSLock()
@@ -1393,7 +1412,9 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     func testAgentToolsInspectionRetainsAccessAndReturnsCodableMetadata() async throws {
-        let sourceURL = URL(fileURLWithPath: "/approved/clip.mov")
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("clip.mov")
+        try Data("fixture".utf8).write(to: sourceURL)
         let leaseState = ApplicationJobLeaseState()
         let expected = ApplicationMediaInspection(
             sourceURL: sourceURL,
@@ -1582,6 +1603,27 @@ final class ApplicationJobContractTests: XCTestCase {
         )
     }
 
+    func testAgentToolsInspectionReportsUnavailableApprovedSource() async throws {
+        let directory = try makeTemporaryDirectory()
+        let missingSource = directory.appendingPathComponent("unmounted.mov")
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: .unrestricted,
+            mediaInspector: ApplicationMediaInspector { _ in
+                XCTFail("Inspection must not run for an unavailable source")
+                throw CancellationError()
+            }
+        )
+
+        do {
+            _ = try await tools.inspectMedia(at: missingSource)
+            XCTFail("Expected an unavailable source to be rejected before inspection")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceUnavailable(missingSource))
+            XCTAssertEqual(ApplicationAgentToolFailure(error: error).code, .sourceUnavailable)
+        }
+    }
+
     func testAgentToolsPlanSubmitGetAndCancelUseSharedJobService() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")
@@ -1655,6 +1697,25 @@ final class ApplicationJobContractTests: XCTestCase {
             invalidResponse.failure?.message,
             "source_path must be an absolute local path."
         )
+
+        let directory = try makeTemporaryDirectory()
+        let missingSource = directory.appendingPathComponent("unmounted.mov")
+        let unavailableInspection = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .inspectMedia,
+            arguments: ["source_path": .string(missingSource.path)]
+        ))
+        XCTAssertEqual(unavailableInspection.failure?.code, .sourceUnavailable)
+
+        let unavailablePlan = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .planConversion,
+            arguments: [
+                "source_paths": .array([.string(missingSource.path)]),
+                "destination_path": .string(directory.path),
+                "preset_id": .string("h264"),
+                "requester_id": .string("Codex")
+            ]
+        ))
+        XCTAssertEqual(unavailablePlan.failure?.code, .sourceUnavailable)
 
         let unexpectedArgumentResponse = await dispatcher.response(to: ApplicationAgentIPCRequest(
             tool: .listPresets,

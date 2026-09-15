@@ -258,6 +258,14 @@ while startup is suspended. This narrows the disabling-policy gate; it does not
 establish helper-triggered cold launch or an external named-client connection.
 See the [lifecycle validation record](4.5-agent-access-lifecycle-validation-2026-09-15.md).
 
+Approved sources that become unavailable now report the stable
+`source_unavailable` failure during both media inspection and conversion
+planning. Planning maps filesystem identity failures to that code, matching
+submit-time revalidation; inspection checks availability after acquiring its
+approved read lease and before launching the media probe. The typed IPC boundary
+returns the same code for both operations. See the
+[unavailable-source validation record](4.5-unavailable-source-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
