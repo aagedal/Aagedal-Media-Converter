@@ -5,8 +5,62 @@
 import AppKit
 import SwiftUI
 
+enum ApplicationAgentMCPClient: String, CaseIterable, Identifiable {
+    case claudeDesktop
+    case claudeCode
+    case codex
+    case openCode
+
+    var id: Self { self }
+
+    var name: String {
+        switch self {
+        case .claudeDesktop: "Claude Desktop"
+        case .claudeCode: "Claude Code"
+        case .codex: "Codex"
+        case .openCode: "OpenCode"
+        }
+    }
+
+    func configuration(helperURL: URL) -> String {
+        let quotedPath = "'" + helperURL.path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        switch self {
+        case .claudeCode:
+            return "claude mcp add --scope user aagedal-media-converter -- \(quotedPath)"
+        case .codex:
+            return "codex mcp add aagedal-media-converter -- \(quotedPath)"
+        case .claudeDesktop:
+            return Self.jsonConfiguration([
+                "mcpServers": [
+                    "aagedal-media-converter": ["command": helperURL.path]
+                ]
+            ])
+        case .openCode:
+            return Self.jsonConfiguration([
+                "$schema": "https://opencode.ai/config.json",
+                "mcp": [
+                    "aagedal-media-converter": [
+                        "type": "local",
+                        "command": [helperURL.path],
+                        "enabled": true
+                    ]
+                ]
+            ])
+        }
+    }
+
+    private static func jsonConfiguration(_ value: [String: Any]) -> String {
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: value,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        ) else { return "{}" }
+        return String(decoding: data, as: UTF8.self)
+    }
+}
+
 struct AgentAccessSettingsView: View {
     @AppStorage(AppConstants.localAgentAccessEnabledKey) private var accessEnabled = false
+    @State private var selectedClient: ApplicationAgentMCPClient = .claudeDesktop
     @State private var connectionStatus = String(localized: "Not tested")
     @State private var isTesting = false
     @State private var isUpdatingAccess = false
@@ -19,16 +73,7 @@ struct AgentAccessSettingsView: View {
     }
 
     private var configuration: String {
-        let value = [
-            "mcpServers": [
-                "aagedal-media-converter": ["command": helperURL.path]
-            ]
-        ]
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: value,
-            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        ) else { return "{}" }
-        return String(decoding: data, as: UTF8.self)
+        selectedClient.configuration(helperURL: helperURL)
     }
 
     private var accessEnabledBinding: Binding<Bool> {
@@ -70,9 +115,27 @@ struct AgentAccessSettingsView: View {
             }
 
             Section("MCP client setup") {
-                Text("Add this stdio server to a local MCP client. Keep the app installed at the same location after configuring the client.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Picker("MCP client", selection: $selectedClient) {
+                    ForEach(ApplicationAgentMCPClient.allCases) { client in
+                        Text(client.name).tag(client)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("settings.agentAccess.client")
+
+                if selectedClient == .claudeDesktop {
+                    Text("Add this stdio server to a local MCP client. Keep the app installed at the same location after configuring the client.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else if selectedClient == .openCode {
+                    Text("Add this entry to your opencode.json configuration, then restart OpenCode. Keep the app installed at the same location.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Run this command in Terminal, then restart the client. Keep the app installed at the same location.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
 
                 Text(configuration)
                     .font(.system(.caption, design: .monospaced))
@@ -83,7 +146,7 @@ struct AgentAccessSettingsView: View {
                     .accessibilityIdentifier("settings.agentAccess.configuration")
 
                 HStack {
-                    Button("Copy Configuration") {
+                    Button("Copy Setup") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(configuration, forType: .string)
                     }

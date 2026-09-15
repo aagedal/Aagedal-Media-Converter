@@ -215,11 +215,22 @@ source/license verification, a Release build, and the 45-image/12-notice static
 bundle audit pass. See the
 [SwiftMediaMetadata 3.0.1 validation record](4.5-swiftmediametadata-3.0.1-validation-2026-09-15.md).
 
+Agent Access now shows copyable, client-specific setup for Claude Desktop,
+Claude Code, Codex, and OpenCode, with a guide for file grants, reconnects,
+retention, and the same-session access policy. The installed Claude Code and Codex CLIs
+accepted the displayed command forms in isolated configurations; Claude Code
+reported a healthy stdio connection and Codex reported the expected registered
+helper path. OpenCode's local-MCP JSON is implemented and covered by a focused
+configuration test, but its installed CLI has not connected in this environment.
+This is setup-syntax validation, not the three-client end-to-end
+workflow required for beta. See the
+[client setup validation record](4.5-client-setup-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
-current direct-distribution target has App Sandbox disabled, two named MCP
-clients have not been exercised, and a Developer ID Release archive has not
-completed signing/notarization validation. Groups/merge, generated waveform
+current direct-distribution target has App Sandbox disabled, the Claude Code,
+Codex, and OpenCode tool workflows have not all been exercised, and a Developer ID
+Release archive has not completed signing/notarization validation. Groups/merge, generated waveform
 behavior, post-actions, and unsupported App Intent cases still use the legacy
 executor, so full
 cross-boundary serialization remains open. The Agent Access surface and
@@ -332,9 +343,9 @@ record retention and idempotency-key lifetime before implementation.
 
 ### 1. Feasibility and scope decision
 
-Prove a signed, sandboxed app and bundled helper can connect, launch the app if
-needed, inspect an approved file, and return structured data. Test denied and
-revoked folder access. Verify compatibility with two selected local MCP clients.
+Prove a signed app and bundled helper can connect under the chosen App Sandbox
+scope, launch the app if needed, inspect an approved file, and return structured data. Test denied and
+revoked folder access. Verify compatibility with Claude Code, Codex, and OpenCode.
 
 Exit: documented IPC/transport decision, supported-client list, setup flow,
 initial preset/override matrix, and an effort estimate. If file access or packaging

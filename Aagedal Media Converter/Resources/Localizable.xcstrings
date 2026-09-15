@@ -11,6 +11,16 @@
         }
       }
     },
+    "Add this entry to your opencode.json configuration, then restart OpenCode. Keep the app installed at the same location." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til denne oppføringen i opencode.json-konfigurasjonen, og start deretter OpenCode på nytt. Behold appen på samme sted."
+          }
+        }
+      }
+    },
     "Audio: %@" : {
       "localizations" : {
         "nb" : {
@@ -381,6 +391,16 @@
         }
       }
     },
+    "Copy Setup" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopier oppsett"
+          }
+        }
+      }
+    },
     "Could not start" : {
       "localizations" : {
         "nb" : {
@@ -451,6 +471,16 @@
         }
       }
     },
+    "MCP client" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP-klient"
+          }
+        }
+      }
+    },
     "Not connected" : {
       "localizations" : {
         "nb" : {
@@ -477,6 +507,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Forespørselen mislyktes"
+          }
+        }
+      }
+    },
+    "Run this command in Terminal, then restart the client. Keep the app installed at the same location." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kjør denne kommandoen i Terminal, og start deretter klienten på nytt. Behold appen på samme sted."
           }
         }
       }

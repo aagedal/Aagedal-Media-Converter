@@ -43,6 +43,19 @@ disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
 
+## 4.5 MCP client setup continuation — 2026-09-15
+
+Agent Access now offers copyable setup for Claude Desktop, Claude Code, Codex,
+and OpenCode. Claude Code reports the embedded helper connected in an isolated
+user-scope configuration; Codex accepts the generated stdio command in an
+isolated configuration. OpenCode's documented local-MCP JSON is covered by a
+focused configuration test, and the packaged helper accepts an OpenCode-named
+MCP initialization and tool-discovery exchange. The OpenCode CLI exits with
+code 137 on this host, so live tool calls from all three named clients remain
+beta acceptance work. The focused bilingual Agent Access UI smoke passes and
+the 1,620-entry localization audit is green. See the
+[client setup validation record](docs/4.5-client-setup-validation-2026-09-15.md).
+
 ## 4.5 SwiftMediaMetadata 3.0.1 update — 2026-09-15
 
 The app now resolves SwiftMediaMetadata 3.0.1 at revision
@@ -98,7 +111,8 @@ locale-aware number and date formatting.
 The full unit target passes **928 tests**, all **74 release-script tests** pass,
 the 1,616-entry localization catalog audit passes, and the preceding Release build passes its
 45-image arm64/Hardened Runtime and 12-notice bundle audit. This is not a signed
-distribution candidate: two named MCP clients, cold launch/reconnect/restart,
+distribution candidate: Claude Code, Codex, and OpenCode tool workflows,
+cold launch/reconnect/restart,
 permission loss, real output/playback, Norwegian visual review, the App Sandbox
 scope decision, and Developer ID archive/notarization remain open. See the
 [4.5 release plan](docs/RELEASE-4.5-PLAN.md) and the latest

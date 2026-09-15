@@ -389,6 +389,15 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
                 status.debugDescription
             )
             XCTAssertTrue(element("settings.agentAccess.configuration").exists)
+            let clientPicker = element("settings.agentAccess.client")
+            let setup = element("settings.agentAccess.configuration")
+            XCTAssertTrue(clientPicker.exists)
+            for client in ["Claude Desktop", "Claude Code", "Codex", "OpenCode"] {
+                let option = clientPicker.descendants(matching: .any)
+                    .matching(NSPredicate(format: "label == %@", client)).firstMatch
+                XCTAssertTrue(option.waitForExistence(timeout: 5))
+            }
+            XCTAssertTrue(waitForTextContaining("mcpServers", of: setup, timeout: 5))
             attachWindowScreenshot(named: "Agent Access ready - \(language)")
 
             accessToggle.click()
@@ -823,6 +832,17 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         timeout: TimeInterval
     ) -> Bool {
         let predicate = NSPredicate(format: "label == %@ OR value == %@", text, text)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func waitForTextContaining(
+        _ text: String,
+        of element: XCUIElement,
+        timeout: TimeInterval
+    ) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }

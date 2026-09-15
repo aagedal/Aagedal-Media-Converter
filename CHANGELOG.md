@@ -54,6 +54,9 @@ localization, and Release-package validation are still open.
   policy that disabling access stops new requests without cancelling accepted
   jobs. Endpoint startup and shutdown run away from the UI thread, and the complete
   opt-in/diagnostic/disable flow is covered in English and Norwegian.
+- Added copyable, client-specific setup for Claude Desktop, Claude Code, Codex,
+  and OpenCode, plus a [local agent access guide](Documentation/LOCAL_AGENT_ACCESS.md)
+  covering folder grants, reconnects, job retention, and same-session access.
 - Projected shared-service jobs into the existing visible queue with live state
   and progress, accepted output locations, origin and stable job-ID labels, and
   per-job cancellation. Legacy manual queue selection, bulk cancellation, and

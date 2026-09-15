@@ -10,6 +10,23 @@ final class ApplicationJobContractTests: XCTestCase {
     private let source = URL(fileURLWithPath: "/fixtures/input.mov")
     private let destination = URL(fileURLWithPath: "/outputs", isDirectory: true)
 
+    func testOpenCodeSetupUsesLocalStdioAndKeepsTheHelperPathAsOneArgument() throws {
+        let helperURL = URL(fileURLWithPath:
+            "/Applications/Aagedal Media Converter.app/Contents/Helpers/aagedal-media-converter-mcp"
+        )
+        let data = Data(ApplicationAgentMCPClient.openCode.configuration(helperURL: helperURL).utf8)
+        let configuration = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        let servers = try XCTUnwrap(configuration["mcp"] as? [String: [String: Any]])
+        let server = try XCTUnwrap(servers["aagedal-media-converter"])
+
+        XCTAssertEqual(configuration["$schema"] as? String, "https://opencode.ai/config.json")
+        XCTAssertEqual(server["type"] as? String, "local")
+        XCTAssertEqual(server["command"] as? [String], [helperURL.path])
+        XCTAssertEqual(server["enabled"] as? Bool, true)
+    }
+
     func testSupportedPresetIDsAreStableAndMapToInitialPresetSubset() {
         XCTAssertEqual(ApplicationPresetID.allCases.map(\.rawValue), [
             "h264", "hevc", "prores", "proxy", "audio_only", "stream_copy"
