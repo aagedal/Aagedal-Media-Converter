@@ -193,17 +193,11 @@ struct AgentAccessSettingsView: View {
             Task {
                 defer { isUpdatingAccess = false }
                 do {
-                    try await Task.detached(priority: .userInitiated) {
-                        try ApplicationAgentIPCServer.shared.start()
-                    }.value
-
-                    guard accessEnabled else {
-                        await Task.detached {
-                            ApplicationAgentIPCServer.shared.stop()
-                        }.value
-                        return
-                    }
-                    connectionStatus = String(localized: "Ready")
+                    let running = try await ApplicationAgentAccessLifecycle.shared.reconcile()
+                    guard accessEnabled else { return }
+                    connectionStatus = running
+                        ? String(localized: "Ready")
+                        : String(localized: "Not connected")
                 } catch {
                     guard accessEnabled else { return }
                     connectionStatus = String(localized: "Could not start")
@@ -214,9 +208,7 @@ struct AgentAccessSettingsView: View {
             isUpdatingAccess = true
             connectionStatus = String(localized: "Disabled")
             Task {
-                await Task.detached(priority: .userInitiated) {
-                    ApplicationAgentIPCServer.shared.stop()
-                }.value
+                _ = try? await ApplicationAgentAccessLifecycle.shared.reconcile()
                 isUpdatingAccess = false
             }
         }

@@ -250,6 +250,14 @@ whether the runner failure reflects only test-runner isolation remains
 unresolved. See the
 [packaged MCP reconnect validation record](4.5-packaged-mcp-reconnect-validation-2026-09-15.md).
 
+Agent Access startup and Settings opt-in changes now share a serialized
+lifecycle reconciler. It reads the current preference at each transition and
+again after endpoint startup, so a delayed app-launch task cannot reopen a
+connection after the user disables access. A timing regression covers disabling
+while startup is suspended. This narrows the disabling-policy gate; it does not
+establish helper-triggered cold launch or an external named-client connection.
+See the [lifecycle validation record](4.5-agent-access-lifecycle-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

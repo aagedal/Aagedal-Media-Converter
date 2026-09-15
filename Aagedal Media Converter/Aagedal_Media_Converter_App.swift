@@ -86,11 +86,8 @@ struct Aagedal_Media_Converter_App: App {
                 ).error("Failed to restore application jobs: \(error.localizedDescription, privacy: .public)")
             }
 
-            guard UserDefaults.standard.bool(forKey: AppConstants.localAgentAccessEnabledKey) else {
-                return
-            }
             do {
-                try ApplicationAgentIPCServer.shared.start()
+                try await ApplicationAgentAccessLifecycle.shared.reconcile()
             } catch {
                 Logger(
                     subsystem: Bundle.main.bundleIdentifier ?? "AagedalMediaConverter",

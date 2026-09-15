@@ -1711,6 +1711,46 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertNil(restartedResponse.failure)
     }
 
+    func testDisablingAgentAccessDuringDelayedStartupCannotReopenEndpoint() async throws {
+        final class AccessState: @unchecked Sendable {
+            private let lock = NSLock()
+            private var enabled = true
+            private var running = false
+
+            func setEnabled(_ value: Bool) { lock.withLock { enabled = value } }
+            func isEnabled() -> Bool { lock.withLock { enabled } }
+            func start() { lock.withLock { running = true } }
+            func stop() { lock.withLock { running = false } }
+            func isRunning() -> Bool { lock.withLock { running } }
+        }
+
+        let state = AccessState()
+        let startupEntered = expectation(description: "Endpoint startup began")
+        let finishStartup = DispatchSemaphore(value: 0)
+        defer { finishStartup.signal() }
+        let lifecycle = ApplicationAgentAccessLifecycle(
+            isEnabled: { state.isEnabled() },
+            start: {
+                startupEntered.fulfill()
+                _ = finishStartup.wait(timeout: .now() + 5)
+                state.start()
+            },
+            stop: { state.stop() }
+        )
+
+        let startup = Task { try await lifecycle.reconcile() }
+        await fulfillment(of: [startupEntered], timeout: 5)
+        state.setEnabled(false)
+        let disabling = Task { try await lifecycle.reconcile() }
+        finishStartup.signal()
+
+        let startupResult = try await startup.value
+        let disablingResult = try await disabling.value
+        XCTAssertFalse(startupResult)
+        XCTAssertFalse(disablingResult)
+        XCTAssertFalse(state.isRunning())
+    }
+
     func testPackagedMCPHelperReturnsObjectResultsAndOwnsRequesterID() throws {
         let portID = UUID()
         let server = ApplicationAgentIPCServer(

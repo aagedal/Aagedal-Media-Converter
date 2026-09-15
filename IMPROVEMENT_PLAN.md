@@ -43,6 +43,17 @@ disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
 
+## 4.5 Agent Access lifecycle continuation — 2026-09-15
+
+App startup and the Settings opt-in toggle now serialize endpoint transitions
+and re-read the current preference after startup. Disabling access during a
+delayed launch cannot reopen the local message port. The timing regression,
+the full app unit target, all 74 release-script tests, and the
+English/Norwegian helper-based Settings smoke pass. External named-client
+workflows, helper-triggered cold launch, and
+Developer ID Release validation remain open. See the
+[lifecycle validation record](docs/4.5-agent-access-lifecycle-validation-2026-09-15.md).
+
 ## 4.5 MCP client setup continuation — 2026-09-15
 
 The helper now confines retries to endpoint startup, reports failed sends once,

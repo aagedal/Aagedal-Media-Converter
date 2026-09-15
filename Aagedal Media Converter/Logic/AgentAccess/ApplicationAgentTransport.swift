@@ -351,6 +351,50 @@ extension JSONDecoder {
     }
 }
 
+/// Serializes startup and Settings changes. A delayed startup must re-read the
+/// current opt-in preference rather than reopen an endpoint the user disabled.
+actor ApplicationAgentAccessLifecycle {
+    static let shared = ApplicationAgentAccessLifecycle(
+        isEnabled: { UserDefaults.standard.bool(forKey: AppConstants.localAgentAccessEnabledKey) },
+        start: { try ApplicationAgentIPCServer.shared.start() },
+        stop: { ApplicationAgentIPCServer.shared.stop() }
+    )
+
+    private let isEnabled: @Sendable () -> Bool
+    private let start: @Sendable () throws -> Void
+    private let stop: @Sendable () -> Void
+
+    init(
+        isEnabled: @escaping @Sendable () -> Bool,
+        start: @escaping @Sendable () throws -> Void,
+        stop: @escaping @Sendable () -> Void
+    ) {
+        self.isEnabled = isEnabled
+        self.start = start
+        self.stop = stop
+    }
+
+    @discardableResult
+    func reconcile() throws -> Bool {
+        guard isEnabled() else {
+            stop()
+            return false
+        }
+        do {
+            try start()
+        } catch {
+            if !isEnabled() { stop() }
+            throw error
+        }
+        // The preference can change while the server's run loop is starting.
+        guard isEnabled() else {
+            stop()
+            return false
+        }
+        return true
+    }
+}
+
 /// The app-side endpoint for the bundled stdio helper. CFMessagePort keeps the
 /// prototype runtime-free and scoped to the logged-in user's launch session.
 /// The opt-in preference controls whether the endpoint exists at all.
