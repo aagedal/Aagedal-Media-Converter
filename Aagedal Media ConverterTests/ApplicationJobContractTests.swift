@@ -1624,6 +1624,68 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testAgentToolsInspectionReportsSourceLostDuringProbe() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("external.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: .unrestricted,
+            mediaInspector: ApplicationMediaInspector { url in
+                try FileManager.default.removeItem(at: url)
+                throw CocoaError(.fileReadUnknown)
+            }
+        )
+
+        do {
+            _ = try await tools.inspectMedia(at: sourceURL)
+            XCTFail("Expected a source lost during probing to be reported as unavailable")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceUnavailable(sourceURL))
+            XCTAssertEqual(ApplicationAgentToolFailure(error: error).code, .sourceUnavailable)
+        }
+    }
+
+    func testAgentToolsInspectionKeepsProbeFailureForAvailableSource() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("invalid.mov")
+        try Data("not media".utf8).write(to: sourceURL)
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: .unrestricted,
+            mediaInspector: ApplicationMediaInspector { _ in
+                throw CocoaError(.fileReadCorruptFile)
+            }
+        )
+
+        do {
+            _ = try await tools.inspectMedia(at: sourceURL)
+            XCTFail("Expected a present, invalid media source to fail inspection")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .mediaInspectionFailed(sourceURL))
+            XCTAssertEqual(ApplicationAgentToolFailure(error: error).code, .mediaInspectionFailed)
+        }
+    }
+
+    func testAgentToolsInspectionRejectsDirectoryBeforeProbe() async throws {
+        let directory = try makeTemporaryDirectory()
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: .unrestricted,
+            mediaInspector: ApplicationMediaInspector { _ in
+                XCTFail("A directory must not be sent to the media probe")
+                throw CocoaError(.fileReadUnknown)
+            }
+        )
+
+        do {
+            _ = try await tools.inspectMedia(at: directory)
+            XCTFail("Expected a directory to be rejected as an unavailable media source")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceUnavailable(directory))
+        }
+    }
+
     func testAgentToolsPlanSubmitGetAndCancelUseSharedJobService() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")

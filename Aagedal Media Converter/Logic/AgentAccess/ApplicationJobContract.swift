@@ -3271,7 +3271,7 @@ struct ApplicationAgentTools: Sendable {
             throw ApplicationJobError.sourceAccessDenied(sourceURL)
         }
         defer { lease.release() }
-        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+        guard Self.isAvailableSource(sourceURL) else {
             throw ApplicationJobError.sourceUnavailable(sourceURL)
         }
         do {
@@ -3281,8 +3281,16 @@ struct ApplicationAgentTools: Sendable {
         } catch let error as ApplicationJobError {
             throw error
         } catch {
+            if !Self.isAvailableSource(sourceURL) {
+                throw ApplicationJobError.sourceUnavailable(sourceURL)
+            }
             throw ApplicationJobError.mediaInspectionFailed(sourceURL)
         }
+    }
+
+    private static func isAvailableSource(_ url: URL) -> Bool {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return attributes?[.type] as? FileAttributeType == .typeRegular
     }
 
     func listPresets() -> [ApplicationPresetDescriptor] {

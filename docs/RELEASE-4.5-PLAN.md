@@ -266,6 +266,12 @@ approved read lease and before launching the media probe. The typed IPC boundary
 returns the same code for both operations. See the
 [unavailable-source validation record](4.5-unavailable-source-validation-2026-09-15.md).
 
+Inspection now also distinguishes a source lost *during* probing from malformed
+media that remains present. It rechecks fresh filesystem attributes after a
+probe failure, returns `source_unavailable` for loss, and rejects directories
+before probing. Focused coverage is in the
+[inspection access-loss validation record](4.5-inspection-access-loss-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

@@ -52,6 +52,12 @@ accepted; live bookmarked external-drive recovery remains in the packaged
 acceptance matrix. See the
 [unavailable-source validation record](docs/4.5-unavailable-source-validation-2026-09-15.md).
 
+Inspection also rechecks fresh filesystem attributes after a probe failure:
+loss during probing now has the same stable code, while present malformed media
+retains `media_inspection_failed`. Directories are rejected before probing.
+The focused and full app unit suites and 74 release-script tests pass; see the
+[inspection access-loss validation record](docs/4.5-inspection-access-loss-validation-2026-09-15.md).
+
 ## 4.5 Agent Access lifecycle continuation — 2026-09-15
 
 App startup and the Settings opt-in toggle now serialize endpoint transitions
