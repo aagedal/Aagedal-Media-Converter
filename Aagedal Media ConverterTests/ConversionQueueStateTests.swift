@@ -114,6 +114,44 @@ final class ConversionQueueStateTests: XCTestCase {
     }
 
     @MainActor
+    func testLegacyCancellationWhileWaitingForApplicationJobDoesNotStartEncoding() async throws {
+        let executionGate = ApplicationConversionExecutionGate()
+        let applicationID = await executionGate.acquire()
+        let manager = ConversionManager(
+            executionGate: executionGate,
+            conversionDetailsLoader: { _, _, _ in
+                XCTFail("Cancelled legacy work reached conversion preparation")
+                return VideoFileUtils.VideoItemDetails(
+                    size: 1234, duration: "00:00:07", durationSeconds: 7,
+                    thumbnailData: nil, outputURL: nil, hasVideoStream: true, metadata: nil
+                )
+            }
+        )
+        let queue = ConversionPreparationQueue(items: [item(status: .waiting)])
+        let task = Task {
+            await manager.startConversion(
+                droppedFiles: queue.binding,
+                outputFolder: "/fixture",
+                preset: .h264
+            )
+        }
+        for _ in 0..<100 {
+            if await executionGate.waitingCount() == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let waitingCount = await executionGate.waitingCount()
+        XCTAssertEqual(waitingCount, 1)
+
+        // The row remains waiting because this cancellation targets active work.
+        // The queued request must still be fenced when its gate turn arrives.
+        await manager.cancelConversion()
+        await executionGate.release(applicationID)
+        await task.value
+        XCTAssertEqual(queue.items[0].status, .waiting)
+        XCTAssertFalse(queue.items[0].detailsLoaded)
+    }
+
+    @MainActor
     func testRemovingItemDuringManagerPreparationFinishesEmptyQueue() async {
         let gate = ConversionPreparationDetailsGate()
         let started = expectation(description: "Conversion details started")

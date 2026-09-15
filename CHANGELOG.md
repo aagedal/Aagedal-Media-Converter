@@ -1,8 +1,8 @@
 # v.4.5.0 (Development)
 
 4.5 development has started with the shared application boundary and signed
-local transport needed for agent access. Final client compatibility, shared
-ownership for specialized manual jobs, wider Shortcut coverage, remaining
+local transport needed for agent access. Final client compatibility, specialized
+manual-job coverage, wider Shortcut coverage, remaining
 localization, and Release-package validation are still open.
 
 ## Local agent access
@@ -34,6 +34,10 @@ localization, and Release-package validation are still open.
   approved file access alive through execution, rechecks queued inputs before
   launch, publishes progress and terminal results, enforces planned outputs, and
   routes cancellation only to the active job owner.
+- Serialized shared-service FFmpeg execution with legacy manual and group
+  conversion batches. A cancelled legacy request waiting for engine access now
+  skips preparation, while retries during a still-draining cancellation retain
+  their immediate rejection behavior.
 - Connected the shared job service to the bundled FFmpeg conversion engine. The
   adapter reconstructs all six supported presets from the immutable settings
   snapshot, aggregates batch progress, stops on the first failed file, rejects

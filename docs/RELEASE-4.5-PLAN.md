@@ -317,14 +317,23 @@ of omitting the policy. A separate live first-party shared-job run with
 preserve-source timecode retains the track and 5.1 layout. See the
 [channel/timecode validation record](4.5-channel-timecode-validation-2026-09-15.md).
 
+Shared-service FFmpeg jobs and legacy manual/group conversion batches now take
+turns through one application execution gate. The gate is FIFO and spans each
+batch's conversion completion; a cancelled service job is skipped when its turn
+arrives, and a legacy request cancelled while waiting cannot start preparation.
+The legacy manager still rejects retries immediately while its previous batch
+is active or cancellation is draining. This covers engine admission across the
+two owners; post-conversion follow-ups and overlapping specialized-job output
+checks remain in the beta acceptance matrix. See the
+[execution serialization validation record](4.5-execution-serialization-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
 Codex, and OpenCode tool workflows have not all been exercised, and a Developer ID
 Release archive has not completed signing/notarization validation. Groups/merge, generated waveform
 behavior, post-actions, and unsupported App Intent cases still use the legacy
-executor, so full
-cross-boundary serialization remains open. The Agent Access surface and
+executor. Their end-to-end coexistence with agent jobs remains open. The Agent Access surface and
 accepted-settings inspector now have Norwegian catalog coverage, but bilingual
 visual review and the packaged end-to-end acceptance matrix remain open.
 

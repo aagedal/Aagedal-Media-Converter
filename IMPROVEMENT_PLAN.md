@@ -43,6 +43,15 @@ disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
 
+## 4.5 execution serialization continuation — 2026-09-15
+
+Shared-service FFmpeg jobs and legacy manual/group conversion batches now use
+the same FIFO engine gate. Queued cancellation skips the executor, and a manual
+request cancelled while waiting cannot begin preparation. Existing immediate
+retry rejection during a draining legacy cancellation is preserved. Specialized
+post-conversion follow-ups still need live overlap checks; see the
+[execution serialization validation record](docs/4.5-execution-serialization-validation-2026-09-15.md).
+
 ## 4.5 unavailable-source continuation — 2026-09-15
 
 Approved sources missing at request time now return `source_unavailable` from

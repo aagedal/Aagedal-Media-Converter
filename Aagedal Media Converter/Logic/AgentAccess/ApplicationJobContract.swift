@@ -2191,6 +2191,41 @@ struct ApplicationFileAccessAuthorizer: Sendable {
     }
 }
 
+/// Serializes conversion engines shared by application jobs and legacy manual
+/// work. Admission is FIFO; a waiter owns the gate only after it is resumed.
+actor ApplicationConversionExecutionGate {
+    static let shared = ApplicationConversionExecutionGate()
+
+    private var owner: UUID?
+    private var waiters: [(id: UUID, continuation: CheckedContinuation<UUID, Never>)] = []
+
+    func acquire() async -> UUID {
+        let id = UUID()
+        if owner == nil {
+            owner = id
+            return id
+        }
+        return await withCheckedContinuation { continuation in
+            waiters.append((id, continuation))
+        }
+    }
+
+    func release(_ id: UUID) {
+        guard owner == id else { return }
+        if waiters.isEmpty {
+            owner = nil
+        } else {
+            let next = waiters.removeFirst()
+            owner = next.id
+            next.continuation.resume(returning: next.id)
+        }
+    }
+
+    func waitingCount() -> Int {
+        waiters.count
+    }
+}
+
 /// Owns transport-neutral plans, submit-time validation, output reservations,
 /// serialized execution handoff, and job lifecycle state. The injected executor
 /// keeps this boundary testable without SwiftUI bindings or helper processes.
@@ -2200,7 +2235,8 @@ actor ApplicationJobService {
 
     static let shared = ApplicationJobService(
         store: .live,
-        executor: ApplicationFFmpegJobExecutor.shared.jobExecutor
+        executor: ApplicationFFmpegJobExecutor.shared.jobExecutor,
+        executionGate: .shared
     )
 
     private let registry: ApplicationJobRegistry
@@ -2208,6 +2244,7 @@ actor ApplicationJobService {
     private let itemExists: ItemExistsProvider
     private let fileAccessAuthorizer: ApplicationFileAccessAuthorizer
     private let executor: ApplicationJobExecutor?
+    private let executionGate: ApplicationConversionExecutionGate
     private let planLifetime: TimeInterval
     private let recordRetentionLifetime: TimeInterval
     private let store: ApplicationJobStore?
@@ -2229,6 +2266,7 @@ actor ApplicationJobService {
         store: ApplicationJobStore? = nil,
         fileAccessAuthorizer: ApplicationFileAccessAuthorizer = .live,
         executor: ApplicationJobExecutor? = nil,
+        executionGate: ApplicationConversionExecutionGate = ApplicationConversionExecutionGate(),
         sourceIdentityProvider: SourceIdentityProvider? = nil,
         itemExists: @escaping ItemExistsProvider = { FileManager.default.fileExists(atPath: $0.path) }
     ) {
@@ -2238,6 +2276,7 @@ actor ApplicationJobService {
         self.store = store
         self.fileAccessAuthorizer = fileAccessAuthorizer
         self.executor = executor
+        self.executionGate = executionGate
         self.sourceIdentityProvider = sourceIdentityProvider ?? Self.liveSourceIdentity
         self.itemExists = itemExists
     }
@@ -2633,6 +2672,14 @@ actor ApplicationJobService {
     }
 
     private func execute(
+        _ pending: (jobID: ApplicationJobID, plan: ApplicationConversionPlan)
+    ) async {
+        let gateID = await executionGate.acquire()
+        await executeHoldingGate(pending)
+        await executionGate.release(gateID)
+    }
+
+    private func executeHoldingGate(
         _ pending: (jobID: ApplicationJobID, plan: ApplicationConversionPlan)
     ) async {
         guard let executor,

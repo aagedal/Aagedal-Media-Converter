@@ -962,6 +962,47 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(completedSnapshot.maximumConcurrentExecutions, 1)
     }
 
+    func testApplicationJobWaitsForLegacyExecutionAndSkipsCancelledWork() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let gate = ApplicationConversionExecutionGate()
+        let legacyID = await gate.acquire()
+        let harness = ApplicationJobExecutorHarness(blocksFirstExecution: false)
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: ApplicationJobExecutor(
+                execute: { jobID, plan, progress in
+                    await harness.execute(jobID: jobID, plan: plan, progress: progress)
+                },
+                cancel: { jobID in await harness.cancel(jobID: jobID) }
+            ),
+            executionGate: gate
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: directory
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let queued = try await service.record(for: accepted.record.id)
+        XCTAssertEqual(queued?.state, .queued)
+
+        let cancelled = try await service.requestCancellation(accepted.record.id)
+        XCTAssertEqual(cancelled.state, .cancelled)
+        await gate.release(legacyID)
+
+        let nextSource = directory.appendingPathComponent("next.mov")
+        try Data("next".utf8).write(to: nextSource)
+        let nextPlan = try await service.plan(makeRequest(
+            sourceURLs: [nextSource],
+            destinationFolderURL: directory,
+            idempotencyKey: "after-legacy"
+        ))
+        let next = try await service.submit(planID: nextPlan.id)
+        _ = try await waitForRecord(service: service, jobID: next.record.id, state: .succeeded)
+        let snapshot = await harness.snapshot()
+        XCTAssertEqual(snapshot.startedIDs, [next.record.id])
+    }
+
     func testCancellationSkipsQueuedJobAndSignalsRunningExecutor() async throws {
         let directory = try makeTemporaryDirectory()
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)

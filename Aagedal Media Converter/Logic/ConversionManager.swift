@@ -226,7 +226,7 @@ struct MergePreparationSubprocess: Sendable {
 }
 
 actor ConversionManager: Sendable {
-    @MainActor static let shared = ConversionManager()
+    @MainActor static let shared = ConversionManager(executionGate: .shared)
     private let mergePreparationSubprocess: MergePreparationSubprocess
     private let subtitleEmbeddingSubprocess: SubtitleEmbeddingSubprocess
     private let ffmpegPathProvider: @Sendable () -> String?
@@ -235,10 +235,12 @@ actor ConversionManager: Sendable {
     private let analyticsSettings: any AnalyticsSettingsProviding
     private let preparationSettingsProvider: @Sendable (ExportPreset) -> ConversionPreparationSettings
     private let conversionDetailsLoader: @Sendable (URL, String, ExportPreset) async -> VideoFileUtils.VideoItemDetails
+    private let executionGate: ApplicationConversionExecutionGate
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         ffmpegConverter: FFMPEGConverter = FFMPEGConverter(),
+        executionGate: ApplicationConversionExecutionGate = ApplicationConversionExecutionGate(),
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings(),
         ocrSettings: any OCRSettingsProviding = PostConversionSettings(),
@@ -254,6 +256,7 @@ actor ConversionManager: Sendable {
     ) {
         self.mergePreparationSubprocess = MergePreparationSubprocess(subprocessRunner: subprocessRunner)
         self.ffmpegConverter = ffmpegConverter
+        self.executionGate = executionGate
         self.subtitleEmbeddingSubprocess = SubtitleEmbeddingSubprocess(subprocessRunner: subprocessRunner)
         self.ffmpegPathProvider = ffmpegPathProvider
         self.transcriptionSettings = transcriptionSettings
@@ -274,6 +277,7 @@ actor ConversionManager: Sendable {
 
     private var isConverting = false
     private var pendingCancellationCount = 0
+    private var cancellationGeneration = 0
     private var batchCancellationNeedsCleanup = false
     private var currentProcess: Process?
     private let ffmpegConverter: FFMPEGConverter
@@ -1483,6 +1487,40 @@ actor ConversionManager: Sendable {
         conformanceMetadata: [UUID: VideoMetadata]? = nil
     ) async {
         guard !isConverting, pendingCancellationCount == 0 else { return }
+        let generation = cancellationGeneration
+        let gateID = await executionGate.acquire()
+        if generation == cancellationGeneration {
+            await convertGroupHoldingGate(
+                items: items,
+                outputFolder: outputFolder,
+                preset: preset,
+                concatEnabled: concatEnabled,
+                groupName: groupName,
+                transcriptionEnabled: transcriptionEnabled,
+                uploadEnabled: uploadEnabled,
+                analyticsEnabled: analyticsEnabled,
+                conformanceMergeEnabled: conformanceMergeEnabled,
+                conformanceReferenceItemID: conformanceReferenceItemID,
+                conformanceMetadata: conformanceMetadata
+            )
+        }
+        await executionGate.release(gateID)
+    }
+
+    private func convertGroupHoldingGate(
+        items: Binding<[VideoItem]>,
+        outputFolder: String,
+        preset: ExportPreset,
+        concatEnabled: Bool,
+        groupName: String? = nil,
+        transcriptionEnabled: Bool,
+        uploadEnabled: Bool,
+        analyticsEnabled: Bool,
+        conformanceMergeEnabled: Bool = false,
+        conformanceReferenceItemID: UUID? = nil,
+        conformanceMetadata: [UUID: VideoMetadata]? = nil
+    ) async {
+        guard !isConverting, pendingCancellationCount == 0 else { return }
         allowedItemIDs = nil
         let batchID = UUID()
         activeBatchID = batchID
@@ -1580,6 +1618,28 @@ actor ConversionManager: Sendable {
     }
 
     func startConversion(
+        droppedFiles: Binding<[VideoItem]>,
+        outputFolder: String,
+        preset: ExportPreset = .videoLoop,
+        mergeClipsEnabled: Bool = false,
+        limitToIDs: Set<UUID>? = nil
+    ) async {
+        guard !isConverting, pendingCancellationCount == 0 else { return }
+        let generation = cancellationGeneration
+        let gateID = await executionGate.acquire()
+        if generation == cancellationGeneration {
+            await startConversionHoldingGate(
+                droppedFiles: droppedFiles,
+                outputFolder: outputFolder,
+                preset: preset,
+                mergeClipsEnabled: mergeClipsEnabled,
+                limitToIDs: limitToIDs
+            )
+        }
+        await executionGate.release(gateID)
+    }
+
+    private func startConversionHoldingGate(
         droppedFiles: Binding<[VideoItem]>,
         outputFolder: String,
         preset: ExportPreset = .videoLoop,
@@ -2085,6 +2145,7 @@ actor ConversionManager: Sendable {
     }
 
     private func cancelConversions(scope: ConversionQueueState.CancellationScope) async {
+        cancellationGeneration &+= 1
         pendingCancellationCount += 1
         batchCancellationNeedsCleanup = true
         isConverting = false
