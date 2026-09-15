@@ -820,22 +820,24 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
             lines.append(String(localized: "Per-file adjustments: \(on)", locale: locale,
                                 comment: "Accepted conversion settings summary: per-file adjustments are enabled."))
         }
-        if let includeDateTag = sourceExecutionSettings?.includeDateTag
-            ?? executionSettings?.includeDateTag {
-            lines.append(String(localized: "Date tag: \(includeDateTag ? yes : no)", locale: locale,
-                                comment: "Accepted conversion settings summary: filename date tag."))
-            let timecodeMode = sourceExecutionSettings?.timecodeMode
-                ?? executionSettings?.timecodeMode
-                ?? .disabled
-            let manualTimecode = sourceExecutionSettings?.manualTimecode
-                ?? executionSettings?.manualTimecode
-            let timecode = switch timecodeMode {
-            case .disabled: String(localized: "Disabled", locale: locale)
-            case .preserveSource: String(localized: "Preserve source", locale: locale)
-            case .manual: manualTimecode ?? String(localized: "Manual", locale: locale)
-            }
-            lines.append(String(localized: "Timecode: \(timecode)", locale: locale,
-                                comment: "Accepted conversion settings summary: timecode behavior or value."))
+        let includeDateTag = sourceExecutionSettings?.includeDateTag
+            ?? executionSettings?.includeDateTag
+            ?? false
+        lines.append(String(localized: "Date tag: \(includeDateTag ? yes : no)", locale: locale,
+                            comment: "Accepted conversion settings summary: filename date tag."))
+        let timecodeMode = sourceExecutionSettings?.timecodeMode
+            ?? executionSettings?.timecodeMode
+            ?? .disabled
+        let manualTimecode = sourceExecutionSettings?.manualTimecode
+            ?? executionSettings?.manualTimecode
+        let timecode = switch timecodeMode {
+        case .disabled: String(localized: "Disabled", locale: locale)
+        case .preserveSource: String(localized: "Preserve source", locale: locale)
+        case .manual: manualTimecode ?? String(localized: "Manual", locale: locale)
+        }
+        lines.append(String(localized: "Timecode: \(timecode)", locale: locale,
+                            comment: "Accepted conversion settings summary: timecode behavior or value."))
+        if sourceExecutionSettings != nil || executionSettings != nil {
             if let sourceExecutionSettings, !sourceExecutionSettings.comment.isEmpty {
                 lines.append(String(localized: "Comment: \(sourceExecutionSettings.comment)", locale: locale,
                                     comment: "Accepted conversion settings summary: embedded comment."))

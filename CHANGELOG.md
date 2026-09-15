@@ -107,7 +107,8 @@ localization, and Release-package validation are still open.
   visibly active and the main Cancel action now targets their stable job IDs.
 - Added a queue inspector for every shared job's immutable accepted settings,
   including codecs, container, quality/rate controls, metadata, subtitles,
-  filename policy, destination, and capture time.
+  filename policy, destination, and capture time. Agent jobs now explicitly show
+  their default disabled timecode and date-tag behavior.
 - Added Norwegian translations for Agent Access setup and connection states,
   shared-job origin labels, and the complete accepted-settings inspector,
   including locale-aware numbers, dates, destinations, and per-file adjustments.

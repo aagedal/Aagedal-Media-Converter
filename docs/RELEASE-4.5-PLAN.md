@@ -309,6 +309,14 @@ that boundary does not turn into an unnecessary encode. The focused regression
 and full application-job contract suite pass; see the
 [handoff cancellation validation record](4.5-handoff-cancellation-validation-2026-09-15.md).
 
+The live Stream Copy MCP workflow now checks a source with 5.1 audio and an MOV
+timecode track. Inspection reports six channels and the source timecode; output
+keeps the channel layout. Agent v1 has no timecode override and deliberately
+disables output timecode, so the accepted-settings inspector now says so instead
+of omitting the policy. A separate live first-party shared-job run with
+preserve-source timecode retains the track and 5.1 layout. See the
+[channel/timecode validation record](4.5-channel-timecode-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
@@ -319,6 +327,26 @@ executor, so full
 cross-boundary serialization remains open. The Agent Access surface and
 accepted-settings inspector now have Norwegian catalog coverage, but bilingual
 visual review and the packaged end-to-end acceptance matrix remain open.
+
+## Beta readiness snapshot — 2026-09-15
+
+The six-tool MCP workflow, shared execution for the six selected presets,
+ordinary manual and Shortcut handoff, queue ownership, reconnect persistence,
+and English/Norwegian setup diagnostics are implemented and covered in Debug.
+The focused application-job suite, release-script suite, localization audit,
+and unsigned Release build pass.
+
+An external beta still needs named Claude Code, Codex, and OpenCode tool calls
+through the packaged app in a normal login session; real first-party grants and
+revocation/lost-drive recovery; overlapping agent/manual specialized-job checks;
+in-app playback plus the broader cancellation/output matrix; bilingual visual
+review; and a Developer ID archive with strict nested signing and notarization.
+This host currently reports zero valid code-signing identities, so the signed
+package gate requires signing access before it can be completed here.
+
+Final-release closure additionally needs candidate stabilization, clean
+installation and update verification, final release notes/screenshots, and the
+signed artifact's dependency/license report retained with the release.
 
 ## Intended outcome
 

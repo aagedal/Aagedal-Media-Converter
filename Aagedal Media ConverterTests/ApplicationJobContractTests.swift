@@ -2203,7 +2203,10 @@ final class ApplicationJobContractTests: XCTestCase {
         try runBundledFFmpeg([
             "-hide_banner", "-loglevel", "error", "-y",
             "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", sourceURL.path
+            "-f", "lavfi", "-i", "anullsrc=channel_layout=5.1:sample_rate=48000",
+            "-timecode", "01:02:03:04",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            "-shortest", sourceURL.path
         ])
 
         let adapter = ApplicationFFmpegJobExecutor(runner: .live())
@@ -2251,6 +2254,11 @@ final class ApplicationJobContractTests: XCTestCase {
             (inspection["videoStreams"] as? [[String: Any]])?.first?["codec"] as? String,
             "avc1"
         )
+        XCTAssertEqual(
+            (inspection["audioStreams"] as? [[String: Any]])?.first?["channels"] as? Int,
+            6
+        )
+        XCTAssertEqual(inspection["timecode"] as? String, "01:02:03:04")
         let planResult = try XCTUnwrap(
             (preparation[2]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
         )
@@ -2280,9 +2288,15 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
         let copiedMetadata = try runBundledFFmpeg([
             "-hide_banner", "-i", outputURL.path,
-            "-map", "0:v:0", "-f", "null", "-"
+            "-map", "0", "-f", "null", "-"
         ])
         XCTAssertTrue(copiedMetadata.contains("Video: h264"), copiedMetadata)
+        XCTAssertTrue(copiedMetadata.contains("Audio: aac"), copiedMetadata)
+        XCTAssertTrue(copiedMetadata.contains("48000 Hz, 5.1"), copiedMetadata)
+        // The v1 agent contract has no timecode override. Its absent execution
+        // settings mean disabled, even when the source has a timecode track.
+        XCTAssertFalse(copiedMetadata.contains("01:02:03:04"), copiedMetadata)
+        XCTAssertTrue(record.request.acceptedSettingsSummary(sourceIndex: nil).contains("Timecode: Disabled"))
 
         let followUp = try runPackagedMCPHelper(portID: portID, messages: [
             initialize, initialized,
@@ -2302,6 +2316,51 @@ final class ApplicationJobContractTests: XCTestCase {
         )
         XCTAssertEqual(retry["wasAlreadyAccepted"] as? Bool, true)
         XCTAssertEqual((retry["record"] as? [String: Any])?["id"] as? String, jobID)
+    }
+
+    func testLiveFirstPartyStreamCopyPreservesConfiguredTimecodeAndChannels() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        let destinationURL = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-f", "lavfi", "-i", "anullsrc=channel_layout=5.1:sample_rate=48000",
+            "-timecode", "01:02:03:04",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            "-shortest", sourceURL.path
+        ])
+
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        let request = makeRequest(
+            origin: .manual,
+            sourceURLs: [sourceURL],
+            destinationFolderURL: destinationURL,
+            presetID: .streamCopy,
+            executionSettings: ApplicationRequestExecutionSettings(
+                includeDateTag: false,
+                timecodeConfig: TimecodeConfig(mode: .preserveSource)
+            ),
+            idempotencyKey: nil
+        )
+        let plan = try await service.plan(request)
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(
+            service: service, jobID: accepted.record.id, state: .succeeded
+        )
+        let outputURL = try XCTUnwrap(record.outputURLs.first)
+        XCTAssertEqual(outputURL, plan.outputs.first?.outputURL)
+        let metadata = try runBundledFFmpeg([
+            "-hide_banner", "-i", outputURL.path,
+            "-map", "0", "-f", "null", "-"
+        ])
+        XCTAssertTrue(metadata.contains("48000 Hz, 5.1"), metadata)
+        XCTAssertTrue(metadata.contains("timecode        : 01:02:03:04"), metadata)
     }
 
     func testLiveSupportedPresetJobsCreateTheirPlannedOutputs() async throws {

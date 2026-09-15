@@ -31,6 +31,11 @@ for 30 days; unfinished work becomes interrupted after an app restart and is not
 automatically restarted. Turning Agent Access off rejects new connections while
 already accepted jobs continue.
 
+The first agent contract does not offer a timecode override. Agent conversions
+disable output timecode, including Stream Copy of a source with a timecode track.
+The accepted-settings inspector shows this policy. Manual and Shortcut jobs keep
+their configured preserve-source or manual timecode behavior.
+
 Enabling Agent Access makes these bounded operations available to processes in
 the same logged-in user's launch session, not only to the configured MCP client.
 Turn it off when you no longer need local agent access.
