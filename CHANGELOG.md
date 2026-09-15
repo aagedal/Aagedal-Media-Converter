@@ -49,6 +49,12 @@ localization, and Release-package validation are still open.
   schemas, forwards versioned typed JSON over a local app-owned message port,
   launches the enclosing app when needed, and leaves accepted jobs app-owned
   after the client disconnects.
+- Limited helper retries to app startup before an IPC port exists. A failed
+  request sent to a live port now reports its transport error once instead of
+  replaying the tool call. The helper also keeps the client-derived requester ID
+  authoritative for plans and waits for app launch without blocking main-thread
+  completion delivery. `list_presets` now returns an object-shaped MCP structured
+  result with a `presets` array for clients that validate tool result schemas.
 - Added opt-in Agent Access settings with a connection test, copyable MCP client
   configuration, helper discovery, approved-folder guidance, and an explicit
   policy that disabling access stops new requests without cancelling accepted

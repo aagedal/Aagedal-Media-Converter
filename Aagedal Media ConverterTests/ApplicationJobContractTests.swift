@@ -1711,6 +1711,105 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertNil(restartedResponse.failure)
     }
 
+    func testPackagedMCPHelperReturnsObjectResultsAndOwnsRequesterID() throws {
+        let portID = UUID()
+        let server = ApplicationAgentIPCServer(
+            portName: "com.aagedal.tests.agent.\(portID.uuidString)",
+            dispatcher: ApplicationAgentRequestDispatcher(
+                tools: ApplicationAgentTools(
+                    jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+                    fileAccessAuthorizer: .unrestricted
+                )
+            )
+        )
+        try server.start()
+        defer { server.stop() }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mcp-helper-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        try Data([0]).write(to: sourceURL)
+
+        let helperURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/aagedal-media-converter-mcp")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: helperURL.path))
+
+        let process = Process()
+        process.executableURL = helperURL
+        process.environment = ProcessInfo.processInfo.environment.merging([
+            "AMC_UI_TEST_AGENT_PORT_ID": portID.uuidString
+        ]) { _, replacement in replacement }
+        let input = Pipe()
+        let output = Pipe()
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
+        process.standardInput = input
+        process.standardOutput = output
+        try process.run()
+
+        let messages: [[String: Any]] = [
+            [
+                "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": [
+                    "protocolVersion": "2025-06-18",
+                    "clientInfo": ["name": "Codex"]
+                ]
+            ],
+            ["jsonrpc": "2.0", "method": "notifications/initialized"],
+            [
+                "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                "params": ["name": "list_presets", "arguments": [:]]
+            ],
+            [
+                "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                "params": [
+                    "name": "plan_conversion",
+                    "arguments": [
+                        "source_paths": [sourceURL.path],
+                        "destination_path": directory.path,
+                        "preset_id": "h264",
+                        "requester_id": "forged-client"
+                    ]
+                ]
+            ]
+        ]
+        let lines = try messages.map { message in
+            try JSONSerialization.data(withJSONObject: message) + Data([0x0A])
+        }
+        input.fileHandleForWriting.write(lines.reduce(Data(), +))
+        try input.fileHandleForWriting.close()
+        guard finished.wait(timeout: .now() + 15) == .success else {
+            process.terminate()
+            return XCTFail("The packaged MCP helper did not exit after stdin closed.")
+        }
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+
+        let responseLines = output.fileHandleForReading.readDataToEndOfFile()
+            .split(separator: 0x0A)
+        XCTAssertEqual(responseLines.count, 3)
+        let responses = try responseLines.map { line in
+            try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
+        }
+        let presetResult = try XCTUnwrap(responses[1]["result"] as? [String: Any])
+        XCTAssertEqual(presetResult["isError"] as? Bool, false)
+        let presetContent = try XCTUnwrap(presetResult["structuredContent"] as? [String: Any])
+        XCTAssertEqual((presetContent["presets"] as? [[String: Any]])?.count, 6)
+        let presetText = try XCTUnwrap((presetResult["content"] as? [[String: Any]])?.first?["text"] as? String)
+        let textContent = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(presetText.utf8)) as? [String: Any]
+        )
+        XCTAssertEqual((textContent["presets"] as? [[String: Any]])?.count, 6)
+
+        let planResult = try XCTUnwrap(responses[2]["result"] as? [String: Any])
+        XCTAssertEqual(planResult["isError"] as? Bool, false)
+        let planContent = try XCTUnwrap(planResult["structuredContent"] as? [String: Any])
+        let request = try XCTUnwrap(planContent["request"] as? [String: Any])
+        XCTAssertEqual(request["requesterID"] as? String, "Codex")
+    }
+
     private func makeRequest(
         schemaVersion: Int = ApplicationConversionRequest.currentSchemaVersion,
         requestID: UUID = UUID(),

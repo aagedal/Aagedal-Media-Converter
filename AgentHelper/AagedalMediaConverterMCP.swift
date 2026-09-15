@@ -6,7 +6,15 @@ import AppKit
 import CoreFoundation
 import Foundation
 
-private let ipcPortName = "com.aagedal.Aagedal-Media-Converter.agent.v1"
+private let ipcPortName: String = {
+#if DEBUG
+    if let identifier = ProcessInfo.processInfo.environment["AMC_UI_TEST_AGENT_PORT_ID"],
+       UUID(uuidString: identifier) != nil {
+        return "com.aagedal.tests.agent.\(identifier)"
+    }
+#endif
+    return "com.aagedal.Aagedal-Media-Converter.agent.v1"
+}()
 private let ipcSchemaVersion = 1
 private let supportedProtocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
 
@@ -88,7 +96,7 @@ private final class MCPStdioServer {
             return
         }
         var arguments = params["arguments"] as? [String: Any] ?? [:]
-        if name == "plan_conversion", arguments["requester_id"] == nil {
+        if name == "plan_conversion" {
             arguments["requester_id"] = clientName
         }
         let requestID = UUID()
@@ -115,14 +123,22 @@ private final class MCPStdioServer {
                 return
             }
             guard let result = response["result"] else { throw HelperError.invalidResponse }
+            let structuredResult: [String: Any]
+            if name == "list_presets", let presets = result as? [Any] {
+                structuredResult = ["presets": presets]
+            } else if let object = result as? [String: Any] {
+                structuredResult = object
+            } else {
+                throw HelperError.invalidResponse
+            }
             let prettyData = try JSONSerialization.data(
-                withJSONObject: result,
+                withJSONObject: structuredResult,
                 options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             )
             let text = String(decoding: prettyData, as: UTF8.self)
             writeResult(id: id, result: [
                 "content": [["type": "text", "text": text]],
-                "structuredContent": result,
+                "structuredContent": structuredResult,
                 "isError": false
             ])
         } catch {
@@ -259,8 +275,6 @@ private final class MCPStdioServer {
 private struct AppIPCClient {
     func send(_ request: [String: Any]) throws -> [String: Any] {
         let requestData = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
-        var lastStatus: Int32?
-
         for attempt in 0..<51 {
             if let remote = CFMessagePortCreateRemote(nil, ipcPortName as CFString) {
                 var responseData: Unmanaged<CFData>?
@@ -273,21 +287,21 @@ private struct AppIPCClient {
                     CFRunLoopMode.defaultMode.rawValue,
                     &responseData
                 )
-                if status == kCFMessagePortSuccess, let responseData {
-                    let data = responseData.takeRetainedValue() as Data
-                    guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                        throw HelperError.invalidResponse
-                    }
-                    return response
+                guard status == kCFMessagePortSuccess else {
+                    throw HelperError.transportStatus(status)
                 }
-                lastStatus = status
+                guard let responseData else { throw HelperError.invalidResponse }
+                let data = responseData.takeRetainedValue() as Data
+                guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw HelperError.invalidResponse
+                }
+                return response
             }
 
             if attempt == 0 { try launchApplication() }
             Thread.sleep(forTimeInterval: 0.2)
         }
 
-        if let lastStatus { throw HelperError.transportStatus(lastStatus) }
         throw HelperError.accessDisabled
     }
 
@@ -302,15 +316,38 @@ private struct AppIPCClient {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         let completion = DispatchSemaphore(value: 0)
-        var launchError: Error?
+        let launchResult = LockedLaunchResult()
         NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
-            launchError = error
+            launchResult.store(hasError: error != nil)
             completion.signal()
         }
-        guard completion.wait(timeout: .now() + 10) == .success else {
-            throw HelperError.launchTimedOut
+        let deadline = Date().addingTimeInterval(10)
+        while completion.wait(timeout: .now()) != .success {
+            guard Date() < deadline else { throw HelperError.launchTimedOut }
+            // MCPStdioServer runs on the main thread. Keep its run loop alive so
+            // NSWorkspace can deliver a main-thread completion handler.
+            if !RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05)) {
+                Thread.sleep(forTimeInterval: 0.05)
+            }
         }
-        if launchError != nil { throw HelperError.appLaunchFailed }
+        if launchResult.hasError { throw HelperError.appLaunchFailed }
+    }
+}
+
+private final class LockedLaunchResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedHasError = false
+
+    var hasError: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedHasError
+    }
+
+    func store(hasError: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedHasError = hasError
     }
 }
 

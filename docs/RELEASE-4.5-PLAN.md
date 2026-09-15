@@ -226,6 +226,15 @@ This is setup-syntax validation, not the three-client end-to-end
 workflow required for beta. See the
 [client setup validation record](4.5-client-setup-validation-2026-09-15.md).
 
+The MCP helper now retries only while waiting for the app endpoint to appear.
+Once a port accepts a send attempt, transport failure is returned to the client
+without replaying a potentially long-running or mutating tool call. Plans use
+the helper's client-derived requester identity even if an undeclared caller
+argument supplies another value, cold-launch waiting keeps the main run loop
+available for `NSWorkspace` completion, and `list_presets` now has an object-shaped
+MCP structured result. These changes are covered by the
+[helper transport validation record](4.5-helper-transport-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

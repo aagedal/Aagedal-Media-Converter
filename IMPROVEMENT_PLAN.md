@@ -45,6 +45,18 @@ are not current release commitments.
 
 ## 4.5 MCP client setup continuation — 2026-09-15
 
+The helper now confines retries to endpoint startup, reports failed sends once,
+and derives plan requester IDs from the MCP connection even when an undeclared
+argument supplies a different value. Its `list_presets` structured result now
+uses an object with a `presets` field as MCP requires. Cold-launch waiting keeps
+the main run loop available for the workspace completion callback. The packaged
+helper round-trip test, Debug and Release builds, and the 45-image/12-notice
+static Release audit pass. A live cold launch from
+the local Debug bundle is still unverified because Launch Services returned
+`kLSNoExecutableErr` on this host; strict helper signature verification still
+hits the local `CSSMERR_TP_NOT_TRUSTED` trust-chain failure. See the
+[helper transport validation record](docs/4.5-helper-transport-validation-2026-09-15.md).
+
 Agent Access now offers copyable setup for Claude Desktop, Claude Code, Codex,
 and OpenCode. Claude Code reports the embedded helper connected in an isolated
 user-scope configuration; Codex accepts the generated stdio command in an
