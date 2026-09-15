@@ -1327,6 +1327,39 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(runCount, 1)
     }
 
+    func testFFmpegAdapterKeepsCancellationReceivedBeforeExecutionStarts() async throws {
+        let directory = try makeTemporaryDirectory()
+        let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let sourceURL = directory.appendingPathComponent("early-cancel.mov")
+        try Data("source".utf8).write(to: sourceURL)
+
+        let harness = ApplicationFFmpegRunnerHarness()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: outputDirectory, idempotencyKey: nil
+        ))
+        let executor = adapter.jobExecutor
+        let jobID = ApplicationJobID()
+
+        await executor.cancel(jobID)
+        let result = await executor.execute(
+            jobID, plan, ApplicationJobProgressReporter { _ in }
+        )
+
+        XCTAssertEqual(result, .cancelled(diagnostic: "Conversion cancelled."))
+        let runCount = await harness.runCount()
+        let cancelCount = await harness.cancelCount()
+        XCTAssertEqual(runCount, 0)
+        XCTAssertEqual(cancelCount, 0)
+    }
+
     func testFFmpegAdapterRejectsUnrepresentableCapturedSettingsBeforeLaunching() async throws {
         let directory = try makeTemporaryDirectory()
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)

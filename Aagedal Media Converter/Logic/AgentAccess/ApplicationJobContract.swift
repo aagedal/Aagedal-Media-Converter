@@ -1693,7 +1693,6 @@ actor ApplicationFFmpegJobExecutor {
             return .failed(diagnostic: "The FFmpeg execution adapter was already busy.")
         }
         activeJobID = jobID
-        cancellationRequested.remove(jobID)
         defer {
             if activeJobID == jobID { activeJobID = nil }
             cancellationRequested.remove(jobID)
@@ -1754,9 +1753,12 @@ actor ApplicationFFmpegJobExecutor {
     }
 
     private func cancel(jobID: ApplicationJobID) async {
-        guard activeJobID == jobID, !cancellationRequested.contains(jobID) else { return }
+        guard activeJobID == nil || activeJobID == jobID else { return }
+        guard !cancellationRequested.contains(jobID) else { return }
         cancellationRequested.insert(jobID)
-        await runner.cancel()
+        if activeJobID == jobID {
+            await runner.cancel()
+        }
     }
 
     private static func makeConversion(
@@ -2667,6 +2669,14 @@ actor ApplicationJobService {
         } catch {
             return
         }
+        // Cancellation can be recorded while the running transition persists.
+        // Recheck before handing the job to an executor that has not started yet.
+        guard let handoffRecord = await registry.record(for: pending.jobID) else { return }
+        if handoffRecord.state == .cancelling {
+            _ = try? await transition(pending.jobID, to: .cancelled)
+            return
+        }
+        guard handoffRecord.state == .running else { return }
         activeExecutionJobID = pending.jobID
 
         let progressReporter = ApplicationJobProgressReporter { update in

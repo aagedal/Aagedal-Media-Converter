@@ -302,6 +302,13 @@ expected output video/audio codecs through the bundled FFmpeg binary. This
 narrows the output-matrix gate; representative in-app playback, channel/timecode
 cases, and signed-package validation still require separate checks.
 
+The shared-service handoff now rechecks cancellation after persisting the
+running state, before invoking FFmpeg. The adapter also keeps a targeted
+pre-start cancellation until execution begins, so an app request delivered at
+that boundary does not turn into an unnecessary encode. The focused regression
+and full application-job contract suite pass; see the
+[handoff cancellation validation record](4.5-handoff-cancellation-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

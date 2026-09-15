@@ -66,6 +66,9 @@ localization, and Release-package validation are still open.
   exists, decodes, and remains available after an MCP client reconnects. Live
   adapter checks also verify the planned file, decodable streams, and output
   codecs for H.264, HEVC, ProRes, Proxy, and Audio Only.
+- Kept a targeted cancellation received just before FFmpeg starts, and rechecked
+  the shared job state after its running transition so a cancellation recorded
+  during persistence skips execution.
 - Added opt-in Agent Access settings with a connection test, copyable MCP client
   configuration, helper discovery, approved-folder guidance, and an explicit
   policy that disabling access stops new requests without cancelling accepted
