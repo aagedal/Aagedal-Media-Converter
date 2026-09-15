@@ -95,7 +95,12 @@ private final class MCPStdioServer {
             writeError(id: id, code: -32602, message: "Unknown or missing tool name.")
             return
         }
-        var arguments = params["arguments"] as? [String: Any] ?? [:]
+        let argumentsValue = params["arguments"]
+        guard argumentsValue == nil || argumentsValue is [String: Any] else {
+            writeError(id: id, code: -32602, message: "Tool arguments must be an object.")
+            return
+        }
+        var arguments = argumentsValue as? [String: Any] ?? [:]
         if name == "plan_conversion" {
             arguments["requester_id"] = clientName
         }
@@ -317,6 +322,7 @@ private struct AppIPCClient {
 
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
+        configuration.allowsRunningApplicationSubstitution = false
         let completion = DispatchSemaphore(value: 0)
         let launchResult = LockedLaunchResult()
         NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in

@@ -55,6 +55,10 @@ localization, and Release-package validation are still open.
   authoritative for plans and waits for app launch without blocking main-thread
   completion delivery. `list_presets` now returns an object-shaped MCP structured
   result with a `presets` array for clients that validate tool result schemas.
+- Made helper cold launch select the app bundle that contains it, even when
+  another installation with the same bundle identifier is running. Non-object
+  MCP tool arguments now return an invalid-parameters error instead of being
+  silently treated as an empty object.
 - Added opt-in Agent Access settings with a connection test, copyable MCP client
   configuration, helper discovery, approved-folder guidance, and an explicit
   policy that disabling access stops new requests without cancelling accepted

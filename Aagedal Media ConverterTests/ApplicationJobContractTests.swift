@@ -1941,6 +1941,21 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(request["requesterID"] as? String, "Codex")
     }
 
+    func testPackagedMCPHelperRejectsNonObjectToolArguments() throws {
+        let responses = try runPackagedMCPHelper(portID: UUID(), messages: [
+            ["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": [
+                "protocolVersion": "2025-06-18", "clientInfo": ["name": "Codex"]
+            ]],
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "list_presets", "arguments": []
+            ]]
+        ])
+        XCTAssertEqual(responses.count, 2)
+        let error = try XCTUnwrap(responses[1]["error"] as? [String: Any])
+        XCTAssertEqual(error["code"] as? Int, -32602)
+        XCTAssertEqual(error["message"] as? String, "Tool arguments must be an object.")
+    }
+
     func testPackagedMCPHelperRejectsIncompatibleAppResponses() throws {
         final class RunLoopState: @unchecked Sendable {
             let source: CFRunLoopSource

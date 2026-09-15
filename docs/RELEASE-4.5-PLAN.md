@@ -279,6 +279,16 @@ than being mistaken for a valid MCP result. A separate helper-process regression
 exercises both cases; see the
 [helper response validation record](4.5-helper-response-validation-2026-09-15.md).
 
+An independently launched packaged Debug helper now reached the opt-in app
+endpoint in the normal login session and returned all six presets. Cold launch
+exposed a same-bundle-ID substitution: with the installed stable app running,
+Launch Services reused that installation instead of opening the helper's
+enclosing Debug app. The helper now disables running-app substitution, and a
+repeat call started the exact Debug bundle while preserving the saved disabled
+Agent Access preference. Non-object MCP tool arguments now fail with JSON-RPC
+invalid parameters. See the
+[cold-launch and input validation record](4.5-helper-cold-launch-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
