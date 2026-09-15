@@ -235,6 +235,21 @@ available for `NSWorkspace` completion, and `list_presets` now has an object-sha
 MCP structured result. These changes are covered by the
 [helper transport validation record](4.5-helper-transport-validation-2026-09-15.md).
 
+The embedded Debug helper now has a process-level reconnect/access test: a plan
+survives a revoked-source submission failure, can be submitted after access is
+restored, and remains visible and cancellable from a new MCP client process.
+Retrying the plan returns the same cancelled job. The freshly built Debug app
+also cold-launched directly through Launch Services and displayed the Agent
+Access pane. This narrows the packaged transport gate but does not yet prove a
+named client's complete workflow or helper-triggered cold launch. An attempt
+to connect the helper from the XCUITest runner failed because that runner could
+see neither the app's UUID test port nor its default port despite an in-app
+`Ready` diagnostic. The pane's connection test now launches the packaged helper
+as an app child process and verifies its MCP preset result in both languages;
+whether the runner failure reflects only test-runner isolation remains
+unresolved. See the
+[packaged MCP reconnect validation record](4.5-packaged-mcp-reconnect-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

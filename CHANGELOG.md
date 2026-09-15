@@ -59,7 +59,10 @@ localization, and Release-package validation are still open.
   configuration, helper discovery, approved-folder guidance, and an explicit
   policy that disabling access stops new requests without cancelling accepted
   jobs. Endpoint startup and shutdown run away from the UI thread, and the complete
-  opt-in/diagnostic/disable flow is covered in English and Norwegian.
+  opt-in/diagnostic/disable flow is covered in English and Norwegian. The
+  connection test now launches the bundled MCP helper and checks its actual
+  stdio-to-app preset response, so helper launch or transport failures cannot
+  appear as a healthy in-process connection.
 - Added copyable, client-specific setup for Claude Desktop, Claude Code, Codex,
   and OpenCode, plus a [local agent access guide](Documentation/LOCAL_AGENT_ACCESS.md)
   covering folder grants, reconnects, job retention, and same-session access.

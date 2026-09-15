@@ -225,16 +225,14 @@ struct AgentAccessSettingsView: View {
     private func testConnection() {
         isTesting = true
         connectionStatus = String(localized: "Testing…")
+        let helperURL = helperURL
         Task {
             defer { isTesting = false }
             do {
-                let response = try await Task.detached {
-                    try ApplicationAgentIPCClient().send(
-                        ApplicationAgentIPCRequest(tool: .listPresets),
-                        receiveTimeout: 10
-                    )
+                let succeeded = try await Task.detached {
+                    try ApplicationAgentMCPConnectionDiagnostic.test(helperURL: helperURL)
                 }.value
-                connectionStatus = response.failure == nil
+                connectionStatus = succeeded
                     ? String(localized: "Ready")
                     : String(localized: "Request failed")
             } catch {
@@ -242,6 +240,58 @@ struct AgentAccessSettingsView: View {
                     + ": " + error.localizedDescription
             }
         }
+    }
+}
+
+/// Checks the same stdio-to-app path that an MCP client uses, rather than a
+/// same-process message-port request that cannot detect helper launch failures.
+private enum ApplicationAgentMCPConnectionDiagnostic {
+    static func test(helperURL: URL) throws -> Bool {
+        guard FileManager.default.isExecutableFile(atPath: helperURL.path) else { return false }
+
+        let process = Process()
+        process.executableURL = helperURL
+        let input = Pipe()
+        let output = Pipe()
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
+        process.standardInput = input
+        process.standardOutput = output
+        try process.run()
+
+        let messages: [[String: Any]] = [
+            ["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": [
+                "protocolVersion": "2025-06-18",
+                "clientInfo": ["name": "Aagedal Media Converter Diagnostics"]
+            ]],
+            ["jsonrpc": "2.0", "method": "notifications/initialized"],
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "list_presets", "arguments": [:]
+            ]]
+        ]
+        let lines = try messages.map {
+            try JSONSerialization.data(withJSONObject: $0) + Data([0x0A])
+        }
+        input.fileHandleForWriting.write(lines.reduce(Data(), +))
+        try input.fileHandleForWriting.close()
+        guard finished.wait(timeout: .now() + 15) == .success else {
+            process.terminate()
+            return false
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return false }
+
+        let responses = try output.fileHandleForReading.readDataToEndOfFile()
+            .split(separator: 0x0A)
+            .map { try JSONSerialization.jsonObject(with: Data($0)) as? [String: Any] }
+        guard responses.count == 2,
+              let result = responses[1]?["result"] as? [String: Any],
+              result["isError"] as? Bool == false,
+              let structured = result["structuredContent"] as? [String: Any],
+              let presets = structured["presets"] as? [[String: Any]] else {
+            return false
+        }
+        return presets.count == ApplicationPresetID.allCases.count
     }
 }
 

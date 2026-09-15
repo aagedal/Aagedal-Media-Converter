@@ -1732,23 +1732,6 @@ final class ApplicationJobContractTests: XCTestCase {
         let sourceURL = directory.appendingPathComponent("source.mov")
         try Data([0]).write(to: sourceURL)
 
-        let helperURL = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Helpers/aagedal-media-converter-mcp")
-        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: helperURL.path))
-
-        let process = Process()
-        process.executableURL = helperURL
-        process.environment = ProcessInfo.processInfo.environment.merging([
-            "AMC_UI_TEST_AGENT_PORT_ID": portID.uuidString
-        ]) { _, replacement in replacement }
-        let input = Pipe()
-        let output = Pipe()
-        let finished = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in finished.signal() }
-        process.standardInput = input
-        process.standardOutput = output
-        try process.run()
-
         let messages: [[String: Any]] = [
             [
                 "jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -1775,24 +1758,8 @@ final class ApplicationJobContractTests: XCTestCase {
                 ]
             ]
         ]
-        let lines = try messages.map { message in
-            try JSONSerialization.data(withJSONObject: message) + Data([0x0A])
-        }
-        input.fileHandleForWriting.write(lines.reduce(Data(), +))
-        try input.fileHandleForWriting.close()
-        guard finished.wait(timeout: .now() + 15) == .success else {
-            process.terminate()
-            return XCTFail("The packaged MCP helper did not exit after stdin closed.")
-        }
-        process.waitUntilExit()
-        XCTAssertEqual(process.terminationStatus, 0)
-
-        let responseLines = output.fileHandleForReading.readDataToEndOfFile()
-            .split(separator: 0x0A)
-        XCTAssertEqual(responseLines.count, 3)
-        let responses = try responseLines.map { line in
-            try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
-        }
+        let responses = try runPackagedMCPHelper(portID: portID, messages: messages)
+        XCTAssertEqual(responses.count, 3)
         let presetResult = try XCTUnwrap(responses[1]["result"] as? [String: Any])
         XCTAssertEqual(presetResult["isError"] as? Bool, false)
         let presetContent = try XCTUnwrap(presetResult["structuredContent"] as? [String: Any])
@@ -1808,6 +1775,161 @@ final class ApplicationJobContractTests: XCTestCase {
         let planContent = try XCTUnwrap(planResult["structuredContent"] as? [String: Any])
         let request = try XCTUnwrap(planContent["request"] as? [String: Any])
         XCTAssertEqual(request["requesterID"] as? String, "Codex")
+    }
+
+    func testPackagedMCPHelperRechecksAccessAndKeepsJobsAcrossClientReconnect() throws {
+        final class GrantState: @unchecked Sendable {
+            private let lock = NSLock()
+            private var sourceApproved = true
+
+            func setSourceApproved(_ approved: Bool) {
+                lock.withLock { sourceApproved = approved }
+            }
+
+            func acquire(_ mode: ApplicationFileAccessMode) -> ApplicationFileAccessLease? {
+                lock.withLock {
+                    guard mode == .write || sourceApproved else { return nil }
+                    return ApplicationFileAccessLease {}
+                }
+            }
+        }
+
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let grants = GrantState()
+        let service = ApplicationJobService(fileAccessAuthorizer: ApplicationFileAccessAuthorizer {
+            _, mode in grants.acquire(mode)
+        })
+        let portID = UUID()
+        let server = ApplicationAgentIPCServer(
+            portName: "com.aagedal.tests.agent.\(portID.uuidString)",
+            dispatcher: ApplicationAgentRequestDispatcher(tools: ApplicationAgentTools(
+                jobService: service,
+                fileAccessAuthorizer: .unrestricted
+            ))
+        )
+        try server.start()
+        defer { server.stop() }
+
+        let initialize: [String: Any] = [
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": ["protocolVersion": "2025-06-18", "clientInfo": ["name": "Codex"]]
+        ]
+        let initialized: [String: Any] = [
+            "jsonrpc": "2.0", "method": "notifications/initialized"
+        ]
+        let planned = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "plan_conversion", "arguments": [
+                    "source_paths": [sourceURL.path],
+                    "destination_path": directory.path,
+                    "preset_id": "h264",
+                    "idempotency_key": "reconnect-test"
+                ]
+            ]]
+        ])
+        let plan = try XCTUnwrap(planned[1]["result"] as? [String: Any])
+        XCTAssertEqual(plan["isError"] as? Bool, false)
+        let planID = try XCTUnwrap(
+            (plan["structuredContent"] as? [String: Any])?["id"] as? String
+        )
+
+        grants.setSourceApproved(false)
+        let denied = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "submit_conversion", "arguments": ["plan_id": planID]
+            ]]
+        ])
+        let denial = try XCTUnwrap(denied[1]["result"] as? [String: Any])
+        XCTAssertEqual(denial["isError"] as? Bool, true)
+        XCTAssertEqual(
+            ((denial["structuredContent"] as? [String: Any])?["error"] as? [String: Any])?["code"] as? String,
+            "source_access_denied"
+        )
+
+        grants.setSourceApproved(true)
+        let submitted = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "submit_conversion", "arguments": ["plan_id": planID]
+            ]]
+        ])
+        let acceptance = try XCTUnwrap(
+            (submitted[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(acceptance["wasAlreadyAccepted"] as? Bool, false)
+        let jobID = try XCTUnwrap((acceptance["record"] as? [String: Any])?["id"] as? String)
+
+        let reconnected = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "get_job", "arguments": ["job_id": jobID]
+            ]],
+            ["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": [
+                "name": "cancel_job", "arguments": ["job_id": jobID]
+            ]],
+            ["jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": [
+                "name": "submit_conversion", "arguments": ["plan_id": planID]
+            ]]
+        ])
+        let lookedUp = try XCTUnwrap(
+            (reconnected[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(lookedUp["id"] as? String, jobID)
+        XCTAssertEqual(lookedUp["state"] as? String, "queued")
+        let cancelled = try XCTUnwrap(
+            (reconnected[2]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(cancelled["state"] as? String, "cancelled")
+        let duplicate = try XCTUnwrap(
+            (reconnected[3]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(duplicate["wasAlreadyAccepted"] as? Bool, true)
+        XCTAssertEqual((duplicate["record"] as? [String: Any])?["id"] as? String, jobID)
+        XCTAssertEqual((duplicate["record"] as? [String: Any])?["state"] as? String, "cancelled")
+    }
+
+    private func runPackagedMCPHelper(
+        portID: UUID,
+        messages: [[String: Any]]
+    ) throws -> [[String: Any]] {
+        let helperURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/aagedal-media-converter-mcp")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: helperURL.path))
+
+        let process = Process()
+        process.executableURL = helperURL
+        process.environment = ProcessInfo.processInfo.environment.merging([
+            "AMC_UI_TEST_AGENT_PORT_ID": portID.uuidString
+        ]) { _, replacement in replacement }
+        let input = Pipe()
+        let output = Pipe()
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
+        process.standardInput = input
+        process.standardOutput = output
+        try process.run()
+
+        let lines = try messages.map { message in
+            try JSONSerialization.data(withJSONObject: message) + Data([0x0A])
+        }
+        input.fileHandleForWriting.write(lines.reduce(Data(), +))
+        try input.fileHandleForWriting.close()
+        guard finished.wait(timeout: .now() + 15) == .success else {
+            process.terminate()
+            throw CocoaError(.fileReadUnknown)
+        }
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+
+        return try output.fileHandleForReading.readDataToEndOfFile()
+            .split(separator: 0x0A)
+            .map { line in
+                try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
+            }
     }
 
     private func makeRequest(
