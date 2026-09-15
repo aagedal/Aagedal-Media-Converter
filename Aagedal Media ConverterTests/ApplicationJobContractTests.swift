@@ -1261,7 +1261,8 @@ final class ApplicationJobContractTests: XCTestCase {
         let capturedSnapshots = await harness.snapshots()
         XCTAssertEqual(capturedSnapshots.count, 2)
         let snapshot = try XCTUnwrap(capturedSnapshots.first)
-        XCTAssertEqual(snapshot.outputURL.pathExtension, "mov")
+        XCTAssertEqual(plan.outputs.first?.outputURL.pathExtension, "mov")
+        XCTAssertEqual(snapshot.outputURL.pathExtension, "")
         XCTAssertTrue(snapshot.ffmpegArguments.contains("libx264"))
         XCTAssertTrue(snapshot.ffmpegArguments.contains("18"))
         XCTAssertTrue(snapshot.ffmpegArguments.contains("slow"))
@@ -1275,7 +1276,7 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(snapshot.trimEnd, 4.5)
         XCTAssertEqual(snapshot.cropConfig, sourceSettings.cropConfig)
         XCTAssertTrue(snapshot.isMuted)
-        XCTAssertEqual(snapshot.outputURL.lastPathComponent, "custom-output.mov")
+        XCTAssertEqual(snapshot.outputURL.lastPathComponent, "custom-output")
         XCTAssertEqual(snapshot.commentPrefix, "Original")
         XCTAssertTrue(capturedSnapshots[1].includeDateTag)
         XCTAssertNil(capturedSnapshots[1].manualTimecode)
@@ -2159,6 +2160,199 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(duplicate["wasAlreadyAccepted"] as? Bool, true)
         XCTAssertEqual((duplicate["record"] as? [String: Any])?["id"] as? String, jobID)
         XCTAssertEqual((duplicate["record"] as? [String: Any])?["state"] as? String, "cancelled")
+    }
+
+    func testPackagedMCPHelperInspectsAndCompletesLiveStreamCopy() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        let destinationURL = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", sourceURL.path
+        ])
+
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        let portID = UUID()
+        let server = ApplicationAgentIPCServer(
+            portName: "com.aagedal.tests.agent.\(portID.uuidString)",
+            dispatcher: ApplicationAgentRequestDispatcher(tools: ApplicationAgentTools(
+                jobService: service,
+                fileAccessAuthorizer: .unrestricted
+            ))
+        )
+        try server.start()
+        defer { server.stop() }
+
+        let initialize: [String: Any] = [
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": ["protocolVersion": "2025-06-18", "clientInfo": ["name": "Codex"]]
+        ]
+        let initialized: [String: Any] = [
+            "jsonrpc": "2.0", "method": "notifications/initialized"
+        ]
+        let preparation = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "inspect_media", "arguments": ["source_path": sourceURL.path]
+            ]],
+            ["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": [
+                "name": "plan_conversion", "arguments": [
+                    "source_paths": [sourceURL.path],
+                    "destination_path": destinationURL.path,
+                    "preset_id": "stream_copy",
+                    "idempotency_key": "live-stream-copy"
+                ]
+            ]]
+        ])
+        let inspection = try XCTUnwrap(
+            (preparation[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(inspection["sourceURL"] as? String, sourceURL.absoluteString)
+        XCTAssertEqual(
+            (inspection["videoStreams"] as? [[String: Any]])?.first?["codec"] as? String,
+            "avc1"
+        )
+        let planResult = try XCTUnwrap(
+            (preparation[2]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        let planID = try XCTUnwrap(planResult["id"] as? String)
+        let plannedOutput = try XCTUnwrap(
+            (planResult["outputs"] as? [[String: Any]])?.first?["outputURL"] as? String
+        )
+
+        let submission = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "submit_conversion", "arguments": ["plan_id": planID]
+            ]]
+        ])
+        let acceptance = try XCTUnwrap(
+            (submission[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(acceptance["wasAlreadyAccepted"] as? Bool, false)
+        let jobID = try XCTUnwrap((acceptance["record"] as? [String: Any])?["id"] as? String)
+        let record = try await waitForRecord(
+            service: service,
+            jobID: ApplicationJobID(try XCTUnwrap(UUID(uuidString: jobID))),
+            state: .succeeded
+        )
+        XCTAssertEqual(record.outputURLs.map(\.absoluteString), [plannedOutput])
+        let outputURL = try XCTUnwrap(record.outputURLs.first)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
+        let copiedMetadata = try runBundledFFmpeg([
+            "-hide_banner", "-i", outputURL.path,
+            "-map", "0:v:0", "-f", "null", "-"
+        ])
+        XCTAssertTrue(copiedMetadata.contains("Video: h264"), copiedMetadata)
+
+        let followUp = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "get_job", "arguments": ["job_id": jobID]
+            ]],
+            ["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": [
+                "name": "submit_conversion", "arguments": ["plan_id": planID]
+            ]]
+        ])
+        let completed = try XCTUnwrap(
+            (followUp[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(completed["state"] as? String, "succeeded")
+        let retry = try XCTUnwrap(
+            (followUp[2]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(retry["wasAlreadyAccepted"] as? Bool, true)
+        XCTAssertEqual((retry["record"] as? [String: Any])?["id"] as? String, jobID)
+    }
+
+    func testLiveSupportedPresetJobsCreateTheirPlannedOutputs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            "-shortest", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
+        defaults.set(H265Encoder.software.rawValue, forKey: AppConstants.h265EncoderKey)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+
+        for (presetID, expectedExtension, videoCodec, audioCodec) in [
+            (ApplicationPresetID.h264, "mp4", "h264", "aac"),
+            (.hevc, "mp4", "hevc", "aac"),
+            (.proRes, "mov", "prores", "pcm_s24le"),
+            (.proxy, "mov", "hevc", "pcm_s24le"),
+            (.audioOnly, "wav", nil, "pcm_s24le")
+        ] {
+            let destinationURL = directory.appendingPathComponent(
+                presetID.rawValue, isDirectory: true
+            )
+            try FileManager.default.createDirectory(
+                at: destinationURL, withIntermediateDirectories: true
+            )
+            let plan = try await service.plan(makeRequest(
+                sourceURLs: [sourceURL],
+                destinationFolderURL: destinationURL,
+                presetID: presetID,
+                idempotencyKey: nil,
+                defaults: defaults
+            ))
+            let plannedURL = try XCTUnwrap(plan.outputs.first?.outputURL)
+            XCTAssertEqual(plannedURL.pathExtension, expectedExtension)
+            let accepted = try await service.submit(planID: plan.id)
+            let record = try await waitForRecord(
+                service: service, jobID: accepted.record.id, state: .succeeded
+            )
+            XCTAssertEqual(record.outputURLs, [plannedURL])
+            XCTAssertTrue(FileManager.default.fileExists(atPath: plannedURL.path))
+            let metadata = try runBundledFFmpeg([
+                "-hide_banner", "-i", plannedURL.path,
+                "-map", "0", "-f", "null", "-"
+            ])
+            if let videoCodec {
+                XCTAssertTrue(metadata.contains("Video: \(videoCodec)"), metadata)
+            } else {
+                XCTAssertFalse(metadata.contains("Video:"), metadata)
+            }
+            XCTAssertTrue(metadata.contains("Audio: \(audioCodec)"), metadata)
+        }
+    }
+
+    @discardableResult
+    private func runBundledFFmpeg(_ arguments: [String]) throws -> String {
+        let binaryURL = Bundle.main.url(forResource: "ffmpeg", withExtension: nil)
+            ?? URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Aagedal Media Converter/Binaries/ffmpeg")
+        let process = Process()
+        let errorPipe = Pipe()
+        process.executableURL = binaryURL
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = errorPipe
+        try process.run()
+        let diagnostic = String(decoding: errorPipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, diagnostic)
+        guard process.terminationStatus == 0 else {
+            throw NSError(domain: "ApplicationJobContractTests.FFmpeg", code: Int(process.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: diagnostic])
+        }
+        return diagnostic
     }
 
     private func runPackagedMCPHelper(

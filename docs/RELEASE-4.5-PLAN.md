@@ -289,6 +289,19 @@ Agent Access preference. Non-object MCP tool arguments now fail with JSON-RPC
 invalid parameters. See the
 [cold-launch and input validation record](4.5-helper-cold-launch-validation-2026-09-15.md).
 
+A packaged-helper test now drives media inspection, planning, submission,
+completion, and reconnect lookup against the live FFmpeg adapter using a real
+Stream Copy fixture. It exposed that the adapter passed the plan's final filename
+to a converter that appends its own extension, leaving a succeeded job pointing
+to a nonexistent planned file. The adapter now supplies the filename base; the
+test confirms the exact planned output exists and decodes. See the
+[live output validation record](4.5-live-mcp-output-validation-2026-09-15.md).
+The same live adapter is now exercised for the other five supported presets:
+each creates its exact planned file, decodes all streams, and reports the
+expected output video/audio codecs through the bundled FFmpeg binary. This
+narrows the output-matrix gate; representative in-app playback, channel/timecode
+cases, and signed-package validation still require separate checks.
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

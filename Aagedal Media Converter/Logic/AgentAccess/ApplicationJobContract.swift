@@ -1563,6 +1563,17 @@ struct ApplicationFFmpegRunner: Sendable {
 
     let run: Run
     let cancel: @Sendable () async -> Void
+    let validatesPlannedOutput: Bool
+
+    init(
+        run: @escaping Run,
+        cancel: @escaping @Sendable () async -> Void,
+        validatesPlannedOutput: Bool = false
+    ) {
+        self.run = run
+        self.cancel = cancel
+        self.validatesPlannedOutput = validatesPlannedOutput
+    }
 
     static func live(converter: FFMPEGConverter = FFMPEGConverter()) -> Self {
         Self(
@@ -1589,7 +1600,8 @@ struct ApplicationFFmpegRunner: Sendable {
             },
             cancel: {
                 await converter.cancelConversion()
-            }
+            },
+            validatesPlannedOutput: true
         )
     }
 }
@@ -1728,6 +1740,10 @@ actor ApplicationFFmpegJobExecutor {
             }
             switch result {
             case .succeeded:
+                if runner.validatesPlannedOutput,
+                   !FileManager.default.fileExists(atPath: output.outputURL.path) {
+                    return .failed(diagnostic: "FFmpeg completed without creating the planned output.")
+                }
                 break
             case .failed(let diagnostic):
                 return .failed(diagnostic: diagnostic)
@@ -1755,7 +1771,9 @@ actor ApplicationFFmpegJobExecutor {
         let defaults = try ApplicationExecutionDefaults(settings: settings)
         var conversionRequest = ConversionRequest(
             inputURL: output.sourceURL,
-            outputURL: output.outputURL,
+            // FFMPEGConverter takes an output base name and appends the captured
+            // container extension itself. The plan already names the final file.
+            outputURL: output.outputURL.deletingPathExtension(),
             preset: plan.request.presetID.exportPreset,
             comment: sourceSettings?.comment ?? "",
             includeDateTag: sourceSettings?.includeDateTag

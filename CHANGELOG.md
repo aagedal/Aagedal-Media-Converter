@@ -59,6 +59,13 @@ localization, and Release-package validation are still open.
   another installation with the same bundle identifier is running. Non-object
   MCP tool arguments now return an invalid-parameters error instead of being
   silently treated as an empty object.
+- Fixed shared-job output naming so the FFmpeg adapter passes the planned base
+  name to the converter, which appends the captured container extension. Live
+  execution now fails if FFmpeg reports success without creating the planned
+  file. A packaged-helper Stream Copy workflow now verifies the planned file
+  exists, decodes, and remains available after an MCP client reconnects. Live
+  adapter checks also verify the planned file, decodable streams, and output
+  codecs for H.264, HEVC, ProRes, Proxy, and Audio Only.
 - Added opt-in Agent Access settings with a connection test, copyable MCP client
   configuration, helper discovery, approved-folder guidance, and an explicit
   policy that disabling access stops new requests without cancelling accepted
