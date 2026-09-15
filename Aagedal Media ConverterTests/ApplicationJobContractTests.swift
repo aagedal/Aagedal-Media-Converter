@@ -2,6 +2,7 @@
 // Copyright 2026 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import CoreFoundation
 import Foundation
 import XCTest
 @testable import Aagedal_Media_Converter
@@ -1938,6 +1939,96 @@ final class ApplicationJobContractTests: XCTestCase {
         let planContent = try XCTUnwrap(planResult["structuredContent"] as? [String: Any])
         let request = try XCTUnwrap(planContent["request"] as? [String: Any])
         XCTAssertEqual(request["requesterID"] as? String, "Codex")
+    }
+
+    func testPackagedMCPHelperRejectsIncompatibleAppResponses() throws {
+        final class RunLoopState: @unchecked Sendable {
+            let source: CFRunLoopSource
+            private let lock = NSLock()
+            private var storedRunLoop: CFRunLoop?
+
+            init(source: CFRunLoopSource) { self.source = source }
+
+            var runLoop: CFRunLoop? { lock.withLock { storedRunLoop } }
+
+            func store(_ runLoop: CFRunLoop) {
+                lock.withLock { storedRunLoop = runLoop }
+            }
+        }
+
+        let portID = UUID()
+        var shouldFreeInfo = DarwinBoolean(false)
+        let port = try XCTUnwrap(CFMessagePortCreateLocal(
+            nil,
+            "com.aagedal.tests.agent.\(portID.uuidString)" as CFString,
+            { _, _, data, _ in
+                guard let data,
+                      let request = try? JSONSerialization.jsonObject(with: data as Data)
+                        as? [String: Any],
+                      let requestID = request["requestID"] as? String else { return nil }
+                var payload: [String: Any] = [
+                    "schemaVersion": request["tool"] as? String == "get_job" ? 1 : 2,
+                    "requestID": requestID,
+                    "result": ["presets": []]
+                ]
+                if request["tool"] as? String == "get_job" {
+                    payload["failure"] = [
+                        "code": "internal_error", "message": "An ambiguous result."
+                    ]
+                }
+                guard let response = try? JSONSerialization.data(withJSONObject: payload) else {
+                    return nil
+                }
+                return Unmanaged.passRetained(response as CFData)
+            },
+            nil,
+            &shouldFreeInfo
+        ))
+        let source = try XCTUnwrap(CFMessagePortCreateRunLoopSource(nil, port, 0))
+        let runLoopState = RunLoopState(source: source)
+        let ready = DispatchSemaphore(value: 0)
+        let stopped = DispatchSemaphore(value: 0)
+        DispatchQueue(label: "com.aagedal.tests.malformed-agent-response").async {
+            guard let runLoop = CFRunLoopGetCurrent() else {
+                ready.signal()
+                stopped.signal()
+                return
+            }
+            runLoopState.store(runLoop)
+            CFRunLoopAddSource(runLoop, runLoopState.source, .defaultMode)
+            ready.signal()
+            CFRunLoopRun()
+            stopped.signal()
+        }
+        defer {
+            CFMessagePortInvalidate(port)
+            if let runLoop = runLoopState.runLoop { CFRunLoopStop(runLoop) }
+            _ = stopped.wait(timeout: .now() + 2)
+        }
+        XCTAssertEqual(ready.wait(timeout: .now() + 2), .success)
+
+        let responses = try runPackagedMCPHelper(portID: portID, messages: [
+            ["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": [
+                "protocolVersion": "2025-06-18", "clientInfo": ["name": "Codex"]
+            ]],
+            ["jsonrpc": "2.0", "method": "notifications/initialized"],
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "list_presets", "arguments": [:]
+            ]],
+            ["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": [
+                "name": "get_job", "arguments": ["job_id": UUID().uuidString]
+            ]]
+        ])
+        XCTAssertEqual(responses.count, 3)
+        for response in responses.dropFirst() {
+            let result = try XCTUnwrap(response["result"] as? [String: Any])
+            XCTAssertEqual(result["isError"] as? Bool, true)
+            let structured = try XCTUnwrap(result["structuredContent"] as? [String: Any])
+            let error = try XCTUnwrap(structured["error"] as? [String: Any])
+            XCTAssertEqual(error["code"] as? String, "transport_unavailable")
+            XCTAssertEqual(error["message"] as? String,
+                           "Aagedal Media Converter returned an invalid response.")
+        }
     }
 
     func testPackagedMCPHelperRechecksAccessAndKeepsJobsAcrossClientReconnect() throws {

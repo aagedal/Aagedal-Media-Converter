@@ -272,6 +272,13 @@ probe failure, returns `source_unavailable` for loss, and rejects directories
 before probing. Focused coverage is in the
 [inspection access-loss validation record](4.5-inspection-access-loss-validation-2026-09-15.md).
 
+The packaged helper now validates the app's IPC response schema and requires
+exactly one success result or failure before presenting a tool result. An
+incompatible schema or ambiguous response returns `transport_unavailable` rather
+than being mistaken for a valid MCP result. A separate helper-process regression
+exercises both cases; see the
+[helper response validation record](4.5-helper-response-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

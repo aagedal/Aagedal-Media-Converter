@@ -110,7 +110,9 @@ private final class MCPStdioServer {
         do {
             let response = try AppIPCClient().send(request)
             guard let responseID = response["requestID"] as? String,
-                  responseID.caseInsensitiveCompare(requestID.uuidString) == .orderedSame else {
+                  responseID.caseInsensitiveCompare(requestID.uuidString) == .orderedSame,
+                  response["schemaVersion"] as? Int == ipcSchemaVersion,
+                  (response["result"] == nil) != (response["failure"] == nil) else {
                 throw HelperError.invalidResponse
             }
             if let failure = response["failure"] as? [String: Any] {
