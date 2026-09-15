@@ -285,7 +285,7 @@ struct ApplicationRequestExecutionSettings: Codable, Equatable, Sendable {
         comment = ApplicationCommentSettings(defaults: defaults)
     }
 
-    fileprivate var timecodeConfig: TimecodeConfig? {
+    var timecodeConfig: TimecodeConfig? {
         switch timecodeMode {
         case .disabled:
             nil

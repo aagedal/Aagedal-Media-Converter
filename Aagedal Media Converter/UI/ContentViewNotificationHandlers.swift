@@ -152,16 +152,12 @@ struct ContentViewNotificationHandlers: ViewModifier {
                 currentOutputFolder = folderURL
                 outputFolder = folderURL.path
                 applyPreset(preset)
-                AppIntentApplicationJobBridge.persistFileAccess(
-                    sourceURLs: request.sourceURLs,
-                    destinationFolderURL: folderURL
-                )
+                AppIntentApplicationJobBridge.persistFileAccess(for: request)
                 do {
                     _ = try await ApplicationJobService.shared.planAndSubmit(request)
                 } catch {
                     addFailedSharedSubmissionRows(
-                        sourceURLs: request.sourceURLs,
-                        outputFolder: folderURL,
+                        request: request,
                         preset: preset,
                         message: ApplicationAgentToolFailure(error: error).message
                     )
@@ -200,13 +196,16 @@ struct ContentViewNotificationHandlers: ViewModifier {
     }
 
     private func addFailedSharedSubmissionRows(
-        sourceURLs: [URL],
-        outputFolder: URL,
+        request: ApplicationConversionRequest,
         preset: ExportPreset,
         message: String
     ) {
-        for sourceURL in sourceURLs {
+        for (index, sourceURL) in request.sourceURLs.enumerated() {
             guard !droppedFiles.contains(where: { $0.url == sourceURL }) else { continue }
+            let sourceDestination = request.sourceSettings?.indices.contains(index) == true
+                ? request.sourceSettings?[index].destinationFolderURL
+                : nil
+            let outputFolder = sourceDestination ?? request.destinationFolderURL
             var item = VideoFileUtils.makePlaceholderItem(
                 from: sourceURL,
                 outputFolder: outputFolder.path,

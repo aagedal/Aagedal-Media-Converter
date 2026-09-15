@@ -1,6 +1,6 @@
 # Corresponding sources and release attribution
 
-The 4.4 distribution includes a separate `Aagedal_Media_Converter_*_Sources_*.tar`
+Release distributions include a separate `Aagedal_Media_Converter_*_Sources_*.tar`
 companion alongside the application ZIP. It contains reviewed source archives,
 licenses, patches and build instructions for the bundled copyleft components.
 The app's About > Licenses viewer also provides the collected notices offline.
@@ -35,7 +35,7 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
   inputs. The package review distinguishes direct archive/payload matches from
   version/build-date inferences for some upstream runtime notices. It does not
   claim every upstream binary has been independently reproduced.
-- **SwiftMediaMetadata 3.0.0:** the exact pinned source tree, including the GeoNames
+- **SwiftMediaMetadata 3.0.1:** the exact pinned source tree, including the GeoNames
   database and its upstream acknowledgement. Its source package identifies
   required platform tools and dependencies in `Package.swift`.
 

@@ -56,9 +56,6 @@ enum AppIntentApplicationJobBridge {
         defaults: UserDefaults = .standard
     ) -> ApplicationConversionRequest? {
         guard let presetID = ApplicationPresetID(exportPreset: preset) else { return nil }
-        // The v1 request has one destination for the whole batch. Preserve the
-        // established per-source output behavior until that is representable.
-        guard !OutputDestinationSettings(defaults: defaults).saveNextToOriginal else { return nil }
 
         var seen = Set<URL>()
         let uniqueSources = sourceURLs.filter {
@@ -66,18 +63,46 @@ enum AppIntentApplicationJobBridge {
         }
         guard !uniqueSources.isEmpty else { return nil }
 
-        return ApplicationConversionRequest(
+        let presetSettings = ApplicationPresetSettings(presetID: presetID, defaults: defaults)
+        let executionSettings = ApplicationRequestExecutionSettings(appIntentDefaults: defaults)
+        let destinationSettings = OutputDestinationSettings(defaults: defaults)
+        let sourceSettings: [ApplicationSourceExecutionSettings]?
+        if destinationSettings.saveNextToOriginal {
+            sourceSettings = uniqueSources.map { sourceURL in
+                let path = destinationSettings.resolveFolder(
+                    for: sourceURL,
+                    defaultOutputFolder: destinationFolderURL.path,
+                    presetSuffix: presetSettings.fileName.presetSuffix
+                )
+                return ApplicationSourceExecutionSettings(
+                    sourceURL: sourceURL,
+                    destinationFolderURL: path.map {
+                        URL(fileURLWithPath: $0, isDirectory: true)
+                    },
+                    includeDateTag: executionSettings.includeDateTag,
+                    timecodeConfig: executionSettings.timecodeConfig
+                )
+            }
+        } else {
+            sourceSettings = nil
+        }
+
+        let request = ApplicationConversionRequest(
             requestID: requestID ?? UUID(),
             origin: .appIntent,
             requesterID: requesterID,
             sourceURLs: uniqueSources,
             destinationFolderURL: destinationFolderURL,
             presetID: presetID,
-            executionSettings: ApplicationRequestExecutionSettings(appIntentDefaults: defaults),
+            presetSettings: presetSettings,
+            executionSettings: executionSettings,
+            sourceSettings: sourceSettings,
             idempotencyKey: requestID?.uuidString.lowercased(),
             capturedAt: capturedAt,
             defaults: defaults
         )
+        guard (try? ApplicationJobRegistry.validate(request)) != nil else { return nil }
+        return request
     }
 
     /// IntentFile URLs represent an explicit user selection. Persist those
@@ -93,6 +118,35 @@ enum AppIntentApplicationJobBridge {
             _ = bookmarks.saveBookmark(for: sourceURL)
         }
         _ = bookmarks.saveWritableBookmark(for: destinationFolderURL.standardizedFileURL)
+    }
+
+    /// Persists only destinations that the accepted request will actually use.
+    /// This matters for Save Next to Original batches, where the App Intent's
+    /// fallback folder is not part of the planned output set.
+    @MainActor
+    static func persistFileAccess(
+        for request: ApplicationConversionRequest,
+        bookmarks: SecurityScopedBookmarkManager = .shared
+    ) {
+        for sourceURL in Set(request.sourceURLs.map(\.standardizedFileURL)) {
+            _ = bookmarks.saveBookmark(for: sourceURL)
+        }
+        var destinations = Set<URL>()
+        for index in request.sourceURLs.indices {
+            let sourceDestination = request.sourceSettings?.indices.contains(index) == true
+                ? request.sourceSettings?[index].destinationFolderURL
+                : nil
+            destinations.insert(
+                (sourceDestination ?? request.destinationFolderURL).standardizedFileURL
+            )
+        }
+        for destinationURL in destinations {
+            try? FileManager.default.createDirectory(
+                at: destinationURL,
+                withIntermediateDirectories: true
+            )
+            _ = bookmarks.saveWritableBookmark(for: destinationURL)
+        }
     }
 }
 
@@ -224,24 +278,9 @@ enum ManualApplicationJobBridge {
         for request: ApplicationConversionRequest,
         bookmarks: SecurityScopedBookmarkManager = .shared
     ) {
-        for sourceURL in Set(request.sourceURLs.map(\.standardizedFileURL)) {
-            _ = bookmarks.saveBookmark(for: sourceURL)
-        }
-        var destinations = Set<URL>()
-        for index in request.sourceURLs.indices {
-            let sourceDestination = request.sourceSettings?.indices.contains(index) == true
-                ? request.sourceSettings?[index].destinationFolderURL
-                : nil
-            destinations.insert(
-                (sourceDestination ?? request.destinationFolderURL).standardizedFileURL
-            )
-        }
-        for destinationURL in destinations {
-            try? FileManager.default.createDirectory(
-                at: destinationURL,
-                withIntermediateDirectories: true
-            )
-            _ = bookmarks.saveWritableBookmark(for: destinationURL)
-        }
+        AppIntentApplicationJobBridge.persistFileAccess(
+            for: request,
+            bookmarks: bookmarks
+        )
     }
 }

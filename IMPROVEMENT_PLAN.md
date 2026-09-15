@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-14
+Last reviewed: 2026-09-15
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -42,6 +42,32 @@ work writing after cancellation must be fixed or have the affected path explicit
 disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
+
+## 4.5 SwiftMediaMetadata 3.0.1 update — 2026-09-15
+
+The app now resolves SwiftMediaMetadata 3.0.1 at revision
+`8662054299a3e13c49c65f74c564360559d1bf7f`. This adopts bounded-memory Sony
+RTMD discovery while preserving the existing package API and license set. The
+reviewed tag archive exactly matches `git archive` for the resolved revision;
+the package attribution, GeoNames notice, source-component mapping, and bundled
+dependency inventory now point at that release. Four focused upstream RTMD tests,
+all **931 app unit tests**, all **74 release-script tests**, the strict source and
+license gates, the Release build, and the 45-image/12-notice static bundle audit
+pass. See the
+[SwiftMediaMetadata validation record](docs/4.5-swiftmediametadata-3.0.1-validation-2026-09-15.md).
+
+## 4.5 App Intent destination continuation — 2026-09-15
+
+The six supported file-bearing Shortcut presets now keep “Save next to original”
+inside the application-owned planner and executor. Effective destinations are
+captured per source, custom or preset-based subfolders remain immutable after
+handoff, and access persistence no longer creates or authorizes an unused batch
+fallback. Failed submission rows also show the source's intended destination.
+The full unit target passes **931 tests**, all **74 release-script tests** pass,
+the **1,616-entry** localization audit remains green, and the Release static
+audit passes for 45 arm64 Mach-O images and 12 notices. Live security-scoped
+Shortcut execution remains part of the packaged acceptance matrix. See the
+[App Intent destination validation record](docs/4.5-app-intent-destination-validation-2026-09-15.md).
 
 ## 4.5 shared-job continuation — through 2026-09-14
 

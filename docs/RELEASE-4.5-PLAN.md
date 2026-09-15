@@ -1,8 +1,9 @@
 # Proposed 4.5 release — Local agent access
 
 Status: signed local transport, visible shared-job queue projection, initial
-Shortcut submission, and ordinary manual shared-queue submission including
-common per-file settings and destinations implemented on `codex/release-4.5`;
+Shortcut submission including per-source destinations, and ordinary manual
+shared-queue submission with common per-file settings and destinations
+implemented on `codex/release-4.5`;
 live manual success/cancellation and bilingual Agent Access diagnostics now pass.
 Beta readiness still depends on named-client, access-loss, output-matrix, sandbox
 scope, and Release-package validation.
@@ -17,7 +18,7 @@ Created: 2026-09-11.
 The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
 signed release candidate.
 
-## Implementation progress — through 2026-09-14
+## Implementation progress — through 2026-09-15
 
 The first shared-boundary increment is implemented without selecting an IPC
 transport prematurely:
@@ -107,9 +108,9 @@ Audio Only, and Stream Copy subset now use the same persisted planner and
 serialized executor as MCP jobs. The handoff captures date-tag, timecode, comment,
 preset, and filename settings before suspension, preserves request identity for
 idempotency, and persists the selected files and destination grants before
-planning. Presets outside the bounded contract and the per-source “save next to
-original” mode continue through the established path rather than silently losing
-semantics. Shared-submission failures become visible failed Shortcut rows. See the
+planning. Presets outside the bounded contract continue through the established
+path rather than silently losing semantics. Shared-submission failures become
+visible failed Shortcut rows. See the
 [App Intent handoff validation record](4.5-app-intent-handoff-validation-2026-09-13.md).
 
 Ordinary ungrouped manual H.264, HEVC, ProRes, Proxy, Audio Only, and Stream Copy
@@ -196,13 +197,31 @@ blocked by the recorded local Apple Development trust-chain failure and does not
 replace Developer ID archive/notarization. See the
 [shared UI ownership validation record](4.5-shared-ui-ownership-validation-2026-09-14.md).
 
+Supported file-bearing App Intent conversions now preserve “Save next to
+original” through the shared service instead of returning to the legacy executor.
+Each source captures its effective destination, including custom or preset-based
+subfolders, and access persistence authorizes only destinations the plan will
+use. Failed submission rows also retain the intended per-source folder. The full
+unit target now passes 931 tests; the 74 release-script tests and 1,616-entry
+catalog audit remain green. See the
+[App Intent destination validation record](4.5-app-intent-destination-validation-2026-09-15.md).
+
+SwiftMediaMetadata is now pinned to 3.0.1 at revision
+`8662054299a3e13c49c65f74c564360559d1bf7f`, adopting its bounded-memory Sony
+RTMD discovery fix. The exact tag source is retained and tied through the package,
+GeoNames, source-component, and bundled-dependency manifests. Four focused
+upstream RTMD tests, all 931 app unit tests, all 74 release-script tests, strict
+source/license verification, a Release build, and the 45-image/12-notice static
+bundle audit pass. See the
+[SwiftMediaMetadata 3.0.1 validation record](4.5-swiftmediametadata-3.0.1-validation-2026-09-15.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, two named MCP
 clients have not been exercised, and a Developer ID Release archive has not
 completed signing/notarization validation. Groups/merge, generated waveform
-behavior, post-actions, and unsupported or per-source-destination App Intent
-cases still use the legacy executor, so full
+behavior, post-actions, and unsupported App Intent cases still use the legacy
+executor, so full
 cross-boundary serialization remains open. The Agent Access surface and
 accepted-settings inspector now have Norwegian catalog coverage, but bilingual
 visual review and the packaged end-to-end acceptance matrix remain open.

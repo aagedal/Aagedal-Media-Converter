@@ -107,11 +107,11 @@
       "identity": "swiftmediametadata",
       "path": "SwiftPackages/swiftmediametadata",
       "sourceURL": "https://github.com/aagedal/SwiftMediaMetadata.git",
-      "revision": "c2d77c2dcefcb997623e52beca57bc61ce302cb9",
+      "revision": "8662054299a3e13c49c65f74c564360559d1bf7f",
       "license": "GPL-3.0-only AND CC-BY-4.0",
       "licenseFile": "Licenses/swiftmediametadata-LICENSE.txt",
       "requiredSourceComponents": [
-        "SwiftMediaMetadata 3.0.0"
+        "SwiftMediaMetadata 3.0.1"
       ]
     }
   ]

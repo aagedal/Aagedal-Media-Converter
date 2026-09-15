@@ -62,8 +62,9 @@ localization, and Release-package validation are still open.
   Shortcut conversions through the same persisted planner and serialized
   executor as agent work. The handoff preserves request identity, approved file
   access, and captured preset, naming, date-tag, timecode, and comment settings;
-  wider presets and per-source Shortcut destinations retain their established
-  path.
+  “Save next to original” now captures and authorizes each source's effective
+  destination, including configured subfolders, while wider presets retain their
+  established path.
 - Routed ordinary ungrouped manual conversions for the same six presets through
   the persisted application planner and serialized executor. Manual batches keep
   their existing visible rows and preserve per-file comments, trim, crop, mute,
@@ -86,6 +87,11 @@ localization, and Release-package validation are still open.
   including locale-aware numbers, dates, destinations, and per-file adjustments.
 - Made the disabled IMF export explanation release-neutral so it remains accurate
   while conformance work is deferred.
+
+## Dependencies and release checks
+
+- Updated SwiftMediaMetadata to 3.0.1, including its bounded-memory Sony RTMD
+  track discovery fix, and refreshed the pinned source and attribution evidence.
 
 ## Interface fixes
 
