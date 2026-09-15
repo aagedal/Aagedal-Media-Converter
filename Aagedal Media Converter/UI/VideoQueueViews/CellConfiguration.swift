@@ -320,6 +320,7 @@ enum CellAction {
     case showDCPMetadata
     case showIMFMetadata
     case showAnalyticsResults
+    case showLoudnessAnalysis
     case showAnalyticsFilePicker
     case showSubtitleTrackSheet
     case showAudioTrackSheet

@@ -4,6 +4,97 @@
 
 import Foundation
 
+/// A playout program is one file, measured through one selected audio presentation.
+/// Stream indices are audio-relative (`0:a:N`), not absolute container indices.
+enum LoudnessPresentation: Equatable, Sendable, Identifiable {
+    case track(Int)
+    case stereo(left: Int, right: Int)
+    /// Order: L, R, C, LFE, Ls, Rs (SMPTE/5.1 side).
+    case surround51([Int])
+
+    var id: String {
+        switch self {
+        case .track(let index): return "track-\(index)"
+        case .stereo(let left, let right): return "stereo-\(left)-\(right)"
+        case .surround51(let indices): return "surround-\(indices.map(String.init).joined(separator: "-"))"
+        }
+    }
+
+    var streamIndices: [Int] {
+        switch self {
+        case .track(let index): return [index]
+        case .stereo(let left, let right): return [left, right]
+        case .surround51(let indices): return indices
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .track(let index): return "Track \(index + 1)"
+        case .stereo(let left, let right): return "Stereo: \(left + 1) L + \(right + 1) R"
+        case .surround51(let indices):
+            return "5.1: \(indices.map { String($0 + 1) }.joined(separator: ", ")) (L, R, C, LFE, Ls, Rs)"
+        }
+    }
+
+    /// Only propose grouping when the participating streams are known to be mono.
+    static func presets(for tracks: [AudioTrackInfo]) -> [LoudnessPresentation] {
+        let singles = tracks.map { LoudnessPresentation.track($0.streamIndex) }
+        guard tracks.count > 1, tracks.allSatisfy({ $0.channels == 1 }) else {
+            return singles
+        }
+        let mono = tracks.map(\.streamIndex).sorted()
+        let pairs = stride(from: 0, to: mono.count - mono.count % 2, by: 2).map {
+            LoudnessPresentation.stereo(left: mono[$0], right: mono[$0 + 1])
+        }
+        var presentations = singles + pairs
+        if mono.count == 6 {
+            presentations.append(.surround51(mono))
+            // Alternative file order L, R, C, Ls, Rs, LFE. The enum always
+            // stores indices in meter order L, R, C, LFE, Ls, Rs.
+            presentations.append(.surround51([mono[0], mono[1], mono[2], mono[5], mono[3], mono[4]]))
+        }
+        return presentations
+    }
+}
+
+struct LoudnessSample: Equatable, Sendable {
+    let seconds: Double
+    let momentaryLUFS: Double?
+    let shortTermLUFS: Double?
+}
+
+struct LoudnessResults: Equatable, Sendable {
+    let presentation: LoudnessPresentation
+    let integratedLUFS: Double
+    let loudnessRangeLU: Double
+    let maximumTruePeakDBTP: Double?
+    let samples: [LoudnessSample]
+
+    /// Reduce chart work without discarding momentary/short-term extremes from
+    /// any time bucket. The measured final summary remains untouched.
+    func graphSamples(maxBuckets: Int = 750) -> [LoudnessSample] {
+        guard samples.count > maxBuckets * 6 else { return samples }
+        let bucketSize = (samples.count + maxBuckets - 1) / maxBuckets
+        var selected: [LoudnessSample] = []
+        for start in stride(from: 0, to: samples.count, by: bucketSize) {
+            let end = min(start + bucketSize, samples.count)
+            var indices = Set([start, end - 1])
+            for keyPath in [\.momentaryLUFS, \.shortTermLUFS] as [KeyPath<LoudnessSample, Double?>] {
+                let valid = (start..<end).filter { samples[$0][keyPath: keyPath] != nil }
+                if let minimum = valid.min(by: { samples[$0][keyPath: keyPath]! < samples[$1][keyPath: keyPath]! }) {
+                    indices.insert(minimum)
+                }
+                if let maximum = valid.max(by: { samples[$0][keyPath: keyPath]! < samples[$1][keyPath: keyPath]! }) {
+                    indices.insert(maximum)
+                }
+            }
+            selected.append(contentsOf: indices.sorted().map { samples[$0] })
+        }
+        return selected
+    }
+}
+
 /// Available video quality metrics
 enum QualityMetric: String, CaseIterable, Codable, Sendable {
     case vmaf

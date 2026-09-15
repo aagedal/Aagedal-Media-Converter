@@ -153,6 +153,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     var onOpenDCPMetadata: ((UUID) -> Void)?
     var onOpenIMFMetadata: ((UUID) -> Void)?
     var onOpenAnalyticsResults: ((UUID) -> Void)?
+    var onOpenLoudnessAnalysis: ((UUID) -> Void)?
     var onToggleDateTag: ((Int) -> Void)?
     var onPlayFullscreen: ((UUID) -> Void)?
     var onRenameOutputFileName: ((UUID, String?) -> Void)?
@@ -1477,6 +1478,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                         parent.droppedFiles[idx].analyticsEnabled.toggle()
                     }
                 }
+            case .showLoudnessAnalysis:
+                parent.onOpenLoudnessAnalysis?(itemID)
             case .toggleAutoEncode:
                 if let idx = droppedFilesIndex[itemID] {
                     parent.droppedFiles[idx].autoEncodeAfterDownload.toggle()

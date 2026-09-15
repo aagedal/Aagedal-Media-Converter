@@ -4,6 +4,195 @@
 
 import SwiftUI
 import AppKit
+import Charts
+
+/// One-file loudness report, with an explicit audio presentation choice. The
+/// grouped presets never silently reinterpret multiple mono streams.
+struct LoudnessAnalysisView: View {
+    let sourceFile: URL
+    let outputFile: URL?
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedFileID = "source"
+    @State private var tracks: [AudioTrackInfo] = []
+    @State private var selectedPresentationID = ""
+    @State private var isProbing = true
+    @State private var isAnalyzing = false
+    @State private var results: LoudnessResults?
+    @State private var errorMessage: String?
+    @State private var analysisTask: Task<Void, Never>?
+    @State private var analysisID: UUID?
+
+    private var presentations: [LoudnessPresentation] {
+        LoudnessPresentation.presets(for: tracks)
+    }
+
+    private var file: URL {
+        selectedFileID == "output" ? outputFile ?? sourceFile : sourceFile
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Program Loudness")
+                        .font(.title2.bold())
+                    Text(file.lastPathComponent)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button("Close") { dismiss() }
+            }
+
+            if isProbing {
+                ProgressView("Reading audio tracks…")
+            } else if presentations.isEmpty {
+                ContentUnavailableView("No audio tracks found", systemImage: "speaker.slash")
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let outputFile {
+                        Picker("File", selection: $selectedFileID) {
+                            Text("Source: \(sourceFile.lastPathComponent)").tag("source")
+                            Text("Output: \(outputFile.lastPathComponent)").tag("output")
+                        }
+                    }
+                    Picker("Audio presentation", selection: $selectedPresentationID) {
+                        ForEach(presentations) { presentation in
+                            Text(label(for: presentation)).tag(presentation.id)
+                        }
+                    }
+                    Text("Group presets assume the listed stream order is the playout channel order. Check the file's routing or MCA labels before using a grouped result for QC.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Button(isAnalyzing ? "Analyzing…" : "Analyze Whole File") { analyze() }
+                            .disabled(isAnalyzing || selectedPresentationID.isEmpty)
+                        if isAnalyzing {
+                            Button("Cancel") { analysisTask?.cancel() }
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+                    .font(.callout)
+            }
+
+            if let results {
+                Divider()
+                HStack(spacing: 22) {
+                    value("Integrated", value: String(format: "%.1f LUFS", results.integratedLUFS))
+                    value("Loudness range", value: String(format: "%.1f LU", results.loudnessRangeLU))
+                    value("Maximum true peak", value: results.maximumTruePeakDBTP.map {
+                        String(format: "%.1f dBTP", $0)
+                    } ?? "—")
+                }
+                Text("Integrated loudness is gated over the complete selected program; it is not an average of the graph.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if (results.samples.last?.seconds ?? 0) < 60 {
+                    Text("Loudness range is not considered stable for programs shorter than one minute.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                Chart {
+                    ForEach(results.graphSamples(), id: \.seconds) { sample in
+                        if let momentary = sample.momentaryLUFS {
+                            LineMark(x: .value("Time", sample.seconds),
+                                     y: .value("LUFS", momentary),
+                                     series: .value("Window", "Momentary (400 ms)"))
+                                .foregroundStyle(by: .value("Window", "Momentary (400 ms)"))
+                        }
+                        if let shortTerm = sample.shortTermLUFS {
+                            LineMark(x: .value("Time", sample.seconds),
+                                     y: .value("LUFS", shortTerm),
+                                     series: .value("Window", "Short-term (3 s)"))
+                                .foregroundStyle(by: .value("Window", "Short-term (3 s)"))
+                        }
+                    }
+                }
+                .chartYScale(domain: -70...0)
+                .chartXAxisLabel("Seconds")
+                .chartYAxisLabel("LUFS")
+                .frame(maxHeight: .infinity)
+            } else {
+                Spacer()
+            }
+        }
+        .padding(22)
+        .frame(width: 730, height: 560)
+        .task(id: file) {
+            isProbing = true
+            tracks = []
+            let probed = await AudioRoutingService.fetchAudioTrackInfo(for: file)
+            guard !Task.isCancelled else { return }
+            tracks = probed
+            selectedPresentationID = presentations.first?.id ?? ""
+            isProbing = false
+        }
+        .onChange(of: selectedFileID) {
+            analysisID = nil
+            analysisTask?.cancel()
+            analysisTask = nil
+            tracks = []
+            selectedPresentationID = ""
+            isProbing = true
+            results = nil
+            errorMessage = nil
+            isAnalyzing = false
+        }
+        .onDisappear {
+            analysisID = nil
+            analysisTask?.cancel()
+        }
+    }
+
+    private func value(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.title3.bold())
+        }
+    }
+
+    private func label(for presentation: LoudnessPresentation) -> String {
+        guard case .track(let index) = presentation,
+              let track = tracks.first(where: { $0.streamIndex == index }) else {
+            return presentation.displayName
+        }
+        let language = track.languageCode.map { " • \($0.uppercased())" } ?? ""
+        return track.displayLabel + language
+    }
+
+    private func analyze() {
+        guard let presentation = presentations.first(where: { $0.id == selectedPresentationID }) else { return }
+        results = nil
+        errorMessage = nil
+        isAnalyzing = true
+        let id = UUID()
+        let analyzedFile = file
+        analysisID = id
+        analysisTask = Task { @MainActor in
+            do {
+                let measured = try await LoudnessAnalysisService.shared.analyze(file: analyzedFile, presentation: presentation)
+                try Task.checkCancellation()
+                if analysisID == id { results = measured }
+            } catch is CancellationError {
+                // The next presentation can be run immediately.
+            } catch {
+                if analysisID == id, !Task.isCancelled { errorMessage = error.localizedDescription }
+            }
+            if analysisID == id {
+                isAnalyzing = false
+                analysisTask = nil
+                analysisID = nil
+            }
+        }
+    }
+}
 
 struct AnalyticsResultsView: View {
     let results: AnalyticsResults

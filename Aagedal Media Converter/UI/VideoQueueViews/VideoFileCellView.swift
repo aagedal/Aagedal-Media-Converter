@@ -103,6 +103,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     let transcriptionButton = NSButton()
     let ocrButton = NSButton()
     let analyticsButton = NSButton()
+    let loudnessButton = NSButton()
     let commentToggleButton = NSButton()
     let metadataToggleButton = NSButton()
 
@@ -765,6 +766,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         setupToggleButton(ocrButton, symbol: "text.viewfinder", action: #selector(ocrButtonClicked))
         ocrButton.isHidden = true
         setupToggleButton(analyticsButton, symbol: "chart.bar.xaxis", action: #selector(analyticsButtonClicked))
+        setupToggleButton(loudnessButton, symbol: "waveform.path", action: #selector(loudnessButtonClicked))
         setupToggleButton(uploadButton, symbol: "icloud.and.arrow.up", action: #selector(uploadButtonClicked))
 
         // Dividers between process toggles, the metadata group, and destructive actions.
@@ -791,7 +793,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         trailingSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         trailingSpacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        for view in [encodeButton, autoEncodeButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, uploadButton,
+        for view in [encodeButton, autoEncodeButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, loudnessButton, uploadButton,
                      metaDivider,
                      dateTagButton, commentToggleButton, metadataToggleButton, waveformButton, waveformBgButton,
                      trailingSpacer,
@@ -1622,6 +1624,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         let opt = NSEvent.modifierFlags.contains(.option)
         actionHandler?(.toggleAnalytics(optionPressed: opt))
     }
+    @objc private func loudnessButtonClicked() { actionHandler?(.showLoudnessAnalysis) }
     @objc private func encodeButtonClicked() {
         let opt = NSEvent.modifierFlags.contains(.option)
         actionHandler?(.encodeNow(optionPressed: opt))

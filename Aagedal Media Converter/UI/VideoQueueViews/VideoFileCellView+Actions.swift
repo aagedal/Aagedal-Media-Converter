@@ -96,6 +96,12 @@ extension VideoFileCellView {
         }
         applyProcessingRing(to: analyticsButton, active: isAnalyzing, color: .systemCyan)
 
+        // Metadata probes can still be pending when the row is rendered. Let the
+        // analysis sheet probe rather than hiding this action prematurely.
+        loudnessButton.isHidden = config.isImageSequence
+        loudnessButton.contentTintColor = .secondaryLabelColor
+        loudnessButton.toolTip = "Analyze program loudness (LUFS) for this file"
+
         // --- Upload button (blue) ---
         uploadButton.isHidden = false
         let isUploading = config.uploadStatus == .uploading
