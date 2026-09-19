@@ -1038,6 +1038,7 @@ enum ApplicationJobPersistenceError: Error, Equatable, Sendable {
     case missingSubmittedJob(ApplicationJobID)
     case mismatchedSubmittedRequest(ApplicationPlanID)
     case invalidPlanContents(ApplicationPlanID)
+    case invalidJobOutputs(ApplicationJobID)
 }
 
 private struct ApplicationSubmittedPlan: Codable, Equatable, Sendable {
@@ -2458,6 +2459,28 @@ actor ApplicationJobService {
                       uniqueOutputs.insert(outputURL).inserted else {
                     throw ApplicationJobPersistenceError.invalidPlanContents(plan.id)
                 }
+            }
+        }
+
+        for record in snapshot.records {
+            // Older snapshots can lack retained plans. Validate against frozen
+            // names only when the original accepted plan is still available;
+            // equivalent retry plans may have different date-based filenames.
+            let originalPlans = snapshot.plans.filter {
+                restoredSubmissions[$0.id]?.record.id == record.id && $0.request == record.request
+            }
+            guard let originalPlan = originalPlans.min(by: {
+                if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+                return $0.id.description < $1.id.description
+            }) else { continue }
+            let expected = originalPlan.outputs.map { $0.outputURL.standardizedFileURL }
+            let actual = record.outputURLs.map(\.standardizedFileURL)
+            guard record.outputURLs.allSatisfy(\.isFileURL),
+                  actual.count <= expected.count,
+                  actual == Array(expected.prefix(actual.count)),
+                  record.state != .succeeded || actual == expected,
+                  record.state != .queued || actual.isEmpty else {
+                throw ApplicationJobPersistenceError.invalidJobOutputs(record.id)
             }
         }
 

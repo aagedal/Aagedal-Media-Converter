@@ -1108,11 +1108,14 @@ final class ApplicationJobContractTests: XCTestCase {
             let outputs = try await service.plannedOutputURLs(for: accepted.record.id)
             XCTAssertEqual(outputs, expected)
         }
+        _ = try await service.transition(accepted.record.id, to: .running)
+        _ = try await service.transition(accepted.record.id, to: .succeeded, outputURLs: expected)
         let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
         let outputs = try await restored.plannedOutputURLs(for: accepted.record.id)
         XCTAssertEqual(outputs, expected)
         let record = try await restored.record(for: accepted.record.id)
-        XCTAssertEqual(record?.state, .interrupted)
+        XCTAssertEqual(record?.state, .succeeded)
+        XCTAssertEqual(record?.outputURLs, expected)
     }
 
     func testPersistenceRetentionRemovesExpiredPlansAndOldTerminalIdempotencyKeys() async throws {
@@ -1368,6 +1371,85 @@ final class ApplicationJobContractTests: XCTestCase {
             let retry = try await restored.submit(planID: plan.id)
             XCTAssertEqual(retry.record.id, accepted.record.id)
             XCTAssertEqual(retry.record.state, .interrupted)
+        }
+    }
+
+    func testRecoveryRejectsOutputsOutsideAcceptedBatchBeforePublishing() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = [directory.appendingPathComponent("first.mov"), directory.appendingPathComponent("second.mov")]
+        for source in sources {
+            try Data("source".utf8).write(to: source)
+        }
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let service = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let plan = try await service.plan(makeRequest(sourceURLs: sources, destinationFolderURL: directory))
+        let accepted = try await service.submit(planID: plan.id)
+        _ = try await service.transition(accepted.record.id, to: .running)
+        let validData = try Data(contentsOf: store.fileURL)
+        let expected = plan.outputs.map { $0.outputURL.absoluteString }
+        let invalidOutputs: [(ApplicationJobState, [String])] = [
+            (.running, [expected[1]]),
+            (.failed, Array(expected.reversed())),
+            (.cancelled, [expected[0], expected[0]]),
+            (.interrupted, expected + [expected[0]]),
+            (.failed, [directory.appendingPathComponent("unrelated.mp4").absoluteString]),
+            (.failed, ["https://example.com/output.mp4"]),
+            (.succeeded, [expected[0]]),
+            (.succeeded, []),
+            (.queued, [expected[0]])
+        ]
+        for (state, outputs) in invalidOutputs {
+            var snapshot = try XCTUnwrap(JSONSerialization.jsonObject(with: validData) as? [String: Any])
+            var records = try XCTUnwrap(snapshot["records"] as? [[String: Any]])
+            records[0]["state"] = state.rawValue
+            records[0]["outputURLs"] = outputs
+            snapshot["records"] = records
+            let damagedData = try JSONSerialization.data(withJSONObject: snapshot)
+            try damagedData.write(to: store.fileURL)
+            let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+            do {
+                _ = try await restored.restorePersistedState()
+                XCTFail("Expected invalid saved outputs to block recovery")
+            } catch {
+                XCTAssertEqual(error as? ApplicationJobPersistenceError, .invalidJobOutputs(accepted.record.id))
+            }
+            var updates = await restored.recordUpdates().makeAsyncIterator()
+            let visible = await updates.next()
+            XCTAssertEqual(visible, [])
+            XCTAssertEqual(try Data(contentsOf: store.fileURL), damagedData)
+            try validData.write(to: store.fileURL)
+            let recovered = try await restored.restorePersistedState()
+            XCTAssertEqual(recovered.map(\.id), [accepted.record.id])
+            let retry = try await restored.submit(planID: plan.id)
+            XCTAssertEqual(retry.record.id, accepted.record.id)
+            XCTAssertEqual(retry.record.state, .interrupted)
+        }
+    }
+
+    func testRecoveryPreservesValidBatchOutputsForEveryLifecycleState() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = [directory.appendingPathComponent("first.mov"), directory.appendingPathComponent("second.mov")]
+        for source in sources {
+            try Data("source".utf8).write(to: source)
+        }
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let service = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let plan = try await service.plan(makeRequest(sourceURLs: sources, destinationFolderURL: directory))
+        let accepted = try await service.submit(planID: plan.id)
+        let validData = try Data(contentsOf: store.fileURL)
+        let expected = plan.outputs.map(\.outputURL)
+        for state in [ApplicationJobState.queued, .running, .cancelling, .succeeded, .failed, .cancelled, .interrupted] {
+            let outputs = state == .queued ? [] : state == .succeeded ? expected : Array(expected.prefix(1))
+            var snapshot = try XCTUnwrap(JSONSerialization.jsonObject(with: validData) as? [String: Any])
+            var records = try XCTUnwrap(snapshot["records"] as? [[String: Any]])
+            records[0]["state"] = state.rawValue
+            records[0]["outputURLs"] = outputs.map(\.absoluteString)
+            snapshot["records"] = records
+            try JSONSerialization.data(withJSONObject: snapshot).write(to: store.fileURL)
+            let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+            let record = try await restored.record(for: accepted.record.id)
+            XCTAssertEqual(record?.state, state.isTerminal ? state : .interrupted)
+            XCTAssertEqual(record?.outputURLs, outputs)
         }
     }
 

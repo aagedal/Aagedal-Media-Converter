@@ -452,6 +452,14 @@ follows the authoritative in-memory state; a later successful save retains the
 cleanup across restart. See the
 [retention queue publication validation record](4.5-retention-publication-validation-2026-09-19.md).
 
+Startup recovery now checks saved job outputs against the original accepted
+plan before publishing any jobs. Completed jobs require the full output list;
+partial and interrupted jobs retain only an ordered prefix, and queued jobs
+cannot claim outputs. Invalid snapshots remain untouched and can be retried after
+repair. Equivalent retry plans cannot substitute their filenames. Older snapshots
+without retained original plans keep their existing recovery behavior. See the
+[recovered output validation record](4.5-recovered-output-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
