@@ -1036,6 +1036,7 @@ enum ApplicationJobPersistenceError: Error, Equatable, Sendable {
     case duplicateSubmittedPlan(ApplicationPlanID)
     case missingSubmittedPlan(ApplicationPlanID)
     case missingSubmittedJob(ApplicationJobID)
+    case mismatchedSubmittedRequest(ApplicationPlanID)
 }
 
 private struct ApplicationSubmittedPlan: Codable, Equatable, Sendable {
@@ -2414,7 +2415,7 @@ actor ApplicationJobService {
         }
         var restoredSubmissions: [ApplicationPlanID: ApplicationJobAcceptance] = [:]
         for submitted in snapshot.submittedPlans {
-            guard restoredPlans[submitted.planID] != nil else {
+            guard let plan = restoredPlans[submitted.planID] else {
                 throw ApplicationJobPersistenceError.missingSubmittedPlan(submitted.planID)
             }
             guard restoredSubmissions[submitted.planID] == nil else {
@@ -2422,6 +2423,14 @@ actor ApplicationJobService {
             }
             guard let record = restoredRecords[submitted.jobID] else {
                 throw ApplicationJobPersistenceError.missingSubmittedJob(submitted.jobID)
+            }
+            // A link can refer to the original request or an equivalent retry
+            // accepted under the same requester-scoped idempotency key.
+            let isEquivalentRetry = plan.request.idempotencyKey != nil
+                && plan.request.idempotencyKey == record.request.idempotencyKey
+                && plan.request.hasSamePayload(as: record.request)
+            guard plan.request == record.request || isEquivalentRetry else {
+                throw ApplicationJobPersistenceError.mismatchedSubmittedRequest(submitted.planID)
             }
             restoredSubmissions[submitted.planID] = ApplicationJobAcceptance(
                 record: record,

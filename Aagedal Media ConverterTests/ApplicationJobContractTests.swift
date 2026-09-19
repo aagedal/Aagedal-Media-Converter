@@ -1098,7 +1098,7 @@ final class ApplicationJobContractTests: XCTestCase {
         let accepted = try await original.submit(planID: plan.id)
         let validData = try Data(contentsOf: store.fileURL)
 
-        for corruption in 0..<5 {
+        for corruption in 0..<10 {
             var snapshot = try XCTUnwrap(JSONSerialization.jsonObject(with: validData) as? [String: Any])
             var plans = try XCTUnwrap(snapshot["plans"] as? [[String: Any]])
             var links = try XCTUnwrap(snapshot["submittedPlans"] as? [[String: Any]])
@@ -1116,9 +1116,31 @@ final class ApplicationJobContractTests: XCTestCase {
             case 3:
                 snapshot["records"] = []
                 expectedError = .missingSubmittedJob(accepted.record.id)
-            default:
+            case 4:
                 links.append(links[0])
                 expectedError = .duplicateSubmittedPlan(plan.id)
+            default:
+                var request = try XCTUnwrap(plans[0]["request"] as? [String: Any])
+                switch corruption {
+                case 5:
+                    request["requesterID"] = "another-client"
+                case 6:
+                    request["idempotencyKey"] = "another-key"
+                case 7:
+                    request["sourceURLs"] = [directory.appendingPathComponent("other.mov").absoluteString]
+                case 8:
+                    request.removeValue(forKey: "idempotencyKey")
+                default:
+                    request.removeValue(forKey: "idempotencyKey")
+                    request["requestID"] = UUID().uuidString
+                    var records = try XCTUnwrap(snapshot["records"] as? [[String: Any]])
+                    var acceptedRequest = try XCTUnwrap(records[0]["request"] as? [String: Any])
+                    acceptedRequest.removeValue(forKey: "idempotencyKey")
+                    records[0]["request"] = acceptedRequest
+                    snapshot["records"] = records
+                }
+                plans[0]["request"] = request
+                expectedError = .mismatchedSubmittedRequest(plan.id)
             }
             snapshot["plans"] = plans
             snapshot["submittedPlans"] = links
@@ -1148,6 +1170,44 @@ final class ApplicationJobContractTests: XCTestCase {
             XCTAssertEqual(retry.record.id, accepted.record.id)
             XCTAssertEqual(retry.record.state, .interrupted)
             XCTAssertTrue(retry.wasAlreadyAccepted)
+        }
+    }
+
+    func testRecoveryPreservesOriginalAndEquivalentSubmittedRequests() async throws {
+        for key: String? in [nil, "retry-key"] {
+            let directory = try makeTemporaryDirectory()
+            let sourceURL = directory.appendingPathComponent("input.mov")
+            try Data("source".utf8).write(to: sourceURL)
+            let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+            let original = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+            let request = makeRequest(
+                sourceURLs: [sourceURL], destinationFolderURL: directory, idempotencyKey: key
+            )
+            let plan = try await original.plan(request)
+            let accepted = try await original.submit(planID: plan.id)
+            var planIDs = [plan.id]
+            if key != nil {
+                let retryRequest = makeRequest(
+                    sourceURLs: [sourceURL], destinationFolderURL: directory,
+                    presetSettings: request.presetSettings, idempotencyKey: key,
+                    capturedAt: request.capturedAt.addingTimeInterval(1)
+                )
+                XCTAssertNotEqual(retryRequest.requestID, request.requestID)
+                let retryPlan = try await original.plan(retryRequest)
+                let retry = try await original.submit(planID: retryPlan.id)
+                XCTAssertEqual(retry.record.id, accepted.record.id)
+                planIDs.append(retryPlan.id)
+            }
+
+            let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+            let recovered = try await restored.restorePersistedState()
+            XCTAssertEqual(recovered.map(\.id), [accepted.record.id])
+            for planID in planIDs {
+                let retry = try await restored.submit(planID: planID)
+                XCTAssertEqual(retry.record.id, accepted.record.id)
+                XCTAssertEqual(retry.record.state, .interrupted)
+                XCTAssertTrue(retry.wasAlreadyAccepted)
+            }
         }
     }
 

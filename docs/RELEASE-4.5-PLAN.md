@@ -416,6 +416,13 @@ repaired, the same service can retry recovery and preserve interruption and
 idempotency behavior. See the
 [atomic recovery validation record](4.5-atomic-recovery-validation-2026-09-19.md).
 
+Startup recovery also verifies that each submitted plan belongs to its linked
+job's original request or a valid requester-scoped idempotent retry. Mismatched
+requesters, keys, or conversion inputs now reject the snapshot before any jobs
+become visible. Original requests without keys and equivalent retries with new
+request IDs and capture timestamps remain supported. See the
+[recovery link validation record](4.5-recovery-links-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
