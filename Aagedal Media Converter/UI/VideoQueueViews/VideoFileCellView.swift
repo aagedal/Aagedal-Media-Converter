@@ -40,6 +40,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
     private(set) var currentItemID: UUID?
     var actionHandler: ((CellAction) -> Void)?
+    var canMoveSelectionToNewGroup: (() -> Bool)?
     internal var currentConfig: VideoFileCellConfiguration?
 
     // MARK: - Card Container

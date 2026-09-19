@@ -217,3 +217,52 @@ extension Array where Element == QueueEntry {
         firstIndex(where: { $0.id == groupID })
     }
 }
+
+/// Moves complete clip values, preserving trims and queue order. Revalidates at
+/// invocation time because background work can start while a menu is open.
+enum QueueGrouping {
+    static func canMove(_ ids: Set<UUID>, files: [VideoItem], groups: [EncodingGroup]) -> Bool {
+        guard !ids.isEmpty else { return false }
+        let items = (files + groups.flatMap(\.items)).filter { ids.contains($0.id) }
+        guard items.count == ids.count else { return false }
+        guard !groups.contains(where: { group in
+            group.status == .converting && group.items.contains { ids.contains($0.id) }
+        }) else { return false }
+        return items.allSatisfy {
+            $0.applicationJobID == nil && $0.status != .converting && !$0.isDownloading
+                && $0.scheduledDownloadTime == nil && !$0.subtitleStatus.isInProgress
+                && !$0.analyticsStatus.isInProgress && $0.uploadStatus != .uploading
+        }
+    }
+
+    @discardableResult
+    static func move(_ ids: Set<UUID>, into group: inout EncodingGroup,
+                     files: inout [VideoItem], groups: inout [EncodingGroup], order: inout [UUID]) -> Bool {
+        guard canMove(ids, files: files, groups: groups) else { return false }
+        let entries = order.compactMap { id -> QueueEntry? in
+            if let file = files.first(where: { $0.id == id }) { return .single(file) }
+            if let existing = groups.first(where: { $0.id == id }) { return .group(existing) }
+            return nil
+        }
+        let selected = entries.allVideoItems.filter { ids.contains($0.id) }
+        guard selected.count == ids.count else { return false }
+        let firstEntry = entries.first { entry in
+            switch entry {
+            case .single(let item): return ids.contains(item.id)
+            case .group(let existing): return existing.items.contains { ids.contains($0.id) }
+            }
+        }?.id
+        let insertionIndex = firstEntry.flatMap { order.firstIndex(of: $0) } ?? order.count
+        files.removeAll { ids.contains($0.id) }
+        for index in groups.indices {
+            groups[index].items.removeAll { ids.contains($0.id) }
+            if groups[index].sequentialNamingEnabled { groups[index].normalizeSequentialNaming() }
+        }
+        group.items = selected
+        if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+        order.insert(group.id, at: insertionIndex)
+        order.removeAll { ids.contains($0) }
+        groups.append(group)
+        return true
+    }
+}

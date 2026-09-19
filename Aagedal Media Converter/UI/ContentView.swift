@@ -601,7 +601,7 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .showCameraCardImporter)) { _ in
                 Task { await handleCameraCardFolderSelection() }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .createEncodingGroup)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .createEncodingGroup)) { notification in
                 let defaultMerge = UserDefaults.standard.object(forKey: AppConstants.defaultGroupMergeEnabledKey) as? Bool
                     ?? AppConstants.defaultGroupMergeEnabled
                 let defaultSequential = UserDefaults.standard.object(forKey: AppConstants.defaultGroupSequentialNamingEnabledKey) as? Bool
@@ -621,8 +621,13 @@ struct ContentView: View {
                     sequentialNamingEnabled: sequentialEnabled
                 )
                 if sequentialEnabled { group.normalizeSequentialNaming() }
-                encodingGroups.append(group)
-                queueOrder.append(group.id)
+                if let ids = notification.userInfo?["itemIDs"] as? Set<UUID> {
+                    guard QueueGrouping.move(ids, into: &group, files: &droppedFiles,
+                                             groups: &encodingGroups, order: &queueOrder) else { return }
+                } else {
+                    encodingGroups.append(group)
+                    queueOrder.append(group.id)
+                }
                 // Let the list view show a "group created" toast + scroll affordance,
                 // since Cmd+N appends at the end where the user may not see it.
                 NotificationCenter.default.post(

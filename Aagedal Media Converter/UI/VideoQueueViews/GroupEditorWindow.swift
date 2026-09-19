@@ -62,13 +62,13 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = String(localized: "Edit Group")
-        window.minSize = NSSize(width: 560, height: 400)
+        window.minSize = NSSize(width: 760, height: 650)
         window.isReleasedWhenClosed = false
         window.delegate = self
         // Persist window size/position across opens. Xcode stores the frame in
@@ -232,6 +232,8 @@ struct GroupEditorView: View {
     var onClose: () -> Void
     var onTitleChange: (String) -> Void
 
+    @State private var showsTimeline = false
+
     private var effectivePreset: ExportPreset { group.preset ?? globalPreset }
 
     private var sortBinding: Binding<GroupEditorSortMode> {
@@ -244,8 +246,16 @@ struct GroupEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+                .disabled(group.status == .converting)
             Divider()
-            itemList
+            if showsTimeline && group.concatEnabled {
+                ScrollView {
+                    StitchingEditorView(group: $group, isStreamCopy: effectivePreset == .streamCopy)
+                }
+            } else {
+                itemList
+                    .disabled(group.status == .converting)
+            }
             Divider()
             footer
         }
@@ -258,6 +268,13 @@ struct GroupEditorView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
+            if group.concatEnabled {
+                Toggle(isOn: $showsTimeline) {
+                    Label("Timeline", systemImage: "film.stack")
+                }
+                .toggleStyle(.button)
+                .help("Edit clip order and trim ranges")
+            }
             Image(systemName: "folder.fill")
                 .foregroundColor(.accentColor)
             TextField("Group name", text: $group.name)
@@ -317,6 +334,7 @@ struct GroupEditorView: View {
             .labelsHidden()
             .frame(maxWidth: 220)
             .help("Sort items in the group")
+            .disabled(group.status == .converting)
             Button("Done", action: onClose)
                 .keyboardShortcut(.defaultAction)
         }
@@ -553,6 +571,11 @@ private struct GroupEditorRow: View {
     private var metadataRow: some View {
         HStack(spacing: 6) {
             Text(item.duration)
+            if item.trimStart != nil || item.trimEnd != nil {
+                Label("Trimmed", systemImage: "scissors")
+                    .foregroundColor(.accentColor)
+                    .help("Kept: \(item.trimmedDuration.formatted(.number.precision(.fractionLength(2)))) seconds")
+            }
             if let res = videoResolution {
                 Text("•")
                 Text(res)

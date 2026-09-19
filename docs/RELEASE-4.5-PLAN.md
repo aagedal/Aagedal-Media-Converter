@@ -545,3 +545,90 @@ plan expiry, reconnect guarantees, and protocol compatibility policy.
 
 4.5 ships when the supported workflow is dependable. Additional formats and agent
 tools should not delay that core scope.
+
+
+## Stitching editor — 2026-09-19
+
+The encoding group editor offers a Timeline toggle for stitching groups, including
+memory-card imports. A single horizontal track displays all clips end to end,
+with duration-proportional filmstrips, a shared time ruler and playhead, zoom, and
+Fit. Clip-edge handles ripple-trim the sequence; clicking or dragging within a
+clip or the ruler scrubs the assembled sequence. Each clip has a black footer with
+start removed / kept duration / end removed readouts. Removed amounts use frame
+counts; kept duration and sequence/ruler positions use non-drop-frame timecode.
+Per-clip frame rates drive trim snapping and one-frame accessibility adjustments.
+The shared ruler/counter uses frames only when all source rates agree; mixed or
+unknown rates use whole-second clock values. Internal/export trim storage stays
+in seconds and Stream Copy retains its keyframe constraints. Narrow clips show the kept
+duration, with all three values in their tooltip and accessibility description.
+Handles use a thin white grip with an opaque black surround and a larger hit area.
+Shift–Z fits the current sequence and returns the timeline to its start, including
+after heavy trimming. Numeric trim-entry fields have been removed; Reset trim
+remains available for the selected clip.
+
+Playback advances automatically from each clip's out-point to the next clip's
+in-point, and stops at the sequence end. Source loading uses the existing native
+and MPV preview paths and security-scoped access. Loading a new source can cause
+a brief transition pause; this is not a pre-rendered, sample-accurate preview.
+Per-file loop settings are suppressed for sequence preview without changing the
+stored clip settings. Pausing, scrubbing, trimming, and reordering stop sequence
+playback. Preview controllers tear down when their clip or editor disappears.
+
+The timeline and clip list share the group's actual items and source trim fields.
+Earlier/Later buttons update the list order, clear its sort mode, and refresh
+sequential filenames where enabled. The list marks trimmed clips explicitly.
+There are no additional tracks, volume editing, effects, or transitions. Stream
+Copy retains its existing keyframe-dependent cut behavior.
+
+Validation: Debug build and five focused XCTest cases passed. Coverage includes
+sequence-to-source mapping at boundaries, reordered clips, empty/zero-duration
+sources, scrub bounds, invalid input, and trim limits. UI automation imported
+both generated sample files but was interrupted by app-state changes before
+validating the group editor. No successful live playback/export check is claimed.
+
+Before release, manually validate native and MPV sequence playback, transition
+from a trimmed out-point to the next trimmed in-point, pause while loading, replay
+after sequence end, ripple trim and reordering in exported output, list/timeline
+sync, and sandbox access after switching clips and closing/reopening the editor.
+Test a real memory-card group, MXF sources, and long recordings. Capture screenshots.
+
+### Future memory-card import improvements (not implemented)
+
+- Show a non-blocking performance advisory before editing card-backed media:
+  editing directly from a camera card can be slow, especially for long recordings;
+  copying the card to local storage first usually gives a better experience.
+  Keep editing directly from the card available. Detect actual removable sources
+  rather than warning on every imported group, and retain approved URL access.
+- Offer optional recording-date splitting during card import, inspired by
+  Aagedal Photo Agent. Prefer embedded recording timestamps; define timezone and
+  missing-metadata behavior explicitly. Keep original ordering and compatible
+  formats together within each resulting group.
+- Optionally split within a day when the gap from the previous recording's end
+  (start timestamp plus duration) to the next recording's start exceeds two hours.
+  Do not split on start-to-start distance, overlap, or exactly two hours. Treat
+  spanned camera recordings as logical recordings before applying these rules.
+- Preview proposed groups before import, with a way to retain a single group.
+  Cover day boundaries, timezone changes, missing dates, and spanned recordings
+  with focused tests before enabling automatic splitting.
+
+
+### Proposed keyframe-aware trimming (not implemented)
+
+- Show discreet keyframe ticks in the clip filmstrip, revealing individual markers
+  only when zoom makes them readable. Offer optional “Snap to keyframes” for
+  Stream Copy. Keep free trimming available for workflows that will re-encode.
+- When dragging an unsnapped edge, show the requested cut and an estimated export
+  boundary/difference. Do not claim the decoded preview is the exact Stream Copy
+  output. Existing merge preparation uses input-side `-ss`, `-t`, and `-c copy`.
+- Probe packet keyframe flags/timestamps using the bundled ffprobe, scoped to
+  the selected video stream; cache by source identity and normalize source start
+  timestamps. Prefer bounded, cancellable scans around edited regions on long
+  recordings/cards, expanding when the next/previous keyframe is not yet known.
+- Treat keyframe markers as candidate seek points, not proof of an independently
+  decodable cut for every codec/GOP. Validate open-GOP/B-frame dependencies and
+  audio packet alignment against the actual trim/export path. If exact preview
+  is needed, offer a short temporary Stream Copy boundary preview using the same
+  preparation commands. All-intra material should avoid an unreadable tick at
+  every frame at normal zoom.
+- References: [FFmpeg seek behavior](https://ffmpeg.org/ffmpeg.html#Main-options)
+  and [ffprobe packet/interval inspection](https://ffmpeg.org/ffprobe.html#Main-options).

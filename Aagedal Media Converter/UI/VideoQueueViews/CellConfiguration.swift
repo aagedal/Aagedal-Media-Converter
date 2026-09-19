@@ -314,6 +314,7 @@ enum CellAction {
 
     // Sheet/popover requests
     case showPreview
+    case moveSelectionToNewGroup
     case showMetadata
     case showAudioRouting
     case showTimecode

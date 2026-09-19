@@ -425,6 +425,10 @@ extension VideoFileCellView {
 
         menu.addItem(.separator())
 
+        menu.addItem(withTitle: String(localized: "Move Selected Files to New Encoding Group"),
+                     action: #selector(ctxMoveSelectionToNewGroup), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+
         let renameItem = menu.addItem(withTitle: "Rename Output", action: #selector(ctxRename), keyEquivalent: "")
         renameItem.target = self
         renameItem.isEnabled = config.status == .waiting
@@ -453,5 +457,16 @@ extension VideoFileCellView {
     @objc private func ctxAttachSubtitle() { actionHandler?(.attachSubtitleFile) }
     @objc private func ctxRename() { beginOutputNameEditing() }
     @objc private func ctxReset() { actionHandler?(.reset(optionKeyPressed: false)) }
+    @objc private func ctxMoveSelectionToNewGroup() { actionHandler?(.moveSelectionToNewGroup) }
     @objc private func ctxRemove() { actionHandler?(.delete) }
+}
+
+
+extension VideoFileCellView: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(ctxMoveSelectionToNewGroup) {
+            return canMoveSelectionToNewGroup?() ?? false
+        }
+        return menuItem.isEnabled
+    }
 }
