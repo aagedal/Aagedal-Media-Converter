@@ -2531,9 +2531,8 @@ actor ApplicationJobService {
         try await ensureRestored(now: now)
         if let accepted = submittedPlans[planID] {
             let currentRecord = await registry.record(for: accepted.record.id) ?? accepted.record
-            try await persist()
+            try await persistAndPublishRecords()
             finishSubmissionHandoff(jobID: currentRecord.id)
-            await publishRecords()
             return ApplicationJobAcceptance(record: currentRecord, wasAlreadyAccepted: true)
         }
         guard let plan = plans[planID] else {
@@ -2542,9 +2541,8 @@ actor ApplicationJobService {
         if let record = try await registry.acceptedRecord(for: plan.request) {
             let accepted = ApplicationJobAcceptance(record: record, wasAlreadyAccepted: true)
             submittedPlans[planID] = accepted
-            try await persist()
+            try await persistAndPublishRecords()
             finishSubmissionHandoff(jobID: record.id)
-            await publishRecords()
             return accepted
         }
         guard now <= plan.expiresAt else {
@@ -2584,9 +2582,11 @@ actor ApplicationJobService {
         outputsByJob[accepted.record.id, default: []].formUnion(normalizedOutputs)
         submittedPlans[planID] = accepted
         pendingSubmissionHandoffs[accepted.record.id] = plan
-        try await persist()
+        // Acceptance already owns the output reservation, even if saving fails.
+        // Publish it so the user can inspect or cancel the pending job, but only
+        // hand it to the executor after the persistence boundary succeeds.
+        try await persistAndPublishRecords()
         finishSubmissionHandoff(jobID: accepted.record.id)
-        await publishRecords()
         return accepted
     }
 

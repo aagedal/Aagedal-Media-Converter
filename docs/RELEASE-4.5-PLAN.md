@@ -402,6 +402,13 @@ diagnostic and timestamp. Reconnect and idempotency retain the same interrupted
 job after storage becomes writable again. See the
 [startup save recovery validation record](4.5-startup-save-recovery-validation-2026-09-19.md).
 
+Newly accepted jobs now reach queue observers even when saving their submission
+fails. The pending job remains visible and cancellable while storage is
+unavailable, and execution still waits for a successful save. Original-plan and
+equivalent-plan retries retain the same job without reviving cancelled work or
+starting duplicate conversions. See the
+[submission visibility validation record](4.5-submission-visibility-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

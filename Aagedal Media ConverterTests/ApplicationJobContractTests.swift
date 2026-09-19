@@ -1107,6 +1107,18 @@ final class ApplicationJobContractTests: XCTestCase {
             let plan = try await service.plan(request)
             let equivalentPlan = try await service.plan(request)
 
+            let updates = await service.recordUpdates()
+            let published = expectation(description: "Unsaved acceptance reaches queue observers")
+            let observer = Task {
+                for await records in updates {
+                    if records.contains(where: { $0.request == request && $0.state == .queued }) {
+                        published.fulfill()
+                        return
+                    }
+                }
+            }
+            defer { observer.cancel() }
+
             // A directory at the snapshot path deterministically rejects atomic writes.
             try FileManager.default.removeItem(at: stateURL)
             try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: false)
@@ -1118,6 +1130,7 @@ final class ApplicationJobContractTests: XCTestCase {
                     XCTAssertFalse(error is ApplicationJobError)
                 }
             }
+            await fulfillment(of: [published], timeout: 5)
             let pendingRecords = try await service.allRecords()
             let pending = try XCTUnwrap(pendingRecords.first)
             XCTAssertEqual(pendingRecords.count, 1)
@@ -1125,10 +1138,17 @@ final class ApplicationJobContractTests: XCTestCase {
             let beforeRecovery = await harness.snapshot()
             XCTAssertTrue(beforeRecovery.startedIDs.isEmpty)
 
-            try FileManager.default.removeItem(at: stateURL)
             if cancelBeforeRetry {
-                _ = try await service.requestCancellation(pending.id)
+                do {
+                    _ = try await service.requestCancellation(pending.id)
+                    XCTFail("Expected cancellation persistence failure")
+                } catch {
+                    XCTAssertFalse(error is ApplicationJobError)
+                }
+                let cancelled = try await service.record(for: pending.id)
+                XCTAssertEqual(cancelled?.state, .cancelled)
             }
+            try FileManager.default.removeItem(at: stateURL)
             let retry = try await service.submit(planID: useEquivalentPlan ? equivalentPlan.id : plan.id)
             XCTAssertTrue(retry.wasAlreadyAccepted)
             XCTAssertEqual(retry.record.id, pending.id)
