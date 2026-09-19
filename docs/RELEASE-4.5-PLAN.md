@@ -460,6 +460,15 @@ repair. Equivalent retry plans cannot substitute their filenames. Older snapshot
 without retained original plans keep their existing recovery behavior. See the
 [recovered output validation record](4.5-recovered-output-validation-2026-09-19.md).
 
+Live shared-job output checks now cover captured first-party trim, crop, mute,
+and audio routing. A three-second source produces a one-second, 24-frame,
+64×48 muted output after trimming and cropping; a separate six-channel source
+retains six channels or downmixes to stereo according to its captured routing.
+All outputs decode with the bundled FFmpeg, and all 90 shared-job contract tests
+pass. This expands automated output validation without closing named-client,
+real bookmark, or in-app playback gates. See the
+[live per-source override validation record](4.5-live-overrides-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

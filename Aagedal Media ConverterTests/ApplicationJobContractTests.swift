@@ -3665,6 +3665,90 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testLiveSharedJobAppliesCapturedTrimCropAndMute() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=128x96:rate=24:duration=3",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=3",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            "-shortest", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        let plan = try await service.plan(makeRequest(
+            origin: .manual,
+            sourceURLs: [sourceURL], destinationFolderURL: directory,
+            sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: sourceURL, includeDateTag: false, timecodeConfig: nil,
+                trimStart: 1, trimEnd: 2,
+                cropConfig: CropConfig(normalizedRect: CropRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5)),
+                isMuted: true, outputBaseNameOverride: "trimmed-cropped-muted"
+            )],
+            defaults: defaults
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+        XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+        let outputURL = try XCTUnwrap(record.outputURLs.first)
+        let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+        let video = try XCTUnwrap(metadata.videoStreams.first)
+        XCTAssertEqual(video.width, 64)
+        XCTAssertEqual(video.height, 48)
+        XCTAssertEqual(metadata.frameCount, 24)
+        XCTAssertTrue(metadata.audioStreams.isEmpty)
+        XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 1, accuracy: 1.0 / 24)
+        try runBundledFFmpeg(["-v", "error", "-xerror", "-i", outputURL.path, "-map", "0", "-f", "null", "-"])
+    }
+
+    func testLiveSharedJobDownmixesCapturedSurroundRouting() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("surround.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-f", "lavfi", "-i", "aevalsrc=0.1*sin(2*PI*440*t)|0.1*sin(2*PI*880*t)|0|0|0|0:s=48000:d=1:c=5.1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "pcm_s24le",
+            "-shortest", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        // Verify both passthrough channel preservation and the explicit downmix
+        // through the same encoded preset, so the fixture proves routing matters.
+        for downmix in [false, true] {
+            let plan = try await service.plan(makeRequest(
+                origin: .manual,
+                sourceURLs: [sourceURL], destinationFolderURL: directory,
+                sourceSettings: [ApplicationSourceExecutionSettings(
+                    sourceURL: sourceURL, includeDateTag: false, timecodeConfig: nil,
+                    audioRoutingConfig: AudioRoutingConfig(
+                        inputTracks: [AudioTrackInfo(
+                            streamIndex: 0, channels: 6, channelLayout: "5.1", codec: "pcm_s24le",
+                            codecLongName: nil, sampleRate: 48_000
+                        )],
+                        outputTracks: [OutputTrack(streamIndex: 0, downmixToStereo: downmix)]
+                    ),
+                    outputBaseNameOverride: downmix ? "stereo" : "surround"
+                )],
+                idempotencyKey: nil, defaults: defaults
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+            XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+            let outputURL = try XCTUnwrap(record.outputURLs.first)
+            let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+            XCTAssertEqual(metadata.audioStreams.count, 1)
+            XCTAssertEqual(metadata.audioStreams.first?.channels, downmix ? 2 : 6)
+            XCTAssertEqual(metadata.audioStreams.first?.sampleRate, 48_000)
+            try runBundledFFmpeg(["-v", "error", "-xerror", "-i", outputURL.path, "-map", "0", "-f", "null", "-"])
+        }
+    }
+
     @discardableResult
     private func runBundledFFmpeg(_ arguments: [String]) throws -> String {
         let binaryURL = Bundle.main.url(forResource: "ffmpeg", withExtension: nil)
