@@ -1112,6 +1112,124 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(completed.startedIDs, [replacement.record.id])
     }
 
+    func testTerminalPersistenceFailurePublishesExecutorResultAndRetrySavesIt() async throws {
+        for cancelRunningJob in [false, true] {
+            let directory = try makeTemporaryDirectory()
+            let sourceURL = directory.appendingPathComponent("source.mov")
+            try Data("source".utf8).write(to: sourceURL)
+            let stateURL = directory.appendingPathComponent("jobs.json")
+            let harness = ApplicationJobExecutorHarness(blocksFirstExecution: true)
+            let started = expectation(description: "Executor started")
+            let service = ApplicationJobService(
+                store: ApplicationJobStore(fileURL: stateURL),
+                fileAccessAuthorizer: .unrestricted,
+                executor: ApplicationJobExecutor(
+                    execute: { jobID, plan, progress in
+                        started.fulfill()
+                        return await harness.execute(jobID: jobID, plan: plan, progress: progress)
+                    },
+                    cancel: { jobID in await harness.cancel(jobID: jobID) }
+                )
+            )
+            let plan = try await service.plan(makeRequest(
+                sourceURLs: [sourceURL], destinationFolderURL: directory
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            await fulfillment(of: [started], timeout: 5)
+            let updates = await service.recordUpdates()
+            let published = expectation(description: "Terminal result reaches queue observers")
+            let observer = Task { () -> ApplicationJobRecord? in
+                for await records in updates {
+                    if let record = records.first(where: { $0.id == accepted.record.id }),
+                       record.state.isTerminal {
+                        published.fulfill()
+                        return record
+                    }
+                }
+                return nil
+            }
+            defer { observer.cancel() }
+            try FileManager.default.removeItem(at: stateURL)
+            try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: false)
+            if cancelRunningJob {
+                do {
+                    _ = try await service.requestCancellation(accepted.record.id)
+                    XCTFail("Expected cancellation persistence failure")
+                } catch {
+                    XCTAssertFalse(error is ApplicationJobError)
+                }
+            } else {
+                await harness.releaseFirstExecution()
+            }
+            await fulfillment(of: [published], timeout: 5)
+            observer.cancel()
+            let visible = await observer.value
+            let expectedState: ApplicationJobState = cancelRunningJob ? .cancelled : .succeeded
+            let expectedOutputs = cancelRunningJob ? [] : plan.outputs.map(\.outputURL)
+            XCTAssertEqual(visible?.state, expectedState)
+            XCTAssertEqual(visible?.outputURLs, expectedOutputs)
+
+            try FileManager.default.removeItem(at: stateURL)
+            let retry = try await service.submit(planID: plan.id)
+            XCTAssertTrue(retry.wasAlreadyAccepted)
+            XCTAssertEqual(retry.record.id, accepted.record.id)
+            XCTAssertEqual(retry.record.state, expectedState)
+            let restored = ApplicationJobService(
+                store: ApplicationJobStore(fileURL: stateURL), fileAccessAuthorizer: .unrestricted
+            )
+            let recovered = try await restored.record(for: accepted.record.id)
+            XCTAssertEqual(recovered?.state, expectedState)
+            XCTAssertEqual(recovered?.outputURLs, expectedOutputs)
+            let execution = await harness.snapshot()
+            XCTAssertEqual(execution.startedIDs, [accepted.record.id])
+            XCTAssertEqual(execution.cancelledIDs, cancelRunningJob ? [accepted.record.id] : [])
+        }
+    }
+
+    func testQueuedCancellationPersistenceFailureStillPublishesAndReleasesReservation() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let stateURL = directory.appendingPathComponent("jobs.json")
+        let service = ApplicationJobService(
+            store: ApplicationJobStore(fileURL: stateURL), fileAccessAuthorizer: .unrestricted
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: directory
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let updates = await service.recordUpdates()
+        let published = expectation(description: "Queued cancellation reaches observers")
+        let observer = Task {
+            for await records in updates {
+                if records.contains(where: { $0.id == accepted.record.id && $0.state == .cancelled }) {
+                    published.fulfill()
+                    return
+                }
+            }
+        }
+        defer { observer.cancel() }
+        try FileManager.default.removeItem(at: stateURL)
+        try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: false)
+        do {
+            _ = try await service.requestCancellation(accepted.record.id)
+            XCTFail("Expected cancellation persistence failure")
+        } catch {
+            XCTAssertFalse(error is ApplicationJobError)
+        }
+        await fulfillment(of: [published], timeout: 5)
+        try FileManager.default.removeItem(at: stateURL)
+        let retry = try await service.submit(planID: plan.id)
+        XCTAssertEqual(retry.record.state, .cancelled)
+        let replacementPlan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: directory,
+            idempotencyKey: "after-cancellation-save-failure"
+        ))
+        let replacement = try await service.submit(planID: replacementPlan.id)
+        XCTAssertNotEqual(replacement.record.id, accepted.record.id)
+        XCTAssertEqual(replacement.record.state, .queued)
+    }
+
     func testSubmittedJobsExecuteSeriallyAndPublishProgressAndOutputs() async throws {
         let directory = try makeTemporaryDirectory()
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)

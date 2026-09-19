@@ -2623,8 +2623,7 @@ actor ApplicationJobService {
         if state.isTerminal {
             releaseOutputReservations(for: jobID)
         }
-        try await persist()
-        await publishRecords()
+        try await persistAndPublishRecords()
         return record
     }
 
@@ -2646,8 +2645,7 @@ actor ApplicationJobService {
                 await executor.cancel(jobID)
             }
         }
-        try await persist()
-        await publishRecords()
+        try await persistAndPublishRecords()
         return record
     }
 
@@ -2674,8 +2672,7 @@ actor ApplicationJobService {
         for record in interrupted {
             releaseOutputReservations(for: record.id)
         }
-        try await persist()
-        await publishRecords()
+        try await persistAndPublishRecords()
         return interrupted
     }
 
@@ -2713,6 +2710,19 @@ actor ApplicationJobService {
             }
         }
         return expiredPlanIDs.count + removedJobIDs.count
+    }
+
+    /// Registry mutations remain authoritative in memory if the store fails.
+    /// Keep queue observers current while still reporting the durability failure
+    /// to callers; an idempotent submission retry can save the record later.
+    private func persistAndPublishRecords() async throws {
+        do {
+            try await persist()
+        } catch {
+            await publishRecords()
+            throw error
+        }
+        await publishRecords()
     }
 
     private func persist() async throws {
@@ -2823,9 +2833,6 @@ actor ApplicationJobService {
                     to: record.state == .cancelling ? .cancelled : .failed,
                     diagnostic: "Could not save the job before starting conversion."
                 )
-                // The store can remain unavailable; publish the in-memory result
-                // even when the terminal snapshot cannot be saved yet.
-                await publishRecords()
             }
             return
         }
@@ -2930,8 +2937,7 @@ actor ApplicationJobService {
         try await registry.checkpointOutputs(
             jobID, outputURLs: outputURLs, expectedOutputs: expectedOutputs
         )
-        try await persist()
-        await publishRecords()
+        try await persistAndPublishRecords()
     }
 
     private static func executionDiagnostic(for error: Error) -> String {

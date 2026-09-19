@@ -381,6 +381,13 @@ saves and returns that same failed job; a new request can reuse the output and
 execute normally. See the
 [running-state persistence validation record](4.5-running-persistence-validation-2026-09-19.md).
 
+Completed and cancelled jobs now remain visible to queue observers when saving
+those state changes fails. Transitions, cancellation, interruption, and completed
+output checkpoints publish their in-memory results while still reporting the
+storage error. Once storage recovers, an idempotent submission retry saves the
+same terminal result without starting another conversion. See the
+[terminal-state persistence validation record](4.5-terminal-persistence-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
