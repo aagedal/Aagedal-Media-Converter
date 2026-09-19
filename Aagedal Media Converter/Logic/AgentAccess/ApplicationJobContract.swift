@@ -2663,8 +2663,8 @@ actor ApplicationJobService {
     }
 
     /// Resolves the accepted output list for queue presentation without exposing a
-    /// mutable plan or consulting current preferences. Submitted plans are preferred;
-    /// an expired plan can be reconstructed from the immutable accepted request.
+    /// mutable plan or consulting current preferences. Accepted plans are retained
+    /// with their jobs; older snapshots may require reconstruction from the request.
     func plannedOutputURLs(
         for jobID: ApplicationJobID,
         now: Date = Date()
@@ -2758,28 +2758,26 @@ actor ApplicationJobService {
         }
     }
 
-    /// Removes expired plans and terminal records older than the documented
-    /// retention window. Submitted-plan links disappear with either their plan
-    /// or retained job.
+    /// Unsubmitted plans expire after the planning window. Accepted plans retain
+    /// their frozen output names and retry links for the lifetime of their job.
     @discardableResult
     private func removeExpiredState(now: Date) async -> Int {
-        let expiredPlanIDs = Set(plans.compactMap { planID, plan in
-            plan.expiresAt < now ? planID : nil
+        let cutoff = now.addingTimeInterval(-recordRetentionLifetime)
+        let removedJobIDs = await registry.removeTerminalRecords(updatedBefore: cutoff)
+        let removedPlanIDs = Set(plans.compactMap { planID, plan in
+            if let accepted = submittedPlans[planID] {
+                return removedJobIDs.contains(accepted.record.id) ? planID : nil
+            }
+            return plan.expiresAt < now ? planID : nil
         })
-        for planID in expiredPlanIDs {
+        for planID in removedPlanIDs {
             plans.removeValue(forKey: planID)
             submittedPlans.removeValue(forKey: planID)
         }
-
-        let cutoff = now.addingTimeInterval(-recordRetentionLifetime)
-        let removedJobIDs = await registry.removeTerminalRecords(updatedBefore: cutoff)
-        if !removedJobIDs.isEmpty {
-            submittedPlans = submittedPlans.filter { !removedJobIDs.contains($0.value.record.id) }
-            for jobID in removedJobIDs {
-                releaseOutputReservations(for: jobID)
-            }
+        for jobID in removedJobIDs {
+            releaseOutputReservations(for: jobID)
         }
-        return expiredPlanIDs.count + removedJobIDs.count
+        return removedPlanIDs.count + removedJobIDs.count
     }
 
     /// Registry mutations remain authoritative in memory if the store fails.

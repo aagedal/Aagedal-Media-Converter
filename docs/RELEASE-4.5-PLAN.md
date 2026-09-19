@@ -62,8 +62,9 @@ a transport-neutral boundary; execution adapters are not yet connected. See the
 Plans, job records, submitted-plan links, and requester-scoped idempotency
 identities are now atomically persisted in Application Support. Startup restores
 terminal results and marks queued, running, or cancelling work interrupted rather
-than restarting it. Plans expire after 15 minutes and terminal records (including
-their idempotency keys) are retained for 30 days. Corrupt or unsupported snapshots
+than restarting it. Unsubmitted plans expire after 15 minutes; accepted plans
+remain with their job records. Terminal records (including their plans and
+idempotency keys) are retained for 30 days. Corrupt or unsupported snapshots
 are reported and preserved instead of being silently replaced. See the
 [persistence validation record](4.5-persistence-validation-2026-09-13.md).
 
@@ -430,6 +431,13 @@ outside the captured per-source folder reject the snapshot without overwriting i
 Accepted filenames remain frozen across restarts. Recovery after repair and valid
 per-source destinations pass the 83-test contract suite. See the
 [plan integrity validation record](4.5-plan-integrity-validation-2026-09-19.md).
+
+Accepted plans now survive the planning expiry window for the lifetime of their
+job records. Queue inspection retains the frozen output mapping, and retries of
+an accepted plan still return the same job after expiry and restart. Unsubmitted
+plans still expire normally; terminal-record retention removes associated plans
+and retry links together. See the
+[accepted-plan retention validation record](4.5-plan-retention-validation-2026-09-19.md).
 
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The

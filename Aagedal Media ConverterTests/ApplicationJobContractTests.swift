@@ -1031,6 +1031,50 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(Set(savedRecords.map(\.id)), Set(records.map(\.id)))
     }
 
+    func testAcceptedPlansSurviveExpiryAndRestartWithTheirJobs() async throws {
+        for cancelBeforeExpiry in [false, true] {
+            let directory = try makeTemporaryDirectory()
+            let source = directory.appendingPathComponent("input.mov")
+            try Data("source".utf8).write(to: source)
+            let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+            let service = ApplicationJobService(
+                planLifetime: 10, recordRetentionLifetime: 100,
+                store: store, fileAccessAuthorizer: .unrestricted
+            )
+            let request = makeRequest(sourceURLs: [source], destinationFolderURL: directory)
+            let createdAt = Date()
+            let plan = try await service.plan(request, now: createdAt)
+            let accepted = try await service.submit(planID: plan.id, now: createdAt)
+            let unusedPlan = try await service.plan(request, now: createdAt)
+            if cancelBeforeExpiry {
+                _ = try await service.requestCancellation(accepted.record.id, now: createdAt)
+            }
+            let afterExpiry = createdAt.addingTimeInterval(11)
+            // Creating another plan triggers ordinary retention cleanup.
+            _ = try await service.plan(request, now: afterExpiry)
+            let retained = try await service.plan(for: plan.id, now: afterExpiry)
+            let expired = try await service.plan(for: unusedPlan.id, now: afterExpiry)
+            XCTAssertEqual(retained, plan)
+            XCTAssertNil(expired)
+            let retry = try await service.submit(planID: plan.id, now: afterExpiry)
+            XCTAssertEqual(retry.record.id, accepted.record.id)
+            XCTAssertTrue(retry.wasAlreadyAccepted)
+
+            let restored = ApplicationJobService(
+                planLifetime: 10, recordRetentionLifetime: 100,
+                store: store, fileAccessAuthorizer: .unrestricted
+            )
+            let restartedRetry = try await restored.submit(planID: plan.id, now: afterExpiry)
+            XCTAssertEqual(restartedRetry.record.id, accepted.record.id)
+            XCTAssertEqual(restartedRetry.record.state, cancelBeforeExpiry ? .cancelled : .interrupted)
+            XCTAssertTrue(restartedRetry.wasAlreadyAccepted)
+            let restoredPlan = try await restored.plan(for: plan.id, now: afterExpiry)
+            XCTAssertEqual(restoredPlan, plan)
+            let outputs = try await restored.plannedOutputURLs(for: accepted.record.id, now: afterExpiry)
+            XCTAssertEqual(outputs, plan.outputs.map(\.outputURL))
+        }
+    }
+
     func testPersistenceRetentionRemovesExpiredPlansAndOldTerminalIdempotencyKeys() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")
