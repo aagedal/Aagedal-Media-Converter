@@ -3545,6 +3545,109 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(metadata.contains("timecode        : 01:02:03:04"), metadata)
     }
 
+    func testLiveReencodedJobAppliesCapturedTimecodePolicy() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("timecoded.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-timecode", "01:02:03:04", "-c:v", "libx264", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        let policies: [(String, TimecodeConfig?, String?)] = [
+            ("preserved", TimecodeConfig(mode: .preserveSource), "01:02:03:04"),
+            ("replaced", TimecodeConfig(mode: .manual("02:03:04:05")), "02:03:04:05"),
+            ("disabled", nil, nil)
+        ]
+        for presetID in [ApplicationPresetID.proRes, .proxy] {
+            for (name, config, expectedTimecode) in policies {
+                let plan = try await service.plan(makeRequest(
+                    origin: .manual, sourceURLs: [sourceURL], destinationFolderURL: directory,
+                    presetID: presetID,
+                    sourceSettings: [ApplicationSourceExecutionSettings(
+                        sourceURL: sourceURL, includeDateTag: false, timecodeConfig: config,
+                        outputBaseNameOverride: "\(presetID.rawValue)-\(name)"
+                    )],
+                    idempotencyKey: nil, defaults: defaults
+                ))
+                let accepted = try await service.submit(planID: plan.id)
+                let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+                XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+                let outputURL = try XCTUnwrap(record.outputURLs.first)
+                let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+                XCTAssertTrue(metadata.audioStreams.isEmpty)
+                XCTAssertEqual(metadata.frameCount, 24)
+                XCTAssertEqual(metadata.timecode, expectedTimecode, name)
+                XCTAssertTrue(metadata.timecodes.allSatisfy { $0.value == expectedTimecode }, name)
+                let decoded = try runBundledFFmpeg([
+                    "-hide_banner", "-xerror", "-i", outputURL.path, "-map", "0:v", "-f", "null", "-"
+                ])
+                let expectedCodec = presetID == .proRes ? "prores" : "hevc"
+                XCTAssertTrue(decoded.contains("Video: \(expectedCodec)"), decoded)
+            }
+        }
+    }
+
+    func testLiveReencodedJobPreservesSelectedAudioTrackOrderAndContent() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("multitrack.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
+            "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000:duration=1",
+            "-map", "0:v", "-map", "1:a", "-map", "2:a",
+            "-c:v", "libx264", "-c:a", "pcm_s24le", sourceURL.path
+        ])
+        let routing = AudioRoutingConfig(
+            inputTracks: [0, 1].map { index in
+                AudioTrackInfo(streamIndex: index, channels: 1, channelLayout: "mono",
+                               codec: "pcm_s24le", codecLongName: nil, sampleRate: 48_000)
+            },
+            outputTracks: [OutputTrack(streamIndex: 1), OutputTrack(streamIndex: 0)]
+        )
+        let defaults = try makeDefaults()
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        let plan = try await service.plan(makeRequest(
+            origin: .manual, sourceURLs: [sourceURL], destinationFolderURL: directory,
+            presetID: .proRes,
+            sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: sourceURL, includeDateTag: false, timecodeConfig: nil,
+                audioRoutingConfig: routing, outputBaseNameOverride: "reordered"
+            )],
+            idempotencyKey: nil, defaults: defaults
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+        XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+        let outputURL = try XCTUnwrap(record.outputURLs.first)
+        let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+        XCTAssertEqual(metadata.audioStreams.count, 2)
+        XCTAssertEqual(metadata.audioStreams.map(\.channels), [1, 1])
+        XCTAssertEqual(metadata.audioStreams.map(\.sampleRate), [48_000, 48_000])
+        // Distinct tones prove the selected order and content, not just stream count.
+        for (index, frequency) in [880.0, 440.0].enumerated() {
+            let pcmURL = directory.appendingPathComponent("track-\(index).pcm")
+            try runBundledFFmpeg([
+                "-v", "error", "-xerror", "-i", outputURL.path, "-map", "0:a:\(index)",
+                "-c:a", "pcm_s16le", "-f", "s16le", pcmURL.path
+            ])
+            let data = try Data(contentsOf: pcmURL)
+            let samples = stride(from: 0, to: data.count - 1, by: 2).map { offset in
+                Int16(bitPattern: UInt16(data[offset]) | UInt16(data[offset + 1]) << 8)
+            }
+            XCTAssertEqual(samples.count, 48_000)
+            guard samples.count >= 36_000 else { continue }
+            let interior = samples[12_000..<36_000]
+            let crossings = zip(interior, interior.dropFirst()).filter { $0 < 0 && $1 >= 0 }.count
+            XCTAssertEqual(Double(crossings), frequency / 2, accuracy: 1)
+        }
+        try runBundledFFmpeg(["-v", "error", "-xerror", "-i", outputURL.path, "-map", "0", "-f", "null", "-"])
+    }
+
     func testLiveBatchRejectsOutputCreatedAfterExecutionValidation() async throws {
         let directory = try makeTemporaryDirectory()
         let firstSource = directory.appendingPathComponent("first.mov")
@@ -4206,8 +4309,12 @@ final class ApplicationJobContractTests: XCTestCase {
         state: ApplicationJobState
     ) async throws -> ApplicationJobRecord {
         for _ in 0..<200 {
-            if let record = try await service.record(for: jobID), record.state == state {
-                return record
+            if let record = try await service.record(for: jobID) {
+                if record.state == state { return record }
+                if record.state.isTerminal {
+                    XCTFail("Job \(jobID) reached \(record.state.rawValue) instead of \(state.rawValue): \(record.diagnostic ?? "No diagnostic")")
+                    return record
+                }
             }
             try await Task.sleep(nanoseconds: 10_000_000)
         }

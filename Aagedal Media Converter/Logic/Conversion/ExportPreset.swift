@@ -1390,7 +1390,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-vf", Self.desqueezeFilter,
                 "-c:a", "pcm_s24le",
                 "-map", "0:v:0",
-                "-map", "0:a"
+                "-map", "0:a?"
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
@@ -1557,7 +1557,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
                 "-vf", scaleFilter,
                 "-map", "0:v:0",
                 "-c:a", "pcm_s24le",
-                "-map", "0:a"
+                "-map", "0:a?"
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
