@@ -3986,6 +3986,96 @@ final class ApplicationJobContractTests: XCTestCase {
         try runBundledFFmpeg(["-v", "error", "-xerror", "-i", outputURL.path, "-map", "0", "-f", "null", "-"])
     }
 
+    func testLiveLongGOPTrimPreservesDecodedFramesAndAudioSampleRange() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("long-gop.mov")
+        // One four-second GOP, B-frames, and a tone change inside the selected range
+        // make an inaccurate keyframe seek or audio offset observable in content.
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=128x96:rate=24:duration=4",
+            "-f", "lavfi", "-i", "aevalsrc=0.1*sin(2*PI*if(lt(t\\,2)\\,440\\,880)*t):s=48000:d=4",
+            "-c:v", "libx264", "-g", "96", "-keyint_min", "96",
+            "-sc_threshold", "0", "-bf", "3", "-pix_fmt", "yuv420p",
+            "-c:a", "pcm_s24le", sourceURL.path
+        ])
+        let referenceVideoURL = directory.appendingPathComponent("reference.gray")
+        let referenceAudioURL = directory.appendingPathComponent("reference.pcm")
+        // Filter trims decode from the beginning, independently of the adapter's seek.
+        try runBundledFFmpeg([
+            "-v", "error", "-xerror", "-i", sourceURL.path,
+            "-map", "0:v:0", "-vf", "trim=start_frame=30:end_frame=66,setpts=PTS-STARTPTS",
+            "-pix_fmt", "gray", "-f", "rawvideo", referenceVideoURL.path
+        ])
+        try runBundledFFmpeg([
+            "-v", "error", "-xerror", "-i", sourceURL.path,
+            "-map", "0:a:0", "-af", "atrim=start_sample=60000:end_sample=132000,asetpts=PTS-STARTPTS",
+            "-c:a", "pcm_s16le", "-f", "s16le", referenceAudioURL.path
+        ])
+        let referenceVideo = try Data(contentsOf: referenceVideoURL)
+        let referenceAudio = try Data(contentsOf: referenceAudioURL)
+        XCTAssertEqual(referenceVideo.count, 36 * 128 * 96)
+        XCTAssertEqual(referenceAudio.count, 72_000 * 2)
+        let defaults = try makeDefaults()
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        for presetID in [ApplicationPresetID.proRes, .audioOnly] {
+            let plan = try await service.plan(makeRequest(
+                origin: .manual, sourceURLs: [sourceURL], destinationFolderURL: directory,
+                presetID: presetID,
+                sourceSettings: [ApplicationSourceExecutionSettings(
+                    sourceURL: sourceURL, includeDateTag: false, timecodeConfig: nil,
+                    trimStart: 1.25, trimEnd: 2.75,
+                    outputBaseNameOverride: "trimmed-\(presetID.rawValue)"
+                )],
+                idempotencyKey: nil, defaults: defaults
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+            XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+            let outputURL = try XCTUnwrap(record.outputURLs.first)
+            let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+            XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 1.5, accuracy: 1.0 / 48_000)
+            XCTAssertEqual(metadata.audioStreams.count, 1)
+            XCTAssertEqual(metadata.audioStreams.first?.sampleRate, 48_000)
+            XCTAssertEqual(metadata.audioStreams.first?.channels, 1)
+            let audioURL = directory.appendingPathComponent("\(presetID.rawValue).pcm")
+            try runBundledFFmpeg([
+                "-v", "error", "-xerror", "-i", outputURL.path, "-map", "0:a:0",
+                "-c:a", "pcm_s16le", "-f", "s16le", audioURL.path
+            ])
+            let audio = try Data(contentsOf: audioURL)
+            XCTAssertEqual(audio.count, referenceAudio.count, presetID.rawValue)
+            // PCM presets must retain the exact selected samples, including the tone
+            // transition 0.75 seconds into the output, without padding or dropped samples.
+            XCTAssertTrue(audio == referenceAudio, "Incorrect trimmed audio content for \(presetID.rawValue)")
+            if presetID == .proRes {
+                XCTAssertEqual(metadata.frameCount, 36)
+                let videoURL = directory.appendingPathComponent("prores.gray")
+                try runBundledFFmpeg([
+                    "-v", "error", "-xerror", "-i", outputURL.path, "-map", "0:v:0",
+                    "-pix_fmt", "gray", "-f", "rawvideo", videoURL.path
+                ])
+                let video = try Data(contentsOf: videoURL)
+                XCTAssertEqual(video.count, referenceVideo.count)
+                guard video.count == referenceVideo.count else { continue }
+                // ProRes is lossy. Compare every frame's luma separately so a single
+                // duplicated or displaced boundary frame cannot hide in an average.
+                let pixelsPerFrame = 128 * 96
+                for frame in 0..<36 {
+                    let range = (frame * pixelsPerFrame)..<((frame + 1) * pixelsPerFrame)
+                    let totalError = zip(video[range], referenceVideo[range]).reduce(0) {
+                        $0 + abs(Int($1.0) - Int($1.1))
+                    }
+                    XCTAssertLessThan(Double(totalError) / Double(pixelsPerFrame), 3,
+                                      "Incorrect source frame at output frame \(frame)")
+                }
+            } else {
+                XCTAssertTrue(metadata.videoStreams.isEmpty)
+            }
+        }
+    }
+
     func testLiveSharedJobDownmixesCapturedSurroundRouting() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("surround.mov")

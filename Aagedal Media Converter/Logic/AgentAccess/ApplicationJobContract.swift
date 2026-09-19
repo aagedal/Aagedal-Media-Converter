@@ -3436,7 +3436,13 @@ struct ApplicationMediaInspector: Sendable {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            let audioMetadata = try await SwiftExifMediaProbe.readAudio(url)
+            var audioMetadata = try await SwiftExifMediaProbe.readAudio(url)
+            // Standalone audio parsers can expose stream details without duration
+            // (for example, WAV). Match the essential-info path's bounded fallback.
+            if audioMetadata.duration == nil {
+                audioMetadata.duration = await SwiftExifMediaProbe.duration(for: url)
+            }
+            try Task.checkCancellation()
             return ApplicationMediaInspection(sourceURL: url, audioMetadata: audioMetadata)
         }
     }
