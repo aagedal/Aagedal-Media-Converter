@@ -2813,6 +2813,20 @@ actor ApplicationJobService {
         do {
             _ = try await transition(pending.jobID, to: .running)
         } catch {
+            // The registry may already be running even though saving failed.
+            // No executor owns this job yet, so leave a terminal, visible result
+            // instead of stranding it as running with its outputs reserved.
+            if let record = await registry.record(for: pending.jobID),
+               record.state == .running || record.state == .cancelling {
+                _ = try? await transition(
+                    pending.jobID,
+                    to: record.state == .cancelling ? .cancelled : .failed,
+                    diagnostic: "Could not save the job before starting conversion."
+                )
+                // The store can remain unavailable; publish the in-memory result
+                // even when the terminal snapshot cannot be saved yet.
+                await publishRecords()
+            }
             return
         }
         // Cancellation can be recorded while the running transition persists.

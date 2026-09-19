@@ -1041,6 +1041,77 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testRunningPersistenceFailureStopsBeforeExecutionAndReleasesOutputReservation() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let stateURL = directory.appendingPathComponent("jobs.json")
+        let gate = ApplicationConversionExecutionGate()
+        let legacyID = await gate.acquire()
+        let harness = ApplicationJobExecutorHarness(blocksFirstExecution: false)
+        let service = ApplicationJobService(
+            store: ApplicationJobStore(fileURL: stateURL),
+            fileAccessAuthorizer: .unrestricted,
+            executor: ApplicationJobExecutor(
+                execute: { jobID, plan, progress in
+                    await harness.execute(jobID: jobID, plan: plan, progress: progress)
+                },
+                cancel: { jobID in await harness.cancel(jobID: jobID) }
+            ),
+            executionGate: gate
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: directory
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let updates = await service.recordUpdates()
+        let failurePublished = expectation(description: "Failed job is visible despite unavailable persistence")
+        let visibleFailure = Task { () -> ApplicationJobRecord? in
+            for await records in updates {
+                if let record = records.first(where: { $0.id == accepted.record.id }),
+                   record.state.isTerminal {
+                    failurePublished.fulfill()
+                    return record
+                }
+            }
+            return nil
+        }
+        defer { visibleFailure.cancel() }
+
+        // Acceptance is durable, but the later running transition cannot save.
+        try FileManager.default.removeItem(at: stateURL)
+        try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: false)
+        await gate.release(legacyID)
+        let failed = try await waitForRecord(service: service, jobID: accepted.record.id, state: .failed)
+        XCTAssertEqual(failed.diagnostic, "Could not save the job before starting conversion.")
+        let beforeRecovery = await harness.snapshot()
+        XCTAssertTrue(beforeRecovery.startedIDs.isEmpty)
+        await fulfillment(of: [failurePublished], timeout: 5)
+        visibleFailure.cancel()
+        let visible = await visibleFailure.value
+        XCTAssertEqual(visible?.state, .failed)
+
+        try FileManager.default.removeItem(at: stateURL)
+        let retry = try await service.submit(planID: plan.id)
+        XCTAssertEqual(retry.record.id, accepted.record.id)
+        XCTAssertEqual(retry.record.state, .failed)
+        let restored = ApplicationJobService(
+            store: ApplicationJobStore(fileURL: stateURL), fileAccessAuthorizer: .unrestricted
+        )
+        let recovered = try await restored.record(for: accepted.record.id)
+        XCTAssertEqual(recovered?.state, .failed)
+
+        // A new request can reuse the unproduced output and the execution queue.
+        let replacementPlan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: directory,
+            idempotencyKey: "after-running-save-failure"
+        ))
+        let replacement = try await service.submit(planID: replacementPlan.id)
+        _ = try await waitForRecord(service: service, jobID: replacement.record.id, state: .succeeded)
+        let completed = await harness.snapshot()
+        XCTAssertEqual(completed.startedIDs, [replacement.record.id])
+    }
+
     func testSubmittedJobsExecuteSeriallyAndPublishProgressAndOutputs() async throws {
         let directory = try makeTemporaryDirectory()
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)

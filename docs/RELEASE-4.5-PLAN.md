@@ -374,6 +374,13 @@ identity, save it before enqueueing, and start execution only once. Cancelling
 the pending job discards the handoff so later retries cannot revive it. See the
 [submission recovery validation record](4.5-submission-recovery-validation-2026-09-19.md).
 
+A failure saving the running transition now stops the job before launching its
+executor, makes the terminal result visible even while the store is unavailable,
+and releases its output reservation. Once storage recovers, an idempotent retry
+saves and returns that same failed job; a new request can reuse the output and
+execute normally. See the
+[running-state persistence validation record](4.5-running-persistence-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
