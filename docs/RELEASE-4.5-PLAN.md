@@ -439,6 +439,13 @@ plans still expire normally; terminal-record retention removes associated plans
 and retry links together. See the
 [accepted-plan retention validation record](4.5-plan-retention-validation-2026-09-19.md).
 
+Queue output lookup now selects a retained plan matching the job's original
+request instead of an arbitrary linked idempotent retry. Equivalent requests can
+capture different dates and propose different template-based filenames; those
+retry names no longer replace the accepted names in queue inspection, including
+after restart. The 85-test contract suite passes. See the
+[original output plan validation record](4.5-original-output-plan-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

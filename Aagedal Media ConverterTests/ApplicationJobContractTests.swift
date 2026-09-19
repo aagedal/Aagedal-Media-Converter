@@ -1075,6 +1075,46 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testPlannedOutputsPreferOriginalRequestOverEquivalentRetryDates() async throws {
+        let directory = try makeTemporaryDirectory()
+        let source = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: source)
+        let defaults = try makeDefaults()
+        defaults.set(true, forKey: AppConstants.enableFileNameProcessingKey)
+        defaults.set(true, forKey: AppConstants.enableCustomFileNameTemplateKey)
+        defaults.set("{sourceName}_{date}", forKey: AppConstants.customFileNameTemplateKey)
+        defaults.set("yyyyMMdd", forKey: AppConstants.customFileNameDateFormatKey)
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let service = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let request = makeRequest(sourceURLs: [source], destinationFolderURL: directory, defaults: defaults)
+        let now = Date()
+        // Retry plans can predate the plan that is actually accepted. Their
+        // requests are equivalent for idempotency but date-based names differ.
+        var retryPlans: [ApplicationConversionPlan] = []
+        for index in 0..<16 {
+            retryPlans.append(try await service.plan(makeRequest(
+                sourceURLs: [source], destinationFolderURL: directory,
+                presetSettings: request.presetSettings,
+                capturedAt: request.capturedAt.addingTimeInterval(Double(index + 1) * 86_400)
+            ), now: now))
+        }
+        let plan = try await service.plan(request, now: now.addingTimeInterval(1))
+        let accepted = try await service.submit(planID: plan.id)
+        let expected = plan.outputs.map(\.outputURL)
+        for retryPlan in retryPlans {
+            XCTAssertNotEqual(retryPlan.outputs.map(\.outputURL), expected)
+            let retry = try await service.submit(planID: retryPlan.id)
+            XCTAssertEqual(retry.record.id, accepted.record.id)
+            let outputs = try await service.plannedOutputURLs(for: accepted.record.id)
+            XCTAssertEqual(outputs, expected)
+        }
+        let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let outputs = try await restored.plannedOutputURLs(for: accepted.record.id)
+        XCTAssertEqual(outputs, expected)
+        let record = try await restored.record(for: accepted.record.id)
+        XCTAssertEqual(record?.state, .interrupted)
+    }
+
     func testPersistenceRetentionRemovesExpiredPlansAndOldTerminalIdempotencyKeys() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")
@@ -2053,6 +2093,14 @@ final class ApplicationJobContractTests: XCTestCase {
         let accepted = try await service.submit(planID: plan.id)
         _ = try await waitForRecord(service: service, jobID: accepted.record.id, state: .running)
 
+        // Running is published before the adapter starts its runner. Wait for
+        // that handoff so this test exercises cancellation during encoding.
+        for _ in 0..<200 {
+            if await harness.runCount() == 1 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let startedCount = await harness.runCount()
+        XCTAssertEqual(startedCount, 1)
         _ = try await service.requestCancellation(accepted.record.id)
         let cancelled = try await waitForRecord(
             service: service,

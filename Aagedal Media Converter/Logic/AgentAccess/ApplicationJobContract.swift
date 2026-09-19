@@ -2670,11 +2670,21 @@ actor ApplicationJobService {
         now: Date = Date()
     ) async throws -> [URL] {
         try await ensureRestored(now: now)
-        if let planID = submittedPlans.first(where: { $0.value.record.id == jobID })?.key,
-           let plan = plans[planID] {
+        guard let record = await registry.record(for: jobID) else { return [] }
+        // Equivalent retries can capture a different date and therefore propose
+        // different filenames. Only the original request describes accepted work.
+        let originalPlans = submittedPlans.compactMap { planID, acceptance in
+            guard acceptance.record.id == jobID,
+                  let plan = plans[planID],
+                  plan.request == record.request else { return nil as ApplicationConversionPlan? }
+            return plan
+        }
+        if let plan = originalPlans.min(by: {
+            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+            return $0.id.description < $1.id.description
+        }) {
             return plan.outputs.map(\.outputURL)
         }
-        guard let record = await registry.record(for: jobID) else { return [] }
         return try Self.plannedOutputs(for: record.request).map(\.outputURL)
     }
 
