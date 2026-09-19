@@ -361,6 +361,13 @@ regressing reports cannot erase them, and a checkpoint write failure stops the
 adapter before another source starts. See the
 [per-file checkpoint validation record](4.5-per-file-checkpoint-validation-2026-09-19.md).
 
+Concurrent submissions now serialize the acceptance boundary across registry
+suspension points. Competing requests cannot both pass the same output reservation
+check, and simultaneous same-plan or equivalent-plan retries return one accepted
+job. Submission admission is separate from conversion execution, so new work can
+still queue while an existing job runs. See the
+[submission concurrency validation record](4.5-submission-concurrency-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

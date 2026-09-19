@@ -520,6 +520,78 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertNotEqual(secondAcceptance.record.id, firstAcceptance.record.id)
     }
 
+    func testConcurrentSubmissionsReserveAnOutputForOnlyOneJob() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        var plans: [ApplicationConversionPlan] = []
+        for _ in 0..<32 {
+            plans.append(try await service.plan(makeRequest(
+                sourceURLs: [sourceURL], destinationFolderURL: directory, idempotencyKey: nil
+            )))
+        }
+        let outcomes = await withTaskGroup(of: Result<ApplicationJobAcceptance, Error>.self) { group in
+            for plan in plans {
+                group.addTask {
+                    do { return .success(try await service.submit(planID: plan.id)) }
+                    catch { return .failure(error) }
+                }
+            }
+            var results: [Result<ApplicationJobAcceptance, Error>] = []
+            for await result in group { results.append(result) }
+            return results
+        }
+        var accepted: [ApplicationJobAcceptance] = []
+        for outcome in outcomes {
+            switch outcome {
+            case .success(let acceptance): accepted.append(acceptance)
+            case .failure(let error):
+                XCTAssertEqual(error as? ApplicationJobError, .outputCollision(plans[0].outputs[0].outputURL))
+            }
+        }
+        XCTAssertEqual(accepted.count, 1)
+        let records = try await service.allRecords()
+        XCTAssertEqual(records.count, 1)
+
+        // Rejection must release admission so subsequent valid work can proceed.
+        let winner = try XCTUnwrap(accepted.first)
+        _ = try await service.requestCancellation(winner.record.id)
+        let nextPlan = try XCTUnwrap(plans.first { $0.request.requestID != winner.record.request.requestID })
+        let nextAcceptance = try await service.submit(planID: nextPlan.id)
+        XCTAssertFalse(nextAcceptance.wasAlreadyAccepted)
+    }
+
+    func testConcurrentPlanRetriesReturnOneAcceptance() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        var plans: [ApplicationConversionPlan] = []
+        for _ in 0..<16 {
+            plans.append(try await service.plan(makeRequest(
+                sourceURLs: [sourceURL], destinationFolderURL: directory,
+                idempotencyKey: "concurrent-network-retry"
+            )))
+        }
+        let acceptances = try await withThrowingTaskGroup(of: ApplicationJobAcceptance.self) { group in
+            for plan in plans {
+                // Exercise both same-plan retries and equivalent newly planned requests.
+                for _ in 0..<2 {
+                    group.addTask { try await service.submit(planID: plan.id) }
+                }
+            }
+            var results: [ApplicationJobAcceptance] = []
+            for try await result in group { results.append(result) }
+            return results
+        }
+        XCTAssertEqual(acceptances.count, 32)
+        XCTAssertEqual(Set(acceptances.map { $0.record.id }).count, 1)
+        XCTAssertEqual(acceptances.filter { !$0.wasAlreadyAccepted }.count, 1)
+        let records = try await service.allRecords()
+        XCTAssertEqual(records.count, 1)
+    }
+
     func testIdempotentRetryThroughANewPlanReturnsOriginalReservedJob() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")

@@ -2310,6 +2310,9 @@ actor ApplicationJobService {
     private let fileAccessAuthorizer: ApplicationFileAccessAuthorizer
     private let executor: ApplicationJobExecutor?
     private let executionGate: ApplicationConversionExecutionGate
+    // Registry calls suspend this actor. Keep validation, reservation, persistence,
+    // and enqueueing together so competing submissions cannot both claim a path.
+    private let submissionGate = ApplicationConversionExecutionGate()
     private let planLifetime: TimeInterval
     private let recordRetentionLifetime: TimeInterval
     private let store: ApplicationJobStore?
@@ -2476,6 +2479,21 @@ actor ApplicationJobService {
     func submit(
         planID: ApplicationPlanID,
         now: Date = Date()
+    ) async throws -> ApplicationJobAcceptance {
+        let admissionID = await submissionGate.acquire()
+        do {
+            let acceptance = try await submitHoldingGate(planID: planID, now: now)
+            await submissionGate.release(admissionID)
+            return acceptance
+        } catch {
+            await submissionGate.release(admissionID)
+            throw error
+        }
+    }
+
+    private func submitHoldingGate(
+        planID: ApplicationPlanID,
+        now: Date
     ) async throws -> ApplicationJobAcceptance {
         try await ensureRestored(now: now)
         if let accepted = submittedPlans[planID] {
