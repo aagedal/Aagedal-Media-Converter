@@ -480,6 +480,14 @@ interactive folder selection, OS-level revocation, lost drives, and the chosen
 App Sandbox scope still require release validation. See the
 [native bookmark validation record](4.5-native-bookmark-validation-2026-09-19.md).
 
+Queued shared jobs now have native-bookmark access-loss coverage after acceptance.
+With execution held behind the gate used by legacy manual work, removing a source
+or writable destination grant causes the affected job to fail before FFmpeg runs;
+the next authorized job still completes. Failed records survive service reload,
+renewal does not restart them through an idempotent retry, and new requests can
+reuse their released output names. All 107 contract/bookmark tests pass. See the
+[queued grant validation record](4.5-queued-grants-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

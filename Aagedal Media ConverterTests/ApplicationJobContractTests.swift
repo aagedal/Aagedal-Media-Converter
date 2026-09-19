@@ -3742,6 +3742,106 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(retry.record.id, record.id)
     }
 
+    func testLiveQueuedJobsRecheckNativeGrantsAndContinueAfterAccessFailures() async throws {
+        let directory = try makeTemporaryDirectory()
+        let fixture = directory.appendingPathComponent("fixture.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", fixture.path
+        ])
+        let defaults = try makeDefaults()
+        let manager = SecurityScopedBookmarkManager(defaults: defaults)
+        let gate = ApplicationConversionExecutionGate()
+        // Hold the same gate used by specialized manual conversions so all
+        // submissions are accepted before their persisted grants are removed.
+        let legacyID = await gate.acquire()
+        defer { Task { await gate.release(legacyID) } }
+        let harness = ApplicationFFmpegRunnerHarness()
+        let liveRunner = ApplicationFFmpegRunner.live()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                _ = await harness.run(conversion: conversion, progress: progress)
+                return await liveRunner.run(conversion, progress)
+            },
+            cancel: liveRunner.cancel,
+            validatesPlannedOutput: true
+        ))
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let service = ApplicationJobService(
+            store: store, fileAccessAuthorizer: .storedBookmarks(using: manager),
+            executor: adapter.jobExecutor, executionGate: gate
+        )
+        var plans: [ApplicationConversionPlan] = []
+        var jobIDs: [ApplicationJobID] = []
+        var revokedFolders: [URL] = []
+        for index in 0..<3 {
+            let sourceFolder = directory.appendingPathComponent("sources-\(index)", isDirectory: true)
+            let destination = directory.appendingPathComponent("outputs-\(index)", isDirectory: true)
+            for folder in [sourceFolder, destination] {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            }
+            let source = sourceFolder.appendingPathComponent("source.mov")
+            try FileManager.default.copyItem(at: fixture, to: source)
+            XCTAssertTrue(manager.saveBookmark(for: sourceFolder))
+            XCTAssertTrue(manager.saveWritableBookmark(for: destination))
+            let plan = try await service.plan(makeRequest(
+                sourceURLs: [source], destinationFolderURL: destination,
+                presetID: .streamCopy, idempotencyKey: "queued-\(index)"
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            XCTAssertEqual(accepted.record.state, .queued)
+            plans.append(plan)
+            jobIDs.append(accepted.record.id)
+            if index < 2 { revokedFolders.append(index == 0 ? sourceFolder : destination) }
+        }
+        var bookmarks = try XCTUnwrap(defaults.dictionary(forKey: "securityScopedBookmarks"))
+        for folder in revokedFolders { bookmarks.removeValue(forKey: folder.absoluteString) }
+        defaults.set(bookmarks, forKey: "securityScopedBookmarks")
+        await gate.release(legacyID)
+
+        for (index, errorCode) in [ApplicationJobErrorCode.sourceAccessDenied, .destinationAccessDenied].enumerated() {
+            let failed = try await waitForRecord(service: service, jobID: jobIDs[index], state: .failed)
+            XCTAssertEqual(failed.diagnostic, errorCode.rawValue)
+            XCTAssertTrue(failed.outputURLs.isEmpty)
+            let files = try FileManager.default.contentsOfDirectory(
+                at: plans[index].request.destinationFolderURL, includingPropertiesForKeys: nil
+            )
+            XCTAssertTrue(files.isEmpty, "Denied queued work must not leave output or staging files")
+        }
+        let completed = try await waitForRecord(service: service, jobID: jobIDs[2], state: .succeeded)
+        XCTAssertEqual(completed.outputURLs, plans[2].outputs.map(\.outputURL))
+        let runCount = await harness.runCount()
+        XCTAssertEqual(runCount, 1, "Only the still-authorized job may reach FFmpeg")
+        let output = try XCTUnwrap(completed.outputURLs.first)
+        try runBundledFFmpeg(["-v", "error", "-xerror", "-i", output.path, "-map", "0", "-f", "null", "-"])
+
+        // Renewed grants do not silently restart terminal failed jobs, even
+        // after reload; a new request may reuse their released output names.
+        XCTAssertTrue(manager.saveBookmark(for: revokedFolders[0]))
+        XCTAssertTrue(manager.saveWritableBookmark(for: revokedFolders[1]))
+        let restored = ApplicationJobService(
+            store: store,
+            fileAccessAuthorizer: .storedBookmarks(using: SecurityScopedBookmarkManager(defaults: defaults))
+        )
+        for index in 0..<2 {
+            let retry = try await restored.submit(planID: plans[index].id)
+            XCTAssertTrue(retry.wasAlreadyAccepted)
+            XCTAssertEqual(retry.record.id, jobIDs[index])
+            XCTAssertEqual(retry.record.state, .failed)
+            XCTAssertTrue(retry.record.outputURLs.isEmpty)
+            let replacement = try await service.plan(makeRequest(
+                sourceURLs: plans[index].request.sourceURLs,
+                destinationFolderURL: plans[index].request.destinationFolderURL,
+                presetID: .streamCopy, idempotencyKey: "renewed-\(index)"
+            ))
+            XCTAssertEqual(replacement.outputs.map(\.outputURL), plans[index].outputs.map(\.outputURL))
+            let accepted = try await service.submit(planID: replacement.id)
+            let recovered = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+            XCTAssertEqual(recovered.outputURLs, replacement.outputs.map(\.outputURL))
+        }
+    }
+
     func testLiveSharedJobAppliesCapturedTrimCropAndMute() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("source.mov")
