@@ -790,6 +790,73 @@ actor ConversionManager: Sendable {
             return
         }
 
+        let av2Settings = plan.settings.av2
+        let dcpSettings = plan.settings.dcp
+        let imfSettings = plan.settings.imf
+        let audioOnlySettings = plan.settings.audioOnly
+        let codecSettings = plan.settings.codec
+        let outputExtension = av2Settings?.container.fileExtension
+            ?? audioOnlySettings?.format.fileExtension
+            ?? codecSettings?.outputExtension(for: plan.segments.first?.originalURL)
+            ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
+        var cutMarkers: [StitchCutMarker] = []
+        var markerWarning: String?
+        var chapterMetadataURL: URL?
+        var chapterMetadataTitles: [String] = []
+        if plan.settings.exportStitchMarkers {
+            do {
+                var media: [StitchMarkerMedia] = []
+                var sourceHasChapters = false
+                for segment in plan.segments {
+                    var prepared = try await StitchMarkerMedia.read(segment.preparedURL)
+                    guard isBatchActive(batchID) else { return }
+                    sourceHasChapters = sourceHasChapters || prepared.hasChapterMetadata
+                    if segment.isTemporary {
+                        let original = try await StitchMarkerMedia.read(segment.originalURL)
+                        guard isBatchActive(batchID) else { return }
+                        sourceHasChapters = sourceHasChapters || original.hasChapterMetadata
+                        if prepared.chapters.isEmpty, !original.chapters.isEmpty {
+                            prepared = StitchMarkerMedia(
+                                duration: prepared.duration, frameRate: prepared.frameRate, timecode: prepared.timecode,
+                                chapters: StitchMarkerExport.retainedChapters(original.chapters,
+                                    trimStart: segment.trimStart ?? 0, duration: prepared.duration),
+                                hasChapterMetadata: original.hasChapterMetadata)
+                        }
+                    }
+                    media.append(prepared)
+                }
+                cutMarkers = try StitchMarkerExport.cuts(
+                    names: plan.segments.map { $0.originalURL.lastPathComponent },
+                    durations: media.map(\.duration)
+                )
+                // Pin concat's scheduling to the same measured segment durations
+                // used for marker placement, including Stream Copy trim preroll.
+                let concat = zip(plan.segments, media).map { segment, source in
+                    let path = segment.preparedURL.path.replacingOccurrences(of: "'", with: "'\\''")
+                    return "file '\(path)'\nduration \(FFMPEGCommandBuilder.ffmpegTimeString(from: source.duration))"
+                }.joined(separator: "\n")
+                try concat.write(to: plan.listFileURL, atomically: true, encoding: .utf8)
+                if StitchMarkerExport.supportedChapterExtensions.contains(outputExtension.lowercased()),
+                   plan.waveformRequest == nil, plan.synthesizedVideoRequest == nil {
+                    let replace = sourceHasChapters ? await StitchMarkerExport.shouldReplaceExistingChapters() : true
+                    guard isBatchActive(batchID) else { return }
+                    let chapters = replace ? cutMarkers : StitchMarkerExport.concatenateChapters(media)
+                    if sourceHasChapters && !replace && chapters.isEmpty {
+                        throw NSError(domain: "StitchMarkers", code: 1, userInfo: [NSLocalizedDescriptionKey:
+                            "Existing chapter metadata could not be preserved after preparation. Automatic chapter replacement was skipped."])
+                    }
+                    let text = try StitchMarkerExport.chapterMetadata(chapters)
+                    let url = plan.listFileURL.deletingPathExtension().appendingPathExtension("ffmetadata")
+                    try text.write(to: url, atomically: true, encoding: .utf8)
+                    chapterMetadataURL = url
+                    chapterMetadataTitles = chapters.map { $0.title.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ") }
+                }
+            } catch {
+                markerWarning = "Clip markers: " + error.localizedDescription
+            }
+        }
+        let resolvedOutput = OSAllocatedUnfairLock(initialState: plan.outputBaseURL.appendingPathExtension(outputExtension))
+
         let customInputs = ["-f", "concat", "-safe", "0", "-i", plan.listFileURL.path]
 
         let mergeOutputArguments: [String]? = plan.preset == .streamCopy ? [
@@ -821,6 +888,9 @@ actor ConversionManager: Sendable {
             inputURL: primaryInput.url,
             outputURL: plan.outputBaseURL,
             preset: plan.preset,
+            outputURLResolved: { url in resolvedOutput.withLock { $0 = url } },
+            chapterMetadataURL: chapterMetadataURL,
+            chapterMetadataTitles: chapterMetadataTitles,
             comment: plan.comment,
             includeDateTag: plan.includeDateTag,
             expectedDuration: plan.totalDuration,
@@ -838,15 +908,9 @@ actor ConversionManager: Sendable {
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let mergeUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
-        let av2Settings = plan.settings.av2
-        let dcpSettings = plan.settings.dcp
-        let imfSettings = plan.settings.imf
-        let audioOnlySettings = plan.settings.audioOnly
-        let codecSettings = plan.settings.codec
-        let outputExtension = av2Settings?.container.fileExtension
-            ?? audioOnlySettings?.format.fileExtension
-            ?? codecSettings?.outputExtension(for: plan.segments.first?.originalURL)
-            ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
+        let capturedMarkers = cutMarkers
+        let capturedMarkerWarning = markerWarning
+        let capturedChapterURL = chapterMetadataURL
         await ffmpegConverter.convert(
             request: mergeRequest,
             av2Settings: av2Settings,
@@ -881,6 +945,10 @@ actor ConversionManager: Sendable {
                     await self.handleMergeCompletion(
                         plan: plan,
                         outputExtension: outputExtension,
+                        resolvedOutputURL: resolvedOutput.withLock { $0 },
+                        cutMarkers: capturedMarkers,
+                        markerWarning: capturedMarkerWarning,
+                        chapterMetadataURL: capturedChapterURL,
                         inputItems: inputItems,
                         callbackOwnership: callbackOwnership,
                         followUpOwnership: mergeFollowUpOwnership,
@@ -911,6 +979,7 @@ actor ConversionManager: Sendable {
     }
 
     private func cleanupMergeArtifacts(for plan: MergePlan) {
+        try? FileManager.default.removeItem(at: plan.listFileURL.deletingPathExtension().appendingPathExtension("ffmetadata"))
         do {
             try FileManager.default.removeItem(at: plan.listFileURL)
         } catch {
@@ -1137,6 +1206,10 @@ actor ConversionManager: Sendable {
     private func handleMergeCompletion(
         plan: MergePlan,
         outputExtension: String,
+        resolvedOutputURL: URL,
+        cutMarkers: [StitchCutMarker],
+        markerWarning: String?,
+        chapterMetadataURL: URL?,
         inputItems: [VideoItem],
         callbackOwnership: ConversionCallbackOwnership,
         followUpOwnership: [UUID: ConversionCallbackOwnership],
@@ -1145,9 +1218,28 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>,
         batchID: UUID
     ) async {
+        defer { if let chapterMetadataURL { try? FileManager.default.removeItem(at: chapterMetadataURL) } }
         guard isBatchActive(batchID) else { return }
 
-        let finalURL = plan.outputBaseURL.appendingPathExtension(outputExtension)
+        let finalURL = resolvedOutputURL
+        var exportWarning = markerWarning
+        if success, !cutMarkers.isEmpty {
+            do {
+                let output = try await StitchMarkerMedia.read(finalURL)
+                guard isBatchActive(batchID) else { return }
+                guard let rate = output.frameRate else { throw StitchMarkerError.invalidRate }
+                let text = try StitchMarkerExport.resolveEDL(title: finalURL.lastPathComponent + " Clip Boundaries",
+                                                            markers: cutMarkers, frameRate: rate, startTimecode: output.timecode)
+                let access = SecurityScopedBookmarkManager.shared.startAccessing(url: finalURL.deletingLastPathComponent())
+                defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+                _ = try StitchMarkerExport.writeEDL(text, alongside: finalURL)
+            } catch { exportWarning = "Clip markers: " + error.localizedDescription }
+        }
+        let completedWarning = exportWarning
+        if success, let completedWarning {
+            mergeLogger.warning("\(completedWarning, privacy: .public)")
+            await StitchMarkerExport.presentWarning(completedWarning, outputURL: finalURL)
+        }
 
         // Capture file size - try with security-scoped access
         var outputFileSizeBytes: Int64?
@@ -1169,7 +1261,7 @@ actor ConversionManager: Sendable {
                     droppedFiles.wrappedValue[index].progress = success ? 1.0 : 0.0
                     droppedFiles.wrappedValue[index].outputURL = success ? finalURL : nil
                     droppedFiles.wrappedValue[index].outputFileSizeBytes = outputFileSizeBytes
-                    droppedFiles.wrappedValue[index].conversionError = success ? nil : errorReason
+                    droppedFiles.wrappedValue[index].conversionError = success ? completedWarning : errorReason
                     droppedFiles.wrappedValue[index].eta = nil
                     droppedFiles.wrappedValue[index].statusMessage = nil
                 }

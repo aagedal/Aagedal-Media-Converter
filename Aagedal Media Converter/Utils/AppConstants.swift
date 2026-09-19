@@ -236,6 +236,8 @@ enum AppConstants {
     // Encoding-group defaults applied when a new group is created.
     // Merge and sequential naming are mutually exclusive — the settings UI and
     // toggle handlers enforce that only one can be on at a time.
+    static let exportStitchMarkersKey = "exportStitchMarkers"
+    static let exportStitchMarkersDefault = true
     static let defaultGroupMergeEnabledKey = "defaultGroupMergeEnabled"
     static let defaultGroupSequentialNamingEnabledKey = "defaultGroupSequentialNamingEnabled"
     static let defaultGroupPresetKey = "defaultGroupPreset"

@@ -14,6 +14,9 @@ struct EncodingSettingsView: View {
     @AppStorage(AppConstants.defaultGroupPresetKey)
     private var defaultGroupPresetRaw = AppConstants.defaultGroupPreset
 
+    @AppStorage(AppConstants.exportStitchMarkersKey)
+    private var exportStitchMarkers = AppConstants.exportStitchMarkersDefault
+
     private let presetManager = PresetManager.shared
 
     private var defaultGroupPresetBinding: Binding<ExportPreset> {
@@ -25,6 +28,11 @@ struct EncodingSettingsView: View {
 
     var body: some View {
         Form {
+            Section("Stitched Exports") {
+                Toggle("Export clip-boundary markers", isOn: $exportStitchMarkers)
+                Text("Save a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. If source chapters exist, ask before replacing them.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(header: Text("New Group Defaults")) {
                 VStack(alignment: .leading, spacing: 8) {
                     LabeledContent("Default format for new groups") {

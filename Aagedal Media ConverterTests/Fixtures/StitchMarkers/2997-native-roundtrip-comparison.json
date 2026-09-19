@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "expectedCount": 7,
+  "actualCount": 7,
+  "frameCountModeMatches": true,
+  "missing": [],
+  "unexpected": [],
+  "rate": "30000/1001",
+  "editorVersion": "21.1.0.14",
+  "originalSHA256": "0536d12ccd301f0dab0dc2f28d72bd80029cb989f656432ec88ec15a0a902929",
+  "returnedSHA256": "7939e17ae765f1efb723adc2aaf3c2093eff11f41e1f783cbaecfd92e184d256",
+  "scope": "Supplied EDL comparison only; native import and media identity require separate evidence"
+}

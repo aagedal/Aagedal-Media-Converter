@@ -116,6 +116,7 @@ struct VideoGroupImportContext: Sendable {
 /// Capture before metadata or merge preparation suspends; item metadata can then
 /// select a generated-video request without consulting preferences again.
 struct ConversionPreparationSettings: Sendable {
+    let exportStitchMarkers: Bool
     let av2: AV2Settings?
     let dcp: DCPSettings?
     let imf: IMFSettings?
@@ -131,6 +132,7 @@ struct ConversionPreparationSettings: Sendable {
     let outputDestination: OutputDestinationSettings
 
     init(preset: ExportPreset, defaults: UserDefaults = .standard) {
+        exportStitchMarkers = defaults.object(forKey: AppConstants.exportStitchMarkersKey) as? Bool ?? AppConstants.exportStitchMarkersDefault
         av2 = preset == .av2 ? AV2Settings(defaults: defaults) : nil
         dcp = preset == .dcp ? DCPSettings(defaults: defaults) : nil
         imf = (preset == .imfJ2K || preset == .imfProRes) ? IMFSettings(defaults: defaults) : nil

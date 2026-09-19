@@ -839,6 +839,7 @@ actor FFMPEGConverter {
             FileSafetyUtils.registerCreatedFile(outputFileURL)
         }
 
+        request.outputURLResolved?(outputFileURL)
         let completionGate = ConversionCompletionGate()
         let cleanupOutputURL = outputFileURL
         let isOrdinaryFileExport = !isImageSequenceExport && !isDCPExport && !isIMFExport
@@ -1132,6 +1133,8 @@ actor FFMPEGConverter {
             visualSourceURL: request.visualSourceURL,
             customInputArguments: effectiveCustomInputArguments,
             additionalOutputArguments: request.additionalOutputArguments,
+            chapterMetadataURL: request.chapterMetadataURL,
+            chapterMetadataTitles: request.chapterMetadataTitles,
             isMuted: request.isMuted
         )
 

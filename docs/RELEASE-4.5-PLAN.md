@@ -549,6 +549,10 @@ tools should not delay that core scope.
 
 ## Stitching editor — 2026-09-19
 
+Stitched exports now default to Resolve EDL clip markers and embedded chapters
+in MOV/MP4/M4V/MKV. Existing chapters trigger a Keep/Replace prompt, defaulting
+to Keep. See [marker export behavior and reused Resolve evidence](stitch-marker-export.md).
+
 The encoding group editor offers a Timeline toggle for stitching groups, including
 memory-card imports. A single horizontal track displays all clips end to end,
 with duration-proportional filmstrips, a shared time ruler and playhead, zoom, and

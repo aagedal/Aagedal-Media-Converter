@@ -19,6 +19,10 @@ struct ConversionRequest: Sendable {
 
     /// Shared jobs must publish to their accepted path rather than choose a new name.
     var requiredOutputURL: URL? = nil
+    /// Reports the collision-safe path actually reserved by the converter.
+    var outputURLResolved: (@Sendable (URL) -> Void)? = nil
+    var chapterMetadataURL: URL? = nil
+    var chapterMetadataTitles: [String] = []
 
     // MARK: - Metadata
     var comment: String = ""

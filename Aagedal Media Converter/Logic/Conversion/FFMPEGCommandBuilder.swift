@@ -349,6 +349,8 @@ enum FFMPEGCommandBuilder {
         visualSourceURL: URL? = nil,
         customInputArguments: [String]? = nil,
         additionalOutputArguments: [String]? = nil,
+        chapterMetadataURL: URL? = nil,
+        chapterMetadataTitles: [String] = [],
         isMuted: Bool = false,
         durationProvider: @Sendable (URL) async -> Double? = { url in
             await FFMPEGProbeService.getVideoDuration(for: url)
@@ -415,6 +417,11 @@ enum FFMPEGCommandBuilder {
         ] : []
         arguments += inputPlan.arguments(seek: trimPlan.seekArguments, fileOptions: fileInputOptions)
 
+        var chapterInputIndex: Int?
+        if let chapterMetadataURL, waveformRequest == nil, synthesizedVideoRequest == nil {
+            chapterInputIndex = arguments.filter { $0 == "-i" }.count
+            arguments += ["-f", "ffmetadata", "-i", chapterMetadataURL.path]
+        }
         let outputArgumentsStart = arguments.count
 
         if let waveformRequest {
@@ -719,6 +726,16 @@ enum FFMPEGCommandBuilder {
             arguments.append(contentsOf: additionalOutputArguments)
         }
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+        // These chapters are explicitly authored by the stitching workflow and
+        // must survive the preset's policy for inherited source metadata.
+        if let chapterInputIndex {
+            arguments += ["-map_chapters", String(chapterInputIndex)]
+            // Metadata stripping disables automatic chapter title copying.
+            // Explicit assignments are applied after FFmpeg creates the chapters.
+            for (index, title) in chapterMetadataTitles.enumerated() {
+                arguments += ["-metadata:c:\(index)", "title=\(title)"]
+            }
+        }
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = trimPlan.effectiveDuration
