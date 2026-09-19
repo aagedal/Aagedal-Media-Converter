@@ -488,6 +488,15 @@ renewal does not restart them through an idempotent retry, and new requests can
 reuse their released output names. All 107 contract/bookmark tests pass. See the
 [queued grant validation record](4.5-queued-grants-validation-2026-09-19.md).
 
+Legacy group and agent cancellation now have integration coverage through the
+real `ConversionManager.convertGroup` entry point and shared job service using
+the same execution gate. Cancelling group preparation releases waiting agent
+work without reviving cancelled rows; cancelling a waiting agent preserves the
+group and allows subsequent agent work after the group ends. All 111 contract
+and queue-state tests pass. Controlled preparation and executor fixtures isolate
+ownership; live merged exports and specialized post-actions remain open. See the
+[group coexistence validation record](4.5-group-coexistence-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

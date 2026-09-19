@@ -152,6 +152,101 @@ final class ConversionQueueStateTests: XCTestCase {
     }
 
     @MainActor
+    func testCancellingLegacyGroupReleasesWaitingAgentJob() async throws {
+        try await checkGroupAndAgentCancellation(cancelAgentFirst: false)
+    }
+
+    @MainActor
+    func testCancellingWaitingAgentJobPreservesLegacyGroup() async throws {
+        try await checkGroupAndAgentCancellation(cancelAgentFirst: true)
+    }
+
+    @MainActor
+    private func checkGroupAndAgentCancellation(cancelAgentFirst: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GroupAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("agent.mov")
+        try Data("fixture".utf8).write(to: source)
+        let executionGate = ApplicationConversionExecutionGate()
+        let detailsGate = ConversionPreparationDetailsGate()
+        let preparing = expectation(description: "Legacy group owns execution during preparation")
+        let manager = ConversionManager(
+            executionGate: executionGate,
+            conversionDetailsLoader: { _, _, _ in await detailsGate.wait(started: preparing) }
+        )
+        let queue = ConversionPreparationQueue(items: [item(status: .waiting)])
+        let legacyTask = Task {
+            await manager.convertGroup(
+                items: queue.binding, outputFolder: directory.path, preset: .h264,
+                concatEnabled: false, transcriptionEnabled: false,
+                uploadEnabled: false, analyticsEnabled: false
+            )
+        }
+        await fulfillment(of: [preparing], timeout: 2)
+        let executed = expectation(description: "Agent executes after legacy cancellation")
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: ApplicationJobExecutor(
+                execute: { _, plan, _ in
+                    XCTAssertTrue(queue.items.allSatisfy { $0.status == .cancelled })
+                    executed.fulfill()
+                    return .succeeded(outputURLs: plan.outputs.map(\.outputURL))
+                },
+                cancel: { _ in XCTFail("Queued agent cancellation must not signal an executor") }
+            ),
+            executionGate: executionGate
+        )
+        let plan = try await service.plan(ApplicationConversionRequest(
+            origin: .localAgent, requesterID: "group-coexistence",
+            sourceURLs: [source], destinationFolderURL: directory, presetID: .h264
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        for _ in 0..<200 {
+            if await executionGate.waitingCount() == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let waiting = await executionGate.waitingCount()
+        XCTAssertEqual(waiting, 1)
+        let queued = try await service.record(for: accepted.record.id)
+        XCTAssertEqual(queued?.state, .queued)
+
+        if cancelAgentFirst {
+            let before = queue.items
+            let cancelled = try await service.requestCancellation(accepted.record.id)
+            XCTAssertEqual(cancelled.state, .cancelled)
+            XCTAssertEqual(queue.items, before, "Agent cancellation must preserve legacy rows")
+            let stillWaiting = await executionGate.waitingCount()
+            XCTAssertEqual(stillWaiting, 1, "Agent cancellation must preserve legacy ownership")
+        }
+        await manager.cancelAllConversions()
+        await detailsGate.finish()
+        await legacyTask.value
+        XCTAssertTrue(queue.items.allSatisfy { $0.status == .cancelled })
+        XCTAssertFalse(queue.items[0].detailsLoaded, "Late preparation cannot revive cancelled rows")
+
+        if cancelAgentFirst {
+            // A subsequent job proves the cancelled gate waiter was drained and
+            // did not stall the service or consume a later job's cancellation.
+            let replacement = try await service.plan(ApplicationConversionRequest(
+                origin: .localAgent, requesterID: "group-coexistence",
+                sourceURLs: [source], destinationFolderURL: directory, presetID: .h264
+            ))
+            _ = try await service.submit(planID: replacement.id)
+        }
+        await fulfillment(of: [executed], timeout: 2)
+        for _ in 0..<200 {
+            let records = try await service.allRecords()
+            if records.allSatisfy({ $0.state.isTerminal }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let records = try await service.allRecords()
+        XCTAssertEqual(records.filter { $0.state == .succeeded }.count, 1)
+        XCTAssertEqual(records.filter { $0.state == .cancelled }.count, cancelAgentFirst ? 1 : 0)
+    }
+
+    @MainActor
     func testRemovingItemDuringManagerPreparationFinishesEmptyQueue() async {
         let gate = ConversionPreparationDetailsGate()
         let started = expectation(description: "Conversion details started")
