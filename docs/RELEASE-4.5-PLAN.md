@@ -566,12 +566,54 @@ in `/private/tmp/amc-4.5-sept20-release.log`,
 `/private/tmp/amc-4.5-sept20-bundle-report.json`. This does not establish signing
 or notarization readiness. Dependencies and bundled media binaries are unchanged.
 
-Remaining priorities: repeat and diagnose preview playback in a controlled login
-session; exercise full Claude Code, Codex, and OpenCode workflows; validate actual
-OS-level grant revocation/lost drives and settle App Sandbox scope; cover
-specialized post-actions and broader long-GOP/audio/merge output cases; visually
-review the new bilingual panels; and complete Developer ID signing/notarization,
-clean installation/update checks, release notes, and retained package reports.
+A subsequent repeat passed both unchanged preview tests. The preview keyboard
+handler now defers to native text editors, and Command-A uses the backend's
+window-scoped handler instead of an app-wide audio-meter monitor. Strengthened
+UI coverage checks timecode replacement without toggling the meter, in addition
+to seeking, frame capture, playback/pause, and reopening. This fixes a concrete
+editing conflict without claiming to explain every earlier event-delivery stall.
+See the [preview keyboard validation record](4.5-preview-keyboard-validation-2026-09-20.md).
+
+The broader output matrix now includes a non-keyframe trim within a four-second
+H.264 GOP with B-frames, exported to ProRes and WAV. It checks all 36 decoded
+video frames and the exact 72,000-sample audio range against independent decoded
+references. This exposed missing WAV inspection duration; the inspector now uses
+the existing bounded duration fallback when the audio parser omits it. See the
+[long-GOP and audio-range record](4.5-long-gop-audio-range-validation-2026-09-20.md).
+
+Two new integration cases cover legacy quality analytics while an agent export
+succeeds or is cancelled. They run real FFmpeg export and PSNR processes, hold
+metric completion to force overlap, and verify that the delayed result preserves
+row ownership and terminal agent state. See the
+[analytics coexistence record](4.5-analytics-agent-coexistence-validation-2026-09-20.md).
+
+A [named-client validation runbook](../Documentation/NAMED_CLIENT_VALIDATION.md)
+now defines tool arguments, actual transcript evidence, reconnect, cancellation,
+restart, and cold-launch checks. Installed Claude Code and Codex pass executable
+preflight. OpenCode still terminates by SIGKILL and its installed executable
+fails signature verification; the causal relationship is not established.
+Actual named-client workflows remain open. See the
+[client preflight record](4.5-named-client-preflight-validation-2026-09-20.md).
+
+All 1,020 Debug unit tests pass with no failures or skips, including the new
+long-GOP and analytics cases. All 81 script tests and the 1,671-entry Norwegian
+catalog audit pass. The combined unit/UI run found a test-only checkbox value
+cast in the strengthened preview assertions; both corrected UI tests pass
+in their separate final run. Evidence is retained in the linked validation records.
+The updated unsigned Release build and static bundle audit also pass (45 arm64
+Mach-O images and 12 packaged license notices). Final evidence:
+`/private/tmp/amc-4.5-continuation-release.log`,
+`/private/tmp/amc-4.5-continuation-bundle-audit.log`, and
+`/private/tmp/amc-4.5-continuation-bundle-report.json`. Signing/notarization remains
+unvalidated; dependencies and bundled binaries are unchanged.
+
+Remaining priorities: validate stitching sequence playback and broader real-media
+playback; exercise full Claude Code, Codex, and OpenCode workflows after resolving
+the OpenCode installation issue; validate actual OS-level grant revocation/lost
+drives and settle App Sandbox scope; cover upload, transcription, OCR/subtitle
+post-actions and broader stream-copy/audio/merge output cases; visually review the
+new bilingual panels; and complete Developer ID signing/notarization, clean
+installation/update checks, release notes, and retained package reports.
 
 ## Beta readiness snapshot — 2026-09-15
 
