@@ -4,6 +4,8 @@
 
 import CoreFoundation
 import Foundation
+import SwiftUI
+import os
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -3926,6 +3928,95 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testLiveMergedGroupCompletesBeforeWaitingAgentExecutes() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
+        for source in sources {
+            try runBundledFFmpeg([
+                "-v", "error", "-y", "-f", "lavfi", "-i",
+                "testsrc2=size=64x48:rate=24:duration=2",
+                "-c:v", "libx264", "-g", "1", "-pix_fmt", "yuv420p", source.path
+            ])
+        }
+        let defaults = try makeDefaults()
+        defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
+        let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        let gate = ApplicationConversionExecutionGate()
+        let prepared = expectation(description: "First merge trim subprocess completed")
+        let runner = ApplicationMergeLiveRunner(prepared: prepared)
+        let manager = ConversionManager(
+            subprocessRunner: runner, executionGate: gate,
+            preparationSettingsProvider: { _ in settings }
+        )
+        let queue = ApplicationMergeLiveQueue(items: sources.map { source in
+            var item = VideoItem(
+                url: source, name: source.lastPathComponent, size: 0,
+                duration: "00:00:02", durationSeconds: 2, status: .waiting,
+                progress: 0, eta: "", outputURL: nil
+            )
+            item.trimStart = 0
+            item.trimEnd = 1
+            item.includeDateTag = false
+            return item
+        })
+        let legacyFinished = expectation(description: "Live merged export completed")
+        let legacyTask = Task {
+            await manager.convertGroup(
+                items: queue.binding, outputFolder: directory.path, preset: .streamCopy,
+                concatEnabled: true, groupName: "merged",
+                transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+            )
+            legacyFinished.fulfill()
+        }
+        await fulfillment(of: [prepared], timeout: 15)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let executor = adapter.jobExecutor
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: ApplicationJobExecutor(execute: { jobID, plan, progress in
+                let groupCompleted = queue.items.allSatisfy { $0.status == .done }
+                XCTAssertTrue(groupCompleted, "Agent must wait until merged output is published")
+                return await executor.execute(jobID, plan, progress)
+            }, cancel: executor.cancel),
+            executionGate: gate
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sources[0]], destinationFolderURL: directory,
+            presetID: .streamCopy, defaults: defaults
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        for _ in 0..<200 {
+            if await gate.waitingCount() == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let waiting = await gate.waitingCount()
+        XCTAssertEqual(waiting, 1)
+        let queued = try await service.record(for: accepted.record.id)
+        XCTAssertEqual(queued?.state, .queued)
+        await runner.release()
+        await fulfillment(of: [legacyFinished], timeout: 20)
+        await legacyTask.value
+        for _ in 0..<1000 {
+            if try await service.record(for: accepted.record.id)?.state.isTerminal == true { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let finalRecord = try await service.record(for: accepted.record.id)
+        let record = try XCTUnwrap(finalRecord)
+        XCTAssertEqual(record.state, .succeeded)
+        XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+        XCTAssertTrue(queue.items.allSatisfy { $0.status == .done })
+        let merged = try XCTUnwrap(queue.items.first?.outputURL)
+        XCTAssertEqual(queue.items.last?.outputURL, merged)
+        XCTAssertFalse(record.outputURLs.contains(merged))
+        for output in [merged] + record.outputURLs {
+            let metadata = try await ApplicationMediaInspector.live.inspect(output)
+            XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: 1.0 / 24)
+            XCTAssertEqual(metadata.frameCount, 48)
+            try runBundledFFmpeg(["-v", "error", "-xerror", "-i", output.path, "-map", "0", "-f", "null", "-"])
+        }
+    }
+
     @discardableResult
     private func runBundledFFmpeg(_ arguments: [String]) throws -> String {
         let binaryURL = Bundle.main.url(forResource: "ffmpeg", withExtension: nil)
@@ -4245,5 +4336,47 @@ private final class ApplicationJobLeaseState: @unchecked Sendable {
         return ApplicationFileAccessLease { [weak self] in
             self?.lock.withLock { self?.count -= 1 }
         }
+    }
+}
+
+private final class ApplicationMergeLiveQueue: Sendable {
+    private let storage: OSAllocatedUnfairLock<[VideoItem]>
+    init(items: [VideoItem]) { storage = OSAllocatedUnfairLock(initialState: items) }
+    var items: [VideoItem] {
+        get { storage.withLock { $0 } }
+        set { storage.withLock { $0 = newValue } }
+    }
+    var binding: Binding<[VideoItem]> {
+        Binding(get: { self.items }, set: { self.items = $0 })
+    }
+}
+
+private actor ApplicationMergeLiveRunner: SubprocessRunning {
+    let prepared: XCTestExpectation
+    private var paused = false
+    private var released = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(prepared: XCTestExpectation) { self.prepared = prepared }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        let result = try await SubprocessRunner().run(request, outputHandler: outputHandler)
+        if !paused {
+            paused = true
+            prepared.fulfill()
+            if !released {
+                await withCheckedContinuation { continuation = $0 }
+            }
+        }
+        return result
+    }
+
+    func release() {
+        released = true
+        continuation?.resume()
+        continuation = nil
     }
 }

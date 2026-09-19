@@ -497,6 +497,15 @@ and queue-state tests pass. Controlled preparation and executor fixtures isolate
 ownership; live merged exports and specialized post-actions remain open. See the
 [group coexistence validation record](4.5-group-coexistence-validation-2026-09-19.md).
 
+Live merge coexistence now also runs the real two-clip concatenation path with
+bundled FFmpeg. Each all-intra fixture is trimmed to one second; an agent job
+waits behind merge preparation and starts only after both group rows report the
+shared merged output complete. The merged file and separate planned agent output
+each contain 48 frames, span two seconds, and decode successfully. This narrows
+the live export overlap gate; audio continuity, long-GOP trimming, encoding-time
+cancellation, post-actions, and playback remain open. See the
+[live merge coexistence validation record](4.5-live-merge-coexistence-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
