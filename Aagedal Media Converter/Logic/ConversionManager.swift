@@ -233,6 +233,7 @@ actor ConversionManager: Sendable {
     private let transcriptionSettings: any TranscriptionSettingsProviding
     private let ocrSettings: any OCRSettingsProviding
     private let analyticsSettings: any AnalyticsSettingsProviding
+    private let analyticsService: AnalyticsService
     private let preparationSettingsProvider: @Sendable (ExportPreset) -> ConversionPreparationSettings
     private let conversionDetailsLoader: @Sendable (URL, String, ExportPreset) async -> VideoFileUtils.VideoItemDetails
     private let executionGate: ApplicationConversionExecutionGate
@@ -245,6 +246,7 @@ actor ConversionManager: Sendable {
         transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings(),
         ocrSettings: any OCRSettingsProviding = PostConversionSettings(),
         analyticsSettings: any AnalyticsSettingsProviding = PostConversionSettings(),
+        analyticsService: AnalyticsService = .shared,
         preparationSettingsProvider: @escaping @Sendable (ExportPreset) -> ConversionPreparationSettings = {
             ConversionPreparationSettings(preset: $0)
         },
@@ -262,6 +264,7 @@ actor ConversionManager: Sendable {
         self.transcriptionSettings = transcriptionSettings
         self.ocrSettings = ocrSettings
         self.analyticsSettings = analyticsSettings
+        self.analyticsService = analyticsService
         self.conversionDetailsLoader = conversionDetailsLoader
         self.preparationSettingsProvider = preparationSettingsProvider
     }
@@ -2980,7 +2983,7 @@ actor ConversionManager: Sendable {
         guard beganAttempt else { return }
 
         do {
-            let results = try await AnalyticsService.shared.runAnalytics(
+            let results = try await analyticsService.runAnalytics(
                 sourceFile: sourceURL,
                 encodedFile: encodedURL,
                 enabledMetrics: enabledMetrics,
