@@ -1368,6 +1368,60 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(runCount, 1)
     }
 
+    func testCancelledBatchRetainsEarlierCompletedOutputs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let firstSource = directory.appendingPathComponent("first.mov")
+        let secondSource = directory.appendingPathComponent("second.mov")
+        try Data("first".utf8).write(to: firstSource)
+        try Data("second".utf8).write(to: secondSource)
+        let harness = ApplicationFFmpegRunnerHarness(blocksFirstRun: true)
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                if conversion.request.inputURL == firstSource { return .succeeded }
+                return await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [firstSource, secondSource], destinationFolderURL: directory
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        for _ in 0..<200 {
+            if await harness.runCount() == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let startedCount = await harness.runCount()
+        XCTAssertEqual(startedCount, 1)
+        _ = try await service.requestCancellation(accepted.record.id)
+        let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .cancelled)
+        XCTAssertEqual(record.outputURLs, [plan.outputs[0].outputURL])
+        XCTAssertEqual(record.diagnostic, "Conversion cancelled.")
+    }
+
+    func testFailedAndCancelledExecutorsCannotReportNonPrefixOutputs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = ["first.mov", "second.mov"].map { directory.appendingPathComponent($0) }
+        for source in sources { try Data("source".utf8).write(to: source) }
+        for cancelled in [false, true] {
+            let executor = ApplicationJobExecutor(
+                execute: { _, plan, _ in
+                    let outputs = [plan.outputs[1].outputURL]
+                    return cancelled
+                        ? .cancelled(diagnostic: "Stopped", outputURLs: outputs)
+                        : .failed(diagnostic: "Failed", outputURLs: outputs)
+                },
+                cancel: { _ in }
+            )
+            let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: executor)
+            let plan = try await service.plan(makeRequest(sourceURLs: sources, destinationFolderURL: directory))
+            let accepted = try await service.submit(planID: plan.id)
+            let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .failed)
+            XCTAssertTrue(record.outputURLs.isEmpty)
+            XCTAssertEqual(record.diagnostic, "Executor outputs did not match the accepted conversion plan.")
+        }
+    }
+
     func testFFmpegAdapterKeepsCancellationReceivedBeforeExecutionStarts() async throws {
         let directory = try makeTemporaryDirectory()
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
@@ -2435,7 +2489,9 @@ final class ApplicationJobContractTests: XCTestCase {
             cancel: liveRunner.cancel,
             validatesPlannedOutput: true
         ))
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
         let service = ApplicationJobService(
+            store: store,
             fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor
         )
         let plan = try await service.plan(makeRequest(
@@ -2448,6 +2504,10 @@ final class ApplicationJobContractTests: XCTestCase {
             service: service, jobID: accepted.record.id, state: .failed
         )
         XCTAssertEqual(record.diagnostic, ApplicationJobErrorCode.outputCollision.rawValue)
+        XCTAssertEqual(record.outputURLs, [plan.outputs[0].outputURL])
+        let restoredService = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let restoredRecord = try await restoredService.record(for: record.id)
+        XCTAssertEqual(restoredRecord?.outputURLs, record.outputURLs)
         XCTAssertEqual(try Data(contentsOf: plan.outputs[1].outputURL), existingContents)
         let files = try FileManager.default.contentsOfDirectory(
             at: destination, includingPropertiesForKeys: nil

@@ -1512,8 +1512,16 @@ struct ApplicationJobProgressUpdate: Equatable, Sendable {
 
 enum ApplicationJobExecutionResult: Equatable, Sendable {
     case succeeded(outputURLs: [URL])
-    case failed(diagnostic: String)
-    case cancelled(diagnostic: String?)
+    case failed(diagnostic: String, outputURLs: [URL] = [])
+    case cancelled(diagnostic: String?, outputURLs: [URL] = [])
+
+    /// Successfully completed outputs, in accepted source order. Failed and
+    /// cancelled sequential batches may report only a prefix of the plan.
+    var outputURLs: [URL] {
+        switch self {
+        case .succeeded(let urls), .failed(_, let urls), .cancelled(_, let urls): urls
+        }
+    }
 }
 
 /// The shared job service owns ordering and lifecycle state; an adapter owns the
@@ -1704,17 +1712,18 @@ actor ApplicationFFmpegJobExecutor {
             return .failed(diagnostic: "The accepted conversion plan had no outputs.")
         }
 
+        var completedOutputs: [URL] = []
         let outputCount = Double(plan.outputs.count)
         for (index, output) in plan.outputs.enumerated() {
             guard activeJobID == jobID, !cancellationRequested.contains(jobID) else {
-                return .cancelled(diagnostic: "Conversion cancelled.")
+                return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
             }
 
             let conversion: ApplicationFFmpegConversion
             do {
                 conversion = try Self.makeConversion(plan: plan, output: output)
             } catch {
-                return .failed(diagnostic: error.localizedDescription)
+                return .failed(diagnostic: error.localizedDescription, outputURLs: completedOutputs)
             }
 
             let itemIndex = Double(index)
@@ -1737,21 +1746,21 @@ actor ApplicationFFmpegJobExecutor {
             let result = await runner.run(conversion, progressSink)
 
             if cancellationRequested.contains(jobID) {
-                return .cancelled(diagnostic: "Conversion cancelled.")
+                return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
             }
             switch result {
             case .succeeded:
                 if runner.validatesPlannedOutput,
                    !FileManager.default.fileExists(atPath: output.outputURL.path) {
-                    return .failed(diagnostic: "FFmpeg completed without creating the planned output.")
+                    return .failed(diagnostic: "FFmpeg completed without creating the planned output.", outputURLs: completedOutputs)
                 }
-                break
+                completedOutputs.append(output.outputURL)
             case .failed(let diagnostic):
-                return .failed(diagnostic: diagnostic)
+                return .failed(diagnostic: diagnostic, outputURLs: completedOutputs)
             }
         }
 
-        return .succeeded(outputURLs: plan.outputs.map(\.outputURL))
+        return .succeeded(outputURLs: completedOutputs)
     }
 
     private func cancel(jobID: ApplicationJobID) async {
@@ -2743,9 +2752,27 @@ actor ApplicationJobService {
         guard let currentRecord = await registry.record(for: pending.jobID) else { return }
 
         do {
+            guard currentRecord.state == .running || currentRecord.state == .cancelling else { return }
+            let expected = pending.plan.outputs.map { $0.outputURL.standardizedFileURL }
+            let actual = result.outputURLs.map(\.standardizedFileURL)
+            let outputsMatch: Bool
+            if case .succeeded = result {
+                outputsMatch = actual == expected
+            } else {
+                outputsMatch = actual.count <= expected.count
+                    && actual == Array(expected.prefix(actual.count))
+            }
+            guard outputsMatch else {
+                _ = try await transition(
+                    pending.jobID,
+                    to: .failed,
+                    diagnostic: "Executor outputs did not match the accepted conversion plan."
+                )
+                return
+            }
             if currentRecord.state == .cancelling {
                 let diagnostic: String?
-                if case .cancelled(let executorDiagnostic) = result {
+                if case .cancelled(let executorDiagnostic, _) = result {
                     diagnostic = executorDiagnostic
                 } else {
                     diagnostic = nil
@@ -2753,6 +2780,7 @@ actor ApplicationJobService {
                 _ = try await transition(
                     pending.jobID,
                     to: .cancelled,
+                    outputURLs: result.outputURLs,
                     diagnostic: diagnostic
                 )
                 return
@@ -2761,31 +2789,23 @@ actor ApplicationJobService {
 
             switch result {
             case .succeeded(let outputURLs):
-                let expected = pending.plan.outputs.map { $0.outputURL.standardizedFileURL }
-                let actual = outputURLs.map(\.standardizedFileURL)
-                guard actual == expected else {
-                    _ = try await transition(
-                        pending.jobID,
-                        to: .failed,
-                        diagnostic: "Executor outputs did not match the accepted conversion plan."
-                    )
-                    return
-                }
                 _ = try await transition(
                     pending.jobID,
                     to: .succeeded,
                     outputURLs: outputURLs
                 )
-            case .failed(let diagnostic):
+            case .failed(let diagnostic, let outputURLs):
                 _ = try await transition(
                     pending.jobID,
                     to: .failed,
+                    outputURLs: outputURLs,
                     diagnostic: diagnostic
                 )
-            case .cancelled(let diagnostic):
+            case .cancelled(let diagnostic, let outputURLs):
                 _ = try await transition(
                     pending.jobID,
                     to: .cancelled,
+                    outputURLs: outputURLs,
                     diagnostic: diagnostic
                 )
             }

@@ -336,6 +336,15 @@ unique-name behavior. A live two-file Stream Copy regression exercises the late
 collision and preserves both the first completed output and the colliding file.
 See the [exact-output validation record](4.5-exact-output-validation-2026-09-19.md).
 
+Failed and cancelled sequential batches now retain the outputs completed before
+execution stopped. The service validates that these outputs match the beginning
+of the accepted plan, persists them for reconnect lookup, and projects completed
+source rows as done even when the overall job failed or was cancelled. A live
+late-collision regression verifies the earlier output survives both on disk and
+in restored job history; cancellation and invalid partial-output reports have
+focused coverage. See the
+[partial-batch validation record](4.5-partial-batch-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

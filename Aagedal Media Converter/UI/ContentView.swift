@@ -1924,6 +1924,12 @@ struct ContentView: View {
         case .failed, .interrupted: .failed
         case .cancelled: .cancelled
         }
+        // A later failure or cancellation does not undo earlier batch outputs.
+        if record.state.isTerminal, record.outputURLs.indices.contains(sourceIndex) {
+            item.status = .done
+            item.statusMessage = nil
+            item.conversionError = nil
+        }
         if item.status == .done {
             item.progress = 1
             item.refreshOutputFileCache()
