@@ -18,7 +18,7 @@ Created: 2026-09-11.
 The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
 signed release candidate.
 
-## Implementation progress — through 2026-09-19
+## Implementation progress — through 2026-09-20
 
 The first shared-boundary increment is implemented without selecting an IPC
 transport prematurely:
@@ -524,6 +524,54 @@ behavior, post-actions, and unsupported App Intent cases still use the legacy
 executor. Their end-to-end coexistence with agent jobs remains open. The Agent Access surface and
 accepted-settings inspector now have Norwegian catalog coverage, but bilingual
 visual review and the packaged end-to-end acceptance matrix remain open.
+
+## Continuation — 2026-09-20
+
+The MCP helper now validates request envelopes and treats ID-less messages as
+silent notifications without invoking app tools. Seven process regressions cover
+invalid JSON, malformed requests, ID/parameter validation, initialization,
+discovery, and recovery after errors. All 81 script tests pass. See the
+[helper envelope validation record](4.5-helper-envelope-validation-2026-09-20.md).
+
+Three live cancellation regressions now cover merged and sequential legacy H.264
+groups while agent work waits. They observe real encoded frames and subprocess
+termination, verify execution ownership through cancellation drainage, preserve
+cancelled rows, and complete subsequent agent output. All 22 queue tests passed.
+See the [encoding cancellation validation record](4.5-encoding-cancellation-validation-2026-09-20.md).
+
+The Norwegian catalog now includes 50 previously missing stitching, accepted
+settings, and analysis strings. LUFS remains an untranslated measurement unit.
+The 1,671-entry audit passes with no unclassified missing keys or placeholder
+mismatches. Full visual review of the newer panels remains open. See the
+[localization validation record](4.5-localization-validation-2026-09-20.md).
+
+Silent video now exports through ProRes and Proxy: their default audio maps no
+longer require a nonexistent audio stream. Live regressions verify preserve,
+replace, and disabled timecode for both presets, plus the content and order of
+two explicitly reordered audio tracks. All 1,017 Debug unit tests pass with no
+failures or skips. See the
+[silent video and timecode validation record](4.5-silent-video-and-reencoded-timecode-validation-2026-09-20.md).
+
+The English/Norwegian Agent Access opt-in and packaged-helper diagnostic UI test
+passes. Targeted native and MPV preview tests both completed initial seeking and
+frame capture, but failed later playback/reopen interactions. Event-delivery
+stalls suggest a possible focus problem without establishing the cause. These
+checks remain failed release gates; see the
+[preview validation record](4.5-preview-validation-2026-09-20.md).
+
+The unsigned Release build (`CODE_SIGNING_ALLOWED=NO`) and static bundle audit
+pass: 45 arm64 Mach-O images and 12 packaged license notices. Evidence is retained
+in `/private/tmp/amc-4.5-sept20-release.log`,
+`/private/tmp/amc-4.5-sept20-bundle-audit.log`, and
+`/private/tmp/amc-4.5-sept20-bundle-report.json`. This does not establish signing
+or notarization readiness. Dependencies and bundled media binaries are unchanged.
+
+Remaining priorities: repeat and diagnose preview playback in a controlled login
+session; exercise full Claude Code, Codex, and OpenCode workflows; validate actual
+OS-level grant revocation/lost drives and settle App Sandbox scope; cover
+specialized post-actions and broader long-GOP/audio/merge output cases; visually
+review the new bilingual panels; and complete Developer ID signing/notarization,
+clean installation/update checks, release notes, and retained package reports.
 
 ## Beta readiness snapshot — 2026-09-15
 
