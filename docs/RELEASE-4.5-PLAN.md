@@ -423,6 +423,14 @@ become visible. Original requests without keys and equivalent retries with new
 request IDs and capture timestamps remain supported. See the
 [recovery link validation record](4.5-recovery-links-validation-2026-09-19.md).
 
+Startup recovery now also checks persisted source identities and output mappings
+against their captured requests before publishing any jobs. Missing, reordered,
+or unrelated sources, missing outputs, duplicate output paths, and destinations
+outside the captured per-source folder reject the snapshot without overwriting it.
+Accepted filenames remain frozen across restarts. Recovery after repair and valid
+per-source destinations pass the 83-test contract suite. See the
+[plan integrity validation record](4.5-plan-integrity-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

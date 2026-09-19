@@ -1037,6 +1037,7 @@ enum ApplicationJobPersistenceError: Error, Equatable, Sendable {
     case missingSubmittedPlan(ApplicationPlanID)
     case missingSubmittedJob(ApplicationJobID)
     case mismatchedSubmittedRequest(ApplicationPlanID)
+    case invalidPlanContents(ApplicationPlanID)
 }
 
 private struct ApplicationSubmittedPlan: Codable, Equatable, Sendable {
@@ -2436,6 +2437,28 @@ actor ApplicationJobService {
                 record: record,
                 wasAlreadyAccepted: false
             )
+        }
+
+        for plan in snapshot.plans {
+            let sourceURLs = plan.request.sourceURLs.map(\.standardizedFileURL)
+            guard plan.sources.map(\.url) == sourceURLs,
+                  plan.outputs.map(\.sourceURL) == plan.request.sourceURLs,
+                  plan.outputs.count == sourceURLs.count else {
+                throw ApplicationJobPersistenceError.invalidPlanContents(plan.id)
+            }
+            var uniqueOutputs = Set<URL>()
+            for (index, output) in plan.outputs.enumerated() {
+                let destination = Self.destinationFolderURL(for: plan.request, sourceIndex: index)
+                    .standardizedFileURL
+                let outputURL = output.outputURL.standardizedFileURL
+                // Preserve the accepted filename: date templates may have been
+                // resolved in a different timezone before the app restarted.
+                guard output.outputURL.isFileURL,
+                      outputURL.deletingLastPathComponent().path == destination.path,
+                      uniqueOutputs.insert(outputURL).inserted else {
+                    throw ApplicationJobPersistenceError.invalidPlanContents(plan.id)
+                }
+            }
         }
 
         // The registry validates records and idempotency identities atomically.

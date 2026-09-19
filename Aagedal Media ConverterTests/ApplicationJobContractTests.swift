@@ -1173,6 +1173,88 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testRecoveryRejectsMalformedPlanContentsBeforePublishingJobs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = [directory.appendingPathComponent("first.mov"), directory.appendingPathComponent("second.mov")]
+        for source in sources {
+            try Data("source".utf8).write(to: source)
+        }
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let original = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let plan = try await original.plan(makeRequest(sourceURLs: sources, destinationFolderURL: directory))
+        let accepted = try await original.submit(planID: plan.id)
+        let validData = try Data(contentsOf: store.fileURL)
+
+        for corruption in 0..<8 {
+            var snapshot = try XCTUnwrap(JSONSerialization.jsonObject(with: validData) as? [String: Any])
+            var plans = try XCTUnwrap(snapshot["plans"] as? [[String: Any]])
+            var identities = try XCTUnwrap(plans[0]["sources"] as? [[String: Any]])
+            var outputs = try XCTUnwrap(plans[0]["outputs"] as? [[String: Any]])
+            switch corruption {
+            case 0: identities.removeAll()
+            case 1: identities.reverse()
+            case 2: identities[0]["url"] = directory.appendingPathComponent("other.mov").absoluteString
+            case 3: outputs.removeLast()
+            case 4: outputs.reverse()
+            case 5: outputs[0]["outputURL"] = directory.appendingPathComponent("unapproved/output.mp4").absoluteString
+            case 6: outputs[1]["outputURL"] = outputs[0]["outputURL"]
+            default: outputs[0]["outputURL"] = "https://example.com/output.mp4"
+            }
+            plans[0]["sources"] = identities
+            plans[0]["outputs"] = outputs
+            snapshot["plans"] = plans
+            let damagedData = try JSONSerialization.data(withJSONObject: snapshot)
+            try damagedData.write(to: store.fileURL)
+            let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+            do {
+                _ = try await restored.submit(planID: plan.id)
+                XCTFail("Expected malformed plan to block submission")
+            } catch {
+                XCTAssertEqual(error as? ApplicationJobPersistenceError, .invalidPlanContents(plan.id))
+            }
+            var updates = await restored.recordUpdates().makeAsyncIterator()
+            let visibleRecords = await updates.next()
+            XCTAssertEqual(visibleRecords, [])
+            XCTAssertEqual(try Data(contentsOf: store.fileURL), damagedData)
+
+            try validData.write(to: store.fileURL)
+            let recovered = try await restored.restorePersistedState()
+            XCTAssertEqual(recovered.map(\.id), [accepted.record.id])
+            let retry = try await restored.submit(planID: plan.id)
+            XCTAssertEqual(retry.record.id, accepted.record.id)
+            XCTAssertEqual(retry.record.state, .interrupted)
+        }
+    }
+
+    func testRecoveryPreservesPerSourceDestinationsAndAcceptedNames() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = [directory.appendingPathComponent("first.mov"), directory.appendingPathComponent("second.mov")]
+        let destinations = [directory.appendingPathComponent("one"), directory.appendingPathComponent("two")]
+        for index in sources.indices {
+            try Data("source".utf8).write(to: sources[index])
+            try FileManager.default.createDirectory(at: destinations[index], withIntermediateDirectories: true)
+        }
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let original = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let plan = try await original.plan(makeRequest(
+            sourceURLs: sources, destinationFolderURL: directory,
+            sourceSettings: sources.indices.map { index in
+                ApplicationSourceExecutionSettings(
+                    sourceURL: sources[index], destinationFolderURL: destinations[index],
+                    includeDateTag: false, timecodeConfig: nil, outputBaseNameOverride: "custom"
+                )
+            }
+        ))
+        // An unsubmitted plan must remain usable after restart, including its
+        // captured names and separate per-source destinations.
+        let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let accepted = try await restored.submit(planID: plan.id)
+        XCTAssertEqual(accepted.record.state, .queued)
+        let outputs = try await restored.plannedOutputURLs(for: accepted.record.id)
+        XCTAssertEqual(outputs, plan.outputs.map(\.outputURL))
+        XCTAssertEqual(outputs.map { $0.deletingLastPathComponent().path }, destinations.map(\.path))
+    }
+
     func testRecoveryPreservesOriginalAndEquivalentSubmittedRequests() async throws {
         for key: String? in [nil, "retry-key"] {
             let directory = try makeTemporaryDirectory()
