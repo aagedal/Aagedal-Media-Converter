@@ -489,6 +489,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
 
         for attempt in 0..<2 {
+            app.activate()
             queueItem.rightClick()
             let preview = app.menuItems["Preview / Trim"]
             XCTAssertTrue(preview.waitForExistence(timeout: 5))
@@ -501,8 +502,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             timecode.click()
             let input = element("trim.timecodeInput")
             XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.click()
+            let audioMeter = element("trim.audioMeter")
+            let meterValue = try XCTUnwrap(audioMeter.value as? NSNumber)
+            // Collapse any automatic initial selection before exercising Select All.
+            input.typeKey(.rightArrow, modifierFlags: [])
             input.typeKey("a", modifierFlags: .command)
             input.typeText("00:00:01:00")
+            XCTAssertTrue(waitForValue("00:00:01:00", of: input, timeout: 5),
+                          "Select All must replace the timecode without triggering preview shortcuts")
+            XCTAssertEqual(audioMeter.value as? NSNumber, meterValue)
             input.typeKey(.return, modifierFlags: [])
             XCTAssertTrue(waitForValue("00:00:01:00", of: timecode, timeout: 10))
             if attempt == 0 {

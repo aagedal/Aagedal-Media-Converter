@@ -84,9 +84,6 @@ struct PreviewPlayerView: View {
         .padding(.vertical, 14)
         .frame(minWidth: 1150, idealWidth: 1350, minHeight: 850, idealHeight: 950)
         .background(Color(NSColor.windowBackgroundColor))
-        .background(KeyboardHandler(onCommandA: {
-            controller.isAudioMeterEnabled.toggle()
-        }))
         .onAppear {
             // Set initial crop expanded state if requested
             if initialCropExpanded {
@@ -401,6 +398,13 @@ struct PreviewPlayerView: View {
     }
 
     private func handleKeyCommand(key: String, modifiers: NSEvent.ModifierFlags, specialKey: NSEvent.SpecialKey? = nil) -> Bool {
+        // Native field editors own selection, cursor movement, and typed text.
+        // Let AppKit deliver these events instead of treating them as playback commands.
+        if let responder = NSApp.keyWindow?.firstResponder,
+           responder is NSTextView || responder is NSTextField {
+            return false
+        }
+
         // CMD + Arrow keys: Move crop box (when crop mode is active)
         if modifiers.contains(.command) && isCropControlsExpanded {
             if let direction = specialKey {
@@ -460,6 +464,9 @@ struct PreviewPlayerView: View {
 
         if modifiers.contains(.command) {
             switch lowerKey {
+            case "a":
+                controller.isAudioMeterEnabled.toggle()
+                return true
             case "l":
                 item.loopPlayback.toggle()
                 return true
@@ -582,41 +589,6 @@ struct PreviewPlayerView: View {
             return false
         default:
             return false
-        }
-    }
-}
-
-// MARK: - Keyboard Handler
-
-/// Helper view to handle keyboard shortcuts using NSEvent
-private struct KeyboardHandler: NSViewRepresentable {
-    let onCommandA: () -> Void
-    
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        context.coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "a" {
-                onCommandA()
-                return nil // Event handled
-            }
-            return event
-        }
-        return view
-    }
-    
-    func updateNSView(_ nsView: NSView, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-    
-    class Coordinator {
-        var monitor: Any?
-        
-        deinit {
-            if let monitor = monitor {
-                NSEvent.removeMonitor(monitor)
-            }
         }
     }
 }
