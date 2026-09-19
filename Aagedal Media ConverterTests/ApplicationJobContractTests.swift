@@ -3930,14 +3930,32 @@ final class ApplicationJobContractTests: XCTestCase {
 
     @MainActor
     func testLiveMergedGroupCompletesBeforeWaitingAgentExecutes() async throws {
+        try await checkLiveMergedGroupBeforeAgent(withAudio: false)
+    }
+
+    @MainActor
+    func testLiveTrimmedMergedGroupPreservesAudioContinuityBeforeWaitingAgentExecutes() async throws {
+        try await checkLiveMergedGroupBeforeAgent(withAudio: true)
+    }
+
+    @MainActor
+    private func checkLiveMergedGroupBeforeAgent(withAudio: Bool) async throws {
         let directory = try makeTemporaryDirectory()
         let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
-        for source in sources {
-            try runBundledFFmpeg([
+        for (index, source) in sources.enumerated() {
+            var arguments = [
                 "-v", "error", "-y", "-f", "lavfi", "-i",
-                "testsrc2=size=64x48:rate=24:duration=2",
-                "-c:v", "libx264", "-g", "1", "-pix_fmt", "yuv420p", source.path
-            ])
+                "testsrc2=size=64x48:rate=24:duration=2"
+            ]
+            if withAudio {
+                arguments += [
+                    "-f", "lavfi", "-i",
+                    "sine=frequency=\(index == 0 ? 440 : 880):sample_rate=48000:duration=2"
+                ]
+            }
+            arguments += ["-c:v", "libx264", "-g", "1", "-pix_fmt", "yuv420p"]
+            if withAudio { arguments += ["-c:a", "pcm_s16le"] }
+            try runBundledFFmpeg(arguments + [source.path])
         }
         let defaults = try makeDefaults()
         defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
@@ -3955,8 +3973,8 @@ final class ApplicationJobContractTests: XCTestCase {
                 duration: "00:00:02", durationSeconds: 2, status: .waiting,
                 progress: 0, eta: "", outputURL: nil
             )
-            item.trimStart = 0
-            item.trimEnd = 1
+            item.trimStart = withAudio ? 0.5 : 0
+            item.trimEnd = withAudio ? 1.5 : 1
             item.includeDateTag = false
             return item
         })
@@ -4011,9 +4029,46 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertFalse(record.outputURLs.contains(merged))
         for output in [merged] + record.outputURLs {
             let metadata = try await ApplicationMediaInspector.live.inspect(output)
-            XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: 1.0 / 24)
+            // Stream Copy keeps whole PCM packets at both trimmed boundaries.
+            let durationTolerance = withAudio ? 4.0 * 1024 / 48_000 : 1.0 / 24
+            XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: durationTolerance)
             XCTAssertEqual(metadata.frameCount, 48)
+            XCTAssertEqual(metadata.audioStreams.count, withAudio ? 1 : 0)
+            if withAudio {
+                XCTAssertEqual(metadata.audioStreams.first?.channels, 1)
+                XCTAssertEqual(metadata.audioStreams.first?.sampleRate, 48_000)
+            }
             try runBundledFFmpeg(["-v", "error", "-xerror", "-i", output.path, "-map", "0", "-f", "null", "-"])
+        }
+        if withAudio {
+            let decoded = directory.appendingPathComponent("merged-audio.pcm")
+            try runBundledFFmpeg([
+                "-v", "error", "-xerror", "-i", merged.path, "-map", "0:a:0",
+                "-c:a", "pcm_s16le", "-f", "s16le", decoded.path
+            ])
+            let data = try Data(contentsOf: decoded)
+            let samples = stride(from: 0, to: data.count - 1, by: 2).map { offset in
+                Double(Int16(bitPattern: UInt16(data[offset]) | UInt16(data[offset + 1]) << 8))
+            }
+            // Allow at most one 1024-sample packet at each cut edge. Copying
+            // packets is not sample-accurate trimming; the fixture currently
+            // retains 98304 samples (2.048 seconds) for two seconds of video.
+            XCTAssertGreaterThanOrEqual(samples.count, 96_000)
+            XCTAssertLessThanOrEqual(samples.count, 96_000 + 4 * 1024)
+            guard samples.count >= 96_000 else { return }
+            // Inspect each clip's interior, outside packet rounding at the seam.
+            // Distinct tones detect missing, duplicated, or reordered clips.
+            for (start, frequency) in [(12_000, 440.0), (60_000, 880.0)] {
+                let segment = Array(samples[start..<(start + 24_000)])
+                let crossings = zip(segment, segment.dropFirst()).filter { $0 < 0 && $1 >= 0 }.count
+                XCTAssertEqual(Double(crossings), frequency / 2, accuracy: 2)
+            }
+            // Every 10 ms window across the possible seam positions must contain
+            // audible samples; a packet-sized gap would evade tone checks.
+            for start in stride(from: 45_600, to: 52_800, by: 480) {
+                let energy = samples[start..<(start + 480)].reduce(0) { $0 + $1 * $1 } / 480
+                XCTAssertGreaterThan(energy.squareRoot(), 1_000)
+            }
         }
     }
 

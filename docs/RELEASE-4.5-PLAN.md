@@ -506,6 +506,15 @@ the live export overlap gate; audio continuity, long-GOP trimming, encoding-time
 cancellation, post-actions, and playback remain open. See the
 [live merge coexistence validation record](4.5-live-merge-coexistence-validation-2026-09-19.md).
 
+Live merge coexistence now also covers trimmed all-intra clips with distinct
+mono PCM tones. The regression checks audio format, bounded packet overhang,
+clip order, audible energy around the join, full decoding, and agent execution
+only after merged output publication. The fixture exposes an existing Stream
+Copy limitation: two seconds of trimmed video retain 2.048 seconds of audio.
+Sample-accurate cuts, perceptually seamless joins, compressed audio, and long-GOP
+behavior remain unproven. See the
+[trimmed merge audio validation record](4.5-merge-audio-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
