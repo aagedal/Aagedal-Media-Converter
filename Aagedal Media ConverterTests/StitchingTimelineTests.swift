@@ -90,4 +90,54 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertNil(item.trimEnd)
     }
 
+    func testMovingMultipleClipsForwardPreservesOrderTrimsAndGaplessMapping() {
+        let original = (0..<5).map { _ in clip(duration: 20, start: 4, end: 10) }
+        var items = original
+        StitchingTimeline.move(&items, selection: [original[1].id, original[2].id], to: 5)
+        XCTAssertEqual(items.map(\.id), [original[0], original[3], original[4], original[1], original[2]].map(\.id))
+        XCTAssertEqual(items.reduce(0) { $0 + StitchingTimeline.duration($1) }, 30)
+        for (index, item) in items.enumerated() {
+            XCTAssertEqual(item.trimStart, 4)
+            XCTAssertEqual(item.trimEnd, 10)
+            XCTAssertEqual(StitchingTimeline.location(at: Double(index * 6), in: items)?.id, item.id)
+        }
+    }
+
+    func testMovingDiscontiguousClipsToBeginningPreservesSequenceOrder() {
+        let original = (0..<5).map { _ in clip(duration: 10) }
+        var items = original
+        StitchingTimeline.move(&items, selection: [original[1].id, original[3].id], to: 0)
+        XCTAssertEqual(items.map(\.id), [original[1], original[3], original[0], original[2], original[4]].map(\.id))
+    }
+
+    func testDroppingWithinSelectionOrMovingAllClipsDoesNotChangeOrder() {
+        let original = (0..<4).map { _ in clip(duration: 10) }
+        for boundary in 1...3 {
+            var items = original
+            StitchingTimeline.move(&items, selection: [original[1].id, original[2].id], to: boundary)
+            XCTAssertEqual(items.map(\.id), original.map(\.id))
+        }
+        var items = original
+        StitchingTimeline.move(&items, selection: Set(original.map(\.id)), to: 4)
+        XCTAssertEqual(items.map(\.id), original.map(\.id))
+    }
+
+    func testShiftSelectionExtendsInBothDirectionsFromAnchor() {
+        let ids = (0..<5).map { _ in UUID() }
+        XCTAssertEqual(StitchingTimeline.selectionRange(from: ids[1], through: ids[4], in: ids), Set(ids[1...4]))
+        XCTAssertEqual(StitchingTimeline.selectionRange(from: ids[3], through: ids[0], in: ids), Set(ids[0...3]))
+        XCTAssertEqual(StitchingTimeline.selectionRange(from: UUID(), through: ids[2], in: ids), [ids[2]])
+    }
+
+    func testDropTargetsSnapAtClipMidpointsIncludingTimelineEnds() {
+        let widths = [100.0, 20, 200]
+        XCTAssertEqual(StitchingTimeline.insertionBoundary(at: -20, widths: widths), 0)
+        XCTAssertEqual(StitchingTimeline.insertionBoundary(at: 49, widths: widths), 0)
+        XCTAssertEqual(StitchingTimeline.insertionBoundary(at: 50, widths: widths), 1)
+        XCTAssertEqual(StitchingTimeline.insertionBoundary(at: 110, widths: widths), 2)
+        XCTAssertEqual(StitchingTimeline.insertionBoundary(at: 219, widths: widths), 2)
+        XCTAssertEqual(StitchingTimeline.insertionBoundary(at: 220, widths: widths), 3)
+        XCTAssertEqual(StitchingTimeline.insertionBoundary(at: 500, widths: widths), 3)
+    }
+
 }

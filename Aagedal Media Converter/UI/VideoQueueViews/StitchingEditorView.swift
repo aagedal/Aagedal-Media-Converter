@@ -2,10 +2,34 @@
 // Copyright © 2026 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AppKit
 import SwiftUI
 
 /// Source ranges mapped onto one gapless output sequence.
 enum StitchingTimeline {
+    /// Destination is a boundary in the original sequence, before removing the selection.
+    static func move(_ items: inout [VideoItem], selection: Set<UUID>, to destination: Int) {
+        let boundary = min(items.count, max(0, destination))
+        let moving = items.filter { selection.contains($0.id) }
+        let insertion = items.prefix(boundary).filter { !selection.contains($0.id) }.count
+        items.removeAll { selection.contains($0.id) }
+        items.insert(contentsOf: moving, at: insertion)
+    }
+
+    static func selectionRange(from anchor: UUID, through target: UUID, in ids: [UUID]) -> Set<UUID> {
+        guard let first = ids.firstIndex(of: anchor), let last = ids.firstIndex(of: target) else { return [target] }
+        return Set(ids[min(first, last)...max(first, last)])
+    }
+
+    static func insertionBoundary(at x: Double, widths: [Double]) -> Int {
+        var edge = 0.0
+        for (index, width) in widths.enumerated() {
+            if x < edge + width / 2 { return index }
+            edge += width
+        }
+        return widths.count
+    }
+
     static func duration(_ item: VideoItem) -> Double {
         let value = item.trimmedDuration
         return value.isFinite ? max(0, value) : 0
@@ -71,6 +95,12 @@ struct StitchingEditorView: View {
     @Binding var group: EncodingGroup
     let isStreamCopy: Bool
     @State private var selectedID: UUID?
+    @State private var selectedClipIDs: Set<UUID> = []
+    @State private var selectionAnchor: UUID?
+    @State private var draggedClipIDs: Set<UUID> = []
+    @State private var insertionBoundary: Int?
+    @GestureState private var isDraggingClips = false
+    @State private var clipDragCancelled = false
     @State private var sourceTime: Double = 0
     @State private var seekRequest = StitchingSeek(time: 0)
     @State private var isPlaying = false
@@ -140,10 +170,9 @@ struct StitchingEditorView: View {
                 HStack {
                     Text(item.name).lineLimit(1).truncationMode(.middle)
                     Spacer()
-                    Button { moveSelection(index, by: -1) } label: { Image(systemName: "arrow.left") }
-                        .help("Move clip earlier").disabled(index == 0)
-                    Button { moveSelection(index, by: 1) } label: { Image(systemName: "arrow.right") }
-                        .help("Move clip later").disabled(index == group.items.count - 1)
+                    if selectedClipIDs.count > 1 {
+                        Text("\(selectedClipIDs.count) clips selected").foregroundStyle(.secondary)
+                    }
                 }
                 Button("Reset trim") {
                     isPlaying = false
@@ -161,26 +190,38 @@ struct StitchingEditorView: View {
                 Text("Stream Copy keeps the original quality. Cut points may depend on source keyframes.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Text("Drag a clip edge to trim. Click or drag in the timeline to scrub the sequence. Changes update the clip list immediately.")
+            Text("Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(12)
         .disabled(group.status == .converting)
         .onChange(of: group.items.map(\.id)) { _, ids in
             isPlaying = false
+            selectedClipIDs.formIntersection(ids)
+            if let selectionAnchor, !ids.contains(selectionAnchor) { self.selectionAnchor = nil }
+            cancelClipDrag()
             if let selectedID, !ids.contains(selectedID) {
                 self.selectedID = nil
                 sourceTime = group.items.first?.effectiveTrimStart ?? 0
             }
         }
-        .onChange(of: group.status) { _, status in if status == .converting { isPlaying = false } }
-        .onDisappear { isPlaying = false }
+        .onChange(of: group.status) { _, status in
+            if status == .converting { isPlaying = false; cancelClipDrag() }
+        }
+        .onChange(of: isDraggingClips) { _, dragging in
+            if !dragging { cancelClipDrag(); clipDragCancelled = false }
+        }
+        .onExitCommand {
+            if isDraggingClips { clipDragCancelled = true; cancelClipDrag() }
+        }
+        .onDisappear { isPlaying = false; cancelClipDrag() }
     }
 
     private var timeline: some View {
         GeometryReader { geometry in
             let scale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * zoom)
-            let width = max(geometry.size.width - 20, total * scale)
+            let clipWidths = group.items.map { max(1, StitchingTimeline.duration($0) * scale) }
+            let width = max(geometry.size.width - 20, clipWidths.reduce(0, +))
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
                     VStack(spacing: 0) {
@@ -203,12 +244,14 @@ struct StitchingEditorView: View {
                         HStack(spacing: 0) {
                             ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
                                 StitchingTimelineClip(
-                                    item: item, selected: selectedIndex == index, scale: scale,
+                                    item: item, selected: selectedClipIDs.contains(item.id), scale: scale,
                                     thumbnailURLs: filmstrips[item.id] ?? [],
-                                    onSeek: { local in scrub(offset(index) + local) },
+                                    onSelect: { selectClip(item.id) },
+                                    reorderGesture: clipDrag(item.id, widths: clipWidths),
                                     onTrim: { start, value in setTrim(item.id, start: start, value: value) }
                                 )
-                                .frame(width: max(1, StitchingTimeline.duration(item) * scale), height: 116)
+                                .frame(width: clipWidths[index], height: 116)
+                                .opacity(draggedClipIDs.contains(item.id) ? 0.45 : 1)
                                 .id(item.id)
                             }
                             Spacer(minLength: 0)
@@ -216,6 +259,32 @@ struct StitchingEditorView: View {
                         .frame(height: 116)
                     }
                     .frame(width: width, alignment: .leading)
+                    .coordinateSpace(name: "stitching.clips")
+                    .overlay(alignment: .topLeading) {
+                        if let boundary = insertionBoundary {
+                            let x = clipWidths.prefix(boundary).reduce(0, +)
+                            // Both elements must share the timeline's leading origin. An
+                            // implicit overlay stack centers the narrow line in the label's width.
+                            ZStack(alignment: .topLeading) {
+                                Rectangle().fill(Color.accentColor)
+                                    .frame(width: 4, height: 120)
+                                    .overlay(alignment: .top) {
+                                        Image(systemName: "arrowtriangle.down.fill")
+                                            .font(.system(size: 14)).foregroundStyle(Color.accentColor)
+                                            .offset(y: -10)
+                                    }
+                                    .offset(x: x - 2, y: 26)
+                                Text("Move \(draggedClipIDs.count) clips here")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(.horizontal, 8).padding(.vertical, 4)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+                                    .offset(x: max(0, min(x - 60, width - 150)), y: 0)
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .allowsHitTesting(group.status != .converting)
                     .id("stitching.timeline.origin")
                     .overlay(alignment: .topLeading) {
                         Rectangle().fill(.red).frame(width: 2, height: 144)
@@ -278,14 +347,55 @@ struct StitchingEditorView: View {
         StitchingTimeline.trim(&group.items[index], start: start, to: value)
         seek(id, to: start ? group.items[index].effectiveTrimStart : group.items[index].effectiveTrimEnd)
     }
-    private func moveSelection(_ index: Int, by offset: Int) {
-        guard group.status != .converting, group.items.indices.contains(index + offset) else { return }
+    private func selectClip(_ id: UUID) {
+        guard group.status != .converting else { return }
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.shift) {
+            selectedClipIDs = StitchingTimeline.selectionRange(
+                from: selectionAnchor ?? selectedID ?? id, through: id, in: group.items.map(\.id))
+        } else if modifiers.contains(.command) {
+            if selectedClipIDs.contains(id) { selectedClipIDs.remove(id) } else { selectedClipIDs.insert(id) }
+            selectionAnchor = id
+        } else {
+            selectedClipIDs = [id]
+            selectionAnchor = id
+        }
         isPlaying = false
-        selectedID = group.items[index].id
-        group.items.swapAt(index, index + offset)
-        group.lastSortMode = nil
-        if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+        if let item = group.items.first(where: { $0.id == id }) { seek(id, to: item.effectiveTrimStart) }
     }
+
+    private func clipDrag(_ id: UUID, widths: [Double]) -> some Gesture {
+        DragGesture(minimumDistance: 5, coordinateSpace: .named("stitching.clips"))
+            .updating($isDraggingClips) { _, active, _ in active = true }
+            .onChanged { value in
+                guard group.status != .converting, !clipDragCancelled else { return }
+                if draggedClipIDs.isEmpty {
+                    if !selectedClipIDs.contains(id) { selectClip(id) }
+                    draggedClipIDs = selectedClipIDs
+                    isPlaying = false
+                }
+                insertionBoundary = (0...144).contains(value.location.y)
+                    ? StitchingTimeline.insertionBoundary(at: value.location.x, widths: widths) : nil
+            }
+            .onEnded { value in
+                defer { cancelClipDrag() }
+                guard group.status != .converting, !clipDragCancelled, !draggedClipIDs.isEmpty,
+                      value.location.y >= 0, value.location.y <= 144 else { return }
+                let destination = StitchingTimeline.insertionBoundary(at: value.location.x, widths: widths)
+                let previous = group.items.map(\.id)
+                StitchingTimeline.move(&group.items, selection: draggedClipIDs, to: destination)
+                if group.items.map(\.id) != previous {
+                    group.lastSortMode = nil
+                    if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+                }
+            }
+    }
+
+    private func cancelClipDrag() {
+        draggedClipIDs = []
+        insertionBoundary = nil
+    }
+
 }
 
 private struct StitchingSeek: Equatable {
@@ -293,12 +403,13 @@ private struct StitchingSeek: Equatable {
     let time: Double
 }
 
-private struct StitchingTimelineClip: View {
+private struct StitchingTimelineClip<ReorderGesture: Gesture>: View {
     let item: VideoItem
     let selected: Bool
     let scale: Double
     let thumbnailURLs: [URL]
-    let onSeek: (Double) -> Void
+    let onSelect: () -> Void
+    let reorderGesture: ReorderGesture
     let onTrim: (Bool, Double) -> Void
     @State private var images: [NSImage] = []
     @State private var fallbackThumbnail: NSImage?
@@ -329,13 +440,17 @@ private struct StitchingTimelineClip: View {
             }
             .clipped()
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0).onChanged { onSeek(max(0, $0.location.x / scale)) })
+            .onTapGesture(perform: onSelect)
+            .gesture(reorderGesture)
             .overlay(Rectangle().strokeBorder(selected ? Color.accentColor : Color.secondary, lineWidth: selected ? 2 : 1))
             .overlay(alignment: .leading) { handle(start: true) }
             .overlay(alignment: .trailing) { handle(start: false) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(item.name)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .accessibilityAction { onSelect() }
+        .help("Drag to move. Shift-click to select a range; ⌘-click to toggle selection.")
         .task(id: thumbnailURLs) {
             fallbackThumbnail = ThumbnailCache.shared[item.id] ?? item.thumbnailData.flatMap { NSImage(data: $0) }
             let urls: [URL]
