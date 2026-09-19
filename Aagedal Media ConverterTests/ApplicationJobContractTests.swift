@@ -980,6 +980,67 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: stateURL), damagedData)
     }
 
+    func testSubmissionRetryRecoversFailedPersistenceWithoutDuplicateExecution() async throws {
+        for (useEquivalentPlan, cancelBeforeRetry) in [(false, false), (true, false), (false, true), (true, true)] {
+            let directory = try makeTemporaryDirectory()
+            let sourceURL = directory.appendingPathComponent("source.mov")
+            try Data("source".utf8).write(to: sourceURL)
+            let stateURL = directory.appendingPathComponent("jobs.json")
+            let harness = ApplicationJobExecutorHarness(blocksFirstExecution: false)
+            let service = ApplicationJobService(
+                store: ApplicationJobStore(fileURL: stateURL),
+                fileAccessAuthorizer: .unrestricted,
+                executor: ApplicationJobExecutor(
+                    execute: { jobID, plan, progress in
+                        await harness.execute(jobID: jobID, plan: plan, progress: progress)
+                    },
+                    cancel: { jobID in await harness.cancel(jobID: jobID) }
+                )
+            )
+            let request = makeRequest(sourceURLs: [sourceURL], destinationFolderURL: directory)
+            let plan = try await service.plan(request)
+            let equivalentPlan = try await service.plan(request)
+
+            // A directory at the snapshot path deterministically rejects atomic writes.
+            try FileManager.default.removeItem(at: stateURL)
+            try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: false)
+            for _ in 0..<2 {
+                do {
+                    _ = try await service.submit(planID: plan.id)
+                    XCTFail("Expected persistence failure")
+                } catch {
+                    XCTAssertFalse(error is ApplicationJobError)
+                }
+            }
+            let pendingRecords = try await service.allRecords()
+            let pending = try XCTUnwrap(pendingRecords.first)
+            XCTAssertEqual(pendingRecords.count, 1)
+            XCTAssertEqual(pending.state, .queued)
+            let beforeRecovery = await harness.snapshot()
+            XCTAssertTrue(beforeRecovery.startedIDs.isEmpty)
+
+            try FileManager.default.removeItem(at: stateURL)
+            if cancelBeforeRetry {
+                _ = try await service.requestCancellation(pending.id)
+            }
+            let retry = try await service.submit(planID: useEquivalentPlan ? equivalentPlan.id : plan.id)
+            XCTAssertTrue(retry.wasAlreadyAccepted)
+            XCTAssertEqual(retry.record.id, pending.id)
+            let expectedState: ApplicationJobState = cancelBeforeRetry ? .cancelled : .succeeded
+            _ = try await waitForRecord(service: service, jobID: pending.id, state: expectedState)
+            let secondRetry = try await service.submit(planID: plan.id)
+            XCTAssertEqual(secondRetry.record.state, expectedState)
+            let afterRecovery = await harness.snapshot()
+            XCTAssertEqual(afterRecovery.startedIDs, cancelBeforeRetry ? [] : [pending.id])
+            let restored = ApplicationJobService(
+                store: ApplicationJobStore(fileURL: stateURL), fileAccessAuthorizer: .unrestricted
+            )
+            let recovered = try await restored.record(for: pending.id)
+            XCTAssertEqual(recovered?.state, expectedState)
+            XCTAssertEqual(recovered?.outputURLs, cancelBeforeRetry ? [] : plan.outputs.map(\.outputURL))
+        }
+    }
+
     func testSubmittedJobsExecuteSeriallyAndPublishProgressAndOutputs() async throws {
         let directory = try makeTemporaryDirectory()
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)

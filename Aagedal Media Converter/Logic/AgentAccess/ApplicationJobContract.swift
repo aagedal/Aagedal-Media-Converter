@@ -2322,6 +2322,9 @@ actor ApplicationJobService {
     private var reservedOutputs: [URL: ApplicationJobID] = [:]
     private var outputsByJob: [ApplicationJobID: Set<URL>] = [:]
     private var pendingExecutions: [(jobID: ApplicationJobID, plan: ApplicationConversionPlan)] = []
+    // Preserve the execution handoff when acceptance succeeds but saving fails.
+    // A submission retry must durably save the job before enqueueing it once.
+    private var pendingSubmissionHandoffs: [ApplicationJobID: ApplicationConversionPlan] = [:]
     private var isExecutionDraining = false
     private var activeExecutionJobID: ApplicationJobID?
     private var cancellationSignals: Set<ApplicationJobID> = []
@@ -2499,6 +2502,8 @@ actor ApplicationJobService {
         if let accepted = submittedPlans[planID] {
             let currentRecord = await registry.record(for: accepted.record.id) ?? accepted.record
             try await persist()
+            finishSubmissionHandoff(jobID: currentRecord.id)
+            await publishRecords()
             return ApplicationJobAcceptance(record: currentRecord, wasAlreadyAccepted: true)
         }
         guard let plan = plans[planID] else {
@@ -2508,6 +2513,8 @@ actor ApplicationJobService {
             let accepted = ApplicationJobAcceptance(record: record, wasAlreadyAccepted: true)
             submittedPlans[planID] = accepted
             try await persist()
+            finishSubmissionHandoff(jobID: record.id)
+            await publishRecords()
             return accepted
         }
         guard now <= plan.expiresAt else {
@@ -2546,8 +2553,9 @@ actor ApplicationJobService {
         }
         outputsByJob[accepted.record.id, default: []].formUnion(normalizedOutputs)
         submittedPlans[planID] = accepted
+        pendingSubmissionHandoffs[accepted.record.id] = plan
         try await persist()
-        enqueueExecution(jobID: accepted.record.id, plan: plan)
+        finishSubmissionHandoff(jobID: accepted.record.id)
         await publishRecords()
         return accepted
     }
@@ -2727,10 +2735,16 @@ actor ApplicationJobService {
     }
 
     private func releaseOutputReservations(for jobID: ApplicationJobID) {
+        pendingSubmissionHandoffs.removeValue(forKey: jobID)
         guard let outputs = outputsByJob.removeValue(forKey: jobID) else { return }
         for output in outputs where reservedOutputs[output] == jobID {
             reservedOutputs.removeValue(forKey: output)
         }
+    }
+
+    private func finishSubmissionHandoff(jobID: ApplicationJobID) {
+        guard let plan = pendingSubmissionHandoffs.removeValue(forKey: jobID) else { return }
+        enqueueExecution(jobID: jobID, plan: plan)
     }
 
     private func enqueueExecution(

@@ -368,6 +368,12 @@ job. Submission admission is separate from conversion execution, so new work can
 still queue while an existing job runs. See the
 [submission concurrency validation record](4.5-submission-concurrency-validation-2026-09-19.md).
 
+Submission retries now recover an execution handoff after a temporary job-store
+write failure. Original-plan and equivalent-plan retries retain the accepted job
+identity, save it before enqueueing, and start execution only once. Cancelling
+the pending job discards the handoff so later retries cannot revive it. See the
+[submission recovery validation record](4.5-submission-recovery-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
