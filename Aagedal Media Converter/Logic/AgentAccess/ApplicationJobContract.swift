@@ -2320,6 +2320,7 @@ actor ApplicationJobService {
     private let recordRetentionLifetime: TimeInterval
     private let store: ApplicationJobStore?
     private var didRestore = false
+    private var recoveryNeedsPersistence = false
     private var plans: [ApplicationPlanID: ApplicationConversionPlan] = [:]
     private var submittedPlans: [ApplicationPlanID: ApplicationJobAcceptance] = [:]
     private var reservedOutputs: [URL: ApplicationJobID] = [:]
@@ -2380,7 +2381,13 @@ actor ApplicationJobService {
         now: Date,
         interruptionDiagnostic: String
     ) async throws -> [ApplicationJobRecord] {
-        guard !didRestore else { return [] }
+        guard !didRestore else {
+            if recoveryNeedsPersistence {
+                try await persistAndPublishRecords()
+                recoveryNeedsPersistence = false
+            }
+            return []
+        }
         guard let store, let snapshot = try store.load() else {
             didRestore = true
             return []
@@ -2425,8 +2432,11 @@ actor ApplicationJobService {
             now: now
         )
         await removeExpiredState(now: now)
-        try await persist()
-        await publishRecords()
+        // Keep recovered results visible even if saving fails, and require the
+        // next caller to retry that save without loading or interrupting again.
+        recoveryNeedsPersistence = true
+        try await persistAndPublishRecords()
+        recoveryNeedsPersistence = false
         return interrupted
     }
 

@@ -395,6 +395,13 @@ the registry. Concurrent restart/submission coverage checks one-time interruptio
 retained new jobs, idempotent retries, and persistence across another reload. See
 the [startup recovery validation record](4.5-startup-recovery-validation-2026-09-19.md).
 
+Startup recovery now publishes interrupted job records even when the recovery
+snapshot cannot be saved. Subsequent service requests retry that save before
+proceeding, without reloading the old snapshot or changing the original recovery
+diagnostic and timestamp. Reconnect and idempotency retain the same interrupted
+job after storage becomes writable again. See the
+[startup save recovery validation record](4.5-startup-save-recovery-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

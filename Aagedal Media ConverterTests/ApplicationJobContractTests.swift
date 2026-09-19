@@ -925,6 +925,64 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(secondRestore.isEmpty)
     }
 
+    func testStartupSaveFailurePublishesRecoveryAndRetriesBeforeServingRequests() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let stateDirectory = directory.appendingPathComponent("state", isDirectory: true)
+        let store = ApplicationJobStore(fileURL: stateDirectory.appendingPathComponent("jobs.json"))
+        let original = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let request = makeRequest(sourceURLs: [sourceURL], destinationFolderURL: directory)
+        let plan = try await original.plan(request)
+        let accepted = try await original.submit(planID: plan.id)
+        let savedData = try Data(contentsOf: store.fileURL)
+        let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let updates = await restored.recordUpdates()
+        let published = expectation(description: "Recovered interruption reaches observers despite save failure")
+        let observer = Task {
+            for await records in updates {
+                if records.contains(where: { $0.id == accepted.record.id && $0.state == .interrupted }) {
+                    published.fulfill()
+                    return
+                }
+            }
+        }
+        defer { observer.cancel() }
+
+        // Keep the snapshot readable while preventing atomic replacement.
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: stateDirectory.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: stateDirectory.path)
+        }
+        let recoveryDate = Date()
+        do {
+            _ = try await restored.restorePersistedState(now: recoveryDate, interruptionDiagnostic: "First recovery")
+            XCTFail("Expected recovery persistence failure")
+        } catch {
+            XCTAssertFalse(error is ApplicationJobError)
+        }
+        await fulfillment(of: [published], timeout: 5)
+        do {
+            _ = try await restored.plan(request)
+            XCTFail("Expected requests to retry the failed recovery save")
+        } catch {
+            XCTAssertFalse(error is ApplicationJobError)
+        }
+        XCTAssertEqual(try Data(contentsOf: store.fileURL), savedData)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: stateDirectory.path)
+        let record = try await restored.record(for: accepted.record.id)
+        XCTAssertEqual(record?.state, .interrupted)
+        XCTAssertEqual(record?.diagnostic, "First recovery")
+        XCTAssertEqual(record?.updatedAt, recoveryDate)
+        let reloaded = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let savedRecord = try await reloaded.record(for: accepted.record.id)
+        XCTAssertEqual(savedRecord, record)
+        let retry = try await restored.submit(planID: plan.id)
+        XCTAssertTrue(retry.wasAlreadyAccepted)
+        XCTAssertEqual(retry.record, record)
+    }
+
     func testConcurrentStartupRestoresOnceAndPreservesNewSubmissions() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")
