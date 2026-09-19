@@ -1255,7 +1255,7 @@ actor ApplicationJobRegistry {
         case .queued:
             return try transition(jobID, to: .cancelled, now: now)
         case .running:
-            return try transition(jobID, to: .cancelling, now: now)
+            return try transition(jobID, to: .cancelling, outputURLs: record.outputURLs, now: now)
         case .cancelling:
             return record
         case .succeeded, .failed, .cancelled, .interrupted:
@@ -1284,6 +1284,31 @@ actor ApplicationJobRegistry {
         record.updatedAt = now
         records[jobID] = record
         return record
+    }
+
+    /// Checkpoints only a growing prefix of the accepted sequential batch.
+    func checkpointOutputs(
+        _ jobID: ApplicationJobID,
+        outputURLs: [URL],
+        expectedOutputs: [URL],
+        now: Date = Date()
+    ) throws {
+        guard var record = records[jobID] else {
+            throw ApplicationJobError.unknownJob(jobID)
+        }
+        guard record.state == .running || record.state == .cancelling else {
+            throw ApplicationJobError.invalidTransition(from: record.state, to: record.state)
+        }
+        let actual = outputURLs.map(\.standardizedFileURL)
+        let expected = expectedOutputs.map(\.standardizedFileURL)
+        guard actual.count >= record.outputURLs.count,
+              actual.count <= expected.count,
+              actual == Array(expected.prefix(actual.count)) else {
+            throw ApplicationJobCheckpointError.invalidOutputs
+        }
+        record.outputURLs = outputURLs
+        record.updatedAt = now
+        records[jobID] = record
     }
 
     /// Called after restoring persisted records. Incomplete work is made terminal
@@ -1540,11 +1565,25 @@ struct ApplicationJobExecutor: Sendable {
     let cancel: Cancel
 }
 
+enum ApplicationJobCheckpointError: Error {
+    case invalidOutputs
+}
+
 final class ApplicationJobProgressReporter: @unchecked Sendable {
     private let handler: ApplicationJobExecutor.ProgressHandler
 
-    init(handler: @escaping ApplicationJobExecutor.ProgressHandler) {
+    private let checkpointHandler: @Sendable ([URL]) async throws -> Void
+
+    init(
+        checkpoint: @escaping @Sendable ([URL]) async throws -> Void = { _ in },
+        handler: @escaping ApplicationJobExecutor.ProgressHandler
+    ) {
+        self.checkpointHandler = checkpoint
         self.handler = handler
+    }
+
+    func checkpoint(outputURLs: [URL]) async throws {
+        try await checkpointHandler(outputURLs)
     }
 
     func report(_ update: ApplicationJobProgressUpdate) async {
@@ -1755,6 +1794,14 @@ actor ApplicationFFmpegJobExecutor {
                     return .failed(diagnostic: "FFmpeg completed without creating the planned output.", outputURLs: completedOutputs)
                 }
                 completedOutputs.append(output.outputURL)
+                do {
+                    try await progress.checkpoint(outputURLs: completedOutputs)
+                } catch {
+                    return .failed(
+                        diagnostic: "Unable to save completed conversion outputs: \(error.localizedDescription)",
+                        outputURLs: completedOutputs
+                    )
+                }
             case .failed(let diagnostic):
                 if cancellationRequested.contains(jobID) {
                     return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
@@ -2746,7 +2793,12 @@ actor ApplicationJobService {
         guard handoffRecord.state == .running else { return }
         activeExecutionJobID = pending.jobID
 
-        let progressReporter = ApplicationJobProgressReporter { update in
+        let progressReporter = ApplicationJobProgressReporter(checkpoint: { outputs in
+            try await self.checkpointOutputs(
+                pending.jobID, outputURLs: outputs,
+                expectedOutputs: pending.plan.outputs.map(\.outputURL)
+            )
+        }) { update in
             _ = try? await self.updateProgress(
                 pending.jobID,
                 progress: update.progress,
@@ -2770,10 +2822,11 @@ actor ApplicationJobService {
                 outputsMatch = actual.count <= expected.count
                     && actual == Array(expected.prefix(actual.count))
             }
-            guard outputsMatch else {
+            guard outputsMatch, actual.count >= currentRecord.outputURLs.count else {
                 _ = try await transition(
                     pending.jobID,
                     to: .failed,
+                    outputURLs: currentRecord.outputURLs,
                     diagnostic: "Executor outputs did not match the accepted conversion plan."
                 )
                 return
@@ -2821,6 +2874,18 @@ actor ApplicationJobService {
             // Persistence or a competing terminal transition is authoritative;
             // never revive or rewrite a record from a late executor callback.
         }
+    }
+
+    private func checkpointOutputs(
+        _ jobID: ApplicationJobID,
+        outputURLs: [URL],
+        expectedOutputs: [URL]
+    ) async throws {
+        try await registry.checkpointOutputs(
+            jobID, outputURLs: outputURLs, expectedOutputs: expectedOutputs
+        )
+        try await persist()
+        await publishRecords()
     }
 
     private static func executionDiagnostic(for error: Error) -> String {

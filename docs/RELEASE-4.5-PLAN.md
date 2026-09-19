@@ -353,6 +353,14 @@ covers single-source and multi-source publication, persisted reconnect results,
 and decoding of the retained output. See the
 [publication cancellation validation record](4.5-publication-cancellation-validation-2026-09-19.md).
 
+Shared FFmpeg batches now persist each successfully completed output before
+starting the next source. Reconnect lookup and visible rows expose that completed
+prefix while the batch is active; restart recovery retains it while marking the
+unfinished job interrupted. Cancellation preserves checkpoints, invalid or
+regressing reports cannot erase them, and a checkpoint write failure stops the
+adapter before another source starts. See the
+[per-file checkpoint validation record](4.5-per-file-checkpoint-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

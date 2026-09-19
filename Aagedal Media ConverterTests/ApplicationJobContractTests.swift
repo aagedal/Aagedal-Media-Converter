@@ -1368,6 +1368,115 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(runCount, 1)
     }
 
+    func testRunningBatchCheckpointsCompletedOutputBeforeNextSourceFinishes() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = ["first.mov", "second.mov"].map { directory.appendingPathComponent($0) }
+        for source in sources { try Data("source".utf8).write(to: source) }
+        let harness = ApplicationFFmpegRunnerHarness(blocksFirstRun: true)
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                if conversion.request.inputURL == sources[0] { return .succeeded }
+                return await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let service = ApplicationJobService(
+            store: store, fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor
+        )
+        let plan = try await service.plan(makeRequest(sourceURLs: sources, destinationFolderURL: directory))
+        let accepted = try await service.submit(planID: plan.id)
+        for _ in 0..<200 {
+            if await harness.runCount() == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let running = try await service.record(for: accepted.record.id)
+        XCTAssertEqual(running?.state, .running)
+        XCTAssertEqual(running?.outputURLs, [plan.outputs[0].outputURL])
+
+        // Restore a copy while the original executor remains suspended. Recovery
+        // must use the on-disk checkpoint, not a terminal callback or live registry.
+        let recoveryURL = directory.appendingPathComponent("recovery.json")
+        try FileManager.default.copyItem(at: directory.appendingPathComponent("jobs.json"), to: recoveryURL)
+        let restored = ApplicationJobService(
+            store: ApplicationJobStore(fileURL: recoveryURL), fileAccessAuthorizer: .unrestricted
+        )
+        let recovered = try await restored.record(for: accepted.record.id)
+        XCTAssertEqual(recovered?.state, .interrupted)
+        XCTAssertEqual(recovered?.outputURLs, [plan.outputs[0].outputURL])
+        let cancelling = try await service.requestCancellation(accepted.record.id)
+        XCTAssertEqual(cancelling.outputURLs, [plan.outputs[0].outputURL])
+        let cancelled = try await waitForRecord(service: service, jobID: accepted.record.id, state: .cancelled)
+        XCTAssertEqual(cancelled.outputURLs, [plan.outputs[0].outputURL])
+    }
+
+    func testCheckpointRejectsNonPrefixAndRegressingOutputs() async throws {
+        let registry = ApplicationJobRegistry()
+        let accepted = try await registry.accept(makeRequest())
+        let jobID = accepted.record.id
+        _ = try await registry.transition(jobID, to: .running)
+        let outputs = ["first.mp4", "second.mp4"].map { destination.appendingPathComponent($0) }
+        try await registry.checkpointOutputs(jobID, outputURLs: [outputs[0]], expectedOutputs: outputs)
+        for invalid in [[], [outputs[1]], [outputs[0], outputs[0]]] {
+            do {
+                try await registry.checkpointOutputs(jobID, outputURLs: invalid, expectedOutputs: outputs)
+                XCTFail("Invalid checkpoint was accepted")
+            } catch ApplicationJobCheckpointError.invalidOutputs { }
+        }
+        let record = await registry.record(for: jobID)
+        XCTAssertEqual(record?.outputURLs, [outputs[0]])
+        _ = try await registry.requestCancellation(jobID)
+        try await registry.checkpointOutputs(jobID, outputURLs: outputs, expectedOutputs: outputs)
+        _ = try await registry.transition(jobID, to: .cancelled, outputURLs: outputs)
+        do {
+            try await registry.checkpointOutputs(jobID, outputURLs: outputs, expectedOutputs: outputs)
+            XCTFail("Terminal job accepted a late checkpoint")
+        } catch is ApplicationJobError { }
+    }
+
+    func testFFmpegAdapterStopsBatchWhenCheckpointCannotBeSaved() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = ["first.mov", "second.mov"].map { directory.appendingPathComponent($0) }
+        for source in sources { try Data("source".utf8).write(to: source) }
+        let harness = ApplicationFFmpegRunnerHarness()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let plan = try await service.plan(makeRequest(sourceURLs: sources, destinationFolderURL: directory))
+        let reporter = ApplicationJobProgressReporter(checkpoint: { _ in
+            throw CocoaError(.fileWriteOutOfSpace)
+        }, handler: { _ in })
+        let result = await adapter.jobExecutor.execute(ApplicationJobID(), plan, reporter)
+        guard case .failed = result else { return XCTFail("Checkpoint failure must stop the batch") }
+        XCTAssertEqual(result.outputURLs, [plan.outputs[0].outputURL])
+        let count = await harness.runCount()
+        XCTAssertEqual(count, 1)
+    }
+
+    func testTerminalExecutorResultCannotDiscardCheckpointedOutputs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let source = directory.appendingPathComponent("source.mov")
+        try Data("source".utf8).write(to: source)
+        let executor = ApplicationJobExecutor(execute: { _, plan, reporter in
+            do {
+                try await reporter.checkpoint(outputURLs: plan.outputs.map(\.outputURL))
+            } catch {
+                return .failed(diagnostic: "Checkpoint failed")
+            }
+            return .failed(diagnostic: "Executor omitted completed output")
+        }, cancel: { _ in })
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: executor)
+        let plan = try await service.plan(makeRequest(sourceURLs: [source], destinationFolderURL: directory))
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .failed)
+        XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+        XCTAssertEqual(record.diagnostic, "Executor outputs did not match the accepted conversion plan.")
+    }
+
     func testCancelledBatchRetainsEarlierCompletedOutputs() async throws {
         let directory = try makeTemporaryDirectory()
         let firstSource = directory.appendingPathComponent("first.mov")

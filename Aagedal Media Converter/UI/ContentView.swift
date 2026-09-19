@@ -1930,7 +1930,7 @@ struct ContentView: View {
         case .cancelled: .cancelled
         }
         // A later failure or cancellation does not undo earlier batch outputs.
-        if record.state.isTerminal, record.outputURLs.indices.contains(sourceIndex) {
+        if record.outputURLs.indices.contains(sourceIndex) {
             item.status = .done
             item.statusMessage = nil
             item.conversionError = nil
