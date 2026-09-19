@@ -39,3 +39,7 @@ their configured preserve-source or manual timecode behavior.
 Enabling Agent Access makes these bounded operations available to processes in
 the same logged-in user's launch session, not only to the configured MCP client.
 Turn it off when you no longer need local agent access.
+
+For release testing, the [named-client validation runbook](NAMED_CLIENT_VALIDATION.md)
+defines the transcripts and app/output observations needed to verify each
+client's conversion, reconnect, cancellation, and restart workflow.
