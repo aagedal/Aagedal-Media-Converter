@@ -247,6 +247,133 @@ final class ConversionQueueStateTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveMergedEncodingCancellationDrainsBeforeWaitingAgentStarts() async throws {
+        try await checkLiveEncodingCancellation(merge: true, cancelAgentFirst: false)
+    }
+
+    @MainActor
+    func testLiveGroupEncodingCancellationDrainsBeforeWaitingAgentStarts() async throws {
+        try await checkLiveEncodingCancellation(merge: false, cancelAgentFirst: false)
+    }
+
+    @MainActor
+    func testCancellingWaitingAgentPreservesLiveMergedEncoding() async throws {
+        try await checkLiveEncodingCancellation(merge: true, cancelAgentFirst: true)
+    }
+
+    @MainActor
+    private func checkLiveEncodingCancellation(merge: Bool, cancelAgentFirst: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("EncodingCancellation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let first = directory.appendingPathComponent("first.mov")
+        let second = directory.appendingPathComponent("second.mov")
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-y", "-f", "lavfi", "-i",
+                        "testsrc2=size=64x48:rate=24:duration=20",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", first.path],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded)
+        try FileManager.default.copyItem(at: first, to: second)
+        let sourceBytes = try Data(contentsOf: first)
+        let suite = "EncodingCancellation.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
+        defaults.set(false, forKey: AppConstants.saveNextToOriginalKey)
+        let settings = ConversionPreparationSettings(preset: .h264, defaults: defaults)
+        let encoding = expectation(description: "Real FFmpeg emitted encoded frame progress")
+        let terminated = expectation(description: "Cancelled FFmpeg terminated before runner drain")
+        let runner = QueueLiveEncodingRunner(encoding: encoding, terminated: terminated)
+        let executionGate = ApplicationConversionExecutionGate()
+        let manager = ConversionManager(
+            ffmpegConverter: FFMPEGConverter(subprocessRunner: runner),
+            executionGate: executionGate,
+            preparationSettingsProvider: { _ in settings }
+        )
+        let queue = ConversionPreparationQueue(items: [first, second].map { source in
+            var value = item(status: .waiting, duration: 20, progress: 0)
+            value.url = source
+            value.name = source.lastPathComponent
+            value.includeDateTag = false
+            return value
+        })
+        let legacyTask = Task {
+            await manager.convertGroup(
+                items: queue.binding, outputFolder: directory.path, preset: .h264,
+                concatEnabled: merge, groupName: "merged",
+                transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+            )
+        }
+        await fulfillment(of: [encoding], timeout: 15)
+        XCTAssertEqual(queue.items.filter { $0.status == .converting }.count, merge ? 2 : 1)
+        let agentStarted = OSAllocatedUnfairLock(initialState: false)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let executor = adapter.jobExecutor
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: ApplicationJobExecutor(execute: { jobID, plan, progress in
+                agentStarted.withLock { $0 = true }
+                XCTAssertTrue(queue.items.allSatisfy { $0.status == .cancelled })
+                return await executor.execute(jobID, plan, progress)
+            }, cancel: executor.cancel),
+            executionGate: executionGate
+        )
+        let request = ApplicationConversionRequest(
+            origin: .localAgent, requesterID: "encoding-coexistence",
+            sourceURLs: [first], destinationFolderURL: directory, presetID: .streamCopy
+        )
+        let plan = try await service.plan(request)
+        let accepted = try await service.submit(planID: plan.id)
+        for _ in 0..<200 {
+            if await executionGate.waitingCount() == 1 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let waiting = await executionGate.waitingCount()
+        XCTAssertEqual(waiting, 1)
+        if cancelAgentFirst {
+            let cancelled = try await service.requestCancellation(accepted.record.id)
+            XCTAssertEqual(cancelled.state, .cancelled)
+            XCTAssertEqual(queue.items.filter { $0.status == .converting }.count, merge ? 2 : 1)
+            let stopped = await runner.didTerminate
+            XCTAssertFalse(stopped, "Cancelling a waiting agent must not stop the legacy encoder")
+        }
+        let cancellation = Task { await manager.cancelAllConversions() }
+        await fulfillment(of: [terminated], timeout: 5)
+        let encoderWasCancelled = await runner.wasCancelled
+        XCTAssertTrue(encoderWasCancelled, "The real child must terminate through cancellation")
+        XCTAssertFalse(agentStarted.withLock { $0 }, "Execution ownership must survive subprocess drain")
+        let cancelledRows = queue.items
+        XCTAssertTrue(cancelledRows.allSatisfy { $0.status == .cancelled })
+        await runner.releaseDrain()
+        await cancellation.value
+        await legacyTask.value
+        XCTAssertEqual(queue.items, cancelledRows, "Late encoding completion must not revive cancelled rows")
+        var expectedJobID = accepted.record.id
+        if cancelAgentFirst {
+            let replacement = try await service.plan(request)
+            expectedJobID = try await service.submit(planID: replacement.id).record.id
+        }
+        for _ in 0..<1000 {
+            if try await service.record(for: expectedJobID)?.state.isTerminal == true { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let record = try await service.record(for: expectedJobID)
+        XCTAssertEqual(record?.state, .succeeded)
+        XCTAssertTrue(agentStarted.withLock { $0 })
+        XCTAssertEqual(queue.items, cancelledRows)
+        XCTAssertEqual(try Data(contentsOf: first), sourceBytes)
+        XCTAssertEqual(try Data(contentsOf: second), sourceBytes)
+        let output = try XCTUnwrap(record?.outputURLs.first)
+        let metadata = try await ApplicationMediaInspector.live.inspect(output)
+        XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 20, accuracy: 1.0 / 24)
+    }
+
+    @MainActor
     func testRemovingItemDuringManagerPreparationFinishesEmptyQueue() async {
         let gate = ConversionPreparationDetailsGate()
         let started = expectation(description: "Conversion details started")
@@ -494,5 +621,72 @@ private actor ConversionPreparationDetailsGate {
             thumbnailData: nil, outputURL: nil, hasVideoStream: true, metadata: nil
         ))
         continuation = nil
+    }
+}
+
+/// Runs the actual encoder at input speed, then holds cancellation drainage so
+/// tests can inspect execution ownership before the converter acknowledges stop.
+private actor QueueLiveEncodingRunner: SubprocessRunning {
+    let encoding: XCTestExpectation
+    let terminated: XCTestExpectation
+    private(set) var didTerminate = false
+    private(set) var wasCancelled = false
+    private var drainReleased = false
+    private var drainContinuation: CheckedContinuation<Void, Never>?
+
+    init(encoding: XCTestExpectation, terminated: XCTestExpectation) {
+        self.encoding = encoding
+        self.terminated = terminated
+    }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        var arguments = request.arguments
+        if let input = arguments.firstIndex(of: "-i") {
+            arguments.insert("-re", at: input)
+        }
+        let paced = SubprocessRequest(
+            executableURL: request.executableURL, arguments: arguments,
+            environment: request.environment, currentDirectoryURL: request.currentDirectoryURL,
+            standardInput: request.standardInput, timeout: .seconds(30),
+            terminationGracePeriod: request.terminationGracePeriod,
+            standardOutputCaptureLimit: request.standardOutputCaptureLimit,
+            standardErrorCaptureLimit: request.standardErrorCaptureLimit,
+            sensitiveArgumentNames: request.sensitiveArgumentNames,
+            sensitiveValues: request.sensitiveValues, redactURLs: request.redactURLs
+        )
+        let progress = OSAllocatedUnfairLock(initialState: (text: "", signalled: false))
+        let encoding = self.encoding
+        let result: Result<SubprocessResult, Error>
+        do {
+            result = .success(try await SubprocessRunner().run(paced) { chunk in
+                outputHandler?(chunk)
+                progress.withLock { state in
+                    guard !state.signalled else { return }
+                    state.text += String(decoding: chunk.data, as: UTF8.self)
+                    if state.text.range(of: #"frame=\s*[1-9][0-9]*"#, options: .regularExpression) != nil {
+                        state.signalled = true
+                        encoding.fulfill()
+                    }
+                }
+            })
+        } catch {
+            wasCancelled = error is CancellationError
+            result = .failure(error)
+        }
+        didTerminate = true
+        terminated.fulfill()
+        if !drainReleased {
+            await withCheckedContinuation { drainContinuation = $0 }
+        }
+        return try result.get()
+    }
+
+    func releaseDrain() {
+        drainReleased = true
+        drainContinuation?.resume()
+        drainContinuation = nil
     }
 }
