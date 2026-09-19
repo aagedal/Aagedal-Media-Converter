@@ -1779,6 +1779,7 @@ actor ApplicationFFmpegJobExecutor {
             // container extension itself. The plan already names the final file.
             outputURL: output.outputURL.deletingPathExtension(),
             preset: plan.request.presetID.exportPreset,
+            requiredOutputURL: output.outputURL,
             comment: sourceSettings?.comment ?? "",
             includeDateTag: sourceSettings?.includeDateTag
                 ?? executionSettings?.includeDateTag

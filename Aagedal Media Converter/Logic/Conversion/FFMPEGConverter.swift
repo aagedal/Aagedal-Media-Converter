@@ -84,6 +84,17 @@ private final class ConversionOutputReservations: @unchecked Sendable {
         }
     }
 
+    func reserveExact(_ url: URL, notOverwriting inputURL: URL, owner: UUID) -> Bool {
+        lock.withLock {
+            let standardizedURL = url.standardizedFileURL
+            guard standardizedURL != inputURL.standardizedFileURL,
+                  !FileManager.default.fileExists(atPath: url.path),
+                  owners[standardizedURL] == nil else { return false }
+            owners[standardizedURL] = owner
+            return true
+        }
+    }
+
     /// Returns true only when this attempt still owns the reservation.
     func release(_ url: URL, owner: UUID) -> Bool {
         lock.withLock {
@@ -795,23 +806,34 @@ actor FFMPEGConverter {
                 ?? preset.outputExtension(for: inputURL)
             outputFileURL = outputURL.appendingPathExtension(outputExtension)
 
-            // CRITICAL: Ensure we never overwrite the source file
-            if outputFileURL.standardizedFileURL == inputURL.standardizedFileURL {
-                // Add "_encoded" suffix to prevent overwriting source
-                let baseName = outputURL.lastPathComponent
-                let safeOutputURL = outputDir.appendingPathComponent(baseName + "_encoded")
-                    .appendingPathExtension(outputExtension)
-                Self.logger.warning("Safety check: would have overwritten input file. Changed output to: \(safeOutputURL.lastPathComponent, privacy: .public)")
-                outputFileURL = safeOutputURL
-            }
+            if let requiredOutputURL = request.requiredOutputURL {
+                guard outputFileURL.standardizedFileURL == requiredOutputURL.standardizedFileURL,
+                      Self.outputReservations.reserveExact(
+                        outputFileURL, notOverwriting: inputURL, owner: conversionID
+                      ) else {
+                    activeConversionID = nil
+                    completion(false, ApplicationJobErrorCode.outputCollision.rawValue)
+                    return
+                }
+            } else {
+                // CRITICAL: Ensure we never overwrite the source file
+                if outputFileURL.standardizedFileURL == inputURL.standardizedFileURL {
+                    // Add "_encoded" suffix to prevent overwriting source
+                    let baseName = outputURL.lastPathComponent
+                    let safeOutputURL = outputDir.appendingPathComponent(baseName + "_encoded")
+                        .appendingPathExtension(outputExtension)
+                    Self.logger.warning("Safety check: would have overwritten input file. Changed output to: \(safeOutputURL.lastPathComponent, privacy: .public)")
+                    outputFileURL = safeOutputURL
+                }
 
-            // Ensure the output path is unique — prevents silently overwriting
-            // a previous conversion output (FFmpeg runs with -y).
-            outputFileURL = Self.outputReservations.reserveUnique(
-                outputFileURL,
-                notOverwriting: inputURL,
-                owner: conversionID
-            )
+                // Ensure the output path is unique — prevents silently overwriting
+                // a previous conversion output (FFmpeg runs with -y).
+                outputFileURL = Self.outputReservations.reserveUnique(
+                    outputFileURL,
+                    notOverwriting: inputURL,
+                    owner: conversionID
+                )
+            }
 
             // Register this file as created by the app (for safe deletion later if needed)
             FileSafetyUtils.registerCreatedFile(outputFileURL)

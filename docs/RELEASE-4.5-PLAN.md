@@ -18,7 +18,7 @@ Created: 2026-09-11.
 The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
 signed release candidate.
 
-## Implementation progress — through 2026-09-15
+## Implementation progress — through 2026-09-19
 
 The first shared-boundary increment is implemented without selecting an IPC
 transport prematurely:
@@ -326,6 +326,15 @@ is active or cancellation is draining. This covers engine admission across the
 two owners; post-conversion follow-ups and overlapping specialized-job output
 checks remain in the beta acceptance matrix. See the
 [execution serialization validation record](4.5-execution-serialization-validation-2026-09-15.md).
+
+Shared jobs now require the converter to reserve each exact accepted output path.
+If another operation creates that output after the service validates the batch,
+the converter returns `output_collision` before encoding or registering the file
+for cleanup. It no longer chooses a suffixed output and incorrectly reports the
+pre-existing planned file as success. Legacy conversions keep their existing
+unique-name behavior. A live two-file Stream Copy regression exercises the late
+collision and preserves both the first completed output and the colliding file.
+See the [exact-output validation record](4.5-exact-output-validation-2026-09-19.md).
 
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The

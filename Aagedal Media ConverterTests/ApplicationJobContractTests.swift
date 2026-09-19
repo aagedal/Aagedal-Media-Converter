@@ -2404,6 +2404,62 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(metadata.contains("timecode        : 01:02:03:04"), metadata)
     }
 
+    func testLiveBatchRejectsOutputCreatedAfterExecutionValidation() async throws {
+        let directory = try makeTemporaryDirectory()
+        let firstSource = directory.appendingPathComponent("first.mov")
+        let secondSource = directory.appendingPathComponent("second.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", firstSource.path
+        ])
+        try FileManager.default.copyItem(at: firstSource, to: secondSource)
+        let destination = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let existingContents = Data("Output published by another operation".utf8)
+        let liveRunner = ApplicationFFmpegRunner.live()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                if conversion.request.inputURL == secondSource {
+                    guard let outputURL = conversion.request.requiredOutputURL else {
+                        return .failed("Missing accepted output path")
+                    }
+                    do {
+                        try existingContents.write(to: outputURL)
+                    } catch {
+                        return .failed(error.localizedDescription)
+                    }
+                }
+                return await liveRunner.run(conversion, progress)
+            },
+            cancel: liveRunner.cancel,
+            validatesPlannedOutput: true
+        ))
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [firstSource, secondSource],
+            destinationFolderURL: destination,
+            presetID: .streamCopy
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(
+            service: service, jobID: accepted.record.id, state: .failed
+        )
+        XCTAssertEqual(record.diagnostic, ApplicationJobErrorCode.outputCollision.rawValue)
+        XCTAssertEqual(try Data(contentsOf: plan.outputs[1].outputURL), existingContents)
+        let files = try FileManager.default.contentsOfDirectory(
+            at: destination, includingPropertiesForKeys: nil
+        )
+        XCTAssertEqual(Set(files.map(\.lastPathComponent)),
+                       Set(plan.outputs.map { $0.outputURL.lastPathComponent }))
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-i", plan.outputs[0].outputURL.path,
+            "-map", "0", "-f", "null", "-"
+        ])
+    }
+
     func testLiveSupportedPresetJobsCreateTheirPlannedOutputs() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("source.mov")

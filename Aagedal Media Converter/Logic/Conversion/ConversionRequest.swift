@@ -17,6 +17,9 @@ struct ConversionRequest: Sendable {
     let outputURL: URL
     let preset: ExportPreset
 
+    /// Shared jobs must publish to their accepted path rather than choose a new name.
+    var requiredOutputURL: URL? = nil
+
     // MARK: - Metadata
     var comment: String = ""
     var includeDateTag: Bool = true
