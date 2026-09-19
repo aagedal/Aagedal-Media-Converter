@@ -3665,6 +3665,83 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testLiveStoredBookmarksRejectRevocationAndResumePersistedPlanAfterRenewal() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceFolder = directory.appendingPathComponent("sources", isDirectory: true)
+        let destination = directory.appendingPathComponent("outputs", isDirectory: true)
+        for folder in [sourceFolder, destination] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let sourceURL = sourceFolder.appendingPathComponent("source.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        // Use native bookmark creation/resolution and scope acquisition throughout.
+        // Isolate the persisted grants from the user's real folder selections.
+        let manager = SecurityScopedBookmarkManager(defaults: defaults)
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let service = ApplicationJobService(
+            store: store, fileAccessAuthorizer: .storedBookmarks(using: manager)
+        )
+        let request = makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: destination, presetID: .streamCopy
+        )
+        do {
+            _ = try await service.plan(request)
+            XCTFail("Ordinary filesystem visibility must not authorize agent access")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .sourceAccessDenied(sourceURL))
+        }
+        XCTAssertTrue(manager.saveBookmark(for: sourceFolder))
+        XCTAssertTrue(manager.saveBookmark(for: destination))
+        do {
+            _ = try await service.plan(request)
+            XCTFail("Read-only destination approval must not authorize output")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .destinationAccessDenied(destination))
+        }
+        XCTAssertTrue(manager.saveWritableBookmark(for: destination))
+        let plan = try await service.plan(request)
+
+        // Recreate both service and manager to consume only persisted state.
+        let restoredManager = SecurityScopedBookmarkManager(defaults: defaults)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let restored = ApplicationJobService(
+            store: store, fileAccessAuthorizer: .storedBookmarks(using: restoredManager),
+            executor: adapter.jobExecutor
+        )
+        for revokedFolder in [sourceFolder, destination] {
+            var bookmarks = try XCTUnwrap(defaults.dictionary(forKey: "securityScopedBookmarks"))
+            bookmarks.removeValue(forKey: revokedFolder.absoluteString)
+            defaults.set(bookmarks, forKey: "securityScopedBookmarks")
+            do {
+                _ = try await restored.submit(planID: plan.id)
+                XCTFail("Revoked approval must reject submission")
+            } catch {
+                XCTAssertEqual(error as? ApplicationJobError, revokedFolder == sourceFolder
+                    ? .sourceAccessDenied(sourceURL) : .destinationAccessDenied(destination))
+            }
+            let records = try await restored.allRecords()
+            XCTAssertTrue(records.isEmpty)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: plan.outputs[0].outputURL.path))
+            if revokedFolder == sourceFolder {
+                XCTAssertTrue(restoredManager.saveBookmark(for: sourceFolder))
+            } else {
+                XCTAssertTrue(restoredManager.saveWritableBookmark(for: destination))
+            }
+        }
+        let accepted = try await restored.submit(planID: plan.id)
+        let record = try await waitForRecord(service: restored, jobID: accepted.record.id, state: .succeeded)
+        XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+        let outputURL = try XCTUnwrap(record.outputURLs.first)
+        try runBundledFFmpeg(["-v", "error", "-xerror", "-i", outputURL.path, "-map", "0", "-f", "null", "-"])
+        let retry = try await restored.submit(planID: plan.id)
+        XCTAssertEqual(retry.record.id, record.id)
+    }
+
     func testLiveSharedJobAppliesCapturedTrimCropAndMute() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("source.mov")

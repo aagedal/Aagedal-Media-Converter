@@ -469,6 +469,17 @@ pass. This expands automated output validation without closing named-client,
 real bookmark, or in-app playback gates. See the
 [live per-source override validation record](4.5-live-overrides-validation-2026-09-19.md).
 
+Shared-job access validation now also runs with native macOS security-scoped
+bookmarks in an isolated grant store. Missing source approval and read-only
+output approval reject planning; removing either persisted grant rejects a
+restored plan's submission without creating a job or output. Renewing both grants
+lets the same plan complete through bundled FFmpeg, and retry returns the same
+job. Native folder-grant coverage also rejects sibling-prefix paths and symlink
+escapes while a valid borrower holds the scope. This narrows the bookmark gate;
+interactive folder selection, OS-level revocation, lost drives, and the chosen
+App Sandbox scope still require release validation. See the
+[native bookmark validation record](4.5-native-bookmark-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

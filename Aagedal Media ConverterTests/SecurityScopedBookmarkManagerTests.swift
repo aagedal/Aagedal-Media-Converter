@@ -3,6 +3,30 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class SecurityScopedBookmarkManagerTests: XCTestCase {
+    func testNativeFolderBookmarkRejectsSiblingAndSymlinkEscape() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NativeBookmarkTests-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let approved = directory.appendingPathComponent("approved", isDirectory: true)
+        let sibling = directory.appendingPathComponent("approved-other", isDirectory: true)
+        for folder in [approved, sibling] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data("fixture".utf8).write(to: folder.appendingPathComponent("source.mov"))
+        }
+        let escape = approved.appendingPathComponent("escape", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: escape, withDestinationURL: sibling)
+        let manager = SecurityScopedBookmarkManager(defaults: try isolatedDefaults())
+        XCTAssertTrue(manager.saveWritableBookmark(for: approved))
+        let authorizer = ApplicationFileAccessAuthorizer.storedBookmarks(using: manager)
+        for mode in [ApplicationFileAccessMode.read, .write] {
+            let lease = try XCTUnwrap(authorizer.acquire(approved.appendingPathComponent("source.mov"), mode))
+            // Check containment while the legitimate borrower keeps the scope open.
+            XCTAssertNil(authorizer.acquire(sibling.appendingPathComponent("source.mov"), mode))
+            XCTAssertNil(authorizer.acquire(escape.appendingPathComponent("source.mov"), mode))
+            lease.release()
+        }
+    }
+
     private func isolatedDefaults() throws -> UserDefaults {
         let name = "SecurityScopedBookmarkManagerTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))

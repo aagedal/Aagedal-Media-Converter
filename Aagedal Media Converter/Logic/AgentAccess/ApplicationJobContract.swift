@@ -2239,17 +2239,21 @@ struct ApplicationFileAccessAuthorizer: Sendable {
 
     let acquire: Acquire
 
-    static let live = ApplicationFileAccessAuthorizer { url, mode in
-        let access = SecurityScopedBookmarkManager.shared.startAccessingStoredBookmark(
-            containing: url,
-            requiresWriteAccess: mode == .write
-        )
-        guard case .none = access else {
-            return ApplicationFileAccessLease {
-                SecurityScopedBookmarkManager.shared.stopAccessing(access)
+    static let live = storedBookmarks(using: .shared)
+
+    static func storedBookmarks(using manager: SecurityScopedBookmarkManager) -> Self {
+        ApplicationFileAccessAuthorizer { url, mode in
+            let access = manager.startAccessingStoredBookmark(
+                containing: url,
+                requiresWriteAccess: mode == .write
+            )
+            guard case .none = access else {
+                return ApplicationFileAccessLease {
+                    manager.stopAccessing(access)
+                }
             }
+            return nil
         }
-        return nil
     }
 
     /// Explicit opt-out for isolated tests whose temporary paths do not carry
