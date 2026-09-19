@@ -40,19 +40,31 @@ private final class MCPStdioServer {
 
     private func handle(line: String) {
         guard let data = line.data(using: .utf8),
-              let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else {
+            writeError(id: nil, code: -32700, message: "Invalid JSON.")
+            return
+        }
+        guard let message = value as? [String: Any],
               message["jsonrpc"] as? String == "2.0",
               let method = message["method"] as? String else {
-            writeError(id: nil, code: -32700, message: "Invalid JSON-RPC message.")
+            writeError(id: nil, code: -32600, message: "Invalid JSON-RPC request.")
             return
         }
 
-        let id = message["id"]
+        // MCP operations are requests. Notifications never produce responses or
+        // invoke app tools, including when a request method is sent without an ID.
+        guard let id = message["id"] else { return }
+        guard Self.isValidRequestID(id) else {
+            writeError(id: nil, code: -32600, message: "Request ID must be a string or integer.")
+            return
+        }
+        guard message["params"] == nil || message["params"] is [String: Any] else {
+            writeError(id: id, code: -32602, message: "Request parameters must be an object.")
+            return
+        }
         switch method {
         case "initialize":
             initialize(message: message, id: id)
-        case "notifications/initialized", "notifications/cancelled":
-            break
         case "ping":
             writeResult(id: id, result: [:])
         case "tools/list":
@@ -60,10 +72,16 @@ private final class MCPStdioServer {
         case "tools/call":
             callTool(message: message, id: id)
         default:
-            if id != nil {
-                writeError(id: id, code: -32601, message: "Method not found: \(method)")
-            }
+            writeError(id: id, code: -32601, message: "Method not found: \(method)")
         }
+    }
+
+    private static func isValidRequestID(_ value: Any) -> Bool {
+        if value is String { return true }
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return false }
+        let numericValue = number.doubleValue
+        return numericValue.isFinite && numericValue.rounded(.towardZero) == numericValue
     }
 
     private func initialize(message: [String: Any], id: Any?) {
