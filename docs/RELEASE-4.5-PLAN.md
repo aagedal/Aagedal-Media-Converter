@@ -409,6 +409,13 @@ equivalent-plan retries retain the same job without reviving cancelled work or
 starting duplicate conversions. See the
 [submission visibility validation record](4.5-submission-visibility-validation-2026-09-19.md).
 
+Startup recovery now validates every persisted plan and submitted-plan link
+before replacing live job records. Invalid snapshots stay untouched and cannot
+leak partially restored jobs into the visible queue. After the snapshot is
+repaired, the same service can retry recovery and preserve interruption and
+idempotency behavior. See the
+[atomic recovery validation record](4.5-atomic-recovery-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

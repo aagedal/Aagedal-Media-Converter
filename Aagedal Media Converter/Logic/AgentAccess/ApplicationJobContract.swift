@@ -2396,7 +2396,8 @@ actor ApplicationJobService {
             throw ApplicationJobPersistenceError.unsupportedSchema(snapshot.schemaVersion)
         }
 
-        try await registry.restore(snapshot.records)
+        // Validate the complete snapshot before replacing any live state. Queue
+        // observers can read the registry even when recovery reports an error.
         var restoredPlans: [ApplicationPlanID: ApplicationConversionPlan] = [:]
         for plan in snapshot.plans {
             guard plan.schemaVersion == ApplicationConversionPlan.currentSchemaVersion else {
@@ -2408,24 +2409,31 @@ actor ApplicationJobService {
             }
             restoredPlans[plan.id] = plan
         }
-        plans = restoredPlans
-        submittedPlans.removeAll(keepingCapacity: true)
+        let restoredRecords = snapshot.records.reduce(into: [ApplicationJobID: ApplicationJobRecord]()) {
+            $0[$1.id] = $1
+        }
+        var restoredSubmissions: [ApplicationPlanID: ApplicationJobAcceptance] = [:]
         for submitted in snapshot.submittedPlans {
-            guard plans[submitted.planID] != nil else {
+            guard restoredPlans[submitted.planID] != nil else {
                 throw ApplicationJobPersistenceError.missingSubmittedPlan(submitted.planID)
             }
-            guard submittedPlans[submitted.planID] == nil else {
+            guard restoredSubmissions[submitted.planID] == nil else {
                 throw ApplicationJobPersistenceError.duplicateSubmittedPlan(submitted.planID)
             }
-            guard let record = await registry.record(for: submitted.jobID) else {
+            guard let record = restoredRecords[submitted.jobID] else {
                 throw ApplicationJobPersistenceError.missingSubmittedJob(submitted.jobID)
             }
-            submittedPlans[submitted.planID] = ApplicationJobAcceptance(
+            restoredSubmissions[submitted.planID] = ApplicationJobAcceptance(
                 record: record,
                 wasAlreadyAccepted: false
             )
         }
 
+        // The registry validates records and idempotency identities atomically.
+        // No throwing validation remains after it commits the restored records.
+        try await registry.restore(snapshot.records)
+        plans = restoredPlans
+        submittedPlans = restoredSubmissions
         didRestore = true
         let interrupted = await registry.interruptInFlightJobs(
             diagnostic: interruptionDiagnostic,

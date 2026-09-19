@@ -1086,6 +1086,71 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: stateURL), damagedData)
     }
 
+    func testInvalidSnapshotDoesNotExposePartialRecoveryAndCanRetryAfterRepair() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let original = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let plan = try await original.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: directory
+        ))
+        let accepted = try await original.submit(planID: plan.id)
+        let validData = try Data(contentsOf: store.fileURL)
+
+        for corruption in 0..<5 {
+            var snapshot = try XCTUnwrap(JSONSerialization.jsonObject(with: validData) as? [String: Any])
+            var plans = try XCTUnwrap(snapshot["plans"] as? [[String: Any]])
+            var links = try XCTUnwrap(snapshot["submittedPlans"] as? [[String: Any]])
+            let expectedError: ApplicationJobPersistenceError
+            switch corruption {
+            case 0:
+                plans[0]["schemaVersion"] = 999
+                expectedError = .unsupportedSchema(999)
+            case 1:
+                plans.append(plans[0])
+                expectedError = .duplicatePlanID(plan.id)
+            case 2:
+                plans.removeAll()
+                expectedError = .missingSubmittedPlan(plan.id)
+            case 3:
+                snapshot["records"] = []
+                expectedError = .missingSubmittedJob(accepted.record.id)
+            default:
+                links.append(links[0])
+                expectedError = .duplicateSubmittedPlan(plan.id)
+            }
+            snapshot["plans"] = plans
+            snapshot["submittedPlans"] = links
+            let damagedData = try JSONSerialization.data(withJSONObject: snapshot)
+            try damagedData.write(to: store.fileURL)
+            let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+
+            for _ in 0..<2 {
+                do {
+                    _ = try await restored.restorePersistedState()
+                    XCTFail("Expected invalid snapshot to block recovery")
+                } catch {
+                    XCTAssertEqual(error as? ApplicationJobPersistenceError, expectedError)
+                }
+                let updates = await restored.recordUpdates()
+                var iterator = updates.makeAsyncIterator()
+                let visibleRecords = await iterator.next()
+                XCTAssertEqual(visibleRecords, [], "Invalid snapshots must not leak records to the queue")
+                XCTAssertEqual(try Data(contentsOf: store.fileURL), damagedData)
+            }
+
+            try validData.write(to: store.fileURL)
+            let recovered = try await restored.restorePersistedState()
+            XCTAssertEqual(recovered.map(\.id), [accepted.record.id])
+            XCTAssertEqual(recovered.first?.state, .interrupted)
+            let retry = try await restored.submit(planID: plan.id)
+            XCTAssertEqual(retry.record.id, accepted.record.id)
+            XCTAssertEqual(retry.record.state, .interrupted)
+            XCTAssertTrue(retry.wasAlreadyAccepted)
+        }
+    }
+
     func testSubmissionRetryRecoversFailedPersistenceWithoutDuplicateExecution() async throws {
         for (useEquivalentPlan, cancelBeforeRetry) in [(false, false), (true, false), (false, true), (true, true)] {
             let directory = try makeTemporaryDirectory()
