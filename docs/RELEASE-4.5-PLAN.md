@@ -446,6 +446,12 @@ retry names no longer replace the accepted names in queue inspection, including
 after restart. The 85-test contract suite passes. See the
 [original output plan validation record](4.5-original-output-plan-validation-2026-09-19.md).
 
+Planning-time retention cleanup now publishes removed terminal jobs to existing
+queue observers. Storage failures still report an error while the visible queue
+follows the authoritative in-memory state; a later successful save retains the
+cleanup across restart. See the
+[retention queue publication validation record](4.5-retention-publication-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

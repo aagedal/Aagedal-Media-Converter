@@ -1151,6 +1151,67 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertFalse(newAcceptance.wasAlreadyAccepted)
     }
 
+    func testPlanningRetentionPublishesRemovedJobsEvenWhenSavingFails() async throws {
+        for failSave in [false, true] {
+            let directory = try makeTemporaryDirectory()
+            let sourceURL = directory.appendingPathComponent("input.mov")
+            try Data("source".utf8).write(to: sourceURL)
+            let stateURL = directory.appendingPathComponent("jobs.json")
+            let service = ApplicationJobService(
+                recordRetentionLifetime: 20,
+                store: ApplicationJobStore(fileURL: stateURL),
+                fileAccessAuthorizer: .unrestricted
+            )
+            let request = makeRequest(sourceURLs: [sourceURL], destinationFolderURL: directory)
+            let createdAt = Date(timeIntervalSince1970: 1_800_000_000)
+            let plan = try await service.plan(request, now: createdAt)
+            let accepted = try await service.submit(planID: plan.id, now: createdAt)
+            _ = try await service.requestCancellation(accepted.record.id, now: createdAt)
+
+            let updates = await service.recordUpdates()
+            var iterator = updates.makeAsyncIterator()
+            let initial = await iterator.next()
+            XCTAssertEqual(initial?.map(\.id), [accepted.record.id])
+            let published = expectation(description: "Retention reaches existing queue observers")
+            let observer = Task {
+                for await records in updates {
+                    if records.isEmpty {
+                        published.fulfill()
+                        return
+                    }
+                }
+            }
+            defer { observer.cancel() }
+
+            if failSave {
+                try FileManager.default.removeItem(at: stateURL)
+                try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: true)
+            }
+            do {
+                _ = try await service.plan(request, now: createdAt.addingTimeInterval(21))
+                XCTAssertFalse(failSave, "Planning must still report its persistence failure")
+            } catch {
+                if !failSave { throw error }
+            }
+            await fulfillment(of: [published], timeout: 5)
+            let records = try await service.allRecords()
+            XCTAssertTrue(records.isEmpty)
+
+            if failSave {
+                try FileManager.default.removeItem(at: stateURL)
+                _ = try await service.plan(request, now: createdAt.addingTimeInterval(22))
+            }
+            let restored = ApplicationJobService(
+                store: ApplicationJobStore(fileURL: stateURL),
+                fileAccessAuthorizer: .unrestricted
+            )
+            let restoredRecords = try await restored.allRecords(now: createdAt.addingTimeInterval(22))
+            XCTAssertTrue(restoredRecords.isEmpty)
+            let removedPlan = try await restored.plan(for: plan.id)
+            XCTAssertNil(removedPlan)
+        }
+    }
+
     func testDamagedPersistenceBlocksMutationAndIsNotOverwritten() async throws {
         let directory = try makeTemporaryDirectory()
         let stateURL = directory.appendingPathComponent("jobs.json")

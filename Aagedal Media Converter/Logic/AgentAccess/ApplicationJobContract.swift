@@ -2542,8 +2542,13 @@ actor ApplicationJobService {
             warnings: warnings
         )
         plans[plan.id] = plan
-        await removeExpiredState(now: now)
-        try await persist()
+        if await removeExpiredState(now: now) > 0 {
+            // Retention can remove visible jobs as well as plans. Publish the
+            // authoritative queue even when saving the cleanup fails.
+            try await persistAndPublishRecords()
+        } else {
+            try await persist()
+        }
         return plan
     }
 
