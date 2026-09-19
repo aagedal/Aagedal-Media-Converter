@@ -925,6 +925,54 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertTrue(secondRestore.isEmpty)
     }
 
+    func testConcurrentStartupRestoresOnceAndPreservesNewSubmissions() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("input.mov")
+        try Data("source".utf8).write(to: sourceURL)
+        let store = ApplicationJobStore(fileURL: directory.appendingPathComponent("jobs.json"))
+        let original = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let request = makeRequest(sourceURLs: [sourceURL], destinationFolderURL: directory)
+        let plan = try await original.plan(request)
+        let accepted = try await original.submit(planID: plan.id)
+        let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let requests = try (0..<24).map { index in
+            let newSource = directory.appendingPathComponent("restart-\(index).mov")
+            try Data("source".utf8).write(to: newSource)
+            return makeRequest(
+                sourceURLs: [newSource],
+                destinationFolderURL: directory,
+                idempotencyKey: "restart-\(index)"
+            )
+        }
+
+        let interrupted = try await withThrowingTaskGroup(of: [ApplicationJobRecord].self) { group in
+            for request in requests {
+                group.addTask {
+                    let recovered = try await restored.restorePersistedState()
+                    let newPlan = try await restored.plan(request)
+                    _ = try await restored.submit(planID: newPlan.id)
+                    return recovered
+                }
+            }
+            var records: [ApplicationJobRecord] = []
+            for try await result in group { records.append(contentsOf: result) }
+            return records
+        }
+        XCTAssertEqual(interrupted.map(\.id), [accepted.record.id])
+        let records = try await restored.allRecords()
+        XCTAssertEqual(records.count, requests.count + 1)
+        XCTAssertEqual(records.filter { $0.state == .queued }.count, requests.count)
+        for request in requests {
+            let retryPlan = try await restored.plan(request)
+            let retry = try await restored.submit(planID: retryPlan.id)
+            XCTAssertTrue(retry.wasAlreadyAccepted)
+            XCTAssertEqual(retry.record.state, .queued)
+        }
+        let reloaded = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+        let savedRecords = try await reloaded.allRecords()
+        XCTAssertEqual(Set(savedRecords.map(\.id)), Set(records.map(\.id)))
+    }
+
     func testPersistenceRetentionRemovesExpiredPlansAndOldTerminalIdempotencyKeys() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")

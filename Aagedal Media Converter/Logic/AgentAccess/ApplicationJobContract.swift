@@ -2313,6 +2313,9 @@ actor ApplicationJobService {
     // Registry calls suspend this actor. Keep validation, reservation, persistence,
     // and enqueueing together so competing submissions cannot both claim a path.
     private let submissionGate = ApplicationConversionExecutionGate()
+    // Startup also suspends on the registry. Every entry point must wait until
+    // recovery finishes before reading or mutating the restored state.
+    private let restorationGate = ApplicationConversionExecutionGate()
     private let planLifetime: TimeInterval
     private let recordRetentionLifetime: TimeInterval
     private let store: ApplicationJobStore?
@@ -2359,6 +2362,23 @@ actor ApplicationJobService {
     func restorePersistedState(
         now: Date = Date(),
         interruptionDiagnostic: String = "Application restarted before the conversion completed."
+    ) async throws -> [ApplicationJobRecord] {
+        let gateID = await restorationGate.acquire()
+        do {
+            let records = try await restoreHoldingGate(
+                now: now, interruptionDiagnostic: interruptionDiagnostic
+            )
+            await restorationGate.release(gateID)
+            return records
+        } catch {
+            await restorationGate.release(gateID)
+            throw error
+        }
+    }
+
+    private func restoreHoldingGate(
+        now: Date,
+        interruptionDiagnostic: String
     ) async throws -> [ApplicationJobRecord] {
         guard !didRestore else { return [] }
         guard let store, let snapshot = try store.load() else {
@@ -2740,7 +2760,7 @@ actor ApplicationJobService {
     }
 
     private func ensureRestored(now: Date) async throws {
-        guard store != nil, !didRestore else { return }
+        guard store != nil else { return }
         _ = try await restorePersistedState(now: now)
     }
 

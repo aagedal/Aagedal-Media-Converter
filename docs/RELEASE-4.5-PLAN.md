@@ -388,6 +388,13 @@ storage error. Once storage recovers, an idempotent submission retry saves the
 same terminal result without starting another conversion. See the
 [terminal-state persistence validation record](4.5-terminal-persistence-validation-2026-09-19.md).
 
+Startup recovery now serializes concurrent restore calls and makes service
+requests wait for recovery to finish. A second caller cannot reload the old
+snapshot over new plans or accepted jobs while the first caller is suspended on
+the registry. Concurrent restart/submission coverage checks one-time interruption,
+retained new jobs, idempotent retries, and persistence across another reload. See
+the [startup recovery validation record](4.5-startup-recovery-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,
