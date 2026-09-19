@@ -1734,6 +1734,9 @@ actor ApplicationFFmpegJobExecutor {
                 progress: itemIndex / outputCount,
                 stage: fallbackStage
             ))
+            guard !cancellationRequested.contains(jobID) else {
+                return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
+            }
             let progressSink = ApplicationFFmpegProgressSink { itemProgress, status in
                 let boundedProgress = min(max(itemProgress, 0), 1)
                 Task {
@@ -1745,9 +1748,6 @@ actor ApplicationFFmpegJobExecutor {
             }
             let result = await runner.run(conversion, progressSink)
 
-            if cancellationRequested.contains(jobID) {
-                return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
-            }
             switch result {
             case .succeeded:
                 if runner.validatesPlannedOutput,
@@ -1756,7 +1756,15 @@ actor ApplicationFFmpegJobExecutor {
                 }
                 completedOutputs.append(output.outputURL)
             case .failed(let diagnostic):
+                if cancellationRequested.contains(jobID) {
+                    return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
+                }
                 return .failed(diagnostic: diagnostic, outputURLs: completedOutputs)
+            }
+            // A successful runner result is authoritative even if cancellation
+            // arrived after publication. Retain that output, then stop the batch.
+            if cancellationRequested.contains(jobID) {
+                return .cancelled(diagnostic: "Conversion cancelled.", outputURLs: completedOutputs)
             }
         }
 

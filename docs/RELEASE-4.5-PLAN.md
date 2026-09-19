@@ -345,6 +345,14 @@ in restored job history; cancellation and invalid partial-output reports have
 focused coverage. See the
 [partial-batch validation record](4.5-partial-batch-validation-2026-09-19.md).
 
+Cancellation at the FFmpeg completion boundary now retains a successfully
+published output before stopping the batch, including when that output is the
+last source. Cancellation received while the adapter publishes preparation
+progress also prevents the runner from starting. A real Stream Copy regression
+covers single-source and multi-source publication, persisted reconnect results,
+and decoding of the retained output. See the
+[publication cancellation validation record](4.5-publication-cancellation-validation-2026-09-19.md).
+
 This is still a beta candidate under construction rather than a completed
 feasibility decision. The
 current direct-distribution target has App Sandbox disabled, the Claude Code,

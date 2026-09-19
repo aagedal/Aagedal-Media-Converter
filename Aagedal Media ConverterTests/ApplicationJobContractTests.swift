@@ -1455,6 +1455,92 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(cancelCount, 0)
     }
 
+    func testFFmpegAdapterRechecksCancellationAfterPreparationProgress() async throws {
+        let directory = try makeTemporaryDirectory()
+        let source = directory.appendingPathComponent("source.mov")
+        try Data("source".utf8).write(to: source)
+        let harness = ApplicationFFmpegRunnerHarness()
+        let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+            run: { conversion, progress in
+                await harness.run(conversion: conversion, progress: progress)
+            },
+            cancel: { await harness.cancel() }
+        ))
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let plan = try await service.plan(makeRequest(sourceURLs: [source], destinationFolderURL: directory))
+        let executor = adapter.jobExecutor
+        let jobID = ApplicationJobID()
+        let result = await executor.execute(jobID, plan, ApplicationJobProgressReporter { _ in
+            await executor.cancel(jobID)
+        })
+        XCTAssertEqual(result, .cancelled(diagnostic: "Conversion cancelled."))
+        let runCount = await harness.runCount()
+        XCTAssertEqual(runCount, 0)
+    }
+
+    func testLiveCancellationAfterPublicationRetainsCompletedOutput() async throws {
+        let directory = try makeTemporaryDirectory()
+        let firstSource = directory.appendingPathComponent("first.mov")
+        let secondSource = directory.appendingPathComponent("second.mov")
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", firstSource.path
+        ])
+        try FileManager.default.copyItem(at: firstSource, to: secondSource)
+        for sourceCount in [1, 2] {
+            let destination = directory.appendingPathComponent("outputs-\(sourceCount)", isDirectory: true)
+            try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+            let harness = ApplicationFFmpegRunnerHarness(blocksFirstRun: true)
+            let liveRunner = ApplicationFFmpegRunner.live()
+            let adapter = ApplicationFFmpegJobExecutor(runner: ApplicationFFmpegRunner(
+                run: { conversion, progress in
+                    let result = await liveRunner.run(conversion, progress)
+                    // Suspend delivery of the authoritative completion until
+                    // cancellation arrives after the real output was published.
+                    _ = await harness.run(conversion: conversion, progress: progress)
+                    return result
+                },
+                cancel: {
+                    await liveRunner.cancel()
+                    await harness.cancel()
+                },
+                validatesPlannedOutput: true
+            ))
+            let store = ApplicationJobStore(fileURL: destination.appendingPathComponent("jobs.json"))
+            let service = ApplicationJobService(
+                store: store, fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor
+            )
+            let plan = try await service.plan(makeRequest(
+                sourceURLs: Array([firstSource, secondSource].prefix(sourceCount)),
+                destinationFolderURL: destination, presetID: .streamCopy
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            for _ in 0..<500 {
+                if await harness.runCount() == 1 { break }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let startedCount = await harness.runCount()
+            XCTAssertEqual(startedCount, 1)
+            _ = try await service.requestCancellation(accepted.record.id)
+            let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .cancelled)
+            XCTAssertEqual(record.outputURLs, [plan.outputs[0].outputURL])
+            XCTAssertEqual(record.diagnostic, "Conversion cancelled.")
+            let runCount = await harness.runCount()
+            XCTAssertEqual(runCount, 1)
+            if sourceCount == 2 {
+                XCTAssertFalse(FileManager.default.fileExists(atPath: plan.outputs[1].outputURL.path))
+            }
+            let restored = ApplicationJobService(store: store, fileAccessAuthorizer: .unrestricted)
+            let restoredRecord = try await restored.record(for: record.id)
+            XCTAssertEqual(restoredRecord?.outputURLs, record.outputURLs)
+            try runBundledFFmpeg([
+                "-hide_banner", "-loglevel", "error", "-i", plan.outputs[0].outputURL.path,
+                "-map", "0", "-f", "null", "-"
+            ])
+        }
+    }
+
     func testFFmpegAdapterRejectsUnrepresentableCapturedSettingsBeforeLaunching() async throws {
         let directory = try makeTemporaryDirectory()
         let outputDirectory = directory.appendingPathComponent("outputs", isDirectory: true)
