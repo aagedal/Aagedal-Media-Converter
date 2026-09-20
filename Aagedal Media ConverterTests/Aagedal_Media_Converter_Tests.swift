@@ -5411,6 +5411,91 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testTesseractOCREngineRejectsLateSuccessAfterCancellation() async throws {
+        try await checkTesseractLateCompletion(terminationStatus: 0)
+    }
+
+    func testTesseractOCREnginePreservesCancellationOverLateProcessFailure() async throws {
+        try await checkTesseractLateCompletion(terminationStatus: 7)
+    }
+
+    private func checkTesseractLateCompletion(terminationStatus: Int32) async throws {
+        let started = expectation(description: "Recognition subprocess is outstanding")
+        let completion = AsyncTestGate()
+        let runner = RecordingSubprocessRunner { _, _ in
+            started.fulfill()
+            // Model completion racing cancellation without a cooperative runner check.
+            await completion.wait()
+            return SubprocessResult(
+                terminationStatus: terminationStatus, termination: .exited,
+                standardOutput: Data("late recognized text".utf8),
+                standardError: Data("late failure".utf8),
+                discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0,
+                duration: .milliseconds(20)
+            )
+        }
+        let engine = TesseractOCREngine(
+            tesseractPath: "/fixture/tesseract", tessdataPrefix: nil,
+            subprocessRunner: runner
+        )
+        let recognition = Task {
+            try await engine.recognize(
+                pngURL: URL(fileURLWithPath: "/private/tmp/frame.png"), language: "eng"
+            )
+        }
+        await fulfillment(of: [started], timeout: 2)
+        recognition.cancel()
+        completion.open()
+        do {
+            _ = try await recognition.value
+            XCTFail("Cancelled recognition must not return late text")
+        } catch is CancellationError {
+            // Cancellation wins over both successful output and a late exit failure.
+        }
+    }
+
+    func testTesseractOCREngineCancellationDrainsActiveSubprocess() async throws {
+        let ready = expectation(description: "Recognition subprocess reported readiness")
+        let drained = expectation(description: "Recognition subprocess drained")
+        let runner = RecordingSubprocessRunner { request, _ in
+            // Use a controlled long-running process at the engine's subprocess boundary.
+            // Readiness comes from the child, not from entering the runner.
+            let controlled = SubprocessRequest(
+                executableURL: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", "printf 'ready\\n'; exec /bin/sleep 30"],
+                timeout: request.timeout,
+                terminationGracePeriod: .milliseconds(100)
+            )
+            defer { drained.fulfill() }
+            return try await SubprocessRunner().run(controlled) { chunk in
+                if chunk.stream == .standardOutput,
+                   String(decoding: chunk.data, as: UTF8.self).contains("ready") {
+                    ready.fulfill()
+                }
+            }
+        }
+        let engine = TesseractOCREngine(
+            tesseractPath: "/fixture/tesseract", tessdataPrefix: nil,
+            subprocessRunner: runner
+        )
+        let recognition = Task {
+            try await engine.recognize(
+                pngURL: URL(fileURLWithPath: "/private/tmp/frame.png"), language: "eng"
+            )
+        }
+        await fulfillment(of: [ready], timeout: 3)
+        let cancellationStart = ContinuousClock.now
+        recognition.cancel()
+        do {
+            _ = try await recognition.value
+            XCTFail("Active recognition must cancel")
+        } catch is CancellationError {
+            // The production runner has drained before the engine returns cancellation.
+        }
+        XCTAssertLessThan(cancellationStart.duration(to: .now), .seconds(3))
+        await fulfillment(of: [drained], timeout: 1)
+    }
+
     func testVisionOCREngineLoadsPixelsBeforeCallingBoundedPerformer() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("VisionOCR-\(UUID().uuidString)", isDirectory: true)

@@ -807,6 +807,15 @@ subtitle-mux coexistence tests pass. A real Apple Vision attempt exceeded its
 recognizer-internal cancellation, VOBSUB, and UI integration also remain open.
 See the [real OCR and failure validation record](4.5-real-ocr-validation-2026-09-21.md).
 
+Tesseract recognition now rechecks cancellation after subprocess completion before
+accepting text or interpreting an exit failure. Two controlled completion-race
+regressions fail before the fix and pass afterward; a real subprocess stand-in
+also verifies prompt cancellation through the production engine and runner.
+All 24 focused engine/coexistence tests pass, including real Tesseract publication.
+Cancellation inside the actual recognition binary, the Apple Vision timeout,
+VOBSUB, and UI integration remain open. See the
+[OCR engine cancellation validation record](4.5-ocr-engine-cancellation-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
