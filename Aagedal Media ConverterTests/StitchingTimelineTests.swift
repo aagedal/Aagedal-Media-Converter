@@ -47,6 +47,42 @@ final class StitchingTimelineTests: XCTestCase {
         return item
     }
 
+    func testRippleTrimTargetsPlayheadAndClosesGap() {
+        let first = clip(duration: 20, start: 4, end: 10)
+        let second = clip(duration: 30, start: 12, end: 18)
+        var items = [first, second]
+        XCTAssertEqual(StitchingTimeline.rippleTrim(&items, at: 8, start: true), second.id)
+        XCTAssertEqual(items[1].effectiveTrimStart, 14)
+        XCTAssertEqual(items[0], first)
+        XCTAssertEqual(items.reduce(0) { $0 + StitchingTimeline.duration($1) }, 10)
+        XCTAssertEqual(StitchingTimeline.rippleTrim(&items, at: 3, start: false), first.id)
+        XCTAssertEqual(items[0].effectiveTrimEnd, 7)
+        XCTAssertEqual(StitchingTimeline.location(at: 3, in: items)?.id, second.id)
+        XCTAssertEqual(items.reduce(0) { $0 + StitchingTimeline.duration($1) }, 7)
+    }
+
+    func testRippleTrimAtBoundaryKeepsNonemptyClip() {
+        var items = [clip(duration: 5), clip(duration: 5, start: 1, end: 4)]
+        let secondID = items[1].id
+        XCTAssertEqual(StitchingTimeline.rippleTrim(&items, at: 5, start: false), secondID)
+        XCTAssertGreaterThan(StitchingTimeline.duration(items[1]), 0)
+        XCTAssertEqual(items[0].effectiveTrimEnd, 5)
+    }
+
+    func testResetTrimAppliesToEntireSelectionOnlyAndKeepsMarkers() {
+        var items = [clip(duration: 10, start: 1, end: 4),
+                     clip(duration: 10, start: 2, end: 5),
+                     clip(duration: 10, start: 3, end: 6)]
+        items[0].timelineMarkers = [StitchTimelineMarker(sourceTime: 2, text: "Note")]
+        let markers = items[0].timelineMarkers
+        let third = items[2]
+        StitchingTimeline.resetTrims(&items, selection: Set(items.prefix(2).map(\.id)))
+        XCTAssertEqual(items.prefix(2).map(\.effectiveTrimStart), [0, 0])
+        XCTAssertEqual(items.prefix(2).map(\.effectiveTrimEnd), [10, 10])
+        XCTAssertEqual(items[2], third)
+        XCTAssertEqual(items[0].timelineMarkers, markers)
+    }
+
     func testSequenceBoundaryMapsToNextTrimmedSource() {
         let first = clip(duration: 20, start: 4, end: 10)
         let second = clip(duration: 30, start: 12, end: 18)

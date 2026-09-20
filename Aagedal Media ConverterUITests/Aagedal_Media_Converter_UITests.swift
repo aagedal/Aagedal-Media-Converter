@@ -482,6 +482,41 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStitchingRippleShortcutsAndSelectionReset() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        let timeline = element("group.timeline")
+        let timecode = element("stitching.timecode")
+        func totalFrames() -> Int {
+            let text = (timecode.value as? String) ?? timecode.label
+            let parts = text.components(separatedBy: " / ").last!.split(separator: ":").compactMap { Int($0) }
+            guard parts.count == 4 else { XCTFail("Unexpected timecode: \(text)"); return -1 }
+            return ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * 24 + parts[3]
+        }
+        element("stitching.fit").click()
+        XCTAssertEqual(totalFrames(), 96)
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.05)).click()
+        app.typeKey("q", modifierFlags: [])
+        let afterQ = totalFrames()
+        XCTAssertGreaterThan(afterQ, 48)
+        XCTAssertLessThan(afterQ, 96)
+        element("stitching.fit").click()
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.05)).click()
+        app.typeKey("w", modifierFlags: [])
+        XCTAssertLessThan(totalFrames(), afterQ)
+        element("stitching.fit").click()
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.35)).click()
+        XCUIElement.perform(withKeyModifiers: .shift) {
+            timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.35)).click()
+        }
+        element("stitching.resetTrim").click()
+        XCTAssertEqual(totalFrames(), 288, "Both six-second sources should be fully restored")
+    }
+
+    @MainActor
     func testStitchingMarkersCanBeAddedEditedAndDeleted() throws {
         launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
         defer { terminateAndCleanFixtures() }

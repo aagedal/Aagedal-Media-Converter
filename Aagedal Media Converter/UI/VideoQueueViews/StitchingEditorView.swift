@@ -62,6 +62,21 @@ enum StitchingTimeline {
         return location(at: time >= total ? 0 : time, in: items)
     }
 
+    /// A gapless sequence ripples automatically when a retained source range shrinks.
+    static func rippleTrim(_ items: inout [VideoItem], at time: Double, start: Bool) -> UUID? {
+        guard let location = location(at: time, in: items),
+              let index = items.firstIndex(where: { $0.id == location.id }) else { return nil }
+        trim(&items[index], start: start, to: location.sourceTime)
+        return location.id
+    }
+
+    static func resetTrims(_ items: inout [VideoItem], selection: Set<UUID>) {
+        for index in items.indices where selection.contains(items[index].id) {
+            items[index].trimStart = nil
+            items[index].trimEnd = nil
+        }
+    }
+
     static func frameRate(for item: VideoItem) -> Double? {
         guard let rate = item.imageSequenceConfig?.frameRate ?? item.metadata?.primaryVideoStream?.frameRate?.value,
               rate.isFinite, rate >= 1, rate <= 1000 else { return nil }
@@ -124,6 +139,7 @@ struct StitchingEditorView<FileList: View>: View {
     // Display preference only: never stored in the encoding group or audio settings.
     @AppStorage("stitchingWaveformVisualScale") private var waveformVisualScale: Double = 4
     @State private var shuttleRate: Float = 1
+    @State private var keyboardZoomSteps = 0
     @State private var pinchStartZoom: Double?
     @State private var zoomAnchorTime: Double = 0
     @State private var zoomAnchorX: Double = 0
@@ -178,7 +194,9 @@ struct StitchingEditorView<FileList: View>: View {
                             onTogglePlayback: togglePlayback,
                             onShuttle: shuttle,
                             onFit: fitTimeline,
+                            onZoom: { keyboardZoomSteps += $0 },
                             onAddMarker: addMarker,
+                            onRippleTrim: rippleTrim,
                             onFinished: { advance(after: item.id) },
                             onAssets: { filmstrips[item.id] = $0 }
                         )
@@ -220,6 +238,7 @@ struct StitchingEditorView<FileList: View>: View {
                     .accessibilityIdentifier("stitching.addMarker")
                     Text("Zoom").foregroundStyle(.secondary)
                     Slider(value: $zoom, in: 1...32).frame(width: 110)
+                        .help("Zoom the timeline (⌘+ / ⌘−)")
                     Button("Fit", action: fitTimeline)
                         .keyboardShortcut("z", modifiers: [.shift])
                         .help("Fit the timeline (⇧Z)")
@@ -227,11 +246,11 @@ struct StitchingEditorView<FileList: View>: View {
                 }
                 timeline
                 HStack(spacing: 12) {
-                    Text("J/K/L: reverse • pause • play · M: marker")
+                    Text("J/K/L: reverse • pause • play · M: marker · Q/W: trim start/end")
                         .font(.caption).foregroundStyle(.secondary)
                     Image(systemName: "questionmark.circle")
                         .foregroundStyle(.secondary)
-                        .help("Pinch to zoom. Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed.")
+                        .help("Pinch to zoom. Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed. Q trims the start to the playhead; W trims the end. Later clips close the gap.")
                     if isStreamCopy {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.secondary)
@@ -251,14 +270,9 @@ struct StitchingEditorView<FileList: View>: View {
                         Text("\(selectedClipIDs.count) clips selected")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Button("Reset trim") {
-                        isPlaying = false
-                        guard let i = selectedIndex else { return }
-                        group.items[i].trimStart = nil
-                        group.items[i].trimEnd = nil
-                        seek(item.id, to: 0)
-                    }
-                    .disabled(item.durationSeconds <= 0)
+                    Button("Reset trim", action: resetSelectedTrims)
+                        .accessibilityIdentifier("stitching.resetTrim")
+                        .help("Reset the start and end trims of all selected clips.")
                 }
             } else {
                 ContentUnavailableView("No clips", systemImage: "film", description: Text("Add files to start stitching."))
@@ -473,6 +487,17 @@ struct StitchingEditorView<FileList: View>: View {
                             contentWidth: newWidth, viewportWidth: geometry.size.width))
                     }
                     .onEnded { _ in pinchStartZoom = nil })
+                .onChange(of: keyboardZoomSteps) { previous, current in
+                    let oldScale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * zoom)
+                    let anchorX = cursorX ?? min(geometry.size.width, max(0, sequenceTime * oldScale + 10 - scrollOffset))
+                    let anchorTime = max(0, (scrollOffset + anchorX - 10) / oldScale)
+                    zoom = min(32, max(1, zoom * pow(1.25, Double(current - previous))))
+                    let newScale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * zoom)
+                    scrollPosition.scrollTo(x: StitchingTimeline.zoomOffset(
+                        time: anchorTime, scale: newScale, anchorX: anchorX,
+                        contentWidth: max(geometry.size.width, total * newScale + 20),
+                        viewportWidth: geometry.size.width))
+                }
                 .onChange(of: fitRequest) { _, _ in
                     proxy.scrollTo("stitching.timeline.origin", anchor: .leading)
                 }
@@ -595,6 +620,32 @@ struct StitchingEditorView<FileList: View>: View {
         zoom = 1
         fitRequest = UUID()
     }
+    private func rippleTrim(start: Bool) {
+        guard group.status != .converting, !showsMarkerEditor else { return }
+        let time = sequenceTime
+        isPlaying = false
+        scrubTask?.cancel()
+        scrubTask = nil
+        pendingScrubTime = nil
+        guard let id = StitchingTimeline.rippleTrim(&group.items, at: time, start: start),
+              let item = group.items.first(where: { $0.id == id }) else { return }
+        seek(id, to: start ? item.effectiveTrimStart : item.effectiveTrimEnd)
+    }
+
+    private func resetSelectedTrims() {
+        guard group.status != .converting, let index = selectedIndex else { return }
+        isPlaying = false
+        scrubTask?.cancel()
+        scrubTask = nil
+        pendingScrubTime = nil
+        let id = group.items[index].id
+        let selection = selectedClipIDs.isEmpty ? Set([id]) : selectedClipIDs
+        StitchingTimeline.resetTrims(&group.items, selection: selection)
+        // Keep the current source frame visible, including when it is outside the selection.
+        seek(id, to: min(group.items[index].effectiveTrimEnd,
+                         max(group.items[index].effectiveTrimStart, sourceTime)))
+    }
+
     private func setTrim(_ id: UUID, start: Bool, value: Double) {
         guard group.status != .converting, let index = group.items.firstIndex(where: { $0.id == id }) else { return }
         isPlaying = false
@@ -853,7 +904,9 @@ private struct StitchingSequencePreview: View {
     let onTime: (Double) -> Void
     let onTogglePlayback: () -> Void
     let onFit: () -> Void
+    let onZoom: (Int) -> Void
     let onAddMarker: () -> Void
+    let onRippleTrim: (Bool) -> Void
     let onFinished: () -> Void
     let onAssets: ([URL]) -> Void
     @StateObject private var controller: PreviewPlayerController
@@ -864,7 +917,7 @@ private struct StitchingSequencePreview: View {
     @State private var preparedID: UUID?
 
     init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, shuttleRate: Float,
-         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onAddMarker: @escaping () -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
+         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
         _item = item
         self.initialTime = initialTime
         self.seekRequest = seekRequest
@@ -874,7 +927,9 @@ private struct StitchingSequencePreview: View {
         self.onTime = onTime
         self.onTogglePlayback = onTogglePlayback
         self.onFit = onFit
+        self.onZoom = onZoom
         self.onAddMarker = onAddMarker
+        self.onRippleTrim = onRippleTrim
         _requestedTime = State(initialValue: initialTime)
         self.onFinished = onFinished
         self.onAssets = onAssets
@@ -893,6 +948,11 @@ private struct StitchingSequencePreview: View {
                 onFit()
                 return true
             }
+            // Accept both the + character and the unshifted = key used by many keyboards.
+            if shortcutModifiers == .command || shortcutModifiers == [.command, .shift] {
+                if key == "+" || key == "=" { onZoom(1); return true }
+                if key == "-", shortcutModifiers == .command { onZoom(-1); return true }
+            }
             guard shortcutModifiers.isEmpty else { return false }
             switch key.lowercased() {
             case " ": onTogglePlayback()
@@ -900,6 +960,8 @@ private struct StitchingSequencePreview: View {
             case "k": onShuttle(0)
             case "l": onShuttle(1)
             case "m": onAddMarker()
+            case "q": onRippleTrim(true)
+            case "w": onRippleTrim(false)
             default: return false
             }
             return true
