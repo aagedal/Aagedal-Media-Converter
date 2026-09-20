@@ -122,7 +122,7 @@
       "Start removed: %lld frames; kept: %lld frames; end removed: %lld frames",
       "Stitched Exports",
       "Stop All",
-      "Stream Copy keeps the original quality. Cut points may depend on source keyframes.",
+      "Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ.",
       "Swap L/R",
       "Testing…",
       "The settings backups folder couldn't be opened in Finder. Try again.",

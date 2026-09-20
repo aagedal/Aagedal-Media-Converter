@@ -245,17 +245,23 @@ struct StitchingEditorView<FileList: View>: View {
                         .accessibilityIdentifier("stitching.fit")
                 }
                 timeline
+                if isStreamCopy {
+                    Label {
+                        Text("Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ.")
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "info.circle")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("stitching.streamCopyBoundaryGuidance")
+                }
                 HStack(spacing: 12) {
                     Text("J/K/L: reverse • pause • play · M: marker · Q/W: trim start/end")
                         .font(.caption).foregroundStyle(.secondary)
                     Image(systemName: "questionmark.circle")
                         .foregroundStyle(.secondary)
                         .help("Pinch to zoom. Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed. Q trims the start to the playhead; W trims the end. Later clips close the gap.")
-                    if isStreamCopy {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.secondary)
-                            .help("Stream Copy keeps the original quality. Cut points may depend on source keyframes.")
-                    }
                     Picker("Waveform height", selection: $waveformVisualScale) {
                         ForEach([1.0, 2, 4, 8, 16], id: \.self) { scale in
                             Text("\(Int(scale))×").tag(scale)

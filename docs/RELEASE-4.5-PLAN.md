@@ -679,8 +679,16 @@ This exposed a timing limitation: even keyframe-aligned 0.5–1.5 second cuts re
 seconds. These tests characterize current packet-copy behavior; they do not
 establish exact long-GOP trimming. See the
 [long-GOP stitching validation record](4.5-stitching-long-gop-validation-2026-09-20.md).
-Exact cut handling or user-visible boundary guidance remains open alongside
-open-GOP and real-media coverage.
+The editor now provides explicit boundary guidance as described below; exact cut
+handling, open-GOP validation, and real-media coverage remain open.
+
+The stitching editor now displays a persistent Stream Copy notice below the
+timeline explaining that exports can include extra video frames and audio even
+at keyframes. It distinguishes the requested preview/timeline selection from
+actual export boundaries and duration. English and Norwegian text replace the
+previous tooltip-only guidance. This addresses disclosure of the observed timing
+limitation; it does not change trimming or establish exact cuts. See the
+[boundary guidance validation record](4.5-stitching-boundary-guidance-validation-2026-09-20.md).
 
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
