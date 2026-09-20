@@ -4076,6 +4076,156 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testLiveKeyframeAlignedStreamCopyPreservesDecodedSelection() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("closed-gop.mov")
+        // Closed one-second GOPs without reordered frames isolate a supported,
+        // independently decodable stream-copy boundary from approximate free trims.
+        try runBundledFFmpeg([
+            "-v", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=128x96:rate=24:duration=4",
+            "-f", "lavfi", "-i", "aevalsrc=0.1*sin(2*PI*(440*t+110*t*t)):s=48000:d=4",
+            "-c:v", "libx264", "-g", "24", "-keyint_min", "24", "-sc_threshold", "0",
+            "-bf", "0", "-flags", "+cgop", "-pix_fmt", "yuv420p", "-c:a", "pcm_s24le",
+            sourceURL.path
+        ])
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        let plan = try await service.plan(makeRequest(
+            origin: .manual, sourceURLs: [sourceURL], destinationFolderURL: directory,
+            presetID: .streamCopy,
+            sourceSettings: [ApplicationSourceExecutionSettings(
+                sourceURL: sourceURL, includeDateTag: false, timecodeConfig: nil,
+                trimStart: 1, trimEnd: 3, outputBaseNameOverride: "copied-selection"
+            )], idempotencyKey: nil
+        ))
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+        XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+        let outputURL = try XCTUnwrap(record.outputURLs.first)
+        let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+        let duration = try XCTUnwrap(metadata.durationSeconds)
+        XCTAssertGreaterThanOrEqual(duration, 2)
+        XCTAssertLessThan(duration, 2 + 1024.0 / 48_000)
+        XCTAssertEqual(metadata.frameCount, 48)
+        // Native MOV inspection returns sample-entry FourCCs; probe fallback
+        // reports codec names for the same encoded streams.
+        XCTAssertTrue(["avc1", "h264"].contains(try XCTUnwrap(metadata.videoStreams.first?.codec)))
+        XCTAssertTrue(["in24", "pcm_s24le"].contains(try XCTUnwrap(metadata.audioStreams.first?.codec)))
+        XCTAssertEqual(metadata.audioStreams.count, 1)
+        for isVideo in [true, false] {
+            let referenceURL = directory.appendingPathComponent(isVideo ? "reference.gray" : "reference.pcm")
+            let actualURL = directory.appendingPathComponent(isVideo ? "actual.gray" : "actual.pcm")
+            let mapping = ["-map", isVideo ? "0:v:0" : "0:a:0"]
+            let format = isVideo ? ["-pix_fmt", "gray", "-f", "rawvideo"] : ["-c:a", "pcm_s16le", "-f", "s16le"]
+            let trim = isVideo
+                ? ["-vf", "trim=start_frame=24:end_frame=72,setpts=PTS-STARTPTS"]
+                : ["-af", "atrim=start_sample=48000:end_sample=144000,asetpts=PTS-STARTPTS"]
+            try runBundledFFmpeg(["-v", "error", "-xerror", "-i", sourceURL.path] + mapping + trim + format + [referenceURL.path])
+            try runBundledFFmpeg(["-v", "error", "-xerror", "-i", outputURL.path] + mapping + format + [actualURL.path])
+            let reference = try Data(contentsOf: referenceURL)
+            let actual = try Data(contentsOf: actualURL)
+            XCTAssertEqual(reference.count, isVideo ? 48 * 128 * 96 : 96_000 * 2)
+            if isVideo {
+                XCTAssertEqual(actual.count, reference.count)
+                XCTAssertTrue(actual == reference, "Stream Copy changed the decoded video selection")
+            } else {
+                // Packet copying can retain the final PCM packet beyond the
+                // requested end. The selected samples must still begin exactly
+                // at the requested start, with less than one extra packet.
+                XCTAssertGreaterThanOrEqual(actual.count, reference.count)
+                XCTAssertLessThan(actual.count - reference.count, 1024 * 2)
+                XCTAssertTrue(actual.prefix(reference.count) == reference,
+                              "Stream Copy displaced the selected audio samples")
+                XCTAssertEqual(duration, Double(actual.count / 2) / 48_000, accuracy: 0.001)
+            }
+        }
+    }
+
+    func testLiveAACTrimPreservesSampleAlignmentAcrossPCMAndAACOutputs() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("aac-source.mov")
+        // A chirp exposes sample offsets without the ambiguity of a periodic tone.
+        // The selected boundaries are inside AAC's 1024-sample packets.
+        try runBundledFFmpeg([
+            "-v", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=4",
+            "-f", "lavfi", "-i", "aevalsrc=0.1*sin(2*PI*(440*t+110*t*t)):s=48000:d=4",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+            sourceURL.path
+        ])
+        let referenceURL = directory.appendingPathComponent("reference.pcm")
+        try runBundledFFmpeg([
+            "-v", "error", "-xerror", "-i", sourceURL.path, "-map", "0:a:0",
+            "-af", "atrim=start_sample=60000:end_sample=132000,asetpts=PTS-STARTPTS",
+            "-c:a", "pcm_s16le", "-f", "s16le", referenceURL.path
+        ])
+        let reference = try Data(contentsOf: referenceURL)
+        XCTAssertEqual(reference.count, 72_000 * 2)
+        let defaults = try makeDefaults()
+        defaults.set(H264Encoder.software.rawValue, forKey: AppConstants.h264EncoderKey)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        for presetID in [ApplicationPresetID.audioOnly, .h264] {
+            let plan = try await service.plan(makeRequest(
+                origin: .manual, sourceURLs: [sourceURL], destinationFolderURL: directory,
+                presetID: presetID,
+                sourceSettings: [ApplicationSourceExecutionSettings(
+                    sourceURL: sourceURL, includeDateTag: false, timecodeConfig: nil,
+                    trimStart: 1.25, trimEnd: 2.75, outputBaseNameOverride: "aac-trim-\(presetID.rawValue)"
+                )], idempotencyKey: nil, defaults: defaults
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+            XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+            let outputURL = try XCTUnwrap(record.outputURLs.first)
+            let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+            XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 1.5, accuracy: 1.0 / 48_000)
+            XCTAssertEqual(metadata.audioStreams.count, 1)
+            XCTAssertEqual(metadata.audioStreams.first?.sampleRate, 48_000)
+            XCTAssertEqual(metadata.audioStreams.first?.channels, 1)
+            let actualURL = directory.appendingPathComponent("\(presetID.rawValue).pcm")
+            try runBundledFFmpeg([
+                "-v", "error", "-xerror", "-i", outputURL.path, "-map", "0:a:0",
+                "-c:a", "pcm_s16le", "-f", "s16le", actualURL.path
+            ])
+            let actual = try Data(contentsOf: actualURL)
+            if presetID == .audioOnly {
+                XCTAssertEqual(actual.count, reference.count)
+                guard actual.count == reference.count else { continue }
+                // The WAV export may quantize through 24-bit PCM before this
+                // 16-bit comparison; allow one quantization unit, never a shift.
+                var maximumError = 0
+                for offset in stride(from: 0, to: reference.count, by: 2) {
+                    let expected = Int16(bitPattern: UInt16(reference[offset]) | UInt16(reference[offset + 1]) << 8)
+                    let decoded = Int16(bitPattern: UInt16(actual[offset]) | UInt16(actual[offset + 1]) << 8)
+                    maximumError = max(maximumError, abs(Int(decoded) - Int(expected)))
+                }
+                XCTAssertLessThanOrEqual(maximumError, 1, "AAC input priming displaced the selected WAV samples")
+            } else {
+                XCTAssertTrue(["mp4a", "aac"].contains(try XCTUnwrap(metadata.audioStreams.first?.codec)))
+                XCTAssertTrue(["avc1", "h264"].contains(try XCTUnwrap(metadata.videoStreams.first?.codec)))
+                // AAC may decode a final padded packet, but must not lose selected
+                // samples or add priming at the beginning of the audible range.
+                XCTAssertGreaterThanOrEqual(actual.count, reference.count)
+                XCTAssertLessThan(actual.count - reference.count, 1024 * 2)
+                guard actual.count >= reference.count else { continue }
+                for firstSample in stride(from: 0, to: 72_000, by: 480) {
+                    var squaredError = 0.0
+                    for sample in firstSample..<(firstSample + 480) {
+                        let offset = sample * 2
+                        let expected = Int16(bitPattern: UInt16(reference[offset]) | UInt16(reference[offset + 1]) << 8)
+                        let decoded = Int16(bitPattern: UInt16(actual[offset]) | UInt16(actual[offset + 1]) << 8)
+                        let error = Double(decoded) - Double(expected)
+                        squaredError += error * error
+                    }
+                    XCTAssertLessThan((squaredError / 480).squareRoot(), 150,
+                                      "AAC content or alignment changed at sample \(firstSample)")
+                }
+            }
+        }
+    }
+
     func testLiveSharedJobDownmixesCapturedSurroundRouting() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("surround.mov")
