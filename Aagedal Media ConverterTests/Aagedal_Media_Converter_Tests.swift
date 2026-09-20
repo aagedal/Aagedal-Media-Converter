@@ -5554,6 +5554,54 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertFalse(request.redactedCommandDescription.contains(output))
     }
 
+    func testTesseractSubtitleExtractorSelectsMetadataTrackFromMixedMedia() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OCRStreamSelection-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let source = directory.appendingPathComponent("mixed.mkv")
+        let captions = ["First subtitle track", "Second subtitle track"]
+        let inputs = try captions.enumerated().map { index, text in
+            let url = directory.appendingPathComponent("input-\(index).srt")
+            try "1\n00:00:00,000 --> 00:00:01,000\n\(text)\n".write(
+                to: url, atomically: true, encoding: .utf8
+            )
+            return url
+        }
+        // Text subtitles exercise the same stream-copy extraction boundary without
+        // requiring an OCR model. Video/audio occupy absolute indices 0 and 1.
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: [
+                "-v", "error", "-y", "-f", "lavfi", "-i", "color=size=64x48:rate=24:duration=1",
+                "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo:d=1",
+                "-i", inputs[0].path, "-i", inputs[1].path,
+                "-map", "0:v", "-map", "1:a", "-map", "2:s", "-map", "3:s",
+                "-c:v", "libx264", "-c:a", "aac", "-c:s", "copy", source.path
+            ],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let sourceBytes = try Data(contentsOf: source)
+        let metadata = try await ApplicationMediaInspector.live.inspect(source)
+        XCTAssertEqual(metadata.subtitleStreams.map(\.index), [0, 1])
+        XCTAssertEqual(metadata.subtitleStreams.count, captions.count)
+        let extractor = TesseractSubtitleStreamExtractor()
+        for (index, stream) in metadata.subtitleStreams.enumerated() {
+            let text = try XCTUnwrap(captions.indices.contains(index) ? captions[index] : nil)
+            let output = directory.appendingPathComponent("extracted-\(index).srt")
+            try await extractor.extract(
+                source: source.path, streamIndex: try XCTUnwrap(stream.index),
+                outputPath: output.path, ffmpegPath: ffmpeg
+            )
+            let extracted = try String(contentsOf: output, encoding: .utf8)
+            XCTAssertTrue(extracted.contains(text))
+            XCTAssertFalse(extracted.contains(captions[1 - index]))
+        }
+        XCTAssertEqual(try Data(contentsOf: source), sourceBytes)
+    }
+
     func testTesseractSubtitleExtractorReassemblesSplitProgressOutput() async throws {
         let progressReported = expectation(description: "split FFmpeg progress parsed")
         let runner = RecordingSubprocessRunner { _, outputHandler in

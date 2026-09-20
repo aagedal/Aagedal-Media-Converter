@@ -758,6 +758,15 @@ model availability are controlled in these regressions; real model inference,
 OCR, and UI integration remain open. See the
 [Whisper-agent coexistence validation record](4.5-whisper-agent-coexistence-validation-2026-09-20.md).
 
+OCR stream selection now has a bundled-FFmpeg regression using a generated MKV
+with video, audio, and two distinct subtitle tracks. The test passes the live
+inspector's subtitle-relative indices into the production extractor, verifies
+each selected track's text, and confirms unchanged source bytes. The existing
+mapping is correct; a misleading queue-model comment is corrected. All six focused
+extraction tests pass. Bitmap recognition and OCR/agent cancellation coexistence
+remain open. See the
+[OCR stream-selection validation record](4.5-ocr-stream-selection-validation-2026-09-20.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

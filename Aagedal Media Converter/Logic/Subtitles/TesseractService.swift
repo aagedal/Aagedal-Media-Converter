@@ -530,6 +530,7 @@ struct TesseractSubtitleStreamExtractor: Sendable {
             arguments: [
                 "-y",
                 "-i", source,
+                // SwiftMediaMetadata numbers subtitles within their stream type.
                 "-map", "0:s:\(streamIndex)",
                 "-c", "copy",
                 outputPath

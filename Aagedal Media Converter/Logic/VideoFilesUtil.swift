@@ -871,7 +871,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var subtitleFilePath: URL? = nil
     /// Which method (Whisper or OCR) was chosen by the user for this item
     var subtitleMethod: SubtitleConversionMethod = .whisper
-    /// Absolute stream index of the bitmap subtitle track chosen for OCR. nil = first bitmap track.
+    /// Subtitle-relative stream index of the bitmap subtitle track chosen for OCR. nil = first bitmap track.
     var selectedBitmapSubtitleStreamIndex: Int? = nil
     /// Absolute stream index of the audio track to use for Whisper transcription. nil = default track.
     var selectedAudioStreamIndex: Int? = nil
