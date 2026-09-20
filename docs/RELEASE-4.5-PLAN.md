@@ -796,6 +796,17 @@ subtitle-mux coexistence tests pass. Recognition remains controlled;
 real engines, VOBSUB, and UI integration remain open. See the
 [active PGS cancellation validation record](4.5-active-pgs-cancellation-validation-2026-09-21.md).
 
+Real bundled Tesseract recognition now passes after cancelling an overlapping
+agent export. A generated readable PGS bitmap is muxed into MKV, extracted through
+bundled FFmpeg, parsed, recognized with the bundled English model, and published
+with exact text/timing while preserving existing files. This work also fixes short
+tracks reporting success with an empty SRT when every recognition attempt failed:
+they now return an OCR error before publication. All 13 focused OCR, Whisper, and
+subtitle-mux coexistence tests pass. A real Apple Vision attempt exceeded its
+10-second frame deadline on this host and remains an open validation issue;
+recognizer-internal cancellation, VOBSUB, and UI integration also remain open.
+See the [real OCR and failure validation record](4.5-real-ocr-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

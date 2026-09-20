@@ -285,6 +285,8 @@ actor TesseractService {
         let total = frames.count
         var srtEntries: [(index: Int, start: TimeInterval, end: TimeInterval, text: String)] = []
         var consecutiveFailures = 0
+        var successfulFrames = 0
+        var lastRecognitionFailure: String?
         let maxConsecutiveFailures = 5
 
         for (i, frame) in frames.enumerated() {
@@ -312,6 +314,7 @@ actor TesseractService {
                     task.cancel()
                 }
                 consecutiveFailures = 0
+                successfulFrames += 1
             } catch is CancellationError {
                 throw TesseractServiceError.cancelled
             } catch {
@@ -319,6 +322,7 @@ actor TesseractService {
                 // the engine itself is broken (wrong tessdata path, missing language pack,
                 // unreadable PNG dimensions). Log every failure; bail after a streak.
                 consecutiveFailures += 1
+                lastRecognitionFailure = error.localizedDescription
                 logger.warning("OCR engine failure on frame \(i + 1)/\(total): \(error.localizedDescription, privacy: .public)")
                 if consecutiveFailures >= maxConsecutiveFailures {
                     throw TesseractServiceError.engineUnstable(error.localizedDescription)
@@ -333,6 +337,12 @@ actor TesseractService {
         }
 
         guard !cancelledRunIDs.contains(runID) else { throw TesseractServiceError.cancelled }
+
+        // A short track can exhaust every frame before reaching the failure-streak
+        // limit. Do not publish an empty success when recognition never succeeded.
+        if successfulFrames == 0, let lastRecognitionFailure {
+            throw TesseractServiceError.ocrFailed(lastRecognitionFailure)
+        }
 
         // Step 4 — Write SRT
         progress(TesseractProgress(stage: .writingSRT, percentage: 0.97))

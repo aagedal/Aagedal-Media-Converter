@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -574,14 +575,28 @@ final class OCRAgentCoexistenceTests: XCTestCase {
     }
 
     @MainActor
-    private func checkCoexistence(cancelAgent: Bool, cancelDuringExtraction: Bool = false) async throws {
+    func testAgentCancellationPreservesRealTesseractOCRPublication() async throws {
+        try await checkCoexistence(cancelAgent: true, useRealTesseract: true)
+    }
+
+    @MainActor
+    func testAllOCRFramesFailWithoutPublishingOrStoppingAgentExport() async throws {
+        try await checkCoexistence(cancelAgent: false, failOCR: true)
+    }
+
+    @MainActor
+    private func checkCoexistence(
+        cancelAgent: Bool, cancelDuringExtraction: Bool = false, useRealTesseract: Bool = false,
+        failOCR: Bool = false
+    ) async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OCRAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let source = directory.appendingPathComponent("source.mkv")
         let subtitleFixture = directory.appendingPathComponent("fixture.sup")
-        try CoexistencePGSFixture.data.write(to: subtitleFixture)
+        try (useRealTesseract ? CoexistencePGSFixture.readableData() : CoexistencePGSFixture.data)
+            .write(to: subtitleFixture)
         let existingSRT = directory.appendingPathComponent("source.srt")
         let existingBytes = Data("Existing subtitles".utf8)
         try existingBytes.write(to: existingSRT)
@@ -599,11 +614,12 @@ final class OCRAgentCoexistenceTests: XCTestCase {
         let sourceBytes = try Data(contentsOf: source)
         let ocrStarted = expectation(description: "OCR recognition is outstanding")
         let ocrCancelled = expectation(description: "OCR engine received cancellation")
-        ocrCancelled.isInverted = cancelAgent || cancelDuringExtraction
+        ocrCancelled.isInverted = cancelAgent || cancelDuringExtraction || failOCR
         ocrStarted.isInverted = cancelDuringExtraction && !cancelAgent
         let extractionStarted = cancelDuringExtraction
             ? expectation(description: "Real subtitle extraction reported FFmpeg progress") : nil
-        let recognizer = CoexistenceOCREngine(started: ocrStarted, cancelled: ocrCancelled)
+        let recognizer = CoexistenceOCREngine(started: ocrStarted, cancelled: ocrCancelled,
+                                               useRealTesseract: useRealTesseract, failOCR: failOCR)
         let extractor = CoexistenceLivePGSRunner(started: extractionStarted)
         let ocr = TesseractService(subprocessRunner: extractor, ocrEngine: recognizer)
         let operationID = UUID()
@@ -641,6 +657,18 @@ final class OCRAgentCoexistenceTests: XCTestCase {
             }
             if cancelAgent {
                 _ = try await service.requestCancellation(accepted.record.id)
+            } else if failOCR {
+                await recognizer.finish()
+                do {
+                    _ = try await recognition.value
+                    XCTFail("An entirely failed OCR run must not publish an empty SRT")
+                } catch let error as TesseractServiceError {
+                    guard case .ocrFailed(let message) = error else { throw error }
+                    XCTAssertEqual(message, "Recognition fixture failure")
+                }
+                await fulfillment(of: [ocrCancelled], timeout: 0.1)
+                let stillRunning = await runner.isRunning
+                XCTAssertTrue(stillRunning)
             } else {
                 await ocr.cancelGeneration(operationID: operationID)
                 if !cancelDuringExtraction {
@@ -681,7 +709,8 @@ final class OCRAgentCoexistenceTests: XCTestCase {
                 let output = try await recognition.value
                 subtitleOutputs = [output]
                 XCTAssertEqual(output.lastPathComponent, "source.ocr.srt")
-                XCTAssertEqual(try Data(contentsOf: output), Data("1\n00:00:00,000 --> 00:00:01,000\nOCR result\n".utf8))
+                let expectedText = useRealTesseract ? "Media subtitle" : "OCR result"
+                XCTAssertEqual(try Data(contentsOf: output), Data("1\n00:00:00,000 --> 00:00:01,000\n\(expectedText)\n".utf8))
                 await fulfillment(of: [ocrCancelled], timeout: 0.1)
             } else {
                 let output = try XCTUnwrap(record?.outputURLs.first)
@@ -761,8 +790,62 @@ private actor CoexistenceLivePGSRunner: SubprocessRunning {
     }
 }
 
-/// A minimal two-pixel PGS display set, muxed into the source before extraction.
+/// Generated PGS display sets, muxed into the source before extraction.
 private enum CoexistencePGSFixture {
+    /// Generates actual readable pixels, then encodes them as a PGS bitmap.
+    @MainActor
+    static func readableData() throws -> Data {
+        let width = 640
+        let height = 100
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSColor.black.setFill()
+        NSRect(x: 0, y: 0, width: width, height: height).fill()
+        ("Media subtitle" as NSString).draw(at: NSPoint(x: 40, y: 25), withAttributes: [
+            .font: NSFont.systemFont(ofSize: 44), .foregroundColor: NSColor.white
+        ])
+        NSGraphicsContext.restoreGraphicsState()
+
+        func word(_ value: Int) -> [UInt8] { [UInt8((value >> 8) & 255), UInt8(value & 255)] }
+        func segment(_ type: UInt8, pts: UInt32 = 0, _ payload: [UInt8]) -> Data {
+            Data([0x50, 0x47, UInt8((pts >> 24) & 255), UInt8((pts >> 16) & 255),
+                  UInt8((pts >> 8) & 255), UInt8(pts & 255), 0, 0, 0, 0, type]
+                 + word(payload.count) + payload)
+        }
+        var rle: [UInt8] = []
+        for y in 0..<height {
+            var x = 0
+            while x < width {
+                func color(at x: Int) -> UInt8 {
+                    (bitmap.colorAt(x: x, y: y)?.redComponent ?? 0) > 0.5 ? 2 : 1
+                }
+                let paletteIndex = color(at: x)
+                var count = 1
+                while x + count < width && color(at: x + count) == paletteIndex { count += 1 }
+                rle += [0, 0xC0 | UInt8(count >> 8), UInt8(count & 255), paletteIndex]
+                x += count
+            }
+            rle += [0, 0]
+        }
+        let dimensions = word(width) + word(height)
+        var data = segment(0x16, dimensions + [0x10, 0, 0, 0x80, 0, 0, 1,
+                                             0, 0, 0, 0, 0, 0, 0, 0])
+        data += segment(0x14, [0, 0, 1, 16, 128, 128, 255, 2, 235, 128, 128, 255])
+        let length = rle.count + 4
+        data += segment(0x15, [0, 0, 0, 0xC0, UInt8(length >> 16)]
+                        + word(length) + dimensions + rle)
+        data += segment(0x80, [])
+        data += segment(0x16, pts: 90_000, dimensions + [0x10, 0, 1, 0, 0, 0, 0])
+        data += segment(0x80, pts: 90_000, [])
+        return data
+    }
+
     static var data: Data {
         func segment(_ type: UInt8, pts: UInt32 = 0, payload: [UInt8]) -> Data {
             Data([0x50, 0x47, UInt8((pts >> 24) & 255), UInt8((pts >> 16) & 255),
@@ -780,7 +863,7 @@ private enum CoexistencePGSFixture {
     }
 }
 
-/// Holds recognition after the production parser has rendered its PNG, then returns late success.
+/// Holds recognition after PNG rendering, then returns controlled text or invokes bundled Tesseract.
 private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
     let started: XCTestExpectation
     let cancelled: XCTestExpectation
@@ -788,9 +871,15 @@ private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
     private var released = false
     private(set) var isRunning = false
 
-    init(started: XCTestExpectation, cancelled: XCTestExpectation) {
+    private let useRealTesseract: Bool
+    private let failOCR: Bool
+
+    init(started: XCTestExpectation, cancelled: XCTestExpectation,
+         useRealTesseract: Bool = false, failOCR: Bool = false) {
         self.started = started
         self.cancelled = cancelled
+        self.useRealTesseract = useRealTesseract
+        self.failOCR = failOCR
     }
 
     func recognize(pngURL: URL, language: String) async throws -> String {
@@ -806,6 +895,17 @@ private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
             }
         } onCancel: {
             self.cancelled.fulfill()
+        }
+        if failOCR {
+            throw NSError(domain: "OCRFixture", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Recognition fixture failure"])
+        }
+        if useRealTesseract {
+            let engine = TesseractOCREngine(
+                tesseractPath: try XCTUnwrap(BinaryPathResolver.tesseractPath),
+                tessdataPrefix: BinaryPathResolver.tessdataDirectory
+            )
+            return try await engine.recognize(pngURL: pngURL, language: language)
         }
         return "OCR result"
     }
