@@ -377,3 +377,177 @@ private actor CoexistenceLiveAgentRunner: SubprocessRunning {
         }
     }
 }
+
+final class WhisperAgentCoexistenceTests: XCTestCase {
+    @MainActor
+    func testWhisperCancellationPreservesRunningAgentExport() async throws {
+        try await checkCoexistence(cancelAgent: false)
+    }
+
+    @MainActor
+    func testAgentCancellationPreservesRunningWhisperPublication() async throws {
+        try await checkCoexistence(cancelAgent: true)
+    }
+
+    @MainActor
+    private func checkCoexistence(cancelAgent: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WhisperAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mp4")
+        let existingSRT = directory.appendingPathComponent("source.srt")
+        let existingBytes = Data("Existing subtitles".utf8)
+        try existingBytes.write(to: existingSRT)
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-y", "-f", "lavfi", "-i",
+                        "testsrc2=size=64x48:rate=24:duration=2",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", source.path],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded)
+        let sourceBytes = try Data(contentsOf: source)
+        let whisperStarted = expectation(description: "Whisper transcription is outstanding")
+        let whisperCancelled = expectation(description: "Whisper runner received cancellation")
+        whisperCancelled.isInverted = cancelAgent
+        let transcriptionRunner = CoexistenceWhisperRunner(started: whisperStarted, cancelled: whisperCancelled)
+        let whisper = WhisperService(
+            modelManager: CoexistenceWhisperModel(path: directory.appendingPathComponent("model.bin")),
+            subprocessRunner: transcriptionRunner, ffmpegPathProvider: { ffmpeg }
+        )
+        let operationID = UUID()
+        let transcription = Task {
+            try await whisper.generateSubtitlesOnly(
+                inputFile: source, model: .base, language: "auto", operationID: operationID
+            ) { _ in }
+        }
+        await fulfillment(of: [whisperStarted], timeout: 3)
+        let agentStarted = expectation(description: "Real agent FFmpeg reported progress")
+        let runner = CoexistenceLiveAgentRunner(started: agentStarted)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live(converter: FFMPEGConverter(subprocessRunner: runner)))
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        var jobID: ApplicationJobID?
+        do {
+            let plan = try await service.plan(ApplicationConversionRequest(
+                origin: .localAgent, requesterID: "whisper-coexistence", sourceURLs: [source],
+                destinationFolderURL: directory, presetID: .streamCopy
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            jobID = accepted.record.id
+            await fulfillment(of: [agentStarted], timeout: 15)
+            let running = await runner.isRunning
+            XCTAssertTrue(running)
+            if cancelAgent {
+                _ = try await service.requestCancellation(accepted.record.id)
+            } else {
+                await whisper.cancelGeneration(operationID: operationID)
+                await fulfillment(of: [whisperCancelled], timeout: 3)
+                // Deliberately return successful SRT output after cancellation.
+                await transcriptionRunner.finish()
+                do {
+                    _ = try await transcription.value
+                    XCTFail("Cancelled Whisper must reject late successful output")
+                } catch let error as WhisperServiceError {
+                    guard case .cancelled = error else { throw error }
+                }
+                let stillRunning = await runner.isRunning
+                XCTAssertTrue(stillRunning)
+            }
+            for _ in 0..<1500 {
+                if try await service.record(for: accepted.record.id)?.state.isTerminal == true { break }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let record = try await service.record(for: accepted.record.id)
+            XCTAssertEqual(record?.state, cancelAgent ? .cancelled : .succeeded)
+            let drained = await runner.isRunning
+            let wasCancelled = await runner.wasCancelled
+            XCTAssertFalse(drained)
+            XCTAssertEqual(wasCancelled, cancelAgent)
+            var subtitleOutputs: [URL] = []
+            if cancelAgent {
+                XCTAssertEqual(record?.outputURLs, [])
+                let transcriptionActive = await transcriptionRunner.isRunning
+                XCTAssertTrue(transcriptionActive)
+                await transcriptionRunner.finish()
+                let output = try await transcription.value
+                subtitleOutputs = [output]
+                XCTAssertEqual(output.lastPathComponent, "source.whisper.srt")
+                XCTAssertEqual(try Data(contentsOf: output), CoexistenceWhisperRunner.subtitleBytes)
+                await fulfillment(of: [whisperCancelled], timeout: 0.1)
+            } else {
+                let output = try XCTUnwrap(record?.outputURLs.first)
+                let metadata = try await ApplicationMediaInspector.live.inspect(output)
+                XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: 1.0 / 24)
+            }
+            XCTAssertEqual(try Data(contentsOf: source), sourceBytes)
+            XCTAssertEqual(try Data(contentsOf: existingSRT), existingBytes)
+            let expectedFiles = [source, existingSRT] + subtitleOutputs + (record?.outputURLs ?? [])
+            XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: directory.path)),
+                           Set(expectedFiles.map(\.lastPathComponent)))
+            let finalRecord = try await service.record(for: accepted.record.id)
+            XCTAssertEqual(finalRecord?.state, record?.state)
+            XCTAssertEqual(finalRecord?.outputURLs, record?.outputURLs)
+        } catch {
+            if let jobID { _ = try? await service.requestCancellation(jobID) }
+            await whisper.cancelGeneration(operationID: operationID)
+            await transcriptionRunner.finish()
+            _ = await transcription.result
+            throw error
+        }
+    }
+}
+
+private struct CoexistenceWhisperModel: WhisperModelProviding {
+    let path: URL
+    func modelPath(for model: WhisperModel) -> URL { path }
+    func isModelDownloaded(_ model: WhisperModel) -> Bool { true }
+}
+
+/// Holds the inference boundary and deliberately succeeds after cancellation.
+private actor CoexistenceWhisperRunner: SubprocessRunning {
+    static let subtitleBytes = Data("1\n00:00:00,000 --> 00:00:01,000\nTranscription result\n".utf8)
+    let started: XCTestExpectation
+    let cancelled: XCTestExpectation
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+    private(set) var isRunning = false
+
+    init(started: XCTestExpectation, cancelled: XCTestExpectation) {
+        self.started = started
+        self.cancelled = cancelled
+    }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        let index = try XCTUnwrap(request.arguments.firstIndex(of: "-af"))
+        let filter = request.arguments[index + 1]
+        let start = try XCTUnwrap(filter.range(of: "destination=")?.upperBound)
+        let end = try XCTUnwrap(filter.range(of: ":use_gpu=true", range: start..<filter.endIndex)?.lowerBound)
+        let staged = URL(fileURLWithPath: String(filter[start..<end]))
+        isRunning = true
+        defer { isRunning = false }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if released { continuation.resume() } else { self.continuation = continuation }
+                started.fulfill()
+            }
+        } onCancel: {
+            self.cancelled.fulfill()
+        }
+        try Self.subtitleBytes.write(to: staged)
+        return SubprocessResult(
+            terminationStatus: 0, termination: .exited, standardOutput: Data(), standardError: Data(),
+            discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .milliseconds(1)
+        )
+    }
+
+    func finish() {
+        released = true
+        continuation?.resume()
+        continuation = nil
+    }
+}

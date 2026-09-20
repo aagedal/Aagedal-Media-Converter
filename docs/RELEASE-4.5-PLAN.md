@@ -748,6 +748,16 @@ service is controlled in these tests; live rclone/remote transfers, inference/OC
 and upload UI integration remain open. See the
 [upload-agent coexistence validation record](4.5-upload-agent-coexistence-validation-2026-09-20.md).
 
+Whisper-service coexistence now passes both cancellation directions alongside a
+real agent FFmpeg export. Cancelling transcription rejects a deliberately late
+successful SRT result while the agent completes; cancelling the agent leaves
+transcription active and permits collision-safe subtitle publication. Source and
+existing subtitle bytes remain unchanged, and no staging files remain. All seven
+focused Whisper/subtitle coexistence tests pass. The inference subprocess and
+model availability are controlled in these regressions; real model inference,
+OCR, and UI integration remain open. See the
+[Whisper-agent coexistence validation record](4.5-whisper-agent-coexistence-validation-2026-09-20.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
