@@ -729,6 +729,15 @@ focused subtitle coexistence tests pass. Cancelling the agent while subtitle
 muxing continues, inference/OCR, and upload remain open. See the
 [simultaneous subtitle cancellation validation record](4.5-simultaneous-subtitle-cancellation-validation-2026-09-20.md).
 
+The reverse cancellation direction now also passes with both real FFmpeg
+processes active: cancelling the shared agent job drains only its subprocess,
+while the subtitle mux remains running and publishes its subtitle-bearing output.
+The regression checks the cancelled job stays cancelled with no published outputs,
+source/SRT bytes remain unchanged, and no partial or subtitle staging files remain.
+All five focused subtitle coexistence tests pass. Inference/OCR and upload remain
+open. See the
+[agent cancellation during subtitle mux validation record](4.5-agent-cancellation-subtitle-validation-2026-09-20.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

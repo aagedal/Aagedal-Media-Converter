@@ -24,10 +24,19 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
     }
 
     @MainActor
+    func testAgentCancellationWhileBothProcessesRunPreservesSubtitlePublication() async throws {
+        try await checkCoexistence(
+            cancelEmbedding: false, cancelActiveMux: true,
+            cancelDuringAgentExport: true, cancelAgent: true
+        )
+    }
+
+    @MainActor
     private func checkCoexistence(
         cancelEmbedding: Bool,
         cancelActiveMux: Bool = false,
-        cancelDuringAgentExport: Bool = false
+        cancelDuringAgentExport: Bool = false,
+        cancelAgent: Bool = false
     ) async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("SubtitleAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
@@ -52,7 +61,10 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
         let muxReady = expectation(description: cancelActiveMux
             ? "Real subtitle mux reported active progress"
             : "Real subtitle mux reached publication boundary")
-        let subtitleRunner = CoexistenceSubtitleRunner(completed: muxReady, throttleMux: cancelActiveMux)
+        let subtitleRunner = CoexistenceSubtitleRunner(
+            completed: muxReady, throttleMux: cancelActiveMux,
+            readRate: cancelAgent ? "0.25" : "0.01"
+        )
         let gate = ApplicationConversionExecutionGate()
         let manager = ConversionManager(subprocessRunner: subtitleRunner, executionGate: gate)
         let itemID = UUID()
@@ -102,6 +114,42 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
                 let agentRunning = await agentRunner.isRunning
                 XCTAssertTrue(muxRunning, "Subtitle FFmpeg must be active at cancellation")
                 XCTAssertTrue(agentRunning, "Agent FFmpeg must be active at cancellation")
+                if cancelAgent {
+                    _ = try await service.requestCancellation(accepted.record.id)
+                    for _ in 0..<1500 {
+                        if try await service.record(for: accepted.record.id)?.state.isTerminal == true { break }
+                        try await Task.sleep(for: .milliseconds(10))
+                    }
+                    let cancelledRecord = try await service.record(for: accepted.record.id)
+                    XCTAssertEqual(cancelledRecord?.state, .cancelled)
+                    XCTAssertEqual(cancelledRecord?.outputURLs, [])
+                    let agentDrained = await agentRunner.isRunning
+                    let agentCancelled = await agentRunner.wasCancelled
+                    let subtitleStillRunning = await subtitleRunner.isRunning
+                    XCTAssertFalse(agentDrained)
+                    XCTAssertTrue(agentCancelled)
+                    XCTAssertTrue(subtitleStillRunning, "Agent cancellation must leave the subtitle subprocess running")
+                    XCTAssertEqual(try Data(contentsOf: legacyOutput), originalBytes)
+                    await embedding.value
+                    let subtitleCancelled = await subtitleRunner.wasCancelled
+                    let subtitleProcessCancelled = await subtitleRunner.processWasCancelled
+                    let subtitleRunning = await subtitleRunner.isRunning
+                    XCTAssertFalse(subtitleCancelled)
+                    XCTAssertFalse(subtitleProcessCancelled)
+                    XCTAssertFalse(subtitleRunning)
+                    let metadata = try await ApplicationMediaInspector.live.inspect(legacyOutput)
+                    XCTAssertEqual(metadata.subtitleStreams.count, 1)
+                    XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: 1.0 / 24)
+                    XCTAssertNotEqual(try Data(contentsOf: legacyOutput), originalBytes)
+                    XCTAssertEqual(try Data(contentsOf: source), originalBytes)
+                    XCTAssertEqual(try Data(contentsOf: subtitles), subtitleBytes)
+                    let remainingFiles = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+                    XCTAssertEqual(Set(remainingFiles), Set([source.lastPathComponent, legacyOutput.lastPathComponent, subtitles.lastPathComponent]))
+                    let finalRecord = try await service.record(for: accepted.record.id)
+                    XCTAssertEqual(finalRecord?.state, .cancelled)
+                    XCTAssertEqual(finalRecord?.outputURLs, [])
+                    return
+                }
                 await manager.cancelSubtitleEmbedding(itemID: itemID, operationID: nil)
                 await embedding.value
                 let muxDrained = await subtitleRunner.isRunning
@@ -183,10 +231,12 @@ private actor CoexistenceSubtitleRunner: SubprocessRunning {
     private(set) var isRunning = false
     private(set) var processWasCancelled = false
     private let throttleMux: Bool
+    private let readRate: String
 
-    init(completed: XCTestExpectation, throttleMux: Bool) {
+    init(completed: XCTestExpectation, throttleMux: Bool, readRate: String = "0.01") {
         self.completed = completed
         self.throttleMux = throttleMux
+        self.readRate = readRate
     }
 
     func run(
@@ -199,7 +249,7 @@ private actor CoexistenceSubtitleRunner: SubprocessRunning {
             let readiness = MuxProgressReadiness(expectation: completed)
             let throttled = SubprocessRequest(
                 executableURL: request.executableURL,
-                arguments: ["-readrate", "0.01", "-progress", "pipe:1", "-stats_period", "0.05"] + request.arguments,
+                arguments: ["-readrate", readRate, "-progress", "pipe:1", "-stats_period", "0.05"] + request.arguments,
                 timeout: .seconds(45),
                 sensitiveValues: request.sensitiveValues
             )
