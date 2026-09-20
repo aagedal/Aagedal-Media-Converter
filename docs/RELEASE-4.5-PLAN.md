@@ -690,7 +690,19 @@ previous tooltip-only guidance. This addresses disclosure of the observed timing
 limitation; it does not change trimming or establish exact cuts. See the
 [boundary guidance validation record](4.5-stitching-boundary-guidance-validation-2026-09-20.md).
 
-Remaining priorities: validate stitching with broader real media and decoder-loading
+Generated open-GOP H.264/AAC stitching now has regressions with markers enabled
+and disabled. These expose a new unresolved correctness issue: two decoded frames
+at the join do not match either original source, even though FFmpeg reports a
+successful decode. The container reports 56 frames while only 54 decode. Source
+frames on either side remain intact, and audio/marker/agent serialization checks
+pass. The whole-output frame-identity requirement remains an explicit strict
+expected failure in each new test; this is not open-GOP acceptance. See the
+[open-GOP validation record](4.5-stitching-open-gop-validation-2026-09-20.md).
+Fix or explicitly restrict this case before claiming reliable open-GOP trimmed
+stitching; the existing approximate-boundary notice does not resolve the mismatch.
+
+Remaining priorities: resolve open-GOP stitching frame integrity; validate
+stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
 drives and settle App Sandbox scope; cover upload, transcription, OCR/subtitle
