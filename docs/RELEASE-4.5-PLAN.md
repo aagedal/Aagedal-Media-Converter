@@ -642,6 +642,16 @@ waveform translations also close the current catalog audit gaps. See the
 All 26 focused unit tests, four native/MPV UI tests, the 1,688-entry localization
 audit, and an unsigned Release build pass for this continuation.
 
+The reordered/trimmed stitching export now has a live regression through
+`ConversionManager.convertGroup` and bundled FFmpeg. Two distinct generated
+all-intra sources are reversed and asymmetrically trimmed; all 48 decoded output
+frames match the retained source frames in that order. Embedded chapter ranges
+and Resolve EDL notes match the new sequence positions, and notes outside the
+retained ranges are excluded. All 12 focused export/marker tests pass. See the
+[reordered export validation record](4.5-stitching-reordered-export-validation-2026-09-20.md).
+This covers the conversion boundary with generated video; editor-driven export,
+real-card/MXF/long-recording media, and compressed-audio joins remain open.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -879,7 +889,10 @@ validating the group editor. No successful live playback/export check was claime
 at that initial point.
 Generated native/MPV transition, replay, pause, and reopening checks now pass; see
 the [continuation record](4.5-stitching-playback-validation-2026-09-20.md).
-Live reordered/trimmed export validation remains open.
+Generated reordered/trimmed Stream Copy export validation now passes through
+the real group conversion path, including decoded frame identity, chapters, and
+note sidecars; see the [export record](4.5-stitching-reordered-export-validation-2026-09-20.md).
+An editor-driven export and the broader real-media matrix remain open.
 
 Before release, manually validate native and MPV sequence playback, transition
 from a trimmed out-point to the next trimmed in-point, pause while loading, replay

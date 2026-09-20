@@ -4272,6 +4272,95 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveReorderedTrimmedStitchPreservesFramesChaptersAndNotes() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
+        for (index, source) in sources.enumerated() {
+            try runBundledFFmpeg([
+                "-v", "error", "-y", "-f", "lavfi", "-i",
+                "testsrc2=size=64x48:rate=24:duration=2",
+                "-vf", "hue=h=\(index * 90)", "-c:v", "libx264", "-g", "1",
+                "-pix_fmt", "yuv420p", source.path
+            ])
+        }
+        let defaults = try makeDefaults()
+        defaults.set(true, forKey: AppConstants.exportStitchMarkersKey)
+        let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
+        // Model the editor's reordered items and asymmetric ripple trims. The
+        // independent decoded-frame oracle below uses source frame indices.
+        let queue = ApplicationMergeLiveQueue(items: [1, 0].map { index in
+            var item = VideoItem(
+                url: sources[index], name: sources[index].lastPathComponent, size: 0,
+                duration: "00:00:02", durationSeconds: 2, status: .waiting,
+                progress: 0, eta: "", outputURL: nil
+            )
+            item.trimStart = index == 1 ? 0.75 : 0.25
+            item.trimEnd = 1.5
+            item.includeDateTag = false
+            item.timelineMarkers = [
+                StitchTimelineMarker(sourceTime: 0, text: "Excluded before trim"),
+                StitchTimelineMarker(sourceTime: index == 1 ? 1 : 0.75, text: "Note \(index)"),
+                StitchTimelineMarker(sourceTime: 1.5, text: "Excluded at out-point")
+            ]
+            return item
+        })
+        await manager.convertGroup(
+            items: queue.binding, outputFolder: directory.path, preset: .streamCopy,
+            concatEnabled: true, groupName: "reordered",
+            transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+        )
+        XCTAssertTrue(queue.items.allSatisfy { $0.status == .done })
+        let output = try XCTUnwrap(queue.items.first?.outputURL)
+        XCTAssertEqual(queue.items.last?.outputURL, output)
+
+        func decodedFrames(_ source: URL, name: String, trim: String? = nil) throws -> Data {
+            let decoded = directory.appendingPathComponent(name + ".yuv")
+            var arguments = ["-v", "error", "-xerror", "-i", source.path, "-map", "0:v:0"]
+            if let trim { arguments += ["-vf", trim] }
+            try runBundledFFmpeg(arguments + [
+                "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-f", "rawvideo", decoded.path
+            ])
+            return try Data(contentsOf: decoded)
+        }
+        let secondFrames = try decodedFrames(sources[1], name: "expected-second",
+                                             trim: "trim=start_frame=18:end_frame=36")
+        let firstFrames = try decodedFrames(sources[0], name: "expected-first",
+                                            trim: "trim=start_frame=6:end_frame=36")
+        let actualFrames = try decodedFrames(output, name: "actual")
+        XCTAssertEqual(actualFrames.count, 48 * 64 * 48 * 3 / 2)
+        XCTAssertTrue(actualFrames == secondFrames + firstFrames,
+                      "Every decoded frame must match the retained source frames in editor order")
+
+        let media = try await StitchMarkerMedia.read(output)
+        XCTAssertEqual(media.duration, 2, accuracy: 1.0 / 24)
+        XCTAssertEqual(media.chapters.map(\.title), [
+            "Cut: second.mov", "Marked: Note 1", "Cut: first.mov", "Marked: Note 0"
+        ])
+        XCTAssertEqual(media.chapters.count, 4)
+        for (chapter, expected) in zip(media.chapters, [0.0, 0.25, 0.75, 1.25]) {
+            XCTAssertEqual(chapter.start, expected, accuracy: 0.001)
+        }
+        for (chapter, expected) in zip(media.chapters, [0.25, 0.75, 1.25, 2.0]) {
+            XCTAssertEqual(chapter.end, expected, accuracy: 0.001)
+        }
+        let sidecar = output.deletingPathExtension().appendingPathExtension("cuts.edl")
+        let edl = try String(contentsOf: sidecar, encoding: .utf8)
+        let lines = edl.components(separatedBy: "\r\n")
+        XCTAssertEqual(lines.filter { $0.hasPrefix(" |C:") }, [
+            " |C:ResolveColorBlue |M:Cut: second.mov |D:1",
+            " |C:ResolveColorBlue |M:Marked: Note 1 |D:1",
+            " |C:ResolveColorBlue |M:Cut: first.mov |D:1",
+            " |C:ResolveColorBlue |M:Marked: Note 0 |D:1"
+        ])
+        let events = lines.filter { $0.contains("  001      V     C") }
+        XCTAssertEqual(events.count, 4)
+        for (event, timecode) in zip(events, ["00:00:00:00", "00:00:00:06", "00:00:00:18", "00:00:01:06"]) {
+            XCTAssertEqual(event.split(separator: " ")[4], Substring(timecode))
+        }
+    }
+
+    @MainActor
     func testLiveMergedGroupCompletesBeforeWaitingAgentExecutes() async throws {
         try await checkLiveMergedGroupBeforeAgent(withAudio: false)
     }
