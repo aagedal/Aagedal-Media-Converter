@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */; };
 		A4591900000000000000000D /* StitchMarkerExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000C /* StitchMarkerExport.swift */; };
 		A4591900000000000000000B /* StitchMarkerTimecodeRate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */; };
 		A45919000000000000000006 /* QueueGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45919000000000000000005 /* QueueGroupingTests.swift */; };
@@ -366,6 +367,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleAgentCoexistenceTests.swift; sourceTree = "<group>"; };
 		A4591900000000000000000C /* StitchMarkerExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerExport.swift; sourceTree = "<group>"; };
 		A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerTimecodeRate.swift; sourceTree = "<group>"; };
 		A45919000000000000000005 /* QueueGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueGroupingTests.swift; sourceTree = "<group>"; };
@@ -1096,6 +1098,7 @@
 				FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */,
 				3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */,
 				A45919000000000000000003 /* StitchingTimelineTests.swift */,
+				A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */,
 				A4591900000000000000000E /* StitchMarkerExportTests.swift */,
 				A45919000000000000000005 /* QueueGroupingTests.swift */,
 				1624627AD00145E0A0897303 /* OutputFolderCleanupServiceTests.swift */,
@@ -1867,6 +1870,7 @@
 				C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */,
 				7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */,
 				A45919000000000000000004 /* StitchingTimelineTests.swift in Sources */,
+				A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */,
 				A4591900000000000000000F /* StitchMarkerExportTests.swift in Sources */,
 				A45919000000000000000006 /* QueueGroupingTests.swift in Sources */,
 				8742E2B3B67147A68FB45282 /* OutputFolderCleanupServiceTests.swift in Sources */,
