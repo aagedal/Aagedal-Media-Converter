@@ -786,6 +786,16 @@ remains controlled to exercise late completion deterministically; VOBSUB extract
 real recognition, and UI integration remain open. See the
 [live PGS extraction validation record](4.5-live-pgs-extraction-validation-2026-09-21.md).
 
+Active PGS extraction now has both cancellation directions covered alongside a
+real agent FFmpeg export. Tests observe FFmpeg progress and require both
+subprocesses to be active before cancellation. Cancelling OCR drains extraction
+without reaching recognition or affecting the agent; cancelling the agent lets
+extraction finish and OCR publish its collision-safe SRT. Source/existing output
+preservation and scratch cleanup are checked. All 11 focused OCR, Whisper, and
+subtitle-mux coexistence tests pass. Recognition remains controlled;
+real engines, VOBSUB, and UI integration remain open. See the
+[active PGS cancellation validation record](4.5-active-pgs-cancellation-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

@@ -564,7 +564,17 @@ final class OCRAgentCoexistenceTests: XCTestCase {
     }
 
     @MainActor
-    private func checkCoexistence(cancelAgent: Bool) async throws {
+    func testActiveExtractionCancellationPreservesRunningAgentExport() async throws {
+        try await checkCoexistence(cancelAgent: false, cancelDuringExtraction: true)
+    }
+
+    @MainActor
+    func testAgentCancellationPreservesActiveExtractionAndOCRPublication() async throws {
+        try await checkCoexistence(cancelAgent: true, cancelDuringExtraction: true)
+    }
+
+    @MainActor
+    private func checkCoexistence(cancelAgent: Bool, cancelDuringExtraction: Bool = false) async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OCRAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -589,9 +599,12 @@ final class OCRAgentCoexistenceTests: XCTestCase {
         let sourceBytes = try Data(contentsOf: source)
         let ocrStarted = expectation(description: "OCR recognition is outstanding")
         let ocrCancelled = expectation(description: "OCR engine received cancellation")
-        ocrCancelled.isInverted = cancelAgent
+        ocrCancelled.isInverted = cancelAgent || cancelDuringExtraction
+        ocrStarted.isInverted = cancelDuringExtraction && !cancelAgent
+        let extractionStarted = cancelDuringExtraction
+            ? expectation(description: "Real subtitle extraction reported FFmpeg progress") : nil
         let recognizer = CoexistenceOCREngine(started: ocrStarted, cancelled: ocrCancelled)
-        let extractor = CoexistenceLivePGSRunner()
+        let extractor = CoexistenceLivePGSRunner(started: extractionStarted)
         let ocr = TesseractService(subprocessRunner: extractor, ocrEngine: recognizer)
         let operationID = UUID()
         let recognition = Task {
@@ -600,7 +613,11 @@ final class OCRAgentCoexistenceTests: XCTestCase {
                 codec: "hdmv_pgs_subtitle", language: "eng", engineKind: .appleVision
             ) { _ in }
         }
-        await fulfillment(of: [ocrStarted], timeout: 15)
+        if let extractionStarted {
+            await fulfillment(of: [extractionStarted], timeout: 15)
+        } else {
+            await fulfillment(of: [ocrStarted], timeout: 15)
+        }
         let agentStarted = expectation(description: "Real agent FFmpeg reported progress")
         let runner = CoexistenceLiveAgentRunner(started: agentStarted)
         let adapter = ApplicationFFmpegJobExecutor(runner: .live(converter: FFMPEGConverter(subprocessRunner: runner)))
@@ -616,12 +633,20 @@ final class OCRAgentCoexistenceTests: XCTestCase {
             await fulfillment(of: [agentStarted], timeout: 15)
             let running = await runner.isRunning
             XCTAssertTrue(running)
+            if cancelDuringExtraction {
+                let extracting = await extractor.isRunning
+                let recognizing = await recognizer.isRunning
+                XCTAssertTrue(extracting, "Both real FFmpeg processes must be active at cancellation")
+                XCTAssertFalse(recognizing)
+            }
             if cancelAgent {
                 _ = try await service.requestCancellation(accepted.record.id)
             } else {
                 await ocr.cancelGeneration(operationID: operationID)
-                await fulfillment(of: [ocrCancelled], timeout: 3)
-                // Deliberately return successful recognized text after cancellation.
+                if !cancelDuringExtraction {
+                    await fulfillment(of: [ocrCancelled], timeout: 3)
+                }
+                // Release any recognition wait; recognition-stage tests return late success.
                 await recognizer.finish()
                 do {
                     _ = try await recognition.value
@@ -645,6 +670,11 @@ final class OCRAgentCoexistenceTests: XCTestCase {
             var subtitleOutputs: [URL] = []
             if cancelAgent {
                 XCTAssertEqual(record?.outputURLs, [])
+                if cancelDuringExtraction {
+                    // Extraction may finish naturally while the agent drains. It must
+                    // reach recognition without receiving the agent's cancellation.
+                    await fulfillment(of: [ocrStarted], timeout: 20)
+                }
                 let recognitionActive = await recognizer.isRunning
                 XCTAssertTrue(recognitionActive)
                 await recognizer.finish()
@@ -658,6 +688,13 @@ final class OCRAgentCoexistenceTests: XCTestCase {
                 let metadata = try await ApplicationMediaInspector.live.inspect(output)
                 XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: 1.0 / 24)
             }
+            if cancelDuringExtraction && !cancelAgent {
+                await fulfillment(of: [ocrStarted, ocrCancelled], timeout: 0.1)
+            }
+            let extractionRunning = await extractor.isRunning
+            let extractionCancelled = await extractor.wasCancelled
+            XCTAssertFalse(extractionRunning)
+            XCTAssertEqual(extractionCancelled, cancelDuringExtraction && !cancelAgent)
             let extractedURL = await extractor.outputURL()
             let scratch = try XCTUnwrap(extractedURL)
             XCTAssertFalse(FileManager.default.fileExists(atPath: scratch.deletingLastPathComponent().path))
@@ -682,6 +719,12 @@ final class OCRAgentCoexistenceTests: XCTestCase {
 /// Records scratch output while extracting the real MKV track with bundled FFmpeg.
 private actor CoexistenceLivePGSRunner: SubprocessRunning {
     private var output: URL?
+    private let started: XCTestExpectation?
+    private(set) var isRunning = false
+    private(set) var wasCancelled = false
+
+    init(started: XCTestExpectation? = nil) { self.started = started }
+
     func outputURL() -> URL? { output }
 
     func run(
@@ -690,7 +733,31 @@ private actor CoexistenceLivePGSRunner: SubprocessRunning {
     ) async throws -> SubprocessResult {
         let destination = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
         output = destination
-        return try await SubprocessRunner().run(request, outputHandler: outputHandler)
+        var paced = request
+        let readiness = started.map { MuxProgressReadiness(expectation: $0) }
+        if readiness != nil {
+            // Slow actual demuxing so the agent starts while extraction is still active.
+            paced = SubprocessRequest(
+                executableURL: request.executableURL,
+                arguments: ["-readrate", "0.1", "-readrate_initial_burst", "0",
+                            "-progress", "pipe:1", "-stats_period", "0.05"] + request.arguments,
+                timeout: .seconds(30),
+                standardOutputCaptureLimit: request.standardOutputCaptureLimit,
+                standardErrorCaptureLimit: request.standardErrorCaptureLimit,
+                sensitiveValues: request.sensitiveValues
+            )
+        }
+        isRunning = true
+        defer { isRunning = false }
+        do {
+            return try await SubprocessRunner().run(paced) { chunk in
+                readiness?.receive(chunk)
+                outputHandler?(chunk)
+            }
+        } catch is CancellationError {
+            wasCancelled = true
+            throw CancellationError()
+        }
     }
 }
 
