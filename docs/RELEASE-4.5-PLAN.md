@@ -738,6 +738,16 @@ All five focused subtitle coexistence tests pass. Inference/OCR and upload remai
 open. See the
 [agent cancellation during subtitle mux validation record](4.5-agent-cancellation-subtitle-validation-2026-09-20.md).
 
+Upload-manager coexistence now has regressions for both cancellation directions
+while a real bundled FFmpeg agent export is active. Cancelling the upload rejects
+late progress/success and leaves the export running to completion; cancelling the
+agent drains its subprocess without cancelling the upload, which can still publish
+its successful result. Both checks preserve the source and upload-file bytes and
+verify no partial files remain. All 17 upload lifecycle tests pass. The upload
+service is controlled in these tests; live rclone/remote transfers, inference/OCR,
+and upload UI integration remain open. See the
+[upload-agent coexistence validation record](4.5-upload-agent-coexistence-validation-2026-09-20.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

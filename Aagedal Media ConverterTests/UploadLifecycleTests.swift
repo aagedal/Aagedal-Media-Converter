@@ -405,6 +405,121 @@ final class UploadLifecycleTests: XCTestCase {
         XCTAssertEqual(secondItems[0].uploadStatus, .uploaded)
     }
 
+    func testUploadCancellationPreservesRunningAgentExport() async throws {
+        try await checkAgentCoexistence(cancelAgent: false)
+    }
+
+    func testAgentCancellationPreservesRunningUpload() async throws {
+        try await checkAgentCoexistence(cancelAgent: true)
+    }
+
+    private func checkAgentCoexistence(cancelAgent: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UploadAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mp4")
+        let uploadFile = directory.appendingPathComponent("upload.mp4")
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-y", "-f", "lavfi", "-i",
+                        "testsrc2=size=64x48:rate=24:duration=2",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", source.path],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded)
+        try FileManager.default.copyItem(at: source, to: uploadFile)
+        let originalBytes = try Data(contentsOf: source)
+        let uploadStarted = expectation(description: "Upload manager started its service")
+        let uploadCancelled = expectation(description: "Upload service received cancellation")
+        uploadCancelled.isInverted = cancelAgent
+        let uploader = ControlledUploadService(started: [uploadStarted], cancelled: [uploadCancelled])
+        let manager = makeManager(service: uploader)
+        var item = makeItem()
+        item.url = source
+        item.outputURL = uploadFile
+        var items = [item]
+        manager.videoItems = Binding(get: { items }, set: { items = $0 })
+        let upload = try XCTUnwrap(manager.startUpload(itemID: item.id))
+        await fulfillment(of: [uploadStarted], timeout: 2)
+        let agentStarted = expectation(description: "Real agent FFmpeg reported progress")
+        let runner = UploadCoexistenceAgentRunner(started: agentStarted)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live(converter: FFMPEGConverter(subprocessRunner: runner)))
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        var jobID: ApplicationJobID?
+        do {
+            let plan = try await service.plan(ApplicationConversionRequest(
+                origin: .localAgent, requesterID: "upload-coexistence", sourceURLs: [source],
+                destinationFolderURL: directory, presetID: .streamCopy
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            jobID = accepted.record.id
+            await fulfillment(of: [agentStarted], timeout: 15)
+            let running = await runner.isRunning
+            XCTAssertTrue(running)
+            XCTAssertEqual(items[0].uploadStatus, .uploading)
+            if cancelAgent {
+                _ = try await service.requestCancellation(accepted.record.id)
+            } else {
+                let cancellation = Task { await manager.cancelUpload(itemID: item.id) }
+                await fulfillment(of: [uploadCancelled], timeout: 2)
+                // A late successful remote completion must not revive the cancelled row.
+                await uploader.emitProgress(run: 0, value: 0.8, speed: "Late speed")
+                await uploader.finish(run: 0)
+                await cancellation.value
+                await upload.value
+                let stillRunning = await runner.isRunning
+                XCTAssertTrue(stillRunning)
+                XCTAssertEqual(items[0].uploadStatus, .cancelled)
+                XCTAssertNil(items[0].uploadedRemotePath)
+            }
+            for _ in 0..<1500 {
+                if try await service.record(for: accepted.record.id)?.state.isTerminal == true { break }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let record = try await service.record(for: accepted.record.id)
+            XCTAssertEqual(record?.state, cancelAgent ? .cancelled : .succeeded)
+            let drained = await runner.isRunning
+            let wasCancelled = await runner.wasCancelled
+            XCTAssertFalse(drained)
+            XCTAssertEqual(wasCancelled, cancelAgent)
+            if cancelAgent {
+                XCTAssertEqual(record?.outputURLs, [])
+                XCTAssertEqual(items[0].uploadStatus, .uploading)
+                XCTAssertNotNil(items[0].uploadOperationID)
+                await uploader.finish(run: 0, remotePath: "/completed/upload.mp4")
+                await upload.value
+                await fulfillment(of: [uploadCancelled], timeout: 0.1)
+                XCTAssertEqual(items[0].uploadStatus, .uploaded)
+                XCTAssertEqual(items[0].uploadedRemotePath, "/completed/upload.mp4")
+                XCTAssertEqual(items[0].uploadProgress, 1)
+            } else {
+                let output = try XCTUnwrap(record?.outputURLs.first)
+                let metadata = try await ApplicationMediaInspector.live.inspect(output)
+                XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: 1.0 / 24)
+                XCTAssertEqual(items[0].uploadStatus, .cancelled)
+                XCTAssertNil(items[0].uploadSpeed)
+                XCTAssertEqual(items[0].uploadProgress, 0)
+            }
+            XCTAssertNil(items[0].uploadOperationID)
+            XCTAssertEqual(try Data(contentsOf: source), originalBytes)
+            XCTAssertEqual(try Data(contentsOf: uploadFile), originalBytes)
+            let expectedFiles = [source, uploadFile] + (record?.outputURLs ?? [])
+            XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: directory.path)),
+                           Set(expectedFiles.map(\.lastPathComponent)))
+            let finalRecord = try await service.record(for: accepted.record.id)
+            XCTAssertEqual(finalRecord?.state, record?.state)
+            XCTAssertEqual(finalRecord?.outputURLs, record?.outputURLs)
+        } catch {
+            if let jobID { _ = try? await service.requestCancellation(jobID) }
+            await uploader.finish(run: 0)
+            await manager.cancelUpload(itemID: item.id)
+            await upload.value
+            throw error
+        }
+    }
+
     private func makeManager(service: any RcloneUploading) -> UploadManager {
         UploadManager(
             rcloneService: service,
@@ -900,6 +1015,76 @@ private final class UploadScopeRecorder: @unchecked Sendable {
             case .none:
                 break
             }
+        }
+    }
+}
+
+/// Pipe chunks can split lines; retain a bounded tail and signal exactly once.
+private final class UploadProgressReadiness: @unchecked Sendable {
+    private let lock = NSLock()
+    private let expectation: XCTestExpectation
+    private let stream: SubprocessOutputStream
+    private var buffer = ""
+    private var signalled = false
+
+    init(expectation: XCTestExpectation, stream: SubprocessOutputStream = .standardOutput) {
+        self.expectation = expectation
+        self.stream = stream
+    }
+
+    func receive(_ chunk: SubprocessOutputChunk) {
+        guard chunk.stream == stream else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard !signalled else { return }
+        buffer += String(decoding: chunk.data, as: UTF8.self)
+        if buffer.contains("progress=continue") {
+            signalled = true
+            expectation.fulfill()
+        }
+        buffer = String(buffer.suffix(4096))
+    }
+}
+
+/// Pace the real agent export so cancellation is observed while the upload service is outstanding.
+private actor UploadCoexistenceAgentRunner: SubprocessRunning {
+    let started: XCTestExpectation
+    private(set) var isRunning = false
+    private(set) var wasCancelled = false
+
+    init(started: XCTestExpectation) { self.started = started }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        var arguments = request.arguments
+        if let input = arguments.firstIndex(of: "-i") {
+            arguments.insert(contentsOf: ["-readrate", "0.25"], at: input)
+        }
+        arguments.insert(contentsOf: ["-stats_period", "0.05"], at: 0)
+        let paced = SubprocessRequest(
+            executableURL: request.executableURL, arguments: arguments,
+            environment: request.environment, currentDirectoryURL: request.currentDirectoryURL,
+            standardInput: request.standardInput, timeout: .seconds(30),
+            terminationGracePeriod: request.terminationGracePeriod,
+            standardOutputCaptureLimit: request.standardOutputCaptureLimit,
+            standardErrorCaptureLimit: request.standardErrorCaptureLimit,
+            sensitiveArgumentNames: request.sensitiveArgumentNames,
+            sensitiveValues: request.sensitiveValues, redactURLs: request.redactURLs
+        )
+        // Production commands send their progress protocol to stderr (pipe:2).
+        let readiness = UploadProgressReadiness(expectation: started, stream: .standardError)
+        isRunning = true
+        defer { isRunning = false }
+        do {
+            return try await SubprocessRunner().run(paced) { chunk in
+                readiness.receive(chunk)
+                outputHandler?(chunk)
+            }
+        } catch is CancellationError {
+            wasCancelled = true
+            throw CancellationError()
         }
     }
 }
