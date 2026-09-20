@@ -33,13 +33,13 @@ enum VOBSUBParser {
             let packet = extractSubtitlePacket(from: subData, at: entry.offset, end: nextOffset)
             guard let packet else { continue }
 
-            guard let (image, durationMs) = decodeSubtitlePacket(packet, palette: palette) else { continue }
+            guard let (image, startMs, stopMs) = decodeSubtitlePacket(packet, palette: palette) else { continue }
             guard let pngData = image.pngData() else { continue }
 
-            let startTime = Double(entry.timestampMs) / 1000.0
+            let startTime = Double(entry.timestampMs + startMs) / 1000.0
             let endTime: TimeInterval
-            if durationMs > 0 {
-                endTime = startTime + Double(durationMs) / 1000.0
+            if let stopMs, stopMs > startMs {
+                endTime = Double(entry.timestampMs + stopMs) / 1000.0
             } else if idx + 1 < entries.count {
                 // Use next subtitle's start time as end time
                 endTime = Double(entries[idx + 1].timestampMs) / 1000.0
@@ -107,55 +107,47 @@ enum VOBSUBParser {
 
     /// Extracts the raw subtitle data bytes from a single MPEG-PS private stream packet.
     private static func extractSubtitlePacket(from data: Data, at start: Int, end: Int) -> Data? {
+        let limit = min(end, data.count)
+        guard start >= 0, start < limit else { return nil }
         var offset = start
         var subtitleData = Data()
-
-        while offset + 6 < min(end, data.count) {
-            // MPEG-PS start code: 0x00 0x00 0x01
-            guard data[offset] == 0x00,
-                  data[offset + 1] == 0x00,
-                  data[offset + 2] == 0x01 else {
+        var subtitleStream: UInt8?
+        while offset + 4 <= limit {
+            guard data[offset] == 0, data[offset + 1] == 0, data[offset + 2] == 1 else {
                 offset += 1
                 continue
             }
             let streamID = data[offset + 3]
-            let packetLen = Int(data[offset + 4]) << 8 | Int(data[offset + 5])
-            offset += 6
-
-            // 0xBD = private stream 1 (DVD subtitles)
-            guard streamID == 0xBD else {
-                offset += packetLen
+            if streamID == 0xBA {
+                // Pack headers have no PES length field. DVD uses the MPEG-2 form.
+                guard offset + 14 <= limit, data[offset + 4] & 0xC0 == 0x40 else { return nil }
+                offset += 14 + Int(data[offset + 13] & 7)
                 continue
             }
-
-            guard offset + 3 <= data.count else { break }
-
-            // Skip PES header extension
-            // PES optional header: flags byte at offset+1 (relative to packet start)
-            let flagsByte = data[offset + 1]
-            let headerDataLen = Int(data[offset + 2])
-            let dataStart = offset + 3 + headerDataLen
-
-            guard dataStart + 1 <= data.count else { break }
-            // First byte of payload is the sub-stream ID (0x20 for first subtitle track)
+            if streamID == 0xB9 { break }
+            guard offset + 6 <= limit else { return nil }
+            let packetLen = Int(readUInt16BE(data, at: offset + 4))
+            let packetStart = offset + 6
+            let packetEnd = packetStart + packetLen
+            guard packetEnd <= limit else { return nil }
+            offset = packetEnd
+            guard streamID == 0xBD else { continue }
+            guard packetLen >= 4 else { return nil }
+            let dataStart = packetStart + 3 + Int(data[packetStart + 2])
+            guard dataStart < packetEnd else { return nil }
             let subStreamID = data[dataStart]
-            guard (subStreamID & 0xE0) == 0x20 else {
-                // Not a subtitle sub-stream
-                offset += packetLen
-                continue
+            guard subStreamID & 0xE0 == 0x20 else { continue }
+            if let subtitleStream, subtitleStream != subStreamID { continue }
+            subtitleStream = subStreamID
+            subtitleData.append(contentsOf: data[(dataStart + 1)..<packetEnd])
+            if subtitleData.count >= 2 {
+                let size = Int(readUInt16BE(subtitleData, at: 0))
+                if size >= 4, subtitleData.count >= size {
+                    return Data(subtitleData.prefix(size))
+                }
             }
-
-            let payloadStart = dataStart + 1
-            let payloadEnd = min(offset + packetLen, data.count)
-            if payloadStart < payloadEnd {
-                subtitleData.append(contentsOf: data[payloadStart..<payloadEnd])
-            }
-
-            _ = flagsByte  // suppress unused warning
-            offset += packetLen
         }
-
-        return subtitleData.isEmpty ? nil : subtitleData
+        return nil
     }
 
     // MARK: - Subtitle Packet Decoder
@@ -164,7 +156,7 @@ enum VOBSUBParser {
     private static func decodeSubtitlePacket(
         _ data: Data,
         palette: [(r: UInt8, g: UInt8, b: UInt8)]
-    ) -> (NSImage, durationMs: Int)? {
+    ) -> (CGImage, startMs: Int, stopMs: Int?)? {
         guard data.count >= 4 else { return nil }
 
         // Packet structure:
@@ -175,25 +167,27 @@ enum VOBSUBParser {
 
         let packetSize = Int(readUInt16BE(data, at: 0))
         let controlOffset = Int(readUInt16BE(data, at: 2))
-        guard controlOffset < data.count else { return nil }
+        guard packetSize <= data.count, controlOffset >= 4, controlOffset + 4 <= packetSize else { return nil }
 
         // Parse control sequence to get dimensions, colors, display duration
         var width = 0
         var height = 0
-        var field1Offset = 0
-        var field2Offset = 0
-        var durationMs = 0
+        var field1Offset = -1
+        var field2Offset = -1
+        var startMs = 0
+        var stopMs: Int?
         var colorMap: [Int: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)] = [:]
 
         var ctrlOff = controlOffset
-        while ctrlOff + 1 < min(packetSize, data.count) {
-            let displayTime = Int(readUInt16BE(data, at: ctrlOff)) * 1000 / 90
-            ctrlOff += 2
-            guard ctrlOff < data.count else { break }
-            let cmdStart = ctrlOff
+        while ctrlOff + 4 <= packetSize {
+            let blockStart = ctrlOff
+            // DVD command dates use 1024 ticks of the 90 kHz clock.
+            let displayTime = Int(readUInt16BE(data, at: ctrlOff)) * 1024 / 90
+            let nextBlock = Int(readUInt16BE(data, at: ctrlOff + 2))
+            ctrlOff += 4
 
             var done = false
-            while !done && ctrlOff < data.count {
+            while !done && ctrlOff < packetSize {
                 let cmd = data[ctrlOff]
                 ctrlOff += 1
                 switch cmd {
@@ -202,23 +196,22 @@ enum VOBSUBParser {
                     break
                 case 0x01:
                     // Start display time
-                    durationMs = 0
+                    startMs = displayTime
                 case 0x02:
                     // Stop display time
-                    durationMs = displayTime
-                    done = true
+                    stopMs = displayTime
                 case 0x03:
                     // Set color indices (4 indices into subtitle palette)
-                    guard ctrlOff + 1 < data.count else { done = true; break }
+                    guard ctrlOff + 2 <= packetSize else { return nil }
                     let b0 = Int(data[ctrlOff]); ctrlOff += 1
                     let b1 = Int(data[ctrlOff]); ctrlOff += 1
                     // Map subtitle color indices 3,2,1,0 to palette entries
                     for k in 0..<4 {
                         let palIdx: Int
                         if k < 2 {
-                            palIdx = (b1 >> ((1 - k) * 4)) & 0x0F
+                            palIdx = (b1 >> (k * 4)) & 0x0F
                         } else {
-                            palIdx = (b0 >> ((3 - k) * 4)) & 0x0F
+                            palIdx = (b0 >> ((k - 2) * 4)) & 0x0F
                         }
                         if palIdx < palette.count {
                             let p = palette[palIdx]
@@ -227,15 +220,15 @@ enum VOBSUBParser {
                     }
                 case 0x04:
                     // Set alpha values (4 values)
-                    guard ctrlOff + 1 < data.count else { done = true; break }
+                    guard ctrlOff + 2 <= packetSize else { return nil }
                     let a0 = Int(data[ctrlOff]); ctrlOff += 1
                     let a1 = Int(data[ctrlOff]); ctrlOff += 1
                     for k in 0..<4 {
                         let alpha: UInt8
                         if k < 2 {
-                            alpha = UInt8(((a1 >> ((1 - k) * 4)) & 0x0F) * 17)
+                            alpha = UInt8(((a1 >> (k * 4)) & 0x0F) * 17)
                         } else {
-                            alpha = UInt8(((a0 >> ((3 - k) * 4)) & 0x0F) * 17)
+                            alpha = UInt8(((a0 >> ((k - 2) * 4)) & 0x0F) * 17)
                         }
                         if var entry = colorMap[k] {
                             entry.a = alpha
@@ -244,7 +237,7 @@ enum VOBSUBParser {
                     }
                 case 0x05:
                     // Set display area: x1,x2,y1,y2 packed in 6 bytes
-                    guard ctrlOff + 5 < data.count else { done = true; break }
+                    guard ctrlOff + 6 <= packetSize else { return nil }
                     let x1 = (Int(data[ctrlOff]) << 4) | (Int(data[ctrlOff + 1]) >> 4)
                     let x2 = ((Int(data[ctrlOff + 1]) & 0x0F) << 8) | Int(data[ctrlOff + 2])
                     let y1 = (Int(data[ctrlOff + 3]) << 4) | (Int(data[ctrlOff + 4]) >> 4)
@@ -254,37 +247,37 @@ enum VOBSUBParser {
                     height = y2 - y1 + 1
                 case 0x06:
                     // Set pixel data offsets (field 1 and field 2)
-                    guard ctrlOff + 3 < data.count else { done = true; break }
+                    guard ctrlOff + 4 <= packetSize else { return nil }
                     field1Offset = Int(readUInt16BE(data, at: ctrlOff)); ctrlOff += 2
                     field2Offset = Int(readUInt16BE(data, at: ctrlOff)); ctrlOff += 2
                 case 0xFF:
                     // End of control sequence
                     done = true
                 default:
-                    // Unknown command — stop parsing this block
-                    done = true
+                    // Unsupported commands must not be interpreted as bitmap data.
+                    return nil
                 }
             }
 
-            // Check if we've moved to a new control block or ended
-            if ctrlOff >= cmdStart + 2 && !done {
-                // Next block follows
-            } else {
-                break
-            }
+            guard done else { return nil }
+            if nextBlock == blockStart { break }
+            guard nextBlock >= ctrlOff, nextBlock + 4 <= packetSize else { return nil }
+            ctrlOff = nextBlock
         }
 
-        guard width > 0, height > 0 else { return nil }
+        guard width > 0, height > 0,
+              field1Offset >= 4, field1Offset < controlOffset,
+              (height == 1 || (field2Offset >= 4 && field2Offset < controlOffset)) else { return nil }
 
         // Decode two interlaced fields into a full RGBA image
-        let pixels = decodeRLE(
-            data: data,
+        guard let pixels = decodeRLE(
+            data: Data(data.prefix(controlOffset)),
             field1Offset: field1Offset,
             field2Offset: field2Offset,
             width: width,
             height: height,
             colorMap: colorMap
-        )
+        ) else { return nil }
 
         let bytesPerRow = width * 4
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
@@ -294,7 +287,7 @@ enum VOBSUBParser {
                 bitsPerComponent: 8,
                 bitsPerPixel: 32,
                 bytesPerRow: bytesPerRow,
-                space: CGColorSpaceCreateDeviceRGB(),
+                space: CGColorSpace(name: CGColorSpace.sRGB)!,
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
                 provider: provider,
                 decode: nil,
@@ -302,8 +295,7 @@ enum VOBSUBParser {
                 intent: .defaultIntent
               ) else { return nil }
 
-        let image = NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
-        return (image, durationMs)
+        return (cgImage, startMs, stopMs)
     }
 
     // MARK: - VOBSUB RLE Decoder
@@ -317,19 +309,19 @@ enum VOBSUBParser {
         width: Int,
         height: Int,
         colorMap: [Int: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)]
-    ) -> [UInt8] {
+    ) -> [UInt8]? {
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
 
-        decodeField(
+        guard decodeField(
             data: data, startOffset: field1Offset,
             width: width, height: height, startLine: 0, step: 2,
             colorMap: colorMap, into: &pixels
-        )
-        decodeField(
+        ) else { return nil }
+        guard decodeField(
             data: data, startOffset: field2Offset,
             width: width, height: height, startLine: 1, step: 2,
             colorMap: colorMap, into: &pixels
-        )
+        ) else { return nil }
 
         return pixels
     }
@@ -343,15 +335,15 @@ enum VOBSUBParser {
         step: Int,
         colorMap: [Int: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)],
         into pixels: inout [UInt8]
-    ) {
+    ) -> Bool {
         var byteOffset = startOffset
         var bitPos = 0  // next bit to read within current byte (0 = MSB)
         var line = startLine
 
-        func readBits(_ n: Int) -> Int {
+        func readBits(_ n: Int) -> Int? {
             var result = 0
             for _ in 0..<n {
-                guard byteOffset < data.count else { return result }
+                guard byteOffset >= 0, byteOffset < data.count else { return nil }
                 let byte = Int(data[byteOffset])
                 let bit = (byte >> (7 - bitPos)) & 1
                 result = (result << 1) | bit
@@ -364,56 +356,28 @@ enum VOBSUBParser {
         while line < height {
             var col = 0
             while col < width {
-                // VOBSUB 2-bit RLE:
-                // Read nibbles until we get a run:
-                // 0b11cc: run of cc+1 for rest of line? No — standard RLE:
-                // Starts with 2 bits for run length + 2 bits for color
-                // Extended runs: leading zeros double the range each time
-                var runLength = 0
-                var color = 0
-                var bits = readBits(4)
-
-                if bits == 0 {
-                    // Long run (at least 3 nibbles)
-                    bits = readBits(4)
-                    if bits == 0 {
-                        // Even longer (5+ nibbles)
-                        bits = readBits(4)
-                        if bits == 0 {
-                            // Maximum length run (to end of line or 255)
-                            bits = readBits(4)
-                            runLength = bits + 48
-                            color = readBits(2)
-                            // Actually for VOBSUB: if run == 0 after all nibbles, fill to end of line
-                        } else {
-                            runLength = bits + 12
-                        }
+                // Each code has one to four nibbles; its low two bits are color.
+                guard var code = readBits(4) else { return false }
+                for threshold in [4, 16, 64] {
+                    if code < threshold {
+                        guard let nibble = readBits(4) else { return false }
+                        code = (code << 4) | nibble
                     } else {
-                        runLength = bits + 4
+                        break
                     }
-                } else {
-                    runLength = bits >> 2
-                    color = bits & 0x03
                 }
-
-                if runLength == 0 {
-                    // Fill to end of line
-                    runLength = width - col
-                }
-
-                // Read color if not yet read
-                if bits > 3 {
-                    color = readBits(2)
-                }
+                let color = code & 3
+                let runLength = code < 4 ? width - col : code >> 2
+                guard runLength <= width - col else { return false }
 
                 let entry = colorMap[color]
                 for _ in 0..<runLength {
                     if col >= width { break }
                     let pixelIdx = (line * width + col) * 4
                     if let c = entry {
-                        pixels[pixelIdx]     = c.r
-                        pixels[pixelIdx + 1] = c.g
-                        pixels[pixelIdx + 2] = c.b
+                        pixels[pixelIdx]     = UInt8(Int(c.r) * Int(c.a) / 255)
+                        pixels[pixelIdx + 1] = UInt8(Int(c.g) * Int(c.a) / 255)
+                        pixels[pixelIdx + 2] = UInt8(Int(c.b) * Int(c.a) / 255)
                         pixels[pixelIdx + 3] = c.a
                     }
                     col += 1
@@ -423,6 +387,7 @@ enum VOBSUBParser {
             if bitPos != 0 { bitPos = 0; byteOffset += 1 }
             line += step
         }
+        return true
     }
 
     // MARK: - Helpers
@@ -434,12 +399,10 @@ enum VOBSUBParser {
     }
 }
 
-// MARK: - NSImage PNG helper
+// MARK: - PNG helper
 
-private extension NSImage {
+private extension CGImage {
     func pngData() -> Data? {
-        guard let tiff = tiffRepresentation,
-              let bitmapRep = NSBitmapImageRep(data: tiff) else { return nil }
-        return bitmapRep.representation(using: .png, properties: [:])
+        NSBitmapImageRep(cgImage: self).representation(using: .png, properties: [:])
     }
 }

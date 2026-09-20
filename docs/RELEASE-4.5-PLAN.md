@@ -816,6 +816,16 @@ Cancellation inside the actual recognition binary, the Apple Vision timeout,
 VOBSUB, and UI integration remain open. See the
 [OCR engine cancellation validation record](4.5-ocr-engine-cancellation-validation-2026-09-21.md).
 
+DVD VOBSUB parser validation exposed incorrect MPEG-PS pack handling, control-chain
+parsing, display-date scaling, palette mapping, and run-length decoding. These
+are corrected with generated pixel/timing and malformed-input regressions; the
+original parser returned no frames for the fixture, while bundled FFmpeg decoded
+it independently. All 17 focused parser/OCR/Whisper/subtitle coexistence tests
+pass. The service's extraction path still expects a `.sub/.idx` pair
+that bundled FFmpeg cannot mux, so end-to-end VOBSUB OCR and cancellation
+coexistence remain open. See the
+[VOBSUB parser validation record](4.5-vobsub-parser-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

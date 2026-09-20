@@ -916,3 +916,100 @@ private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
         continuation = nil
     }
 }
+
+final class VOBSUBParserTests: XCTestCase {
+    func testDVDControlChainTimingPaletteAndVariableLengthRuns() throws {
+        let frames = try parse(packet: fixture())
+        let frame = try XCTUnwrap(frames.first)
+        XCTAssertEqual(frames.count, 1)
+        XCTAssertEqual(frame.startTime, 2.512, accuracy: 0.0001)
+        XCTAssertEqual(frame.endTime, 3.536, accuracy: 0.0001)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: frame.imageData))
+        XCTAssertEqual(bitmap.pixelsWide, 300)
+        XCTAssertEqual(bitmap.pixelsHigh, 2)
+        for (x, expected) in [(0, [255, 0, 0, 255]), (1, [0, 255, 0, 255]),
+                              (3, [0, 255, 0, 255]), (4, [0, 0, 255, 255]),
+                              (15, [0, 0, 255, 255]), (16, [255, 255, 255, 255]),
+                              (85, [255, 255, 255, 255]), (86, [255, 0, 0, 255]),
+                              (299, [255, 0, 0, 255])] {
+            var pixel = [Int](repeating: 0, count: 4)
+            bitmap.getPixel(&pixel, atX: x, y: 0)
+            XCTAssertEqual(pixel, expected, "x=\(x)")
+        }
+        var oddField = [Int](repeating: 0, count: 4)
+        bitmap.getPixel(&oddField, atX: 299, y: 1)
+        XCTAssertEqual(oddField, [0, 255, 0, 255])
+    }
+
+    func testPreservesPaletteAlpha() throws {
+        var packet = fixture()
+        packet[21] = 0xF8 // White opaque, blue 8/15 alpha.
+        packet[22] = 0x40 // Green 4/15 alpha, red transparent.
+        let frame = try XCTUnwrap(try parse(packet: packet).first)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: frame.imageData))
+        for (x, expectedAlpha) in [(0, 0), (1, 68), (4, 136), (16, 255)] {
+            var pixel = [Int](repeating: 0, count: 4)
+            bitmap.getPixel(&pixel, atX: x, y: 0)
+            XCTAssertEqual(pixel[3], expectedAlpha, "x=\(x)")
+        }
+    }
+
+    func testRejectsBackwardControlLinkAndTruncatedPacket() throws {
+        var packet = fixture()
+        packet[14] = 0
+        packet[15] = 4 // First block points backward into pixel data.
+        XCTAssertTrue(try parse(packet: packet).isEmpty)
+        XCTAssertTrue(try parse(packet: Array(fixture().dropLast())).isEmpty)
+    }
+
+    func testRejectsRunBeyondRowAndTruncatedPixelData() throws {
+        var packet = fixture()
+        // A run of 255 pixels followed by another 255 exceeds the 300-pixel row.
+        packet.replaceSubrange(4..<8, with: [0x03, 0xFC, 0x03, 0xFC])
+        XCTAssertTrue(try parse(packet: packet).isEmpty)
+        packet = fixture()
+        packet[33] = 0
+        packet[34] = 11 // Odd field starts with only one byte before the controls.
+        XCTAssertTrue(try parse(packet: packet).isEmpty)
+    }
+
+    private func fixture() -> [UInt8] {
+        // Even row: 1 red, 3 green, 12 blue, 70 white, then red to end-of-line.
+        // Odd row: green to end-of-line. Exercises all four RLE code lengths.
+        let pixels: [UInt8] = [0x4D, 0x32, 0x01, 0x1B, 0, 0, 0, 1]
+        let firstControl = 4 + pixels.count
+        let stopControl = firstControl + 24
+        let size = stopControl + 6
+        return word(size) + word(firstControl) + pixels
+            + word(45) + word(stopControl)
+            + [0x01, 0x03, 0x32, 0x10, 0x04, 0xFF, 0xFF,
+               0x05, 0, 0x01, 0x2B, 0, 0, 1,
+               0x06, 0, 4, 0, 10, 0xFF]
+            + word(135) + word(stopControl) + [0x02, 0xFF]
+    }
+
+    private func word(_ value: Int) -> [UInt8] { [UInt8(value >> 8), UInt8(value & 255)] }
+
+    private func parse(packet: [UInt8]) throws -> [SubtitleFrame] {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VOBSUBParser-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let idx = directory.appendingPathComponent("fixture.idx")
+        let sub = directory.appendingPathComponent("fixture.sub")
+        try """
+        # VobSub index file, v7 (do not modify this line!)
+        size: 720x480
+        palette: ff0000, 00ff00, 0000ff, ffffff, 000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000, 000000
+        id: en, index: 0
+        timestamp: 00:00:02:000, filepos: 000000000
+        """.write(to: idx, atomically: true, encoding: .utf8)
+        // A DVD pack followed by two PES packets carrying one fragmented subtitle.
+        var ps: [UInt8] = [0, 0, 1, 0xBA, 0x44, 0, 4, 0, 4, 1, 1, 0x89, 0xC3, 0xF8]
+        for chunk in [Array(packet.prefix(7)), Array(packet.dropFirst(7))] {
+            ps += [0, 0, 1, 0xBD] + word(chunk.count + 4) + [0x80, 0, 0, 0x20] + chunk
+        }
+        try Data(ps).write(to: sub)
+        return try VOBSUBParser.parse(idxURL: idx, subURL: sub)
+    }
+}
