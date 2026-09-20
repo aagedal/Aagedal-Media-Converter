@@ -637,6 +637,30 @@ final class PreviewPlayerController: ObservableObject {
         }
     }
     
+    /// Restores sequence playback intent after changing source clips.
+    func playShuttle(at rate: Float) {
+        guard isReady, rate.isFinite, rate != 0 else { return }
+        pause()
+        if rate < 0 {
+            reverseSpeed = max(1, min(8, Int(abs(rate))))
+            isReverseSimulating = true
+            startReverseTimer(skip: reverseSpeed)
+            currentPlaybackSpeed = -Float(reverseSpeed)
+        } else {
+            let speed = max(0.25, min(8, rate))
+            if useImageSequence {
+                startImageSequencePlayback()
+                updateImageSequenceSpeed(speed)
+            } else if useMPV, let mpv = mpvPlayer {
+                mpv.rate = speed
+                mpv.play()
+            } else if let player {
+                player.playImmediately(atRate: speed)
+            }
+            currentPlaybackSpeed = speed
+        }
+    }
+
     func stepRate(forward: Bool) {
         trimPlayback.invalidate()
         let step: Float = 0.5

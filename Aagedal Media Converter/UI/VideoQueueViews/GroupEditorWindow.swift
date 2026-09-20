@@ -62,13 +62,13 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 920, height: 800),
+            contentRect: NSRect(x: 0, y: 0, width: 1120, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = String(localized: "Edit Group")
-        window.minSize = NSSize(width: 760, height: 650)
+        window.minSize = NSSize(width: 960, height: 700)
         window.isReleasedWhenClosed = false
         window.delegate = self
         // Persist window size/position across opens. Xcode stores the frame in
@@ -232,7 +232,7 @@ struct GroupEditorView: View {
     var onClose: () -> Void
     var onTitleChange: (String) -> Void
 
-    @State private var showsTimeline = false
+    @State private var selectedClipIDs: Set<UUID> = []
 
     private var effectivePreset: ExportPreset { group.preset ?? globalPreset }
 
@@ -248,9 +248,10 @@ struct GroupEditorView: View {
             header
                 .disabled(group.status == .converting)
             Divider()
-            if showsTimeline && group.concatEnabled {
-                ScrollView {
-                    StitchingEditorView(group: $group, isStreamCopy: effectivePreset == .streamCopy)
+            if group.concatEnabled {
+                StitchingEditorView(group: $group, isStreamCopy: effectivePreset == .streamCopy,
+                                    selectedClipIDs: $selectedClipIDs) {
+                    itemList
                 }
             } else {
                 itemList
@@ -268,14 +269,6 @@ struct GroupEditorView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            if group.concatEnabled {
-                Toggle(isOn: $showsTimeline) {
-                    Label("Timeline", systemImage: "film.stack")
-                }
-                .toggleStyle(.button)
-                .accessibilityIdentifier("group.timeline")
-                .help("Edit clip order and trim ranges")
-            }
             Image(systemName: "folder.fill")
                 .foregroundColor(.accentColor)
             TextField("Group name", text: $group.name)
@@ -298,7 +291,7 @@ struct GroupEditorView: View {
     }
 
     private var itemList: some View {
-        List {
+        List(selection: $selectedClipIDs) {
             ForEach(group.items) { item in
                 GroupEditorRow(
                     item: item,
@@ -314,11 +307,13 @@ struct GroupEditorView: View {
                     onPlayFullscreen: { onPlayFullscreen(item.id) },
                     onOpenMetadata: { onOpenMetadata([item.id]) }
                 )
+                .tag(item.id)
                 .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
             }
             .onMove(perform: moveItems)
         }
         .listStyle(.plain)
+        .accessibilityIdentifier("group.files")
     }
 
     private var footer: some View {
@@ -571,6 +566,28 @@ private struct GroupEditorRow: View {
     }
 
     private var metadataRow: some View {
+        ViewThatFits(in: .horizontal) {
+            fullMetadataRow.fixedSize(horizontal: true, vertical: false)
+            HStack(spacing: 6) {
+                Text(item.duration)
+                if item.trimStart != nil || item.trimEnd != nil {
+                    Image(systemName: "scissors")
+                        .foregroundColor(.accentColor)
+                        .accessibilityLabel("Trimmed")
+                        .help("Kept: \(item.trimmedDuration.formatted(.number.precision(.fractionLength(2)))) seconds")
+                }
+                if let res = videoResolution {
+                    Text("•")
+                    Text(res)
+                }
+            }
+            .font(.system(size: 10))
+            .foregroundColor(.secondary)
+            .lineLimit(1)
+        }
+    }
+
+    private var fullMetadataRow: some View {
         HStack(spacing: 6) {
             Text(item.duration)
             if item.trimStart != nil || item.trimEnd != nil {

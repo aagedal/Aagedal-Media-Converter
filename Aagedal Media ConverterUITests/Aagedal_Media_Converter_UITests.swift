@@ -502,7 +502,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             edit.click()
             let timeline = element("group.timeline")
             XCTAssertTrue(timeline.waitForExistence(timeout: 10))
-            timeline.click()
+            XCTAssertTrue(element("group.files").exists)
             let preview = element("stitching.preview")
             XCTAssertTrue(waitForLabel("\(expectedBackend == "AVPlayer" ? "native" : "mpv") ready", of: preview, timeout: 30))
             let play = element("stitching.play")
@@ -511,6 +511,18 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             XCTAssertTrue(waitForValue("00:00:00:00 / 00:00:04:00", of: timecode, timeout: 10))
             play.click()
             XCTAssertTrue(waitForValue("ui-test-second.\(container)", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 15))
+            XCTAssertTrue(waitForValue("00:00:04:00 / 00:00:04:00", of: timecode, timeout: 5))
+            // J reverses across the cut and stops at the first trimmed in-point.
+            app.typeText("j")
+            XCTAssertTrue(waitForValue("ui-test-fixture.\(container)", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 15))
+            XCTAssertTrue(waitForValue("00:00:00:00 / 00:00:04:00", of: timecode, timeout: 5))
+            // K is a pause command, including when already paused. Repeated L speeds up.
+            app.typeText("k")
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+            app.typeText("ll")
+            XCTAssertTrue(waitForValue("1.5×", of: element("stitching.rate"), timeout: 5))
             XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 15))
             XCTAssertTrue(waitForValue("00:00:04:00 / 00:00:04:00", of: timecode, timeout: 5))
             // Replay must seek to the first trimmed in-point after sequence end.

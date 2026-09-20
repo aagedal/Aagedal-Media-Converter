@@ -99,11 +99,12 @@ enum StitchingTimeline {
     }
 }
 
-struct StitchingEditorView: View {
+struct StitchingEditorView<FileList: View>: View {
     @Binding var group: EncodingGroup
     let isStreamCopy: Bool
     @State private var selectedID: UUID?
-    @State private var selectedClipIDs: Set<UUID> = []
+    @Binding var selectedClipIDs: Set<UUID>
+    @ViewBuilder var fileList: () -> FileList
     @State private var selectionAnchor: UUID?
     @State private var draggedClipIDs: Set<UUID> = []
     @State private var insertionBoundary: Int?
@@ -112,9 +113,14 @@ struct StitchingEditorView: View {
     @State private var sourceTime: Double = 0
     @State private var seekRequest = StitchingSeek(time: 0)
     @State private var isPlaying = false
+    // Display preference only: never stored in the encoding group or audio settings.
+    @AppStorage("stitchingWaveformVisualScale") private var waveformVisualScale: Double = 4
+    @State private var shuttleRate: Float = 1
+    @GestureState private var pinchMagnification: Double = 1
     @State private var zoom: Double = 1
     @State private var fittedDuration: Double?
     @State private var fitRequest = UUID()
+    @State private var previewAssets: [UUID: PreviewAssets] = [:]
     @State private var filmstrips: [UUID: [URL]] = [:]
 
     private var selectedIndex: Int? {
@@ -145,17 +151,33 @@ struct StitchingEditorView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let index = selectedIndex {
                 let item = group.items[index]
-                StitchingSequencePreview(
-                    item: itemBinding(item), initialTime: item.id == selectedID ? sourceTime : item.effectiveTrimStart,
-                    seekRequest: seekRequest, isPlaying: $isPlaying,
-                    onTime: { time in if selectedIndex.map({ group.items[$0].id }) == item.id { sourceTime = time } },
-                    onTogglePlayback: togglePlayback,
-                    onFit: fitTimeline,
-                    onFinished: { advance(after: item.id) },
-                    onAssets: { filmstrips[item.id] = $0 }
-                )
-                .id(item.id)
-                .frame(height: 280)
+                HSplitView {
+                    fileList()
+                        .frame(minWidth: 380, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+                    StitchingSequencePreview(
+                        item: itemBinding(item), initialTime: item.id == selectedID ? sourceTime : item.effectiveTrimStart,
+                        seekRequest: seekRequest, isPlaying: $isPlaying, shuttleRate: shuttleRate,
+                        onTime: { time in if selectedIndex.map({ group.items[$0].id }) == item.id { sourceTime = time } },
+                        onTogglePlayback: togglePlayback,
+                        onShuttle: shuttle,
+                        onFit: fitTimeline,
+                        onFinished: { advance(after: item.id) },
+                        onAssets: { filmstrips[item.id] = $0 }
+                    )
+                    .id(item.id)
+                    .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.black, in: RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(alignment: .bottomLeading) {
+                        Text(item.name).font(.caption).lineLimit(1).truncationMode(.middle)
+                            .padding(6)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+                            .padding(8)
+                            .accessibilityIdentifier("stitching.selectedClip")
+                            .allowsHitTesting(false)
+                    }
+                }
+                .frame(minHeight: 230, maxHeight: .infinity)
 
                 HStack {
                     Button(action: togglePlayback) {
@@ -167,6 +189,10 @@ struct StitchingEditorView: View {
                         .accessibilityIdentifier("stitching.timecode")
                         .help(sequenceFrameRate.map { "HH:MM:SS:FF · \($0.formatted()) fps · non-drop-frame" }
                               ?? "HH:MM:SS · mixed or unknown frame rates")
+                    Text(isPlaying ? "\(shuttleRate.formatted())×" : "")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("stitching.rate")
                     Spacer()
                     Text("Zoom").foregroundStyle(.secondary)
                     Slider(value: $zoom, in: 1...32).frame(width: 110)
@@ -176,38 +202,72 @@ struct StitchingEditorView: View {
                         .accessibilityIdentifier("stitching.fit")
                 }
                 timeline
-                HStack {
-                    Text(item.name).lineLimit(1).truncationMode(.middle)
-                        .accessibilityIdentifier("stitching.selectedClip")
+                HStack(spacing: 12) {
+                    Text("J/K/L: reverse • pause • play")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Image(systemName: "questionmark.circle")
+                        .foregroundStyle(.secondary)
+                        .help("Pinch to zoom. Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed.")
+                    if isStreamCopy {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.secondary)
+                            .help("Stream Copy keeps the original quality. Cut points may depend on source keyframes.")
+                    }
+                    Picker("Waveform height", selection: $waveformVisualScale) {
+                        ForEach([1.0, 2, 4, 8, 16], id: \.self) { scale in
+                            Text("\(Int(scale))×").tag(scale)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .accessibilityIdentifier("stitching.waveformScale")
+                    .help("Enlarge the waveform visually. Playback and export volume are unchanged. Choose 1× to reset.")
                     Spacer()
                     if selectedClipIDs.count > 1 {
-                        Text("\(selectedClipIDs.count) clips selected").foregroundStyle(.secondary)
+                        Text("\(selectedClipIDs.count) clips selected")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
+                    Button("Reset trim") {
+                        isPlaying = false
+                        guard let i = selectedIndex else { return }
+                        group.items[i].trimStart = nil
+                        group.items[i].trimEnd = nil
+                        seek(item.id, to: 0)
+                    }
+                    .disabled(item.durationSeconds <= 0)
                 }
-                Button("Reset trim") {
-                    isPlaying = false
-                    guard let i = selectedIndex else { return }
-                    group.items[i].trimStart = nil
-                    group.items[i].trimEnd = nil
-                    seek(item.id, to: 0)
-                }
-                .disabled(item.durationSeconds <= 0)
-                .frame(maxWidth: .infinity, alignment: .trailing)
             } else {
                 ContentUnavailableView("No clips", systemImage: "film", description: Text("Add files to start stitching."))
             }
-            if isStreamCopy {
-                Text("Stream Copy keeps the original quality. Cut points may depend on source keyframes.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Text("Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub.")
-                .font(.caption).foregroundStyle(.secondary)
+
         }
         .padding(12)
         .disabled(group.status == .converting)
+        .task(id: group.items.map(\.id)) {
+            // Generate sequentially so a large group does not launch a decoder per clip.
+            let items = group.items
+            for item in items {
+                guard !Task.isCancelled else { return }
+                guard previewAssets[item.id] == nil else { continue }
+                if let assets = try? await PreviewAssetGenerator.shared.generateAssets(for: item.url) {
+                    guard !Task.isCancelled else { return }
+                    previewAssets[item.id] = assets
+                    filmstrips[item.id] = assets.thumbnails
+                }
+            }
+        }
+        .onChange(of: selectedClipIDs) { _, ids in
+            guard let item = group.items.first(where: { ids.contains($0.id) }),
+                  selectedID.map({ !ids.contains($0) }) ?? true else { return }
+            isPlaying = false
+            selectionAnchor = item.id
+            seek(item.id, to: item.effectiveTrimStart)
+        }
         .onChange(of: group.items.map(\.id)) { _, ids in
             isPlaying = false
             selectedClipIDs.formIntersection(ids)
+            previewAssets = previewAssets.filter { ids.contains($0.key) }
+            filmstrips = filmstrips.filter { ids.contains($0.key) }
             if let selectionAnchor, !ids.contains(selectionAnchor) { self.selectionAnchor = nil }
             cancelClipDrag()
             if let selectedID, !ids.contains(selectedID) {
@@ -229,7 +289,7 @@ struct StitchingEditorView: View {
 
     private var timeline: some View {
         GeometryReader { geometry in
-            let scale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * zoom)
+            let scale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * min(32, max(1, zoom * pinchMagnification)))
             let clipWidths = group.items.map { max(1, StitchingTimeline.duration($0) * scale) }
             let width = max(geometry.size.width - 20, clipWidths.reduce(0, +))
             ScrollViewReader { proxy in
@@ -256,17 +316,19 @@ struct StitchingEditorView: View {
                                 StitchingTimelineClip(
                                     item: item, selected: selectedClipIDs.contains(item.id), scale: scale,
                                     thumbnailURLs: filmstrips[item.id] ?? [],
+                                    assets: previewAssets[item.id],
+                                    waveformVisualScale: waveformVisualScale,
                                     onSelect: { selectClip(item.id) },
                                     reorderGesture: clipDrag(item.id, widths: clipWidths),
                                     onTrim: { start, value in setTrim(item.id, start: start, value: value) }
                                 )
-                                .frame(width: clipWidths[index], height: 116)
+                                .frame(width: clipWidths[index], height: 164)
                                 .opacity(draggedClipIDs.contains(item.id) ? 0.45 : 1)
                                 .id(item.id)
                             }
                             Spacer(minLength: 0)
                         }
-                        .frame(height: 116)
+                        .frame(height: 164)
                     }
                     .frame(width: width, alignment: .leading)
                     .coordinateSpace(name: "stitching.clips")
@@ -277,7 +339,7 @@ struct StitchingEditorView: View {
                             // implicit overlay stack centers the narrow line in the label's width.
                             ZStack(alignment: .topLeading) {
                                 Rectangle().fill(Color.accentColor)
-                                    .frame(width: 4, height: 120)
+                                    .frame(width: 4, height: 168)
                                     .overlay(alignment: .top) {
                                         Image(systemName: "arrowtriangle.down.fill")
                                             .font(.system(size: 14)).foregroundStyle(Color.accentColor)
@@ -297,7 +359,7 @@ struct StitchingEditorView: View {
                     .allowsHitTesting(group.status != .converting)
                     .id("stitching.timeline.origin")
                     .overlay(alignment: .topLeading) {
-                        Rectangle().fill(.red).frame(width: 2, height: 144)
+                        Rectangle().fill(.red).frame(width: 2, height: 192)
                             .offset(x: min(width - 2, sequenceTime * scale))
                             .allowsHitTesting(false)
                     }
@@ -312,7 +374,17 @@ struct StitchingEditorView: View {
                 }
             }
         }
-        .frame(height: 166)
+        .frame(height: 214)
+        .simultaneousGesture(
+            MagnifyGesture()
+                .updating($pinchMagnification) { value, magnification, _ in
+                    magnification = value.magnification
+                }
+                .onEnded { value in
+                    zoom = min(32, max(1, zoom * value.magnification))
+                }
+        )
+        .accessibilityIdentifier("group.timeline")
         .background(Color.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 6))
     }
 
@@ -333,16 +405,40 @@ struct StitchingEditorView: View {
         seek(location.id, to: location.sourceTime)
     }
     private func togglePlayback() {
+        guard group.status != .converting else { return }
         if isPlaying { isPlaying = false; return }
+        shuttleRate = 1
+        startForwardPlayback()
+    }
+    private func startForwardPlayback() {
         guard let location = StitchingTimeline.playbackLocation(at: sequenceTime, in: group.items) else { return }
         if selectedIndex.map({ group.items[$0].id }) != location.id || abs(sourceTime - location.sourceTime) > 0.000001 {
             seek(location.id, to: location.sourceTime)
         }
         isPlaying = true
     }
+    private func shuttle(_ direction: Int) {
+        guard group.status != .converting else { return }
+        if direction == 0 { isPlaying = false; return }
+        if direction > 0 {
+            shuttleRate = isPlaying && shuttleRate > 0 ? min(8, shuttleRate + 0.5) : 1
+            startForwardPlayback()
+        } else {
+            shuttleRate = isPlaying && shuttleRate < 0 ? max(-8, shuttleRate - 1) : -1
+            guard sequenceTime > 0 else { isPlaying = false; return }
+            isPlaying = true
+        }
+    }
     private func advance(after id: UUID) {
         guard isPlaying, let index = selectedIndex, group.items[index].id == id else { return }
-        if let next = group.items.dropFirst(index + 1).first(where: { StitchingTimeline.duration($0) > 0 }) {
+        if shuttleRate < 0 {
+            if let previous = group.items.prefix(index).last(where: { StitchingTimeline.duration($0) > 0 }) {
+                seek(previous.id, to: previous.effectiveTrimEnd)
+            } else {
+                isPlaying = false
+                sourceTime = group.items[index].effectiveTrimStart
+            }
+        } else if let next = group.items.dropFirst(index + 1).first(where: { StitchingTimeline.duration($0) > 0 }) {
             seek(next.id, to: next.effectiveTrimStart)
         } else {
             isPlaying = false
@@ -387,13 +483,13 @@ struct StitchingEditorView: View {
                     draggedClipIDs = selectedClipIDs
                     isPlaying = false
                 }
-                insertionBoundary = (0...144).contains(value.location.y)
+                insertionBoundary = (0...192).contains(value.location.y)
                     ? StitchingTimeline.insertionBoundary(at: value.location.x, widths: widths) : nil
             }
             .onEnded { value in
                 defer { cancelClipDrag() }
                 guard group.status != .converting, !clipDragCancelled, !draggedClipIDs.isEmpty,
-                      value.location.y >= 0, value.location.y <= 144 else { return }
+                      value.location.y >= 0, value.location.y <= 192 else { return }
                 let destination = StitchingTimeline.insertionBoundary(at: value.location.x, widths: widths)
                 let previous = group.items.map(\.id)
                 StitchingTimeline.move(&group.items, selection: draggedClipIDs, to: destination)
@@ -416,11 +512,69 @@ private struct StitchingSeek: Equatable {
     let time: Double
 }
 
+/// Draw source waveforms in timeline coordinates so trimming crops rather than stretches them.
+private struct StitchingClipWaveform: View {
+    let item: VideoItem
+    let assets: PreviewAssets?
+    let visualScale: Double
+    @State private var segments: [(start: Double, duration: Double, image: NSImage)] = []
+
+    var body: some View {
+        Canvas { context, size in
+            context.clip(to: Path(CGRect(origin: .zero, size: size)))
+            let duration = max(0.001, StitchingTimeline.duration(item))
+            let scale = visualScale.isFinite ? min(16, max(1, visualScale)) : 4
+            // Zoom around the zero-amplitude center, preserving timing and track height.
+            let height = size.height * scale
+            let originY = (size.height - height) / 2
+            for segment in segments {
+                let rect = CGRect(x: (segment.start - item.effectiveTrimStart) / duration * size.width,
+                                  y: originY, width: segment.duration / duration * size.width, height: height)
+                guard rect.maxX > 0, rect.minX < size.width else { continue }
+                context.draw(Image(nsImage: segment.image), in: rect)
+            }
+        }
+        .background(Color.black.opacity(0.8))
+        .overlay {
+            if segments.isEmpty {
+                Image(systemName: "waveform").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityLabel("Audio waveform for \(item.name)")
+        .task(id: assets == nil) {
+            guard let assets else { segments = []; return }
+            if let image = assets.nativeWaveform(forAudioStream: nil) {
+                segments = [(0, item.durationSeconds, image)]
+            } else {
+                let chunks = assets.waveformChunks
+                let waveform = assets.waveform
+                let duration = item.durationSeconds
+                let loaded = await Task.detached(priority: .utility) {
+                    if !chunks.isEmpty {
+                        return chunks.compactMap { chunk -> (Double, Double, NSImage)? in
+                            guard let image = NSImage(contentsOf: chunk.url) else { return nil }
+                            return (chunk.startTime, chunk.duration, image)
+                        }
+                    }
+                    if let waveform, let image = NSImage(contentsOf: waveform) {
+                        return [(0.0, duration, image)]
+                    }
+                    return []
+                }.value
+                guard !Task.isCancelled else { return }
+                segments = loaded
+            }
+        }
+    }
+}
+
 private struct StitchingTimelineClip<ReorderGesture: Gesture>: View {
     let item: VideoItem
     let selected: Bool
     let scale: Double
     let thumbnailURLs: [URL]
+    let assets: PreviewAssets?
+    let waveformVisualScale: Double
     let onSelect: () -> Void
     let reorderGesture: ReorderGesture
     let onTrim: (Bool, Double) -> Void
@@ -446,16 +600,20 @@ private struct StitchingTimelineClip<ReorderGesture: Gesture>: View {
                 }
                 .frame(height: 68).offset(y: 24)
                 Text(item.name).font(.caption).lineLimit(1).padding(.horizontal, 12).padding(.top, 4)
+                StitchingClipWaveform(item: item, assets: assets, visualScale: waveformVisualScale)
+                    .frame(height: 48)
+                    .offset(y: 92)
                 clipReadouts(width: geometry.size.width)
                     .frame(height: 24)
                     .background(Color.black)
-                    .offset(y: 92)
+                    .offset(y: 140)
             }
-            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
             .gesture(reorderGesture)
-            .overlay(Rectangle().strokeBorder(selected ? Color.accentColor : Color.secondary, lineWidth: selected ? 2 : 1))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.5), lineWidth: selected ? 2 : 1))
             .overlay(alignment: .leading) { handle(start: true) }
             .overlay(alignment: .trailing) { handle(start: false) }
         }
@@ -557,6 +715,8 @@ private struct StitchingSequencePreview: View {
     let initialTime: Double
     let seekRequest: StitchingSeek
     @Binding var isPlaying: Bool
+    let shuttleRate: Float
+    let onShuttle: (Int) -> Void
     let onTime: (Double) -> Void
     let onTogglePlayback: () -> Void
     let onFit: () -> Void
@@ -568,12 +728,14 @@ private struct StitchingSequencePreview: View {
     @State private var active = false
     @State private var requestedTime: Double
 
-    init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>,
-         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onFit: @escaping () -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
+    init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, shuttleRate: Float,
+         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
         _item = item
         self.initialTime = initialTime
         self.seekRequest = seekRequest
         _isPlaying = isPlaying
+        self.shuttleRate = shuttleRate
+        self.onShuttle = onShuttle
         self.onTime = onTime
         self.onTogglePlayback = onTogglePlayback
         self.onFit = onFit
@@ -588,13 +750,21 @@ private struct StitchingSequencePreview: View {
     var body: some View {
         PreviewPlayerContent(item: $item, controller: controller, showsPlaybackControls: false,
                              togglePlaybackControls: {}, keyHandler: { key, modifiers, _ in
+            guard item.status != .converting,
+                  !(NSApp.keyWindow?.firstResponder is NSTextView) else { return false }
             let shortcutModifiers = modifiers.intersection([.command, .control, .option, .shift])
             if key.lowercased() == "z", shortcutModifiers == .shift {
                 onFit()
                 return true
             }
-            guard shortcutModifiers.isEmpty, key == " " else { return false }
-            onTogglePlayback()
+            guard shortcutModifiers.isEmpty else { return false }
+            switch key.lowercased() {
+            case " ": onTogglePlayback()
+            case "j": onShuttle(-1)
+            case "k": onShuttle(0)
+            case "l": onShuttle(1)
+            default: return false
+            }
             return true
         }, currentPlaybackTime: $playbackTime)
         .clipped()
@@ -628,6 +798,10 @@ private struct StitchingSequencePreview: View {
         .onChange(of: isPlaying) { _, playing in
             if playing { finished = false; playIfReady() } else { controller.pause() }
         }
+        .onChange(of: shuttleRate) { _, _ in
+            finished = false
+            playIfReady()
+        }
         .onChange(of: controller.isReady) { _, ready in
             if ready {
                 controller.seekTo(requestedTime)
@@ -641,7 +815,9 @@ private struct StitchingSequencePreview: View {
             playbackTime = time
             requestedTime = time
             onTime(time)
-            if isPlaying && time >= item.effectiveTrimEnd { finish() }
+            if isPlaying && (shuttleRate < 0 ? time <= item.effectiveTrimStart : time >= item.effectiveTrimEnd) {
+                finish()
+            }
         }
     }
 
@@ -656,8 +832,7 @@ private struct StitchingSequencePreview: View {
 
     private func playIfReady() {
         guard active, isPlaying, controller.isReady else { return }
-        controller.pause()
-        controller.togglePlayback()
+        controller.playShuttle(at: shuttleRate)
     }
     private func finish() {
         guard active, isPlaying, !finished else { return }
