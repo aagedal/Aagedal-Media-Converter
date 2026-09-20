@@ -652,6 +652,15 @@ retained ranges are excluded. All 12 focused export/marker tests pass. See the
 This covers the conversion boundary with generated video; editor-driven export,
 real-card/MXF/long-recording media, and compressed-audio joins remain open.
 
+Generated AAC stitching joins now pass with marker export both enabled and
+disabled. The live group-conversion regressions check decoded tone order,
+audio energy across the join, bounded packet rounding, video frame count,
+chapter/sidecar output, and serialization with a waiting agent conversion.
+All 16 focused stitching/export tests pass. See the
+[AAC join validation record](4.5-stitching-aac-join-validation-2026-09-20.md).
+This narrows compressed-audio coverage to matching mono 48 kHz AAC sources;
+multichannel, differing encoder delay, long-GOP joins, and real media remain open.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

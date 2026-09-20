@@ -4371,7 +4371,19 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
-    private func checkLiveMergedGroupBeforeAgent(withAudio: Bool) async throws {
+    func testLiveTrimmedAACMergedGroupPreservesAudioContinuityBeforeWaitingAgentExecutes() async throws {
+        try await checkLiveMergedGroupBeforeAgent(withAudio: true, audioCodec: "aac")
+    }
+
+    @MainActor
+    func testLiveTrimmedAACMergedGroupWithMarkersPreservesAudioContinuityBeforeWaitingAgentExecutes() async throws {
+        try await checkLiveMergedGroupBeforeAgent(withAudio: true, audioCodec: "aac", exportMarkers: true)
+    }
+
+    @MainActor
+    private func checkLiveMergedGroupBeforeAgent(
+        withAudio: Bool, audioCodec: String = "pcm_s16le", exportMarkers: Bool = false
+    ) async throws {
         let directory = try makeTemporaryDirectory()
         let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
         for (index, source) in sources.enumerated() {
@@ -4386,11 +4398,11 @@ final class ApplicationJobContractTests: XCTestCase {
                 ]
             }
             arguments += ["-c:v", "libx264", "-g", "1", "-pix_fmt", "yuv420p"]
-            if withAudio { arguments += ["-c:a", "pcm_s16le"] }
+            if withAudio { arguments += ["-c:a", audioCodec] }
             try runBundledFFmpeg(arguments + [source.path])
         }
         let defaults = try makeDefaults()
-        defaults.set(false, forKey: AppConstants.exportStitchMarkersKey)
+        defaults.set(exportMarkers, forKey: AppConstants.exportStitchMarkersKey)
         let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
         let gate = ApplicationConversionExecutionGate()
         let prepared = expectation(description: "First merge trim subprocess completed")
@@ -4459,9 +4471,21 @@ final class ApplicationJobContractTests: XCTestCase {
         let merged = try XCTUnwrap(queue.items.first?.outputURL)
         XCTAssertEqual(queue.items.last?.outputURL, merged)
         XCTAssertFalse(record.outputURLs.contains(merged))
+        if exportMarkers {
+            let media = try await StitchMarkerMedia.read(merged)
+            XCTAssertEqual(media.chapters.map(\.title), ["Cut: first.mov", "Cut: second.mov"])
+            XCTAssertEqual(try XCTUnwrap(media.chapters.first?.start), 0, accuracy: 0.001)
+            // The chapter and concat boundary include compressed packet tails.
+            XCTAssertEqual(try XCTUnwrap(media.chapters.last?.start), 1, accuracy: 2 * 1024.0 / 48_000)
+            XCTAssertEqual(try XCTUnwrap(media.chapters.last?.end), media.duration, accuracy: 0.001)
+            let sidecar = merged.deletingPathExtension().appendingPathExtension("cuts.edl")
+            let edl = try String(contentsOf: sidecar, encoding: .utf8)
+            XCTAssertTrue(edl.contains("|M:Cut: first.mov"))
+            XCTAssertTrue(edl.contains("|M:Cut: second.mov"))
+        }
         for output in [merged] + record.outputURLs {
             let metadata = try await ApplicationMediaInspector.live.inspect(output)
-            // Stream Copy keeps whole PCM packets at both trimmed boundaries.
+            // Stream Copy keeps whole audio packets at trimmed boundaries.
             let durationTolerance = withAudio ? 4.0 * 1024 / 48_000 : 1.0 / 24
             XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: durationTolerance)
             XCTAssertEqual(metadata.frameCount, 48)
@@ -4483,8 +4507,8 @@ final class ApplicationJobContractTests: XCTestCase {
                 Double(Int16(bitPattern: UInt16(data[offset]) | UInt16(data[offset + 1]) << 8))
             }
             // Allow at most one 1024-sample packet at each cut edge. Copying
-            // packets is not sample-accurate trimming; the fixture currently
-            // retains 98304 samples (2.048 seconds) for two seconds of video.
+            // packets is not sample-accurate trimming. PCM and AAC both use
+            // 1024-sample packets in these fixtures.
             XCTAssertGreaterThanOrEqual(samples.count, 96_000)
             XCTAssertLessThanOrEqual(samples.count, 96_000 + 4 * 1024)
             guard samples.count >= 96_000 else { return }
