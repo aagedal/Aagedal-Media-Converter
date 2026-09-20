@@ -607,7 +607,33 @@ Mach-O images and 12 packaged license notices). Final evidence:
 `/private/tmp/amc-4.5-continuation-bundle-report.json`. Signing/notarization remains
 unvalidated; dependencies and bundled binaries are unchanged.
 
-Remaining priorities: validate stitching sequence playback and broader real-media
+The stitching continuation fixes empty-source starts, trim-out advancement,
+replay ordering, and unnecessary seeks on ordinary resume. Native and MPV UI
+cases now pass with two trimmed generated clips, transitions, sequence-end replay
+progress, pause, and closing/reopening the editor. Three added unit cases cover
+boundary behavior. Screenshots were visually reviewed; real-card/MXF/long-media
+and delayed-loading stress coverage remain open. See the
+[stitching playback record](4.5-stitching-playback-validation-2026-09-20.md).
+
+The output matrix now verifies decoded keyframe-aligned Stream Copy content and
+AAC sample alignment through WAV and H.264/AAC exports. Copied audio may retain
+part of its final packet; the test measures that bounded tail without claiming
+sample-exact stream-copy trimming. Two additional real subtitle-mux cases verify
+late publication and cancellation alongside independent agent execution. See the
+[Stream Copy/AAC record](4.5-stream-copy-aac-boundary-validation-2026-09-20.md) and
+[subtitle coexistence record](4.5-subtitle-agent-coexistence-validation-2026-09-20.md).
+
+The complete Debug unit target passes **1,027 tests**, with no failures or skips.
+Both new stitching UI cases, all 81 script tests, and the 1,671-entry Norwegian
+catalog audit pass. The updated unsigned Release build and static bundle audit
+also pass: 45 arm64 Mach-O images and 12 packaged license notices. Evidence:
+`/private/tmp/amc-4.5-sequence-release.log`,
+`/private/tmp/amc-4.5-sequence-bundle-audit.log`, and
+`/private/tmp/amc-4.5-sequence-bundle-report.json`. This does not validate
+Developer ID signing or notarization. No dependencies or bundled media binaries
+changed.
+
+Remaining priorities: validate stitching under delayed loading and broader real-media
 playback; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
 drives and settle App Sandbox scope; cover upload, transcription, OCR/subtitle
@@ -836,11 +862,15 @@ sequential filenames where enabled. The list marks trimmed clips explicitly.
 There are no additional tracks, volume editing, effects, or transitions. Stream
 Copy retains its existing keyframe-dependent cut behavior.
 
-Validation: Debug build and five focused XCTest cases passed. Coverage includes
+Initial validation: Debug build and five focused XCTest cases passed. Coverage includes
 sequence-to-source mapping at boundaries, reordered clips, empty/zero-duration
 sources, scrub bounds, invalid input, and trim limits. UI automation imported
 both generated sample files but was interrupted by app-state changes before
-validating the group editor. No successful live playback/export check is claimed.
+validating the group editor. No successful live playback/export check was claimed
+at that initial point.
+Generated native/MPV transition, replay, pause, and reopening checks now pass; see
+the [continuation record](4.5-stitching-playback-validation-2026-09-20.md).
+Live reordered/trimmed export validation remains open.
 
 Before release, manually validate native and MPV sequence playback, transition
 from a trimmed out-point to the next trimmed in-point, pause while loading, replay
