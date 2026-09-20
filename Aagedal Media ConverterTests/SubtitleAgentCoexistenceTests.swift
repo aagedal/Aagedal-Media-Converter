@@ -569,7 +569,9 @@ final class OCRAgentCoexistenceTests: XCTestCase {
             .appendingPathComponent("OCRAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let source = directory.appendingPathComponent("source.mp4")
+        let source = directory.appendingPathComponent("source.mkv")
+        let subtitleFixture = directory.appendingPathComponent("fixture.sup")
+        try CoexistencePGSFixture.data.write(to: subtitleFixture)
         let existingSRT = directory.appendingPathComponent("source.srt")
         let existingBytes = Data("Existing subtitles".utf8)
         try existingBytes.write(to: existingSRT)
@@ -578,16 +580,18 @@ final class OCRAgentCoexistenceTests: XCTestCase {
             executableURL: URL(fileURLWithPath: ffmpeg),
             arguments: ["-v", "error", "-y", "-f", "lavfi", "-i",
                         "testsrc2=size=64x48:rate=24:duration=2",
-                        "-c:v", "libx264", "-pix_fmt", "yuv420p", source.path],
+                        "-i", subtitleFixture.path, "-map", "0:v:0", "-map", "1:s:0",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:s", "copy", source.path],
             timeout: .seconds(15)
         ))
-        XCTAssertTrue(generated.succeeded)
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        try FileManager.default.removeItem(at: subtitleFixture)
         let sourceBytes = try Data(contentsOf: source)
         let ocrStarted = expectation(description: "OCR recognition is outstanding")
         let ocrCancelled = expectation(description: "OCR engine received cancellation")
         ocrCancelled.isInverted = cancelAgent
         let recognizer = CoexistenceOCREngine(started: ocrStarted, cancelled: ocrCancelled)
-        let extractor = CoexistencePGSRunner()
+        let extractor = CoexistenceLivePGSRunner()
         let ocr = TesseractService(subprocessRunner: extractor, ocrEngine: recognizer)
         let operationID = UUID()
         let recognition = Task {
@@ -596,7 +600,7 @@ final class OCRAgentCoexistenceTests: XCTestCase {
                 codec: "hdmv_pgs_subtitle", language: "eng", engineKind: .appleVision
             ) { _ in }
         }
-        await fulfillment(of: [ocrStarted], timeout: 3)
+        await fulfillment(of: [ocrStarted], timeout: 15)
         let agentStarted = expectation(description: "Real agent FFmpeg reported progress")
         let runner = CoexistenceLiveAgentRunner(started: agentStarted)
         let adapter = ApplicationFFmpegJobExecutor(runner: .live(converter: FFMPEGConverter(subprocessRunner: runner)))
@@ -675,8 +679,8 @@ final class OCRAgentCoexistenceTests: XCTestCase {
     }
 }
 
-/// Supplies a minimal PGS display set to the real parser; extraction itself is controlled.
-private actor CoexistencePGSRunner: SubprocessRunning {
+/// Records scratch output while extracting the real MKV track with bundled FFmpeg.
+private actor CoexistenceLivePGSRunner: SubprocessRunning {
     private var output: URL?
     func outputURL() -> URL? { output }
 
@@ -686,6 +690,13 @@ private actor CoexistencePGSRunner: SubprocessRunning {
     ) async throws -> SubprocessResult {
         let destination = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
         output = destination
+        return try await SubprocessRunner().run(request, outputHandler: outputHandler)
+    }
+}
+
+/// A minimal two-pixel PGS display set, muxed into the source before extraction.
+private enum CoexistencePGSFixture {
+    static var data: Data {
         func segment(_ type: UInt8, pts: UInt32 = 0, payload: [UInt8]) -> Data {
             Data([0x50, 0x47, UInt8((pts >> 24) & 255), UInt8((pts >> 16) & 255),
                   UInt8((pts >> 8) & 255), UInt8(pts & 255), 0, 0, 0, 0, type,
@@ -698,11 +709,7 @@ private actor CoexistencePGSRunner: SubprocessRunning {
         data += segment(0x80, payload: [])
         data += segment(0x16, pts: 90_000, payload: [0, 2, 0, 1, 0x10, 0, 1, 0, 0, 0, 0])
         data += segment(0x80, pts: 90_000, payload: [])
-        try data.write(to: destination)
-        return SubprocessResult(
-            terminationStatus: 0, termination: .exited, standardOutput: Data(), standardError: Data(),
-            discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .milliseconds(1)
-        )
+        return data
     }
 }
 

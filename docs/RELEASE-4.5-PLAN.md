@@ -778,6 +778,14 @@ recognition are controlled boundaries; real bitmap extraction, recognition quali
 and UI integration remain open. See the
 [OCR-agent coexistence validation record](4.5-ocr-agent-coexistence-validation-2026-09-21.md).
 
+The OCR coexistence checks now mux a generated PGS display set into an H.264 MKV
+and extract its real subtitle track through bundled FFmpeg before parsing and
+recognition. Both cancellation directions pass with unchanged source/existing
+subtitle bytes, exact successful SRT timing, and scratch cleanup. Recognition
+remains controlled to exercise late completion deterministically; VOBSUB extraction,
+real recognition, and UI integration remain open. See the
+[live PGS extraction validation record](4.5-live-pgs-extraction-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
