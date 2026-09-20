@@ -670,6 +670,18 @@ serialization checks. All 20 focused stitching/export tests pass. See the
 This covers matching-format generated sources; differing encoder delays,
 long-GOP joins, other layouts, and real media remain open.
 
+Generated closed-GOP H.264 with two B-frames and stereo AAC now has bounded
+Stream Copy stitching regressions with marker export enabled and disabled.
+Independent source-frame comparisons verify clip order and the exact retained
+reference-frame tails; audio checks cover both channels across the extended join.
+This exposed a timing limitation: even keyframe-aligned 0.5–1.5 second cuts retain
+26 rather than 24 frames per clip, and the two-clip output lasts about 2.22–2.29
+seconds. These tests characterize current packet-copy behavior; they do not
+establish exact long-GOP trimming. See the
+[long-GOP stitching validation record](4.5-stitching-long-gop-validation-2026-09-20.md).
+Exact cut handling or user-visible boundary guidance remains open alongside
+open-GOP and real-media coverage.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -897,7 +909,9 @@ The timeline and clip list share the group's actual items and source trim fields
 Earlier/Later buttons update the list order, clear its sort mode, and refresh
 sequential filenames where enabled. The list marks trimmed clips explicitly.
 There are no additional tracks, volume editing, effects, or transitions. Stream
-Copy retains its existing keyframe-dependent cut behavior.
+Copy retains its existing keyframe-dependent cut behavior. Closed-GOP B-frame
+validation also found retained reference-frame tails at keyframe-aligned cuts;
+keyframe alignment alone does not guarantee an exact exported out-point.
 
 Initial validation: Debug build and five focused XCTest cases passed. Coverage includes
 sequence-to-source mapping at boundaries, reordered clips, empty/zero-duration

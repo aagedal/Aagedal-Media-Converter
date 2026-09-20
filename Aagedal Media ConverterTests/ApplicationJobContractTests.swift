@@ -4409,9 +4409,23 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveTrimmedLongGOPAACMergedGroupRetainsBoundedPacketTails() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", audioChannels: 2, longGOP: true
+        )
+    }
+
+    @MainActor
+    func testLiveTrimmedLongGOPAACMergedGroupWithMarkersRetainsBoundedPacketTails() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", exportMarkers: true, audioChannels: 2, longGOP: true
+        )
+    }
+
+    @MainActor
     private func checkLiveMergedGroupBeforeAgent(
         withAudio: Bool, audioCodec: String = "pcm_s16le", exportMarkers: Bool = false,
-        audioChannels: Int = 1
+        audioChannels: Int = 1, longGOP: Bool = false
     ) async throws {
         let directory = try makeTemporaryDirectory()
         let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
@@ -4433,7 +4447,15 @@ final class ApplicationJobContractTests: XCTestCase {
                 let layout = audioChannels == 6 ? "5.1" : (audioChannels == 2 ? "stereo" : "mono")
                 arguments += ["-f", "lavfi", "-i", "aevalsrc=\(tones):s=48000:d=2:c=\(layout)"]
             }
-            arguments += ["-c:v", "libx264", "-g", "1", "-pix_fmt", "yuv420p"]
+            arguments += ["-vf", "hue=h=\(index * 90)", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
+            if longGOP {
+                // Closed half-second GOPs make both trim edges keyframe-aligned.
+                // Fixed B-frames exercise reordered packet timestamps at the join.
+                arguments += ["-g", "12", "-keyint_min", "12", "-sc_threshold", "0",
+                              "-bf", "2", "-x264-params", "b-adapt=0:open-gop=0"]
+            } else {
+                arguments += ["-g", "1"]
+            }
             if withAudio {
                 arguments += ["-c:a", audioCodec]
                 if audioCodec == "aac" { arguments += ["-b:a", "\(audioChannels * 96)k"] }
@@ -4515,7 +4537,7 @@ final class ApplicationJobContractTests: XCTestCase {
             XCTAssertEqual(media.chapters.map(\.title), ["Cut: first.mov", "Cut: second.mov"])
             XCTAssertEqual(try XCTUnwrap(media.chapters.first?.start), 0, accuracy: 0.001)
             // The chapter and concat boundary include compressed packet tails.
-            XCTAssertEqual(try XCTUnwrap(media.chapters.last?.start), 1, accuracy: 2 * 1024.0 / 48_000)
+            XCTAssertEqual(try XCTUnwrap(media.chapters.last?.start), 1, accuracy: 2 * 1024.0 / 48_000 + (longGOP ? 4.0 / 24 : 0))
             XCTAssertEqual(try XCTUnwrap(media.chapters.last?.end), media.duration, accuracy: 0.001)
             let sidecar = merged.deletingPathExtension().appendingPathExtension("cuts.edl")
             let edl = try String(contentsOf: sidecar, encoding: .utf8)
@@ -4525,15 +4547,40 @@ final class ApplicationJobContractTests: XCTestCase {
         for output in [merged] + record.outputURLs {
             let metadata = try await ApplicationMediaInspector.live.inspect(output)
             // Stream Copy keeps whole audio packets at trimmed boundaries.
-            let durationTolerance = withAudio ? 4.0 * 1024 / 48_000 : 1.0 / 24
+            // B-frame packet tails and timestamp normalization can each add
+            // two frame intervals per clip, beyond AAC packet rounding.
+            let durationTolerance = (withAudio ? 4.0 * 1024 / 48_000 : 1.0 / 24)
+                + (longGOP ? 8.0 / 24 : 0)
             XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: durationTolerance)
-            XCTAssertEqual(metadata.frameCount, 48)
+            XCTAssertEqual(metadata.frameCount, longGOP && output == merged ? 52 : 48)
             XCTAssertEqual(metadata.audioStreams.count, withAudio ? 1 : 0)
             if withAudio {
                 XCTAssertEqual(metadata.audioStreams.first?.channels, audioChannels)
                 XCTAssertEqual(metadata.audioStreams.first?.sampleRate, 48_000)
             }
             try runBundledFFmpeg(["-v", "error", "-xerror", "-i", output.path, "-map", "0", "-f", "null", "-"])
+        }
+        if longGOP {
+            func decodedFrames(_ source: URL, name: String, trim: Bool) throws -> Data {
+                let decoded = directory.appendingPathComponent(name + ".yuv")
+                var arguments = ["-v", "error", "-xerror", "-i", source.path, "-map", "0:v:0"]
+                // The copy cut retains the next I-frame (36) and its forward
+                // reference P-frame (39), beyond requested frames 12..<36.
+                // Decode from the beginning to verify these exact source frames.
+                if trim {
+                    arguments += ["-vf", "select='between(n,12,36)+eq(n,39)'"]
+                }
+                try runBundledFFmpeg(arguments + [
+                    "-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-f", "rawvideo", decoded.path
+                ])
+                return try Data(contentsOf: decoded)
+            }
+            let expectedFirst = try decodedFrames(sources[0], name: "expected-first", trim: true)
+            let expectedSecond = try decodedFrames(sources[1], name: "expected-second", trim: true)
+            let actual = try decodedFrames(merged, name: "actual", trim: false)
+            XCTAssertEqual(actual.count, 52 * 64 * 48 * 3 / 2)
+            XCTAssertTrue(actual == expectedFirst + expectedSecond,
+                          "Long-GOP stitching must preserve source frames, including known reference-frame tails")
         }
         if withAudio {
             let decoded = directory.appendingPathComponent("merged-audio.pcm")
@@ -4550,7 +4597,10 @@ final class ApplicationJobContractTests: XCTestCase {
             // Stream Copy retains packets rather than making sample-exact cuts.
             let frameCount = samples.count / audioChannels
             XCTAssertGreaterThanOrEqual(frameCount, 96_000)
-            XCTAssertLessThanOrEqual(frameCount, 96_000 + 4 * 1024)
+            // Two reordered video frames per clip can also extend copied
+            // audio. This characterizes bounded tails, not exact trim behavior.
+            let videoTailSamples = longGOP ? 2 * 2 * 48_000 / 24 : 0
+            XCTAssertLessThanOrEqual(frameCount, 96_000 + 4 * 1024 + videoTailSamples)
             guard frameCount >= 96_000 else { return }
             for channel in 0..<audioChannels {
                 let channelSamples = stride(from: channel, to: samples.count, by: audioChannels).map { samples[$0] }
@@ -4565,7 +4615,7 @@ final class ApplicationJobContractTests: XCTestCase {
                 }
                 // Every 10 ms window near the seam must contain audible samples
                 // in every channel, including LFE, to catch packet-sized gaps.
-                for start in stride(from: 45_600, to: 52_800, by: 480) {
+                for start in stride(from: 45_600, to: longGOP ? 58_080 : 52_800, by: 480) {
                     let energy = channelSamples[start..<(start + 480)].reduce(0) { $0 + $1 * $1 } / 480
                     XCTAssertGreaterThan(energy.squareRoot(), 1_000, "Gap in channel \(channel) at sample \(start)")
                 }
