@@ -273,6 +273,7 @@ struct GroupEditorView: View {
                     Label("Timeline", systemImage: "film.stack")
                 }
                 .toggleStyle(.button)
+                .accessibilityIdentifier("group.timeline")
                 .help("Edit clip order and trim ranges")
             }
             Image(systemName: "folder.fill")
@@ -336,6 +337,7 @@ struct GroupEditorView: View {
             .help("Sort items in the group")
             .disabled(group.status == .converting)
             Button("Done", action: onClose)
+                .accessibilityIdentifier("group.done")
                 .keyboardShortcut(.defaultAction)
         }
         .padding(12)

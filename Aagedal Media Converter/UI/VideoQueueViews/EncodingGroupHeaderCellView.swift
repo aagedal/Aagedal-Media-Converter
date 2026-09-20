@@ -536,6 +536,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
         // Opens the standalone editor window where reorder/remove/extract happen.
         // Keeps the main queue focused on high-level queue manipulation.
         configureActionButton(editButton, symbolName: "square.and.pencil", tint: .systemBlue, action: #selector(editClicked))
+        editButton.setAccessibilityIdentifier("group.edit")
         editButton.toolTip = String(localized: "Edit group contents (reorder, remove, rename)")
 
         configureActionButton(resetButton, symbolName: "arrow.counterclockwise.circle.fill", tint: .systemBlue, action: #selector(resetClicked))

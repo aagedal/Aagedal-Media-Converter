@@ -482,6 +482,60 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testNativeStitchingSequencePlaybackAndReplay() throws {
+        try exerciseStitchingSequence(container: "mp4", expectedBackend: "AVPlayer")
+    }
+
+    @MainActor
+    func testMPVStitchingSequencePlaybackAndReplay() throws {
+        try exerciseStitchingSequence(container: "mkv", expectedBackend: "MPV")
+    }
+
+    @MainActor
+    private func exerciseStitchingSequence(container: String, expectedBackend: String) throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: container, stitching: true)
+        defer { terminateAndCleanFixtures() }
+        app.activate()
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        for attempt in 0..<2 {
+            edit.click()
+            let timeline = element("group.timeline")
+            XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+            timeline.click()
+            let preview = element("stitching.preview")
+            XCTAssertTrue(waitForLabel("\(expectedBackend == "AVPlayer" ? "native" : "mpv") ready", of: preview, timeout: 30))
+            let play = element("stitching.play")
+            let selected = element("stitching.selectedClip")
+            let timecode = element("stitching.timecode")
+            XCTAssertTrue(waitForValue("00:00:00:00 / 00:00:04:00", of: timecode, timeout: 10))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.\(container)", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 15))
+            XCTAssertTrue(waitForValue("00:00:04:00 / 00:00:04:00", of: timecode, timeout: 5))
+            // Replay must seek to the first trimmed in-point after sequence end.
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-fixture.\(container)", of: selected, timeout: 5))
+            let replayAdvances = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@ AND value != %@",
+                                       "00:00:00:00 / 00:00:04:00", "00:00:04:00 / 00:00:04:00"), object: timecode
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [replayAdvances], timeout: 5), .completed)
+            play.click()
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+            let paused = try XCTUnwrap(timecode.value as? String)
+            let remainsPaused = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@", paused), object: timecode
+            )
+            remainsPaused.isInverted = true
+            XCTAssertEqual(XCTWaiter.wait(for: [remainsPaused], timeout: 1), .completed)
+            attachWindowScreenshot(named: "\(expectedBackend) stitching playback - \(attempt)")
+            element("group.done").click()
+            XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+        }
+    }
+
+    @MainActor
     private func exercisePreview(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, previewContainer: container)
         defer { terminateAndCleanFixtures() }
@@ -759,6 +813,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         damagedSchedules: Bool = false,
         damagedHistory: Bool = false,
         previewContainer: String? = nil,
+        stitching: Bool = false,
         resetAgentAccess: Bool = false
     ) {
         app = XCUIApplication()
@@ -777,6 +832,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         app.launchEnvironment["AMC_UI_TEST_AGENT_PORT_ID"] = UUID().uuidString
         if resetAgentAccess {
             app.launchEnvironment["AMC_UI_TEST_RESET_AGENT_ACCESS"] = "1"
+        }
+        if stitching {
+            app.launchEnvironment["AMC_UI_TEST_STITCHING"] = "1"
         }
         if let previewContainer {
             app.launchEnvironment["AMC_UI_TEST_PREVIEW_CONTAINER"] = previewContainer

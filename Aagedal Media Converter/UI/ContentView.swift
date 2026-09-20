@@ -1728,7 +1728,26 @@ struct ContentView: View {
             currentOutputFolder = directory
 
             let fixtureURL = try await Self.generateUITestFixture(in: directory)
-            await handleFileSelection(result: .success([fixtureURL]))
+            if environment["AMC_UI_TEST_STITCHING"] == "1" {
+                let secondURL = directory.appendingPathComponent("ui-test-second.\(fixtureURL.pathExtension)")
+                try FileManager.default.copyItem(at: fixtureURL, to: secondURL)
+                let context = VideoGroupImportContext(preset: .h264, outputFolder: directory.path)
+                var items: [VideoItem] = []
+                for url in [fixtureURL, secondURL] {
+                    guard var item = context.makePlaceholder(from: url) else { continue }
+                    item.apply(details: await context.loadDetails(for: item))
+                    item.detailsLoaded = true
+                    // Different nonzero in-points exercise source changes and replay.
+                    item.trimStart = items.isEmpty ? 1 : 2
+                    item.trimEnd = items.isEmpty ? 3 : 4
+                    items.append(item)
+                }
+                let group = EncodingGroup(name: "UI Test Sequence", items: items, preset: .h264)
+                encodingGroups.append(group)
+                queueOrder.append(group.id)
+            } else {
+                await handleFileSelection(result: .success([fixtureURL]))
+            }
             if environment["AMC_UI_TEST_REMOVE_FIXTURE_AFTER_IMPORT"] == "1" {
                 try FileManager.default.removeItem(at: fixtureURL)
             }

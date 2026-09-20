@@ -49,6 +49,14 @@ enum StitchingTimeline {
         return nil
     }
 
+    /// Resolve play through the sequence so empty clips and a clip's out point
+    /// advance to the next playable source. Only the sequence end wraps to zero.
+    static func playbackLocation(at time: Double, in items: [VideoItem]) -> (id: UUID, sourceTime: Double)? {
+        guard time.isFinite else { return nil }
+        let total = items.reduce(0) { $0 + duration($1) }
+        return location(at: time >= total ? 0 : time, in: items)
+    }
+
     static func frameRate(for item: VideoItem) -> Double? {
         guard let rate = item.imageSequenceConfig?.frameRate ?? item.metadata?.primaryVideoStream?.frameRate?.value,
               rate.isFinite, rate >= 1, rate <= 1000 else { return nil }
@@ -156,6 +164,7 @@ struct StitchingEditorView: View {
                     .accessibilityIdentifier("stitching.play")
                     Text("\(StitchingTimeline.timeDisplay(sequenceTime, frameRate: sequenceFrameRate)) / \(StitchingTimeline.timeDisplay(total, frameRate: sequenceFrameRate))")
                         .monospacedDigit()
+                        .accessibilityIdentifier("stitching.timecode")
                         .help(sequenceFrameRate.map { "HH:MM:SS:FF · \($0.formatted()) fps · non-drop-frame" }
                               ?? "HH:MM:SS · mixed or unknown frame rates")
                     Spacer()
@@ -169,6 +178,7 @@ struct StitchingEditorView: View {
                 timeline
                 HStack {
                     Text(item.name).lineLimit(1).truncationMode(.middle)
+                        .accessibilityIdentifier("stitching.selectedClip")
                     Spacer()
                     if selectedClipIDs.count > 1 {
                         Text("\(selectedClipIDs.count) clips selected").foregroundStyle(.secondary)
@@ -324,8 +334,11 @@ struct StitchingEditorView: View {
     }
     private func togglePlayback() {
         if isPlaying { isPlaying = false; return }
-        if sequenceTime >= total - 0.01 { scrub(0) }
-        isPlaying = total > 0
+        guard let location = StitchingTimeline.playbackLocation(at: sequenceTime, in: group.items) else { return }
+        if selectedIndex.map({ group.items[$0].id }) != location.id || abs(sourceTime - location.sourceTime) > 0.000001 {
+            seek(location.id, to: location.sourceTime)
+        }
+        isPlaying = true
     }
     private func advance(after id: UUID) {
         guard isPlaying, let index = selectedIndex, group.items[index].id == id else { return }
@@ -585,6 +598,9 @@ private struct StitchingSequencePreview: View {
             return true
         }, currentPlaybackTime: $playbackTime)
         .clipped()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(previewAccessibilityLabel)
+        .accessibilityIdentifier("stitching.preview")
         .onAppear {
             active = true
             controller.playbackDidFinish = finish
@@ -605,6 +621,9 @@ private struct StitchingSequencePreview: View {
             requestedTime = request.time
             controller.pause()
             controller.seekTo(request.time)
+            // Replay can change seek and playback intent in the same SwiftUI
+            // update. Restore intent regardless of which onChange runs first.
+            playIfReady()
         }
         .onChange(of: isPlaying) { _, playing in
             if playing { finished = false; playIfReady() } else { controller.pause() }
@@ -620,9 +639,19 @@ private struct StitchingSequencePreview: View {
         .onReceive(controller.playbackTimePublisher) { time in
             guard active, controller.isReady, !finished, time.isFinite else { return }
             playbackTime = time
+            requestedTime = time
             onTime(time)
-            if isPlaying && time >= item.effectiveTrimEnd - 0.02 { finish() }
+            if isPlaying && time >= item.effectiveTrimEnd { finish() }
         }
+    }
+
+    private var previewAccessibilityLabel: String {
+#if DEBUG
+        if ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1" {
+            return "\(controller.useImageSequence ? "images" : controller.useMPV ? "mpv" : "native") \(controller.isReady ? "ready" : "loading")"
+        }
+#endif
+        return String(localized: "Preview")
     }
 
     private func playIfReady() {

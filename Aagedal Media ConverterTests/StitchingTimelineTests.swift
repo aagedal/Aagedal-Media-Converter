@@ -41,6 +41,38 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertEqual(second.trimEnd, 18)
     }
 
+    func testPlaybackSkipsEmptySourcesAndAdvancesAtTrimOut() {
+        let empty = clip(duration: 0)
+        let first = clip(duration: 20, start: 4, end: 10)
+        let second = clip(duration: 30, start: 12, end: 18)
+        let items = [empty, first, empty, second]
+        let start = StitchingTimeline.playbackLocation(at: 0, in: items)
+        XCTAssertEqual(start?.id, first.id)
+        XCTAssertEqual(start?.sourceTime, 4)
+        let boundary = StitchingTimeline.playbackLocation(at: 6, in: items)
+        XCTAssertEqual(boundary?.id, second.id)
+        XCTAssertEqual(boundary?.sourceTime, 12)
+    }
+
+    func testPlaybackAtSequenceEndRestartsAtFirstTrimInAfterReorder() {
+        let first = clip(duration: 20, start: 4, end: 10)
+        let second = clip(duration: 30, start: 12, end: 18)
+        let replay = StitchingTimeline.playbackLocation(at: 12, in: [second, first])
+        XCTAssertEqual(replay?.id, second.id)
+        XCTAssertEqual(replay?.sourceTime, 12)
+        let singleReplay = StitchingTimeline.playbackLocation(at: 6, in: [first])
+        XCTAssertEqual(singleReplay?.id, first.id)
+        XCTAssertEqual(singleReplay?.sourceTime, 4)
+    }
+
+    func testPlaybackPreservesLastSubframeInsteadOfRestartingEarly() {
+        let item = clip(duration: 10, start: 2, end: 8)
+        XCTAssertEqual(StitchingTimeline.playbackLocation(at: 5.999, in: [item])?.sourceTime ?? 0,
+                       7.999, accuracy: 0.000001)
+        XCTAssertNil(StitchingTimeline.playbackLocation(at: .nan, in: [item]))
+        XCTAssertNil(StitchingTimeline.playbackLocation(at: 0, in: [clip(duration: 0)]))
+    }
+
     func testTrimCannotCrossOppositeEdgeOrSourceBounds() {
         var item = clip(duration: 10, start: 2, end: 8)
         StitchingTimeline.trim(&item, start: true, to: 50)
