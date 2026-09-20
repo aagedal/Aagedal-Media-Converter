@@ -711,6 +711,16 @@ tests pass. Approximate trim boundaries and retained audio preroll remain; broad
 codec/container and real-media acceptance is still open. See the
 [open-GOP fix validation record](4.5-stitching-open-gop-fix-validation-2026-09-20.md).
 
+Active subtitle mux cancellation now has a process-level coexistence regression.
+A generated attached-SRT mux reports live FFmpeg progress and remains active while
+a real agent Stream Copy export completes. Cancelling the mux then drains its
+subprocess, preserves the original legacy output and completed agent result, and
+removes staged subtitle files. All three focused subtitle coexistence tests pass.
+This extends the earlier publication-boundary cancellation coverage; cancellation
+while both media subprocesses are active, transcription/OCR inference, and live
+uploads remain open. See the
+[active subtitle cancellation validation record](4.5-active-subtitle-cancellation-validation-2026-09-20.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

@@ -14,7 +14,12 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
     }
 
     @MainActor
-    private func checkCoexistence(cancelEmbedding: Bool) async throws {
+    func testActiveSubtitleMuxCancellationPreservesConcurrentAgentExport() async throws {
+        try await checkCoexistence(cancelEmbedding: true, cancelActiveMux: true)
+    }
+
+    @MainActor
+    private func checkCoexistence(cancelEmbedding: Bool, cancelActiveMux: Bool = false) async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("SubtitleAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -35,8 +40,10 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
         let originalBytes = try Data(contentsOf: source)
         let subtitleBytes = Data("1\n00:00:00,000 --> 00:00:01,500\nCoexistence fixture\n".utf8)
         try subtitleBytes.write(to: subtitles)
-        let muxFinished = expectation(description: "Real subtitle mux reached publication boundary")
-        let subtitleRunner = CoexistenceSubtitleRunner(completed: muxFinished)
+        let muxReady = expectation(description: cancelActiveMux
+            ? "Real subtitle mux reported active progress"
+            : "Real subtitle mux reached publication boundary")
+        let subtitleRunner = CoexistenceSubtitleRunner(completed: muxReady, throttleMux: cancelActiveMux)
         let gate = ApplicationConversionExecutionGate()
         let manager = ConversionManager(subprocessRunner: subtitleRunner, executionGate: gate)
         let itemID = UUID()
@@ -45,7 +52,7 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
                 srtURL: subtitles, videoURL: legacyOutput, itemID: itemID
             )
         }
-        let agentStarted = expectation(description: "Agent acquired execution while subtitle publication waits")
+        let agentStarted = expectation(description: "Agent acquired execution while subtitle work is outstanding")
         let agentGate = CoexistenceAgentGate(started: agentStarted)
         let adapter = ApplicationFFmpegJobExecutor(runner: .live())
         let liveExecutor = adapter.jobExecutor
@@ -59,7 +66,7 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
         )
         var acceptedJobID: ApplicationJobID?
         do {
-            await fulfillment(of: [muxFinished], timeout: 15)
+            await fulfillment(of: [muxReady], timeout: 15)
             XCTAssertEqual(try Data(contentsOf: legacyOutput), originalBytes)
             let plan = try await service.plan(ApplicationConversionRequest(
                 origin: .localAgent, requesterID: "subtitle-coexistence",
@@ -68,7 +75,7 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
             let accepted = try await service.submit(planID: plan.id)
             acceptedJobID = accepted.record.id
             await fulfillment(of: [agentStarted], timeout: 15)
-            if cancelEmbedding {
+            if cancelEmbedding && !cancelActiveMux {
                 await manager.cancelSubtitleEmbedding(itemID: itemID, operationID: nil)
                 await subtitleRunner.release()
                 await embedding.value
@@ -86,6 +93,17 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
             XCTAssertNotEqual(agentOutput, source)
             XCTAssertNotEqual(agentOutput, legacyOutput)
             let agentBytes = try Data(contentsOf: agentOutput)
+            if cancelActiveMux {
+                let stillMuxing = await subtitleRunner.isRunning
+                XCTAssertTrue(stillMuxing, "The real mux must remain active throughout the agent export")
+                await manager.cancelSubtitleEmbedding(itemID: itemID, operationID: nil)
+                await embedding.value
+                let drained = await subtitleRunner.isRunning
+                let cancelledProcess = await subtitleRunner.processWasCancelled
+                XCTAssertFalse(drained)
+                XCTAssertTrue(cancelledProcess, "Cancellation must reach the running subprocess")
+                XCTAssertEqual(try Data(contentsOf: legacyOutput), originalBytes)
+            }
             if !cancelEmbedding {
                 await subtitleRunner.release()
                 await embedding.value
@@ -118,19 +136,50 @@ final class SubtitleAgentCoexistenceTests: XCTestCase {
     }
 }
 
-/// Only completion is controlled; media is produced by the bundled FFmpeg.
+/// Media is produced by the bundled FFmpeg; tests control completion or input read rate.
 private actor CoexistenceSubtitleRunner: SubprocessRunning {
     let completed: XCTestExpectation
     private var continuation: CheckedContinuation<Void, Never>?
     private var released = false
     private(set) var wasCancelled = false
+    private(set) var isRunning = false
+    private(set) var processWasCancelled = false
+    private let throttleMux: Bool
 
-    init(completed: XCTestExpectation) { self.completed = completed }
+    init(completed: XCTestExpectation, throttleMux: Bool) {
+        self.completed = completed
+        self.throttleMux = throttleMux
+    }
 
     func run(
         _ request: SubprocessRequest,
         outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
     ) async throws -> SubprocessResult {
+        if throttleMux {
+            // Keep the real mux active long enough to finish the concurrent agent job.
+            // Signal readiness from FFmpeg progress, not merely from launching the task.
+            let readiness = MuxProgressReadiness(expectation: completed)
+            let throttled = SubprocessRequest(
+                executableURL: request.executableURL,
+                arguments: ["-readrate", "0.01", "-progress", "pipe:1", "-stats_period", "0.05"] + request.arguments,
+                timeout: .seconds(45),
+                sensitiveValues: request.sensitiveValues
+            )
+            isRunning = true
+            defer {
+                isRunning = false
+                wasCancelled = Task.isCancelled
+            }
+            do {
+                return try await SubprocessRunner().run(throttled) { chunk in
+                    readiness.receive(chunk)
+                    outputHandler?(chunk)
+                }
+            } catch is CancellationError {
+                processWasCancelled = true
+                throw CancellationError()
+            }
+        }
         let result = try await SubprocessRunner().run(request, outputHandler: outputHandler)
         if !released {
             await withCheckedContinuation {
@@ -168,5 +217,28 @@ private actor CoexistenceAgentGate {
         released = true
         continuation?.resume()
         continuation = nil
+    }
+}
+
+/// Pipe chunks can split lines; retain a bounded tail and signal exactly once.
+private final class MuxProgressReadiness: @unchecked Sendable {
+    private let lock = NSLock()
+    private let expectation: XCTestExpectation
+    private var buffer = ""
+    private var signalled = false
+
+    init(expectation: XCTestExpectation) { self.expectation = expectation }
+
+    func receive(_ chunk: SubprocessOutputChunk) {
+        guard chunk.stream == .standardOutput else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard !signalled else { return }
+        buffer += String(decoding: chunk.data, as: UTF8.self)
+        if buffer.contains("progress=continue") {
+            signalled = true
+            expectation.fulfill()
+        }
+        buffer = String(buffer.suffix(4096))
     }
 }
