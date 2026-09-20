@@ -4381,24 +4381,63 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveTrimmedStereoAACMergedGroupPreservesChannelsAndContinuity() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", exportMarkers: false, audioChannels: 2
+        )
+    }
+
+    @MainActor
+    func testLiveTrimmedStereoAACMergedGroupWithMarkersPreservesChannelsAndContinuity() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", exportMarkers: true, audioChannels: 2
+        )
+    }
+
+    @MainActor
+    func testLiveTrimmedSurroundAACMergedGroupPreservesChannelsAndContinuity() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", exportMarkers: false, audioChannels: 6
+        )
+    }
+
+    @MainActor
+    func testLiveTrimmedSurroundAACMergedGroupWithMarkersPreservesChannelsAndContinuity() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", exportMarkers: true, audioChannels: 6
+        )
+    }
+
+    @MainActor
     private func checkLiveMergedGroupBeforeAgent(
-        withAudio: Bool, audioCodec: String = "pcm_s16le", exportMarkers: Bool = false
+        withAudio: Bool, audioCodec: String = "pcm_s16le", exportMarkers: Bool = false,
+        audioChannels: Int = 1
     ) async throws {
         let directory = try makeTemporaryDirectory()
         let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
+        // Distinct tones catch channel swaps, downmixing, and duplication.
+        // Keep the 5.1 LFE tone below the AAC encoder's low-pass cutoff.
+        let channelFrequencies = audioChannels == 6
+            ? [440.0, 660, 880, 80, 1100, 1320]
+            : Array([440.0, 660].prefix(audioChannels))
+        func frequencies(for clip: Int) -> [Double] {
+            channelFrequencies.map { $0 * (clip == 0 ? 1 : (audioChannels == 1 ? 2 : 1.5)) }
+        }
         for (index, source) in sources.enumerated() {
             var arguments = [
                 "-v", "error", "-y", "-f", "lavfi", "-i",
                 "testsrc2=size=64x48:rate=24:duration=2"
             ]
             if withAudio {
-                arguments += [
-                    "-f", "lavfi", "-i",
-                    "sine=frequency=\(index == 0 ? 440 : 880):sample_rate=48000:duration=2"
-                ]
+                let tones = frequencies(for: index).map { "0.125*sin(2*PI*\($0)*t)" }.joined(separator: "|")
+                let layout = audioChannels == 6 ? "5.1" : (audioChannels == 2 ? "stereo" : "mono")
+                arguments += ["-f", "lavfi", "-i", "aevalsrc=\(tones):s=48000:d=2:c=\(layout)"]
             }
             arguments += ["-c:v", "libx264", "-g", "1", "-pix_fmt", "yuv420p"]
-            if withAudio { arguments += ["-c:a", audioCodec] }
+            if withAudio {
+                arguments += ["-c:a", audioCodec]
+                if audioCodec == "aac" { arguments += ["-b:a", "\(audioChannels * 96)k"] }
+            }
             try runBundledFFmpeg(arguments + [source.path])
         }
         let defaults = try makeDefaults()
@@ -4491,7 +4530,7 @@ final class ApplicationJobContractTests: XCTestCase {
             XCTAssertEqual(metadata.frameCount, 48)
             XCTAssertEqual(metadata.audioStreams.count, withAudio ? 1 : 0)
             if withAudio {
-                XCTAssertEqual(metadata.audioStreams.first?.channels, 1)
+                XCTAssertEqual(metadata.audioStreams.first?.channels, audioChannels)
                 XCTAssertEqual(metadata.audioStreams.first?.sampleRate, 48_000)
             }
             try runBundledFFmpeg(["-v", "error", "-xerror", "-i", output.path, "-map", "0", "-f", "null", "-"])
@@ -4506,24 +4545,30 @@ final class ApplicationJobContractTests: XCTestCase {
             let samples = stride(from: 0, to: data.count - 1, by: 2).map { offset in
                 Double(Int16(bitPattern: UInt16(data[offset]) | UInt16(data[offset + 1]) << 8))
             }
-            // Allow at most one 1024-sample packet at each cut edge. Copying
-            // packets is not sample-accurate trimming. PCM and AAC both use
-            // 1024-sample packets in these fixtures.
-            XCTAssertGreaterThanOrEqual(samples.count, 96_000)
-            XCTAssertLessThanOrEqual(samples.count, 96_000 + 4 * 1024)
-            guard samples.count >= 96_000 else { return }
-            // Inspect each clip's interior, outside packet rounding at the seam.
-            // Distinct tones detect missing, duplicated, or reordered clips.
-            for (start, frequency) in [(12_000, 440.0), (60_000, 880.0)] {
-                let segment = Array(samples[start..<(start + 24_000)])
-                let crossings = zip(segment, segment.dropFirst()).filter { $0 < 0 && $1 >= 0 }.count
-                XCTAssertEqual(Double(crossings), frequency / 2, accuracy: 2)
-            }
-            // Every 10 ms window across the possible seam positions must contain
-            // audible samples; a packet-sized gap would evade tone checks.
-            for start in stride(from: 45_600, to: 52_800, by: 480) {
-                let energy = samples[start..<(start + 480)].reduce(0) { $0 + $1 * $1 } / 480
-                XCTAssertGreaterThan(energy.squareRoot(), 1_000)
+            XCTAssertEqual(samples.count % audioChannels, 0)
+            // Allow at most one 1024-sample packet at each cut edge per channel.
+            // Stream Copy retains packets rather than making sample-exact cuts.
+            let frameCount = samples.count / audioChannels
+            XCTAssertGreaterThanOrEqual(frameCount, 96_000)
+            XCTAssertLessThanOrEqual(frameCount, 96_000 + 4 * 1024)
+            guard frameCount >= 96_000 else { return }
+            for channel in 0..<audioChannels {
+                let channelSamples = stride(from: channel, to: samples.count, by: audioChannels).map { samples[$0] }
+                // Inspect interiors to identify both clip order and channel order.
+                for (clip, start) in [12_000, 60_000].enumerated() {
+                    let segment = Array(channelSamples[start..<(start + 24_000)])
+                    let crossings = zip(segment, segment.dropFirst()).filter { $0 < 0 && $1 >= 0 }.count
+                    XCTAssertEqual(
+                        Double(crossings), frequencies(for: clip)[channel] / 2, accuracy: 2,
+                        "Unexpected tone in clip \(clip), channel \(channel)"
+                    )
+                }
+                // Every 10 ms window near the seam must contain audible samples
+                // in every channel, including LFE, to catch packet-sized gaps.
+                for start in stride(from: 45_600, to: 52_800, by: 480) {
+                    let energy = channelSamples[start..<(start + 480)].reduce(0) { $0 + $1 * $1 } / 480
+                    XCTAssertGreaterThan(energy.squareRoot(), 1_000, "Gap in channel \(channel) at sample \(start)")
+                }
             }
         }
     }

@@ -661,6 +661,15 @@ All 16 focused stitching/export tests pass. See the
 This narrows compressed-audio coverage to matching mono 48 kHz AAC sources;
 multichannel, differing encoder delay, long-GOP joins, and real media remain open.
 
+Generated stereo and 5.1 AAC stitching joins now also pass with marker export
+both enabled and disabled. Distinct tones verify every decoded channel's identity
+and clip order, including LFE; per-channel seam checks detect packet-sized gaps.
+The four new cases retain the existing duration, chapter, decode, and waiting-agent
+serialization checks. All 20 focused stitching/export tests pass. See the
+[multichannel AAC validation record](4.5-stitching-multichannel-aac-validation-2026-09-20.md).
+This covers matching-format generated sources; differing encoder delays,
+long-GOP joins, other layouts, and real media remain open.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
