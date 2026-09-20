@@ -651,7 +651,19 @@ actor ConversionManager: Sendable {
             arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: duration)])
         }
 
-        arguments.append(contentsOf: ["-c", "copy", "-avoid_negative_ts", "make_zero", tempURL.path])
+        arguments.append(contentsOf: ["-c", "copy"])
+        if hasStartTrim {
+            // Open GOPs can carry leading pictures after the first copied
+            // keyframe in decode order, but before it in presentation order.
+            // Those pictures depend on the discarded GOP. At a concat join
+            // they can decode against the preceding clip and produce corrupt
+            // frames. Remove only that leading video preroll; preserve packet
+            // contents, subsequent B-frame reordering, and all audio packets.
+            arguments.append(contentsOf: [
+                "-bsf:v", "noise=amount=0:drop='not(eq(pts,nopts))*lt(pts,startpts)'"
+            ])
+        }
+        arguments.append(contentsOf: ["-avoid_negative_ts", "make_zero", tempURL.path])
 
         let success = await runMergePreparationFFmpeg(
             at: ffmpegPath,

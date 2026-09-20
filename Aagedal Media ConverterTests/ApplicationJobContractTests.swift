@@ -4423,14 +4423,14 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
-    func testLiveTrimmedOpenGOPAACMergedGroupExposesBoundaryFrameMismatch() async throws {
+    func testLiveTrimmedOpenGOPAACMergedGroupPreservesSourceFrames() async throws {
         try await checkLiveMergedGroupBeforeAgent(
             withAudio: true, audioCodec: "aac", audioChannels: 2, longGOP: true, openGOP: true
         )
     }
 
     @MainActor
-    func testLiveTrimmedOpenGOPAACMergedGroupWithMarkersExposesBoundaryFrameMismatch() async throws {
+    func testLiveTrimmedOpenGOPAACMergedGroupWithMarkersPreservesSourceFrames() async throws {
         try await checkLiveMergedGroupBeforeAgent(
             withAudio: true, audioCodec: "aac", exportMarkers: true,
             audioChannels: 2, longGOP: true, openGOP: true
@@ -4438,9 +4438,26 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveUnsnappedOpenGOPAACMergedGroupPreservesSourceFrames() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", audioChannels: 2,
+            longGOP: true, openGOP: true, requestedStart: 0.625
+        )
+    }
+
+    @MainActor
+    func testLiveUnsnappedOpenGOPAACMergedGroupWithMarkersPreservesSourceFrames() async throws {
+        try await checkLiveMergedGroupBeforeAgent(
+            withAudio: true, audioCodec: "aac", exportMarkers: true, audioChannels: 2,
+            longGOP: true, openGOP: true, requestedStart: 0.625
+        )
+    }
+
+    @MainActor
     private func checkLiveMergedGroupBeforeAgent(
         withAudio: Bool, audioCodec: String = "pcm_s16le", exportMarkers: Bool = false,
-        audioChannels: Int = 1, longGOP: Bool = false, openGOP: Bool = false
+        audioChannels: Int = 1, longGOP: Bool = false, openGOP: Bool = false,
+        requestedStart: Double = 0.5
     ) async throws {
         let directory = try makeTemporaryDirectory()
         let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
@@ -4464,7 +4481,7 @@ final class ApplicationJobContractTests: XCTestCase {
             }
             arguments += ["-vf", "hue=h=\(index * 90)", "-c:v", "libx264", "-pix_fmt", "yuv420p"]
             if longGOP {
-                // Half-second GOPs place both requested trim edges on keyframes.
+                // Half-second GOPs cover both aligned cuts and cuts between keyframes.
                 // Fixed B-frames exercise reordered packet timestamps at the join.
                 arguments += ["-g", "12", "-keyint_min", "12", "-sc_threshold", "0",
                               "-bf", "2", "-x264-params", "b-adapt=0:open-gop=\(openGOP ? 1 : 0)"]
@@ -4493,7 +4510,7 @@ final class ApplicationJobContractTests: XCTestCase {
                 duration: "00:00:02", durationSeconds: 2, status: .waiting,
                 progress: 0, eta: "", outputURL: nil
             )
-            item.trimStart = withAudio ? 0.5 : 0
+            item.trimStart = withAudio ? requestedStart : 0
             item.trimEnd = withAudio ? 1.5 : 1
             item.includeDateTag = false
             return item
@@ -4562,13 +4579,13 @@ final class ApplicationJobContractTests: XCTestCase {
         for output in [merged] + record.outputURLs {
             let metadata = try await ApplicationMediaInspector.live.inspect(output)
             // Stream Copy keeps whole audio packets at trimmed boundaries.
-            // Closed-GOP B-frame tails and timestamp normalization can each
-            // add two frame intervals per clip. Open GOPs retain more dependent
-            // packets, so their characterization allows four intervals each.
+            // B-frame tails and timestamp normalization extend copied ranges.
+            // Open-GOP sources retain more audio preroll even after dependent
+            // leading video pictures are removed; preserve separate bounds.
             let durationTolerance = (withAudio ? 4.0 * 1024 / 48_000 : 1.0 / 24)
                 + (openGOP ? 16.0 / 24 : (longGOP ? 8.0 / 24 : 0))
             XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: durationTolerance)
-            XCTAssertEqual(metadata.frameCount, longGOP && output == merged ? (openGOP ? 56 : 52) : 48)
+            XCTAssertEqual(metadata.frameCount, longGOP && output == merged ? 52 : 48)
             XCTAssertEqual(metadata.audioStreams.count, withAudio ? 1 : 0)
             if withAudio {
                 XCTAssertEqual(metadata.audioStreams.first?.channels, audioChannels)
@@ -4580,7 +4597,8 @@ final class ApplicationJobContractTests: XCTestCase {
             func decodedFrames(_ source: URL, name: String, trim: Bool) throws -> Data {
                 let decoded = directory.appendingPathComponent(name + ".yuv")
                 var arguments = ["-v", "error", "-xerror", "-i", source.path, "-map", "0:v:0"]
-                // The copy cut retains the next I-frame (36) and its forward
+                // Both requested starts seek to frame 12. The copy cut retains
+                // the next I-frame (36) and its forward
                 // reference P-frame (39), beyond requested frames 12..<36.
                 // Decode from the beginning to verify these exact source frames.
                 if trim {
@@ -4594,23 +4612,9 @@ final class ApplicationJobContractTests: XCTestCase {
             let expectedFirst = try decodedFrames(sources[0], name: "expected-first", trim: true)
             let expectedSecond = try decodedFrames(sources[1], name: "expected-second", trim: true)
             let actual = try decodedFrames(merged, name: "actual", trim: false)
-            if openGOP {
-                // The container reports 56 frames, but only 54 decode. Two
-                // decoded frames at the join do not match either original.
-                // Keep the source-identity requirement visible as a known defect;
-                // do not accept corrupt frames as a new golden output.
-                XCTAssertTrue(actual.starts(with: expectedFirst), "First clip's retained source frames must remain intact")
-                XCTAssertTrue(actual.suffix(expectedSecond.count) == expectedSecond,
-                              "Second clip's retained source frames must remain intact")
-                XCTExpectFailure("Open-GOP copy trimming retains dependent boundary frames that do not match the sources") {
-                    XCTAssertTrue(actual == expectedFirst + expectedSecond,
-                                  "Open-GOP stitching must preserve independently decoded source frames")
-                }
-            } else {
-                XCTAssertEqual(actual.count, 52 * 64 * 48 * 3 / 2)
-                XCTAssertTrue(actual == expectedFirst + expectedSecond,
-                              "Long-GOP stitching must preserve source frames, including known reference-frame tails")
-            }
+            XCTAssertEqual(actual.count, 52 * 64 * 48 * 3 / 2)
+            XCTAssertTrue(actual == expectedFirst + expectedSecond,
+                          "Long-GOP stitching must preserve source frames, including known reference-frame tails")
         }
         if withAudio {
             let decoded = directory.appendingPathComponent("merged-audio.pcm")
@@ -4627,7 +4631,7 @@ final class ApplicationJobContractTests: XCTestCase {
             // Stream Copy retains packets rather than making sample-exact cuts.
             let frameCount = samples.count / audioChannels
             XCTAssertGreaterThanOrEqual(frameCount, 96_000)
-            // Reordered video packets can extend copied audio by two frame
+            // Reordering and preroll can extend copied audio by two frame
             // intervals per closed GOP clip, or four for these open GOP clips.
             // This characterizes bounded tails, not exact trim behavior.
             let videoTailSamples = openGOP ? 2 * 4 * 48_000 / 24 : (longGOP ? 2 * 2 * 48_000 / 24 : 0)

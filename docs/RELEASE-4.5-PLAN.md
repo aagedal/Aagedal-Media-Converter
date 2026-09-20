@@ -701,8 +701,17 @@ expected failure in each new test; this is not open-GOP acceptance. See the
 Fix or explicitly restrict this case before claiming reliable open-GOP trimmed
 stitching; the existing approximate-boundary notice does not resolve the mismatch.
 
-Remaining priorities: resolve open-GOP stitching frame integrity; validate
-stitching with broader real media and decoder-loading
+Trimmed merge preparation now drops leading video pictures presented before the
+first copied keyframe, preventing the demonstrated open-GOP join corruption.
+The two expected failures above are replaced by strict source-frame identity
+checks, with additional cuts between keyframes and markers enabled/disabled.
+The generated outputs contain 52 reported and decoded frames, all matching the
+originals. All 152 focused application-job, marker, merge, queue, and cancellation
+tests pass. Approximate trim boundaries and retained audio preroll remain; broader
+codec/container and real-media acceptance is still open. See the
+[open-GOP fix validation record](4.5-stitching-open-gop-fix-validation-2026-09-20.md).
+
+Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
 drives and settle App Sandbox scope; cover upload, transcription, OCR/subtitle
