@@ -721,6 +721,14 @@ while both media subprocesses are active, transcription/OCR inference, and live
 uploads remain open. See the
 [active subtitle cancellation validation record](4.5-active-subtitle-cancellation-validation-2026-09-20.md).
 
+Subtitle cancellation now also passes while both the subtitle mux and agent
+FFmpeg export are actively running. The new regression waits for real progress
+from both subprocesses, cancels and drains only the subtitle mux, checks that the
+agent remains running, and verifies its eventual successful output. All four
+focused subtitle coexistence tests pass. Cancelling the agent while subtitle
+muxing continues, inference/OCR, and upload remain open. See the
+[simultaneous subtitle cancellation validation record](4.5-simultaneous-subtitle-cancellation-validation-2026-09-20.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
