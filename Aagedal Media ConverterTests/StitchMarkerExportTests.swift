@@ -32,9 +32,37 @@ final class StitchMarkerExportTests: XCTestCase {
         XCTAssertEqual(Data(result.utf8), expected)
     }
 
+    func testNotesRespectTrimAndSequenceOffset() {
+        let notes = [0.5, 1.0, 2.0, 3.0].map { StitchTimelineMarker(sourceTime: $0, text: "Note") }
+        let result = StitchMarkerExport.notes(notes, trimStart: 1, trimEnd: 3, duration: 2.2, offset: 5)
+        XCTAssertEqual(result.map(\.start), [5, 6])
+        XCTAssertEqual(result.map(\.title), ["Marked: Note", "Marked: Note"])
+    }
+
+    func testCutsAndNotesBecomeNonOverlappingChapters() throws {
+        let cuts = try StitchMarkerExport.cuts(names: ["A", "B"], durations: [2, 3])
+        let notes = [StitchCutMarker(title: "Marked: Note", start: 1, end: 2),
+                     StitchCutMarker(title: "Marked: At cut", start: 2, end: 5)]
+        let chapters = StitchMarkerExport.chapters(from: cuts + notes)
+        XCTAssertEqual(chapters.map(\.start), [0, 1, 2])
+        XCTAssertEqual(chapters.map(\.end), [1, 2, 5])
+        XCTAssertTrue(chapters[2].title.contains("Cut: B"))
+        XCTAssertTrue(chapters[2].title.contains("Marked: At cut"))
+        XCTAssertNoThrow(try StitchMarkerExport.chapterMetadata(chapters))
+    }
+
+    func testNotesOnSameOutputFrameShareEDLEntry() throws {
+        let points = [StitchCutMarker(title: "Cut: A", start: 0, end: 1),
+                      StitchCutMarker(title: "Marked: Note", start: 0.001, end: 1)]
+        let result = try StitchMarkerExport.coalescedForEDL(points, frameRate: 24)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].title, "Cut: A • Marked: Note")
+        XCTAssertNoThrow(try StitchMarkerExport.resolveEDL(title: "Test", markers: result, frameRate: 24, startTimecode: nil))
+    }
+
     func testCutOrderAndMeasuredDurations() throws {
         let cuts = try StitchMarkerExport.cuts(names: ["B", "A"], durations: [2.4, 1.2])
-        XCTAssertEqual(cuts.map(\.title), ["B", "A"])
+        XCTAssertEqual(cuts.map(\.title), ["Cut: B", "Cut: A"])
         XCTAssertEqual(cuts[1].start, 2.4)
         XCTAssertEqual(cuts[1].end, 3.6, accuracy: 0.000001)
         XCTAssertThrowsError(try StitchMarkerExport.cuts(names: ["A"], durations: [.nan]))
@@ -92,8 +120,9 @@ final class StitchMarkerExportTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let source = directory.appendingPathComponent("source.mov")
         let metadata = directory.appendingPathComponent("chapters.ffmetadata")
-        let chapters = [StitchCutMarker(title: "Camera A = æøå; #1", start: 0, end: 1),
-                        StitchCutMarker(title: "Camera B", start: 1, end: 2)]
+        let chapters = StitchMarkerExport.chapters(from:
+            try StitchMarkerExport.cuts(names: ["Camera A = æøå; #1", "Camera B"], durations: [1, 1]) +
+            [StitchCutMarker(title: "Marked: Review audio", start: 0.5, end: 1)])
         try StitchMarkerExport.chapterMetadata(chapters).write(to: metadata, atomically: true, encoding: .utf8)
         let runner = SubprocessRunner()
         let fixture = try await runner.run(SubprocessRequest(

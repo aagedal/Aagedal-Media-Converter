@@ -482,6 +482,57 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStitchingMarkersCanBeAddedEditedAndDeleted() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        app.typeKey("m", modifierFlags: [])
+        XCTAssertTrue(element("stitching.marker").waitForExistence(timeout: 5))
+        app.typeKey("m", modifierFlags: [])
+        let note = element("stitching.markerText")
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.click()
+        app.typeKey("a", modifierFlags: .command)
+        note.typeText("Review music")
+        element("stitching.saveMarker").click()
+        XCTAssertTrue(waitForLabel("Marked: Review music", of: element("stitching.marker"), timeout: 5))
+        element("group.done").click()
+        element("group.edit").click()
+        XCTAssertTrue(element("stitching.marker").waitForExistence(timeout: 10))
+        element("stitching.marker").click()
+        element("stitching.deleteMarker").click()
+        XCTAssertTrue(element("stitching.marker").waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testStitchingColdSeekAndRapidScrub() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        edit.click()
+        let timeline = element("group.timeline")
+        XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+        element("stitching.fit").click()
+        let early = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.05))
+        let late = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.05))
+        late.click()
+        early.press(forDuration: 0.05, thenDragTo: late)
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        XCTAssertTrue(waitForValue("ui-test-second.mp4", of: element("stitching.selectedClip"), timeout: 10))
+        let seekLanded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value BEGINSWITH %@", "00:00:03:"),
+            object: element("stitching.timecode")
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [seekLanded], timeout: 5), .completed)
+        attachWindowScreenshot(named: "Dynamic waveform and cold seek")
+        element("group.done").click()
+        XCTAssertTrue(element("stitching.preview").waitForNonExistence(timeout: 10))
+    }
+
+    @MainActor
     func testNativeStitchingSequencePlaybackAndReplay() throws {
         try exerciseStitchingSequence(container: "mp4", expectedBackend: "AVPlayer")
     }
@@ -832,6 +883,8 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         app.launchArguments += [
             "-AppleLanguages", "(\(language))",
             "-AppleLocale", locale,
+            // Keep first-launch update permission prompts out of test sessions.
+            "-SUEnableAutomaticChecks", "NO",
             // The installed app and UI-test host share a bundle identifier. Do not
             // inherit a persisted state in which every main window was closed.
             "-ApplePersistenceIgnoreState", "YES",

@@ -766,6 +766,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var cachedOutputFileSize: Int64? = nil
     var comment: String = ""
     var includeDateTag: Bool = true
+    var timelineMarkers: [StitchTimelineMarker] = []
     var trimStart: Double? = nil
     var trimEnd: Double? = nil
     var loopPlayback: Bool = false

@@ -357,6 +357,7 @@ actor ConversionManager: Sendable {
     }
 
     private struct MergeSegment {
+        let timelineMarkers: [StitchTimelineMarker]
         let itemID: UUID
         let originalURL: URL
         let preparedURL: URL
@@ -549,6 +550,7 @@ actor ConversionManager: Sendable {
                     return nil
                 }
                 let segment = MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id,
                     originalURL: item.url,
                     preparedURL: trimmedURL,
@@ -562,6 +564,7 @@ actor ConversionManager: Sendable {
                 temporaryFiles.append(trimmedURL)
             } else {
                 let segment = MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id,
                     originalURL: item.url,
                     preparedURL: item.url,
@@ -832,6 +835,15 @@ actor ConversionManager: Sendable {
                     names: plan.segments.map { $0.originalURL.lastPathComponent },
                     durations: media.map(\.duration)
                 )
+                var noteMarkers: [StitchCutMarker] = []
+                var markerOffset = 0.0
+                for (segment, source) in zip(plan.segments, media) {
+                    noteMarkers += StitchMarkerExport.notes(segment.timelineMarkers,
+                        trimStart: segment.trimStart ?? 0, trimEnd: segment.trimEnd,
+                        duration: source.duration, offset: markerOffset)
+                    markerOffset += source.duration
+                }
+                cutMarkers = StitchMarkerExport.chapters(from: cutMarkers + noteMarkers)
                 // Pin concat's scheduling to the same measured segment durations
                 // used for marker placement, including Stream Copy trim preroll.
                 let concat = zip(plan.segments, media).map { segment, source in
@@ -843,8 +855,9 @@ actor ConversionManager: Sendable {
                    plan.waveformRequest == nil, plan.synthesizedVideoRequest == nil {
                     let replace = sourceHasChapters ? await StitchMarkerExport.shouldReplaceExistingChapters() : true
                     guard isBatchActive(batchID) else { return }
-                    let chapters = replace ? cutMarkers : StitchMarkerExport.concatenateChapters(media)
-                    if sourceHasChapters && !replace && chapters.isEmpty {
+                    let preserved = StitchMarkerExport.concatenateChapters(media)
+                    let chapters = replace ? cutMarkers : StitchMarkerExport.chapters(from: preserved + noteMarkers)
+                    if sourceHasChapters && !replace && preserved.isEmpty {
                         throw NSError(domain: "StitchMarkers", code: 1, userInfo: [NSLocalizedDescriptionKey:
                             "Existing chapter metadata could not be preserved after preparation. Automatic chapter replacement was skipped."])
                     }
@@ -1075,6 +1088,7 @@ actor ConversionManager: Sendable {
                     return nil
                 }
                 segments.append(MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id, originalURL: item.url, preparedURL: conformedURL,
                     trimStart: item.trimStart, trimEnd: item.trimEnd,
                     isTemporary: true, duration: segmentDuration, isConformed: true
@@ -1087,6 +1101,7 @@ actor ConversionManager: Sendable {
                     return nil
                 }
                 segments.append(MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id, originalURL: item.url, preparedURL: trimmedURL,
                     trimStart: item.trimStart, trimEnd: item.trimEnd,
                     isTemporary: true, duration: segmentDuration, isConformed: false
@@ -1095,6 +1110,7 @@ actor ConversionManager: Sendable {
             } else {
                 // Already matches, no trim — use original
                 segments.append(MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id, originalURL: item.url, preparedURL: item.url,
                     trimStart: nil, trimEnd: nil,
                     isTemporary: false, duration: segmentDuration, isConformed: false
@@ -1231,8 +1247,8 @@ actor ConversionManager: Sendable {
                 let output = try await StitchMarkerMedia.read(finalURL)
                 guard isBatchActive(batchID) else { return }
                 guard let rate = output.frameRate else { throw StitchMarkerError.invalidRate }
-                let text = try StitchMarkerExport.resolveEDL(title: finalURL.lastPathComponent + " Clip Boundaries",
-                                                            markers: cutMarkers, frameRate: rate, startTimecode: output.timecode)
+                let text = try StitchMarkerExport.resolveEDL(title: finalURL.lastPathComponent + " Timeline Markers",
+                                                            markers: try StitchMarkerExport.coalescedForEDL(cutMarkers, frameRate: rate), frameRate: rate, startTimecode: output.timecode)
                 let access = SecurityScopedBookmarkManager.shared.startAccessing(url: finalURL.deletingLastPathComponent())
                 defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
                 _ = try StitchMarkerExport.writeEDL(text, alongside: finalURL)

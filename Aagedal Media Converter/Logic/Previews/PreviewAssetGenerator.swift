@@ -40,6 +40,7 @@ struct PreviewAssets: Sendable {
     // Per-channel waveform images (one image per audio channel, not just per stream)
     let nativeChannelWaveform: SendableChannelWaveform?
     let nativePerStreamChannelWaveforms: [Int: SendableChannelWaveform]
+    var waveformEnvelope: WaveformEnvelope? = nil
 
     /// Expected total number of chunks based on duration
     var expectedChunkCount: Int {
@@ -164,6 +165,8 @@ actor PreviewAssetGenerator {
     /// Tracks in-progress asset generation tasks to prevent duplicate work.
     /// The identity prevents cleanup from an older cancelled attempt removing its replacement.
     private var inProgressGenerations: [URL: InProgressGeneration] = [:]
+    private var completedAssets: [(fingerprint: String, assets: PreviewAssets)] = []
+    private var cacheEpoch = 0
 
     /// In-memory cache for per-channel waveforms (keyed by URL, then stream index)
     /// Survives across trim view open/close cycles since PreviewAssetGenerator is a singleton actor
@@ -268,6 +271,8 @@ actor PreviewAssetGenerator {
 
     /// Clears the entire preview cache directory.
     func cleanupAllCache() async {
+        completedAssets.removeAll()
+        cacheEpoch += 1
         let baseDirectory = AppConstants.previewCacheDirectory
         guard fileManager.fileExists(atPath: baseDirectory.path) else {
             logger.info("Cache directory does not exist, nothing to clear")
@@ -537,6 +542,15 @@ actor PreviewAssetGenerator {
     }
 
     func generateAssets(for url: URL) async throws -> PreviewAssets {
+        let access = startAccessingSecurityScope(for: url)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        let fingerprint = try? assetFingerprint(for: url)
+        let epoch = cacheEpoch
+        if let fingerprint, let index = completedAssets.firstIndex(where: { $0.fingerprint == fingerprint }) {
+            let cached = completedAssets.remove(at: index)
+            completedAssets.append(cached)
+            return cached.assets
+        }
         // Check if there's already an in-progress generation for this URL
         // If so, await the existing task instead of starting a duplicate
         if let existingGeneration = inProgressGenerations[url] {
@@ -555,6 +569,11 @@ actor PreviewAssetGenerator {
 
         do {
             let result = try await generationTask.value
+            if let fingerprint, cacheEpoch == epoch {
+                completedAssets.removeAll { $0.fingerprint == fingerprint }
+                completedAssets.append((fingerprint, result))
+                if completedAssets.count > 4 { completedAssets.removeFirst() }
+            }
             if inProgressGenerations[url]?.id == generationID {
                 inProgressGenerations.removeValue(forKey: url)
             }
@@ -776,19 +795,22 @@ actor PreviewAssetGenerator {
 
         // Generate native waveform images (fast: single FFmpeg PCM decode + Swift render)
         var nativeWaveformImage: SendableImage?
+        var waveformEnvelope: WaveformEnvelope?
         var nativePerStreamImages: [Int: SendableImage] = [:]
 
         do {
             let t0 = CFAbsoluteTimeGetCurrent()
-            let image = try await NativeWaveformRenderer.generateWaveform(
+            let generated = try await NativeWaveformRenderer.generateWaveformAssets(
                 url: url,
                 ffmpegPath: ffmpegPath,
                 streamIndex: 0,
                 duration: duration,
                 width: totalWaveformWidth,
-                height: chunkHeight
+                height: chunkHeight,
+                channelCount: metadata?.audioStreams.first?.channels ?? 1
             )
-            nativeWaveformImage = SendableImage(image: image)
+            waveformEnvelope = generated.envelope
+            nativeWaveformImage = SendableImage(image: generated.image)
             let t1 = CFAbsoluteTimeGetCurrent()
             logger.info("Native waveform generated in \(String(format: "%.2f", t1 - t0))s for \(url.lastPathComponent, privacy: .public)")
 
@@ -911,7 +933,8 @@ actor PreviewAssetGenerator {
             nativeWaveformImage: nativeWaveformImage,
             nativePerStreamWaveformImages: nativePerStreamImages,
             nativeChannelWaveform: nativeChannelWaveform,
-            nativePerStreamChannelWaveforms: nativePerStreamChannelWaveforms
+            nativePerStreamChannelWaveforms: nativePerStreamChannelWaveforms,
+            waveformEnvelope: waveformEnvelope
         )
     }
 

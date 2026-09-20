@@ -2,6 +2,42 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class StitchingTimelineTests: XCTestCase {
+    func testZoomKeepsPointerTimeFixedAndClampsAtEdges() {
+        let offset = StitchingTimeline.zoomOffset(time: 12, scale: 40, anchorX: 210,
+                                                  contentWidth: 2000, viewportWidth: 600)
+        XCTAssertEqual(offset, 280)
+        XCTAssertEqual((offset + 210 - 10) / 40, 12)
+        XCTAssertEqual(StitchingTimeline.zoomOffset(time: 0, scale: 40, anchorX: 210,
+                                                    contentWidth: 2000, viewportWidth: 600), 0)
+        XCTAssertEqual(StitchingTimeline.zoomOffset(time: 99, scale: 40, anchorX: 210,
+                                                    contentWidth: 2000, viewportWidth: 600), 1400)
+    }
+
+    func testWaveformLODPreservesQuietPeaksAndTransients() {
+        let samples: [Float] = [0, 0.00001, -0.00002, 0, 0.8, -0.7, 0, 0]
+        let data = samples.withUnsafeBytes { Data($0) }
+        let envelope = WaveformEnvelope(pcmData: data, channelCount: 1, sampleRate: 8,
+                                        minimumFramesPerBin: 1)
+        let quiet = envelope.peak(from: 0.125, to: 0.375, level: 0)
+        XCTAssertEqual(quiet.maximum, 0.00001, accuracy: 0.000001)
+        XCTAssertEqual(quiet.minimum, -0.00002, accuracy: 0.000001)
+        let overview = envelope.peak(from: 0, to: 1, level: 3)
+        XCTAssertEqual(overview.maximum, 0.8)
+        XCTAssertEqual(overview.minimum, -0.7)
+        XCTAssertEqual(envelope.level(secondsPerPixel: 0.125), 0)
+        XCTAssertEqual(envelope.level(secondsPerPixel: 1), 3)
+    }
+
+    func testWaveformDoesNotCancelOppositePhaseChannelsOrAmplifySilence() {
+        let samples: [Float] = [0.5, -0.5, 0, 0]
+        let envelope = WaveformEnvelope(pcmData: samples.withUnsafeBytes { Data($0) },
+                                        channelCount: 2, sampleRate: 2, minimumFramesPerBin: 1)
+        XCTAssertEqual(envelope.peak(from: 0, to: 0.5, level: 0),
+                       WaveformEnvelope.Peak(minimum: -0.5, maximum: 0.5))
+        XCTAssertEqual(envelope.peak(from: 0.5, to: 1, level: 0),
+                       WaveformEnvelope.Peak(minimum: 0, maximum: 0))
+    }
+
     private func clip(duration: Double, start: Double? = nil, end: Double? = nil) -> VideoItem {
         var item = VideoItem(url: URL(fileURLWithPath: "/tmp/stitching-test.mov"), name: "Test",
                              size: 0, duration: "", status: .waiting, progress: 0, eta: nil, outputURL: nil)

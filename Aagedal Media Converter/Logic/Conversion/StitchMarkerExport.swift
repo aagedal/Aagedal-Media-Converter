@@ -5,6 +5,13 @@
 import AppKit
 import Foundation
 
+/// Source-relative notes survive clip reordering and non-destructive trimming.
+struct StitchTimelineMarker: Identifiable, Equatable, Sendable {
+    let id: UUID = UUID()
+    var sourceTime: Double
+    var text: String
+}
+
 struct StitchCutMarker: Equatable, Sendable {
     let title: String
     let start: Double
@@ -67,8 +74,51 @@ enum StitchMarkerExport {
                 throw StitchMarkerError.unavailableTiming
             }
             defer { offset += duration }
-            return StitchCutMarker(title: name, start: offset, end: offset + duration)
+            return StitchCutMarker(title: "Cut: " + name, start: offset, end: offset + duration)
         }
+    }
+
+    static func notes(_ markers: [StitchTimelineMarker], trimStart: Double,
+                      trimEnd: Double?, duration: Double, offset: Double) -> [StitchCutMarker] {
+        markers.compactMap { marker in
+            let time = marker.sourceTime - trimStart
+            guard time.isFinite, time >= 0, time < duration,
+                  trimEnd.map({ marker.sourceTime < $0 }) ?? true else { return nil }
+            let text = marker.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return StitchCutMarker(title: "Marked: " + (text.isEmpty ? "Note" : text),
+                                   start: offset + time, end: offset + duration)
+        }
+    }
+
+    /// Point markers become non-overlapping chapters. Keep both labels at a shared timestamp.
+    static func chapters(from markers: [StitchCutMarker]) -> [StitchCutMarker] {
+        let sorted = markers.sorted { $0.start < $1.start }
+        var merged: [StitchCutMarker] = []
+        for marker in sorted {
+            if let last = merged.last, (last.start * 1_000_000).rounded() == (marker.start * 1_000_000).rounded() {
+                merged[merged.count - 1] = StitchCutMarker(title: last.title + " • " + marker.title,
+                    start: last.start, end: max(last.end, marker.end))
+            } else { merged.append(marker) }
+        }
+        return merged.enumerated().map { index, marker in
+            StitchCutMarker(title: marker.title, start: marker.start,
+                end: index + 1 < merged.count ? min(marker.end, merged[index + 1].start) : marker.end)
+        }
+    }
+
+    /// Resolve permits only one marker per output frame.
+    static func coalescedForEDL(_ markers: [StitchCutMarker], frameRate: Double) throws -> [StitchCutMarker] {
+        guard frameRate.isFinite, frameRate >= 1, frameRate <= 60.001 else { throw StitchMarkerError.invalidRate }
+        let rate = StitchMarkerTimecodeRate(frameRate: frameRate, dropFrame: false)
+        var result: [StitchCutMarker] = []
+        for marker in markers.sorted(by: { $0.start < $1.start }) {
+            guard let frame = rate.frameCount(forSeconds: marker.start) else { throw StitchMarkerError.unavailableTiming }
+            if let last = result.last, rate.frameCount(forSeconds: last.start) == frame {
+                result[result.count - 1] = StitchCutMarker(title: last.title + " • " + marker.title,
+                    start: last.start, end: max(last.end, marker.end))
+            } else { result.append(marker) }
+        }
+        return result
     }
 
     /// Used when a preparation pass omits chapters. Keep source titles and
@@ -189,7 +239,7 @@ enum StitchMarkerExport {
     static func shouldReplaceExistingChapters() async -> Bool {
         let alert = NSAlert()
         alert.messageText = String(localized: "These clips already contain chapters")
-        alert.informativeText = String(localized: "Keep their existing chapters in the stitched file, or replace them with chapters at each clip boundary? The EDL sidecar will include clip boundaries either way.")
+        alert.informativeText = String(localized: "Keep their existing chapters in the stitched file, or replace them with chapters at each clip boundary? Marked notes are added to the chapters either way, and the EDL includes both cuts and notes.")
         alert.addButton(withTitle: String(localized: "Keep Existing Chapters"))
         alert.addButton(withTitle: String(localized: "Replace with Clip Boundaries"))
         guard let window = NSApp.mainWindow ?? NSApp.keyWindow else {

@@ -29,8 +29,8 @@ struct EncodingSettingsView: View {
     var body: some View {
         Form {
             Section("Stitched Exports") {
-                Toggle("Export clip-boundary markers", isOn: $exportStitchMarkers)
-                Text("Save a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. If source chapters exist, ask before replacing them.")
+                Toggle("Export timeline markers", isOn: $exportStitchMarkers)
+                Text("Save cuts and marked notes in a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. If source chapters exist, ask before replacing them.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(header: Text("New Group Defaults")) {
