@@ -633,8 +633,17 @@ also pass: 45 arm64 Mach-O images and 12 packaged license notices. Evidence:
 Developer ID signing or notarization. No dependencies or bundled media binaries
 changed.
 
-Remaining priorities: validate stitching under delayed loading and broader real-media
-playback; exercise full Claude Code, Codex, and OpenCode workflows after resolving
+The delayed-loading continuation adds native and MPV checks for pausing during
+preparation, preserving the trimmed in-point, resuming, and closing/reopening the
+editor before preparation completes. It fixes a paused MPV startup callback that
+could replace the pending seek position with zero. Seventeen Norwegian marker and
+waveform translations also close the current catalog audit gaps. See the
+[delayed-loading validation record](4.5-stitching-delayed-loading-validation-2026-09-20.md).
+All 26 focused unit tests, four native/MPV UI tests, the 1,688-entry localization
+audit, and an unsigned Release build pass for this continuation.
+
+Remaining priorities: validate stitching with broader real media and decoder-loading
+stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
 drives and settle App Sandbox scope; cover upload, transcription, OCR/subtitle
 post-actions and broader stream-copy/audio/merge output cases; visually review the

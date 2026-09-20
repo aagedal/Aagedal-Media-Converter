@@ -242,6 +242,24 @@ final class PreviewPlayerController: ObservableObject {
         useMPV = false
         useImageSequence = false
 
+#if DEBUG
+        // Exercise user actions while a source is unavailable without slowing normal previews.
+        if ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1",
+           ProcessInfo.processInfo.environment["AMC_UI_TEST_DELAY_STITCHING_LOAD"] == "1",
+           videoItem.url.deletingPathExtension().lastPathComponent == "ui-test-second" {
+            preparationTask = Task { @MainActor [weak self] in
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                guard let self, !Task.isCancelled else { return }
+                self.preparationTask = nil
+                self.preparePreviewBackend(startTime: startTime)
+            }
+            return
+        }
+#endif
+        preparePreviewBackend(startTime: startTime)
+    }
+
+    private func preparePreviewBackend(startTime: TimeInterval) {
         // Image sequence preview: load frames directly from disk
         if let config = videoItem.imageSequenceConfig {
             setupImageSequencePreview(config: config, startTime: startTime)

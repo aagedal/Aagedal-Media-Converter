@@ -578,6 +578,72 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testNativeStitchingPauseAndDismissDuringLoading() throws {
+        try exerciseStitchingDelayedLoad(container: "mp4", backend: "native")
+    }
+
+    @MainActor
+    func testMPVStitchingPauseAndDismissDuringLoading() throws {
+        try exerciseStitchingDelayedLoad(container: "mkv", backend: "mpv")
+    }
+
+    @MainActor
+    private func exerciseStitchingDelayedLoad(container: String, backend: String) throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: container,
+                  stitching: true, delayedStitchingLoad: true)
+        defer { terminateAndCleanFixtures() }
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        let preview = element("stitching.preview")
+        let play = element("stitching.play")
+        let selected = element("stitching.selectedClip")
+        for dismissWhileLoading in [false, true] {
+            edit.click()
+            XCTAssertTrue(waitForLabel("\(backend) ready", of: preview, timeout: 30))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.\(container)", of: selected, timeout: 15))
+            XCTAssertTrue(preview.label.hasSuffix("loading"), "The transition must still be loading")
+            if dismissWhileLoading {
+                element("group.done").click()
+                XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+                edit.click()
+                XCTAssertTrue(waitForLabel("\(backend) ready", of: preview, timeout: 30))
+                // Remain open past the abandoned preparation's delay. It must not
+                // switch sources or start playback in the replacement editor.
+                let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    selected.value as? String != "ui-test-fixture.\(container)" || play.label != "Play sequence"
+                }, object: nil)
+                changed.isInverted = true
+                XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 6), .completed)
+            } else {
+                play.click()
+                XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+                XCTAssertTrue(waitForLabel("\(backend) ready", of: preview, timeout: 30))
+                let backendTime = element("stitching.backendTime")
+                let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let time = Double((backendTime.value as? String) ?? backendTime.label) else { return false }
+                    return abs(time - 2) < 0.15
+                }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed,
+                               "Expected second clip in-point; backend value: \(backendTime.debugDescription)")
+                // Observe the backend clock: the sequence counter deliberately
+                // ignores paused callbacks and alone could hide unwanted playback.
+                let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let time = Double((backendTime.value as? String) ?? backendTime.label) else { return true }
+                    return abs(time - 2) > 0.2
+                }, object: nil)
+                moved.isInverted = true
+                XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 2), .completed)
+                play.click()
+                XCTAssertTrue(waitForValue("00:00:04:00 / 00:00:04:00", of: element("stitching.timecode"), timeout: 15))
+                XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+            }
+            element("group.done").click()
+            XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+        }
+    }
+
+    @MainActor
     private func exerciseStitchingSequence(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: container, stitching: true)
         defer { terminateAndCleanFixtures() }
@@ -912,6 +978,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         damagedHistory: Bool = false,
         previewContainer: String? = nil,
         stitching: Bool = false,
+        delayedStitchingLoad: Bool = false,
         resetAgentAccess: Bool = false
     ) {
         app = XCUIApplication()
@@ -935,6 +1002,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }
         if stitching {
             app.launchEnvironment["AMC_UI_TEST_STITCHING"] = "1"
+        }
+        if delayedStitchingLoad {
+            app.launchEnvironment["AMC_UI_TEST_DELAY_STITCHING_LOAD"] = "1"
         }
         if let previewContainer {
             app.launchEnvironment["AMC_UI_TEST_PREVIEW_CONTAINER"] = previewContainer

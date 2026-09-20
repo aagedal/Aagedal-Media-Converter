@@ -1004,7 +1004,7 @@ private struct StitchingSequencePreview: View {
             playIfReady()
         }
         .onChange(of: controller.isReady) { _, ready in
-            if ready {
+            if ready, active, preparedID == item.id {
                 controller.seekTo(requestedTime)
                 playIfReady()
             }
@@ -1014,11 +1014,24 @@ private struct StitchingSequencePreview: View {
         .onReceive(controller.playbackTimePublisher) { time in
             guard active, preparedID == item.id, controller.isReady, !finished, time.isFinite else { return }
             playbackTime = time
-            requestedTime = time
-            if isPlaying { onTime(time) }
+            // Paused backend startup/seek callbacks can still report zero or an
+            // earlier frame. Keep the explicit seek target until playback resumes.
+            if isPlaying {
+                requestedTime = time
+                onTime(time)
+            }
             if isPlaying && (shuttleRate < 0 ? time <= item.effectiveTrimStart : time >= item.effectiveTrimEnd) {
                 finish()
             }
+        }
+        .overlay(alignment: .topTrailing) {
+#if DEBUG
+            if ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1" {
+                Text(String(controller.currentPlaybackTime))
+                    .font(.caption.monospacedDigit())
+                    .accessibilityIdentifier("stitching.backendTime")
+            }
+#endif
         }
     }
 
