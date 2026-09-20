@@ -84,6 +84,7 @@ actor TesseractService {
     /// Used both when creating a run dir and when sweeping orphans on launch.
     private static let tempDirPrefix = "TesseractOCR-"
 
+    private let ocrEngine: (any BitmapSubtitleOCREngine)?
     private let subtitleStreamExtractor: TesseractSubtitleStreamExtractor
     private var activeRunIDs: Set<UUID> = []
     private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
@@ -93,7 +94,11 @@ actor TesseractService {
     private var currentExtractionTasks: [UUID: Task<Void, Error>] = [:]
     private var currentOCRTasks: [UUID: Task<String, Error>] = [:]
 
-    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+    init(
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        ocrEngine: (any BitmapSubtitleOCREngine)? = nil
+    ) {
+        self.ocrEngine = ocrEngine
         subtitleStreamExtractor = TesseractSubtitleStreamExtractor(
             subprocessRunner: subprocessRunner
         )
@@ -233,17 +238,21 @@ actor TesseractService {
         }
 
         let engine: any BitmapSubtitleOCREngine
-        switch engineKind {
-        case .tesseract:
-            guard let tesseractPath = BinaryPathResolver.tesseractPath else {
-                throw TesseractServiceError.tesseractNotFound
+        if let ocrEngine {
+            engine = ocrEngine
+        } else {
+            switch engineKind {
+            case .tesseract:
+                guard let tesseractPath = BinaryPathResolver.tesseractPath else {
+                    throw TesseractServiceError.tesseractNotFound
+                }
+                engine = TesseractOCREngine(
+                    tesseractPath: tesseractPath,
+                    tessdataPrefix: BinaryPathResolver.tessdataDirectory
+                )
+            case .appleVision:
+                engine = VisionOCREngine()
             }
-            engine = TesseractOCREngine(
-                tesseractPath: tesseractPath,
-                tessdataPrefix: BinaryPathResolver.tessdataDirectory
-            )
-        case .appleVision:
-            engine = VisionOCREngine()
         }
 
         let tempDir = FileManager.default.temporaryDirectory

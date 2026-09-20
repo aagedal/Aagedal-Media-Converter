@@ -18,7 +18,7 @@ Created: 2026-09-11.
 The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
 signed release candidate.
 
-## Implementation progress — through 2026-09-20
+## Implementation progress — through 2026-09-21
 
 The first shared-boundary increment is implemented without selecting an IPC
 transport prematurely:
@@ -766,6 +766,17 @@ mapping is correct; a misleading queue-model comment is corrected. All six focus
 extraction tests pass. Bitmap recognition and OCR/agent cancellation coexistence
 remain open. See the
 [OCR stream-selection validation record](4.5-ocr-stream-selection-validation-2026-09-20.md).
+
+OCR-service coexistence now passes both cancellation directions alongside a
+real agent FFmpeg export. A minimal generated PGS display set exercises the real
+parser and PNG rendering, while a controlled recognition engine returns late
+success after cancellation. Cancelling OCR discards that result without stopping
+the agent; cancelling the agent leaves OCR able to publish a collision-safe SRT.
+Both checks preserve existing files and verify scratch/staging cleanup. All nine
+focused OCR, Whisper, and subtitle-mux coexistence tests pass. Extraction and
+recognition are controlled boundaries; real bitmap extraction, recognition quality,
+and UI integration remain open. See the
+[OCR-agent coexistence validation record](4.5-ocr-agent-coexistence-validation-2026-09-21.md).
 
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving

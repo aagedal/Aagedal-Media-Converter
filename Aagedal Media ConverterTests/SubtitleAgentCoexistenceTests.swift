@@ -551,3 +551,194 @@ private actor CoexistenceWhisperRunner: SubprocessRunning {
         continuation = nil
     }
 }
+
+final class OCRAgentCoexistenceTests: XCTestCase {
+    @MainActor
+    func testOCRCancellationPreservesRunningAgentExport() async throws {
+        try await checkCoexistence(cancelAgent: false)
+    }
+
+    @MainActor
+    func testAgentCancellationPreservesRunningOCRPublication() async throws {
+        try await checkCoexistence(cancelAgent: true)
+    }
+
+    @MainActor
+    private func checkCoexistence(cancelAgent: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OCRAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mp4")
+        let existingSRT = directory.appendingPathComponent("source.srt")
+        let existingBytes = Data("Existing subtitles".utf8)
+        try existingBytes.write(to: existingSRT)
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-y", "-f", "lavfi", "-i",
+                        "testsrc2=size=64x48:rate=24:duration=2",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", source.path],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded)
+        let sourceBytes = try Data(contentsOf: source)
+        let ocrStarted = expectation(description: "OCR recognition is outstanding")
+        let ocrCancelled = expectation(description: "OCR engine received cancellation")
+        ocrCancelled.isInverted = cancelAgent
+        let recognizer = CoexistenceOCREngine(started: ocrStarted, cancelled: ocrCancelled)
+        let extractor = CoexistencePGSRunner()
+        let ocr = TesseractService(subprocessRunner: extractor, ocrEngine: recognizer)
+        let operationID = UUID()
+        let recognition = Task {
+            try await ocr.generateSubtitlesOnly(
+                sourceFile: source, operationID: operationID, subtitleStreamIndex: 0,
+                codec: "hdmv_pgs_subtitle", language: "eng", engineKind: .appleVision
+            ) { _ in }
+        }
+        await fulfillment(of: [ocrStarted], timeout: 3)
+        let agentStarted = expectation(description: "Real agent FFmpeg reported progress")
+        let runner = CoexistenceLiveAgentRunner(started: agentStarted)
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live(converter: FFMPEGConverter(subprocessRunner: runner)))
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        var jobID: ApplicationJobID?
+        do {
+            let plan = try await service.plan(ApplicationConversionRequest(
+                origin: .localAgent, requesterID: "ocr-coexistence", sourceURLs: [source],
+                destinationFolderURL: directory, presetID: .streamCopy
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            jobID = accepted.record.id
+            await fulfillment(of: [agentStarted], timeout: 15)
+            let running = await runner.isRunning
+            XCTAssertTrue(running)
+            if cancelAgent {
+                _ = try await service.requestCancellation(accepted.record.id)
+            } else {
+                await ocr.cancelGeneration(operationID: operationID)
+                await fulfillment(of: [ocrCancelled], timeout: 3)
+                // Deliberately return successful recognized text after cancellation.
+                await recognizer.finish()
+                do {
+                    _ = try await recognition.value
+                    XCTFail("Cancelled OCR must reject late successful output")
+                } catch let error as TesseractServiceError {
+                    guard case .cancelled = error else { throw error }
+                }
+                let stillRunning = await runner.isRunning
+                XCTAssertTrue(stillRunning)
+            }
+            for _ in 0..<1500 {
+                if try await service.record(for: accepted.record.id)?.state.isTerminal == true { break }
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let record = try await service.record(for: accepted.record.id)
+            XCTAssertEqual(record?.state, cancelAgent ? .cancelled : .succeeded)
+            let drained = await runner.isRunning
+            let wasCancelled = await runner.wasCancelled
+            XCTAssertFalse(drained)
+            XCTAssertEqual(wasCancelled, cancelAgent)
+            var subtitleOutputs: [URL] = []
+            if cancelAgent {
+                XCTAssertEqual(record?.outputURLs, [])
+                let recognitionActive = await recognizer.isRunning
+                XCTAssertTrue(recognitionActive)
+                await recognizer.finish()
+                let output = try await recognition.value
+                subtitleOutputs = [output]
+                XCTAssertEqual(output.lastPathComponent, "source.ocr.srt")
+                XCTAssertEqual(try Data(contentsOf: output), Data("1\n00:00:00,000 --> 00:00:01,000\nOCR result\n".utf8))
+                await fulfillment(of: [ocrCancelled], timeout: 0.1)
+            } else {
+                let output = try XCTUnwrap(record?.outputURLs.first)
+                let metadata = try await ApplicationMediaInspector.live.inspect(output)
+                XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: 1.0 / 24)
+            }
+            let extractedURL = await extractor.outputURL()
+            let scratch = try XCTUnwrap(extractedURL)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: scratch.deletingLastPathComponent().path))
+            XCTAssertEqual(try Data(contentsOf: source), sourceBytes)
+            XCTAssertEqual(try Data(contentsOf: existingSRT), existingBytes)
+            let expectedFiles = [source, existingSRT] + subtitleOutputs + (record?.outputURLs ?? [])
+            XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: directory.path)),
+                           Set(expectedFiles.map(\.lastPathComponent)))
+            let finalRecord = try await service.record(for: accepted.record.id)
+            XCTAssertEqual(finalRecord?.state, record?.state)
+            XCTAssertEqual(finalRecord?.outputURLs, record?.outputURLs)
+        } catch {
+            if let jobID { _ = try? await service.requestCancellation(jobID) }
+            await ocr.cancelGeneration(operationID: operationID)
+            await recognizer.finish()
+            _ = await recognition.result
+            throw error
+        }
+    }
+}
+
+/// Supplies a minimal PGS display set to the real parser; extraction itself is controlled.
+private actor CoexistencePGSRunner: SubprocessRunning {
+    private var output: URL?
+    func outputURL() -> URL? { output }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        let destination = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+        output = destination
+        func segment(_ type: UInt8, pts: UInt32 = 0, payload: [UInt8]) -> Data {
+            Data([0x50, 0x47, UInt8((pts >> 24) & 255), UInt8((pts >> 16) & 255),
+                  UInt8((pts >> 8) & 255), UInt8(pts & 255), 0, 0, 0, 0, type,
+                  UInt8(payload.count >> 8), UInt8(payload.count & 255)] + payload)
+        }
+        var data = segment(0x16, payload: [0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 1,
+                                          0, 0, 0, 0, 0, 0, 0, 0])
+        data += segment(0x14, payload: [0, 0, 1, 235, 128, 128, 255])
+        data += segment(0x15, payload: [0, 0, 0, 0xC0, 0, 0, 8, 0, 2, 0, 1, 1, 1, 0, 0])
+        data += segment(0x80, payload: [])
+        data += segment(0x16, pts: 90_000, payload: [0, 2, 0, 1, 0x10, 0, 1, 0, 0, 0, 0])
+        data += segment(0x80, pts: 90_000, payload: [])
+        try data.write(to: destination)
+        return SubprocessResult(
+            terminationStatus: 0, termination: .exited, standardOutput: Data(), standardError: Data(),
+            discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .milliseconds(1)
+        )
+    }
+}
+
+/// Holds recognition after the production parser has rendered its PNG, then returns late success.
+private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
+    let started: XCTestExpectation
+    let cancelled: XCTestExpectation
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+    private(set) var isRunning = false
+
+    init(started: XCTestExpectation, cancelled: XCTestExpectation) {
+        self.started = started
+        self.cancelled = cancelled
+    }
+
+    func recognize(pngURL: URL, language: String) async throws -> String {
+        let bytes = try Data(contentsOf: pngURL)
+        XCTAssertEqual(Array(bytes.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+        XCTAssertEqual(language, "eng")
+        isRunning = true
+        defer { isRunning = false }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if released { continuation.resume() } else { self.continuation = continuation }
+                started.fulfill()
+            }
+        } onCancel: {
+            self.cancelled.fulfill()
+        }
+        return "OCR result"
+    }
+
+    func finish() {
+        released = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
