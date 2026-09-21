@@ -517,6 +517,33 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStitchingRangeDeletionAndUndo() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+        let timeline = element("group.timeline")
+        let timecode = element("stitching.timecode")
+        func durationText() -> String {
+            ((timecode.value as? String) ?? timecode.label).components(separatedBy: " / ").last ?? ""
+        }
+        let originalDuration = durationText()
+        element("stitching.rangeTool").click()
+        let start = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.4))
+        let end = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.4))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        XCTAssertTrue(element("stitching.deleteRange").isEnabled)
+        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        XCTAssertNotEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertNotEqual(durationText(), originalDuration)
+    }
+
+    @MainActor
     func testStitchingSplitKeepsDurationAndAllowsIndependentTrim() throws {
         launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
         defer { terminateAndCleanFixtures() }

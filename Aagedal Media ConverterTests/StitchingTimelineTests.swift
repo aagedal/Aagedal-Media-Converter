@@ -2,6 +2,58 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class StitchingTimelineTests: XCTestCase {
+    func testRangeDeletionRetainsSourceGapAndSettings() {
+        var source = clip(duration: 60, start: 10, end: 50)
+        source.comment = "Keep me"
+        var items = [source]
+        StitchingTimeline.deleteRange(&items, id: source.id, range: 20...30)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items.map(\.effectiveTrimStart), [10, 30])
+        XCTAssertEqual(items.map(\.effectiveTrimEnd), [20, 50])
+        XCTAssertEqual(items[0].id, source.id)
+        XCTAssertNotEqual(items[0].id, items[1].id)
+        XCTAssertEqual(items[1].comment, "Keep me")
+        XCTAssertEqual(items.reduce(0) { $0 + StitchingTimeline.duration($1) }, 30)
+        var history = StitchingEditHistory()
+        history.record(from: [source], to: items)
+        history.restore(&items)
+        XCTAssertEqual(items, [source])
+        history.restore(&items, redo: true)
+        XCTAssertEqual(items.count, 2)
+    }
+
+    func testRangeDeletionAtEdgesWholeClipAndEmptyRange() {
+        let source = clip(duration: 20, start: 2, end: 18)
+        for (range, start, end) in [(2.0...8.0, 8.0, 18.0), (12.0...18.0, 2.0, 12.0)] {
+            var items = [source]
+            StitchingTimeline.deleteRange(&items, id: source.id, range: range)
+            XCTAssertEqual(items.count, 1)
+            XCTAssertEqual(items[0].id, source.id)
+            XCTAssertEqual(items[0].effectiveTrimStart, start)
+            XCTAssertEqual(items[0].effectiveTrimEnd, end)
+        }
+        var items = [source]
+        StitchingTimeline.deleteRange(&items, id: source.id, range: 5...5)
+        XCTAssertEqual(items, [source])
+        StitchingTimeline.deleteRange(&items, id: source.id, range: 0...20)
+        XCTAssertTrue(items.isEmpty)
+    }
+
+    func testRangeDeletionRejectsBusyClip() {
+        var source = clip(duration: 20)
+        source.status = .converting
+        var items = [source]
+        StitchingTimeline.deleteRange(&items, id: source.id, range: 5...10)
+        XCTAssertEqual(items, [source])
+    }
+
+    func testKeyframeSnappingStaysWithinAllowedTrimBounds() {
+        XCTAssertEqual(StitchingTimeline.nearestKeyframe(3.8, in: [0, 2, 4, 6], bounds: 0...3.9), 2)
+        XCTAssertEqual(StitchingTimeline.nearestKeyframe(3.8, in: [0, 2, 4, 6], bounds: 0...6), 4)
+        XCTAssertNil(StitchingTimeline.nearestKeyframe(3, in: [0, 6], bounds: 2...4))
+        XCTAssertNil(StitchingTimeline.nearestKeyframe(3, in: [], bounds: 0...6))
+    }
+
     func testUndoRedoSplitAndTrimPreservesCurrentMetadata() {
         let source = clip(duration: 60, start: 10, end: 50)
         var items = [source]

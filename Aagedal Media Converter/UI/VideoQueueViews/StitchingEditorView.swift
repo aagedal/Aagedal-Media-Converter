@@ -2,6 +2,7 @@
 // Copyright © 2026 Truls Aagedal
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import AVFoundation
 import AppKit
 import SwiftUI
 
@@ -94,6 +95,37 @@ enum StitchingTimeline {
         items[point.index].analyticsEnabled = analyticsEnabled
         items.insert(second, at: point.index + 1)
         return second.id
+    }
+
+    /// Remove a source range from one clip, retaining independent copies on either side.
+    static func deleteRange(_ items: inout [VideoItem], id: UUID, range: ClosedRange<Double>) {
+        guard let index = items.firstIndex(where: { $0.id == id }),
+              QueueGrouping.canMove([id], files: items, groups: []), items[index].isPlayable,
+              range.lowerBound.isFinite, range.upperBound.isFinite else { return }
+        let original = items[index]
+        let lower = max(original.effectiveTrimStart, range.lowerBound)
+        let upper = min(original.effectiveTrimEnd, range.upperBound)
+        guard upper > lower else { return }
+        var retained: [VideoItem] = []
+        if lower > original.effectiveTrimStart {
+            var left = original
+            left.trimEnd = lower
+            left.resetConversionState()
+            left.analyticsEnabled = original.analyticsEnabled
+            retained.append(left)
+        }
+        if upper < original.effectiveTrimEnd {
+            var right = retained.isEmpty ? original : original.timelineCopy()
+            right.trimStart = upper
+            right.resetConversionState()
+            right.analyticsEnabled = original.analyticsEnabled
+            retained.append(right)
+        }
+        items.replaceSubrange(index...index, with: retained)
+    }
+
+    static func nearestKeyframe(_ time: Double, in times: [Double], bounds: ClosedRange<Double>) -> Double? {
+        times.filter { $0.isFinite && bounds.contains($0) }.min { abs($0 - time) < abs($1 - time) }
     }
 
     static func resetTrims(_ items: inout [VideoItem], selection: Set<UUID>) {
@@ -203,6 +235,15 @@ struct StitchingEditHistory {
 struct StitchingEditorView<FileList: View>: View {
     @Binding var group: EncodingGroup
     let isStreamCopy: Bool
+    @State private var rangeMode = false
+    @State private var selectedRange: ClipRange?
+    @State private var snapToKeyframes = false
+    @State private var keyframes: [URL: [Double]] = [:]
+    @State private var keyframeLoading = false
+    private struct ClipRange: Equatable {
+        let id: UUID
+        let bounds: ClosedRange<Double>
+    }
     @State private var editHistory = StitchingEditHistory()
     @State private var trimGestureBefore: [VideoItem]?
     @State private var editingMarkerID: UUID?
@@ -286,6 +327,7 @@ struct StitchingEditorView<FileList: View>: View {
                             onZoom: { keyboardZoomSteps += $0 },
                             onAddMarker: addMarker,
                             onSplit: splitAtPlayhead,
+                            onDeleteRange: deleteSelectedRange,
                             onUndo: { restoreEdit() },
                             onRedo: { restoreEdit(redo: true) },
                             onRippleTrim: rippleTrim,
@@ -356,8 +398,34 @@ struct StitchingEditorView<FileList: View>: View {
                         .help("Fit the timeline (⇧Z)")
                         .accessibilityIdentifier("stitching.fit")
                 }
+                HStack {
+                    Toggle("Range", isOn: $rangeMode)
+                        .toggleStyle(.button)
+                        .help("Drag across a clip to select a range. Backspace deletes it; Escape clears it.")
+                        .accessibilityIdentifier("stitching.rangeTool")
+                    Button("Delete range", action: deleteSelectedRange)
+                        .disabled(selectedRange == nil || !canEditHistory)
+                        .keyboardShortcut(.delete, modifiers: [])
+                        .accessibilityIdentifier("stitching.deleteRange")
+                    if let selection = selectedRange,
+                       let selected = group.items.first(where: { $0.id == selection.id }) {
+                        Text("Selected: \(StitchingTimeline.timeDisplay(selection.bounds.upperBound - selection.bounds.lowerBound, frameRate: StitchingTimeline.frameRate(for: selected)))")
+                            .font(.caption.monospacedDigit())
+                    }
+                    Spacer()
+                    if rangeMode {
+                        Text("Drag within a clip · Backspace: delete range · Esc: clear")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 timeline
                 if isStreamCopy {
+                    Toggle("Snap trims and ranges to keyframes", isOn: $snapToKeyframes)
+                        .accessibilityIdentifier("stitching.keyframeSnap")
+                    if snapToKeyframes {
+                        Text(keyframeLoading ? "Finding keyframes…" : (keyframes[item.url]?.isEmpty == false ? "Trims and ranges snap to the nearest available keyframe." : "Keyframes unavailable for this clip. Using frame snapping."))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Label {
                         Text("Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ.")
                             .fixedSize(horizontal: false, vertical: true)
@@ -416,7 +484,22 @@ struct StitchingEditorView<FileList: View>: View {
                 }
             }
         }
+        .task(id: "\(isStreamCopy && snapToKeyframes)-\(group.items.map { $0.url.absoluteString }.joined())") {
+            guard isStreamCopy, snapToKeyframes else { return }
+            keyframeLoading = true
+            defer { keyframeLoading = false }
+            for url in Set(group.items.map(\.url)) where keyframes[url] == nil {
+                let times = await TimelineKeyframes.load(url)
+                guard !Task.isCancelled else { return }
+                keyframes[url] = times
+            }
+        }
+        .onChange(of: rangeMode) { _, _ in selectedRange = nil }
+        .onChange(of: snapToKeyframes) { _, _ in selectedRange = nil }
         .onChange(of: group.items) { old, new in
+            if old.map(\.id) != new.map(\.id) || zip(old, new).contains(where: { $0.trimStart != $1.trimStart || $0.trimEnd != $1.trimEnd }) {
+                selectedRange = nil
+            }
             guard canEditHistory else {
                 editHistory = StitchingEditHistory()
                 trimGestureBefore = nil
@@ -450,6 +533,7 @@ struct StitchingEditorView<FileList: View>: View {
             if !dragging { cancelClipDrag(); clipDragCancelled = false }
         }
         .onExitCommand {
+            selectedRange = nil
             if isDraggingClips { clipDragCancelled = true; cancelClipDrag() }
         }
         .sheet(isPresented: $showsMarkerEditor) {
@@ -527,6 +611,28 @@ struct StitchingEditorView<FileList: View>: View {
                                         }
                                     }
                                 )
+                                .overlay {
+                                    if rangeMode {
+                                        Rectangle().fill(Color.clear).contentShape(Rectangle())
+                                            .gesture(DragGesture(minimumDistance: 0)
+                                                .onChanged { value in
+                                                    isPlaying = false
+                                                    let a = rangeBoundary(item, value: item.effectiveTrimStart + value.startLocation.x / scale)
+                                                    let b = rangeBoundary(item, value: item.effectiveTrimStart + value.location.x / scale)
+                                                    selectedRange = a == b ? nil : ClipRange(id: item.id, bounds: min(a, b)...max(a, b))
+                                                    seek(item.id, to: b)
+                                                })
+                                    }
+                                }
+                                .overlay(alignment: .leading) {
+                                    if let selection = selectedRange, selection.id == item.id {
+                                        Rectangle().fill(Color.yellow.opacity(0.3))
+                                            .overlay(Rectangle().strokeBorder(Color.yellow, lineWidth: 2))
+                                            .frame(width: (selection.bounds.upperBound - selection.bounds.lowerBound) * scale)
+                                            .offset(x: (selection.bounds.lowerBound - item.effectiveTrimStart) * scale)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
                                 .frame(width: clipWidths[index], height: 164)
                                 .opacity(draggedClipIDs.contains(item.id) ? 0.45 : 1)
                                 .id(item.id)
@@ -783,9 +889,8 @@ struct StitchingEditorView<FileList: View>: View {
         scrubTask?.cancel()
         scrubTask = nil
         pendingScrubTime = nil
-        guard let id = StitchingTimeline.rippleTrim(&group.items, at: time, start: start),
-              let item = group.items.first(where: { $0.id == id }) else { return }
-        seek(id, to: start ? item.effectiveTrimStart : item.effectiveTrimEnd)
+        guard let location = StitchingTimeline.location(at: time, in: group.items) else { return }
+        setTrim(location.id, start: start, value: location.sourceTime)
     }
 
     private func splitAtPlayhead() {
@@ -801,6 +906,33 @@ struct StitchingEditorView<FileList: View>: View {
         selectedClipIDs = [id]
         selectionAnchor = id
         seek(id, to: item.effectiveTrimStart)
+    }
+
+    private func rangeBoundary(_ item: VideoItem, value: Double) -> Double {
+        let bounds = item.effectiveTrimStart...item.effectiveTrimEnd
+        let clamped = min(bounds.upperBound, max(bounds.lowerBound, value))
+        if clamped == bounds.lowerBound || clamped == bounds.upperBound { return clamped }
+        if isStreamCopy, snapToKeyframes,
+           let point = StitchingTimeline.nearestKeyframe(clamped, in: keyframes[item.url] ?? [], bounds: bounds) { return point }
+        let rate = StitchingTimeline.frameRate(for: item)
+        return min(bounds.upperBound, max(bounds.lowerBound, rate.map { (clamped * $0).rounded() / $0 } ?? clamped))
+    }
+
+    private func deleteSelectedRange() {
+        guard canEditHistory, !showsMarkerEditor, let selection = selectedRange else { return }
+        isPlaying = false
+        scrubTask?.cancel()
+        scrubTask = nil
+        pendingScrubTime = nil
+        let time = sequenceTime
+        StitchingTimeline.deleteRange(&group.items, id: selection.id, range: selection.bounds)
+        selectedRange = nil
+        group.lastSortMode = nil
+        if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+        if let location = StitchingTimeline.location(at: min(time, total), in: group.items) {
+            selectedClipIDs = [location.id]
+            seek(location.id, to: location.sourceTime)
+        }
     }
 
     private func resetSelectedTrims() {
@@ -820,7 +952,17 @@ struct StitchingEditorView<FileList: View>: View {
     private func setTrim(_ id: UUID, start: Bool, value: Double) {
         guard group.status != .converting, let index = group.items.firstIndex(where: { $0.id == id }) else { return }
         isPlaying = false
-        StitchingTimeline.trim(&group.items[index], start: start, to: value)
+        let item = group.items[index]
+        let gap = 1 / (StitchingTimeline.frameRate(for: item) ?? 100)
+        let bounds = start ? 0...max(0, item.effectiveTrimEnd - gap)
+            : min(item.durationSeconds, item.effectiveTrimStart + gap)...item.durationSeconds
+        if isStreamCopy, snapToKeyframes,
+           let point = StitchingTimeline.nearestKeyframe(value, in: keyframes[item.url] ?? [], bounds: bounds) {
+            if start { group.items[index].trimStart = point }
+            else { group.items[index].trimEnd = point }
+        } else {
+            StitchingTimeline.trim(&group.items[index], start: start, to: value)
+        }
         seek(id, to: start ? group.items[index].effectiveTrimStart : group.items[index].effectiveTrimEnd)
     }
     private func selectClip(_ id: UUID) {
@@ -1085,6 +1227,7 @@ private struct StitchingSequencePreview: View {
     let onZoom: (Int) -> Void
     let onAddMarker: () -> Void
     let onSplit: () -> Void
+    let onDeleteRange: () -> Void
     let onUndo: () -> Void
     let onRedo: () -> Void
     let onRippleTrim: (Bool) -> Void
@@ -1098,7 +1241,7 @@ private struct StitchingSequencePreview: View {
     @State private var preparedID: UUID?
 
     init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, shuttleRate: Float,
-         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
+         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onDeleteRange: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
         _item = item
         self.initialTime = initialTime
         self.seekRequest = seekRequest
@@ -1111,6 +1254,7 @@ private struct StitchingSequencePreview: View {
         self.onZoom = onZoom
         self.onAddMarker = onAddMarker
         self.onSplit = onSplit
+        self.onDeleteRange = onDeleteRange
         self.onUndo = onUndo
         self.onRedo = onRedo
         self.onRippleTrim = onRippleTrim
@@ -1155,6 +1299,7 @@ private struct StitchingSequencePreview: View {
             case "j": onShuttle(-1)
             case "k": onShuttle(0)
             case "l": onShuttle(1)
+            case "\u{7f}", "\u{08}": onDeleteRange()
             case "m": onAddMarker()
             case "q": onRippleTrim(true)
             case "w": onRippleTrim(false)
@@ -1249,5 +1394,39 @@ private struct StitchingSequencePreview: View {
         finished = true
         controller.pause()
         onFinished()
+    }
+}
+
+/// Reads compressed samples, so sync timestamps do not require decoding the video.
+private enum TimelineKeyframes {
+    static func load(_ url: URL) async -> [Double] {
+        let task = Task.detached(priority: .utility) { () -> [Double] in
+            let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+            defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+            do {
+                let asset = AVURLAsset(url: url)
+                guard let track = try await asset.loadTracks(withMediaType: .video).first else { return [] }
+                let reader = try AVAssetReader(asset: asset)
+                let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+                output.alwaysCopiesSampleData = false
+                guard reader.canAdd(output) else { return [] }
+                reader.add(output)
+                guard reader.startReading() else { return [] }
+                var times: [Double] = []
+                while let sample = output.copyNextSampleBuffer() {
+                    guard !Task.isCancelled else { reader.cancelReading(); return [] }
+                    let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false) as? [[CFString: Any]]
+                    let notSync = attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool ?? false
+                    let time = CMSampleBufferGetPresentationTimeStamp(sample).seconds
+                    if !notSync, time.isFinite, time >= 0 { times.append(time) }
+                }
+                return reader.status == .completed ? times.sorted() : []
+            } catch { return [] }
+        }
+        return await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 }
