@@ -254,6 +254,7 @@ struct StitchingEditorView<FileList: View>: View {
     @ViewBuilder var fileList: () -> FileList
     @State private var selectionAnchor: UUID?
     @State private var draggedClipIDs: Set<UUID> = []
+    @State private var rangeDragID: UUID?
     @State private var insertionBoundary: Int?
     @GestureState private var isDraggingClips = false
     @State private var clipDragCancelled = false
@@ -328,6 +329,8 @@ struct StitchingEditorView<FileList: View>: View {
                             onAddMarker: addMarker,
                             onSplit: splitAtPlayhead,
                             onDeleteRange: deleteSelectedRange,
+                            onClearRange: clearSelectedRange,
+                            onToggleRange: toggleRangeMode,
                             onUndo: { restoreEdit() },
                             onRedo: { restoreEdit(redo: true) },
                             onRippleTrim: rippleTrim,
@@ -401,12 +404,18 @@ struct StitchingEditorView<FileList: View>: View {
                 HStack {
                     Toggle("Range", isOn: $rangeMode)
                         .toggleStyle(.button)
-                        .help("Drag across a clip to select a range. Backspace deletes it; Escape clears it.")
+                        .keyboardShortcut("r", modifiers: [])
+                        .help("Toggle Range mode (R), or hold Command while dragging across a clip to select a range. Backspace deletes it; Option+X or Escape clears it.")
                         .accessibilityIdentifier("stitching.rangeTool")
                     Button("Delete range", action: deleteSelectedRange)
                         .disabled(selectedRange == nil || !canEditHistory)
                         .keyboardShortcut(.delete, modifiers: [])
                         .accessibilityIdentifier("stitching.deleteRange")
+                    Button("Clear range") { clearSelectedRange() }
+                        .disabled(selectedRange == nil)
+                        .keyboardShortcut("x", modifiers: .option)
+                        .help("Clear the selected range (⌥X or Escape)")
+                        .accessibilityIdentifier("stitching.clearRange")
                     if let selection = selectedRange,
                        let selected = group.items.first(where: { $0.id == selection.id }) {
                         Text("Selected: \(StitchingTimeline.timeDisplay(selection.bounds.upperBound - selection.bounds.lowerBound, frameRate: StitchingTimeline.frameRate(for: selected)))")
@@ -414,7 +423,7 @@ struct StitchingEditorView<FileList: View>: View {
                     }
                     Spacer()
                     if rangeMode {
-                        Text("Drag within a clip · Backspace: delete range · Esc: clear")
+                        Text("Drag within a clip · Backspace: delete range · ⌥X: clear")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -437,11 +446,11 @@ struct StitchingEditorView<FileList: View>: View {
                     .accessibilityIdentifier("stitching.streamCopyBoundaryGuidance")
                 }
                 HStack(spacing: 12) {
-                    Text("J/K/L: reverse • pause • play · ⌘B: split · ⌘Z: undo · M: marker · Q/W: trim start/end")
+                    Text("J/K/L: reverse • pause • play · R: range mode · ⌘B: split · ⌘Z: undo · M: marker · Q/W: trim start/end")
                         .font(.caption).foregroundStyle(.secondary)
                     Image(systemName: "questionmark.circle")
                         .foregroundStyle(.secondary)
-                        .help("Pinch to zoom. Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed. Q trims the start to the playhead; W trims the end. Later clips close the gap.")
+                        .help("Pinch to zoom. Drag clips to reorder; Command-drag selects a time range within a clip. Shift-click selects a range of clips; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed. Q trims the start to the playhead; W trims the end. Later clips close the gap.")
                     Picker("Waveform height", selection: $waveformVisualScale) {
                         ForEach([1.0, 2, 4, 8, 16], id: \.self) { scale in
                             Text("\(Int(scale))×").tag(scale)
@@ -533,7 +542,7 @@ struct StitchingEditorView<FileList: View>: View {
             if !dragging { cancelClipDrag(); clipDragCancelled = false }
         }
         .onExitCommand {
-            selectedRange = nil
+            clearSelectedRange()
             if isDraggingClips { clipDragCancelled = true; cancelClipDrag() }
         }
         .sheet(isPresented: $showsMarkerEditor) {
@@ -601,7 +610,7 @@ struct StitchingEditorView<FileList: View>: View {
                                     waveformVisualScale: waveformVisualScale,
                                     visibleRange: max(0, min(clipWidths[index], scrollOffset - 10 - clipWidths.prefix(index).reduce(0, +)))...max(0, min(clipWidths[index], scrollOffset + geometry.size.width - 10 - clipWidths.prefix(index).reduce(0, +))),
                                     onSelect: { selectClip(item.id) },
-                                    reorderGesture: clipDrag(item.id, widths: clipWidths),
+                                    reorderGesture: clipDrag(item.id, widths: clipWidths, scale: scale),
                                     onTrim: { start, value in setTrim(item.id, start: start, value: value) },
                                     onTrimGesture: { active in
                                         if active { trimGestureBefore = group.items }
@@ -616,11 +625,8 @@ struct StitchingEditorView<FileList: View>: View {
                                         Rectangle().fill(Color.clear).contentShape(Rectangle())
                                             .gesture(DragGesture(minimumDistance: 0)
                                                 .onChanged { value in
-                                                    isPlaying = false
-                                                    let a = rangeBoundary(item, value: item.effectiveTrimStart + value.startLocation.x / scale)
-                                                    let b = rangeBoundary(item, value: item.effectiveTrimStart + value.location.x / scale)
-                                                    selectedRange = a == b ? nil : ClipRange(id: item.id, bounds: min(a, b)...max(a, b))
-                                                    seek(item.id, to: b)
+                                                    selectRange(in: item, from: value.startLocation.x / scale,
+                                                                to: value.location.x / scale)
                                                 })
                                     }
                                 }
@@ -918,6 +924,18 @@ struct StitchingEditorView<FileList: View>: View {
         return min(bounds.upperBound, max(bounds.lowerBound, rate.map { (clamped * $0).rounded() / $0 } ?? clamped))
     }
 
+    private func toggleRangeMode() {
+        guard group.status != .converting, !showsMarkerEditor else { return }
+        rangeMode.toggle()
+    }
+
+    @discardableResult
+    private func clearSelectedRange() -> Bool {
+        guard !showsMarkerEditor, selectedRange != nil else { return false }
+        selectedRange = nil
+        return true
+    }
+
     private func deleteSelectedRange() {
         guard canEditHistory, !showsMarkerEditor, let selection = selectedRange else { return }
         isPlaying = false
@@ -982,11 +1000,39 @@ struct StitchingEditorView<FileList: View>: View {
         if let item = group.items.first(where: { $0.id == id }) { seek(id, to: item.effectiveTrimStart) }
     }
 
-    private func clipDrag(_ id: UUID, widths: [Double]) -> some Gesture {
+    private func selectRange(in item: VideoItem, from start: Double, to end: Double) {
+        isPlaying = false
+        scrubTask?.cancel()
+        scrubTask = nil
+        pendingScrubTime = nil
+        let a = rangeBoundary(item, value: item.effectiveTrimStart + start)
+        let b = rangeBoundary(item, value: item.effectiveTrimStart + end)
+        selectedRange = a == b ? nil : ClipRange(id: item.id, bounds: min(a, b)...max(a, b))
+        seek(item.id, to: b)
+    }
+
+    private func selectDraggedRange(_ id: UUID, value: DragGesture.Value, widths: [Double], scale: Double) {
+        guard let index = group.items.firstIndex(where: { $0.id == id }) else { return }
+        let origin = widths.prefix(index).reduce(0, +)
+        selectRange(in: group.items[index], from: (value.startLocation.x - origin) / scale,
+                    to: (value.location.x - origin) / scale)
+    }
+
+    private func clipDrag(_ id: UUID, widths: [Double], scale: Double) -> some Gesture {
         DragGesture(minimumDistance: 5, coordinateSpace: .named("stitching.clips"))
             .updating($isDraggingClips) { _, active, _ in active = true }
             .onChanged { value in
                 guard group.status != .converting, !clipDragCancelled else { return }
+                // Latch the gesture's intent so releasing Command before the mouse
+                // cannot turn a range selection into a clip reorder. A click still
+                // reaches selectClip and retains Command-click multiselection.
+                if draggedClipIDs.isEmpty, rangeDragID == nil, NSEvent.modifierFlags.contains(.command) {
+                    rangeDragID = id
+                }
+                if rangeDragID == id {
+                    selectDraggedRange(id, value: value, widths: widths, scale: scale)
+                    return
+                }
                 if draggedClipIDs.isEmpty {
                     if !selectedClipIDs.contains(id) { selectClip(id) }
                     draggedClipIDs = selectedClipIDs
@@ -997,7 +1043,12 @@ struct StitchingEditorView<FileList: View>: View {
             }
             .onEnded { value in
                 defer { cancelClipDrag() }
-                guard group.status != .converting, !clipDragCancelled, !draggedClipIDs.isEmpty,
+                guard group.status != .converting, !clipDragCancelled else { return }
+                if rangeDragID == id {
+                    selectDraggedRange(id, value: value, widths: widths, scale: scale)
+                    return
+                }
+                guard !draggedClipIDs.isEmpty,
                       value.location.y >= 0, value.location.y <= 192 else { return }
                 let destination = StitchingTimeline.insertionBoundary(at: value.location.x, widths: widths)
                 let previous = group.items.map(\.id)
@@ -1010,6 +1061,7 @@ struct StitchingEditorView<FileList: View>: View {
     }
 
     private func cancelClipDrag() {
+        rangeDragID = nil
         draggedClipIDs = []
         insertionBoundary = nil
     }
@@ -1228,6 +1280,8 @@ private struct StitchingSequencePreview: View {
     let onAddMarker: () -> Void
     let onSplit: () -> Void
     let onDeleteRange: () -> Void
+    let onClearRange: () -> Bool
+    let onToggleRange: () -> Void
     let onUndo: () -> Void
     let onRedo: () -> Void
     let onRippleTrim: (Bool) -> Void
@@ -1241,7 +1295,7 @@ private struct StitchingSequencePreview: View {
     @State private var preparedID: UUID?
 
     init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, shuttleRate: Float,
-         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onDeleteRange: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
+         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onDeleteRange: @escaping () -> Void, onClearRange: @escaping () -> Bool, onToggleRange: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
         _item = item
         self.initialTime = initialTime
         self.seekRequest = seekRequest
@@ -1255,6 +1309,8 @@ private struct StitchingSequencePreview: View {
         self.onAddMarker = onAddMarker
         self.onSplit = onSplit
         self.onDeleteRange = onDeleteRange
+        self.onClearRange = onClearRange
+        self.onToggleRange = onToggleRange
         self.onUndo = onUndo
         self.onRedo = onRedo
         self.onRippleTrim = onRippleTrim
@@ -1272,6 +1328,12 @@ private struct StitchingSequencePreview: View {
             guard item.status != .converting,
                   !(NSApp.keyWindow?.firstResponder is NSTextView) else { return false }
             let shortcutModifiers = modifiers.intersection([.command, .control, .option, .shift])
+            // The preview uses AppKit event monitors, so Escape does not always
+            // reach SwiftUI's onExitCommand. Handle range clearing here as well.
+            if (key.lowercased() == "x" && shortcutModifiers == .option)
+                || (key == "\u{1b}" && shortcutModifiers.isEmpty) {
+                return onClearRange()
+            }
             if key.lowercased() == "z", shortcutModifiers == .shift {
                 onFit()
                 return true
@@ -1300,6 +1362,7 @@ private struct StitchingSequencePreview: View {
             case "k": onShuttle(0)
             case "l": onShuttle(1)
             case "\u{7f}", "\u{08}": onDeleteRange()
+            case "r": onToggleRange()
             case "m": onAddMarker()
             case "q": onRippleTrim(true)
             case "w": onRippleTrim(false)
