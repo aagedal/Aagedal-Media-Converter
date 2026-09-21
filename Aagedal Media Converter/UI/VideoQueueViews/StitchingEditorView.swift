@@ -128,6 +128,40 @@ enum StitchingTimeline {
         times.filter { $0.isFinite && bounds.contains($0) }.min { abs($0 - time) < abs($1 - time) }
     }
 
+    /// Source timestamps must be sorted, as returned by keyframe discovery. Keep
+    /// dense regions hidden instead of suggesting that a sampled subset is complete.
+    static func keyframeTickOffsets(in times: [Double], sourceStart: Double, duration: Double,
+                                    scale: Double, visibleRange: ClosedRange<Double>) -> [Double] {
+        guard sourceStart.isFinite, duration.isFinite, duration > 0,
+              scale.isFinite, scale > 0,
+              visibleRange.lowerBound.isFinite, visibleRange.upperBound.isFinite,
+              visibleRange.upperBound > visibleRange.lowerBound else { return [] }
+        let lowerTime = sourceStart + max(0, visibleRange.lowerBound) / scale
+        let upperTime = sourceStart + min(duration, visibleRange.upperBound / scale)
+        guard lowerTime <= upperTime else { return [] }
+        // Search only the visible interval, even for all-intra or long recordings.
+        var lower = 0
+        var upper = times.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if times[middle] < lowerTime { lower = middle + 1 }
+            else { upper = middle }
+        }
+        var offsets: [Double] = []
+        var index = lower
+        let minimumSpacing = 8.0 / scale
+        while index < times.count, times[index] <= upperTime {
+            let time = times[index]
+            let previousReadable = index == 0 || time - times[index - 1] >= minimumSpacing
+            let nextReadable = index + 1 == times.count || times[index + 1] - time >= minimumSpacing
+            if previousReadable && nextReadable {
+                offsets.append((time - sourceStart) * scale)
+            }
+            index += 1
+        }
+        return offsets
+    }
+
     static func resetTrims(_ items: inout [VideoItem], selection: Set<UUID>) {
         for index in items.indices where selection.contains(items[index].id) {
             items[index].trimStart = nil
@@ -494,11 +528,15 @@ struct StitchingEditorView<FileList: View>: View {
                 }
             }
         }
-        .task(id: "\(isStreamCopy && snapToKeyframes)-\(group.items.map { $0.url.absoluteString }.joined())") {
-            guard isStreamCopy, snapToKeyframes else { return }
+        .task(id: "\(isStreamCopy)-\(snapToKeyframes)-\(selectedID?.uuidString ?? "")-\(group.items.map { $0.url.absoluteString }.joined())") {
+            guard isStreamCopy else { return }
             keyframeLoading = true
             defer { keyframeLoading = false }
-            for url in Set(group.items.map(\.url)) where keyframes[url] == nil {
+            // Show candidates while freely trimming the selected clip, without
+            // starting a whole-group scan until keyframe snapping is enabled.
+            let previewID = selectedID ?? group.items.first?.id
+            let items = snapToKeyframes ? group.items : group.items.filter { $0.id == previewID }
+            for url in Set(items.map(\.url)) where keyframes[url] == nil {
                 let times = await TimelineKeyframes.load(url)
                 guard !Task.isCancelled else { return }
                 keyframes[url] = times
@@ -607,6 +645,7 @@ struct StitchingEditorView<FileList: View>: View {
                                 StitchingTimelineClip(
                                     item: item, selected: selectedClipIDs.contains(item.id), scale: scale,
                                     thumbnailURLs: filmstrips[item.id] ?? [],
+                                    keyframeTimes: isStreamCopy ? keyframes[item.url] ?? [] : [],
                                     assets: previewAssets[item.id],
                                     waveformVisualScale: waveformVisualScale,
                                     visibleRange: max(0, min(clipWidths[index], scrollOffset - 10 - clipWidths.prefix(index).reduce(0, +)))...max(0, min(clipWidths[index], scrollOffset + geometry.size.width - 10 - clipWidths.prefix(index).reduce(0, +))),
@@ -1101,6 +1140,7 @@ private struct StitchingTimelineClip<ReorderGesture: Gesture>: View {
     let selected: Bool
     let scale: Double
     let thumbnailURLs: [URL]
+    let keyframeTimes: [Double]
     let assets: PreviewAssets?
     let waveformVisualScale: Double
     let visibleRange: ClosedRange<Double>
@@ -1129,6 +1169,26 @@ private struct StitchingTimelineClip<ReorderGesture: Gesture>: View {
                     }
                 }
                 .frame(height: 68).offset(y: 24)
+                let offsets = StitchingTimeline.keyframeTickOffsets(
+                    in: keyframeTimes, sourceStart: item.effectiveTrimStart,
+                    duration: StitchingTimeline.duration(item), scale: scale,
+                    visibleRange: visibleRange
+                )
+                Canvas { context, _ in
+                    var ticks = Path()
+                    for x in offsets {
+                        ticks.move(to: CGPoint(x: x, y: 59))
+                        ticks.addLine(to: CGPoint(x: x, y: 67))
+                    }
+                    context.stroke(ticks, with: .color(.black.opacity(0.8)), lineWidth: 3)
+                    context.stroke(ticks, with: .color(.white.opacity(0.8)), lineWidth: 1)
+                }
+                .frame(height: 68).offset(y: 24)
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Keyframe candidates: \(offsets.count)"))
+                .accessibilityIdentifier("stitching.keyframeMarkers")
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
                 Text(item.name).font(.caption).lineLimit(1).padding(.horizontal, 12).padding(.top, 4)
                 StitchingClipWaveform(item: item, assets: assets, visualScale: waveformVisualScale,
                                       visibleRange: visibleRange)

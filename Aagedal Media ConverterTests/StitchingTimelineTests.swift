@@ -69,6 +69,50 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertNil(StitchingTimeline.nearestKeyframe(3, in: [], bounds: 0...6))
     }
 
+    func testKeyframeTicksFollowTrimAndVisibleSourceRange() {
+        let times = [0.0, 2, 4, 6, 8, 10, 12]
+        XCTAssertEqual(StitchingTimeline.keyframeTickOffsets(
+            in: times, sourceStart: 3, duration: 5, scale: 20, visibleRange: 30...100
+        ), [60, 100])
+        XCTAssertTrue(StitchingTimeline.keyframeTickOffsets(
+            in: times, sourceStart: 3, duration: 5, scale: 20, visibleRange: 120...150
+        ).isEmpty)
+        XCTAssertTrue(StitchingTimeline.keyframeTickOffsets(
+            in: times, sourceStart: 3, duration: 5, scale: 20, visibleRange: 0...0
+        ).isEmpty)
+    }
+
+    func testAllIntraKeyframeTicksRequireReadableZoomIncludingViewportEdges() {
+        let times = (0...250).map { Double($0) / 25 }
+        XCTAssertTrue(StitchingTimeline.keyframeTickOffsets(
+            in: times, sourceStart: 0, duration: 10, scale: 20, visibleRange: 0...200
+        ).isEmpty)
+        // A tiny visible slice must still consider neighbors outside the viewport.
+        XCTAssertTrue(StitchingTimeline.keyframeTickOffsets(
+            in: times, sourceStart: 0, duration: 10, scale: 20, visibleRange: 99.9...100.1
+        ).isEmpty)
+        let offsets = StitchingTimeline.keyframeTickOffsets(
+            in: times, sourceStart: 0, duration: 10, scale: 250, visibleRange: 100...130
+        )
+        XCTAssertEqual(offsets.count, 4)
+        for (offset, expected) in zip(offsets, [100.0, 110, 120, 130]) {
+            XCTAssertEqual(offset, expected, accuracy: 0.000001)
+        }
+    }
+
+    func testKeyframeTicksHideDenseClustersWithoutThinningCandidates() {
+        XCTAssertEqual(StitchingTimeline.keyframeTickOffsets(
+            in: [0, 2, 2.1, 4, 6], sourceStart: 0, duration: 6,
+            scale: 20, visibleRange: 0...120
+        ), [0, 80, 120])
+        XCTAssertTrue(StitchingTimeline.keyframeTickOffsets(
+            in: [0, 2], sourceStart: 0, duration: 2, scale: .nan, visibleRange: 0...100
+        ).isEmpty)
+        XCTAssertTrue(StitchingTimeline.keyframeTickOffsets(
+            in: [], sourceStart: 0, duration: 2, scale: 20, visibleRange: 0...100
+        ).isEmpty)
+    }
+
     func testUndoRedoSplitAndTrimPreservesCurrentMetadata() {
         let source = clip(duration: 60, start: 10, end: 50)
         var items = [source]

@@ -517,6 +517,37 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStitchingKeyframeMarkersDoNotRequireSnapping() throws {
+        launchApp(generatedFixture: true, defaultPreset: "Stream Copy", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+        let snap = app.checkBoxes["Snap trims and ranges to keyframes"]
+        XCTAssertTrue(snap.exists, app.debugDescription)
+        XCTAssertEqual(String(describing: snap.value ?? ""), "0")
+        let markers = app.descendants(matching: .any).matching(identifier: "stitching.keyframeMarkers")
+        let visibleMarkers = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 }
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [visibleMarkers], timeout: 30), .completed,
+                       "Stream Copy must show candidate keyframes while free trimming remains enabled")
+        let timecode = element("stitching.timecode")
+        let duration = (timecode.value as? String) ?? timecode.label
+        snap.click()
+        XCTAssertEqual(String(describing: snap.value ?? ""), "1")
+        snap.click()
+        XCTAssertEqual(String(describing: snap.value ?? ""), "0")
+        XCTAssertEqual((timecode.value as? String) ?? timecode.label, duration)
+        XCTAssertTrue(markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 })
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "stitching-keyframe-candidates-free-trim"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
     func testStitchingRangeDeletionAndUndo() throws {
         launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
         defer { terminateAndCleanFixtures() }
@@ -531,6 +562,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }
         let originalDuration = durationText()
         element("stitching.rangeTool").click()
+        // Other desktop apps can open status-item popovers during this test.
+        // Restore focus before synthesizing the timeline drag.
+        app.activate()
         let start = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.4))
         let end = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.4))
         start.press(forDuration: 0.1, thenDragTo: end)
@@ -1063,6 +1097,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }
         if stitching {
             app.launchEnvironment["AMC_UI_TEST_STITCHING"] = "1"
+            app.launchEnvironment["AMC_UI_TEST_STITCHING_PRESET"] = defaultPreset
         }
         if delayedStitchingLoad {
             app.launchEnvironment["AMC_UI_TEST_DELAY_STITCHING_LOAD"] = "1"

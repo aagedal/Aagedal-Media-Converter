@@ -880,6 +880,24 @@ notice and needs a clean rerun. Investigate the dependency callback lifetime and
 rerun MPV transition/replay checks before treating playback validation as closed.
 The continuation record retains the crash evidence and diagnostic limits.
 
+Follow-up investigation found a matching upstream CoreAudio initialization-failure
+cleanup fix and retained its complete two-commit patch. Independent app-side fixes
+remove MPVPlayer's callback retention cycle and correct 32-bit flag reads. The
+bundled library remains unchanged; its rebuild and crash validation remain a
+release blocker. See the [MPV investigation and rebuild steps](4.5-mpv-lifetime-and-coreaudio-2026-09-21.md).
+
+The next continuation adds zoom-aware keyframe candidates to Stream Copy
+filmstrips, including while snapping is disabled. Dense candidate clusters remain
+hidden, and only the selected clip is scanned until snapping is enabled. Camera
+recording-day grouping now has a tested, transport-independent foundation with
+fixed-timezone day boundaries, explicit missing-date handling, indivisible logical
+recordings, and strictly greater-than-two-hour end-to-start gaps. Automatic card
+splitting remains disabled pending reliable span metadata and import preview UI.
+The full unit suite and focused keyframe UI check pass; MPV replay and
+pause/dismiss pass for this run, while the existing range-deletion drag UI check
+still fails and needs investigation. See the
+[continuation validation record](4.5-keyframes-grouping-mpv-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -1138,6 +1156,14 @@ volume status do not trigger it. Import remains available, and the existing
 folder grant covers both scanning and the off-main-actor volume lookup. Physical
 card and bilingual visual validation remain open.
 
+The grouping foundation is implemented and unit tested, but not connected to
+import. Callers must resolve spans into logical recordings first. It prefers
+camera dates over container dates, never substitutes filesystem dates, uses an
+explicit fixed timezone for the whole import, preserves input order, and keeps
+contiguous undated recordings separate. The importer currently lacks reliable
+span identity/resolution; compatibility grouping and a user-reviewed preview are
+still required before enabling this option.
+
 Remaining:
 
 - Offer optional recording-date splitting during card import, inspired by
@@ -1166,11 +1192,15 @@ drag reordering, undo/redo, scalable waveform envelopes, and source audio meters
 Mono streams share a meter bank; stereo and surround tracks remain separate.
 Waveform decoding now preserves delayed-track alignment with the source meters.
 
+Stream Copy filmstrips now show candidate keyframe ticks when adjacent points
+are at least eight screen points apart. Dense/all-intra clusters remain hidden
+until zoom makes individual points readable; rendering is limited to the visible
+trimmed interval. The selected clip loads candidates independently of snapping,
+so displaying ticks leaves free trimming available. These remain candidate seek
+points, not a guarantee of independently decodable or exact exported boundaries.
+
 Remaining refinements:
 
-- Show discreet keyframe ticks in the clip filmstrip, revealing individual markers
-  only when zoom makes them readable. Preserve the existing optional snapping
-  and free trimming for workflows that will re-encode.
 - When dragging an unsnapped edge, show the requested cut and an estimated export
   boundary/difference. Do not claim the decoded preview is the exact Stream Copy
   output. Existing merge preparation uses input-side `-ss`, `-t`, and `-c copy`.

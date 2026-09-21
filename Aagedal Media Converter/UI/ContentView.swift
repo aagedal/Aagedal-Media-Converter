@@ -1743,7 +1743,8 @@ struct ContentView: View {
             if environment["AMC_UI_TEST_STITCHING"] == "1" {
                 let secondURL = directory.appendingPathComponent("ui-test-second.\(fixtureURL.pathExtension)")
                 try FileManager.default.copyItem(at: fixtureURL, to: secondURL)
-                let context = VideoGroupImportContext(preset: .h264, outputFolder: directory.path)
+                let fixturePreset = ExportPreset(rawValue: environment["AMC_UI_TEST_STITCHING_PRESET"] ?? "") ?? .h264
+                let context = VideoGroupImportContext(preset: fixturePreset, outputFolder: directory.path)
                 var items: [VideoItem] = []
                 for url in [fixtureURL, secondURL] {
                     guard var item = context.makePlaceholder(from: url) else { continue }
@@ -1754,7 +1755,7 @@ struct ContentView: View {
                     item.trimEnd = items.isEmpty ? 3 : 4
                     items.append(item)
                 }
-                let group = EncodingGroup(name: "UI Test Sequence", items: items, preset: .h264)
+                let group = EncodingGroup(name: "UI Test Sequence", items: items, preset: fixturePreset)
                 encodingGroups.append(group)
                 queueOrder.append(group.id)
             } else {

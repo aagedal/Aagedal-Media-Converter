@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Keyframe candidates: %lld" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kandidater for nøkkelbilder: %lld"
+          }
+        }
+      }
+    },
     "DVD subtitle color palette is invalid. OCR requires 16 comma-separated RGB colors with six hexadecimal digits each." : {
       "localizations" : {
         "nb" : {
