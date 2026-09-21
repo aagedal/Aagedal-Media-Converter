@@ -836,6 +836,16 @@ DVD-specific agent cancellation overlap, real recognition/disc media, and UI
 integration remain open. See the
 [VOBSUB extraction validation record](4.5-vobsub-extraction-validation-2026-09-21.md).
 
+DVD extraction now also has bidirectional cancellation/coexistence coverage with
+an agent export. The generated fragmented-packet fixture exercises real bundled
+FFmpeg VOB extraction, controlled OCR publication with three exact display
+intervals, cancellation ownership, source/existing-output preservation, and
+scratch-directory cleanup. A test-only discarded video output and nonzero initial
+burst keep the extraction subprocess active for the overlap assertion. All 20
+focused OCR, VOBSUB, Whisper, and subtitle-mux tests pass. Real disc media,
+recognition accuracy, missing palettes, long tracks, and UI validation remain open.
+See the [active DVD cancellation validation record](4.5-active-dvd-cancellation-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

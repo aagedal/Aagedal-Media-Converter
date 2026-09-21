@@ -534,7 +534,7 @@ private actor CoexistenceWhisperRunner: SubprocessRunning {
         await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 if released { continuation.resume() } else { self.continuation = continuation }
-                started.fulfill()
+                if !released { started.fulfill() }
             }
         } onCancel: {
             self.cancelled.fulfill()
@@ -575,6 +575,16 @@ final class OCRAgentCoexistenceTests: XCTestCase {
     }
 
     @MainActor
+    func testActiveDVDExtractionCancellationPreservesRunningAgentExport() async throws {
+        try await checkCoexistence(cancelAgent: false, cancelDuringExtraction: true, useDVD: true)
+    }
+
+    @MainActor
+    func testAgentCancellationPreservesActiveDVDExtractionAndOCRPublication() async throws {
+        try await checkCoexistence(cancelAgent: true, cancelDuringExtraction: true, useDVD: true)
+    }
+
+    @MainActor
     func testAgentCancellationPreservesRealTesseractOCRPublication() async throws {
         try await checkCoexistence(cancelAgent: true, useRealTesseract: true)
     }
@@ -587,16 +597,35 @@ final class OCRAgentCoexistenceTests: XCTestCase {
     @MainActor
     private func checkCoexistence(
         cancelAgent: Bool, cancelDuringExtraction: Bool = false, useRealTesseract: Bool = false,
-        failOCR: Bool = false
+        failOCR: Bool = false, useDVD: Bool = false
     ) async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OCRAgentCoexistence-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let source = directory.appendingPathComponent("source.mkv")
-        let subtitleFixture = directory.appendingPathComponent("fixture.sup")
-        try (useRealTesseract ? CoexistencePGSFixture.readableData() : CoexistencePGSFixture.data)
-            .write(to: subtitleFixture)
+        let fixtureDirectory = directory.appendingPathComponent("fixture", isDirectory: true)
+        try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
+        let subtitleFixture: URL
+        if useDVD {
+            subtitleFixture = try CoexistenceDVDFixture.writeFixture(
+                packet: CoexistenceDVDFixture.fixture(padding: 4096), directory: fixtureDirectory
+            )
+            let header = try String(contentsOf: subtitleFixture, encoding: .utf8)
+            let sub = fixtureDirectory.appendingPathComponent("fixture.sub")
+            let packet = try Data(contentsOf: sub)
+            try (packet + packet + packet).write(to: sub)
+            let additionalTimestamps = [200, 400].enumerated().map { index, milliseconds in
+                String(format: "\ntimestamp: 00:00:00:%03d, filepos: %09X", milliseconds,
+                       packet.count * (index + 1))
+            }.joined()
+            try (header.replacingOccurrences(of: "00:00:02:000", with: "00:00:00:000")
+                 + additionalTimestamps).write(to: subtitleFixture, atomically: true, encoding: .utf8)
+        } else {
+            subtitleFixture = fixtureDirectory.appendingPathComponent("fixture.sup")
+            try (useRealTesseract ? CoexistencePGSFixture.readableData() : CoexistencePGSFixture.data)
+                .write(to: subtitleFixture)
+        }
         let existingSRT = directory.appendingPathComponent("source.srt")
         let existingBytes = Data("Existing subtitles".utf8)
         try existingBytes.write(to: existingSRT)
@@ -610,7 +639,7 @@ final class OCRAgentCoexistenceTests: XCTestCase {
             timeout: .seconds(15)
         ))
         XCTAssertTrue(generated.succeeded, generated.standardErrorText)
-        try FileManager.default.removeItem(at: subtitleFixture)
+        try FileManager.default.removeItem(at: fixtureDirectory)
         let sourceBytes = try Data(contentsOf: source)
         let ocrStarted = expectation(description: "OCR recognition is outstanding")
         let ocrCancelled = expectation(description: "OCR engine received cancellation")
@@ -620,13 +649,13 @@ final class OCRAgentCoexistenceTests: XCTestCase {
             ? expectation(description: "Real subtitle extraction reported FFmpeg progress") : nil
         let recognizer = CoexistenceOCREngine(started: ocrStarted, cancelled: ocrCancelled,
                                                useRealTesseract: useRealTesseract, failOCR: failOCR)
-        let extractor = CoexistenceLivePGSRunner(started: extractionStarted)
+        let extractor = CoexistenceLiveBitmapSubtitleRunner(started: extractionStarted, paceVideo: useDVD)
         let ocr = TesseractService(subprocessRunner: extractor, ocrEngine: recognizer)
         let operationID = UUID()
         let recognition = Task {
             try await ocr.generateSubtitlesOnly(
                 sourceFile: source, operationID: operationID, subtitleStreamIndex: 0,
-                codec: "hdmv_pgs_subtitle", language: "eng", engineKind: .appleVision
+                codec: useDVD ? "dvd_subtitle" : "hdmv_pgs_subtitle", language: "eng", engineKind: .appleVision
             ) { _ in }
         }
         if let extractionStarted {
@@ -710,7 +739,14 @@ final class OCRAgentCoexistenceTests: XCTestCase {
                 subtitleOutputs = [output]
                 XCTAssertEqual(output.lastPathComponent, "source.ocr.srt")
                 let expectedText = useRealTesseract ? "Media subtitle" : "OCR result"
-                XCTAssertEqual(try Data(contentsOf: output), Data("1\n00:00:00,000 --> 00:00:01,000\n\(expectedText)\n".utf8))
+                let expectedIntervals = useDVD
+                    ? ["00:00:00,512 --> 00:00:01,536", "00:00:00,712 --> 00:00:01,736",
+                       "00:00:00,912 --> 00:00:01,936"]
+                    : ["00:00:00,000 --> 00:00:01,000"]
+                let expectedSRT = expectedIntervals.enumerated().map { index, interval in
+                    "\(index + 1)\n\(interval)\n\(expectedText)\n"
+                }.joined(separator: "\n")
+                XCTAssertEqual(try Data(contentsOf: output), Data(expectedSRT.utf8))
                 await fulfillment(of: [ocrCancelled], timeout: 0.1)
             } else {
                 let output = try XCTUnwrap(record?.outputURLs.first)
@@ -746,13 +782,17 @@ final class OCRAgentCoexistenceTests: XCTestCase {
 }
 
 /// Records scratch output while extracting the real MKV track with bundled FFmpeg.
-private actor CoexistenceLivePGSRunner: SubprocessRunning {
+private actor CoexistenceLiveBitmapSubtitleRunner: SubprocessRunning {
     private var output: URL?
     private let started: XCTestExpectation?
+    private let paceVideo: Bool
     private(set) var isRunning = false
     private(set) var wasCancelled = false
 
-    init(started: XCTestExpectation? = nil) { self.started = started }
+    init(started: XCTestExpectation? = nil, paceVideo: Bool = false) {
+        self.started = started
+        self.paceVideo = paceVideo
+    }
 
     func outputURL() -> URL? { output }
 
@@ -766,10 +806,13 @@ private actor CoexistenceLivePGSRunner: SubprocessRunning {
         let readiness = started.map { MuxProgressReadiness(expectation: $0) }
         if readiness != nil {
             // Slow actual demuxing so the agent starts while extraction is still active.
+            // Subtitle-only DVD extraction does not honor read-rate pacing here.
+            // A discarded video output keeps the same demuxer alive at the test rate.
+            let pacingOutput = paceVideo ? ["-map", "0:v:0", "-c:v", "copy", "-f", "null", "-"] : []
             paced = SubprocessRequest(
                 executableURL: request.executableURL,
-                arguments: ["-readrate", "0.1", "-readrate_initial_burst", "0",
-                            "-progress", "pipe:1", "-stats_period", "0.05"] + request.arguments,
+                arguments: ["-readrate", "0.1", "-readrate_initial_burst", paceVideo ? "0.001" : "0",
+                            "-progress", "pipe:1", "-stats_period", "0.05"] + request.arguments + pacingOutput,
                 timeout: .seconds(30),
                 standardOutputCaptureLimit: request.standardOutputCaptureLimit,
                 standardErrorCaptureLimit: request.standardErrorCaptureLimit,
@@ -891,7 +934,7 @@ private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
         await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 if released { continuation.resume() } else { self.continuation = continuation }
-                started.fulfill()
+                if !released { started.fulfill() }
             }
         } onCancel: {
             self.cancelled.fulfill()
@@ -919,7 +962,7 @@ private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
 
 final class VOBSUBParserTests: XCTestCase {
     func testDVDControlChainTimingPaletteAndVariableLengthRuns() throws {
-        let frames = try parse(packet: fixture())
+        let frames = try parse(packet: CoexistenceDVDFixture.fixture())
         let frame = try XCTUnwrap(frames.first)
         XCTAssertEqual(frames.count, 1)
         XCTAssertEqual(frame.startTime, 2.512, accuracy: 0.0001)
@@ -942,7 +985,7 @@ final class VOBSUBParserTests: XCTestCase {
     }
 
     func testPreservesPaletteAlpha() throws {
-        var packet = fixture()
+        var packet = CoexistenceDVDFixture.fixture()
         packet[21] = 0xF8 // White opaque, blue 8/15 alpha.
         packet[22] = 0x40 // Green 4/15 alpha, red transparent.
         let frame = try XCTUnwrap(try parse(packet: packet).first)
@@ -955,19 +998,19 @@ final class VOBSUBParserTests: XCTestCase {
     }
 
     func testRejectsBackwardControlLinkAndTruncatedPacket() throws {
-        var packet = fixture()
+        var packet = CoexistenceDVDFixture.fixture()
         packet[14] = 0
         packet[15] = 4 // First block points backward into pixel data.
         XCTAssertTrue(try parse(packet: packet).isEmpty)
-        XCTAssertTrue(try parse(packet: Array(fixture().dropLast())).isEmpty)
+        XCTAssertTrue(try parse(packet: Array(CoexistenceDVDFixture.fixture().dropLast())).isEmpty)
     }
 
     func testRejectsRunBeyondRowAndTruncatedPixelData() throws {
-        var packet = fixture()
+        var packet = CoexistenceDVDFixture.fixture()
         // A run of 255 pixels followed by another 255 exceeds the 300-pixel row.
         packet.replaceSubrange(4..<8, with: [0x03, 0xFC, 0x03, 0xFC])
         XCTAssertTrue(try parse(packet: packet).isEmpty)
-        packet = fixture()
+        packet = CoexistenceDVDFixture.fixture()
         packet[33] = 0
         packet[34] = 11 // Odd field starts with only one byte before the controls.
         XCTAssertTrue(try parse(packet: packet).isEmpty)
@@ -982,9 +1025,9 @@ final class VOBSUBParserTests: XCTestCase {
         let second = directory.appendingPathComponent("second", isDirectory: true)
         try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
-        let firstIDX = try writeFixture(packet: fixture(), directory: first)
+        let firstIDX = try CoexistenceDVDFixture.writeFixture(packet: CoexistenceDVDFixture.fixture(), directory: first)
         // Force FFmpeg to fragment the selected SPU across several PES packets.
-        let secondIDX = try writeFixture(packet: fixture(padding: 4096), directory: second)
+        let secondIDX = try CoexistenceDVDFixture.writeFixture(packet: CoexistenceDVDFixture.fixture(padding: 4096), directory: second)
         let originalHeader = try String(contentsOf: secondIDX, encoding: .utf8)
         try originalHeader.replacingOccurrences(of: "00:00:02:000", with: "00:00:07:000")
             .replacingOccurrences(of: "ff0000, 00ff00", with: "ffff00, 00ff00")
@@ -1029,7 +1072,18 @@ final class VOBSUBParserTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: source), originalSource)
     }
 
-    private func fixture(padding: Int = 0) -> [UInt8] {
+    private func parse(packet: [UInt8]) throws -> [SubtitleFrame] {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("VOBSUBParser-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let idx = try CoexistenceDVDFixture.writeFixture(packet: packet, directory: directory)
+        return try VOBSUBParser.parse(idxURL: idx, subURL: directory.appendingPathComponent("fixture.sub"))
+    }
+}
+
+private enum CoexistenceDVDFixture {
+    static func fixture(padding: Int = 0) -> [UInt8] {
         // Even row: 1 red, 3 green, 12 blue, 70 white, then red to end-of-line.
         // Odd row: green to end-of-line. Exercises all four RLE code lengths.
         let pixels: [UInt8] = [0x4D, 0x32, 0x01, 0x1B, 0, 0, 0, 1]
@@ -1045,18 +1099,9 @@ final class VOBSUBParserTests: XCTestCase {
             + word(135) + word(stopControl) + [0x02, 0xFF]
     }
 
-    private func word(_ value: Int) -> [UInt8] { [UInt8(value >> 8), UInt8(value & 255)] }
+    static func word(_ value: Int) -> [UInt8] { [UInt8(value >> 8), UInt8(value & 255)] }
 
-    private func parse(packet: [UInt8]) throws -> [SubtitleFrame] {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("VOBSUBParser-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let idx = try writeFixture(packet: packet, directory: directory)
-        return try VOBSUBParser.parse(idxURL: idx, subURL: directory.appendingPathComponent("fixture.sub"))
-    }
-
-    private func writeFixture(packet: [UInt8], directory: URL) throws -> URL {
+    static func writeFixture(packet: [UInt8], directory: URL) throws -> URL {
         let idx = directory.appendingPathComponent("fixture.idx")
         let sub = directory.appendingPathComponent("fixture.sub")
         try """
