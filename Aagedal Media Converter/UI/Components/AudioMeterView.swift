@@ -212,3 +212,142 @@ private struct LevelBar: View {
         )
     }
 }
+
+/// Source-channel peaks at the playhead. This never enables system-audio capture.
+struct SourceAudioMeterPanel: View {
+    @ObservedObject var controller: PreviewPlayerController
+    let item: VideoItem
+    let time: Double
+    let isPlaying: Bool
+    let onSelectTrack: (Int) -> Void
+    @State private var metadata: VideoMetadata?
+    @State private var chunk: SourceAudioMeterChunk?
+    @State private var cache = SourceAudioMeterCache()
+    @State private var isLoading = false
+    @State private var failed = false
+
+    private var streamIndex: Int? {
+        let position = controller.selectedAudioTrackOrderIndex
+        guard controller.audioTrackOptions.indices.contains(position) else { return nil }
+        return controller.audioTrackOptions[position].streamIndex
+    }
+
+    private var stream: VideoMetadata.AudioStream? {
+        guard let streamIndex, let streams = (item.metadata ?? metadata)?.audioStreams,
+              streams.indices.contains(streamIndex) else { return nil }
+        return streams[streamIndex]
+    }
+
+    private var request: SourceAudioMeterRequest? {
+        guard let streamIndex, let channels = stream?.channels, channels > 0,
+              time.isFinite, time >= 0 else { return nil }
+        return SourceAudioMeterRequest(url: item.url, track: streamIndex, channels: channels,
+                                       window: Int(time / SourceAudioMeterRequest.windowDuration))
+    }
+
+    private var labels: [String] {
+        guard let channels = stream?.channels else { return [] }
+        return Array(NativeWaveformRenderer.channelNames(count: channels, layout: stream?.channelLayout).prefix(8))
+    }
+
+    private var levels: [Float] {
+        guard isPlaying, let request, chunk?.request == request else {
+            return Array(repeating: -60, count: labels.count)
+        }
+        return chunk?.levels(at: time) ?? []
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Text("Source dBFS").font(.caption)
+                .help("Sample peaks for the selected source track, before playback volume and speaker downmixing.")
+            GeometryReader { geometry in
+                HStack(alignment: .top, spacing: 4) {
+                    VStack {
+                        Text("0")
+                        Spacer()
+                        Text("−20")
+                        Spacer()
+                        Text("−40")
+                        Spacer()
+                        Text("−60")
+                    }
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 16)
+                    ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+                        VStack(spacing: 3) {
+                            LevelBar(level: levels.indices.contains(index) ? levels[index] : -60,
+                                     range: -60...0, height: max(10, geometry.size.height - 16))
+                            Text(labels.count == 2 ? (index == 0 ? "L" : "R") : "\(index + 1)")
+                                .font(.system(size: 8, design: .monospaced)).lineLimit(1)
+                                .help(label)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Channel \(index + 1): \(label)")
+                        .accessibilityValue(levels.indices.contains(index) && levels[index] > -60
+                                            ? "\(Int(levels[index])) dBFS" : "Silent")
+                    }
+                }
+            }
+            .frame(minHeight: 70)
+            .overlay {
+                if isLoading { ProgressView().controlSize(.small) }
+                else if failed { Text("Meter unavailable").font(.caption2) }
+                else if labels.isEmpty { Text("No audio channels").font(.caption2) }
+            }
+            if (stream?.channels ?? 0) > 8 {
+                Text("Channels 1–8 of \(stream?.channels ?? 0)").font(.caption2)
+            }
+            Picker("Track", selection: Binding(
+                get: { controller.selectedAudioTrackOrderIndex },
+                set: onSelectTrack
+            )) {
+                ForEach(controller.audioTrackOptions) { option in
+                    Text(option.title).tag(option.position)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .disabled(controller.audioTrackOptions.count < 2)
+            .accessibilityLabel("Meter and preview audio track")
+            .accessibilityIdentifier("stitching.audioTrack")
+            .help("Select the audio track for preview playback and metering.")
+        }
+        .padding(8)
+        .frame(width: 156)
+        .background(Color.black.opacity(0.65))
+        .accessibilityIdentifier("stitching.audioMeter")
+        .task(id: item.url) {
+            metadata = nil
+            if item.metadata == nil {
+                let result = try? await BoundedVideoMetadataProbe.metadata(for: item.url)
+                guard !Task.isCancelled else { return }
+                metadata = result
+            }
+        }
+        .task(id: request) {
+            chunk = nil
+            failed = false
+            guard let request else { isLoading = false; return }
+            isLoading = true
+            do {
+                let loaded = try await cache.load(request)
+                guard !Task.isCancelled else { return }
+                chunk = loaded
+                isLoading = false
+                // Warm both neighbors for forward playback, reverse shuttle and seeks.
+                if request.start + SourceAudioMeterRequest.windowDuration < item.durationSeconds {
+                    _ = try? await cache.load(request.adjacent(1))
+                }
+                guard !Task.isCancelled else { return }
+                if request.window > 0 { _ = try? await cache.load(request.adjacent(-1)) }
+            } catch {
+                guard !Task.isCancelled else { return }
+                isLoading = false
+                failed = true
+            }
+        }
+    }
+}

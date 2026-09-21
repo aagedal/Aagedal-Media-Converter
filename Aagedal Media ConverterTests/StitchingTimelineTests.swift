@@ -441,3 +441,76 @@ final class GroupEditorWindowLayoutTests: XCTestCase {
         XCTAssertEqual(GroupEditorWindowLayout.fittedFrame(initial, within: screen), screen)
     }
 }
+
+final class SourceAudioMeterTests: XCTestCase {
+    func testEightChannelPeaksAreIndependentAndUseDBFS() {
+        let request = SourceAudioMeterRequest(url: URL(fileURLWithPath: "/tmp/meter.wav"),
+                                             track: 1, channels: 8, window: 0)
+        let channelSamples: [Float] = [1, 0.5, 0.25, 0.125, 0, -0.5, .nan, .infinity]
+        let samples = (0..<480).flatMap { _ in channelSamples }
+        let chunk = SourceAudioMeterChunk(request: request, pcm: samples.withUnsafeBytes { Data($0) })
+        let levels = chunk.levels(at: 0)
+        XCTAssertEqual(levels.count, 8)
+        XCTAssertEqual(levels[0], 0, accuracy: 0.001)
+        XCTAssertEqual(levels[1], -6.0206, accuracy: 0.001)
+        XCTAssertEqual(levels[2], -12.0412, accuracy: 0.001)
+        XCTAssertEqual(levels[3], -18.0618, accuracy: 0.001)
+        XCTAssertEqual(levels[4], -60)
+        XCTAssertEqual(levels[5], -6.0206, accuracy: 0.001)
+        XCTAssertEqual(levels[6], -60)
+        XCTAssertEqual(levels[7], -60)
+    }
+
+    func testSeekingOutsideDecodedWindowReturnsSilence() {
+        let request = SourceAudioMeterRequest(url: URL(fileURLWithPath: "/tmp/meter.wav"),
+                                             track: 0, channels: 1, window: 1)
+        let samples = Array(repeating: Float(1), count: 480)
+        let chunk = SourceAudioMeterChunk(request: request, pcm: samples.withUnsafeBytes { Data($0) })
+        XCTAssertEqual(chunk.levels(at: 8), [0])
+        for time in [0.0, 7.99, 8.5, 16, .nan, .infinity] {
+            XCTAssertEqual(chunk.levels(at: time), [-60])
+        }
+    }
+
+    func testDecoderSelectsAudioOrdinalWithoutDownmixing() {
+        let request = SourceAudioMeterRequest(url: URL(fileURLWithPath: "/tmp/meter.mkv"),
+                                             track: 2, channels: 6, window: 2)
+        let arguments = SourceAudioMeterDecoder.arguments(for: request)
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "-map")! + 1], "0:a:2")
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "-ss")! + 1], "16.0")
+        XCTAssertFalse(arguments.contains("-ac"))
+        XCTAssertFalse(arguments.joined().contains("pan="))
+        let many = SourceAudioMeterRequest(url: request.url, track: 1, channels: 16, window: 0)
+        XCTAssertEqual(many.displayedChannels, 8)
+        XCTAssertTrue(SourceAudioMeterDecoder.arguments(for: many).joined().contains("pan=8c|c0=c0|c1=c1"))
+    }
+
+    func testDecodedMultitrackFixtureHasSeparateSourceLevels() async throws {
+        let path = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("meter.mkv")
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: path),
+            arguments: ["-hide_banner", "-loglevel", "error", "-nostdin",
+                        "-f", "lavfi", "-i", "aevalsrc=0.5|0.25:s=48000:d=10:c=stereo",
+                        "-itsoffset", "0.5", "-f", "lavfi", "-i", "aevalsrc=0.1|0.2|0.3|0.4|0.5|0.6|0.7|0.8:s=48000:d=10:c=7.1",
+                        "-map", "0:a", "-map", "1:a", "-c:a", "pcm_f32le", "-y", url.path],
+            timeout: .seconds(20)
+        ))
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+        let stereo = try await SourceAudioMeterDecoder.decode(.init(url: url, track: 0, channels: 2, window: 0))
+        XCTAssertEqual(stereo.levels(at: 1)[0], -6.0206, accuracy: 0.01)
+        XCTAssertEqual(stereo.levels(at: 1)[1], -12.0412, accuracy: 0.01)
+        let delayed = try await SourceAudioMeterDecoder.decode(.init(url: url, track: 1, channels: 8, window: 0))
+        XCTAssertEqual(delayed.levels(at: 0.1), Array(repeating: -60, count: 8))
+        XCTAssertEqual(delayed.levels(at: 0.75)[0], -20, accuracy: 0.01)
+        let surround = try await SourceAudioMeterDecoder.decode(.init(url: url, track: 1, channels: 8, window: 1))
+        let levels = surround.levels(at: 9)
+        XCTAssertEqual(levels.count, 8)
+        for index in 0..<8 {
+            XCTAssertEqual(levels[index], 20 * log10(Float(index + 1) / 10), accuracy: 0.01)
+        }
+    }
+}

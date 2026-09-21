@@ -137,7 +137,7 @@ final class PreviewPlayerController: ObservableObject {
     var primaryAccess: SecurityScopedAccess = .none
     var imageSequenceAudioAccess: SecurityScopedAccess = .none
     weak var playerView: AVPlayerView?
-    var selectedAudioTrackOrderIndex: Int = 0
+    @Published var selectedAudioTrackOrderIndex: Int = 0
     var selectedSubtitleTrackOrderIndex: Int = -1  // -1 means subtitles disabled
 
     // MARK: - Audio Monitoring
@@ -1074,7 +1074,7 @@ final class PreviewPlayerController: ObservableObject {
                 AudioTrackOption(
                     id: Int(trackID),
                     position: position,
-                    streamIndex: Int(trackID) - 1, // MPV track IDs are 1-based, waveforms are 0-based
+                    streamIndex: position, // Audio ordinal; MPV IDs need not be contiguous.
                     mediaOptionIndex: nil,
                     title: name,
                     subtitle: nil

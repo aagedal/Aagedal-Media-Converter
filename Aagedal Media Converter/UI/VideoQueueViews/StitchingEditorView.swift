@@ -261,6 +261,7 @@ struct StitchingEditorView<FileList: View>: View {
     @State private var sourceTime: Double = 0
     @State private var seekRequest = StitchingSeek(time: 0)
     @State private var isPlaying = false
+    @State private var previewAudioTrack = 0
     // Display preference only: never stored in the encoding group or audio settings.
     @AppStorage("stitchingWaveformVisualScale") private var waveformVisualScale: Double = 4
     @State private var shuttleRate: Float = 1
@@ -320,7 +321,7 @@ struct StitchingEditorView<FileList: View>: View {
                     ZStack {
                         StitchingSequencePreview(
                             item: itemBinding(item), initialTime: item.id == selectedID ? sourceTime : item.effectiveTrimStart,
-                            seekRequest: seekRequest, isPlaying: $isPlaying, shuttleRate: shuttleRate,
+                            seekRequest: seekRequest, isPlaying: $isPlaying, audioTrack: $previewAudioTrack, shuttleRate: shuttleRate,
                             onTime: { time in if selectedIndex.map({ group.items[$0].id }) == item.id { sourceTime = time } },
                             onTogglePlayback: togglePlayback,
                             onShuttle: shuttle,
@@ -1251,6 +1252,7 @@ private struct StitchingSequencePreview: View {
     let initialTime: Double
     let seekRequest: StitchingSeek
     @Binding var isPlaying: Bool
+    @Binding var audioTrack: Int
     let shuttleRate: Float
     let onShuttle: (Int) -> Void
     let onTime: (Double) -> Void
@@ -1274,12 +1276,13 @@ private struct StitchingSequencePreview: View {
     @State private var requestedTime: Double
     @State private var preparedID: UUID?
 
-    init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, shuttleRate: Float,
+    init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, audioTrack: Binding<Int>, shuttleRate: Float,
          onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onDeleteRange: @escaping () -> Void, onClearRange: @escaping () -> Bool, onToggleRange: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
         _item = item
         self.initialTime = initialTime
         self.seekRequest = seekRequest
         _isPlaying = isPlaying
+        _audioTrack = audioTrack
         self.shuttleRate = shuttleRate
         self.onShuttle = onShuttle
         self.onTime = onTime
@@ -1303,6 +1306,21 @@ private struct StitchingSequencePreview: View {
     }
 
     var body: some View {
+        HStack(spacing: 0) {
+            preview
+            SourceAudioMeterPanel(controller: controller, item: item, time: requestedTime,
+                                  isPlaying: isPlaying && controller.isReady) { position in
+                // Preserve sequence/shuttle intent without the controller's delayed
+                // toggle-to-resume, which could restart playback after a user pause.
+                controller.pause()
+                controller.selectAudioTrack(at: position)
+                audioTrack = position
+                playIfReady()
+            }
+        }
+    }
+
+    private var preview: some View {
         PreviewPlayerContent(item: $item, controller: controller, showsPlaybackControls: false,
                              togglePlaybackControls: {}, keyHandler: { key, modifiers, _ in
             guard item.status != .converting,
@@ -1358,7 +1376,8 @@ private struct StitchingSequencePreview: View {
             active = true
             preparedID = item.id
             controller.playbackDidFinish = finish
-            controller.preparePreview(startTime: initialTime)
+            controller.selectedAudioTrackOrderIndex = audioTrack
+            controller.preparePreview(startTime: initialTime, resetAudioSelection: false)
         }
         .onDisappear {
             active = false

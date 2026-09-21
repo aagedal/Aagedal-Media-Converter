@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		896FB28C461E44B297193476 /* SourceAudioMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD5A34CD8CE549C08F9DDEFF /* SourceAudioMeter.swift */; };
 		A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */; };
 		A4591900000000000000000D /* StitchMarkerExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000C /* StitchMarkerExport.swift */; };
 		A4591900000000000000000B /* StitchMarkerTimecodeRate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */; };
@@ -367,6 +368,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BD5A34CD8CE549C08F9DDEFF /* SourceAudioMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceAudioMeter.swift; sourceTree = "<group>"; };
 		A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleAgentCoexistenceTests.swift; sourceTree = "<group>"; };
 		A4591900000000000000000C /* StitchMarkerExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerExport.swift; sourceTree = "<group>"; };
 		A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerTimecodeRate.swift; sourceTree = "<group>"; };
@@ -1283,6 +1285,7 @@
 		8EEE45382EC13B670049F017 /* Previews */ = {
 			isa = PBXGroup;
 			children = (
+				BD5A34CD8CE549C08F9DDEFF /* SourceAudioMeter.swift */,
 				8EA1B0002F0E8A000049F017 /* NativeWaveformRenderer.swift */,
 				8EEE451B2EBF4BFD0049F017 /* PreviewAssetGenerator.swift */,
 				8E09F7412EC27EDA00E129CD /* PreviewCacheCleanupPolicy.swift */,
@@ -1772,6 +1775,7 @@
 				00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */,
 				DCAB5042D7F99ED919EF7D29 /* WaveformFramePipeWriter.swift in Sources */,
 				8EEE451C2EBF4BFD0049F017 /* PreviewAssetGenerator.swift in Sources */,
+				896FB28C461E44B297193476 /* SourceAudioMeter.swift in Sources */,
 				8EA1B0012F0E8A000049F017 /* NativeWaveformRenderer.swift in Sources */,
 				8E545D892C34030C0088C274 /* VideoFileListView.swift in Sources */,
 				GRPEDITWIN000002 /* GroupEditorWindow.swift in Sources */,
