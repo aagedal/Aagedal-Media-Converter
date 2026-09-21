@@ -26,9 +26,61 @@ enum VOBSUBParser {
         let palette = parsePalette(from: idxText)
         let entries = parseIDXEntries(from: idxText)
 
+        return try decodeFrames(subData: subData, palette: palette, entries: entries)
+    }
+
+    /// Reads the selected DVD subtitle stream from FFmpeg’s MPEG-2 program stream.
+    /// The separately dumped codec header retains the original RGB palette.
+    static func parse(programStreamURL: URL, paletteURL: URL) throws -> [SubtitleFrame] {
+        let data = try Data(contentsOf: programStreamURL)
+        let header = try String(contentsOf: paletteURL, encoding: .utf8)
+        var entries: [IDXEntry] = []
+        var offset = 0
+        while offset + 4 <= data.count {
+            try Task.checkCancellation()
+            guard data[offset] == 0, data[offset + 1] == 0, data[offset + 2] == 1 else {
+                offset += 1
+                continue
+            }
+            let streamID = data[offset + 3]
+            if streamID == 0xBA {
+                guard offset + 14 <= data.count, data[offset + 4] & 0xC0 == 0x40 else { break }
+                offset += 14 + Int(data[offset + 13] & 7)
+                continue
+            }
+            if streamID == 0xB9 { break }
+            guard offset + 6 <= data.count else { break }
+            let start = offset + 6
+            let end = start + Int(readUInt16BE(data, at: offset + 4))
+            guard end <= data.count else { break }
+            if streamID == 0xBD, start + 8 <= end,
+               data[start] & 0xC0 == 0x80, data[start + 1] & 0x80 != 0,
+               data[start + 2] >= 5 {
+                let payload = start + 3 + Int(data[start + 2])
+                if payload < end, data[payload] & 0xE0 == 0x20 {
+                    let pts = start + 3
+                    guard data[pts] & 1 == 1, data[pts + 2] & 1 == 1,
+                          data[pts + 4] & 1 == 1 else { break }
+                    let ticks = (UInt64(data[pts] & 0x0E) << 29)
+                        | (UInt64(data[pts + 1]) << 22)
+                        | (UInt64(data[pts + 2] & 0xFE) << 14)
+                        | (UInt64(data[pts + 3]) << 7)
+                        | UInt64(data[pts + 4] >> 1)
+                    entries.append(IDXEntry(timestampMs: Int(ticks / 90), offset: offset))
+                }
+            }
+            offset = end
+        }
+        return try decodeFrames(subData: data, palette: parsePalette(from: header), entries: entries)
+    }
+
+    private static func decodeFrames(
+        subData: Data, palette: [(r: UInt8, g: UInt8, b: UInt8)], entries: [IDXEntry]
+    ) throws -> [SubtitleFrame] {
         var frames: [SubtitleFrame] = []
 
         for (idx, entry) in entries.enumerated() {
+            try Task.checkCancellation()
             let nextOffset = idx + 1 < entries.count ? entries[idx + 1].offset : subData.count
             let packet = extractSubtitlePacket(from: subData, at: entry.offset, end: nextOffset)
             guard let packet else { continue }

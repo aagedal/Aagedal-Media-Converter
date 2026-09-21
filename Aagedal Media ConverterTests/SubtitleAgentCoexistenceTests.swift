@@ -973,10 +973,67 @@ final class VOBSUBParserTests: XCTestCase {
         XCTAssertTrue(try parse(packet: packet).isEmpty)
     }
 
-    private func fixture() -> [UInt8] {
+    func testSelectedDVDTrackExtractionAndSRTPublication() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DVDExtraction-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = directory.appendingPathComponent("first", isDirectory: true)
+        let second = directory.appendingPathComponent("second", isDirectory: true)
+        try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
+        let firstIDX = try writeFixture(packet: fixture(), directory: first)
+        // Force FFmpeg to fragment the selected SPU across several PES packets.
+        let secondIDX = try writeFixture(packet: fixture(padding: 4096), directory: second)
+        let originalHeader = try String(contentsOf: secondIDX, encoding: .utf8)
+        try originalHeader.replacingOccurrences(of: "00:00:02:000", with: "00:00:07:000")
+            .replacingOccurrences(of: "ff0000, 00ff00", with: "ffff00, 00ff00")
+            .write(to: secondIDX, atomically: true, encoding: .utf8)
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let source = directory.appendingPathComponent("source.mkv")
+        let mux = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-y", "-i", firstIDX.path, "-i", secondIDX.path,
+                        "-map", "0:s:0", "-map", "1:s:0", "-c", "copy", source.path],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(mux.succeeded, mux.standardErrorText)
+        let originalSource = try Data(contentsOf: source)
+        let programStream = directory.appendingPathComponent("selected.vob")
+        let palette = directory.appendingPathComponent("palette.txt")
+        try await TesseractSubtitleStreamExtractor().extract(
+            source: source.path, streamIndex: 1, outputPath: programStream.path,
+            palettePath: palette.path, ffmpegPath: ffmpeg
+        )
+        let frames = try VOBSUBParser.parse(programStreamURL: programStream, paletteURL: palette)
+        XCTAssertEqual(frames.count, 1)
+        let frame = try XCTUnwrap(frames.first)
+        XCTAssertEqual(frame.startTime, 7.512, accuracy: 0.001)
+        XCTAssertEqual(frame.endTime, 8.536, accuracy: 0.001)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: frame.imageData))
+        var pixel = [Int](repeating: 0, count: 4)
+        bitmap.getPixel(&pixel, atX: 0, y: 0)
+        XCTAssertEqual(pixel, [255, 255, 0, 255])
+
+        let existing = directory.appendingPathComponent("source.ocr.srt")
+        try "Preserve existing subtitles".write(to: existing, atomically: true, encoding: .utf8)
+        let service = TesseractService(ocrEngine: DVDExtractionOCREngine())
+        let output = try await service.generateSubtitles(
+            sourceFile: source, outputDirectory: directory, operationID: UUID(),
+            subtitleStreamIndex: 1, codec: "dvd_subtitle", language: "eng"
+        ) { _ in }
+        XCTAssertNotEqual(output, existing)
+        XCTAssertEqual(try String(contentsOf: output, encoding: .utf8),
+                       "1\n00:00:07,512 --> 00:00:08,536\nSelected DVD track\n")
+        XCTAssertEqual(try String(contentsOf: existing, encoding: .utf8), "Preserve existing subtitles")
+        XCTAssertEqual(try Data(contentsOf: source), originalSource)
+    }
+
+    private func fixture(padding: Int = 0) -> [UInt8] {
         // Even row: 1 red, 3 green, 12 blue, 70 white, then red to end-of-line.
         // Odd row: green to end-of-line. Exercises all four RLE code lengths.
         let pixels: [UInt8] = [0x4D, 0x32, 0x01, 0x1B, 0, 0, 0, 1]
+            + [UInt8](repeating: 0, count: padding)
         let firstControl = 4 + pixels.count
         let stopControl = firstControl + 24
         let size = stopControl + 6
@@ -995,6 +1052,11 @@ final class VOBSUBParserTests: XCTestCase {
             .appendingPathComponent("VOBSUBParser-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
+        let idx = try writeFixture(packet: packet, directory: directory)
+        return try VOBSUBParser.parse(idxURL: idx, subURL: directory.appendingPathComponent("fixture.sub"))
+    }
+
+    private func writeFixture(packet: [UInt8], directory: URL) throws -> URL {
         let idx = directory.appendingPathComponent("fixture.idx")
         let sub = directory.appendingPathComponent("fixture.sub")
         try """
@@ -1010,6 +1072,16 @@ final class VOBSUBParserTests: XCTestCase {
             ps += [0, 0, 1, 0xBD] + word(chunk.count + 4) + [0x80, 0, 0, 0x20] + chunk
         }
         try Data(ps).write(to: sub)
-        return try VOBSUBParser.parse(idxURL: idx, subURL: sub)
+        return idx
+    }
+}
+
+private struct DVDExtractionOCREngine: BitmapSubtitleOCREngine {
+    func recognize(pngURL: URL, language: String) async throws -> String {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: pngURL)))
+        var pixel = [Int](repeating: 0, count: 4)
+        bitmap.getPixel(&pixel, atX: 0, y: 0)
+        XCTAssertEqual(pixel, [255, 255, 0, 255])
+        return "Selected DVD track"
     }
 }

@@ -826,6 +826,16 @@ that bundled FFmpeg cannot mux, so end-to-end VOBSUB OCR and cancellation
 coexistence remain open. See the
 [VOBSUB parser validation record](4.5-vobsub-parser-validation-2026-09-21.md).
 
+DVD bitmap extraction now uses the supported VOB program-stream muxer and dumps
+selected-stream codec metadata separately to retain its palette. The parser reads
+PES presentation timestamps and reassembles the subtitle packets. A generated
+two-track MKV regression checks selected-track color, exact timing, and SRT
+publication with a controlled recognizer while preserving source/existing output.
+The DVD muxer was rejected after validation exposed its first-timestamp rebasing.
+DVD-specific agent cancellation overlap, real recognition/disc media, and UI
+integration remain open. See the
+[VOBSUB extraction validation record](4.5-vobsub-extraction-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

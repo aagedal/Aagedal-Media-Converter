@@ -71,7 +71,7 @@ enum TesseractServiceError: Error, LocalizedError {
 /// Converts bitmap subtitle streams (PGS/VOBSUB) to SRT using Tesseract OCR.
 ///
 /// Pipeline:
-///   1. FFmpeg extracts the subtitle stream to a temporary .sup or .sub file
+///   1. FFmpeg extracts the subtitle stream to a temporary .sup or DVD program stream
 ///   2. PGSParser / VOBSUBParser decodes frames into SubtitleFrame values
 ///   3. Tesseract OCRs each PNG frame
 ///   4. An SRT file is assembled and written to the output directory
@@ -404,24 +404,27 @@ actor TesseractService {
                 throw TesseractServiceError.parsingFailed(error.localizedDescription)
             }
         } else {
-            // VOBSUB — FFmpeg outputs .sub + .idx
-            let subFile = tempDir.appendingPathComponent("subs.sub")
-            let idxFile = tempDir.appendingPathComponent("subs.idx")
+            // DVD program-stream muxing is supported; VOBSUB pair muxing is not.
+            let subFile = tempDir.appendingPathComponent("subs.vob")
+            let paletteFile = tempDir.appendingPathComponent("palette.txt")
             try await extractStream(
                 source: sourceFile.path,
                 streamIndex: streamIndex,
                 outputPath: subFile.path,
+                palettePath: paletteFile.path,
                 ffmpegPath: ffmpegPath,
                 runID: runID,
                 progress: extractProgress
             )
             progress(TesseractProgress(stage: .parsingFrames, percentage: 0.15))
             guard FileManager.default.fileExists(atPath: subFile.path),
-                  FileManager.default.fileExists(atPath: idxFile.path) else {
-                throw TesseractServiceError.extractionFailed("VOBSUB .sub/.idx files not created")
+                  FileManager.default.fileExists(atPath: paletteFile.path) else {
+                throw TesseractServiceError.extractionFailed("DVD subtitle stream or palette not created")
             }
             do {
-                return try VOBSUBParser.parse(idxURL: idxFile, subURL: subFile)
+                return try VOBSUBParser.parse(programStreamURL: subFile, paletteURL: paletteFile)
+            } catch is CancellationError {
+                throw TesseractServiceError.cancelled
             } catch {
                 throw TesseractServiceError.parsingFailed(error.localizedDescription)
             }
@@ -432,6 +435,7 @@ actor TesseractService {
         source: String,
         streamIndex: Int,
         outputPath: String,
+        palettePath: String? = nil,
         ffmpegPath: String,
         runID: UUID,
         progress: (@Sendable (Double) -> Void)? = nil
@@ -444,6 +448,7 @@ actor TesseractService {
                 source: source,
                 streamIndex: streamIndex,
                 outputPath: outputPath,
+                palettePath: palettePath,
                 ffmpegPath: ffmpegPath,
                 progress: progress
             )
@@ -539,25 +544,27 @@ struct TesseractSubtitleStreamExtractor: Sendable {
         source: String,
         streamIndex: Int,
         outputPath: String,
+        palettePath: String? = nil,
         ffmpegPath: String,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws {
         try Task.checkCancellation()
 
+        let dvdInputOptions = palettePath.map { ["-dump_attachment:s:\(streamIndex)", $0, "-copyts"] } ?? []
+        // The DVD muxer rebases the first PTS to its preload; VOB preserves source timing.
+        let dvdOutputOptions = palettePath == nil ? [] : ["-f", "vob", "-avoid_negative_ts", "disabled"]
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
-            arguments: [
-                "-y",
+            arguments: ["-y"] + dvdInputOptions + [
                 "-i", source,
                 // SwiftMediaMetadata numbers subtitles within their stream type.
                 "-map", "0:s:\(streamIndex)",
-                "-c", "copy",
-                outputPath
-            ],
+                "-c", "copy"
+            ] + dvdOutputOptions + [outputPath],
             timeout: Self.timeout,
             standardOutputCaptureLimit: 0,
             standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
-            sensitiveValues: [source, outputPath]
+            sensitiveValues: Set([source, outputPath] + (palettePath.map { [$0] } ?? []))
         )
         let progressParser = TesseractExtractionProgressParser(progress: progress)
 
