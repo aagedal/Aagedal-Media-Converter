@@ -135,3 +135,54 @@ final class MPVPreviewObservationTests: XCTestCase {
         XCTAssertNil(weakController)
     }
 }
+
+final class MPVWakeupContextTests: XCTestCase {
+    private final class Owner: @unchecked Sendable {}
+
+    @MainActor
+    func testInitializedPlayerReleasesAfterLastOwnerDropsIt() async throws {
+        var player: MPVPlayer? = MPVPlayer()
+        weak var releasedPlayer = player
+        player?.attachDrawable(MPVMetalLayer())
+        XCTAssertNil(player?.error, "The regression must exercise successful MPV initialization")
+        player = nil
+        // Initial property notifications can briefly retain the player in queued
+        // event work. Yield the main actor so those notifications can drain.
+        for _ in 0..<100 where releasedPlayer != nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNil(releasedPlayer, "The registered C callback must not retain its player")
+    }
+
+    func testCallbackContextDoesNotKeepWeakOwnerAlive() {
+        let queue = DispatchQueue(label: "mpv-wakeup-ownership-test")
+        var owner: Owner? = Owner()
+        weak var weakOwner = owner
+        let context = MPVWakeupContext(queue: queue) { [weak owner = owner] in
+            XCTAssertNil(owner)
+        }
+        let rawContext = Unmanaged.passRetained(context).toOpaque()
+        defer { Unmanaged<MPVWakeupContext>.fromOpaque(rawContext).release() }
+        owner = nil
+        XCTAssertNil(weakOwner)
+        Unmanaged<MPVWakeupContext>.fromOpaque(rawContext).takeUnretainedValue().schedule()
+        queue.sync {}
+    }
+
+    func testCallbackSchedulesWorkWithoutRunningInlineAndSurvivesContextRelease() {
+        let queue = DispatchQueue(label: "mpv-wakeup-dispatch-test")
+        let invoked = expectation(description: "Queued callback runs after context release")
+        queue.suspend()
+        var context: MPVWakeupContext? = MPVWakeupContext(queue: queue) {
+            dispatchPrecondition(condition: .onQueue(queue))
+            invoked.fulfill()
+        }
+        weak var weakContext = context
+        // A synchronous callback here would fulfill while the event queue is suspended.
+        context?.schedule()
+        context = nil
+        XCTAssertNil(weakContext)
+        queue.resume()
+        wait(for: [invoked], timeout: 1)
+    }
+}
