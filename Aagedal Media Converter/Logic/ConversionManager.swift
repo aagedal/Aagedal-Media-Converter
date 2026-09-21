@@ -449,6 +449,7 @@ actor ConversionManager: Sendable {
         guard let (segments, temporaryFiles, totalDuration) = await prepareMergeSegments(
             from: orderedWaitingItems,
             durationLookup: durationLookup,
+            decodeTrims: preset != .streamCopy && orderedWaitingItems.contains(where: hasActiveTrim),
             batchID: batchID
         ) else {
             return nil
@@ -526,6 +527,7 @@ actor ConversionManager: Sendable {
     private func prepareMergeSegments(
         from items: [VideoItem],
         durationLookup: [UUID: Double],
+        decodeTrims: Bool,
         batchID: UUID
     ) async -> ([MergeSegment], [URL], Double?)? {
         var segments: [MergeSegment] = []
@@ -544,8 +546,8 @@ actor ConversionManager: Sendable {
                 totalDuration += segmentDuration
             }
 
-            if hasTrim {
-                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID) else {
+            if hasTrim || decodeTrims {
+                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID, decodeTrim: decodeTrims) else {
                     cleanupTemporaryFiles(temporaryFiles)
                     return nil
                 }
@@ -620,13 +622,13 @@ actor ConversionManager: Sendable {
         return false
     }
 
-    private func prepareTrimmedClip(for item: VideoItem, batchID: UUID) async -> URL? {
+    private func prepareTrimmedClip(for item: VideoItem, batchID: UUID, decodeTrim: Bool = false) async -> URL? {
         guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
             mergeLogger.error("FFmpeg binary not found while preparing trimmed clip for \(item.name, privacy: .public)")
             return nil
         }
 
-        let fileExtension = item.url.pathExtension.isEmpty ? "mp4" : item.url.pathExtension
+        let fileExtension = decodeTrim ? "mkv" : (item.url.pathExtension.isEmpty ? "mp4" : item.url.pathExtension)
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("trimmed_\(UUID().uuidString).\(fileExtension)")
 
@@ -651,8 +653,19 @@ actor ConversionManager: Sendable {
             arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: duration)])
         }
 
-        arguments.append(contentsOf: ["-c", "copy"])
-        if hasStartTrim {
+        if decodeTrim {
+            // Prepare every segment in the same lossless format, including untrimmed
+            // neighbours. Input seeking discards preroll while decoding; the final
+            // requested codec is encoded only once, after concatenation.
+            arguments.append(contentsOf: [
+                "-map", "0:v?", "-map", "0:a?",
+                "-c:v", "ffv1", "-level:v", "3", "-c:a", "pcm_f64le",
+                "-fps_mode:v", "passthrough"
+            ])
+        } else {
+            arguments.append(contentsOf: ["-c", "copy"])
+        }
+        if hasStartTrim && !decodeTrim {
             // Open GOPs can carry leading pictures after the first copied
             // keyframe in decode order, but before it in presentation order.
             // Those pictures depend on the discarded GOP. At a concat join
@@ -1076,7 +1089,9 @@ actor ConversionManager: Sendable {
                 return nil
             }
 
-            let segmentDuration = durationLookup[item.id] ?? item.durationSeconds
+            let segmentDuration = resolveSegmentDuration(
+                for: item, baseDuration: durationLookup[item.id], hasTrim: hasActiveTrim(item)
+            ) ?? item.durationSeconds
             totalDuration += segmentDuration
 
             // Check if this item matches the reference format
@@ -1088,7 +1103,8 @@ actor ConversionManager: Sendable {
 
             let needsConformance = analysis?.needsConformance ?? true
 
-            if needsConformance {
+            if needsConformance || hasActiveTrim(item) {
+                // Decode trimmed clips too, so the requested cut survives conformance.
                 // Re-encode to match reference (trim applied in same pass)
                 await statusUpdate("Conforming clip \(index + 1) of \(items.count): \(item.name)")
                 guard let conformedURL = await prepareConformedClip(
@@ -1106,19 +1122,6 @@ actor ConversionManager: Sendable {
                     isTemporary: true, duration: segmentDuration, isConformed: true
                 ))
                 temporaryFiles.append(conformedURL)
-            } else if hasActiveTrim(item) {
-                // Already matches but needs trim — stream copy trim
-                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID) else {
-                    cleanupTemporaryFiles(temporaryFiles)
-                    return nil
-                }
-                segments.append(MergeSegment(
-                    timelineMarkers: item.timelineMarkers,
-                    itemID: item.id, originalURL: item.url, preparedURL: trimmedURL,
-                    trimStart: item.trimStart, trimEnd: item.trimEnd,
-                    isTemporary: true, duration: segmentDuration, isConformed: false
-                ))
-                temporaryFiles.append(trimmedURL)
             } else {
                 // Already matches, no trim — use original
                 segments.append(MergeSegment(

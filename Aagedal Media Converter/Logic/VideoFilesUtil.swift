@@ -744,7 +744,7 @@ struct TimecodeConfig: Equatable, Sendable {
 }
 
 struct VideoItem: Identifiable, Equatable, Sendable {
-    let id: UUID = UUID()
+    private(set) var id: UUID = UUID()
     var url: URL
     var name: String
     var size: Int64
@@ -952,6 +952,26 @@ struct VideoItem: Identifiable, Equatable, Sendable {
             uploadSpeed = nil
             uploadedRemotePath = nil
         }
+    }
+
+    /// A new timeline instance shares source settings, but never completed job state.
+    func timelineCopy() -> VideoItem {
+        var copy = self
+        copy.id = UUID()
+        copy.resetConversionState()
+        copy.analyticsEnabled = analyticsEnabled
+        copy.outputURL = nil
+        copy.uploadOperationID = nil
+        copy.uploadStatus = .notQueued
+        copy.uploadProgress = 0
+        copy.uploadSpeed = nil
+        copy.uploadedRemotePath = nil
+        copy.subtitleOperationID = nil
+        copy.subtitleStatus = .notQueued
+        copy.subtitleProgress = 0
+        copy.subtitleFilePath = nil
+        copy.timelineMarkers = timelineMarkers.map { StitchTimelineMarker(sourceTime: $0.sourceTime, text: $0.text) }
+        return copy
     }
 
     /// Clears user-configured per-item settings (trim, crop, audio routing, mute, comment, etc.).

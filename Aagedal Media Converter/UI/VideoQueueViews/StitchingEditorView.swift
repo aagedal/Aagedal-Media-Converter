@@ -70,6 +70,32 @@ enum StitchingTimeline {
         return location.id
     }
 
+    static func splitPoint(at time: Double, in items: [VideoItem]) -> (index: Int, time: Double)? {
+        guard let location = location(at: time, in: items),
+              let index = items.firstIndex(where: { $0.id == location.id }) else { return nil }
+        let item = items[index]
+        guard QueueGrouping.canMove([item.id], files: items, groups: []), item.isPlayable else { return nil }
+        let rate = frameRate(for: item)
+        let point = rate.map { (location.sourceTime * $0).rounded() / $0 } ?? location.sourceTime
+        let minimum = rate.map { 1 / $0 } ?? 0.01
+        guard point - item.effectiveTrimStart >= minimum - 0.000001,
+              item.effectiveTrimEnd - point >= minimum - 0.000001 else { return nil }
+        return (index, point)
+    }
+
+    @discardableResult
+    static func split(_ items: inout [VideoItem], at time: Double) -> UUID? {
+        guard let point = splitPoint(at: time, in: items) else { return nil }
+        var second = items[point.index].timelineCopy()
+        second.trimStart = point.time
+        items[point.index].trimEnd = point.time
+        let analyticsEnabled = items[point.index].analyticsEnabled
+        items[point.index].resetConversionState()
+        items[point.index].analyticsEnabled = analyticsEnabled
+        items.insert(second, at: point.index + 1)
+        return second.id
+    }
+
     static func resetTrims(_ items: inout [VideoItem], selection: Set<UUID>) {
         for index in items.indices where selection.contains(items[index].id) {
             items[index].trimStart = nil
@@ -119,9 +145,66 @@ enum StitchingTimeline {
     }
 }
 
+/// History contains timeline edits only. Applying it retains current metadata and job state.
+struct StitchingEditHistory {
+    private struct Edit: Equatable {
+        let id: UUID
+        let start: Double?
+        let end: Double?
+        let markers: [StitchTimelineMarker]
+    }
+    private var undoItems: [[VideoItem]] = []
+    private var redoItems: [[VideoItem]] = []
+    private var observed: [Edit]?
+    var canUndo: Bool { !undoItems.isEmpty }
+    var canRedo: Bool { !redoItems.isEmpty }
+
+    private func edits(_ items: [VideoItem]) -> [Edit] {
+        items.map { Edit(id: $0.id, start: $0.trimStart, end: $0.trimEnd, markers: $0.timelineMarkers) }
+    }
+
+    mutating func record(from old: [VideoItem], to new: [VideoItem]) {
+        guard (old + new).allSatisfy({ item in
+            QueueGrouping.canMove([item.id], files: [item], groups: []) && item.isPlayable
+        }) else {
+            self = StitchingEditHistory()
+            return
+        }
+        let next = edits(new)
+        guard next != observed, edits(old) != next else { return }
+        undoItems.append(old)
+        if undoItems.count > 100 { undoItems.removeFirst() }
+        redoItems.removeAll()
+        observed = next
+    }
+
+    mutating func restore(_ items: inout [VideoItem], redo: Bool = false) {
+        let target: [VideoItem]?
+        if redo {
+            target = redoItems.popLast()
+            if target != nil { undoItems.append(items) }
+        } else {
+            target = undoItems.popLast()
+            if target != nil { redoItems.append(items) }
+        }
+        guard let target else { return }
+        let current = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        items = target.map { saved in
+            var item = current[saved.id] ?? saved
+            item.trimStart = saved.trimStart
+            item.trimEnd = saved.trimEnd
+            item.timelineMarkers = saved.timelineMarkers
+            return item
+        }
+        observed = edits(items)
+    }
+}
+
 struct StitchingEditorView<FileList: View>: View {
     @Binding var group: EncodingGroup
     let isStreamCopy: Bool
+    @State private var editHistory = StitchingEditHistory()
+    @State private var trimGestureBefore: [VideoItem]?
     @State private var editingMarkerID: UUID?
     @State private var markerText = ""
     @State private var showsMarkerEditor = false
@@ -153,6 +236,12 @@ struct StitchingEditorView<FileList: View>: View {
     @State private var fitRequest = UUID()
     @State private var previewAssets: [UUID: PreviewAssets] = [:]
     @State private var filmstrips: [UUID: [URL]] = [:]
+
+    private var canEditHistory: Bool {
+        group.status != .converting && group.items.allSatisfy { item in
+            QueueGrouping.canMove([item.id], files: [item], groups: []) && item.isPlayable
+        }
+    }
 
     private var selectedIndex: Int? {
         group.items.firstIndex { $0.id == selectedID } ?? group.items.indices.first
@@ -196,6 +285,9 @@ struct StitchingEditorView<FileList: View>: View {
                             onFit: fitTimeline,
                             onZoom: { keyboardZoomSteps += $0 },
                             onAddMarker: addMarker,
+                            onSplit: splitAtPlayhead,
+                            onUndo: { restoreEdit() },
+                            onRedo: { restoreEdit(redo: true) },
                             onRippleTrim: rippleTrim,
                             onFinished: { advance(after: item.id) },
                             onAssets: { filmstrips[item.id] = $0 }
@@ -231,6 +323,26 @@ struct StitchingEditorView<FileList: View>: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("stitching.rate")
                     Spacer()
+                    Button { restoreEdit() } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                    }
+                    .help("Undo timeline edit (⌘Z)")
+                    .accessibilityLabel("Undo timeline edit")
+                    .accessibilityIdentifier("stitching.undo")
+                    .disabled(!canEditHistory || !editHistory.canUndo || trimGestureBefore != nil)
+                    Button { restoreEdit(redo: true) } label: {
+                        Image(systemName: "arrow.uturn.forward")
+                    }
+                    .help("Redo timeline edit (⇧⌘Z)")
+                    .accessibilityLabel("Redo timeline edit")
+                    .accessibilityIdentifier("stitching.redo")
+                    .disabled(!canEditHistory || !editHistory.canRedo || trimGestureBefore != nil)
+                    Button(action: splitAtPlayhead) {
+                        Label("Split", systemImage: "scissors")
+                    }
+                    .disabled(group.status == .converting || StitchingTimeline.splitPoint(at: sequenceTime, in: group.items) == nil)
+                    .help("Split the clip at the playhead (⌘B). Trim either part independently.")
+                    .accessibilityIdentifier("stitching.split")
                     Button(action: addMarker) {
                         Label("Marker", systemImage: "bookmark.fill")
                     }
@@ -257,7 +369,7 @@ struct StitchingEditorView<FileList: View>: View {
                     .accessibilityIdentifier("stitching.streamCopyBoundaryGuidance")
                 }
                 HStack(spacing: 12) {
-                    Text("J/K/L: reverse • pause • play · M: marker · Q/W: trim start/end")
+                    Text("J/K/L: reverse • pause • play · ⌘B: split · ⌘Z: undo · M: marker · Q/W: trim start/end")
                         .font(.caption).foregroundStyle(.secondary)
                     Image(systemName: "questionmark.circle")
                         .foregroundStyle(.secondary)
@@ -282,6 +394,10 @@ struct StitchingEditorView<FileList: View>: View {
                 }
             } else {
                 ContentUnavailableView("No clips", systemImage: "film", description: Text("Add files to start stitching."))
+                Button("Undo timeline edit") { restoreEdit() }
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!canEditHistory || !editHistory.canUndo)
+                    .accessibilityIdentifier("stitching.undo")
             }
 
         }
@@ -299,6 +415,14 @@ struct StitchingEditorView<FileList: View>: View {
                     filmstrips[item.id] = assets.thumbnails
                 }
             }
+        }
+        .onChange(of: group.items) { old, new in
+            guard canEditHistory else {
+                editHistory = StitchingEditHistory()
+                trimGestureBefore = nil
+                return
+            }
+            if trimGestureBefore == nil { editHistory.record(from: old, to: new) }
         }
         .onChange(of: selectedClipIDs) { _, ids in
             guard let item = group.items.first(where: { ids.contains($0.id) }),
@@ -394,7 +518,14 @@ struct StitchingEditorView<FileList: View>: View {
                                     visibleRange: max(0, min(clipWidths[index], scrollOffset - 10 - clipWidths.prefix(index).reduce(0, +)))...max(0, min(clipWidths[index], scrollOffset + geometry.size.width - 10 - clipWidths.prefix(index).reduce(0, +))),
                                     onSelect: { selectClip(item.id) },
                                     reorderGesture: clipDrag(item.id, widths: clipWidths),
-                                    onTrim: { start, value in setTrim(item.id, start: start, value: value) }
+                                    onTrim: { start, value in setTrim(item.id, start: start, value: value) },
+                                    onTrimGesture: { active in
+                                        if active { trimGestureBefore = group.items }
+                                        else if let before = trimGestureBefore {
+                                            editHistory.record(from: before, to: group.items)
+                                            trimGestureBefore = nil
+                                        }
+                                    }
                                 )
                                 .frame(width: clipWidths[index], height: 164)
                                 .opacity(draggedClipIDs.contains(item.id) ? 0.45 : 1)
@@ -626,6 +757,25 @@ struct StitchingEditorView<FileList: View>: View {
         zoom = 1
         fitRequest = UUID()
     }
+    private func restoreEdit(redo: Bool = false) {
+        guard canEditHistory, !showsMarkerEditor, trimGestureBefore == nil,
+              redo ? editHistory.canRedo : editHistory.canUndo else { return }
+        let time = sequenceTime
+        isPlaying = false
+        scrubTask?.cancel()
+        scrubTask = nil
+        pendingScrubTime = nil
+        cancelClipDrag()
+        editHistory.restore(&group.items, redo: redo)
+        group.lastSortMode = nil
+        if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+        if let location = StitchingTimeline.location(at: min(time, total), in: group.items) {
+            selectedClipIDs = [location.id]
+            selectionAnchor = location.id
+            seek(location.id, to: location.sourceTime)
+        }
+    }
+
     private func rippleTrim(start: Bool) {
         guard group.status != .converting, !showsMarkerEditor else { return }
         let time = sequenceTime
@@ -636,6 +786,21 @@ struct StitchingEditorView<FileList: View>: View {
         guard let id = StitchingTimeline.rippleTrim(&group.items, at: time, start: start),
               let item = group.items.first(where: { $0.id == id }) else { return }
         seek(id, to: start ? item.effectiveTrimStart : item.effectiveTrimEnd)
+    }
+
+    private func splitAtPlayhead() {
+        guard group.status != .converting, !showsMarkerEditor else { return }
+        let time = sequenceTime
+        isPlaying = false
+        scrubTask?.cancel()
+        scrubTask = nil
+        pendingScrubTime = nil
+        guard let id = StitchingTimeline.split(&group.items, at: time),
+              let item = group.items.first(where: { $0.id == id }) else { return }
+        if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+        selectedClipIDs = [id]
+        selectionAnchor = id
+        seek(id, to: item.effectiveTrimStart)
     }
 
     private func resetSelectedTrims() {
@@ -767,6 +932,7 @@ private struct StitchingTimelineClip<ReorderGesture: Gesture>: View {
     let onSelect: () -> Void
     let reorderGesture: ReorderGesture
     let onTrim: (Bool, Double) -> Void
+    let onTrimGesture: (Bool) -> Void
     @State private var images: [NSImage] = []
     @State private var fallbackThumbnail: NSImage?
     @State private var dragOrigin: Double?
@@ -884,10 +1050,16 @@ private struct StitchingTimelineClip<ReorderGesture: Gesture>: View {
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
                 .onChanged { value in
-                    if dragOrigin == nil { dragOrigin = start ? item.effectiveTrimStart : item.effectiveTrimEnd }
+                    if dragOrigin == nil {
+                        onTrimGesture(true)
+                        dragOrigin = start ? item.effectiveTrimStart : item.effectiveTrimEnd
+                    }
                     onTrim(start, (dragOrigin ?? 0) + value.translation.width / scale)
                 }
-                .onEnded { _ in dragOrigin = nil })
+                .onEnded { _ in
+                    dragOrigin = nil
+                    onTrimGesture(false)
+                })
             .accessibilityLabel(start ? "Trim in for \(item.name)" : "Trim out for \(item.name)")
             .accessibilityAdjustableAction { direction in
                 let step = clipFrameRate.map { 1 / $0 } ?? 0.1
@@ -912,6 +1084,9 @@ private struct StitchingSequencePreview: View {
     let onFit: () -> Void
     let onZoom: (Int) -> Void
     let onAddMarker: () -> Void
+    let onSplit: () -> Void
+    let onUndo: () -> Void
+    let onRedo: () -> Void
     let onRippleTrim: (Bool) -> Void
     let onFinished: () -> Void
     let onAssets: ([URL]) -> Void
@@ -923,7 +1098,7 @@ private struct StitchingSequencePreview: View {
     @State private var preparedID: UUID?
 
     init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, shuttleRate: Float,
-         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
+         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
         _item = item
         self.initialTime = initialTime
         self.seekRequest = seekRequest
@@ -935,6 +1110,9 @@ private struct StitchingSequencePreview: View {
         self.onFit = onFit
         self.onZoom = onZoom
         self.onAddMarker = onAddMarker
+        self.onSplit = onSplit
+        self.onUndo = onUndo
+        self.onRedo = onRedo
         self.onRippleTrim = onRippleTrim
         _requestedTime = State(initialValue: initialTime)
         self.onFinished = onFinished
@@ -952,6 +1130,18 @@ private struct StitchingSequencePreview: View {
             let shortcutModifiers = modifiers.intersection([.command, .control, .option, .shift])
             if key.lowercased() == "z", shortcutModifiers == .shift {
                 onFit()
+                return true
+            }
+            if key.lowercased() == "z", shortcutModifiers == .command {
+                onUndo()
+                return true
+            }
+            if key.lowercased() == "z", shortcutModifiers == [.command, .shift] {
+                onRedo()
+                return true
+            }
+            if key.lowercased() == "b", shortcutModifiers == .command {
+                onSplit()
                 return true
             }
             // Accept both the + character and the unshifted = key used by many keyboards.

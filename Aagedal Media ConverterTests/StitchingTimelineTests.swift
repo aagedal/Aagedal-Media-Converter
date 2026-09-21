@@ -2,6 +2,108 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class StitchingTimelineTests: XCTestCase {
+    func testUndoRedoSplitAndTrimPreservesCurrentMetadata() {
+        let source = clip(duration: 60, start: 10, end: 50)
+        var items = [source]
+        var history = StitchingEditHistory()
+        let original = items
+        StitchingTimeline.split(&items, at: 20)
+        let split = items
+        history.record(from: original, to: items)
+        items[0].comment = "Updated metadata"
+        history.restore(&items)
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].trimEnd, 50)
+        XCTAssertEqual(items[0].comment, "Updated metadata")
+        history.record(from: split, to: items) // SwiftUI observes the undo itself.
+        XCTAssertFalse(history.canUndo)
+        XCTAssertTrue(history.canRedo)
+        history.restore(&items, redo: true)
+        XCTAssertEqual(items.map(\.id), split.map(\.id))
+        XCTAssertEqual(items[0].comment, "Updated metadata")
+        let beforeTrim = items
+        StitchingTimeline.trim(&items[1], start: true, to: 35)
+        history.record(from: beforeTrim, to: items)
+        history.restore(&items)
+        XCTAssertEqual(items[1].trimStart, 30)
+        XCTAssertEqual(items[0].trimEnd, 30)
+        history.restore(&items)
+        XCTAssertEqual(items.count, 1)
+    }
+
+    func testRemovingBusyClipDoesNotCreateRestorableJobState() {
+        var source = clip(duration: 20)
+        source.status = .converting
+        var history = StitchingEditHistory()
+        history.record(from: [source], to: [])
+        XCTAssertFalse(history.canUndo)
+    }
+
+    func testUndoRemovalOfLastClipAndRedo() {
+        let original = [clip(duration: 20, start: 2, end: 15)]
+        var items: [VideoItem] = []
+        var history = StitchingEditHistory()
+        history.record(from: original, to: items)
+        history.restore(&items)
+        XCTAssertEqual(items.map(\.id), original.map(\.id))
+        XCTAssertEqual(items[0].trimStart, 2)
+        XCTAssertEqual(items[0].trimEnd, 15)
+        history.restore(&items, redo: true)
+        XCTAssertTrue(items.isEmpty)
+    }
+
+    func testNewEditClearsRedoAndNonTimelineChangesAreIgnored() {
+        var items = [clip(duration: 20)]
+        var history = StitchingEditHistory()
+        let original = items
+        items[0].comment = "Metadata only"
+        history.record(from: original, to: items)
+        XCTAssertFalse(history.canUndo)
+        items[0].trimEnd = 10
+        history.record(from: original, to: items)
+        history.restore(&items)
+        XCTAssertTrue(history.canRedo)
+        let before = items
+        items[0].trimStart = 5
+        history.record(from: before, to: items)
+        XCTAssertFalse(history.canRedo)
+        history.restore(&items)
+        XCTAssertNil(items[0].trimStart)
+        XCTAssertEqual(items[0].comment, "Metadata only")
+    }
+
+    func testSplitPreservesSourceRangesAndIndependentIdentity() {
+        var source = clip(duration: 60, start: 10, end: 50)
+        source.comment = "Keep settings"
+        source.timelineMarkers = [StitchTimelineMarker(sourceTime: 35, text: "Note")]
+        var items = [source]
+        let id = StitchingTimeline.split(&items, at: 20)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].id, source.id)
+        XCTAssertEqual(items[1].id, id)
+        XCTAssertNotEqual(items[0].id, items[1].id)
+        XCTAssertEqual(items[0].url, items[1].url)
+        XCTAssertEqual(items[0].effectiveTrimStart, 10)
+        XCTAssertEqual(items[0].effectiveTrimEnd, 30)
+        XCTAssertEqual(items[1].effectiveTrimStart, 30)
+        XCTAssertEqual(items[1].effectiveTrimEnd, 50)
+        XCTAssertEqual(items[1].comment, source.comment)
+        XCTAssertNotEqual(items[0].timelineMarkers[0].id, items[1].timelineMarkers[0].id)
+        StitchingTimeline.trim(&items[1], start: true, to: 35)
+        XCTAssertEqual(items[0].effectiveTrimEnd, 30)
+        XCTAssertEqual(items.reduce(0) { $0 + StitchingTimeline.duration($1) }, 35)
+    }
+
+    func testSplitRejectsBoundariesInvalidTimesAndBusyItems() {
+        var items = [clip(duration: 20), clip(duration: 10)]
+        for time in [0.0, 20, 30, -1, Double.nan, Double.infinity] {
+            XCTAssertNil(StitchingTimeline.split(&items, at: time))
+        }
+        items[0].status = .converting
+        XCTAssertNil(StitchingTimeline.split(&items, at: 5))
+        XCTAssertEqual(items.count, 2)
+    }
+
     func testZoomKeepsPointerTimeFixedAndClampsAtEdges() {
         let offset = StitchingTimeline.zoomOffset(time: 12, scale: 40, anchorX: 210,
                                                   contentWidth: 2000, viewportWidth: 600)
