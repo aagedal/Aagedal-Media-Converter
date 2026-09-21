@@ -221,7 +221,7 @@ struct SourceAudioMeterPanel: View {
     let isPlaying: Bool
     let onSelectTrack: (Int) -> Void
     @State private var metadata: VideoMetadata?
-    @State private var chunk: SourceAudioMeterChunk?
+    @State private var chunks: [SourceAudioMeterRequest: SourceAudioMeterChunk] = [:]
     @State private var cache = SourceAudioMeterCache()
     @State private var isLoading = false
     @State private var failed = false
@@ -232,35 +232,59 @@ struct SourceAudioMeterPanel: View {
         return controller.audioTrackOptions[position].streamIndex
     }
 
+    private var streams: [VideoMetadata.AudioStream] { (item.metadata ?? metadata)?.audioStreams ?? [] }
+    private var groups: [SourceAudioMeterGroup] {
+        SourceAudioMeterGroup.groups(channelCounts: streams.map(\.channels))
+    }
+    private var selectedGroup: SourceAudioMeterGroup? {
+        guard let streamIndex else { return nil }
+        return groups.first { $0.tracks.contains(streamIndex) }
+    }
     private var stream: VideoMetadata.AudioStream? {
-        guard let streamIndex, let streams = (item.metadata ?? metadata)?.audioStreams,
-              streams.indices.contains(streamIndex) else { return nil }
+        guard let streamIndex, streams.indices.contains(streamIndex) else { return nil }
         return streams[streamIndex]
     }
-
-    private var request: SourceAudioMeterRequest? {
-        guard let streamIndex, let channels = stream?.channels, channels > 0,
-              time.isFinite, time >= 0 else { return nil }
-        return SourceAudioMeterRequest(url: item.url, track: streamIndex, channels: channels,
-                                       window: Int(time / SourceAudioMeterRequest.windowDuration))
+    private var requests: [SourceAudioMeterRequest] {
+        guard let selectedGroup, time.isFinite, time >= 0 else { return [] }
+        return selectedGroup.tracks.compactMap { index in
+            guard let channels = streams[index].channels, channels > 0 else { return nil }
+            return SourceAudioMeterRequest(url: item.url, track: index, channels: channels,
+                                           window: Int(time / SourceAudioMeterRequest.windowDuration))
+        }
     }
-
     private var labels: [String] {
+        if let group = selectedGroup, group.isMultiMono {
+            return group.tracks.map { track in
+                controller.audioTrackOptions.first { $0.streamIndex == track }?.title ?? "Track \(track + 1)"
+            }
+        }
         guard let channels = stream?.channels else { return [] }
         return Array(NativeWaveformRenderer.channelNames(count: channels, layout: stream?.channelLayout).prefix(8))
     }
-
     private var levels: [Float] {
-        guard isPlaying, let request, chunk?.request == request else {
-            return Array(repeating: -60, count: labels.count)
+        guard isPlaying else { return Array(repeating: -60, count: labels.count) }
+        return requests.flatMap { request in
+            chunks[request]?.levels(at: time) ?? Array(repeating: -60, count: request.displayedChannels)
         }
-        return chunk?.levels(at: time) ?? []
+    }
+    private func selectTrack(_ track: Int) {
+        if let option = controller.audioTrackOptions.first(where: { $0.streamIndex == track }) {
+            onSelectTrack(option.position)
+        }
+    }
+    private func barLabel(_ index: Int) -> String {
+        if let group = selectedGroup, group.isMultiMono { return "\(group.tracks[index] + 1)" }
+        return labels.count == 2 ? (index == 0 ? "L" : "R") : "\(index + 1)"
+    }
+    private func groupTitle(_ group: SourceAudioMeterGroup) -> String {
+        if group.isMultiMono { return String(localized: "Mono tracks (\(group.tracks.count))") }
+        return controller.audioTrackOptions.first { $0.streamIndex == group.id }?.title ?? "Track \(group.id + 1)"
     }
 
     var body: some View {
         VStack(spacing: 8) {
             Text("Source dBFS").font(.caption)
-                .help("Sample peaks for the selected source track, before playback volume and speaker downmixing.")
+                .help("Source sample peaks before playback volume and speaker downmixing. Mono tracks are shown together; click a mono meter to choose the preview track.")
             GeometryReader { geometry in
                 HStack(alignment: .top, spacing: 4) {
                     VStack {
@@ -279,11 +303,18 @@ struct SourceAudioMeterPanel: View {
                         VStack(spacing: 3) {
                             LevelBar(level: levels.indices.contains(index) ? levels[index] : -60,
                                      range: -60...0, height: max(10, geometry.size.height - 16))
-                            Text(labels.count == 2 ? (index == 0 ? "L" : "R") : "\(index + 1)")
+                            Text(barLabel(index))
                                 .font(.system(size: 8, design: .monospaced)).lineLimit(1)
                                 .help(label)
                         }
                         .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if let group = selectedGroup, group.isMultiMono { selectTrack(group.tracks[index]) }
+                        }
+                        .accessibilityAction {
+                            if let group = selectedGroup, group.isMultiMono { selectTrack(group.tracks[index]) }
+                        }
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Channel \(index + 1): \(label)")
                         .accessibilityValue(levels.indices.contains(index) && levels[index] > -60
@@ -297,26 +328,34 @@ struct SourceAudioMeterPanel: View {
                 else if failed { Text("Meter unavailable").font(.caption2) }
                 else if labels.isEmpty { Text("No audio channels").font(.caption2) }
             }
+            if selectedGroup?.isMultiMono == true, let streamIndex {
+                Text("Preview: track \(streamIndex + 1)").font(.caption2)
+                    .help("Click a mono meter to listen to that track. All mono meters remain visible.")
+            }
             if (stream?.channels ?? 0) > 8 {
                 Text("Channels 1–8 of \(stream?.channels ?? 0)").font(.caption2)
             }
             Picker("Track", selection: Binding(
-                get: { controller.selectedAudioTrackOrderIndex },
-                set: onSelectTrack
+                get: { selectedGroup?.id ?? -1 },
+                set: { id in
+                    guard let group = groups.first(where: { $0.id == id }),
+                          !group.tracks.contains(streamIndex ?? -1) else { return }
+                    selectTrack(group.id)
+                }
             )) {
-                ForEach(controller.audioTrackOptions) { option in
-                    Text(option.title).tag(option.position)
+                ForEach(groups) { group in
+                    Text(groupTitle(group)).tag(group.id)
                 }
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .disabled(controller.audioTrackOptions.count < 2)
+            .disabled(groups.count < 2)
             .accessibilityLabel("Meter and preview audio track")
             .accessibilityIdentifier("stitching.audioTrack")
             .help("Select the audio track for preview playback and metering.")
         }
         .padding(8)
-        .frame(width: 156)
+        .frame(width: min(300, max(156, CGFloat(labels.count) * 18 + 32)))
         .background(Color.black.opacity(0.65))
         .accessibilityIdentifier("stitching.audioMeter")
         .task(id: item.url) {
@@ -327,26 +366,33 @@ struct SourceAudioMeterPanel: View {
                 metadata = result
             }
         }
-        .task(id: request) {
-            chunk = nil
+        .task(id: requests) {
+            chunks = [:]
             failed = false
-            guard let request else { isLoading = false; return }
+            let currentRequests = requests
+            guard !currentRequests.isEmpty else { isLoading = false; return }
             isLoading = true
-            do {
-                let loaded = try await cache.load(request)
-                guard !Task.isCancelled else { return }
-                chunk = loaded
-                isLoading = false
-                // Warm both neighbors for forward playback, reverse shuttle and seeks.
-                if request.start + SourceAudioMeterRequest.windowDuration < item.durationSeconds {
-                    _ = try? await cache.load(request.adjacent(1))
+            let capacity = currentRequests.count * 3
+            // Decode sequentially to avoid one simultaneous decoder per mono track.
+            for request in currentRequests {
+                do {
+                    let loaded = try await cache.load(request, capacity: capacity)
+                    guard !Task.isCancelled else { return }
+                    chunks[request] = loaded
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    failed = true
                 }
-                guard !Task.isCancelled else { return }
-                if request.window > 0 { _ = try? await cache.load(request.adjacent(-1)) }
-            } catch {
-                guard !Task.isCancelled else { return }
-                isLoading = false
-                failed = true
+            }
+            isLoading = false
+            // Warm neighboring windows for every visible track, preserving source offsets.
+            for delta in [1, -1] {
+                for request in currentRequests {
+                    guard !Task.isCancelled else { return }
+                    if delta == 1, request.start + SourceAudioMeterRequest.windowDuration >= item.durationSeconds { continue }
+                    if delta == -1, request.window == 0 { continue }
+                    _ = try? await cache.load(request.adjacent(delta), capacity: capacity)
+                }
             }
         }
     }

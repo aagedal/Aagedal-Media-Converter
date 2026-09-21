@@ -443,6 +443,16 @@ final class GroupEditorWindowLayoutTests: XCTestCase {
 }
 
 final class SourceAudioMeterTests: XCTestCase {
+    func testMonoTracksShareOneBankWhileStereoAndSurroundStaySeparate() {
+        let groups = SourceAudioMeterGroup.groups(channelCounts: [1, 2, 1, 6, 1])
+        XCTAssertEqual(groups.map(\.tracks), [[0, 2, 4], [1], [3]])
+        XCTAssertEqual(groups.map(\.isMultiMono), [true, false, false])
+        XCTAssertEqual(SourceAudioMeterGroup.groups(channelCounts: [1, 1]).map(\.tracks), [[0, 1]])
+        XCTAssertEqual(SourceAudioMeterGroup.groups(channelCounts: [2, 2]).map(\.tracks), [[0], [1]])
+        XCTAssertEqual(SourceAudioMeterGroup.groups(channelCounts: [nil, 1, 1]).map(\.tracks), [[0], [1, 2]])
+        XCTAssertTrue(SourceAudioMeterGroup.groups(channelCounts: []).isEmpty)
+    }
+
     func testEightChannelPeaksAreIndependentAndUseDBFS() {
         let request = SourceAudioMeterRequest(url: URL(fileURLWithPath: "/tmp/meter.wav"),
                                              track: 1, channels: 8, window: 0)

@@ -21,6 +21,23 @@ struct SourceAudioMeterRequest: Hashable, Sendable {
     }
 }
 
+/// Mono streams form one meter bank; stereo/surround streams stay separate.
+struct SourceAudioMeterGroup: Identifiable, Equatable {
+    let tracks: [Int]
+    var id: Int { tracks[0] }
+    var isMultiMono: Bool { tracks.count > 1 }
+
+    static func groups(channelCounts: [Int?]) -> [Self] {
+        let mono = channelCounts.indices.filter { channelCounts[$0] == 1 }
+        return channelCounts.indices.compactMap { index in
+            if channelCounts[index] == 1 {
+                return index == mono.first ? Self(tracks: mono) : nil
+            }
+            return Self(tracks: [index])
+        }
+    }
+}
+
 struct SourceAudioMeterChunk: Sendable {
     let request: SourceAudioMeterRequest
     /// Sample peaks per channel in 10 ms bins, without normalization or downmixing.
@@ -104,14 +121,14 @@ actor SourceAudioMeterCache {
     private var chunks: [SourceAudioMeterRequest: SourceAudioMeterChunk] = [:]
     private var order: [SourceAudioMeterRequest] = []
 
-    func load(_ request: SourceAudioMeterRequest) async throws -> SourceAudioMeterChunk {
+    func load(_ request: SourceAudioMeterRequest, capacity: Int = 3) async throws -> SourceAudioMeterChunk {
         if let cached = chunks[request] { return cached }
         let chunk = try await SourceAudioMeterDecoder.decode(request)
         try Task.checkCancellation()
         chunks[request] = chunk
         order.removeAll { $0 == request }
         order.append(request)
-        while order.count > 3 { chunks.removeValue(forKey: order.removeFirst()) }
+        while order.count > max(3, capacity) { chunks.removeValue(forKey: order.removeFirst()) }
         return chunk
     }
 }
