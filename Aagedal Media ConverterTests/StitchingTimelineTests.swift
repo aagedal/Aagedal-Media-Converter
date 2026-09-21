@@ -2,6 +2,15 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class StitchingTimelineTests: XCTestCase {
+    func testSeekCandidateRequiresContinuousScannedCoverageThroughCut() {
+        XCTAssertEqual(StitchingTimeline.precedingSeekCandidate(3.2, times: [0, 2, 4], scannedRanges: [0...6]), 2)
+        XCTAssertEqual(StitchingTimeline.precedingSeekCandidate(4, times: [0, 2, 4], scannedRanges: [0...6]), 4)
+        XCTAssertNil(StitchingTimeline.precedingSeekCandidate(30, times: [0, 2, 40], scannedRanges: [0...6, 35...45]))
+        XCTAssertNil(StitchingTimeline.precedingSeekCandidate(1, times: [2, 4], scannedRanges: [0...6]))
+        XCTAssertNil(StitchingTimeline.precedingSeekCandidate(.nan, times: [0], scannedRanges: [0...6]))
+        XCTAssertNil(StitchingTimeline.precedingSeekCandidate(-1, times: [0], scannedRanges: [0...6]))
+    }
+
     func testPerChannelWaveformPreservesIndependentPeaksAndSilence() {
         let samples: [Float] = [0, 0.8, 0, -0.7, 0.00001, 0, -0.00002, 0]
         let data = samples.withUnsafeBytes { Data($0) }

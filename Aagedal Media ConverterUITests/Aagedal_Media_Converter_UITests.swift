@@ -533,12 +533,18 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [visibleMarkers], timeout: 30), .completed,
                        "Stream Copy must show candidate keyframes while free trimming remains enabled")
+        XCTAssertTrue(element("stitching.requestedCut").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("stitching.seekEstimate").waitForExistence(timeout: 5))
         let timecode = element("stitching.timecode")
         let duration = (timecode.value as? String) ?? timecode.label
         snap.click()
         XCTAssertEqual(String(describing: snap.value ?? ""), "1")
+        XCTAssertTrue(element("stitching.requestedCut").waitForNonExistence(timeout: 5))
+        XCTAssertTrue(element("stitching.seekEstimate").waitForNonExistence(timeout: 5))
         snap.click()
         XCTAssertEqual(String(describing: snap.value ?? ""), "0")
+        XCTAssertTrue(element("stitching.requestedCut").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("stitching.seekEstimate").waitForExistence(timeout: 5))
         XCTAssertEqual((timecode.value as? String) ?? timecode.label, duration)
         XCTAssertTrue(markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 })
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -555,20 +561,29 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         element("group.edit").click()
         XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
         element("stitching.fit").click()
-        let timeline = element("group.timeline")
         let timecode = element("stitching.timecode")
         func durationText() -> String {
             ((timecode.value as? String) ?? timecode.label).components(separatedBy: " / ").last ?? ""
         }
         let originalDuration = durationText()
         element("stitching.rangeTool").click()
+        XCTAssertEqual(String(describing: element("stitching.rangeTool").value ?? ""), "1")
         // Other desktop apps can open status-item popovers during this test.
         // Restore focus before synthesizing the timeline drag.
         app.activate()
-        let start = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.4))
-        let end = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.4))
-        start.press(forDuration: 0.1, thenDragTo: end)
-        XCTAssertTrue(element("stitching.deleteRange").isEnabled)
+        let rangeSurface = app.descendants(matching: .any).matching(identifier: "stitching.rangeSurface").firstMatch
+        XCTAssertTrue(rangeSurface.waitForExistence(timeout: 5), app.debugDescription)
+        let start = rangeSurface.coordinate(withNormalizedOffset: CGVector(dx: 0.24, dy: 0.4))
+        let end = rangeSurface.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4))
+        // press(forDuration:) sends touch events; the macOS editor needs mouse events.
+        start.click(forDuration: 0.1, thenDragTo: end)
+        XCTAssertTrue(element("stitching.deleteRange").wait(for: \.isEnabled, toEqual: true, timeout: 5), app.debugDescription)
+        XCTAssertEqual(durationText(), originalDuration, "Selecting a range must not trim or reorder clips")
+        element("stitching.clearRange").click()
+        XCTAssertFalse(element("stitching.deleteRange").isEnabled)
+        end.click(forDuration: 0.1, thenDragTo: start)
+        XCTAssertTrue(element("stitching.deleteRange").wait(for: \.isEnabled, toEqual: true, timeout: 5),
+                      "Reverse drags must select the same deletable interval")
         app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
         XCTAssertNotEqual(durationText(), originalDuration)
         app.typeKey("z", modifierFlags: .command)
@@ -649,7 +664,13 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         let early = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.05))
         let late = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.05))
         late.click()
-        early.press(forDuration: 0.05, thenDragTo: late)
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        XCTAssertTrue(waitForValue("ui-test-second.mp4", of: element("stitching.selectedClip"), timeout: 10))
+        // Start on the first clip so the final state proves the drag landed,
+        // rather than merely retaining the preceding cold seek's position.
+        early.click()
+        XCTAssertTrue(waitForValue("ui-test-fixture.mp4", of: element("stitching.selectedClip"), timeout: 10))
+        early.click(forDuration: 0.05, thenDragTo: late)
         XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
         XCTAssertTrue(waitForValue("ui-test-second.mp4", of: element("stitching.selectedClip"), timeout: 10))
         let seekLanded = XCTNSPredicateExpectation(

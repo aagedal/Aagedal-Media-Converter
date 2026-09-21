@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Requested start: %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ønsket start: %@"
+          }
+        }
+      }
+    },
+    "Estimated seek point: %@ (%@ s earlier). Export can differ.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anslått søkepunkt: %@ (%@ s tidligere). Eksporten kan avvike."
+          }
+        }
+      }
+    },
+    "Seek estimate unavailable near this cut.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Søkeanslag er ikke tilgjengelig nær dette klippet."
+          }
+        }
+      }
+    },
     "Keyframe candidates: %lld" : {
       "localizations" : {
         "nb" : {

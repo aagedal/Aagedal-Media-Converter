@@ -898,6 +898,18 @@ pause/dismiss pass for this run, while the existing range-deletion drag UI check
 still fails and needs investigation. See the
 [continuation validation record](4.5-keyframes-grouping-mpv-validation-2026-09-21.md).
 
+Keyframe discovery now scans bounded regions around trim endpoints and the
+selected playhead, with cancellable readers, identity-aware caching, and explicit
+completed coverage. Same-path replacements invalidate cached results, and unknown
+neighboring regions cannot cause distant keyframe snapping. Free Stream Copy
+trimming shows the requested start and a preceding seek estimate with a time
+difference and export caveat. Discovery remains native because ffprobe is absent
+from the current bundle. The range/ruler UI tests now use macOS mouse-drag APIs;
+the product's SwiftUI range gesture is retained. All 1,123 unit tests, 81 release
+script tests, localization checks, and three isolated serial UI checks pass,
+including the previously failing range deletion/undo check. See the
+[bounded discovery validation record](4.5-bounded-keyframes-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -1183,8 +1195,9 @@ Remaining:
 
 Optional Stream Copy keyframe snapping now applies to trim edges and selected
 ranges. Discovery reads compressed samples from the first video track with a
-cancellable AVAssetReader scan, retaining scoped source access. Results are held
-by URL for the editor session; unavailable results fall back to frame snapping.
+cancellable, bounded AVAssetReader scans, retaining scoped source access. Completed
+regions are cached by fresh source identity and track; unavailable or insufficient
+coverage falls back to frame snapping.
 The existing approximate-cut guidance remains applicable.
 
 The editor also includes split and range deletion, multiple-clip selection,
@@ -1201,10 +1214,12 @@ points, not a guarantee of independently decodable or exact exported boundaries.
 
 Remaining refinements:
 
-- When dragging an unsnapped edge, show the requested cut and an estimated export
-  boundary/difference. Do not claim the decoded preview is the exact Stream Copy
-  output. Existing merge preparation uses input-side `-ss`, `-t`, and `-c copy`.
-- Probe packet keyframe flags/timestamps using the bundled ffprobe, scoped to
+- Requested-start and preceding-seek-candidate feedback is implemented, including
+  a difference and uncertainty caveat. Out-point estimates and actual temporary
+  export-boundary previews remain open. Do not claim decoded preview is exact
+  Stream Copy output. Merge preparation uses input-side `-ss`, `-t`, and `-c copy`.
+- Resolve the absent ffprobe packaging decision, then probe packet keyframe
+  flags/timestamps using the selected bundled tool, scoped to
   the selected video stream; cache by source identity and normalize source start
   timestamps. Prefer bounded, cancellable scans around edited regions on long
   recordings/cards, expanding when the next/previous keyframe is not yet known.

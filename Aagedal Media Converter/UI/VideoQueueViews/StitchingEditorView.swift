@@ -128,6 +128,17 @@ enum StitchingTimeline {
         times.filter { $0.isFinite && bounds.contains($0) }.min { abs($0 - time) < abs($1 - time) }
     }
 
+    /// A preceding sync sample is a seek estimate, never a decoded export boundary.
+    /// Require scanned coverage through the requested cut so a distant cached
+    /// candidate cannot be presented as the nearest preceding point.
+    static func precedingSeekCandidate(_ requested: Double, times: [Double],
+                                       scannedRanges: [ClosedRange<Double>]) -> Double? {
+        guard requested.isFinite, requested >= 0,
+              let candidate = times.last(where: { $0.isFinite && $0 >= 0 && $0 <= requested }),
+              scannedRanges.contains(where: { $0.contains(candidate) && $0.contains(requested) }) else { return nil }
+        return candidate
+    }
+
     /// Source timestamps must be sorted, as returned by keyframe discovery. Keep
     /// dense regions hidden instead of suggesting that a sampled subset is complete.
     static func keyframeTickOffsets(in times: [Double], sourceStart: Double, duration: Double,
@@ -273,7 +284,9 @@ struct StitchingEditorView<FileList: View>: View {
     @State private var selectedRange: ClipRange?
     @State private var snapToKeyframes = false
     @State private var keyframes: [URL: [Double]] = [:]
+    @State private var keyframeSourceIdentities: [URL: TimelineKeyframeService.SourceIdentity] = [:]
     @State private var keyframeLoading = false
+    @State private var keyframeScannedRanges: [URL: [ClosedRange<Double>]] = [:]
     private struct ClipRange: Equatable {
         let id: UUID
         let bounds: ClosedRange<Double>
@@ -470,6 +483,25 @@ struct StitchingEditorView<FileList: View>: View {
                         Text(keyframeLoading ? "Finding keyframes…" : (keyframes[item.url]?.isEmpty == false ? "Trims and ranges snap to the nearest available keyframe." : "Keyframes unavailable for this clip. Using frame snapping."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    if !snapToKeyframes {
+                        let requested = item.effectiveTrimStart
+                        let display = StitchingTimeline.timeDisplay(requested, frameRate: StitchingTimeline.frameRate(for: item))
+                        Text("Requested start: \(display)")
+                            .font(.caption.monospacedDigit())
+                            .accessibilityIdentifier("stitching.requestedCut")
+                        if let candidate = StitchingTimeline.precedingSeekCandidate(
+                            requested, times: keyframes[item.url] ?? [],
+                            scannedRanges: keyframeScannedRanges[item.url] ?? []) {
+                            let candidateDisplay = StitchingTimeline.timeDisplay(candidate, frameRate: StitchingTimeline.frameRate(for: item))
+                            let difference = (requested - candidate).formatted(.number.precision(.fractionLength(3)))
+                            Text("Estimated seek point: \(candidateDisplay) (\(difference) s earlier). Export can differ.")
+                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("stitching.seekEstimate")
+                        } else {
+                            Text("Seek estimate unavailable near this cut.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     Label {
                         Text("Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ.")
                             .fixedSize(horizontal: false, vertical: true)
@@ -528,18 +560,39 @@ struct StitchingEditorView<FileList: View>: View {
                 }
             }
         }
-        .task(id: "\(isStreamCopy)-\(snapToKeyframes)-\(selectedID?.uuidString ?? "")-\(group.items.map { $0.url.absoluteString }.joined())") {
+        .task(id: keyframeRequestID) {
             guard isStreamCopy else { return }
             keyframeLoading = true
-            defer { keyframeLoading = false }
-            // Show candidates while freely trimming the selected clip, without
-            // starting a whole-group scan until keyframe snapping is enabled.
+            defer { if !Task.isCancelled { keyframeLoading = false } }
             let previewID = selectedID ?? group.items.first?.id
             let items = snapToKeyframes ? group.items : group.items.filter { $0.id == previewID }
-            for url in Set(items.map(\.url)) where keyframes[url] == nil {
-                let times = await TimelineKeyframes.load(url)
-                guard !Task.isCancelled else { return }
-                keyframes[url] = times
+            for item in items {
+                let points = [item.effectiveTrimStart, item.effectiveTrimEnd]
+                    + (item.id == previewID ? [sourceTime] : [])
+                for point in points {
+                    do {
+                        let scan = try await TimelineKeyframeService.shared.scan(
+                            url: item.url, around: point, duration: item.durationSeconds)
+                        try Task.checkCancellation()
+                        if keyframeSourceIdentities[item.url] != scan.sourceIdentity || scan.sourceIdentity == nil {
+                            keyframes[item.url] = []
+                            keyframeScannedRanges[item.url] = []
+                        }
+                        keyframeSourceIdentities[item.url] = scan.sourceIdentity
+                        // Incomplete scans never establish coverage or snapping candidates.
+                        guard scan.status == .complete, let region = scan.scannedRange else { continue }
+                        keyframes[item.url] = Array(Set((keyframes[item.url] ?? []) + scan.times)).sorted()
+                        var regions = (keyframeScannedRanges[item.url] ?? []) + [region]
+                        regions.sort { $0.lowerBound < $1.lowerBound }
+                        var merged: [ClosedRange<Double>] = []
+                        for region in regions {
+                            if let last = merged.last, region.lowerBound <= last.upperBound.nextUp {
+                                merged[merged.count - 1] = last.lowerBound...max(last.upperBound, region.upperBound)
+                            } else { merged.append(region) }
+                        }
+                        keyframeScannedRanges[item.url] = merged
+                    } catch { if Task.isCancelled { return } }
+                }
             }
         }
         .onChange(of: rangeMode) { _, _ in selectedRange = nil }
@@ -663,6 +716,8 @@ struct StitchingEditorView<FileList: View>: View {
                                 .overlay {
                                     if rangeMode {
                                         Rectangle().fill(Color.clear).contentShape(Rectangle())
+                                            .accessibilityElement(children: .ignore)
+                                            .accessibilityIdentifier("stitching.rangeSurface")
                                             .gesture(DragGesture(minimumDistance: 0)
                                                 .onChanged { value in
                                                     selectRange(in: item, from: value.startLocation.x / scale,
@@ -954,12 +1009,33 @@ struct StitchingEditorView<FileList: View>: View {
         seek(id, to: item.effectiveTrimStart)
     }
 
+    private var keyframeRequestID: String {
+        let items = group.items.map {
+            "\($0.id)-\($0.url.absoluteString)-\(floor($0.effectiveTrimStart / 5))-\(floor($0.effectiveTrimEnd / 5))"
+        }.joined(separator: "|")
+        return "\(isStreamCopy)-\(snapToKeyframes)-\(selectedID?.uuidString ?? "")-\(floor(sourceTime / 15))-\(items)"
+    }
+
+    private func scannedKeyframe(_ time: Double, item: VideoItem, bounds: ClosedRange<Double>) -> Double? {
+        guard let region = keyframeScannedRanges[item.url]?.first(where: { $0.contains(time) }) else { return nil }
+        let lower = max(region.lowerBound, bounds.lowerBound)
+        let upper = min(region.upperBound, bounds.upperBound)
+        guard lower <= upper else { return nil }
+        guard let candidate = StitchingTimeline.nearestKeyframe(time, in: keyframes[item.url] ?? [], bounds: lower...upper) else { return nil }
+        // An uninspected adjacent region may contain a closer point. Fall back to
+        // frame snapping until the local search can establish the nearest candidate.
+        let distance = abs(candidate - time)
+        if region.lowerBound > bounds.lowerBound, distance > time - region.lowerBound { return nil }
+        if region.upperBound < bounds.upperBound, distance > region.upperBound - time { return nil }
+        return candidate
+    }
+
     private func rangeBoundary(_ item: VideoItem, value: Double) -> Double {
         let bounds = item.effectiveTrimStart...item.effectiveTrimEnd
         let clamped = min(bounds.upperBound, max(bounds.lowerBound, value))
         if clamped == bounds.lowerBound || clamped == bounds.upperBound { return clamped }
         if isStreamCopy, snapToKeyframes,
-           let point = StitchingTimeline.nearestKeyframe(clamped, in: keyframes[item.url] ?? [], bounds: bounds) { return point }
+           let point = scannedKeyframe(clamped, item: item, bounds: bounds) { return point }
         let rate = StitchingTimeline.frameRate(for: item)
         return min(bounds.upperBound, max(bounds.lowerBound, rate.map { (clamped * $0).rounded() / $0 } ?? clamped))
     }
@@ -1015,7 +1091,7 @@ struct StitchingEditorView<FileList: View>: View {
         let bounds = start ? 0...max(0, item.effectiveTrimEnd - gap)
             : min(item.durationSeconds, item.effectiveTrimStart + gap)...item.durationSeconds
         if isStreamCopy, snapToKeyframes,
-           let point = StitchingTimeline.nearestKeyframe(value, in: keyframes[item.url] ?? [], bounds: bounds) {
+           let point = scannedKeyframe(value, item: item, bounds: bounds) {
             if start { group.items[index].trimStart = point }
             else { group.items[index].trimEnd = point }
         } else {
@@ -1516,39 +1592,5 @@ private struct StitchingSequencePreview: View {
         finished = true
         controller.pause()
         onFinished()
-    }
-}
-
-/// Reads compressed samples, so sync timestamps do not require decoding the video.
-private enum TimelineKeyframes {
-    static func load(_ url: URL) async -> [Double] {
-        let task = Task.detached(priority: .utility) { () -> [Double] in
-            let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
-            defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
-            do {
-                let asset = AVURLAsset(url: url)
-                guard let track = try await asset.loadTracks(withMediaType: .video).first else { return [] }
-                let reader = try AVAssetReader(asset: asset)
-                let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
-                output.alwaysCopiesSampleData = false
-                guard reader.canAdd(output) else { return [] }
-                reader.add(output)
-                guard reader.startReading() else { return [] }
-                var times: [Double] = []
-                while let sample = output.copyNextSampleBuffer() {
-                    guard !Task.isCancelled else { reader.cancelReading(); return [] }
-                    let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false) as? [[CFString: Any]]
-                    let notSync = attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool ?? false
-                    let time = CMSampleBufferGetPresentationTimeStamp(sample).seconds
-                    if !notSync, time.isFinite, time >= 0 { times.append(time) }
-                }
-                return reader.status == .completed ? times.sorted() : []
-            } catch { return [] }
-        }
-        return await withTaskCancellationHandler {
-            await task.value
-        } onCancel: {
-            task.cancel()
-        }
     }
 }

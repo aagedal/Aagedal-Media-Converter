@@ -28,6 +28,7 @@
 		E1ACF6BCCBB0485C81D569A9 /* DenoExtractionDrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */; };
 		C954573AF1D84E73A9596708 /* DownloadHistoryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */; };
 		81F0864DD57840B9971CD561 /* IVFConcatenatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D81BE4D4410A4875A8EF38EE /* IVFConcatenatorTests.swift */; };
+		FBA41D8157AC4F0DBD63B194 /* TimelineKeyframeServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA41D8157AC4F0DBD63B193 /* TimelineKeyframeServiceTests.swift */; };
 		A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */; };
 		24CB417957434AF98E564C83 /* UploadLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */; };
 		368FA5664CC4494EA5ED2D8A /* SubtitleSRTPublicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C8D0547D524C448BA478BB /* SubtitleSRTPublicationTests.swift */; };
@@ -210,6 +211,7 @@
 		8EEE45202EBF81FD0049F017 /* VideoMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE451F2EBF81FD0049F017 /* VideoMetadataService.swift */; };
 		8EEE452B2EC139000049F017 /* ExportPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE452A2EC138FA0049F017 /* ExportPreset.swift */; };
 		8EEE452D2EC1390F0049F017 /* FFMPEGCommandBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE452C2EC139060049F017 /* FFMPEGCommandBuilder.swift */; };
+		FBA41D8157AC4F0DBD63B192 /* TimelineKeyframeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA41D8157AC4F0DBD63B191 /* TimelineKeyframeService.swift */; };
 		8EEE452F2EC139190049F017 /* FFMPEGProbeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE452E2EC139120049F017 /* FFMPEGProbeService.swift */; };
 		8EEE45312EC139270049F017 /* FFMPEGProgressParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE45302EC1391C0049F017 /* FFMPEGProgressParser.swift */; };
 		8EEE453B2EC13E8C0049F017 /* ConversionToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEE453A2EC13E840049F017 /* ConversionToolbarView.swift */; };
@@ -391,6 +393,7 @@
 		758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DenoExtractionDrainTests.swift; sourceTree = "<group>"; };
 		DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadHistoryServiceTests.swift; sourceTree = "<group>"; };
 		D81BE4D4410A4875A8EF38EE /* IVFConcatenatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IVFConcatenatorTests.swift; sourceTree = "<group>"; };
+		FBA41D8157AC4F0DBD63B193 /* TimelineKeyframeServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineKeyframeServiceTests.swift; sourceTree = "<group>"; };
 		1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BMXProbeLifecycleTests.swift; sourceTree = "<group>"; };
 		06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLifecycleTests.swift; sourceTree = "<group>"; };
 		56C8D0547D524C448BA478BB /* SubtitleSRTPublicationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSRTPublicationTests.swift; sourceTree = "<group>"; };
@@ -584,6 +587,7 @@
 		8EEE451F2EBF81FD0049F017 /* VideoMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMetadataService.swift; sourceTree = "<group>"; };
 		8EEE452A2EC138FA0049F017 /* ExportPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportPreset.swift; sourceTree = "<group>"; };
 		8EEE452C2EC139060049F017 /* FFMPEGCommandBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFMPEGCommandBuilder.swift; sourceTree = "<group>"; };
+		FBA41D8157AC4F0DBD63B191 /* TimelineKeyframeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineKeyframeService.swift; sourceTree = "<group>"; };
 		8EEE452E2EC139120049F017 /* FFMPEGProbeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFMPEGProbeService.swift; sourceTree = "<group>"; };
 		8EEE45302EC1391C0049F017 /* FFMPEGProgressParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFMPEGProgressParser.swift; sourceTree = "<group>"; };
 		8EEE453A2EC13E840049F017 /* ConversionToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionToolbarView.swift; sourceTree = "<group>"; };
@@ -1125,6 +1129,7 @@
 				758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */,
 				7748A92962A74E189CB18CD7 /* AV2AACParserTests.swift */,
 				D5826C72F8754C839D8C9A62 /* PackageMetadataSettingsTests.swift */,
+				FBA41D8157AC4F0DBD63B193 /* TimelineKeyframeServiceTests.swift */,
 				1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */,
 				42E08E9AD75145B68E1C049D /* ConversionPreparationSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
@@ -1158,6 +1163,7 @@
 			isa = PBXGroup;
 			children = (
 				8EEE45302EC1391C0049F017 /* FFMPEGProgressParser.swift */,
+				FBA41D8157AC4F0DBD63B191 /* TimelineKeyframeService.swift */,
 				8EEE452E2EC139120049F017 /* FFMPEGProbeService.swift */,
 				8EEE452C2EC139060049F017 /* FFMPEGCommandBuilder.swift */,
 				A4591900000000000000000C /* StitchMarkerExport.swift */,
@@ -1721,6 +1727,7 @@
 				8E824AC12EF8AB02001A6B95 /* MPVPlayer.swift in Sources */,
 				8E08B2842EAA3BFD000148A8 /* WatchFolderDurationUnit.swift in Sources */,
 				8EEE452B2EC139000049F017 /* ExportPreset.swift in Sources */,
+				FBA41D8157AC4F0DBD63B192 /* TimelineKeyframeService.swift in Sources */,
 				8EEE452F2EC139190049F017 /* FFMPEGProbeService.swift in Sources */,
 				8E0C32CB2E09EC3B00F22B21 /* AddToEncodeQueueIntent.swift in Sources */,
 				8E1477492ECF4DAB00C805AA /* UpdateNotificationView.swift in Sources */,
@@ -1902,6 +1909,7 @@
 				E1ACF6BCCBB0485C81D569A9 /* DenoExtractionDrainTests.swift in Sources */,
 				EC4CE91691E24FB19B6E1838 /* AV2AACParserTests.swift in Sources */,
 				D59F0C939A18421EB3F88F5D /* PackageMetadataSettingsTests.swift in Sources */,
+				FBA41D8157AC4F0DBD63B194 /* TimelineKeyframeServiceTests.swift in Sources */,
 				A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */,
 				6333450EF06E41EF9B17CB73 /* ConversionPreparationSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
