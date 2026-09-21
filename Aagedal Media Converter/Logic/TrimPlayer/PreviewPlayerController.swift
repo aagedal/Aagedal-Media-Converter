@@ -61,6 +61,8 @@ final class PreviewPlayerController: ObservableObject {
     @Published private(set) var currentWaveformURL: URL?
     @Published private(set) var currentWaveformChunks: [WaveformChunk] = []
     @Published private(set) var currentNativeWaveformImage: NSImage?
+    @Published private(set) var currentChannelWaveformEnvelopes: [WaveformEnvelope] = []
+    @Published private(set) var currentWaveformEnvelope: WaveformEnvelope?
     @Published private(set) var currentChannelWaveformImages: [NSImage] = []
     @Published private(set) var currentChannelWaveformLabels: [String] = []
     @Published private(set) var currentChapters: [Chapter] = []
@@ -1264,9 +1266,12 @@ final class PreviewPlayerController: ObservableObject {
     private var channelWaveformGenerationTask: Task<Void, Never>?
 
     private func updateCurrentWaveform() {
+        channelWaveformGenerationTask?.cancel()
         let streamIndex = selectedAudioStreamIndex()
         // Per-channel waveform images (preferred, shows one waveform per audio channel)
         let channelWaveform = previewAssets?.nativeChannelWaveforms(forAudioStream: streamIndex)
+        currentChannelWaveformEnvelopes = channelWaveform?.channelEnvelopes ?? []
+        currentWaveformEnvelope = (streamIndex == nil || streamIndex == 0) ? previewAssets?.waveformEnvelope : nil
         currentChannelWaveformImages = channelWaveform?.channelImages ?? []
         currentChannelWaveformLabels = channelWaveform?.channelLabels ?? []
         // Native waveform image (fallback, single mono image)
@@ -1279,7 +1284,7 @@ final class PreviewPlayerController: ObservableObject {
         logger.debug("Updated waveform: channels=\(self.currentChannelWaveformImages.count, privacy: .public), native=\(self.currentNativeWaveformImage != nil, privacy: .public), \(self.currentWaveformChunks.count, privacy: .public) chunks, totalDuration: \(self.totalDuration, privacy: .public)s for stream index: \(streamIndex ?? -1, privacy: .public)")
 
         // If per-channel waveform is missing for this stream, generate on demand
-        if currentChannelWaveformImages.isEmpty, let streamIndex {
+        if currentChannelWaveformEnvelopes.isEmpty, let streamIndex {
             generateChannelWaveformOnDemand(for: streamIndex)
         }
     }
@@ -1316,7 +1321,9 @@ final class PreviewPlayerController: ObservableObject {
 
             guard !Task.isCancelled else { return }
 
+            guard self.videoItem.url == url, self.selectedAudioStreamIndex() == streamIndex else { return }
             // Update the published state
+            self.currentChannelWaveformEnvelopes = waveform.channelEnvelopes
             self.currentChannelWaveformImages = waveform.channelImages
             self.currentChannelWaveformLabels = waveform.channelLabels
         }
@@ -1431,6 +1438,8 @@ final class PreviewPlayerController: ObservableObject {
         currentWaveformURL = nil
         currentWaveformChunks = []
         currentNativeWaveformImage = nil
+        currentWaveformEnvelope = nil
+        currentChannelWaveformEnvelopes = []
         currentChannelWaveformImages = []
         currentChannelWaveformLabels = []
         channelWaveformGenerationTask?.cancel()

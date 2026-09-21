@@ -2,6 +2,21 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class StitchingTimelineTests: XCTestCase {
+    func testPerChannelWaveformPreservesIndependentPeaksAndSilence() {
+        let samples: [Float] = [0, 0.8, 0, -0.7, 0.00001, 0, -0.00002, 0]
+        let data = samples.withUnsafeBytes { Data($0) }
+        let left = WaveformEnvelope(pcmData: data, channelCount: 2, sampleRate: 4,
+                                    minimumFramesPerBin: 1, channel: 0)
+        let right = WaveformEnvelope(pcmData: data, channelCount: 2, sampleRate: 4,
+                                     minimumFramesPerBin: 1, channel: 1)
+        XCTAssertEqual(left.peak(from: 0, to: 0.5, level: 0), .init(minimum: 0, maximum: 0))
+        XCTAssertEqual(right.peak(from: 0, to: 0.5, level: 0), .init(minimum: -0.7, maximum: 0.8))
+        XCTAssertEqual(left.peak(from: 0.5, to: 1, level: 0), .init(minimum: -0.00002, maximum: 0.00001))
+        XCTAssertEqual(right.peak(from: 0.5, to: 1, level: 0), .init(minimum: 0, maximum: 0))
+        XCTAssertEqual(right.peak(from: 0, to: 1, level: 2), .init(minimum: -0.7, maximum: 0.8))
+        XCTAssertEqual(left.duration, 1)
+    }
+
     func testRangeDeletionRetainsSourceGapAndSettings() {
         var source = clip(duration: 60, start: 10, end: 50)
         source.comment = "Keep me"
@@ -398,4 +413,31 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertEqual(StitchingTimeline.insertionBoundary(at: 500, widths: widths), 3)
     }
 
+}
+
+final class GroupEditorWindowLayoutTests: XCTestCase {
+    func testOversizedSavedWindowFitsUsableScreen() {
+        let screen = CGRect(x: 0, y: 40, width: 1440, height: 838)
+        let saved = CGRect(x: 0, y: -900, width: 1440, height: 1800)
+        XCTAssertEqual(GroupEditorWindowLayout.fittedFrame(saved, within: screen), screen)
+    }
+
+    func testValidSavedFrameIsPreserved() {
+        let screen = CGRect(x: 0, y: 40, width: 1920, height: 1018)
+        let saved = CGRect(x: 100, y: 100, width: 1120, height: 822)
+        XCTAssertEqual(GroupEditorWindowLayout.fittedFrame(saved, within: screen), saved)
+    }
+
+    func testOffscreenWindowMovesInsideSecondaryDisplayWithoutResizing() {
+        let screen = CGRect(x: -1920, y: 40, width: 1920, height: 1018)
+        let saved = CGRect(x: 100, y: -400, width: 1120, height: 822)
+        let expected = CGRect(x: -1120, y: 40, width: 1120, height: 822)
+        XCTAssertEqual(GroupEditorWindowLayout.fittedFrame(saved, within: screen), expected)
+    }
+
+    func testDefaultWindowFitsSmallDisplay() {
+        let screen = CGRect(x: 0, y: 40, width: 1024, height: 638)
+        let initial = CGRect(x: 0, y: 0, width: 1120, height: 822)
+        XCTAssertEqual(GroupEditorWindowLayout.fittedFrame(initial, within: screen), screen)
+    }
 }

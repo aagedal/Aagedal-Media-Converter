@@ -18,6 +18,7 @@ struct SendableImage: @unchecked Sendable {
 struct SendableChannelWaveform: @unchecked Sendable {
     let channelImages: [NSImage]
     let channelLabels: [String]
+    var channelEnvelopes: [WaveformEnvelope] = []
 }
 
 /// Peak envelopes retain amplitude precision independently of display size.
@@ -32,7 +33,7 @@ struct WaveformEnvelope: Sendable {
     let framesPerBin: Int
     let frameCount: Int
 
-    init(pcmData: Data, channelCount: Int, sampleRate: Double, minimumFramesPerBin: Int = 256) {
+    init(pcmData: Data, channelCount: Int, sampleRate: Double, minimumFramesPerBin: Int = 256, channel: Int? = nil) {
         let channels = max(1, channelCount)
         frameCount = pcmData.count / (MemoryLayout<Float>.size * channels)
         duration = Double(frameCount) / max(1, sampleRate)
@@ -42,11 +43,12 @@ struct WaveformEnvelope: Sendable {
         var base = [Peak](repeating: Peak(minimum: 0, maximum: 0), count: bins)
         let binSize = framesPerBin
         let frames = frameCount
+        let selectedChannels = channel.map { min(channels - 1, max(0, $0))..<(min(channels - 1, max(0, $0)) + 1) } ?? (0..<channels)
         pcmData.withUnsafeBytes { raw in
             let samples = raw.bindMemory(to: Float.self)
             for frame in 0..<frames {
                 let bin = frame / binSize
-                for channel in 0..<channels {
+                for channel in selectedChannels {
                     let value = samples[frame * channels + channel]
                     guard value.isFinite else { continue }
                     base[bin].minimum = min(base[bin].minimum, max(-1, value))
@@ -294,7 +296,7 @@ struct NativeWaveformRenderer {
         heightPerChannel: Int,
         colorHex: String = "FF2D78",
         subprocessRunner: any SubprocessRunning = SubprocessRunner()
-    ) async throws -> ([NSImage], [String]) {
+    ) async throws -> ([NSImage], [String], [WaveformEnvelope]) {
         let effectiveWidth = max(800, width)
         let effectiveChannelCount = max(1, channelCount)
 
@@ -338,6 +340,9 @@ struct NativeWaveformRenderer {
         let (r, g, b) = parseHexColor(colorHex)
         let labels = channelNames(count: effectiveChannelCount, layout: channelLayout)
         var images: [NSImage] = []
+        var envelopes: [WaveformEnvelope] = []
+        // Share the envelope memory budget across channels for long recordings.
+        let binSize = max(256, Int(ceil(Double(totalFrames) * Double(effectiveChannelCount) / 2_000_000)))
 
         for ch in 0..<effectiveChannelCount {
             try Task.checkCancellation()
@@ -358,13 +363,17 @@ struct NativeWaveformRenderer {
                 continue
             }
             images.append(image)
+            envelopes.append(WaveformEnvelope(pcmData: pcmData, channelCount: effectiveChannelCount,
+                                               sampleRate: Double(idealRate), minimumFramesPerBin: binSize,
+                                               channel: ch))
         }
 
         guard !images.isEmpty else {
             throw PreviewAssetError.generationFailed("Failed to render any channel waveform images")
         }
 
-        return (images, labels)
+        try Task.checkCancellation()
+        return (images, labels, envelopes)
     }
 
     // MARK: - Channel Labels

@@ -5039,7 +5039,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             )
         }
 
-        let (images, labels) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+        let (images, labels, envelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
             url: URL(fileURLWithPath: "/private/fixture/stereo.wav"),
             ffmpegPath: "/private/fixture/ffmpeg",
             streamIndex: 1,
@@ -5055,6 +5055,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(images.map(\.size.width), [800, 800])
         XCTAssertEqual(images.map(\.size.height), [30, 30])
         XCTAssertEqual(labels, ["Left", "Right"])
+        XCTAssertEqual(envelopes.count, 2)
+        XCTAssertEqual(envelopes.map(\.frameCount), [800, 800])
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertTrue(request.arguments.contains("0:a:1"))
         XCTAssertFalse(request.arguments.contains("-ac"))

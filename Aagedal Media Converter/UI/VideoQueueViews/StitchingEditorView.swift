@@ -1079,31 +1079,11 @@ private struct StitchingClipWaveform: View {
     let assets: PreviewAssets?
     let visualScale: Double
     let visibleRange: ClosedRange<Double>
-    @Environment(\.displayScale) private var displayScale
-
     var body: some View {
-        Canvas { context, size in
-            guard let envelope = assets?.waveformEnvelope, size.width > 0 else { return }
-            let duration = max(0.001, StitchingTimeline.duration(item))
-            let secondsPerPoint = duration / size.width
-            let pixel = 1 / max(1, displayScale)
-            let level = envelope.level(secondsPerPixel: secondsPerPoint * pixel)
-            let gain = visualScale.isFinite ? min(16, max(1, visualScale)) : 4
-            let midY = size.height / 2
-            let halfHeight = max(0, midY - 2)
-            let start = max(0, floor(visibleRange.lowerBound / pixel) * pixel)
-            let end = min(size.width, visibleRange.upperBound)
-            guard end > start else { return }
-            var path = Path()
-            for x in stride(from: start, to: end, by: pixel) {
-                let time = item.effectiveTrimStart + x * secondsPerPoint
-                let peak = envelope.peak(from: time, to: time + pixel * secondsPerPoint, level: level)
-                let top = midY - min(1, Double(peak.maximum) * gain) * halfHeight
-                let bottom = midY - max(-1, Double(peak.minimum) * gain) * halfHeight
-                path.addRect(CGRect(x: x, y: top, width: pixel, height: max(pixel, bottom - top)))
-            }
-            context.fill(path, with: .color(Color(red: 1, green: 0.18, blue: 0.47)))
-        }
+        WaveformEnvelopeView(envelope: assets?.waveformEnvelope,
+                             sourceStart: item.effectiveTrimStart,
+                             sourceDuration: StitchingTimeline.duration(item),
+                             visualScale: visualScale, visibleRange: visibleRange)
         .background(Color.black.opacity(0.8))
         .overlay {
             if assets?.waveformEnvelope == nil {

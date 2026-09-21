@@ -57,6 +57,7 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
 
         if let existing = currentWindow {
             hostingView?.rootView = content
+            fitWindowToScreen(existing)
             existing.makeKeyAndOrderFront(nil)
             return
         }
@@ -71,11 +72,14 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
         window.minSize = NSSize(width: 960, height: 700)
         window.isReleasedWhenClosed = false
         window.delegate = self
-        // Persist window size/position across opens. Xcode stores the frame in
+        // Persist window size/position across opens. AppKit stores the frame in
         // UserDefaults under this autosave name automatically.
         window.setFrameAutosaveName("GroupEditorWindow")
 
         let hosting = NSHostingView(rootView: content)
+        // The resizable window owns the layout size. In particular, the preview's
+        // intrinsic/ideal size must not expand the window when media loads.
+        hosting.sizingOptions = []
         hosting.autoresizingMask = [.width, .height]
         hosting.frame = window.contentView?.bounds ?? .zero
         window.contentView = hosting
@@ -85,6 +89,8 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
             positionNextToMainWindow(window)
         }
 
+        // Repair oversized saved frames, including those from a larger display.
+        fitWindowToScreen(window)
         currentWindow = window
         hostingView = hosting
         window.makeKeyAndOrderFront(nil)
@@ -117,6 +123,13 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
         hostingView = nil
     }
 
+    private func fitWindowToScreen(_ window: NSWindow) {
+        guard let screen = window.screen ?? NSApp.mainWindow?.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame
+        window.minSize = NSSize(width: min(960, visible.width), height: min(700, visible.height))
+        window.setFrame(GroupEditorWindowLayout.fittedFrame(window.frame, within: visible), display: true)
+    }
+
     private func positionNextToMainWindow(_ window: NSWindow) {
         guard let main = NSApp.mainWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else {
             window.center()
@@ -132,6 +145,21 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
             origin.y = max(sf.minY, min(origin.y, sf.maxY - size.height))
         }
         window.setFrameOrigin(origin)
+    }
+}
+
+/// Keep both new and restored windows inside the usable screen area, excluding
+/// the menu bar and Dock. Preserve a valid user-selected size and position.
+enum GroupEditorWindowLayout {
+    static func fittedFrame(_ frame: NSRect, within visible: NSRect) -> NSRect {
+        let width = min(frame.width, visible.width)
+        let height = min(frame.height, visible.height)
+        return NSRect(
+            x: min(max(frame.minX, visible.minX), visible.maxX - width),
+            y: min(max(frame.minY, visible.minY), visible.maxY - height),
+            width: width,
+            height: height
+        )
     }
 }
 

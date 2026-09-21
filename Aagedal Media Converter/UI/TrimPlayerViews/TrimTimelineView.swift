@@ -20,6 +20,9 @@ struct TrimTimelineView: View {
     let playbackTime: Double
     let thumbnails: [URL]?
     let quickThumbnailImages: [NSImage]
+    let waveformEnvelope: WaveformEnvelope?
+    let channelWaveformEnvelopes: [WaveformEnvelope]
+    let waveformVisualScale: Double
     let nativeWaveformImage: NSImage?
     let channelWaveformImages: [NSImage]
     let channelWaveformLabels: [String]
@@ -67,6 +70,9 @@ struct TrimTimelineView: View {
         playbackTime: Double,
         thumbnails: [URL]?,
         quickThumbnailImages: [NSImage] = [],
+        waveformEnvelope: WaveformEnvelope? = nil,
+        channelWaveformEnvelopes: [WaveformEnvelope] = [],
+        waveformVisualScale: Double = 4,
         nativeWaveformImage: NSImage? = nil,
         channelWaveformImages: [NSImage] = [],
         channelWaveformLabels: [String] = [],
@@ -88,6 +94,9 @@ struct TrimTimelineView: View {
         self.playbackTime = playbackTime
         self.thumbnails = thumbnails
         self.quickThumbnailImages = quickThumbnailImages
+        self.waveformEnvelope = waveformEnvelope
+        self.channelWaveformEnvelopes = channelWaveformEnvelopes
+        self.waveformVisualScale = waveformVisualScale
         self.nativeWaveformImage = nativeWaveformImage
         self.channelWaveformImages = channelWaveformImages
         self.channelWaveformLabels = channelWaveformLabels
@@ -770,9 +779,13 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
 
     @ViewBuilder
     private func waveformContent(width: CGFloat, height: CGFloat) -> some View {
-        if !channelWaveformImages.isEmpty {
+        if !channelWaveformEnvelopes.isEmpty || !channelWaveformImages.isEmpty {
             // Per-channel waveform — one waveform per audio channel, stacked vertically
             perChannelWaveformContent(width: width, height: height)
+        } else if let waveformEnvelope {
+            WaveformEnvelopeView(envelope: waveformEnvelope, sourceStart: 0,
+                                 sourceDuration: duration, visualScale: waveformVisualScale)
+                .frame(width: width, height: height)
         } else if let image = nativeWaveformImage {
             // Native waveform — direct NSImage, no disk I/O (mono fallback)
             Image(nsImage: image)
@@ -810,11 +823,16 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
     @ViewBuilder
     private func perChannelWaveformContent(width: CGFloat, height: CGFloat) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(channelWaveformImages.enumerated()), id: \.offset) { index, image in
+            ForEach(0..<max(channelWaveformEnvelopes.count, channelWaveformImages.count), id: \.self) { index in
                 ZStack(alignment: .leading) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .interpolation(.medium)
+                    if channelWaveformEnvelopes.indices.contains(index) {
+                        WaveformEnvelopeView(envelope: channelWaveformEnvelopes[index], sourceStart: 0,
+                                             sourceDuration: duration, visualScale: waveformVisualScale)
+                    } else if channelWaveformImages.indices.contains(index) {
+                        Image(nsImage: channelWaveformImages[index])
+                            .resizable()
+                            .interpolation(.medium)
+                    }
 
                     // Channel label (top-left)
                     if index < channelWaveformLabels.count {
@@ -827,7 +845,7 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                     }
 
                     // Subtle separator line between channels
-                    if index < channelWaveformImages.count - 1 {
+                    if index < max(channelWaveformEnvelopes.count, channelWaveformImages.count) - 1 {
                         VStack {
                             Spacer()
                             Rectangle()
@@ -1465,6 +1483,42 @@ private struct TimelineKeyTrackerView: NSViewRepresentable {
             // Clean up monitors before removal
             flagsChangedMonitor = nil
             super.removeFromSuperview()
+        }
+    }
+}
+
+/// Shared by the Trim and encoding-group timelines. Draw at the actual display
+/// density so resizing preserves peaks instead of stretching a cached bitmap.
+struct WaveformEnvelopeView: View {
+    let envelope: WaveformEnvelope?
+    let sourceStart: Double
+    let sourceDuration: Double
+    let visualScale: Double
+    var visibleRange: ClosedRange<Double>? = nil
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
+        Canvas { context, size in
+            guard let envelope, size.width > 0 else { return }
+            let duration = max(0.001, sourceDuration)
+            let secondsPerPoint = duration / size.width
+            let pixel = 1 / max(1, displayScale)
+            let level = envelope.level(secondsPerPixel: secondsPerPoint * pixel)
+            let gain = visualScale.isFinite ? min(16, max(1, visualScale)) : 4
+            let midY = size.height / 2
+            let halfHeight = max(0, midY - 2)
+            let start = max(0, floor((visibleRange?.lowerBound ?? 0) / pixel) * pixel)
+            let end = min(size.width, (visibleRange?.upperBound ?? size.width))
+            guard end > start else { return }
+            var path = Path()
+            for x in stride(from: start, to: end, by: pixel) {
+                let time = sourceStart + x * secondsPerPoint
+                let peak = envelope.peak(from: time, to: time + pixel * secondsPerPoint, level: level)
+                let top = midY - min(1, Double(peak.maximum) * gain) * halfHeight
+                let bottom = midY - max(-1, Double(peak.minimum) * gain) * halfHeight
+                path.addRect(CGRect(x: x, y: top, width: pixel, height: max(pixel, bottom - top)))
+            }
+            context.fill(path, with: .color(Color(red: 1, green: 0.18, blue: 0.47)))
         }
     }
 }

@@ -611,7 +611,7 @@ actor PreviewAssetGenerator {
 
         do {
             let t0 = CFAbsoluteTimeGetCurrent()
-            let (images, labels) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+            let (images, labels, envelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
                 url: url,
                 ffmpegPath: ffmpegPath,
                 streamIndex: streamIndex,
@@ -621,7 +621,7 @@ actor PreviewAssetGenerator {
                 width: width,
                 heightPerChannel: height
             )
-            let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels)
+            let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels, channelEnvelopes: envelopes)
 
             // Cache the result
             var urlCache = channelWaveformCache[url] ?? [:]
@@ -890,7 +890,7 @@ actor PreviewAssetGenerator {
             let channels0 = stream0.channels ?? 2
             do {
                 let t0 = CFAbsoluteTimeGetCurrent()
-                let (images, labels) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+                let (images, labels, envelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
                     url: url,
                     ffmpegPath: ffmpegPath,
                     streamIndex: 0,
@@ -900,7 +900,7 @@ actor PreviewAssetGenerator {
                     width: perChannelWidth,
                     heightPerChannel: perChannelHeight
                 )
-                let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels)
+                let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels, channelEnvelopes: envelopes)
                 nativeChannelWaveform = waveform
                 // Cache for persistence across trim view open/close cycles
                 var urlCache = channelWaveformCache[url] ?? [:]
