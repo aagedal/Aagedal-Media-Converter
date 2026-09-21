@@ -36,6 +36,9 @@ enum VOBSUBParser {
         let header = try String(contentsOf: paletteURL, encoding: .utf8)
         var entries: [IDXEntry] = []
         var offset = 0
+        var previousTicks: Int64?
+        var unwrappedTicks: Int64 = 0
+        let timestampPeriod: Int64 = 1 << 33
         while offset + 4 <= data.count {
             try Task.checkCancellation()
             guard data[offset] == 0, data[offset + 1] == 0, data[offset + 2] == 1 else {
@@ -66,7 +69,19 @@ enum VOBSUBParser {
                         | (UInt64(data[pts + 2] & 0xFE) << 14)
                         | (UInt64(data[pts + 3]) << 7)
                         | UInt64(data[pts + 4] >> 1)
-                    entries.append(IDXEntry(timestampMs: Int(ticks / 90), offset: offset))
+                    let rawTicks = Int64(ticks)
+                    if let previousTicks {
+                        // Resolve the nearest timestamp across the 33-bit PES clock wrap.
+                        // Small backward steps remain backward steps, not a new epoch.
+                        var delta = rawTicks - previousTicks
+                        if delta < -timestampPeriod / 2 { delta += timestampPeriod }
+                        if delta > timestampPeriod / 2 { delta -= timestampPeriod }
+                        unwrappedTicks += delta
+                    } else {
+                        unwrappedTicks = rawTicks
+                    }
+                    previousTicks = rawTicks
+                    entries.append(IDXEntry(timestampMs: Int(unwrappedTicks / 90), offset: offset))
                 }
             }
             offset = end

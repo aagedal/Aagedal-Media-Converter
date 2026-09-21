@@ -846,6 +846,15 @@ focused OCR, VOBSUB, Whisper, and subtitle-mux tests pass. Real disc media,
 recognition accuracy, missing palettes, long tracks, and UI validation remain open.
 See the [active DVD cancellation validation record](4.5-active-dvd-cancellation-validation-2026-09-21.md).
 
+DVD program-stream subtitle timing now unwraps the 33-bit PES clock instead of
+jumping backward at its boundary. Three fragmented-packet regressions cover
+forward wrap, repeated/small backward timestamps, and reordering across the
+boundary. All 23 focused parser, OCR, subtitle-mux, and Whisper coexistence tests
+pass. Real-disc and long-track validation remain open; nearest-timestamp
+unwrapping cannot resolve gaps exceeding half the clock period or an epoch before
+the first observed timestamp. See the
+[DVD timestamp-wrap validation record](4.5-dvd-timestamp-wrap-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

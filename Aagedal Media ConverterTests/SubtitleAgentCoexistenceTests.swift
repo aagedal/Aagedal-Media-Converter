@@ -961,6 +961,61 @@ private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
 }
 
 final class VOBSUBParserTests: XCTestCase {
+    func testProgramStreamTimestampsRemainContinuousAcrossClockWrap() throws {
+        let period: UInt64 = 1 << 33
+        let timestamps = [period - 180_000, period - 90_000, period, period + 90_000]
+        let frames = try parseProgramStream(timestamps: timestamps.map { $0 % period })
+        XCTAssertEqual(frames.count, timestamps.count)
+        for (frame, ticks) in zip(frames, timestamps) {
+            XCTAssertEqual(frame.startTime, Double(ticks / 90) / 1000 + 0.512, accuracy: 0.0001)
+            XCTAssertEqual(frame.endTime, Double(ticks / 90) / 1000 + 1.536, accuracy: 0.0001)
+        }
+    }
+
+    func testProgramStreamPreservesSmallBackwardAndRepeatedTimestamps() throws {
+        let timestamps: [UInt64] = [900_000, 900_000, 810_000, 990_000]
+        let frames = try parseProgramStream(timestamps: timestamps)
+        XCTAssertEqual(frames.count, timestamps.count)
+        for (frame, ticks) in zip(frames, timestamps) {
+            XCTAssertEqual(frame.startTime, Double(ticks / 90) / 1000 + 0.512, accuracy: 0.0001)
+        }
+    }
+
+    func testProgramStreamHandlesReorderedTimestampAcrossWrap() throws {
+        let period: UInt64 = 1 << 33
+        let timestamps = [period - 180_000, period + 90_000, period - 90_000, period + 180_000]
+        let frames = try parseProgramStream(timestamps: timestamps.map { $0 % period })
+        XCTAssertEqual(frames.count, timestamps.count)
+        for (frame, ticks) in zip(frames, timestamps) {
+            XCTAssertEqual(frame.startTime, Double(ticks / 90) / 1000 + 0.512, accuracy: 0.0001)
+        }
+    }
+
+    private func parseProgramStream(timestamps: [UInt64]) throws -> [SubtitleFrame] {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DVDTimestamp-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let packet = CoexistenceDVDFixture.fixture()
+        let palette = try CoexistenceDVDFixture.writeFixture(packet: packet, directory: directory)
+        var bytes: [UInt8] = []
+        for ticks in timestamps {
+            let pts: [UInt8] = [
+                0x21 | UInt8((ticks >> 29) & 0x0E), UInt8((ticks >> 22) & 0xFF),
+                UInt8((ticks >> 14) & 0xFE) | 1, UInt8((ticks >> 7) & 0xFF),
+                UInt8((ticks << 1) & 0xFE) | 1
+            ]
+            // Split each SPU across a timestamped PES and an untimestamped continuation.
+            bytes += [0, 0, 1, 0xBD] + CoexistenceDVDFixture.word(16)
+                + [0x80, 0x80, 5] + pts + [0x20] + Array(packet.prefix(7))
+            bytes += [0, 0, 1, 0xBD] + CoexistenceDVDFixture.word(packet.count - 7 + 4)
+                + [0x80, 0, 0, 0x20] + Array(packet.dropFirst(7))
+        }
+        let stream = directory.appendingPathComponent("timestamps.vob")
+        try Data(bytes).write(to: stream)
+        return try VOBSUBParser.parse(programStreamURL: stream, paletteURL: palette)
+    }
+
     func testDVDControlChainTimingPaletteAndVariableLengthRuns() throws {
         let frames = try parse(packet: CoexistenceDVDFixture.fixture())
         let frame = try XCTUnwrap(frames.first)
