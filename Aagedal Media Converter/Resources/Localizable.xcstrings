@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Requested end: %@": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ønsket slutt: %@"
+          }
+        }
+      }
+    },
+    "Keyframe at or after end: %@ (%@ s later). This does not predict the exported end.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nøkkelbilde ved eller etter slutten: %@ (%@ s senere). Dette forutsier ikke slutten på eksporten."
+          }
+        }
+      }
+    },
+    "No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes.": {
+      "localizations": {
+        "nb": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fant ikke noe påfølgende nøkkelbilde i det undersøkte området. Slutten på eksporten kan ikke anslås ut fra nøkkelbilder."
+          }
+        }
+      }
+    },
     "Requested start: %@": {
       "localizations": {
         "nb": {

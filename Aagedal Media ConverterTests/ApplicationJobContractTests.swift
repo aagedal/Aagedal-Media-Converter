@@ -4226,6 +4226,66 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    func testLiveLosslessSurroundExportsPreserveEverySelectedChannelSample() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("six-channel.mov")
+        // Different chirps in all six channels detect swaps, silence, downmixing,
+        // and sample shifts, including in the LFE channel.
+        let channels = (0..<6).map { channel in
+            "0.1*sin(2*PI*(\(60 + channel * 130)*t+\(13 + channel * 7)*t*t))"
+        }.joined(separator: "|")
+        try runBundledFFmpeg([
+            "-v", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=3",
+            "-f", "lavfi", "-i", "aevalsrc=\(channels):s=48000:d=3:c=5.1",
+            "-c:v", "libx264", "-c:a", "pcm_s24le", sourceURL.path
+        ])
+        let referenceURL = directory.appendingPathComponent("reference.pcm")
+        try runBundledFFmpeg([
+            "-v", "error", "-xerror", "-i", sourceURL.path, "-map", "0:a:0",
+            "-af", "atrim=start_sample=36000:end_sample=108000,asetpts=PTS-STARTPTS",
+            "-c:a", "pcm_s24le", "-f", "s24le", referenceURL.path
+        ])
+        let reference = try Data(contentsOf: referenceURL)
+        XCTAssertEqual(reference.count, 72_000 * 6 * 3)
+        let defaults = try makeDefaults()
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted, executor: adapter.jobExecutor)
+        for (presetID, format, name) in [
+            (ApplicationPresetID.audioOnly, AudioOnlyFormat.wav, "wav"),
+            (.audioOnly, .flac, "flac"),
+            (.proRes, .wav, "prores")
+        ] {
+            defaults.set(format.rawValue, forKey: AppConstants.audioOnlyFormatKey)
+            let plan = try await service.plan(makeRequest(
+                origin: .manual, sourceURLs: [sourceURL], destinationFolderURL: directory,
+                presetID: presetID,
+                sourceSettings: [ApplicationSourceExecutionSettings(
+                    sourceURL: sourceURL, includeDateTag: false, timecodeConfig: nil,
+                    trimStart: 0.75, trimEnd: 2.25, outputBaseNameOverride: "surround-\(name)"
+                )], idempotencyKey: nil, defaults: defaults
+            ))
+            let accepted = try await service.submit(planID: plan.id)
+            let record = try await waitForRecord(service: service, jobID: accepted.record.id, state: .succeeded)
+            XCTAssertEqual(record.outputURLs, plan.outputs.map(\.outputURL))
+            let outputURL = try XCTUnwrap(record.outputURLs.first)
+            let metadata = try await ApplicationMediaInspector.live.inspect(outputURL)
+            XCTAssertEqual(metadata.audioStreams.count, 1, name)
+            XCTAssertEqual(metadata.audioStreams.first?.channels, 6, name)
+            XCTAssertEqual(metadata.audioStreams.first?.sampleRate, 48_000, name)
+            XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 1.5, accuracy: 1.0 / 48_000, name)
+            XCTAssertEqual(metadata.videoStreams.isEmpty, presetID == .audioOnly, name)
+            let actualURL = directory.appendingPathComponent("\(name).pcm")
+            try runBundledFFmpeg([
+                "-v", "error", "-xerror", "-i", outputURL.path, "-map", "0:a:0",
+                "-c:a", "pcm_s24le", "-f", "s24le", actualURL.path
+            ])
+            let actual = try Data(contentsOf: actualURL)
+            XCTAssertEqual(actual.count, reference.count, name)
+            XCTAssertTrue(actual == reference, "\(name) changed selected 24-bit surround samples or channel order")
+        }
+    }
+
     func testLiveSharedJobDownmixesCapturedSurroundRouting() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("surround.mov")

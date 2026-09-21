@@ -2,6 +2,19 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class StitchingTimelineTests: XCTestCase {
+    func testOutPointReferenceRequiresContinuousCoverageThroughFollowingKeyframe() {
+        XCTAssertEqual(StitchingTimeline.followingKeyframeReference(3.2, times: [0, 2, 4], scannedRanges: [0...6]), 4)
+        XCTAssertEqual(StitchingTimeline.followingKeyframeReference(4, times: [0, 2, 4], scannedRanges: [0...6]), 4)
+        XCTAssertNil(StitchingTimeline.followingKeyframeReference(3.2, times: [0, 2, 40], scannedRanges: [0...6, 35...45]))
+        XCTAssertNil(StitchingTimeline.followingKeyframeReference(6, times: [0, 2, 4], scannedRanges: [0...6]))
+        // A half-open reader range must not establish knowledge at its excluded end.
+        XCTAssertNil(StitchingTimeline.followingKeyframeReference(4, times: [0, 4], scannedRanges: [0...Double(4).nextDown]))
+        XCTAssertNil(StitchingTimeline.followingKeyframeReference(.nan, times: [0, 4], scannedRanges: [0...6]))
+        XCTAssertNil(StitchingTimeline.followingKeyframeReference(.infinity, times: [0, 4], scannedRanges: [0...6]))
+        XCTAssertNil(StitchingTimeline.followingKeyframeReference(-1, times: [0, 4], scannedRanges: [0...6]))
+        XCTAssertNil(StitchingTimeline.followingKeyframeReference(3, times: [.nan, .infinity], scannedRanges: [0...6]))
+    }
+
     func testSeekCandidateRequiresContinuousScannedCoverageThroughCut() {
         XCTAssertEqual(StitchingTimeline.precedingSeekCandidate(3.2, times: [0, 2, 4], scannedRanges: [0...6]), 2)
         XCTAssertEqual(StitchingTimeline.precedingSeekCandidate(4, times: [0, 2, 4], scannedRanges: [0...6]), 4)

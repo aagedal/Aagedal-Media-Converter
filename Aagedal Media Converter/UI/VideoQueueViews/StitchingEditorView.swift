@@ -139,6 +139,17 @@ enum StitchingTimeline {
         return candidate
     }
 
+    /// A following sync sample is only a source reference for an out-point.
+    /// Packet copy can retain reordered video and audio across it, so this is
+    /// neither an exported-end prediction nor an upper bound on the export.
+    static func followingKeyframeReference(_ requested: Double, times: [Double],
+                                          scannedRanges: [ClosedRange<Double>]) -> Double? {
+        guard requested.isFinite, requested >= 0,
+              let candidate = times.first(where: { $0.isFinite && $0 >= requested }),
+              scannedRanges.contains(where: { $0.contains(requested) && $0.contains(candidate) }) else { return nil }
+        return candidate
+    }
+
     /// Source timestamps must be sorted, as returned by keyframe discovery. Keep
     /// dense regions hidden instead of suggesting that a sampled subset is complete.
     static func keyframeTickOffsets(in times: [Double], sourceStart: Double, duration: Double,
@@ -500,6 +511,26 @@ struct StitchingEditorView<FileList: View>: View {
                         } else {
                             Text("Seek estimate unavailable near this cut.")
                                 .font(.caption).foregroundStyle(.secondary)
+                        }
+                        let requestedEnd = item.effectiveTrimEnd
+                        let endDisplay = StitchingTimeline.timeDisplay(requestedEnd, frameRate: StitchingTimeline.frameRate(for: item))
+                        Text("Requested end: \(endDisplay)")
+                            .font(.caption.monospacedDigit())
+                            .accessibilityIdentifier("stitching.requestedEnd")
+                        if let reference = StitchingTimeline.followingKeyframeReference(
+                            requestedEnd, times: keyframes[item.url] ?? [],
+                            scannedRanges: keyframeScannedRanges[item.url] ?? []) {
+                            let referenceDisplay = StitchingTimeline.timeDisplay(reference, frameRate: StitchingTimeline.frameRate(for: item))
+                            let difference = (reference - requestedEnd).formatted(.number.precision(.fractionLength(3)))
+                            Text("Keyframe at or after end: \(referenceDisplay) (\(difference) s later). This does not predict the exported end.")
+                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("stitching.endKeyframeReference")
+                        } else {
+                            Text("No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes.")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("stitching.endKeyframeUnavailable")
                         }
                     }
                     Label {

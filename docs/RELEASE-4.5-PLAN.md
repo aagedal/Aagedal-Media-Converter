@@ -910,6 +910,16 @@ script tests, localization checks, and three isolated serial UI checks pass,
 including the previously failing range deletion/undo check. See the
 [bounded discovery validation record](4.5-bounded-keyframes-validation-2026-09-21.md).
 
+The free Stream Copy trim panel now displays the requested end and, when continuous
+scan coverage permits it, a following-keyframe reference and time difference.
+The reference explicitly does not predict the exported end. Camera-card grouping
+now has a conservative compatibility-proposal layer that keeps logical spans
+intact, preserves contiguous order, and isolates unknown/conflicting recordings
+for review. Import activation still requires span resolution and a reviewed UI.
+A live shared-service regression also verifies every selected 24-bit sample in
+all six surround channels for trimmed WAV, FLAC, and ProRes output. See the
+[continuation validation record](4.5-end-guidance-surround-grouping-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -1173,8 +1183,9 @@ import. Callers must resolve spans into logical recordings first. It prefers
 camera dates over container dates, never substitutes filesystem dates, uses an
 explicit fixed timezone for the whole import, preserves input order, and keeps
 contiguous undated recordings separate. The importer currently lacks reliable
-span identity/resolution; compatibility grouping and a user-reviewed preview are
-still required before enabling this option.
+span identity/resolution. Conservative compatibility proposals are now available
+in the foundation, but an importer metadata/compatibility adapter and a
+user-reviewed preview are still required before enabling this option.
 
 Remaining:
 
@@ -1215,8 +1226,10 @@ points, not a guarantee of independently decodable or exact exported boundaries.
 Remaining refinements:
 
 - Requested-start and preceding-seek-candidate feedback is implemented, including
-  a difference and uncertainty caveat. Out-point estimates and actual temporary
-  export-boundary previews remain open. Do not claim decoded preview is exact
+  a difference and uncertainty caveat. Requested-end and coverage-gated
+  following-keyframe references are also implemented, explicitly without predicting
+  exported end. Actual out-point estimates and temporary export-boundary previews
+  remain open. Do not claim decoded preview is exact
   Stream Copy output. Merge preparation uses input-side `-ss`, `-t`, and `-c copy`.
 - Resolve the absent ffprobe packaging decision, then probe packet keyframe
   flags/timestamps using the selected bundled tool, scoped to

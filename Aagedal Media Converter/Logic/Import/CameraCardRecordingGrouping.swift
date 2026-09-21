@@ -36,6 +36,75 @@ enum CameraCardRecordingGrouping {
         case recordingDay(splitOnLongGaps: Bool)
     }
 
+    enum Compatibility: Equatable {
+        case compatible
+        case incompatible
+        case unknown
+    }
+
+    struct ProposedGroup: Equatable {
+        let recordings: [Recording]
+        /// Unknown or internally incompatible spans require review; they must
+        /// never be converted into multiple recordings to make a merge pass.
+        let compatibility: Compatibility
+
+        var urls: [URL] { recordings.flatMap(\.urls) }
+        var requiresReview: Bool { compatibility != .compatible }
+    }
+
+    /// Produces a conservative proposal after logical spans have been resolved.
+    /// The evaluator must inspect every URL, including every segment of a span,
+    /// and return `unknown` for missing metadata. It must not accept a group by
+    /// comparing only the first segment or ignoring unprobed files.
+    ///
+    /// Compatibility partitions are contiguous: A/B/A stays A/B/A, never A/A/B.
+    /// Unknown or conflicting recordings remain intact in isolated review groups.
+    /// `singleGroup` bypasses all splitting but still exposes compatibility, so a
+    /// future preview can offer retaining one group without implying it can merge.
+    static func proposal(
+        for recordings: [Recording],
+        mode: Mode,
+        timeZone: TimeZone,
+        evaluateCompatibility: ([URL]) -> Compatibility
+    ) -> [ProposedGroup] {
+        guard !recordings.isEmpty else { return [] }
+
+        func compatibility(of recordings: [Recording]) -> Compatibility {
+            guard recordings.allSatisfy({ !$0.urls.isEmpty }) else { return .unknown }
+            return evaluateCompatibility(recordings.flatMap(\.urls))
+        }
+
+        if case .singleGroup = mode {
+            return [ProposedGroup(recordings: recordings, compatibility: compatibility(of: recordings))]
+        }
+
+        var result: [ProposedGroup] = []
+        for datedGroup in groups(for: recordings, mode: mode, timeZone: timeZone) {
+            var pending: [Recording] = []
+            for recording in datedGroup {
+                let status = compatibility(of: [recording])
+                guard status == .compatible else {
+                    if !pending.isEmpty {
+                        result.append(ProposedGroup(recordings: pending, compatibility: .compatible))
+                        pending = []
+                    }
+                    result.append(ProposedGroup(recordings: [recording], compatibility: status))
+                    continue
+                }
+
+                if !pending.isEmpty, compatibility(of: pending + [recording]) != .compatible {
+                    result.append(ProposedGroup(recordings: pending, compatibility: .compatible))
+                    pending = []
+                }
+                pending.append(recording)
+            }
+            if !pending.isEmpty {
+                result.append(ProposedGroup(recordings: pending, compatibility: .compatible))
+            }
+        }
+        return result
+    }
+
     /// Uses one explicitly chosen timezone for the whole import. Camera offset
     /// changes therefore do not change the interpretation of the day mid-card.
     /// Unknown dates form separate contiguous runs; no filesystem fallback or

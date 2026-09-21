@@ -97,4 +97,78 @@ final class CameraCardRecordingGroupingTests: XCTestCase {
         XCTAssertEqual(Grouping.Recording(urls: urls, cameraDate: nil, containerDate: container, duration: 1).start, container)
         XCTAssertNil(Grouping.Recording(urls: urls, cameraDate: nil, containerDate: nil, duration: 1).start)
     }
+
+    func testCompatibilityProposalPreservesContiguousOrderAndAllSpanSegments() {
+        let input = [recording("a", "2026-01-01T08:00:00Z", segments: 2),
+                     recording("b", "2026-01-01T09:00:00Z"),
+                     recording("a", "2026-01-01T10:00:00Z")]
+        var evaluatedSpan = false
+        let result = Grouping.proposal(for: input, mode: .recordingDay(splitOnLongGaps: false), timeZone: utc) { urls in
+            if urls == input[0].urls { evaluatedSpan = true }
+            let formats = Set(urls.map { $0.lastPathComponent.first! })
+            return formats.count == 1 ? .compatible : .incompatible
+        }
+        XCTAssertTrue(evaluatedSpan)
+        XCTAssertEqual(result.map(\.recordings), input.map { [$0] })
+        XCTAssertEqual(result.flatMap(\.urls), input.flatMap(\.urls))
+        XCTAssertTrue(result.allSatisfy { !$0.requiresReview })
+    }
+
+    func testUnknownAndConflictingSpansRemainIntactAndRequireReview() {
+        let input = [recording("a", nil), recording("unknown", nil, segments: 3),
+                     recording("conflict", nil, segments: 2), recording("b", nil)]
+        let result = Grouping.proposal(for: input, mode: .recordingDay(splitOnLongGaps: false), timeZone: utc) { urls in
+            if urls.contains(where: { $0.lastPathComponent.hasPrefix("unknown") }) { return .unknown }
+            if urls.contains(where: { $0.lastPathComponent.hasPrefix("conflict") }) { return .incompatible }
+            return .compatible
+        }
+        XCTAssertEqual(result.map(\.recordings), input.map { [$0] })
+        XCTAssertEqual(result.map(\.compatibility), [.compatible, .unknown, .incompatible, .compatible])
+        XCTAssertEqual(result.map(\.requiresReview), [false, true, true, false])
+        XCTAssertEqual(result.flatMap(\.urls), input.flatMap(\.urls))
+    }
+
+    func testCompatibilityProposalNeverRejoinsDateOrUnknownDateBoundaries() {
+        let input = [recording("a", "2026-01-01T08:00:00Z"),
+                     recording("b", "2026-01-01T09:00:00Z"),
+                     recording("c", nil), recording("d", nil),
+                     recording("e", "2026-01-02T08:00:00Z")]
+        let result = Grouping.proposal(for: input, mode: .recordingDay(splitOnLongGaps: false), timeZone: utc) { _ in .compatible }
+        XCTAssertEqual(result.map { $0.recordings.count }, [2, 2, 1])
+        XCTAssertEqual(result.flatMap(\.recordings), input)
+    }
+
+    func testRetainingSingleGroupStillReportsIncompatibilityAndDoesNotSplit() {
+        let input = [recording("a", "2026-01-01T08:00:00Z"),
+                     recording("b", "2026-01-02T09:00:00Z", segments: 3)]
+        let result = Grouping.proposal(for: input, mode: .singleGroup, timeZone: utc) { urls in
+            XCTAssertEqual(urls, input.flatMap(\.urls))
+            return .incompatible
+        }
+        XCTAssertEqual(result.map(\.recordings), [input])
+        XCTAssertEqual(result.first?.requiresReview, true)
+        XCTAssertTrue(Grouping.proposal(for: [], mode: .singleGroup, timeZone: utc) { _ in
+            XCTFail("Empty input must not invoke the evaluator")
+            return .compatible
+        }.isEmpty)
+    }
+
+    func testProposalChecksWholeCandidateGroupRatherThanAssumingPairwiseCompatibility() {
+        let input = [recording("a", nil), recording("b", nil), recording("c", nil)]
+        let result = Grouping.proposal(for: input, mode: .recordingDay(splitOnLongGaps: false), timeZone: utc) { urls in
+            urls.count <= 2 ? .compatible : .unknown
+        }
+        XCTAssertEqual(result.map { $0.recordings.count }, [2, 1])
+        XCTAssertEqual(result.flatMap(\.recordings), input)
+    }
+
+    func testEmptyLogicalRecordingIsRetainedForReviewWithoutPassingIncompleteInputs() {
+        let empty = Grouping.Recording(urls: [], cameraDate: nil, containerDate: nil, duration: nil)
+        let result = Grouping.proposal(for: [empty], mode: .recordingDay(splitOnLongGaps: false), timeZone: utc) { _ in
+            XCTFail("Incomplete recordings must not be approved by an evaluator")
+            return .compatible
+        }
+        XCTAssertEqual(result.map(\.recordings), [[empty]])
+        XCTAssertEqual(result.first?.compatibility, .unknown)
+    }
 }
