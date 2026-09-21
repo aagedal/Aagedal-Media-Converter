@@ -23,7 +23,7 @@ enum VOBSUBParser {
         let idxText = try String(contentsOf: idxURL, encoding: .utf8)
         let subData = try Data(contentsOf: subURL)
 
-        let palette = parsePalette(from: idxText)
+        let palette = try parsePalette(from: idxText)
         let entries = parseIDXEntries(from: idxText)
 
         return try decodeFrames(subData: subData, palette: palette, entries: entries)
@@ -34,6 +34,7 @@ enum VOBSUBParser {
     static func parse(programStreamURL: URL, paletteURL: URL) throws -> [SubtitleFrame] {
         let data = try Data(contentsOf: programStreamURL)
         let header = try String(contentsOf: paletteURL, encoding: .utf8)
+        let palette = try parsePalette(from: header)
         var entries: [IDXEntry] = []
         var offset = 0
         var previousTicks: Int64?
@@ -86,7 +87,7 @@ enum VOBSUBParser {
             }
             offset = end
         }
-        return try decodeFrames(subData: data, palette: parsePalette(from: header), entries: entries)
+        return try decodeFrames(subData: data, palette: palette, entries: entries)
     }
 
     private static func decodeFrames(
@@ -127,26 +128,41 @@ enum VOBSUBParser {
         let offset: Int
     }
 
-    private static func parsePalette(from idxText: String) -> [(r: UInt8, g: UInt8, b: UInt8)] {
-        // Look for: palette: RRGGBB, RRGGBB, ...
-        let pattern = #"palette:\s*((?:[0-9a-fA-F]{6},?\s*)+)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: idxText, range: NSRange(idxText.startIndex..., in: idxText)),
-              let range = Range(match.range(at: 1), in: idxText) else {
-            return []
-        }
-        let colorList = String(idxText[range])
-        return colorList
-            .components(separatedBy: ",")
-            .compactMap { hex -> (r: UInt8, g: UInt8, b: UInt8)? in
-                let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard trimmed.count == 6, let value = UInt32(trimmed, radix: 16) else { return nil }
-                return (
-                    r: UInt8((value >> 16) & 0xFF),
-                    g: UInt8((value >> 8) & 0xFF),
-                    b: UInt8(value & 0xFF)
-                )
+    enum PaletteError: LocalizedError, Equatable {
+        case missing
+        case malformed
+
+        var errorDescription: String? {
+            switch self {
+            case .missing:
+                return String(localized: "DVD subtitle color palette is missing. OCR requires the original 16-color palette; use a source that includes it.")
+            case .malformed:
+                return String(localized: "DVD subtitle color palette is invalid. OCR requires 16 comma-separated RGB colors with six hexadecimal digits each.")
             }
+        }
+    }
+
+    private static func parsePalette(from idxText: String) throws -> [(r: UInt8, g: UInt8, b: UInt8)] {
+        // Match a whole header line: accepting a partial regex match can silently
+        // shift color indices or produce fully transparent subtitle images.
+        let lines = idxText.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.lowercased().hasPrefix("palette:") }
+        guard !lines.isEmpty else { throw PaletteError.missing }
+        guard lines.count == 1 else { throw PaletteError.malformed }
+        let colors = lines[0].dropFirst("palette:".count).components(separatedBy: ",")
+        guard colors.count == 16 else { throw PaletteError.malformed }
+        return try colors.map { hex in
+            let trimmed = hex.trimmingCharacters(in: .whitespaces)
+            guard trimmed.utf8.count == 6,
+                  trimmed.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }),
+                  let value = UInt32(trimmed, radix: 16) else { throw PaletteError.malformed }
+            return (
+                r: UInt8((value >> 16) & 0xFF),
+                g: UInt8((value >> 8) & 0xFF),
+                b: UInt8(value & 0xFF)
+            )
+        }
     }
 
     private static func parseIDXEntries(from idxText: String) -> [IDXEntry] {

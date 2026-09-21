@@ -863,6 +863,23 @@ still emits one bitmap per SPU, without time-varying palette animation. Missing
 palettes, real-disc recognition, and UI validation remain open. See the
 [DVD contrast-state validation record](4.5-dvd-alpha-validation-2026-09-21.md).
 
+DVD OCR now rejects missing and malformed palettes with actionable bilingual
+errors before recognition, preserving existing outputs and cleaning extraction
+scratch files. Both waveform decoders now retain delayed audio on the source
+timeline instead of displaying it too early. Camera-card import shows a
+non-blocking performance advisory only when a discovered clip's volume reports
+removable media, with the volume check performed off the main actor while the
+selected folder's access remains active. Recent timeline and source-meter strings
+now have Norwegian translations. See the
+[continuation validation record](4.5-palette-waveform-card-validation-2026-09-21.md).
+
+The continuation UI smoke run exposed a **release-blocking MPV crash** during
+sequence replay, with `EXC_BAD_ACCESS` in the bundled CoreAudio hotplug callback.
+Native replay passed; the subsequent range-drag test was obstructed by the crash
+notice and needs a clean rerun. Investigate the dependency callback lifetime and
+rerun MPV transition/replay checks before treating playback validation as closed.
+The continuation record retains the crash evidence and diagnostic limits.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -1113,13 +1130,16 @@ after sequence end, ripple trim and reordering in exported output, list/timeline
 sync, and sandbox access after switching clips and closing/reopening the editor.
 Test a real memory-card group, MXF sources, and long recordings. Capture screenshots.
 
-### Future memory-card import improvements (not implemented)
+### Memory-card import improvements
 
-- Show a non-blocking performance advisory before editing card-backed media:
-  editing directly from a camera card can be slow, especially for long recordings;
-  copying the card to local storage first usually gives a better experience.
-  Keep editing directly from the card available. Detect actual removable sources
-  rather than warning on every imported group, and retain approved URL access.
+Implemented: the import sheet shows a non-blocking local-copy advisory when at
+least one discovered source reports `volumeIsRemovable`. Local copies and unknown
+volume status do not trigger it. Import remains available, and the existing
+folder grant covers both scanning and the off-main-actor volume lookup. Physical
+card and bilingual visual validation remain open.
+
+Remaining:
+
 - Offer optional recording-date splitting during card import, inspired by
   Aagedal Photo Agent. Prefer embedded recording timestamps; define timezone and
   missing-metadata behavior explicitly. Keep original ordering and compatible
@@ -1133,11 +1153,24 @@ Test a real memory-card group, MXF sources, and long recordings. Capture screens
   with focused tests before enabling automatic splitting.
 
 
-### Proposed keyframe-aware trimming (not implemented)
+### Keyframe-aware trimming — partially implemented
+
+Optional Stream Copy keyframe snapping now applies to trim edges and selected
+ranges. Discovery reads compressed samples from the first video track with a
+cancellable AVAssetReader scan, retaining scoped source access. Results are held
+by URL for the editor session; unavailable results fall back to frame snapping.
+The existing approximate-cut guidance remains applicable.
+
+The editor also includes split and range deletion, multiple-clip selection,
+drag reordering, undo/redo, scalable waveform envelopes, and source audio meters.
+Mono streams share a meter bank; stereo and surround tracks remain separate.
+Waveform decoding now preserves delayed-track alignment with the source meters.
+
+Remaining refinements:
 
 - Show discreet keyframe ticks in the clip filmstrip, revealing individual markers
-  only when zoom makes them readable. Offer optional “Snap to keyframes” for
-  Stream Copy. Keep free trimming available for workflows that will re-encode.
+  only when zoom makes them readable. Preserve the existing optional snapping
+  and free trimming for workflows that will re-encode.
 - When dragging an unsnapped edge, show the requested cut and an estimated export
   boundary/difference. Do not claim the decoded preview is the exact Stream Copy
   output. Existing merge preparation uses input-side `-ss`, `-t`, and `-c copy`.

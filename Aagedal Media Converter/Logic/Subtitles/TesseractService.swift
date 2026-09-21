@@ -417,9 +417,11 @@ actor TesseractService {
                 progress: extractProgress
             )
             progress(TesseractProgress(stage: .parsingFrames, percentage: 0.15))
-            guard FileManager.default.fileExists(atPath: subFile.path),
-                  FileManager.default.fileExists(atPath: paletteFile.path) else {
-                throw TesseractServiceError.extractionFailed("DVD subtitle stream or palette not created")
+            guard FileManager.default.fileExists(atPath: subFile.path) else {
+                throw TesseractServiceError.extractionFailed("DVD subtitle stream not created")
+            }
+            guard FileManager.default.fileExists(atPath: paletteFile.path) else {
+                throw TesseractServiceError.parsingFailed(VOBSUBParser.PaletteError.missing.localizedDescription)
             }
             do {
                 return try VOBSUBParser.parse(programStreamURL: subFile, paletteURL: paletteFile)

@@ -24,6 +24,7 @@ struct CameraCardImportView: View {
     @Environment(\.openSettings) private var openSettings
     let clipCount: Int
     let folderName: String
+    let hasRemovableSources: Bool
     @Binding var masterName: String
     @Binding var selectedPreset: ExportPreset
     @Binding var concatEnabled: Bool
@@ -97,6 +98,18 @@ struct CameraCardImportView: View {
                 Text("\(clipCount) clips found",
                      comment: "Label showing how many clips were detected on the imported camera card.")
                     .foregroundStyle(.secondary)
+            }
+
+            if hasRemovableSources {
+                Label {
+                    Text("Editing directly from removable media can be slow, especially for long recordings. For smoother editing, copy the card to local storage first. You can also continue importing from the card.")
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "info.circle")
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("cameraCardRemovableMediaAdvisory")
             }
 
             Divider()

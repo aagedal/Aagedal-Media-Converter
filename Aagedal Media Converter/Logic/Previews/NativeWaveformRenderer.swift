@@ -145,6 +145,8 @@ struct NativeWaveformRenderer {
             "-vn",
             "-map", "0:a:\(streamIndex)",
             "-ac", "\(channels)",
+            // Preserve delayed tracks and timestamp gaps on the source timeline.
+            "-af", "aresample=\(idealRate):async=1:first_pts=0",
             "-ar", "\(idealRate)",
             "-f", "f32le",
             "-c:a", "pcm_f32le",
@@ -315,6 +317,7 @@ struct NativeWaveformRenderer {
             "-i", url.path,
             "-vn",
             "-map", "0:a:\(streamIndex)",
+            "-af", "aresample=\(idealRate):async=1:first_pts=0",
             "-ar", "\(idealRate)",
             "-f", "f32le",
             "-c:a", "pcm_f32le",

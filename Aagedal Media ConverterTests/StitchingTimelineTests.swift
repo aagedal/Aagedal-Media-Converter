@@ -516,6 +516,26 @@ final class SourceAudioMeterTests: XCTestCase {
         let delayed = try await SourceAudioMeterDecoder.decode(.init(url: url, track: 1, channels: 8, window: 0))
         XCTAssertEqual(delayed.levels(at: 0.1), Array(repeating: -60, count: 8))
         XCTAssertEqual(delayed.levels(at: 0.75)[0], -20, accuracy: 0.01)
+        // Both waveform paths must keep the same source-time origin as playback and metering.
+        let waveform = try await NativeWaveformRenderer.generateWaveformAssets(
+            url: url, ffmpegPath: path, streamIndex: 1, duration: 10.5,
+            width: 800, height: 80, channelCount: 8
+        )
+        let envelope = try XCTUnwrap(waveform.envelope)
+        XCTAssertEqual(envelope.duration, 10.5, accuracy: 0.01)
+        XCTAssertEqual(envelope.peak(from: 0.1, to: 0.2, level: 0), .init(minimum: 0, maximum: 0))
+        XCTAssertEqual(envelope.peak(from: 0.75, to: 0.8, level: 0).maximum, 0.8, accuracy: 0.001)
+        let (_, _, channelEnvelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+            url: url, ffmpegPath: path, streamIndex: 1, channelCount: 8,
+            channelLayout: "7.1", duration: 10.5, width: 800, heightPerChannel: 40
+        )
+        XCTAssertEqual(channelEnvelopes.count, 8)
+        for (index, channel) in channelEnvelopes.enumerated() {
+            XCTAssertEqual(channel.duration, 10.5, accuracy: 0.01)
+            XCTAssertEqual(channel.peak(from: 0.1, to: 0.2, level: 0), .init(minimum: 0, maximum: 0))
+            XCTAssertEqual(channel.peak(from: 0.75, to: 0.8, level: 0).maximum,
+                           Float(index + 1) / 10, accuracy: 0.001)
+        }
         let surround = try await SourceAudioMeterDecoder.decode(.init(url: url, track: 1, channels: 8, window: 1))
         let levels = surround.levels(at: 9)
         XCTAssertEqual(levels.count, 8)

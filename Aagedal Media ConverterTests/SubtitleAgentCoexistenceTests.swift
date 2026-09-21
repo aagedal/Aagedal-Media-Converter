@@ -961,6 +961,97 @@ private actor CoexistenceOCREngine: BitmapSubtitleOCREngine {
 }
 
 final class VOBSUBParserTests: XCTestCase {
+    func testMissingPaletteFailsBeforeDecodingInsteadOfReturningInvisibleFrames() throws {
+        for header in ["", "size: 720x480", "# palette: " + Array(repeating: "ffffff", count: 16).joined(separator: ", ")] {
+            try assertPaletteFailure(header: header, expected: .missing)
+        }
+    }
+
+    func testMalformedPaletteRejectsPartialMatchesAndShiftedColorIndices() throws {
+        let valid = Array(repeating: "ffffff", count: 16)
+        var invalidHex = valid
+        invalidHex[7] = "gggggg"
+        var extraDigit = valid
+        extraDigit[15] = "ffffff0"
+        var signedColor = valid
+        signedColor[0] = "+fffff"
+        let malformed = [
+            [], Array(valid.dropLast()), valid + ["000000"], invalidHex, extraDigit, signedColor,
+            valid + [""]
+        ]
+        for colors in malformed {
+            try assertPaletteFailure(header: "palette: " + colors.joined(separator: ", "), expected: .malformed)
+        }
+        let line = "palette: " + valid.joined(separator: ", ")
+        try assertPaletteFailure(header: line + "\n" + line, expected: .malformed)
+    }
+
+    func testPaletteAcceptsUppercaseHexAndHeaderWhitespace() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DVDPalette-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let idx = try CoexistenceDVDFixture.writeFixture(packet: CoexistenceDVDFixture.fixture(), directory: directory)
+        let original = try String(contentsOf: idx, encoding: .utf8)
+        let header = original.replacingOccurrences(of: "palette: ", with: "  PALETTE:\t")
+            .replacingOccurrences(of: "ff0000", with: "FF0000")
+            .replacingOccurrences(of: "\n", with: "\r\n")
+        try header.write(to: idx, atomically: true, encoding: .utf8)
+        let frames = try VOBSUBParser.parse(idxURL: idx, subURL: directory.appendingPathComponent("fixture.sub"))
+        XCTAssertEqual(frames.count, 1)
+    }
+
+    private func assertPaletteFailure(
+        header: String, expected: VOBSUBParser.PaletteError,
+        file: StaticString = #filePath, line: UInt = #line
+    ) throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DVDPalette-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let idx = try CoexistenceDVDFixture.writeFixture(packet: CoexistenceDVDFixture.fixture(), directory: directory)
+        try (header + "\ntimestamp: 00:00:02:000, filepos: 000000000").write(to: idx, atomically: true, encoding: .utf8)
+        let sub = directory.appendingPathComponent("fixture.sub")
+        XCTAssertThrowsError(try VOBSUBParser.parse(idxURL: idx, subURL: sub), file: file, line: line) {
+            XCTAssertEqual($0 as? VOBSUBParser.PaletteError, expected, file: file, line: line)
+        }
+        XCTAssertThrowsError(try VOBSUBParser.parse(programStreamURL: sub, paletteURL: idx), file: file, line: line) {
+            XCTAssertEqual($0 as? VOBSUBParser.PaletteError, expected, file: file, line: line)
+        }
+    }
+
+    func testInvalidDVDPaletteFailsWithoutOCRPublicationAndRemovesScratch() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DVDPaletteService-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mkv")
+        let existing = directory.appendingPathComponent("source.ocr.srt")
+        try Data("Original source".utf8).write(to: source)
+        try Data("Existing subtitles".utf8).write(to: existing)
+        for header: String? in [nil, "size: 720x480", "palette: ffffff, broken"] {
+            let runner = InvalidDVDPaletteRunner(header: header)
+            let service = TesseractService(subprocessRunner: runner, ocrEngine: UnexpectedDVDPaletteOCREngine())
+            do {
+                _ = try await service.generateSubtitles(
+                    sourceFile: source, outputDirectory: directory, operationID: UUID(),
+                    subtitleStreamIndex: 0, codec: "dvd_subtitle", language: "eng"
+                ) { _ in }
+                XCTFail("Missing or malformed palettes must fail before OCR")
+            } catch TesseractServiceError.parsingFailed(let message) {
+                let expected: VOBSUBParser.PaletteError = header?.hasPrefix("palette:") == true ? .malformed : .missing
+                XCTAssertEqual(message, expected.localizedDescription)
+            }
+            let scratchDirectory = await runner.scratchDirectory()
+            let scratch = try XCTUnwrap(scratchDirectory)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: scratch.path))
+            XCTAssertEqual(try String(contentsOf: source, encoding: .utf8), "Original source")
+            XCTAssertEqual(try String(contentsOf: existing, encoding: .utf8), "Existing subtitles")
+            XCTAssertEqual(Set(try FileManager.default.contentsOfDirectory(atPath: directory.path)),
+                           Set(["source.mkv", "source.ocr.srt"]))
+        }
+    }
+
     func testProgramStreamTimestampsRemainContinuousAcrossClockWrap() throws {
         let period: UInt64 = 1 << 33
         let timestamps = [period - 180_000, period - 90_000, period, period + 90_000]
@@ -1229,5 +1320,38 @@ private struct DVDExtractionOCREngine: BitmapSubtitleOCREngine {
         bitmap.getPixel(&pixel, atX: 0, y: 0)
         XCTAssertEqual(pixel, [255, 255, 0, 255])
         return "Selected DVD track"
+    }
+}
+
+private actor InvalidDVDPaletteRunner: SubprocessRunning {
+    let header: String?
+    private var scratch: URL?
+
+    init(header: String?) { self.header = header }
+    func scratchDirectory() -> URL? { scratch }
+
+    func run(
+        _ request: SubprocessRequest,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        let output = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+        scratch = output.deletingLastPathComponent()
+        try Data().write(to: output)
+        if let header {
+            let option = try XCTUnwrap(request.arguments.firstIndex { $0.hasPrefix("-dump_attachment:s:") })
+            try header.write(toFile: request.arguments[option + 1], atomically: true, encoding: .utf8)
+        }
+        return SubprocessResult(
+            terminationStatus: 0, termination: .exited,
+            standardOutput: Data(), standardError: Data(),
+            discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero
+        )
+    }
+}
+
+private struct UnexpectedDVDPaletteOCREngine: BitmapSubtitleOCREngine {
+    func recognize(pngURL: URL, language: String) async throws -> String {
+        XCTFail("Invalid DVD palette must fail before invoking OCR")
+        return "Unexpected OCR"
     }
 }

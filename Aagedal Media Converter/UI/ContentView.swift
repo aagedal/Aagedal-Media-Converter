@@ -663,6 +663,7 @@ struct ContentView: View {
                 CameraCardImportView(
                     clipCount: state.videoURLs.count,
                     folderName: state.folderURL.lastPathComponent,
+                    hasRemovableSources: state.hasRemovableSources,
                     masterName: $cameraCardMasterName,
                     selectedPreset: cameraCardPresetBinding,
                     concatEnabled: $cameraCardConcatEnabled,
@@ -1103,6 +1104,7 @@ struct ContentView: View {
         let id = UUID()
         let folderURL: URL
         let videoURLs: [URL]
+        let hasRemovableSources: Bool
     }
 
     @MainActor
@@ -1130,15 +1132,25 @@ struct ContentView: View {
         // choose any directory (including a large external drive or deep tree), so the
         // recursive FileManager walk can take seconds. Keeping it on @MainActor would
         // freeze the UI for the duration.
-        let videoURLs = await Task.detached(priority: .userInitiated) {
-            CameraCardScanner.scanForVideoFiles(in: folderURL)
+        let scan = await Task.detached(priority: .userInitiated) {
+            let urls = CameraCardScanner.scanForVideoFiles(in: folderURL)
+            // Query actual clips while the selected folder's access is retained.
+            // A copied card directory on local storage should not show an advisory.
+            let hasRemovableSources = urls.contains { url in
+                (try? url.resourceValues(forKeys: [.volumeIsRemovableKey]))?.volumeIsRemovable == true
+            }
+            return (urls: urls, hasRemovableSources: hasRemovableSources)
         }.value
 
         if hasAccess { folderURL.stopAccessingSecurityScopedResource() }
 
-        guard !videoURLs.isEmpty else { return }
+        guard !scan.urls.isEmpty else { return }
 
-        cameraCardImportState = CameraCardImportState(folderURL: folderURL, videoURLs: videoURLs)
+        cameraCardImportState = CameraCardImportState(
+            folderURL: folderURL,
+            videoURLs: scan.urls,
+            hasRemovableSources: scan.hasRemovableSources
+        )
     }
 
     @MainActor
