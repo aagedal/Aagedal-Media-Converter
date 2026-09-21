@@ -855,6 +855,14 @@ unwrapping cannot resolve gaps exceeding half the clock period or an epoch befor
 the first observed timestamp. See the
 [DVD timestamp-wrap validation record](4.5-dvd-timestamp-wrap-validation-2026-09-21.md).
 
+DVD subtitle decoding now retains contrast independently of palette selection,
+preserving transparency when alpha commands precede colors or a later control
+block selects new colors. Two pixel-level regressions cover both cases; all 25
+focused parser, OCR, subtitle-mux, and Whisper coexistence tests pass. The parser
+still emits one bitmap per SPU, without time-varying palette animation. Missing
+palettes, real-disc recognition, and UI validation remain open. See the
+[DVD contrast-state validation record](4.5-dvd-alpha-validation-2026-09-21.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

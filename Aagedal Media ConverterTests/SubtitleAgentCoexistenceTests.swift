@@ -1060,6 +1060,52 @@ final class VOBSUBParserTests: XCTestCase {
         XCTAssertTrue(try parse(packet: Array(CoexistenceDVDFixture.fixture().dropLast())).isEmpty)
     }
 
+    func testAlphaBeforePaletteMatchesPaletteBeforeAlpha() throws {
+        var packet = CoexistenceDVDFixture.fixture()
+        packet[21] = 0xF8
+        packet[22] = 0x40
+        let expected = try XCTUnwrap(try parse(packet: packet).first)
+        // The same color/contrast state must produce the same bitmap in either order.
+        packet.replaceSubrange(17..<23, with: [0x04, 0xF8, 0x40, 0x03, 0x32, 0x10])
+        let actual = try XCTUnwrap(try parse(packet: packet).first)
+        XCTAssertEqual(actual.startTime, expected.startTime)
+        XCTAssertEqual(actual.endTime, expected.endTime)
+        let expectedBitmap = try XCTUnwrap(NSBitmapImageRep(data: expected.imageData))
+        let actualBitmap = try XCTUnwrap(NSBitmapImageRep(data: actual.imageData))
+        for y in 0..<2 {
+            for x in 0..<300 {
+                var expectedPixel = [Int](repeating: 0, count: 4)
+                var actualPixel = [Int](repeating: 0, count: 4)
+                expectedBitmap.getPixel(&expectedPixel, atX: x, y: y)
+                actualBitmap.getPixel(&actualPixel, atX: x, y: y)
+                XCTAssertEqual(actualPixel, expectedPixel, "x=\(x), y=\(y)")
+            }
+        }
+    }
+
+    func testLaterPaletteCommandPreservesContrast() throws {
+        var packet = CoexistenceDVDFixture.fixture()
+        packet[21] = 0xF8
+        packet[22] = 0x40
+        // A later control block changes colors without changing contrast.
+        packet.insert(contentsOf: [0x03, 0x32, 0x01], at: packet.count - 2)
+        packet.replaceSubrange(0..<2, with: CoexistenceDVDFixture.word(packet.count))
+        let frame = try XCTUnwrap(try parse(packet: packet).first)
+        XCTAssertEqual(frame.startTime, 2.512, accuracy: 0.0001)
+        XCTAssertEqual(frame.endTime, 3.536, accuracy: 0.0001)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: frame.imageData))
+        for (x, alpha) in [(0, 0), (1, 68), (4, 136), (16, 255)] {
+            var pixel = [Int](repeating: 0, count: 4)
+            bitmap.getPixel(&pixel, atX: x, y: 0)
+            XCTAssertEqual(pixel[3], alpha, "x=\(x)")
+            if x == 1 {
+                XCTAssertGreaterThan(pixel[0], 0)
+                XCTAssertEqual(pixel[1], 0)
+                XCTAssertEqual(pixel[2], 0)
+            }
+        }
+    }
+
     func testRejectsRunBeyondRowAndTruncatedPixelData() throws {
         var packet = CoexistenceDVDFixture.fixture()
         // A run of 255 pixels followed by another 255 exceeds the 300-pixel row.

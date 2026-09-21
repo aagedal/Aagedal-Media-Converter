@@ -244,6 +244,9 @@ enum VOBSUBParser {
         var startMs = 0
         var stopMs: Int?
         var colorMap: [Int: (r: UInt8, g: UInt8, b: UInt8, a: UInt8)] = [:]
+        // Color and contrast commands update independent DVD subtitle state.
+        // Keep alpha even when its command precedes the first palette selection.
+        var alphaValues = [UInt8](repeating: 255, count: 4)
 
         var ctrlOff = controlOffset
         while ctrlOff + 4 <= packetSize {
@@ -282,7 +285,7 @@ enum VOBSUBParser {
                         }
                         if palIdx < palette.count {
                             let p = palette[palIdx]
-                            colorMap[k] = (r: p.r, g: p.g, b: p.b, a: 255)
+                            colorMap[k] = (r: p.r, g: p.g, b: p.b, a: alphaValues[k])
                         }
                     }
                 case 0x04:
@@ -297,6 +300,7 @@ enum VOBSUBParser {
                         } else {
                             alpha = UInt8(((a0 >> ((k - 2) * 4)) & 0x0F) * 17)
                         }
+                        alphaValues[k] = alpha
                         if var entry = colorMap[k] {
                             entry.a = alpha
                             colorMap[k] = entry
