@@ -31,6 +31,16 @@ final class CameraCardRecordingGroupingTests: XCTestCase {
         XCTAssertTrue(counts([]).isEmpty)
     }
 
+    func testReviewerResolvedSegmentsPreserveOrderAndIgnoreFirstContinuationMark() {
+        let urls = (1...5).map { URL(fileURLWithPath: "/card/clip\($0).mov") }
+        let segments = Grouping.resolvedSegments(
+            urls: urls, continuesPrevious: [urls[0], urls[2], urls[3]]
+        )
+        XCTAssertEqual(segments, [[urls[0]], [urls[1], urls[2], urls[3]], [urls[4]]])
+        XCTAssertEqual(segments.flatMap { $0 }, urls)
+        XCTAssertTrue(Grouping.resolvedSegments(urls: [], continuesPrevious: []).isEmpty)
+    }
+
     func testDayBoundarySplitsWithoutReorderingOrRecombiningRepeatedDays() {
         let input = [recording("a", "2026-01-01T23:59:00Z"),
                      recording("b", "2026-01-02T00:00:00Z"),

@@ -1,6 +1,134 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Review recording-date groups…" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Se gjennom grupper etter opptaksdato …" } } }
+    },
+    "Reading recording metadata…" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Leser opptaksmetadata …" } } }
+    },
+    "Review recording-date groups" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Se gjennom grupper etter opptaksdato" } } }
+    },
+    "Dates use %@. Camera dates take precedence over container dates. Files without either date stay together in their own consecutive groups. Mark every segment that continues the recording above it before importing." : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Datoer bruker tidssonen %@. Kameradatoer går foran containerdatoer. Filer uten noen av datoene holdes samlet i egne sammenhengende grupper. Merk hvert segment som fortsetter opptaket over før du importerer." } } }
+    },
+    "Grouping" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Gruppering" } } }
+    },
+    "Split by recording day" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Del etter opptaksdag" } } }
+    },
+    "Keep single group" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Behold én gruppe" } } }
+    },
+    "Also split after gaps longer than two hours" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Del også ved opphold på mer enn to timer" } } }
+    },
+    "Continues previous recording" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Fortsetter forrige opptak" } } }
+    },
+    "Date unknown" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Ukjent dato" } } }
+    },
+    "Proposed groups: %lld" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Foreslåtte grupper: %lld" } } }
+    },
+    "Group %lld: %lld clips" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Gruppe %lld: %lld klipp" } } }
+    },
+    "Format metadata incomplete; this group will import without concatenation." : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Formatmetadata mangler; denne gruppen importeres uten sammenføyning." } } }
+    },
+    "Formats conflict; this group will import without concatenation." : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Formatene er ulike; denne gruppen importeres uten sammenføyning." } } }
+    },
+    "A multi-file recording has incompatible or incomplete format metadata. Resolve its continuation marks or import the card without date splitting." : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Et opptak med flere filer har ulike eller ufullstendige formatmetadata. Rett merkene for fortsettelse, eller importer kortet uten datodeling." } } }
+    },
+    "Import proposed groups" : {
+      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Importer foreslåtte grupper" } } }
+    },
+    "Help count active installations" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hjelp oss å telle aktive installasjoner"
+          }
+        }
+      }
+    },
+    "An anonymous count helps us understand whether Aagedal Media Converter is being used and guides development. If you allow it, this Mac sends one random weekly token at most once per day when the app opens." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En anonym telling hjelper oss å forstå om Aagedal Media Converter blir brukt, og gir retning for utviklingen. Hvis du tillater det, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes."
+          }
+        }
+      }
+    },
+    "Example data sent: {\"token\": \"a weekly random-looking value\"}. No files, paths, media details, conversion activity, account details, hardware IDs, or OS details are included." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksempel på data som sendes: {\"token\": \"en tilfeldig utseende ukekode\"}. Ingen filer, filbaner, mediedetaljer, konverteringsaktivitet, kontoopplysninger, maskinvare-ID-er eller OS-detaljer er inkludert."
+          }
+        }
+      }
+    },
+    "The count is for active installations, not people. You can change this choice in General Settings at any time." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tellingen gjelder aktive installasjoner, ikke personer. Du kan endre valget når som helst i Generelle innstillinger."
+          }
+        }
+      }
+    },
+    "Don't send data" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke send data"
+          }
+        }
+      }
+    },
+    "Allow anonymous usage count" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tillat anonym brukstelling"
+          }
+        }
+      }
+    },
+    "Anonymous usage count" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anonym brukstelling"
+          }
+        }
+      }
+    },
+    "When enabled, this Mac sends one random weekly token at most once per day when the app opens. It contains no files, paths, media, conversion, account, hardware, or OS details. This counts active installations, not people." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når dette er slått på, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes. Den inneholder ingen filer, filbaner, medier, konverteringer, kontoopplysninger, maskinvare- eller OS-detaljer. Dette teller aktive installasjoner, ikke personer."
+          }
+        }
+      }
+    },
     "Requested end: %@": {
       "localizations": {
         "nb": {

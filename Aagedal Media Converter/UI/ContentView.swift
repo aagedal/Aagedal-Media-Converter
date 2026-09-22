@@ -677,6 +677,7 @@ struct ContentView: View {
                     },
                     onCancel: {
                         cancelCardMergeCompatibilityCheck()
+                        cardDateSplitPreparationTask?.cancel()
                         cameraCardImportState = nil
                     },
                     onAutoSplit: {
@@ -685,11 +686,33 @@ struct ContentView: View {
                     },
                     onForceMerge: {
                         showCardConformanceMergeDialog = true
+                    },
+                    isPreparingDateSplit: isPreparingCardDateSplit,
+                    onReviewDateSplit: {
+                        cardDateSplitPreparationTask = Task {
+                            await prepareCameraCardDateSplitReview()
+                        }
                     }
                 )
                 .onAppear { checkCardMergeCompatibility() }
-                .onDisappear { cancelCardMergeCompatibilityCheck() }
+                .onDisappear {
+                    cancelCardMergeCompatibilityCheck()
+                    cardDateSplitPreparationTask?.cancel()
+                }
                 .onChange(of: cameraCardPresetRaw) { _, _ in checkCardMergeCompatibility() }
+                .sheet(item: $cardDateSplitReview) { review in
+                    CameraCardRecordingReviewView(
+                        urls: review.urls,
+                        metadata: review.metadata,
+                        cameraMetadata: review.cameraMetadata,
+                        timeZone: review.timeZone,
+                        onImport: { groups in
+                            cardDateSplitReview = nil
+                            Task { await performCameraCardDateSplit(groups: groups) }
+                        },
+                        onCancel: { cardDateSplitReview = nil }
+                    )
+                }
                 .sheet(isPresented: $showCardConformanceMergeDialog) {
                     if cameraCardImportState != nil {
                         ConformanceMergeDialog(
@@ -1099,12 +1122,23 @@ struct ContentView: View {
     @State private var cardConformanceItems: [VideoItem] = []
     @State private var cardConformanceImportContext: VideoGroupImportContext?
     @State private var cardConformanceMetadata: [UUID: VideoMetadata] = [:]
+    @State private var isPreparingCardDateSplit = false
+    @State private var cardDateSplitPreparationTask: Task<Void, Never>?
+    @State private var cardDateSplitReview: CameraCardDateSplitReviewState?
 
     private struct CameraCardImportState: Identifiable {
         let id = UUID()
         let folderURL: URL
         let videoURLs: [URL]
         let hasRemovableSources: Bool
+    }
+
+    private struct CameraCardDateSplitReviewState: Identifiable {
+        let id = UUID()
+        let urls: [URL]
+        let metadata: [URL: VideoMetadata]
+        let cameraMetadata: [URL: CameraMetadata]
+        let timeZone: TimeZone
     }
 
     @MainActor
@@ -1288,6 +1322,92 @@ struct ContentView: View {
         cardCompatibilityCheckTask = nil
         cardCompatibilityCheckID = nil
         isCheckingCardCompatibility = false
+    }
+
+    @MainActor
+    private func prepareCameraCardDateSplitReview() async {
+        guard let state = cameraCardImportState, !isPreparingCardDateSplit else { return }
+        isPreparingCardDateSplit = true
+        defer { isPreparingCardDateSplit = false }
+
+        let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
+        defer { if hasAccess { state.folderURL.stopAccessingSecurityScopedResource() } }
+
+        let metadata: [URL: VideoMetadata]
+        do {
+            metadata = try await BoundedVideoMetadataProbe.availableMetadata(for: state.videoURLs)
+        } catch {
+            // Missing probes are displayed as unknown and never approved for merge.
+            metadata = [:]
+        }
+
+        var cameraMetadata: [URL: CameraMetadata] = [:]
+        for url in state.videoURLs {
+            guard !Task.isCancelled else { return }
+            if let camera = await VideoFileUtils.fetchCameraMetadata(for: url) {
+                cameraMetadata[url] = camera
+            }
+        }
+        guard !Task.isCancelled, cameraCardImportState?.id == state.id else { return }
+        cardDateSplitReview = CameraCardDateSplitReviewState(
+            urls: state.videoURLs,
+            metadata: metadata,
+            cameraMetadata: cameraMetadata,
+            timeZone: .current
+        )
+    }
+
+    @MainActor
+    private func performCameraCardDateSplit(
+        groups: [CameraCardRecordingGrouping.ProposedGroup]
+    ) async {
+        guard let state = cameraCardImportState, !groups.isEmpty,
+              groups.flatMap(\.urls) == state.videoURLs else { return }
+        let preset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
+        let context = VideoGroupImportContext(preset: preset, outputFolder: outputFolder)
+        let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
+        defer { if hasAccess { state.folderURL.stopAccessingSecurityScopedResource() } }
+        let preparedItems = groups.map { $0.urls.compactMap { context.makePlaceholder(from: $0) } }
+        guard groups.indices.allSatisfy({ groups[$0].urls.count == preparedItems[$0].count }) else { return }
+        cameraCardImportState = nil
+        cancelCardMergeCompatibilityCheck()
+        for url in state.videoURLs {
+            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+        }
+
+        let baseName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let chosenName = baseName.isEmpty ? state.folderURL.lastPathComponent : baseName
+        var createdIDs: [UUID] = []
+
+        for (index, proposed) in groups.enumerated() {
+            let name = groups.count == 1 ? chosenName : String(format: "%@_group%02d", chosenName, index + 1)
+            let canConcatenate = proposed.compatibility == .compatible && proposed.urls.count > 1
+            var items = preparedItems[index]
+            for itemIndex in items.indices {
+                if cameraCardUploadEnabled { items[itemIndex].uploadEnabled = true }
+                if !canConcatenate || itemIndex == 0 {
+                    let itemName = canConcatenate ? name : String(format: "%@_%03d", name, itemIndex + 1)
+                    items[itemIndex].outputFileNameOverride = FileNameProcessor.processFileName(
+                        itemName, settings: context.naming.fileName
+                    )
+                    items[itemIndex].outputURL = context.outputURL(for: items[itemIndex])
+                }
+            }
+            let group = EncodingGroup(
+                name: name, items: items, preset: preset,
+                concatEnabled: canConcatenate, uploadEnabled: cameraCardUploadEnabled
+            )
+            encodingGroups.append(group)
+            queueOrder.append(group.id)
+            createdIDs.append(group.id)
+            let itemIDs = items.map(\.id)
+            Task { await loadGroupItemDetails(groupID: group.id, itemIDs: itemIDs, context: context) }
+        }
+        if cameraCardAutoEncodeEnabled {
+            Task {
+                for id in createdIDs { await encodeOnlyGroup(groupID: id) }
+            }
+        }
     }
 
     @MainActor

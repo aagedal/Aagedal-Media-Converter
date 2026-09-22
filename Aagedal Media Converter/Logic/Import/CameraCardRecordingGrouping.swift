@@ -8,6 +8,20 @@ import Foundation
 /// resolve spanned clips into complete logical recordings; filenames and filesystem
 /// dates are not reliable evidence of either a span or a recording timestamp.
 enum CameraCardRecordingGrouping {
+    /// The reviewer explicitly marks which files continue the previous recording.
+    /// A scanner must not infer this from adjacent names or timestamps.
+    static func resolvedSegments(urls: [URL], continuesPrevious: Set<URL>) -> [[URL]] {
+        var result: [[URL]] = []
+        for url in urls {
+            if continuesPrevious.contains(url), !result.isEmpty {
+                result[result.count - 1].append(url)
+            } else {
+                result.append([url])
+            }
+        }
+        return result
+    }
+
     struct Recording: Equatable {
         /// All segments, in playback order. A recording is indivisible here.
         let urls: [URL]

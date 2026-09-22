@@ -988,6 +988,24 @@ audit pass. The full unit result is retained at
 QoS warnings remain. No new UI/manual playback or signed Release run is claimed.
 These checks do not close package integration or CoreAudio runtime gates.
 
+Camera-card import now offers an opt-in recording-date review. Users mark
+continuation segments explicitly before grouping; the preview shows a fixed
+timezone, optional gaps over two hours, compatibility partitions, and a
+single-group choice. Incomplete or conflicting multi-file recordings block the
+proposed import. Physical-card fixtures and live import/export checks remain open.
+
+The anonymous usage indicator now has a first-open choice, a General Settings
+control, a device-only Keychain secret, weekly tokens, and a daily HTTPS client.
+There is no configured endpoint, so the client sends nothing. Server-side
+aggregation, public policy, and the rolling-seven-day metric decision remain
+open; unlinkable weekly tokens cannot deduplicate one installation across a
+week boundary in that rolling window. See [privacy design and endpoint
+requirements](ANONYMOUS-USAGE-PRIVACY.md).
+The full Debug unit suite passes 1,176 tests; 96 release-script tests and the
+1,761-entry Norwegian catalog audit pass. The unsigned Release build and static
+45-image/12-notice bundle audit pass. See the [continuation validation
+record](4.5-card-grouping-usage-indicator-validation-2026-09-22.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -998,7 +1016,7 @@ installation/update checks, release notes, and retained package reports.
 
 ### Privacy-preserving usage indicator
 
-Add an explicit first-launch choice for a small aggregate usage indicator. The
+Implemented an explicit first-launch choice for a small aggregate usage indicator. The
 dialog offers **Allow anonymous usage count** and **Don't send data**, explains why
 the count helps development, describes the reporting frequency, and shows an
 illustrative payload. No option is preselected; declining produces no network
@@ -1014,9 +1032,10 @@ retaining client IP addresses, and reports distinct active installations during
 the last seven days. The product copy must say “active installations,” not
 “active users,” because one person may use several Macs and a Mac may be shared.
 
-This is an opt-in telemetry feature with a documented privacy policy and a clear
-off switch. It remains separate from the existing quality-analysis feature and
-does not collect conversion analytics.
+The client is implemented with a clear off switch and remains separate from the
+existing quality-analysis feature. An endpoint, server controls, and a public
+privacy policy are required before any reports can be sent. The client does not
+collect conversion analytics.
 
 ## Beta readiness snapshot — 2026-09-15
 
@@ -1268,28 +1287,22 @@ volume status do not trigger it. Import remains available, and the existing
 folder grant covers both scanning and the off-main-actor volume lookup. Physical
 card and bilingual visual validation remain open.
 
-The grouping foundation is implemented and unit tested, but not connected to
-import. Callers must resolve spans into logical recordings first. It prefers
-camera dates over container dates, never substitutes filesystem dates, uses an
-explicit fixed timezone for the whole import, preserves input order, and keeps
-contiguous undated recordings separate. The importer currently lacks reliable
-span identity/resolution. Conservative compatibility proposals and a probe-metadata adapter are now
-available in the foundation. The scanner still needs reliable span resolution
-and integration with a user-reviewed preview before enabling this option.
+The grouping foundation is implemented and connected to an opt-in import review.
+Users explicitly mark continuation files to resolve logical recordings before
+splitting. Camera dates take precedence over container dates; filesystem dates
+are never substituted. The preview fixes one timezone for the import, preserves
+input order, keeps consecutive undated recordings together, and offers both a
+single group and optional splitting after gaps longer than two hours. Compatibility
+is evaluated across every segment. Unknown or incompatible multi-file recordings
+cannot be submitted through this flow. The scanner still lacks trusted
+format-specific span identity, so automatic continuation detection remains off.
 
-Remaining:
+Remaining live validation and automation:
 
-- Offer optional recording-date splitting during card import, inspired by
-  Aagedal Photo Agent. Prefer embedded recording timestamps; define timezone and
-  missing-metadata behavior explicitly. Keep original ordering and compatible
-  formats together within each resulting group.
-- Optionally split within a day when the gap from the previous recording's end
-  (start timestamp plus duration) to the next recording's start exceeds two hours.
-  Do not split on start-to-start distance, overlap, or exactly two hours. Treat
-  spanned camera recordings as logical recordings before applying these rules.
-- Preview proposed groups before import, with a way to retain a single group.
-  Cover day boundaries, timezone changes, missing dates, and spanned recordings
-  with focused tests before enabling automatic splitting.
+- Validate review and actual imported groups with physical cards, MXF and spanned
+  recordings, including output and playback. Capture bilingual screenshots.
+- Add trusted format-specific span identifiers before offering automatic
+  continuation detection. Keep manual review available.
 
 
 ### Keyframe-aware trimming — partially implemented

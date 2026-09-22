@@ -5,6 +5,16 @@ local transport needed for agent access. Final client compatibility, specialized
 manual-job coverage, wider Shortcut coverage, remaining
 localization, and Release-package validation are still open.
 
+## Import and privacy
+
+- Added an optional camera-card recording-date review with explicit continuation
+  marks for spanned recordings, a single-group choice, optional splitting after
+  gaps over two hours, and compatibility checks before import.
+- Added a first-open anonymous usage choice and a General Settings control. The
+  client uses a device-only secret and rotating weekly token with a daily HTTPS
+  limit. Reporting remains inactive until a server endpoint and privacy policy
+  are ready.
+
 ## Local agent access
 
 - Added stable identifiers for the initial H.264, HEVC, ProRes, Proxy, Audio Only,

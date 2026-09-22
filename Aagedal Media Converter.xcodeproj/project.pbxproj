@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A45A99000000000000000003 /* AnonymousUsageIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45A99000000000000000001 /* AnonymousUsageIndicator.swift */; };
+		A45A99000000000000000004 /* AnonymousUsageIndicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */; };
 		00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */; };
 		010A25E4BFF94166AD0C8126 /* AV2AudioTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */; };
 		042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */; };
@@ -375,6 +377,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A45A99000000000000000001 /* AnonymousUsageIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousUsageIndicator.swift; sourceTree = "<group>"; };
+		A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousUsageIndicatorTests.swift; sourceTree = "<group>"; };
 		02B1DCFCB3DC44408B8C4598 /* MergeCompatibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicy.swift; sourceTree = "<group>"; };
 		045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettings.swift; sourceTree = "<group>"; };
 		06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLifecycleTests.swift; sourceTree = "<group>"; };
@@ -889,6 +893,7 @@
 				CD5693B21A7341B2A3FA32A7 /* ConversionQueueState.swift */,
 				3A606FA6387C4AE4B6C4B9EE /* ConversionUploadFollowUp.swift */,
 				ENCGRP00000000002 /* EncodingGroup.swift */,
+				A45A99000000000000000001 /* AnonymousUsageIndicator.swift */,
 				8E545D862C33FD8C0088C274 /* VideoFilesUtil.swift */,
 				8E0CA7AB2C3458A400EA7C37 /* ParsingUtils.swift */,
 				8E903F5E2E05642D0075E05C /* FileNameProcessor.swift */,
@@ -1080,6 +1085,7 @@
 			isa = PBXGroup;
 			children = (
 				A45000000000000000000002 /* ApplicationJobContractTests.swift */,
+				A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */,
 				06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */,
 				56C8D0547D524C448BA478BB /* SubtitleSRTPublicationTests.swift */,
 				301B064EB8BC47D39D4BDA44 /* ToolDiagnosticsTests.swift */,
@@ -1650,6 +1656,7 @@
 				A45100000000000000000003 /* ApplicationAgentTransport.swift in Sources */,
 				A45200000000000000000003 /* AgentAccessSettingsView.swift in Sources */,
 				A45000000000000000000003 /* ApplicationJobContract.swift in Sources */,
+				A45A99000000000000000003 /* AnonymousUsageIndicator.swift in Sources */,
 				A3209450F7A948BBB7B75086 /* SubtitleSRTPublication.swift in Sources */,
 				B15C008BDFBA4E8893B1C380 /* ToolDiagnosticsSettingsView.swift in Sources */,
 				D8A2F88E52D7450387CA54AD /* ToolDiagnostics.swift in Sources */,
@@ -1882,6 +1889,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A45000000000000000000004 /* ApplicationJobContractTests.swift in Sources */,
+				A45A99000000000000000004 /* AnonymousUsageIndicatorTests.swift in Sources */,
 				24CB417957434AF98E564C83 /* UploadLifecycleTests.swift in Sources */,
 				368FA5664CC4494EA5ED2D8A /* SubtitleSRTPublicationTests.swift in Sources */,
 				30AE39FAAA1D4E5AA89C4C74 /* ToolDiagnosticsTests.swift in Sources */,

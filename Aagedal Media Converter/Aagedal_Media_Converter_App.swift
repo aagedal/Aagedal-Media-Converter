@@ -16,6 +16,7 @@ import Sparkle
 @main
 struct Aagedal_Media_Converter_App: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @State private var showingUsageChoice = false
 
     /// Construct Sparkle eagerly so the updater attaches to the run loop
     /// before the first window appears. Inert for Homebrew installs and when
@@ -101,6 +102,17 @@ struct Aagedal_Media_Converter_App: App {
         WindowGroup {
             VStack {
                 ContentView()
+            }
+            .task {
+                showingUsageChoice = AnonymousUsageIndicator.shared.choice == nil
+                AnonymousUsageIndicator.shared.reportOnOpen()
+            }
+            .sheet(isPresented: $showingUsageChoice) {
+                AnonymousUsageConsentView { choice in
+                    AnonymousUsageIndicator.shared.setChoice(choice)
+                    if choice == .allow { AnonymousUsageIndicator.shared.reportOnOpen() }
+                    showingUsageChoice = false
+                }
             }
         }
         .handlesExternalEvents(matching: []) // Prevent automatic window creation for opened files
@@ -330,5 +342,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return nil
+    }
+}
+
+
+private struct AnonymousUsageConsentView: View {
+    let choose: (AnonymousUsageChoice) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Help count active installations")
+                .font(.title2.bold())
+            Text("An anonymous count helps us understand whether Aagedal Media Converter is being used and guides development. If you allow it, this Mac sends one random weekly token at most once per day when the app opens.")
+            Text("Example data sent: {\"token\": \"a weekly random-looking value\"}. No files, paths, media details, conversion activity, account details, hardware IDs, or OS details are included.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Text("The count is for active installations, not people. You can change this choice in General Settings at any time.")
+                .font(.callout)
+            HStack {
+                Button("Don't send data") { choose(.decline) }
+                Spacer()
+                Button("Allow anonymous usage count") { choose(.allow) }
+            }
+        }
+        .padding(24)
+        .frame(width: 540)
+        .interactiveDismissDisabled()
     }
 }
