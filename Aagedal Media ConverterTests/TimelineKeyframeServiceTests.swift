@@ -65,6 +65,13 @@ final class TimelineKeyframeServiceTests: XCTestCase {
         XCTAssertFalse(second.times.contains { abs($0 - 1) < 0.01 })
         XCTAssertTrue(second.times.contains { abs($0 - 2) < 0.01 })
         XCTAssertTrue(first.times.allSatisfy { (0...5).contains($0) })
+        let containmentService = TimelineKeyframeService()
+        let broad = try await containmentService.scan(url: url, videoTrackOrdinal: 0, range: 0...6, duration: 6)
+        let contained = try await containmentService.scan(url: url, videoTrackOrdinal: 0, range: 1...3, duration: 6)
+        XCTAssertEqual(broad.status, .complete)
+        XCTAssertEqual(contained.scannedRange, broad.scannedRange,
+                       "A completed wider scan should serve a contained request")
+        XCTAssertEqual(contained.times, broad.times)
         let missing = try await service.scan(url: url, videoTrackOrdinal: 2, range: 0...5, duration: 6)
         XCTAssertEqual(missing.status, .unavailable)
         try Data("replacement is not media".utf8).write(to: url, options: .atomic)

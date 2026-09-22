@@ -1024,10 +1024,15 @@ CoreAudio runtime recovery, and signed distribution checks remain open.
 
 The integrated Debug unit suite now passes **1,178 tests**, all 98 release-script
 tests pass, and the unsigned Release build passes the 45-image/12-notice static
-bundle audit. Restoring the removed Swift package pin file allowed a temporary
-strict manifest pass, but the active Xcode 27 environment removes it again and
-a strict resolution invocation fails. The release script needs durable pinning
-and a successful archive run. See the [combined validation record](4.5-card-mpv-release-validation-2026-09-22.md).
+bundle audit. The Xcode 27 workspace did not retain its generated Swift package
+lockfile, so the project now requires exact revisions for all three packages.
+The strict manifest check binds them to reviewed attribution, and local package
+resolution and an unsigned Debug build pass. A successful signed release archive
+is still required. See the [combined validation record](4.5-card-mpv-release-validation-2026-09-22.md)
+and [package pin validation](4.5-package-pin-validation-2026-09-23.md).
+The [September 23 continuation](4.5-continuation-2026-09-23.md) records the
+99-test release-script run, five focused keyframe tests, and camera-card review
+validation change.
 
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
@@ -1319,6 +1324,8 @@ single group and optional splitting after gaps longer than two hours. Compatibil
 is evaluated across every segment. Unknown or incompatible multi-file recordings
 cannot be submitted through this flow. The scanner still lacks trusted
 format-specific span identity, so automatic continuation detection remains off.
+The reviewed import now applies the same card-name validation as ordinary import
+and retains the chosen upload server for its resulting groups.
 
 Remaining live validation and automation:
 
@@ -1336,6 +1343,14 @@ cancellable, bounded AVAssetReader scans, retaining scoped source access. Comple
 regions are cached by fresh source identity and track; unavailable or insufficient
 coverage falls back to frame snapping.
 The existing approximate-cut guidance remains applicable.
+
+Completed keyframe scans now also serve contained bounded requests for the same
+source identity and video track. Moving nearby trim handles can reuse inspected
+coverage without rereading compressed samples. A preserved local FFmpeg 9.0.1
+build contains `ffprobe`, but adding its roughly 52 MB executable requires an
+explicit bundle-size, signing, license/provenance, and release-packaging review.
+The 4.5 app continues to use bounded native discovery until that decision is
+made; it does not use a user's Homebrew `ffprobe` for keyframe candidates.
 
 The editor also includes split and range deletion, multiple-clip selection,
 drag reordering, undo/redo, scalable waveform envelopes, and source audio meters.

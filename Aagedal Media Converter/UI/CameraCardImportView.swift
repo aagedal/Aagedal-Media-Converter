@@ -174,8 +174,11 @@ struct CameraCardImportView: View {
             if clipCount >= 2 {
                 Toggle("Concatenate clips into single file", isOn: $concatEnabled)
                 HStack {
-                    Button("Review recording-date groups…", action: onReviewDateSplit)
-                        .disabled(isPreparingDateSplit)
+                    Button("Review recording-date groups…") {
+                        applySelectedServer()
+                        onReviewDateSplit()
+                    }
+                    .disabled(isPreparingDateSplit || !isNameValid)
                     if isPreparingDateSplit {
                         ProgressView().controlSize(.small)
                         Text("Reading recording metadata…")

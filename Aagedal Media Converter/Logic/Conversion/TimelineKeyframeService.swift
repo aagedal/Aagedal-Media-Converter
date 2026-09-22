@@ -78,6 +78,17 @@ actor TimelineKeyframeService {
             try Task.checkCancellation()
             return cached
         }
+        // An earlier completed scan may already cover this request. Reuse its
+        // established coverage and candidates instead of starting another reader
+        // when nearby trim handles request overlapping quantized regions.
+        if let identity,
+           let coveringKey = cacheOrder.reversed().first(where: {
+               $0.source == identity && $0.track == videoTrackOrdinal &&
+               $0.start <= bounded.lowerBound && $0.end >= bounded.upperBound
+           }), let cached = cache[coveringKey] {
+            try Task.checkCancellation()
+            return cached
+        }
         let cancellation = ReaderCancellation()
         let task = Task.detached(priority: .utility) {
             try await Self.read(url: url, trackOrdinal: videoTrackOrdinal, range: bounded, cancellation: cancellation)

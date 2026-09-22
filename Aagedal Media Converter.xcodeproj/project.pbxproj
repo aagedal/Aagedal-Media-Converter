@@ -2427,24 +2427,24 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/aagedal/MPVKit.git";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = revision;
+				revision = 230c3174f1515898f24599147ad61c2a277d0dc2;
 			};
 		};
 		8ED369EF2F8CEFFC00FB9A33 /* XCRemoteSwiftPackageReference "SwiftMediaMetadata" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/aagedal/SwiftMediaMetadata.git";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.0.1;
+				kind = revision;
+				revision = 8662054299a3e13c49c65f74c564360559d1bf7f;
 			};
 		};
 		C1DCF31D2FB2341100D617D4 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.9.1;
+				kind = revision;
+				revision = ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

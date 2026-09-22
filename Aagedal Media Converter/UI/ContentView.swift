@@ -1363,6 +1363,9 @@ struct ContentView: View {
     ) async {
         guard let state = cameraCardImportState, !groups.isEmpty,
               groups.flatMap(\.urls) == state.videoURLs else { return }
+        let baseName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !baseName.isEmpty,
+              baseName.rangeOfCharacter(from: CharacterSet(charactersIn: "/:\0")) == nil else { return }
         let preset = ExportPreset(rawValue: cameraCardPresetRaw) ?? .streamCopy
         let context = VideoGroupImportContext(preset: preset, outputFolder: outputFolder)
         let hasAccess = state.folderURL.startAccessingSecurityScopedResource()
@@ -1375,12 +1378,10 @@ struct ContentView: View {
             _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
         }
 
-        let baseName = cameraCardMasterName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let chosenName = baseName.isEmpty ? state.folderURL.lastPathComponent : baseName
         var createdIDs: [UUID] = []
 
         for (index, proposed) in groups.enumerated() {
-            let name = groups.count == 1 ? chosenName : String(format: "%@_group%02d", chosenName, index + 1)
+            let name = groups.count == 1 ? baseName : String(format: "%@_group%02d", baseName, index + 1)
             let canConcatenate = proposed.compatibility == .compatible && proposed.urls.count > 1
             var items = preparedItems[index]
             for itemIndex in items.indices {
