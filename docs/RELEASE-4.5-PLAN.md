@@ -1024,10 +1024,10 @@ CoreAudio runtime recovery, and signed distribution checks remain open.
 
 The integrated Debug unit suite now passes **1,178 tests**, all 98 release-script
 tests pass, and the unsigned Release build passes the 45-image/12-notice static
-bundle audit. The removed Swift package pin file was restored, and the strict
-dependency manifest check passes. Xcode 27 still removes that file during a
-strict package-resolution invocation, so the release script's pinned archive
-path needs a successful run. See the [combined validation record](4.5-card-mpv-release-validation-2026-09-22.md).
+bundle audit. Restoring the removed Swift package pin file allowed a temporary
+strict manifest pass, but the active Xcode 27 environment removes it again and
+a strict resolution invocation fails. The release script needs durable pinning
+and a successful archive run. See the [combined validation record](4.5-card-mpv-release-validation-2026-09-22.md).
 
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
