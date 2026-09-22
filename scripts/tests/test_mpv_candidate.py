@@ -18,6 +18,8 @@ class MPVCandidateTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.payloads = {MODULE.FRAMEWORK: b"universal framework"}
+        self.payloads[MODULE.SOURCE_DIFF] = b"pre-patch diff"
+        self.payloads[MODULE.PATCHED_SOURCE] = b"patched CoreAudio source"
         for arch in MODULE.ARCHITECTURES:
             self.payloads[f"dist/libmpv/macos/thin/{arch}/lib/libmpv.a"] = arch.encode()
         self.library = {"LibraryIdentifier": "macos-arm64_x86_64", "BinaryPath": "Libmpv.framework/Versions/A/Libmpv",
@@ -43,13 +45,20 @@ class MPVCandidateTests(unittest.TestCase):
                     for arch in MODULE.ARCHITECTURES:
                         bundle.writestr(f"lib/macos/thin/{arch}/lib/libmpv.a", arch.encode())
             self.payloads[archive] = stream.getvalue()
-        self.evidence = {"status": "build_succeeded", "exit_code": 0, "candidate_binaries": [], "candidate_archives": []}
+        self.evidence = {
+            "status": "build_succeeded", "exit_code": 0,
+            "patch_sha256": hashlib.sha256(MODULE.PATCH.read_bytes()).hexdigest(),
+            "source_before_coreaudio_diff_sha256": hashlib.sha256(self.payloads[MODULE.SOURCE_DIFF]).hexdigest(),
+            "patched_coreaudio_sha256": hashlib.sha256(self.payloads[MODULE.PATCHED_SOURCE]).hexdigest(),
+            "candidate_binaries": [], "candidate_archives": [],
+        }
         for name, data in self.payloads.items():
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-            key = "candidate_archives" if name.endswith(".zip") else "candidate_binaries"
-            self.evidence[key].append({"path": name, "sha256": hashlib.sha256(data).hexdigest()})
+            if name not in (MODULE.SOURCE_DIFF, MODULE.PATCHED_SOURCE):
+                key = "candidate_archives" if name.endswith(".zip") else "candidate_binaries"
+                self.evidence[key].append({"path": name, "sha256": hashlib.sha256(data).hexdigest()})
 
     def verify(self, architectures=("arm64", "x86_64"), thin_architectures=None):
         def read_architectures(path):
@@ -64,6 +73,21 @@ class MPVCandidateTests(unittest.TestCase):
     def test_changed_payload_fails(self):
         (self.root / MODULE.FRAMEWORK).write_bytes(b"changed")
         with self.assertRaisesRegex(ValueError, "hash mismatch"):
+            self.verify()
+
+    def test_changed_patched_source_fails(self):
+        (self.root / MODULE.PATCHED_SOURCE).write_bytes(b"different")
+        with self.assertRaisesRegex(ValueError, "Patched CoreAudio source hash mismatch"):
+            self.verify()
+
+    def test_changed_pre_patch_diff_fails(self):
+        (self.root / MODULE.SOURCE_DIFF).write_bytes(b"different")
+        with self.assertRaisesRegex(ValueError, "Pre-patch source diff hash mismatch"):
+            self.verify()
+
+    def test_changed_patch_hash_fails(self):
+        self.evidence["patch_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "Retained CoreAudio patch hash mismatch"):
             self.verify()
 
     def test_archive_with_valid_hash_but_different_binary_fails(self):

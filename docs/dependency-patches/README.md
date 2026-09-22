@@ -70,7 +70,8 @@ python3 scripts/verify-mpv-candidate.py \
   --report /private/tmp/amc-mpv-candidate-verification.json
 ```
 
-It checks every retained artifact hash, inspects the actual universal framework
+It matches the retained patch, pre-patch source diff, and staged patched CoreAudio
+source against build evidence. It checks every retained artifact hash, inspects the actual universal framework
 with `lipo`, validates the XCFramework's platform/architecture declarations, and
 compares archived framework/static-library bytes with the build outputs without
 extracting the ZIPs. Missing artifacts, duplicate ZIP members, changed payloads,

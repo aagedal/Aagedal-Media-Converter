@@ -16,6 +16,9 @@ FRAMEWORK = "dist/libmpv/macos/Libmpv.framework/Versions/A/Libmpv"
 ARCHIVE = "dist/release/Libmpv.xcframework.zip"
 STATIC_ARCHIVE = "dist/release/libmpv-all.zip"
 PREFIX = "Libmpv.xcframework/"
+PATCH = Path(__file__).resolve().parents[1] / "docs/dependency-patches/mpv-0.41.0-coreaudio-init-failure.patch"
+SOURCE_DIFF = "source-before-coreaudio.patch"
+PATCHED_SOURCE = "dist/libmpv-v0.41.0/audio/out/ao_coreaudio.c"
 
 
 def archive_path(name):
@@ -49,6 +52,18 @@ def contained(root, name):
 def verify(root, evidence, architecture_reader=None):
     if evidence.get("status") != "build_succeeded" or evidence.get("exit_code") != 0:
         raise ValueError("Evidence does not describe a successful build")
+    source_checks = (
+        (PATCH, "patch_sha256", "Retained CoreAudio patch"),
+        (contained(root, SOURCE_DIFF), "source_before_coreaudio_diff_sha256", "Pre-patch source diff"),
+        (contained(root, PATCHED_SOURCE), "patched_coreaudio_sha256", "Patched CoreAudio source"),
+    )
+    for path, key, label in source_checks:
+        expected_hash = evidence.get(key)
+        if not isinstance(expected_hash, str) or len(expected_hash) != 64:
+            raise ValueError(f"Evidence is missing {label} hash")
+        with path.open("rb") as stream:
+            if digest(stream) != expected_hash:
+                raise ValueError(f"{label} hash mismatch")
     rows = evidence.get("candidate_archives", []) + evidence.get("candidate_binaries", [])
     expected = {}
     for row in rows:
@@ -104,6 +119,7 @@ def verify(root, evidence, architecture_reader=None):
                     if digest(stream) != expected[candidate]:
                         raise ValueError(f"Archive binary differs from candidate: {member}")
     return {"status": "verified", "artifact_count": len(expected),
+            "coreaudio_source_correspondence": True,
             "framework_architectures": sorted(ARCHITECTURES),
             "thin_archive_architectures": {arch: [arch] for arch in sorted(ARCHITECTURES)},
             "archive_binary_correspondence": True, "release_ready": False}
