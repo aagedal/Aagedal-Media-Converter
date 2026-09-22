@@ -819,6 +819,70 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testNormalTrimHandleHitAreas() throws {
+        launchApp(generatedFixture: true, previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+        app.activate()
+        queueItem.rightClick()
+        app.menuItems["Preview / Trim"].click()
+        XCTAssertTrue(waitForValue("AVPlayer ready", of: element("preview.media"), timeout: 30))
+
+        let timeline = element("trim.timeline")
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        let start = element("trim.timeline.start")
+        let end = element("trim.timeline.end")
+        func waitForTrim(_ seconds: Double, of slider: XCUIElement) -> Bool {
+            let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                guard let value = slider.value as? NSNumber else { return false }
+                return abs(value.doubleValue - seconds) < 0.01
+            }, object: slider)
+            return XCTWaiter.wait(for: [expectation], timeout: 5) == .completed
+        }
+
+        // Grab the transparent padding, not just the two-point visible line.
+        // Edge handles must win over scrubbing even when no trim is set yet.
+        for compact in [false, true] {
+            if compact {
+                element("trim.cropControls").click()
+            }
+            for offset: CGFloat in [-10, 10] {
+                if !compact {
+                    element("trim.reset").click()
+                } else {
+                    app.typeKey("i", modifierFlags: .option)
+                    app.typeKey("o", modifierFlags: .option)
+                }
+                let origin = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+                let width = timeline.frame.width
+                origin.withOffset(CGVector(dx: 10, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: 10 + width * 0.25, dy: 0)))
+                XCTAssertTrue(waitForTrim(1.5, of: start))
+                XCTAssertTrue(waitForTrim(6.0, of: end))
+
+                origin.withOffset(CGVector(dx: width - 10, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: width * 0.75 - 10, dy: 0)))
+                XCTAssertTrue(waitForTrim(4.5, of: end))
+                XCTAssertTrue(waitForTrim(1.5, of: start))
+
+                // Both sides of an interior handle must adjust that endpoint.
+                origin.withOffset(CGVector(dx: width * 0.25 + offset, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: width * 0.35 + offset, dy: 0)))
+                XCTAssertTrue(waitForTrim(2.1, of: start))
+                XCTAssertTrue(waitForTrim(4.5, of: end))
+
+                origin.withOffset(CGVector(dx: width * 0.75 + offset, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: width * 0.65 + offset, dy: 0)))
+                XCTAssertTrue(waitForTrim(3.9, of: end))
+                XCTAssertTrue(waitForTrim(2.1, of: start))
+            }
+            attachWindowScreenshot(named: compact ? "Compact trim handle drag" : "Normal trim handle drag")
+        }
+        element("preview.close").click()
+    }
+
+    @MainActor
     private func exercisePreview(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, previewContainer: container)
         defer { terminateAndCleanFixtures() }

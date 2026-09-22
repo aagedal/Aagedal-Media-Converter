@@ -12,6 +12,34 @@ import AppKit
 import OSLog
 import ImageIO
 
+// One geometry definition for handle drawing, pointer hits, and cursor feedback.
+private struct TrimHandleGeometry {
+    static let hitWidth: CGFloat = 30
+
+    let startX: CGFloat
+    let endX: CGFloat
+    let width: CGFloat
+
+    init(trimStart: Double, trimEnd: Double, duration: Double, width: CGFloat) {
+        self.width = max(width, 1)
+        startX = duration > 0 ? max(0, min(self.width, CGFloat(trimStart / duration) * self.width)) : 0
+        endX = duration > 0 ? max(0, min(self.width, CGFloat(trimEnd / duration) * self.width)) : self.width
+    }
+
+    // Split overlapping hit areas at the midpoint so each handle remains reachable.
+    var startRange: ClosedRange<CGFloat> {
+        max(0, startX - Self.hitWidth / 2)...min((startX + endX) / 2, startX + Self.hitWidth / 2)
+    }
+
+    var endRange: ClosedRange<CGFloat> {
+        max((startX + endX) / 2, endX - Self.hitWidth / 2)...min(width, endX + Self.hitWidth / 2)
+    }
+
+    func containsHandle(at x: CGFloat) -> Bool {
+        startRange.contains(x) || endRange.contains(x)
+    }
+}
+
 struct TrimTimelineView: View {
     @Binding private var trimStart: Double
     @Binding private var trimEnd: Double
@@ -181,11 +209,7 @@ private struct TrimHandlesInteractionLayer: View {
     @Binding var isDraggingStart: Bool
     @Binding var isDraggingEnd: Bool
 
-    // Visual bar is 2px wide (see handleView); this is the hit-test/drag width
-    // around it — wide enough that clicks aimed at the handle don't slip
-    // through to the scrub layer below.
-    static let handleWidth: CGFloat = 30
-    private var handleWidth: CGFloat { Self.handleWidth }
+    private let coordinateSpace = "trimHandleDrag"
 
     @State private var startInitialValue: Double?
     @State private var endInitialValue: Double?
@@ -198,41 +222,37 @@ private struct TrimHandlesInteractionLayer: View {
         GeometryReader { geometry in
             let width = max(geometry.size.width, 1)
             let height = geometry.size.height
-            let startX = position(for: trimStart, width: width)
-            let endX = position(for: trimEnd, width: width)
-            let clampedStartX = max(0, min(width, startX))
-            let clampedEndX = max(0, min(width, endX))
+            let handles = TrimHandleGeometry(trimStart: trimStart, trimEnd: trimEnd, duration: duration, width: width)
 
             ZStack(alignment: .topLeading) {
-                // Start handle
-                handleView(isLeading: true, isActive: isDraggingStart)
-                    .frame(width: handleWidth, height: height)
-                    .offset(x: clampedStartX - handleWidth / 2)
+                handleView(range: handles.startRange, position: handles.startX, height: height, isActive: isDraggingStart)
                     .gesture(startGesture(width: width))
-                    .zIndex(isDraggingStart ? 2 : 1)
 
-                // End handle
-                handleView(isLeading: false, isActive: isDraggingEnd)
-                    .frame(width: handleWidth, height: height)
-                    .offset(x: clampedEndX - handleWidth / 2)
+                handleView(range: handles.endRange, position: handles.endX, height: height, isActive: isDraggingEnd)
                     .gesture(endGesture(width: width))
-                    .zIndex(isDraggingEnd ? 2 : 1)
             }
+            .frame(width: width, height: height, alignment: .topLeading)
             .allowsHitTesting(duration > 0)
         }
+        .coordinateSpace(name: coordinateSpace)
     }
 
-    private func handleView(isLeading: Bool, isActive: Bool) -> some View {
-        ZStack {
-            Color.clear
-            Rectangle()
-                .fill(Color.blue.opacity(isActive ? 1.0 : 0.8))
-                .frame(width: 2)
-        }
+    private func handleView(range: ClosedRange<CGFloat>, position: CGFloat, height: CGFloat, isActive: Bool) -> some View {
+        Color.clear
+            .frame(width: range.upperBound - range.lowerBound, height: height)
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(Color.blue.opacity(isActive ? 1.0 : 0.8))
+                    .frame(width: 2)
+                    .offset(x: position - range.lowerBound - 1)
+                    .allowsHitTesting(false)
+            }
+            .contentShape(Rectangle())
+            .offset(x: range.lowerBound)
     }
 
     private func startGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinateSpace))
             .onChanged { value in
                 guard duration > 0 else { return }
                 if !isDraggingStart {
@@ -286,7 +306,7 @@ private struct TrimHandlesInteractionLayer: View {
     }
 
     private func endGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(coordinateSpace))
             .onChanged { value in
                 guard duration > 0 else { return }
                 if !isDraggingEnd {
@@ -358,11 +378,6 @@ private struct TrimHandlesInteractionLayer: View {
         guard step > 0 else { return value }
         return (value / step).rounded() * step
     }
-
-    private func position(for value: Double, width: CGFloat) -> CGFloat {
-        guard duration > 0 else { return 0 }
-        return CGFloat(value / duration) * width
-    }
 }
 
 // MARK: - Timeline Cursor Overlay
@@ -373,11 +388,8 @@ private struct TrimHandlesInteractionLayer: View {
 /// onto the global NSCursor stack. Uses `NSCursor.set()` rather than
 /// `push()`/`pop()` so there is no shared stack to get out of sync.
 private struct TimelineCursorOverlay: NSViewRepresentable {
-    let startX: CGFloat
-    let endX: CGFloat
-    let cursorHitWidth: CGFloat          // Tighter than handle drag zone so the
-                                         // cursor only changes when near the
-                                         // visible handle line.
+    let handles: TrimHandleGeometry
+    let isEnabled: Bool
     let isSymmetricScalingActive: Bool   // Option held
     let isRangeSelectionActive: Bool     // Cmd held
     let isRangeSlidingActive: Bool       // Shift held
@@ -397,9 +409,8 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
 
     private func applyState(to view: TrackingNSView) {
         view.update(
-            startX: startX,
-            endX: endX,
-            cursorHitWidth: cursorHitWidth,
+            handles: handles,
+            isEnabled: isEnabled,
             isSymmetric: isSymmetricScalingActive,
             isRangeSelectionActive: isRangeSelectionActive,
             isRangeSlidingActive: isRangeSlidingActive,
@@ -409,9 +420,8 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
     }
 
     final class TrackingNSView: NSView {
-        private var startX: CGFloat = 0
-        private var endX: CGFloat = 0
-        private var cursorHitWidth: CGFloat = 12
+        private var handles = TrimHandleGeometry(trimStart: 0, trimEnd: 0, duration: 0, width: 1)
+        private var isEnabled = false
         private var isSymmetric: Bool = false
         private var isRangeSelectionActive: Bool = false
         private var isRangeSlidingActive: Bool = false
@@ -421,13 +431,12 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
         private var lastMouseLocation: CGPoint?
         private var isInside: Bool = false
 
-        func update(startX: CGFloat, endX: CGFloat, cursorHitWidth: CGFloat,
+        func update(handles: TrimHandleGeometry, isEnabled: Bool,
                     isSymmetric: Bool,
                     isRangeSelectionActive: Bool, isRangeSlidingActive: Bool,
                     isDraggingStart: Bool, isDraggingEnd: Bool) {
-            self.startX = startX
-            self.endX = endX
-            self.cursorHitWidth = cursorHitWidth
+            self.handles = handles
+            self.isEnabled = isEnabled
             self.isSymmetric = isSymmetric
             self.isRangeSelectionActive = isRangeSelectionActive
             self.isRangeSlidingActive = isRangeSlidingActive
@@ -489,19 +498,18 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
             }
             guard isInside, let loc = lastMouseLocation else { return }
 
-            let half = cursorHitWidth / 2
-            let startDist = abs(loc.x - startX)
-            let endDist = abs(loc.x - endX)
-            let withinStart = startDist <= half
-            let withinEnd = endDist <= half
-
-            // Hover over a handle wins over modifier-key cursors.
-            if withinStart && (!withinEnd || startDist <= endDist) {
-                (isSymmetric ? NSCursor.resizeLeftRight : NSCursor.resizeLeft).set()
+            guard isEnabled else {
+                NSCursor.arrow.set()
                 return
             }
-            if withinEnd {
+
+            // Match the handle views, including end-handle priority at the shared midpoint.
+            if handles.endRange.contains(loc.x) {
                 (isSymmetric ? NSCursor.resizeLeftRight : NSCursor.resizeRight).set()
+                return
+            }
+            if handles.startRange.contains(loc.x) {
+                (isSymmetric ? NSCursor.resizeLeftRight : NSCursor.resizeLeft).set()
                 return
             }
             if isRangeSelectionActive {
@@ -602,16 +610,9 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
                 // so the trim handles and scrub layer never push competing
                 // cursors onto the global stack.
                 let width = max(geometry.size.width, 1)
-                let rawStartX = duration > 0 ? CGFloat(trimStart / duration) * width : 0
-                let rawEndX = duration > 0 ? CGFloat(trimEnd / duration) * width : width
                 TimelineCursorOverlay(
-                    startX: max(0, min(width, rawStartX)),
-                    endX: max(0, min(width, rawEndX)),
-                    // Cursor zone is intentionally narrower than the drag
-                    // hit zone so the resize cursor only appears when the
-                    // pointer is right on the handle, while the drag
-                    // gesture stays forgiving.
-                    cursorHitWidth: 7,
+                    handles: TrimHandleGeometry(trimStart: trimStart, trimEnd: trimEnd, duration: duration, width: width),
+                    isEnabled: duration > 0,
                     isSymmetricScalingActive: isOptionKeyPressed,
                     isRangeSelectionActive: isCommandKeyPressed,
                     isRangeSlidingActive: isShiftKeyPressed,
@@ -625,6 +626,8 @@ private struct TimelineCursorOverlay: NSViewRepresentable {
         .accessibilityRepresentation {
             accessibleTimelineControls
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("trim.timeline")
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .background(TimelineKeyTrackerView(isCommandKeyPressed: $isCommandKeyPressed, isShiftKeyPressed: $isShiftKeyPressed, isOptionKeyPressed: $isOptionKeyPressed))
         .onChange(of: thumbnails) { _, newThumbnails in
@@ -1204,9 +1207,6 @@ private struct TimelineScrubLayer: View {
     let onEditingChanged: (Bool) -> Void
     let onSeek: (Double) -> Void
 
-    private let handleWidth: CGFloat = 12  // Matches handle visual width
-    private let handleMargin: CGFloat = 1  // Minimal margin so playhead can reach near trim handles
-
     @State private var isScrubbing = false
     @State private var isRangeSelecting = false
     @State private var rangeStartTime: Double?
@@ -1273,7 +1273,13 @@ private struct TimelineScrubLayer: View {
                             let clickX = value.location.x
                             let clickTime = timeForPosition(clickX, width: width)
 
-                            // Range selection mode when R is held
+                            // A gesture belongs to its initial target, even if it later crosses a handle.
+                            if !isScrubbing && !isRangeSelecting && !isRangeSliding {
+                                let handles = TrimHandleGeometry(trimStart: trimStart, trimEnd: trimEnd, duration: duration, width: width)
+                                guard !handles.containsHandle(at: value.startLocation.x) else { return }
+                            }
+
+                            // Range selection mode when Command is held
                             if isRangeSelectionActive {
                                 if !isRangeSelecting {
                                     // Start of range selection - set in-point
@@ -1301,14 +1307,8 @@ private struct TimelineScrubLayer: View {
                                 return
                             }
 
-                            // Check handle proximity for scrubbing
-                            let startX = position(for: trimStart, width: width)
-                            let endX = position(for: trimEnd, width: width)
-                            let nearStartHandle = abs(clickX - startX) < (handleWidth / 2 + handleMargin)
-                            let nearEndHandle = abs(clickX - endX) < (handleWidth / 2 + handleMargin)
-
                             // Range sliding mode when Shift is held and click is between trim points
-                            if isRangeSlidingActive && !nearStartHandle && !nearEndHandle {
+                            if isRangeSlidingActive {
                                 let isBetweenTrimPoints = clickTime > trimStart && clickTime < trimEnd
 
                                 if !isRangeSliding && isBetweenTrimPoints {
@@ -1348,14 +1348,6 @@ private struct TimelineScrubLayer: View {
                                     // Seek to current position within the range
                                     throttledSeek(clickTime)
                                 }
-                                return
-                            }
-
-                            // Normal scrubbing mode - skip if near handles
-                            // But allow scrubbing at the extreme edges (no trim set)
-                            let startAtEdge = trimStart <= 0
-                            let endAtEdge = trimEnd >= duration
-                            if (nearStartHandle && !startAtEdge) || (nearEndHandle && !endAtEdge) {
                                 return
                             }
 
@@ -1402,11 +1394,6 @@ private struct TimelineScrubLayer: View {
                         }
                 )
         }
-    }
-
-    private func position(for value: Double, width: CGFloat) -> CGFloat {
-        guard duration > 0 else { return 0 }
-        return CGFloat(value / duration) * width
     }
 
     private func timeForPosition(_ x: CGFloat, width: CGFloat) -> Double {
