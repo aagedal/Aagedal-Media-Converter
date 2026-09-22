@@ -78,3 +78,30 @@ and paths escaping staging fail the audit. The September 22 candidate passed
 all seven artifact hashes and the three archived binary comparisons. This closes
 archive/framework correspondence only; source/dependency provenance, publication,
 app integration, signing, and CoreAudio runtime checks remain open.
+
+## Prepare the GPL target asset
+
+The isolated recipe invokes `enable-gpl`, and both retained Meson configurations
+record `gpl: true`. Its generic packaging step names the resulting archive
+`Libmpv.xcframework.zip`; the app's `MPVKit-GPL` product instead references a
+`Libmpv-GPL.xcframework.zip` release asset. The two archive names use the same
+internal `Libmpv.xcframework` layout. Prepare a checked, correctly named asset:
+
+```sh
+python3 scripts/prepare-mpv-gpl-release.py \
+  --candidate /private/tmp/amc-mpv-coreaudio-20260922-d \
+  --evidence docs/dependency-patches/mpv-coreaudio-build-2026-09-22.json \
+  --output /private/tmp/amc-mpv-gpl-release-20260922
+swift package compute-checksum \
+  /private/tmp/amc-mpv-gpl-release-20260922/Libmpv-GPL.xcframework.zip
+```
+
+The script rechecks candidate hashes, architecture and archive correspondence,
+then reads the actual arm64 and x86_64 Meson options before copying the archive.
+The prepared asset's SwiftPM checksum is
+`abd855457c4783efdb9a5827faa0f1439392cba32150550b1694fe79e6fb3856`.
+`release-preparation.json` retains the checks and release steps. The asset is
+still in temporary storage, unpublished, and marked `release_ready: false`.
+Publish it under a new versioned MPVKit release, update that package's GPL
+binary-target URL/checksum, then pin this app to the resulting package revision
+and validate the app before treating the dependency update as integrated.
