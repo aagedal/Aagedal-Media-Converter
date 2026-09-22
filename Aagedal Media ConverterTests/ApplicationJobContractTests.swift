@@ -522,6 +522,107 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertNotEqual(secondAcceptance.record.id, firstAcceptance.record.id)
     }
 
+    func testDestinationAliasSharesReservationAndCancellationReleasesIt() async throws {
+        let directory = try makeTemporaryDirectory()
+        let realParent = directory.appendingPathComponent("real", isDirectory: true)
+        let aliasParent = directory.appendingPathComponent("alias", isDirectory: true)
+        let outputDirectory = realParent.appendingPathComponent("outputs", isDirectory: true)
+        let alias = aliasParent.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: aliasParent, withDestinationURL: realParent)
+        let source = directory.appendingPathComponent("clip.mov")
+        try Data("source".utf8).write(to: source)
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let firstPlan = try await service.plan(makeRequest(
+            sourceURLs: [source], destinationFolderURL: outputDirectory, idempotencyKey: nil
+        ))
+        let aliasPlan = try await service.plan(makeRequest(
+            sourceURLs: [source], destinationFolderURL: alias, idempotencyKey: nil
+        ))
+        XCTAssertEqual(aliasPlan.outputs[0].outputURL.deletingLastPathComponent().path, alias.path)
+        let accepted = try await service.submit(planID: firstPlan.id)
+        do {
+            _ = try await service.submit(planID: aliasPlan.id)
+            XCTFail("Aliased destination must share the active reservation")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .outputCollision(aliasPlan.outputs[0].outputURL))
+        }
+        _ = try await service.requestCancellation(accepted.record.id)
+        let aliasAcceptance = try await service.submit(planID: aliasPlan.id)
+        XCTAssertNotEqual(aliasAcceptance.record.id, accepted.record.id)
+        XCTAssertEqual(aliasAcceptance.record.request.destinationFolderURL, alias)
+    }
+
+    func testPlanningRejectsPerSourceDestinationsAliasingTheSameOutput() async throws {
+        let fixture = try makeAliasedOutputFixture(initiallyAliased: true)
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        do {
+            _ = try await service.plan(fixture.request)
+            XCTFail("Per-source destination aliases must not permit duplicate output files")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError,
+                           .duplicateOutput(fixture.alias.appendingPathComponent("clip_h264.mp4")))
+        }
+    }
+
+    func testSubmissionRechecksPerSourceDestinationAliases() async throws {
+        let fixture = try makeAliasedOutputFixture(initiallyAliased: false)
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let plan = try await service.plan(fixture.request)
+        let aliasParent = fixture.alias.deletingLastPathComponent()
+        try FileManager.default.removeItem(at: aliasParent)
+        try FileManager.default.createSymbolicLink(
+            at: aliasParent, withDestinationURL: fixture.outputDirectory.deletingLastPathComponent()
+        )
+        do {
+            _ = try await service.submit(planID: plan.id)
+            XCTFail("Destinations that became aliases since planning must be rechecked")
+        } catch {
+            XCTAssertEqual(error as? ApplicationJobError, .duplicateOutput(plan.outputs[1].outputURL))
+        }
+        // Rejected admission must not reserve either output.
+        let replacement = try await service.plan(makeRequest(
+            sourceURLs: [fixture.request.sourceURLs[0]],
+            destinationFolderURL: fixture.outputDirectory, idempotencyKey: nil
+        ))
+        _ = try await service.submit(planID: replacement.id)
+    }
+
+    private func makeAliasedOutputFixture(initiallyAliased: Bool) throws -> (
+        request: ApplicationConversionRequest, alias: URL, outputDirectory: URL
+    ) {
+        let directory = try makeTemporaryDirectory()
+        let realParent = directory.appendingPathComponent("real", isDirectory: true)
+        let aliasParent = directory.appendingPathComponent("alias", isDirectory: true)
+        let outputDirectory = realParent.appendingPathComponent("outputs", isDirectory: true)
+        let alias = aliasParent.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        if initiallyAliased {
+            try FileManager.default.createSymbolicLink(at: aliasParent, withDestinationURL: realParent)
+        } else {
+            try FileManager.default.createDirectory(at: alias, withIntermediateDirectories: true)
+        }
+        let sources = try ["first", "second"].map { name in
+            let folder = directory.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let source = folder.appendingPathComponent("clip.mov")
+            try Data(name.utf8).write(to: source)
+            return source
+        }
+        return (makeRequest(
+            sourceURLs: sources, destinationFolderURL: outputDirectory,
+            sourceSettings: [
+                ApplicationSourceExecutionSettings(
+                    sourceURL: sources[0], includeDateTag: false, timecodeConfig: nil
+                ),
+                ApplicationSourceExecutionSettings(
+                    sourceURL: sources[1], destinationFolderURL: alias,
+                    includeDateTag: false, timecodeConfig: nil
+                )
+            ], idempotencyKey: nil
+        ), alias, outputDirectory)
+    }
+
     func testConcurrentSubmissionsReserveAnOutputForOnlyOneJob() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("input.mov")

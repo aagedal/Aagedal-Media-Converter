@@ -2547,7 +2547,7 @@ actor ApplicationJobService {
 
         var uniqueOutputs = Set<URL>()
         for output in outputs {
-            let normalized = output.outputURL.standardizedFileURL
+            let normalized = Self.outputReservationIdentity(output.outputURL)
             guard uniqueOutputs.insert(normalized).inserted else {
                 throw ApplicationJobError.duplicateOutput(output.outputURL)
             }
@@ -2639,15 +2639,18 @@ actor ApplicationJobService {
             }
         }
 
+        var normalizedOutputs = Set<URL>()
         for output in plan.outputs {
-            let normalized = output.outputURL.standardizedFileURL
+            let normalized = Self.outputReservationIdentity(output.outputURL)
+            guard normalizedOutputs.insert(normalized).inserted else {
+                throw ApplicationJobError.duplicateOutput(output.outputURL)
+            }
             guard !itemExists(output.outputURL), reservedOutputs[normalized] == nil else {
                 throw ApplicationJobError.outputCollision(output.outputURL)
             }
         }
 
         let accepted = try await registry.accept(plan.request, now: now)
-        let normalizedOutputs = Set(plan.outputs.map { $0.outputURL.standardizedFileURL })
         for output in normalizedOutputs {
             reservedOutputs[output] = accepted.record.id
         }
@@ -3134,6 +3137,17 @@ actor ApplicationJobService {
                 ).appendingPathComponent(fileName)
             )
         }
+    }
+
+    /// Output files need not exist yet. Resolve only the authorized parent folder,
+    /// preserving the planned filename and the original paths in the public contract.
+    /// Call while destination access leases are held; capture once for reservation
+    /// and release so later filesystem changes cannot strand the reservation.
+    private static func outputReservationIdentity(_ outputURL: URL) -> URL {
+        outputURL.deletingLastPathComponent()
+            .resolvingSymlinksInPath()
+            .appendingPathComponent(outputURL.lastPathComponent)
+            .standardizedFileURL
     }
 
     private static func destinationFolderURL(

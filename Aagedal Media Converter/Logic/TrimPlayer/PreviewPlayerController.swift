@@ -129,6 +129,7 @@ final class PreviewPlayerController: ObservableObject {
     var playerItemStatusObserverID: UUID?
     var playerItemStatusOperationID: UUID?
     var playerItemStatusTask: Task<Void, Never>?
+    var playerItemLoadDeadlineTask: Task<Void, Never>?
     private var audioSelectionTask: Task<Void, Never>?
     private var audioSelectionOperationID: UUID?
     var mpvObservers = Set<AnyCancellable>()

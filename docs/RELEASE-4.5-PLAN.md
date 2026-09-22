@@ -941,6 +941,27 @@ the [load deadline validation record](4.5-preview-load-deadline-validation-2026-
 This bounds asynchronous MPV loading only; native-player loading, synchronous
 decoder hangs, and broader real-media stress remain unverified.
 
+Native AVPlayer loading now also has a 30-second deadline. A source that stays
+in the unknown state retires its native callbacks and falls back to the existing
+bounded MPV path while preserving audio selection. The camera-card grouping
+foundation now has a conservative probe-metadata adapter for explicitly resolved
+logical recordings, including complete span duration and every video/audio track.
+Automatic splitting stays disabled pending reliable span identification and a
+reviewed import preview. Shared-job output reservations now recognize symlinked
+ancestor-folder aliases, including duplicate per-source destinations checked
+again at submission. All 1,162 unit tests, three serial preview UI checks,
+81 release-script tests, and the localization audit pass. See the
+[continuation validation record](4.5-native-card-alias-validation-2026-09-22.md).
+
+The retained CoreAudio patch has now completed an isolated libmpv-only rebuild
+for arm64 and x86_64 with the installed macOS 27 SDK, including universal framework,
+XCFramework, and ZIP assembly. A reusable driver preserves the original checkout
+and dependency outputs. Candidate hashes and the remaining publication,
+provenance, and runtime gates are retained in the
+[isolated rebuild record](dependency-patches/README.md).
+The app still uses its previous dependency; the CoreAudio release blocker remains
+open until the patched package is integrated and validated.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -1226,9 +1247,9 @@ import. Callers must resolve spans into logical recordings first. It prefers
 camera dates over container dates, never substitutes filesystem dates, uses an
 explicit fixed timezone for the whole import, preserves input order, and keeps
 contiguous undated recordings separate. The importer currently lacks reliable
-span identity/resolution. Conservative compatibility proposals are now available
-in the foundation, but an importer metadata/compatibility adapter and a
-user-reviewed preview are still required before enabling this option.
+span identity/resolution. Conservative compatibility proposals and a probe-metadata adapter are now
+available in the foundation. The scanner still needs reliable span resolution
+and integration with a user-reviewed preview before enabling this option.
 
 Remaining:
 
