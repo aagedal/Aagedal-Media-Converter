@@ -6,7 +6,7 @@ This read-only audit does not establish signing, source provenance, or runtime s
 import argparse
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import plistlib
 import subprocess
 import zipfile
@@ -16,6 +16,17 @@ FRAMEWORK = "dist/libmpv/macos/Libmpv.framework/Versions/A/Libmpv"
 ARCHIVE = "dist/release/Libmpv.xcframework.zip"
 STATIC_ARCHIVE = "dist/release/libmpv-all.zip"
 PREFIX = "Libmpv.xcframework/"
+
+
+def archive_path(name):
+    """Reject ambiguous ZIP paths without extracting any archive content."""
+    if not isinstance(name, str) or not name or "\\" in name:
+        raise ValueError(f"Unsafe archive path: {name!r}")
+    path = PurePosixPath(name)
+    if (path.is_absolute() or ".." in path.parts
+            or str(path) != name.rstrip("/")):
+        raise ValueError(f"Unsafe archive path: {name}")
+    return name
 
 
 def digest(stream):
@@ -58,11 +69,17 @@ def verify(root, evidence, architecture_reader=None):
             ["lipo", "-archs", str(path)], text=True).split()
     if set(architecture_reader(contained(root, FRAMEWORK))) != ARCHITECTURES:
         raise ValueError("Framework must contain exactly arm64 and x86_64")
+    for arch in sorted(ARCHITECTURES):
+        candidate = f"dist/libmpv/macos/thin/{arch}/lib/libmpv.a"
+        if set(architecture_reader(contained(root, candidate))) != {arch}:
+            raise ValueError(f"Thin archive must contain exactly {arch}: {candidate}")
     for archive in (ARCHIVE, STATIC_ARCHIVE):
         with zipfile.ZipFile(contained(root, archive)) as bundle:
             names = bundle.namelist()
             if len(names) != len(set(names)):
                 raise ValueError(f"Duplicate ZIP members: {archive}")
+            for name in names:
+                archive_path(name)
             if archive == ARCHIVE:
                 info = plistlib.loads(bundle.read(PREFIX + "Info.plist"))
                 libraries = info.get("AvailableLibraries", [])
@@ -73,7 +90,11 @@ def verify(root, evidence, architecture_reader=None):
                         or library.get("SupportedPlatformVariant") is not None
                         or set(library.get("SupportedArchitectures", [])) != ARCHITECTURES):
                     raise ValueError("Unexpected XCFramework platform or architectures")
-                member = PREFIX + library["LibraryIdentifier"] + "/" + library["BinaryPath"]
+                identifier = archive_path(library["LibraryIdentifier"])
+                binary_path = archive_path(library["BinaryPath"])
+                if "/" in identifier or binary_path.endswith("/"):
+                    raise ValueError("Unexpected XCFramework binary location")
+                member = PREFIX + identifier + "/" + binary_path
                 comparisons = {member: FRAMEWORK}
             else:
                 comparisons = {f"lib/macos/thin/{arch}/lib/libmpv.a":
@@ -84,6 +105,7 @@ def verify(root, evidence, architecture_reader=None):
                         raise ValueError(f"Archive binary differs from candidate: {member}")
     return {"status": "verified", "artifact_count": len(expected),
             "framework_architectures": sorted(ARCHITECTURES),
+            "thin_archive_architectures": {arch: [arch] for arch in sorted(ARCHITECTURES)},
             "archive_binary_correspondence": True, "release_ready": False}
 
 

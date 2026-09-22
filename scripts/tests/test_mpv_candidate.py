@@ -24,10 +24,12 @@ class MPVCandidateTests(unittest.TestCase):
                         "SupportedPlatform": "macos", "SupportedArchitectures": ["arm64", "x86_64"]}
         self.make_archives()
 
-    def make_archives(self, framework=None, duplicate=False):
+    def make_archives(self, framework=None, duplicate=False, extra_member=None):
         for archive in (MODULE.ARCHIVE, MODULE.STATIC_ARCHIVE):
             stream = io.BytesIO()
             with zipfile.ZipFile(stream, "w") as bundle:
+                if extra_member:
+                    bundle.writestr(extra_member, b"unexpected")
                 if archive == MODULE.ARCHIVE:
                     bundle.writestr(MODULE.PREFIX + "Info.plist", plistlib.dumps({"AvailableLibraries": [self.library]}))
                     member = MODULE.PREFIX + self.library["LibraryIdentifier"] + "/" + self.library["BinaryPath"]
@@ -49,8 +51,12 @@ class MPVCandidateTests(unittest.TestCase):
             key = "candidate_archives" if name.endswith(".zip") else "candidate_binaries"
             self.evidence[key].append({"path": name, "sha256": hashlib.sha256(data).hexdigest()})
 
-    def verify(self, architectures=("arm64", "x86_64")):
-        return MODULE.verify(self.root, self.evidence, lambda _: architectures)
+    def verify(self, architectures=("arm64", "x86_64"), thin_architectures=None):
+        def read_architectures(path):
+            if path.name == "libmpv.a":
+                return thin_architectures or (path.parents[1].name,)
+            return architectures
+        return MODULE.verify(self.root, self.evidence, read_architectures)
 
     def test_corresponding_candidate_passes_without_claiming_release_ready(self):
         self.assertFalse(self.verify()["release_ready"])
@@ -68,6 +74,33 @@ class MPVCandidateTests(unittest.TestCase):
     def test_incorrect_actual_architecture_fails(self):
         with self.assertRaisesRegex(ValueError, "exactly"):
             self.verify(("arm64",))
+
+    def test_mislabeled_thin_archive_fails_even_when_hashes_match(self):
+        with self.assertRaisesRegex(ValueError, "Thin archive must contain exactly"):
+            self.verify(thin_architectures=("arm64",))
+
+    def test_universal_archive_in_thin_location_fails(self):
+        with self.assertRaisesRegex(ValueError, "Thin archive must contain exactly"):
+            self.verify(thin_architectures=("arm64", "x86_64"))
+
+    def test_unsafe_unrelated_zip_member_fails(self):
+        for name in ("../outside", "/absolute", "a/../outside", "a//b", "a/./b", "a\\b"):
+            with self.subTest(name=name):
+                self.make_archives(extra_member=name)
+                with self.assertRaisesRegex(ValueError, "Unsafe archive path"):
+                    self.verify()
+
+    def test_unsafe_metadata_binary_path_fails(self):
+        self.library["BinaryPath"] = "../Libmpv"
+        self.make_archives()
+        with self.assertRaisesRegex(ValueError, "Unsafe archive path"):
+            self.verify()
+
+    def test_nested_library_identifier_fails(self):
+        self.library["LibraryIdentifier"] = "nested/macos-arm64_x86_64"
+        self.make_archives()
+        with self.assertRaisesRegex(ValueError, "binary location"):
+            self.verify()
 
     def test_incorrect_declared_platform_fails(self):
         self.library["SupportedPlatform"] = "ios"
