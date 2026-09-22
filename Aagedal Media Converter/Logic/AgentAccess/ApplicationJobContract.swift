@@ -2350,7 +2350,11 @@ actor ApplicationJobService {
         executor: ApplicationJobExecutor? = nil,
         executionGate: ApplicationConversionExecutionGate = ApplicationConversionExecutionGate(),
         sourceIdentityProvider: SourceIdentityProvider? = nil,
-        itemExists: @escaping ItemExistsProvider = { FileManager.default.fileExists(atPath: $0.path) }
+        itemExists: @escaping ItemExistsProvider = {
+            // fileExists follows symlinks, so a dangling link needs a separate check.
+            FileManager.default.fileExists(atPath: $0.path)
+                || (try? FileManager.default.destinationOfSymbolicLink(atPath: $0.path)) != nil
+        }
     ) {
         self.registry = registry
         self.planLifetime = planLifetime
@@ -3139,15 +3143,20 @@ actor ApplicationJobService {
         }
     }
 
-    /// Output files need not exist yet. Resolve only the authorized parent folder,
-    /// preserving the planned filename and the original paths in the public contract.
-    /// Call while destination access leases are held; capture once for reservation
-    /// and release so later filesystem changes cannot strand the reservation.
+    /// Output files need not exist yet. Resolve the authorized parent and honor
+    /// its volume's case sensitivity so differently cased names cannot reserve
+    /// the same file on the usual case-insensitive macOS volumes. Unknown volume
+    /// capabilities conservatively use case-insensitive identity.
+    /// Public paths remain unchanged. Capture while access leases are held and
+    /// retain that identity for release even if the filesystem later changes.
     private static func outputReservationIdentity(_ outputURL: URL) -> URL {
-        outputURL.deletingLastPathComponent()
-            .resolvingSymlinksInPath()
-            .appendingPathComponent(outputURL.lastPathComponent)
-            .standardizedFileURL
+        let parent = outputURL.deletingLastPathComponent().resolvingSymlinksInPath()
+        let values = try? parent.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey])
+        let path = parent.appendingPathComponent(outputURL.lastPathComponent).standardizedFileURL.path
+        let identity = values?.volumeSupportsCaseSensitiveNames == true
+            ? path
+            : path.folding(options: .caseInsensitive, locale: Locale(identifier: "en_US_POSIX"))
+        return URL(fileURLWithPath: identity)
     }
 
     private static func destinationFolderURL(

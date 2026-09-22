@@ -522,6 +522,99 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertNotEqual(secondAcceptance.record.id, firstAcceptance.record.id)
     }
 
+    func testCaseVariantOutputReservationsFollowDestinationVolumeAndReleaseOnCancellation() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = try ["first", "second"].map { name in
+            let source = directory.appendingPathComponent("\(name).mov")
+            try Data(name.utf8).write(to: source)
+            return source
+        }
+        let caseSensitive = try directory.resourceValues(
+            forKeys: [.volumeSupportsCaseSensitiveNamesKey]
+        ).volumeSupportsCaseSensitiveNames == true
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        var plans: [ApplicationConversionPlan] = []
+        for (source, name) in zip(sources, ["Clip", "clip"]) {
+            plans.append(try await service.plan(makeRequest(
+                sourceURLs: [source], destinationFolderURL: directory,
+                sourceSettings: [ApplicationSourceExecutionSettings(
+                    sourceURL: source, includeDateTag: false, timecodeConfig: nil,
+                    outputBaseNameOverride: name
+                )], idempotencyKey: nil
+            )))
+        }
+        XCTAssertNotEqual(plans[0].outputs[0].outputURL, plans[1].outputs[0].outputURL)
+        let first = try await service.submit(planID: plans[0].id)
+        if caseSensitive {
+            _ = try await service.submit(planID: plans[1].id)
+        } else {
+            do {
+                _ = try await service.submit(planID: plans[1].id)
+                XCTFail("Case variants target the same file on this volume")
+            } catch {
+                XCTAssertEqual(error as? ApplicationJobError, .outputCollision(plans[1].outputs[0].outputURL))
+            }
+            _ = try await service.requestCancellation(first.record.id)
+            _ = try await service.submit(planID: plans[1].id)
+        }
+    }
+
+    func testCaseVariantBatchOutputsFollowDestinationVolume() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sources = try ["first", "second"].map { name in
+            let source = directory.appendingPathComponent("\(name).mov")
+            try Data(name.utf8).write(to: source)
+            return source
+        }
+        let caseSensitive = try directory.resourceValues(
+            forKeys: [.volumeSupportsCaseSensitiveNamesKey]
+        ).volumeSupportsCaseSensitiveNames == true
+        let request = makeRequest(
+            sourceURLs: sources, destinationFolderURL: directory,
+            sourceSettings: zip(sources, ["Clip", "clip"]).map { source, name in
+                ApplicationSourceExecutionSettings(
+                    sourceURL: source, includeDateTag: false, timecodeConfig: nil,
+                    outputBaseNameOverride: name
+                )
+            }, idempotencyKey: nil
+        )
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        do {
+            let plan = try await service.plan(request)
+            XCTAssertTrue(caseSensitive, "Case variants must be rejected on a case-insensitive volume")
+            XCTAssertEqual(plan.outputs.count, 2)
+        } catch {
+            XCTAssertFalse(caseSensitive)
+            guard case .duplicateOutput = error as? ApplicationJobError else {
+                return XCTFail("Expected duplicate output, got \(error)")
+            }
+        }
+    }
+
+    func testDanglingOutputSymlinkWarnsAndRejectsSubmissionWithoutReplacingLink() async throws {
+        let directory = try makeTemporaryDirectory()
+        let source = directory.appendingPathComponent("clip.mov")
+        try Data("source".utf8).write(to: source)
+        let service = ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        let request = makeRequest(sourceURLs: [source], destinationFolderURL: directory, idempotencyKey: nil)
+        let initial = try await service.plan(request)
+        let output = initial.outputs[0].outputURL
+        let missing = directory.appendingPathComponent("missing.mp4")
+        try FileManager.default.createSymbolicLink(at: output, withDestinationURL: missing)
+        let plan = try await service.plan(request)
+        XCTAssertEqual(plan.warnings.map(\.code), [.outputAlreadyExists])
+        for candidate in [initial, plan] {
+            do {
+                _ = try await service.submit(planID: candidate.id)
+                XCTFail("A dangling symlink is an existing destination entry")
+            } catch {
+                XCTAssertEqual(error as? ApplicationJobError, .outputCollision(output))
+            }
+        }
+        XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: output.path), missing.path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: missing.path))
+    }
+
     func testDestinationAliasSharesReservationAndCancellationReleasesIt() async throws {
         let directory = try makeTemporaryDirectory()
         let realParent = directory.appendingPathComponent("real", isDirectory: true)
