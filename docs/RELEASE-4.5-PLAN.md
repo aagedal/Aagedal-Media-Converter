@@ -928,6 +928,28 @@ post-actions and broader stream-copy/audio/merge output cases; visually review t
 new bilingual panels; and complete Developer ID signing/notarization, clean
 installation/update checks, release notes, and retained package reports.
 
+### Privacy-preserving usage indicator
+
+Add an explicit first-launch choice for a small aggregate usage indicator. The
+dialog offers **Allow anonymous usage count** and **Don't send data**, explains why
+the count helps development, describes the reporting frequency, and shows an
+illustrative payload. No option is preselected; declining produces no network
+request for this feature, and the choice can be changed later in Settings.
+
+When the user allows reporting, the app creates a random installation secret in
+the device-only Keychain and derives a different pseudonymous token for each
+calendar week. It sends that token at most once per day when the app opens over
+HTTPS. The request contains no filenames, paths, media or conversion details,
+account information, hardware identifiers, or OS metadata. The server assigns
+the date/week, stores only the minimum data needed for aggregation, avoids
+retaining client IP addresses, and reports distinct active installations during
+the last seven days. The product copy must say “active installations,” not
+“active users,” because one person may use several Macs and a Mac may be shared.
+
+This is an opt-in telemetry feature with a documented privacy policy and a clear
+off switch. It remains separate from the existing quality-analysis feature and
+does not collect conversion analytics.
+
 ## Beta readiness snapshot — 2026-09-15
 
 The six-tool MCP workflow, shared execution for the six selected presets,
