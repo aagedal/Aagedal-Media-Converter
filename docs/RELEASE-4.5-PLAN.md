@@ -971,6 +971,23 @@ XCFramework declarations, and archive/build binary correspondence. The retained
 patched candidate passes; integration and CoreAudio runtime validation remain
 open. See the [continuation record](4.5-preview-stress-candidate-validation-2026-09-22.md).
 
+Shared-job output reservations now honor destination-volume case sensitivity,
+preventing case-variant batch names and competing jobs from claiming the same
+output on case-insensitive volumes. Dangling output symlinks now produce an
+existing-output warning and block submission/execution. Accepted public paths
+remain unchanged. See the [output entry safety record](4.5-output-entry-safety-validation-2026-09-22.md).
+Whisper and OCR extraction adapters also reject late successful subprocess results
+after task cancellation, before flushing buffered progress; see the
+[adapter cancellation record](4.5-subtitle-adapter-completion-cancellation-validation-2026-09-22.md).
+The retained MPV candidate additionally passes actual thin-archive architecture
+checks and stricter archive-path validation; see the
+[candidate archive record](4.5-mpv-candidate-archive-validation-2026-09-22.md).
+All 1,172 unit tests, 96 release-script tests, and the 1,737-entry localization
+audit pass. The full unit result is retained at
+`/private/tmp/amc-45-output-cancellation-full.xcresult`; four existing test-target
+QoS warnings remain. No new UI/manual playback or signed Release run is claimed.
+These checks do not close package integration or CoreAudio runtime gates.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

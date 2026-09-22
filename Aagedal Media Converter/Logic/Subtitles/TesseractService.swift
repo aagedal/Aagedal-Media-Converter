@@ -598,6 +598,9 @@ struct TesseractSubtitleStreamExtractor: Sendable {
                 request.redactedDiagnostic(error.localizedDescription, limit: 300)
             )
         }
+        // Cancellation can race a successful process exit. Reject its result before
+        // flushing buffered progress or classifying the exit status.
+        try Task.checkCancellation()
         progressParser.finish()
 
         guard result.succeeded else {

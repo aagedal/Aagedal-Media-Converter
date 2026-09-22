@@ -5805,6 +5805,38 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testTesseractSubtitleExtractorRejectsSuccessAfterCancellationBeforeFlushingProgress() async throws {
+        let progressValues = OSAllocatedUnfairLock<[Double]>(initialState: [])
+        let runner = RecordingSubprocessRunner { _, outputHandler in
+            outputHandler?(SubprocessOutputChunk(
+                stream: .standardError,
+                data: Data("Duration: 00:00:10.00\nframe=12 time=00:00:05.00 speed=1.0x".utf8)
+            ))
+            withUnsafeCurrentTask { $0?.cancel() }
+            return SubprocessResult(
+                terminationStatus: 0, termination: .exited,
+                standardOutput: Data(), standardError: Data(),
+                discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0,
+                duration: .milliseconds(20)
+            )
+        }
+        let task = Task {
+            try await TesseractSubtitleStreamExtractor(subprocessRunner: runner).extract(
+                source: "/fixture/input.mkv", streamIndex: 0,
+                outputPath: "/fixture/output.sup", ffmpegPath: "/fixture/ffmpeg"
+            ) { value in
+                progressValues.withLock { $0.append(value) }
+            }
+        }
+        do {
+            try await task.value
+            XCTFail("Expected cancellation despite a successful runner result")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertTrue(progressValues.withLock { $0.isEmpty }, "Cancelled output must not flush buffered progress")
+    }
+
     func testTesseractSubtitleExtractorPropagatesTaskCancellation() async throws {
         let runner = BlockingSubprocessRunner()
         let extractor = TesseractSubtitleStreamExtractor(subprocessRunner: runner)
@@ -6083,6 +6115,40 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             XCTAssertFalse(message.contains("example.com"))
             XCTAssertLessThanOrEqual(message.count, 550)
         }
+    }
+
+    func testWhisperTranscriberRejectsSuccessAfterCancellationBeforeFlushingProgress() async throws {
+        let progressValues = OSAllocatedUnfairLock<[Double]>(initialState: [])
+        let runner = RecordingSubprocessRunner { _, outputHandler in
+            outputHandler?(SubprocessOutputChunk(
+                stream: .standardError,
+                data: Data("Duration: 00:00:10.00\nframe=12 time=00:00:05.00 speed=1.0x".utf8)
+            ))
+            withUnsafeCurrentTask { $0?.cancel() }
+            return SubprocessResult(
+                terminationStatus: 0, termination: .exited,
+                standardOutput: Data(), standardError: Data(),
+                discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0,
+                duration: .milliseconds(20)
+            )
+        }
+        let task = Task {
+            try await WhisperFFmpegTranscriber(subprocessRunner: runner).transcribe(
+                inputFile: URL(fileURLWithPath: "/fixture/input.mov"),
+                modelPath: URL(fileURLWithPath: "/fixture/model.bin"),
+                outputFile: URL(fileURLWithPath: "/fixture/output.srt"),
+                ffmpegPath: "/fixture/ffmpeg", language: "auto", audioStreamIndex: nil
+            ) { update in
+                progressValues.withLock { $0.append(update.percentage) }
+            }
+        }
+        do {
+            try await task.value
+            XCTFail("Expected cancellation despite a successful runner result")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertTrue(progressValues.withLock { $0.isEmpty }, "Cancelled output must not flush buffered progress")
     }
 
     func testWhisperTranscriberPropagatesTaskCancellation() async throws {
