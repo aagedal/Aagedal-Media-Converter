@@ -1006,6 +1006,29 @@ The full Debug unit suite passes 1,176 tests; 96 release-script tests and the
 45-image/12-notice bundle audit pass. See the [continuation validation
 record](4.5-card-grouping-usage-indicator-validation-2026-09-22.md).
 
+The camera-card review now keeps each source directory contiguous, so repeated
+clip names from separate cameras do not interleave and prevent users from marking
+adjacent continuation segments. The reviewed import guard evaluates each marked
+multi-file recording's format compatibility on its own; a conflicting whole
+group no longer makes a compatible recording look unmergeable. All 20 focused
+grouping tests pass, including a two-camera temporary card tree. Physical-card,
+real-span, export/playback, and bilingual visual checks remain open. See the
+[card review validation record](4.5-card-review-order-validation-2026-09-22.md).
+
+The retained patched libmpv candidate has been verified as GPL-enabled in both
+architectures and prepared under the `Libmpv-GPL` asset name expected by the
+app's package target. Its bytes and SwiftPM checksum are recorded in the
+[asset preparation record](4.5-mpv-gpl-asset-preparation-2026-09-22.md). The asset
+remains in temporary storage and unpublished; package integration, provenance,
+CoreAudio runtime recovery, and signed distribution checks remain open.
+
+The integrated Debug unit suite now passes **1,178 tests**, all 98 release-script
+tests pass, and the unsigned Release build passes the 45-image/12-notice static
+bundle audit. The removed Swift package pin file was restored, and the strict
+dependency manifest check passes. Xcode 27 still removes that file during a
+strict package-resolution invocation, so the release script's pinned archive
+path needs a successful run. See the [combined validation record](4.5-card-mpv-release-validation-2026-09-22.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
