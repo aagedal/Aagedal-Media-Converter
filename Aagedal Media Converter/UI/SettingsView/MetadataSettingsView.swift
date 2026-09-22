@@ -17,6 +17,8 @@ struct MetadataSettingsView: View {
     @AppStorage(AppConstants.dateTagPrefixKey) private var dateTagPrefix = AppConstants.defaultDateTagPrefix
     @AppStorage(AppConstants.showCommentFieldKey) private var showCommentField = false
     @AppStorage(AppConstants.showDateTagButtonKey) private var showDateTagButton = true
+    @AppStorage(AppConstants.ignoreStitchTimecodeTrimOffsetKey) private var ignoreStitchTimecodeTrimOffset = false
+
     @State private var isValidTimecode: Bool = true
     @State private var showCommentInfoPopover = false
     @FocusState private var isTextFieldFocused: Bool
@@ -334,6 +336,13 @@ struct MetadataSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
+
+                Toggle("Ignore trim offset for stitched timecode", isOn: $ignoreStitchTimecodeTrimOffset)
+                    .accessibilityIdentifier("settings.metadata.ignoreStitchTimecodeTrimOffset")
+                Text("By default, stitched output starts at the first clip’s source timecode plus its trim-in offset. Enable this to use its original starting timecode. Manual timecode is always used exactly as entered.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 // Mode-specific content
                 switch selectedMode {

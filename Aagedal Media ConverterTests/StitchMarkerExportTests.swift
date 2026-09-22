@@ -2,6 +2,33 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class StitchMarkerExportTests: XCTestCase {
+    func testSourceReferencesUseTrimmedOriginalTimecode() {
+        let source = StitchMarkerMedia(duration: 20, frameRate: 25, timecode: "10:00:00:00", chapters: [])
+        XCTAssertEqual(StitchMarkerExport.sourceTimecode(source, trimStart: 2.48), "10:00:02:12")
+        let drop = StitchMarkerMedia(duration: 20, frameRate: 30_000.0 / 1001, timecode: "00:00:59;29", chapters: [])
+        XCTAssertEqual(StitchMarkerExport.sourceTimecode(drop, trimStart: 1001.0 / 30_000), "00:01:00;02")
+        let missing = StitchMarkerMedia(duration: 20, frameRate: 25, timecode: nil, chapters: [])
+        XCTAssertNil(StitchMarkerExport.sourceTimecode(missing, trimStart: 2))
+        XCTAssertNil(StitchMarkerExport.sourceTimecode(source, trimStart: .nan))
+        let invalid = StitchMarkerMedia(duration: 20, frameRate: 25, timecode: "bad", chapters: [])
+        XCTAssertNil(StitchMarkerExport.sourceTimecode(invalid, trimStart: 0))
+    }
+
+    func testSourceReferencesSurviveChapterAndEDLSerialization() throws {
+        let cuts = try StitchMarkerExport.cuts(names: ["B.mov", "A.mov", "NoTC.mov"], durations: [5, 5, 5],
+                                              sourceTimecodes: ["10:00:02:12", "02:00:00;04", nil])
+        XCTAssertEqual(cuts.map(\.start), [0, 5, 10])
+        XCTAssertEqual(cuts[0].title, "Cut: B.mov • Source TC: 10:00:02:12")
+        XCTAssertEqual(cuts[2].title, "Cut: NoTC.mov")
+        let chapters = try StitchMarkerExport.chapterMetadata(StitchMarkerExport.chapters(from: cuts))
+        XCTAssertTrue(chapters.contains("Source TC: 10:00:02:12"))
+        XCTAssertTrue(chapters.contains("Source TC: 02:00:00\\;04"))
+        let edl = try StitchMarkerExport.resolveEDL(title: "Stitched", markers: cuts, frameRate: 25, startTimecode: "01:00:00:00")
+        XCTAssertTrue(edl.contains("|M:Cut: B.mov • Source TC: 10:00:02:12"))
+        XCTAssertTrue(edl.contains("01:00:05:00 01:00:05:01"))
+        XCTAssertThrowsError(try StitchMarkerExport.cuts(names: ["A"], durations: [5], sourceTimecodes: []))
+    }
+
     func testRetainedResolve2997DropFrameFixture() throws {
         try checkFixture("2997", rate: 30_000.0 / 1001,
                          frames: [0, 1, 59, 60, 16241, 16242, 18280], numbers: [1, 2, 3, 4, 6, 7, 8])
@@ -121,7 +148,8 @@ final class StitchMarkerExportTests: XCTestCase {
         let source = directory.appendingPathComponent("source.mov")
         let metadata = directory.appendingPathComponent("chapters.ffmetadata")
         let chapters = StitchMarkerExport.chapters(from:
-            try StitchMarkerExport.cuts(names: ["Camera A = æøå; #1", "Camera B"], durations: [1, 1]) +
+            try StitchMarkerExport.cuts(names: ["Camera A = æøå; #1", "Camera B"], durations: [1, 1],
+                                        sourceTimecodes: ["10:00:02:12", "02:00:00;04"]) +
             [StitchCutMarker(title: "Marked: Review audio", start: 0.5, end: 1)])
         try StitchMarkerExport.chapterMetadata(chapters).write(to: metadata, atomically: true, encoding: .utf8)
         let runner = SubprocessRunner()

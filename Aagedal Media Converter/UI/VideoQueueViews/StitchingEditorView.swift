@@ -197,6 +197,27 @@ enum StitchingTimeline {
         return rate
     }
 
+    /// Matches the merge request: the current first clip is the master, with
+    /// preserve-source as the default and the first clip’s trim-in offset.
+    static func outputStartTimecode(for items: [VideoItem], ignoreTrimOffset: Bool = false) -> String? {
+        guard let first = items.first else { return nil }
+        return FFMPEGCommandBuilder.resolvedTimecode(
+            timecodeConfig: first.timecodeConfig ?? TimecodeConfig(mode: .preserveSource),
+            sourceMetadata: first.metadata,
+            trimStart: ignoreTrimOffset ? 0 : first.effectiveTrimStart
+        )
+    }
+
+    static func sequenceTimeDisplay(_ seconds: Double, frameRate: Double?, startTimecode: String?) -> String {
+        guard let frameRate else { return timeDisplay(seconds, frameRate: nil) }
+        let rate = StitchMarkerTimecodeRate(frameRate: frameRate, dropFrame: startTimecode?.contains(";") == true)
+        guard seconds >= 0, let frames = rate.frameCount(forSeconds: seconds) else { return "—" }
+        let start = startTimecode.flatMap { rate.frameCount(forTimecode: $0) } ?? 0
+        let sum = start.addingReportingOverflow(frames)
+        guard !sum.overflow else { return "—" }
+        return rate.timecode(forFrameCount: sum.partialValue)
+    }
+
     static func timeDisplay(_ seconds: Double, frameRate: Double?, compact: Bool = false) -> String {
         guard seconds.isFinite, seconds >= 0, seconds < 1_000_000_000 else { return "—" }
         if let frameRate {
@@ -356,6 +377,18 @@ struct StitchingEditorView<FileList: View>: View {
               }) else { return nil }
         return rate
     }
+    @AppStorage(AppConstants.ignoreStitchTimecodeTrimOffsetKey) private var ignoreStitchTimecodeTrimOffset = false
+    private var sequenceStartTimecode: String? {
+        StitchingTimeline.outputStartTimecode(for: group.items, ignoreTrimOffset: ignoreStitchTimecodeTrimOffset)
+    }
+    private func sequenceTimeDisplay(_ seconds: Double) -> String {
+        StitchingTimeline.sequenceTimeDisplay(seconds, frameRate: sequenceFrameRate, startTimecode: sequenceStartTimecode)
+    }
+    private var sequenceTimecodeHelp: String {
+        if sequenceFrameRate == nil { return "Relative time · mixed or unknown frame rates" }
+        if sequenceStartTimecode == nil { return "Relative timecode · no starting timecode on the first clip" }
+        return "Output timecode follows the first clip’s settings. Reordering the first clip changes the timeline timecode. The value after / is the sequence duration."
+    }
     private var sourceTotal: Double {
         max(1, group.items.reduce(0) { $0 + ($1.durationSeconds.isFinite ? max(0, $1.durationSeconds) : 0) })
     }
@@ -417,11 +450,14 @@ struct StitchingEditorView<FileList: View>: View {
                         Label(isPlaying ? "Pause" : "Play sequence", systemImage: isPlaying ? "pause.fill" : "play.fill")
                     }
                     .accessibilityIdentifier("stitching.play")
-                    Text("\(StitchingTimeline.timeDisplay(sequenceTime, frameRate: sequenceFrameRate)) / \(StitchingTimeline.timeDisplay(total, frameRate: sequenceFrameRate))")
+                    Text(sequenceFrameRate != nil && sequenceStartTimecode != nil ? "Output TC" : "Relative TC")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(sequenceTimecodeHelp)
+                    Text("\(sequenceTimeDisplay(sequenceTime)) / \(StitchingTimeline.timeDisplay(total, frameRate: sequenceFrameRate))")
                         .monospacedDigit()
                         .accessibilityIdentifier("stitching.timecode")
-                        .help(sequenceFrameRate.map { "HH:MM:SS:FF · \($0.formatted()) fps · non-drop-frame" }
-                              ?? "HH:MM:SS · mixed or unknown frame rates")
+                        .help(sequenceTimecodeHelp)
                     Text(isPlaying ? "\(shuttleRate.formatted())×" : "")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -702,15 +738,16 @@ struct StitchingEditorView<FileList: View>: View {
                 ScrollView(.horizontal) {
                     VStack(spacing: 0) {
                         Canvas { context, size in
-                            let step = pow(10, floor(log10(max(1, 90 / scale))))
-                            let interval = step * (90 / scale / step > 5 ? 10 : 90 / scale / step > 2 ? 5 : 2)
+                            let labelSpacing = 115.0
+                            let step = pow(10, floor(log10(max(1, labelSpacing / scale))))
+                            let interval = step * (labelSpacing / scale / step > 5 ? 10 : labelSpacing / scale / step > 2 ? 5 : 2)
                             for tick in stride(from: 0.0, through: max(total, width / scale), by: interval) {
                                 let x = tick * scale
                                 var path = Path()
                                 path.move(to: CGPoint(x: x, y: 19))
                                 path.addLine(to: CGPoint(x: x, y: 27))
                                 context.stroke(path, with: .color(.secondary), lineWidth: 1)
-                                context.draw(Text(StitchingTimeline.timeDisplay(tick, frameRate: sequenceFrameRate, compact: true)).font(.caption2).foregroundStyle(.secondary),
+                                context.draw(Text(sequenceTimeDisplay(tick)).font(.caption2).foregroundStyle(.secondary),
                                              at: CGPoint(x: x + 3, y: 8), anchor: .leading)
                             }
                         }
@@ -1595,13 +1632,15 @@ private struct StitchingSequencePreview: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-#if DEBUG
-            if ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1" {
-                Text(String(controller.currentPlaybackTime))
-                    .font(.caption.monospacedDigit())
-                    .accessibilityIdentifier("stitching.backendTime")
-            }
-#endif
+            Text(StitchingTimeline.timeDisplay(playbackTime, frameRate: StitchingTimeline.frameRate(for: item) ?? 30))
+                .font(.caption.monospacedDigit())
+                .padding(6)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+                .padding(8)
+                .help("Relative clip timecode (HH:MM:SS:FF)")
+                .accessibilityIdentifier("stitching.backendTime")
+                .accessibilityValue(String(controller.currentPlaybackTime))
+                .allowsHitTesting(false)
         }
     }
 

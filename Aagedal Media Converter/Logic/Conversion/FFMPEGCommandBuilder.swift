@@ -341,6 +341,7 @@ enum FFMPEGCommandBuilder {
         audioRoutingConfig: AudioRoutingConfig? = nil,
         cropConfig: CropConfig? = nil,
         timecodeConfig: TimecodeConfig? = nil,
+        timecodeTrimStart: Double? = nil,
         sourceMetadata: VideoMetadata? = nil,
         waveformRequest: WaveformVideoRequest? = nil,
         synthesizedVideoRequest: SynthesizedVideoRequest? = nil,
@@ -384,7 +385,7 @@ enum FFMPEGCommandBuilder {
             comment: commentPlan,
             timecode: await configuredTimecodePlan(
                 preset: preset, inputURL: inputURL, timecodeConfig: timecodeConfig,
-                sourceMetadata: sourceMetadata, trimStart: normalizedTrimStart
+                sourceMetadata: sourceMetadata, trimStart: timecodeTrimStart ?? normalizedTrimStart
             )
         )
 

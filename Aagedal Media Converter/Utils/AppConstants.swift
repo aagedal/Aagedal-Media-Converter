@@ -373,6 +373,8 @@ enum AppConstants {
     /// invalidate every existing user's flag and cause the notice to re-fire.
     static let didShowAutoUpdateNoticeKey = "didShowAutoUpdateNotice"
 
+    static let ignoreStitchTimecodeTrimOffsetKey = "ignoreStitchTimecodeTrimOffset"
+
     // Timecode defaults
     static let defaultTimecodeModeKey = "defaultTimecodeMode"
     static let defaultTimecodeValueKey = "defaultTimecodeValue"

@@ -837,13 +837,15 @@ actor ConversionManager: Sendable {
         if plan.settings.exportStitchMarkers {
             do {
                 var media: [StitchMarkerMedia] = []
+                var sourceTimecodes: [String?] = []
                 var sourceHasChapters = false
                 for segment in plan.segments {
                     var prepared = try await StitchMarkerMedia.read(segment.preparedURL)
                     guard isBatchActive(batchID) else { return }
                     sourceHasChapters = sourceHasChapters || prepared.hasChapterMetadata
+                    var original = prepared
                     if segment.isTemporary {
-                        let original = try await StitchMarkerMedia.read(segment.originalURL)
+                        original = try await StitchMarkerMedia.read(segment.originalURL)
                         guard isBatchActive(batchID) else { return }
                         sourceHasChapters = sourceHasChapters || original.hasChapterMetadata
                         if prepared.chapters.isEmpty, !original.chapters.isEmpty {
@@ -854,11 +856,12 @@ actor ConversionManager: Sendable {
                                 hasChapterMetadata: original.hasChapterMetadata)
                         }
                     }
+                    sourceTimecodes.append(StitchMarkerExport.sourceTimecode(original, trimStart: segment.trimStart ?? 0))
                     media.append(prepared)
                 }
                 cutMarkers = try StitchMarkerExport.cuts(
                     names: plan.segments.map { $0.originalURL.lastPathComponent },
-                    durations: media.map(\.duration)
+                    durations: media.map(\.duration), sourceTimecodes: sourceTimecodes
                 )
                 var noteMarkers: [StitchCutMarker] = []
                 var markerOffset = 0.0
@@ -939,6 +942,9 @@ actor ConversionManager: Sendable {
             audioRoutingConfig: mergeAudioRoutingConfig,
             cropConfig: mergeCropConfig,
             timecodeConfig: mergeTimecodeConfig,
+            // The media is already trimmed in the prepared segments. Offset only
+            // the preserved metadata, without trimming the concatenated input again.
+            timecodeTrimStart: plan.settings.ignoreStitchTimecodeTrimOffset ? 0 : primaryInput.effectiveTrimStart,
             isMuted: plan.preset == .streamCopy ? false : primaryInput.isMuted,
             waveformRequest: plan.waveformRequest,
             synthesizedVideoRequest: plan.synthesizedVideoRequest,

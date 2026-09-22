@@ -400,6 +400,34 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertEqual(item.trimEnd, 8)
     }
 
+    func testSequenceTimecodeFollowsFirstClipAfterReordering() {
+        var first = clip(duration: 20, start: 5)
+        first.timecodeConfig = TimecodeConfig(mode: .manual("01:00:00:00"))
+        var second = clip(duration: 20)
+        second.timecodeConfig = TimecodeConfig(mode: .manual("02:00:00:00"))
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first, second]), "01:00:00:00")
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [second, first]), "02:00:00:00")
+        XCTAssertEqual(StitchingTimeline.sequenceTimeDisplay(6.08, frameRate: 25,
+            startTimecode: StitchingTimeline.outputStartTimecode(for: [first, second])), "01:00:06:02")
+        XCTAssertNil(StitchingTimeline.outputStartTimecode(for: []))
+        XCTAssertNil(StitchingTimeline.outputStartTimecode(for: [clip(duration: 10)]))
+    }
+
+    func testSequenceTimecodeDropFrameRolloverAndRelativeFallback() {
+        XCTAssertEqual(StitchingTimeline.sequenceTimeDisplay(1 / (30_000.0 / 1001),
+            frameRate: 30_000.0 / 1001, startTimecode: "00:00:59;29"), "00:01:00;02")
+        XCTAssertEqual(StitchingTimeline.sequenceTimeDisplay(1 / (60_000.0 / 1001),
+            frameRate: 60_000.0 / 1001, startTimecode: "00:00:59;59"), "00:01:00;04")
+        XCTAssertEqual(StitchingTimeline.sequenceTimeDisplay(1, frameRate: 25,
+            startTimecode: "23:59:59:00"), "00:00:00:00")
+        XCTAssertEqual(StitchingTimeline.sequenceTimeDisplay(6.08, frameRate: 25,
+            startTimecode: nil), "00:00:06:02")
+        XCTAssertEqual(StitchingTimeline.sequenceTimeDisplay(6.08, frameRate: nil,
+            startTimecode: "01:00:00:00"), "00:00:06")
+        XCTAssertEqual(StitchingTimeline.sequenceTimeDisplay(.nan, frameRate: 25,
+            startTimecode: nil), "—")
+    }
+
     func testFrameTimecodeAndTrimCountsAt25FPS() {
         XCTAssertEqual(StitchingTimeline.timeDisplay(6.08, frameRate: 25), "00:00:06:02")
         XCTAssertEqual(StitchingTimeline.timeDisplay(6.08, frameRate: 25, compact: true), "00:06:02")

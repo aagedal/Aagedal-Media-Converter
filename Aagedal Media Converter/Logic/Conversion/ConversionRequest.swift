@@ -42,6 +42,9 @@ struct ConversionRequest: Sendable {
     var audioRoutingConfig: AudioRoutingConfig? = nil
     var cropConfig: CropConfig? = nil
     var timecodeConfig: TimecodeConfig? = nil
+    /// Metadata-only offset when source trimming was already applied (for example, stitching).
+    /// Nil uses the normal trim start; zero explicitly preserves the original timecode.
+    var timecodeTrimStart: Double? = nil
     var isMuted: Bool = false
 
     // MARK: - Special Rendering

@@ -30,7 +30,7 @@ struct EncodingSettingsView: View {
         Form {
             Section("Stitched Exports") {
                 Toggle("Export timeline markers", isOn: $exportStitchMarkers)
-                Text("Save cuts and marked notes in a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. If source chapters exist, ask before replacing them.")
+                Text("Save cuts and marked notes in a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. Cut titles include the source timecode at each clip’s trimmed in-point when available. If source chapters exist, ask before replacing them.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(header: Text("New Group Defaults")) {

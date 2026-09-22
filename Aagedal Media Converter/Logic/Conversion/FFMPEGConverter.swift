@@ -1044,6 +1044,7 @@ actor FFMPEGConverter {
                     includeDateTag: request.includeDateTag,
                     commentSettings: capturedCommentSettings,
                     timecodeConfig: request.timecodeConfig,
+                    timecodeTrimStart: request.timecodeTrimStart,
                     sourceMetadata: request.sourceMetadata ?? (request.visualSourceURL == nil ? av2PlanningMetadata : nil),
                     trimStart: request.trimStart,
                     trimEnd: request.trimEnd,
@@ -1123,6 +1124,7 @@ actor FFMPEGConverter {
             audioRoutingConfig: tempAudioURL != nil ? nil : request.audioRoutingConfig,  // Audio already processed
             cropConfig: request.cropConfig,
             timecodeConfig: request.timecodeConfig,
+            timecodeTrimStart: request.timecodeTrimStart,
             sourceMetadata: request.sourceMetadata,
             waveformRequest: request.waveformRequest,
             synthesizedVideoRequest: request.synthesizedVideoRequest,
@@ -2813,6 +2815,7 @@ actor FFMPEGConverter {
         includeDateTag: Bool,
         commentSettings: CommentSettings,
         timecodeConfig: TimecodeConfig?,
+        timecodeTrimStart: Double?,
         sourceMetadata knownSourceMetadata: VideoMetadata?,
         trimStart: Double?,
         trimEnd: Double?,
@@ -2910,7 +2913,7 @@ actor FFMPEGConverter {
             FFMPEGCommandBuilder.resolvedTimecode(
                 timecodeConfig: $0,
                 sourceMetadata: sourceMetadata,
-                trimStart: trimStart
+                trimStart: timecodeTrimStart ?? trimStart
             )
         }
         let metadata = MatroskaMuxer.Metadata(

@@ -66,15 +66,35 @@ enum StitchMarkerError: LocalizedError {
 enum StitchMarkerExport {
     static let supportedChapterExtensions: Set<String> = ["mov", "mp4", "m4v", "mkv"]
 
-    static func cuts(names: [String], durations: [Double]) throws -> [StitchCutMarker] {
+    /// Source references always use original metadata and the retained in-point,
+    /// independently of manual output timecode and the stitched trim-offset preference.
+    static func sourceTimecode(_ source: StitchMarkerMedia, trimStart: Double) -> String? {
+        guard let timecode = source.timecode, let fps = source.frameRate,
+              fps.isFinite, fps >= 1, fps <= 240, trimStart.isFinite, trimStart >= 0 else { return nil }
+        let rate = StitchMarkerTimecodeRate(frameRate: fps, dropFrame: timecode.contains(";"))
+        guard !timecode.contains(";") || rate.isDropFrame,
+              let start = rate.frameCount(forTimecode: timecode),
+              let offset = rate.frameCount(forSeconds: trimStart) else { return nil }
+        let sum = start.addingReportingOverflow(offset)
+        guard !sum.overflow else { return nil }
+        return rate.timecode(forFrameCount: sum.partialValue)
+    }
+
+    static func cuts(names: [String], durations: [Double], sourceTimecodes: [String?]? = nil) throws -> [StitchCutMarker] {
         guard names.count == durations.count, !names.isEmpty else { throw StitchMarkerError.unavailableTiming }
+        guard sourceTimecodes == nil || sourceTimecodes?.count == names.count else {
+            throw StitchMarkerError.unavailableTiming
+        }
         var offset = 0.0
-        return try zip(names, durations).map { name, duration in
+        return try names.indices.map { index in
+            let name = names[index]
+            let duration = durations[index]
             guard duration.isFinite, duration > 0, (offset + duration).isFinite else {
                 throw StitchMarkerError.unavailableTiming
             }
             defer { offset += duration }
-            return StitchCutMarker(title: "Cut: " + name, start: offset, end: offset + duration)
+            let reference = sourceTimecodes?[index].map { " • Source TC: " + $0 } ?? ""
+            return StitchCutMarker(title: "Cut: " + name + reference, start: offset, end: offset + duration)
         }
     }
 

@@ -10004,6 +10004,53 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testStitchedTimecodeTrimPreferenceDefaultsToOffsetAndIsCaptured() {
+        let name = "StitchTimecode.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertFalse(ConversionPreparationSettings(preset: .streamCopy, defaults: defaults).ignoreStitchTimecodeTrimOffset)
+        defaults.set(true, forKey: AppConstants.ignoreStitchTimecodeTrimOffsetKey)
+        let captured = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        defaults.set(false, forKey: AppConstants.ignoreStitchTimecodeTrimOffsetKey)
+        XCTAssertTrue(captured.ignoreStitchTimecodeTrimOffset)
+    }
+
+    func testStitchedTimelineOffsetsPreservedTimecodeButNotManualTimecode() {
+        var first = VideoItem(url: URL(fileURLWithPath: "/tmp/first.mov"), name: "First",
+                              size: 0, duration: "", status: .waiting, progress: 0, eta: nil, outputURL: nil)
+        first.durationSeconds = 20
+        first.trimStart = 5
+        first.metadata = videoMetadata(timecode: "01:00:00:00", frameRate: 25)
+        first.timecodeConfig = nil // Stitching defaults to preserving source timecode.
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first]), "01:00:05:00")
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first], ignoreTrimOffset: true), "01:00:00:00")
+        first.timecodeConfig = TimecodeConfig(mode: .manual("02:00:00:00"))
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first]), "02:00:00:00")
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first], ignoreTrimOffset: true), "02:00:00:00")
+        first.timecodeConfig = TimecodeConfig(mode: .preserveSource)
+        first.metadata = videoMetadata(timecode: "00:00:59;29", frameRate: 30_000.0 / 1001)
+        first.trimStart = 1001.0 / 30_000
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first]), "00:01:00;02")
+    }
+
+    func testStitchedTimecodeOffsetDoesNotTrimConcatenatedMediaAgain() async {
+        for (offset, expected) in [(5.0, "01:00:05:00"), (0.0, "01:00:00:00")] {
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/tmp/first.mov"),
+                outputFileURL: URL(fileURLWithPath: "/tmp/stitched.mov"),
+                preset: .streamCopy, comment: "", includeDateTag: false,
+                trimStart: nil, trimEnd: nil,
+                timecodeConfig: TimecodeConfig(mode: .preserveSource),
+                timecodeTrimStart: offset,
+                sourceMetadata: videoMetadata(timecode: "01:00:00:00", frameRate: 25),
+                customInputArguments: ["-f", "concat", "-safe", "0", "-i", "/tmp/clips.txt"]
+            )
+            XCTAssertTrue(command.arguments.containsAdjacent("-metadata", "timecode=\(expected)"))
+            XCTAssertFalse(command.arguments.contains("-ss"))
+            XCTAssertFalse(command.arguments.contains("-t"))
+        }
+    }
+
     func testPreservedTimecodeOffsetsByTrimAtSourceFrameRate() async {
         var arguments: [String] = []
 
