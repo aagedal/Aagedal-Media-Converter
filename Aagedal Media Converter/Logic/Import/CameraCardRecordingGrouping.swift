@@ -66,6 +66,17 @@ enum CameraCardRecordingGrouping {
         var requiresReview: Bool { compatibility != .compatible }
     }
 
+    /// A conflicting whole group does not mean one of its multi-file recordings
+    /// is internally invalid. Only the latter prevents the reviewed import.
+    static func hasUnmergeableSpan(
+        in recordings: [Recording],
+        evaluateCompatibility: ([URL]) -> Compatibility
+    ) -> Bool {
+        recordings.contains {
+            $0.urls.count > 1 && evaluateCompatibility($0.urls) != .compatible
+        }
+    }
+
     /// Produces a conservative proposal after logical spans have been resolved.
     /// The evaluator must inspect every URL, including every segment of a span,
     /// and return `unknown` for missing metadata. It must not accept a group by

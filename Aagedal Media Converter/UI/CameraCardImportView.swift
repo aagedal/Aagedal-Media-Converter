@@ -384,8 +384,8 @@ struct CameraCardRecordingReviewView: View {
     }
 
     private var hasUnmergeableSpan: Bool {
-        proposal.contains { group in
-            group.compatibility != .compatible && group.recordings.contains { $0.urls.count > 1 }
+        CameraCardRecordingGrouping.hasUnmergeableSpan(in: recordings) {
+            CameraCardRecordingMetadata.compatibility(for: $0, metadata: metadata)
         }
     }
 

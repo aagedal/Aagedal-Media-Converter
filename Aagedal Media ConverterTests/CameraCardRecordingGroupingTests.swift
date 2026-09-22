@@ -163,6 +163,26 @@ final class CameraCardRecordingGroupingTests: XCTestCase {
         }.isEmpty)
     }
 
+    func testSingleGroupConflictDoesNotMislabelCompatibleSpanAsUnmergeable() {
+        let span = recording("a", "2026-01-01T08:00:00Z", segments: 2)
+        let other = recording("b", "2026-01-01T09:00:00Z")
+        let recordings = [span, other]
+        let compatibility: ([URL]) -> Grouping.Compatibility = { urls in
+            urls.allSatisfy { $0.lastPathComponent.hasPrefix("a") } ? .compatible : .incompatible
+        }
+        let proposal = Grouping.proposal(
+            for: recordings, mode: .singleGroup, timeZone: utc,
+            evaluateCompatibility: compatibility
+        )
+        XCTAssertEqual(proposal.first?.compatibility, .incompatible)
+        XCTAssertFalse(Grouping.hasUnmergeableSpan(
+            in: recordings, evaluateCompatibility: compatibility
+        ))
+        XCTAssertTrue(Grouping.hasUnmergeableSpan(in: recordings) { urls in
+            urls == span.urls ? .unknown : .compatible
+        })
+    }
+
     func testProposalChecksWholeCandidateGroupRatherThanAssumingPairwiseCompatibility() {
         let input = [recording("a", nil), recording("b", nil), recording("c", nil)]
         let result = Grouping.proposal(for: input, mode: .recordingDay(splitOnLongGaps: false), timeZone: utc) { urls in
@@ -182,14 +202,59 @@ final class CameraCardRecordingGroupingTests: XCTestCase {
         XCTAssertEqual(result.first?.compatibility, .unknown)
     }
 
-    func testCardScannerOrdersRepeatedClipNamesByNaturalDirectoryPath() {
+    func testCardScannerKeepsCameraFoldersContiguousAndSortsClipsNaturally() {
         let paths = ["/card/camera10/clip1.mov", "/card/camera2/clip1.mov",
                      "/card/camera1/clip10.mov", "/card/camera1/clip2.mov"]
         let urls = paths.map { URL(fileURLWithPath: $0) }
-        let expected = [urls[1], urls[0], urls[3], urls[2]]
+        let expected = [urls[3], urls[2], urls[1], urls[0]]
         XCTAssertEqual(CameraCardScanner.sortedForImport(urls), expected)
         XCTAssertEqual(CameraCardScanner.sortedForImport(Array(urls.reversed())), expected)
         XCTAssertEqual(Set(CameraCardScanner.sortedForImport(urls)), Set(urls))
+    }
+
+    func testPhysicalLikeTwoCameraTreeKeepsContinuationSegmentsAdjacent() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("card-grouping-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cameraA = root.appendingPathComponent("DCIM/CAMERA_A", isDirectory: true)
+        let cameraB = root.appendingPathComponent("DCIM/CAMERA_B", isDirectory: true)
+        try FileManager.default.createDirectory(at: cameraA, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: cameraB, withIntermediateDirectories: true)
+        let a1 = cameraA.appendingPathComponent("C0001.MOV")
+        let a2 = cameraA.appendingPathComponent("C0002.MOV")
+        let b1 = cameraB.appendingPathComponent("C0001.MOV")
+        let b2 = cameraB.appendingPathComponent("C0002.MOV")
+        for url in [b2, a2, b1, a1] {
+            try Data().write(to: url)
+        }
+
+        let scanned = CameraCardScanner.scanForVideoFiles(in: root)
+        XCTAssertEqual(scanned.map {
+            "\($0.deletingLastPathComponent().lastPathComponent)/\($0.lastPathComponent)"
+        }, ["CAMERA_A/C0001.MOV", "CAMERA_A/C0002.MOV",
+            "CAMERA_B/C0001.MOV", "CAMERA_B/C0002.MOV"])
+        guard scanned.count == 4 else {
+            XCTFail("Expected four scanned clips, found \(scanned.count)")
+            return
+        }
+        let resolved = Grouping.resolvedSegments(
+            urls: scanned, continuesPrevious: [scanned[1], scanned[3]]
+        )
+        XCTAssertEqual(resolved, [Array(scanned[0...1]), Array(scanned[2...3])])
+
+        let day = date("2026-09-01T08:00:00Z")
+        let recordings = resolved.enumerated().map { index, urls in
+            Grouping.Recording(
+                urls: urls, cameraDate: day.addingTimeInterval(Double(index) * 60),
+                containerDate: nil, duration: 120
+            )
+        }
+        let groups = Grouping.proposal(
+            for: recordings, mode: .recordingDay(splitOnLongGaps: false), timeZone: utc
+        ) { _ in .compatible }
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups[0].recordings, recordings)
+        XCTAssertEqual(groups[0].urls, scanned)
     }
 
     func testCardScannerEquivalentNaturalNamesDoNotDependOnEnumerationOrder() {
