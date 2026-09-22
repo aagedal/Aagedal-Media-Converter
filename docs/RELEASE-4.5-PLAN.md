@@ -1034,6 +1034,20 @@ and [package pin validation](4.5-package-pin-validation-2026-09-23.md).
 The [September 23 continuation](4.5-continuation-2026-09-23.md) records the
 99-test release-script run, five focused keyframe tests, and camera-card review
 validation change.
+The next bounded keyframe increment extends a sparse-GOP search into adjacent
+regions while retaining per-reader limits and source-identity checks; six focused
+tests pass. The retained MPV candidate verifier now checks the patched CoreAudio
+source against build evidence before inspecting its archives, with 20 focused
+script tests passing. The [named-client continuation](4.5-named-client-validation-2026-09-23.md)
+records direct helper discovery and successful Claude Code and Codex registration,
+but no live named-client tool call: Claude Code needs authentication, the Codex
+headless run was blocked by local state permissions, and OpenCode exited with
+signal 9. MPV integration still needs a published versioned asset, an MPVKit
+package revision and exact app pin, provenance, and affected-macOS runtime checks.
+The integrated Debug unit suite passes 1,178 tests, all 102 release-script
+tests pass, and the updated unsigned Release archive passes the static
+45-image/12-notice bundle audit. These checks are recorded in the
+[September 23 continuation](4.5-continuation-2026-09-23.md).
 
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving

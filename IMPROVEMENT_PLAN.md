@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-15
+Last reviewed: 2026-09-23
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
