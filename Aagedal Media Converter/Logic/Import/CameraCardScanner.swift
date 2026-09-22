@@ -45,9 +45,25 @@ enum CameraCardScanner {
             videoURLs.append(fileURL)
         }
 
-        videoURLs.sort { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        videoURLs = sortedForImport(videoURLs)
 
         logger.info("Found \(videoURLs.count) video file(s) in \(folderURL.lastPathComponent, privacy: .public)")
         return videoURLs
+    }
+
+    /// Repeated clip names are common when a card contains multiple camera
+    /// folders. Directory enumeration order is unspecified, so use the path to
+    /// break filename ties before presenting or importing the sequence. This is
+    /// ordering only: adjacent names are not evidence of a spanned recording.
+    static func sortedForImport(_ urls: [URL]) -> [URL] {
+        urls.sorted { lhs, rhs in
+            let filenameOrder = lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent)
+            if filenameOrder != .orderedSame { return filenameOrder == .orderedAscending }
+            let pathOrder = lhs.path.localizedStandardCompare(rhs.path)
+            if pathOrder != .orderedSame { return pathOrder == .orderedAscending }
+            // Natural comparison may consider distinct spellings equivalent
+            // (for example case or leading zeroes). Preserve a total ordering.
+            return lhs.path.utf8.lexicographicallyPrecedes(rhs.path.utf8)
+        }
     }
 }

@@ -962,6 +962,15 @@ provenance, and runtime gates are retained in the
 The app still uses its previous dependency; the CoreAudio release blocker remains
 open until the patched package is integrated and validated.
 
+Camera-card scanning now deterministically orders duplicate clip basenames by
+folder path, including a stable tie-breaker for naturally equivalent spellings.
+Preview lifecycle coverage now stresses repeated source replacement, queued stale
+callbacks, cancellation, and real missing-source decoder teardown. A read-only
+MPV candidate verifier checks retained hashes, actual universal architectures,
+XCFramework declarations, and archive/build binary correspondence. The retained
+patched candidate passes; integration and CoreAudio runtime validation remain
+open. See the [continuation record](4.5-preview-stress-candidate-validation-2026-09-22.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

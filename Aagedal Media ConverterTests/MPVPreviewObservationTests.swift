@@ -226,6 +226,82 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testRapidSourceReplacementRejectsAllRetiredEventsAndReleasesTasks() async throws {
+        let controller = makeController()
+        defer { controller.teardown() }
+        var retiredTasks: [Task<Void, Never>] = []
+        var cancellationCount = 0
+        controller.playbackDidFinish = { XCTFail("Retired source must not advance playback") }
+        for index in 0..<100 {
+            let time = PassthroughSubject<Double, Never>()
+            let loaded = PassthroughSubject<Bool, Never>()
+            let ended = PassthroughSubject<Bool, Never>()
+            let failure = PassthroughSubject<String?, Never>()
+            controller.installMPVObservers(
+                timePosition: time.handleEvents(receiveCancel: { cancellationCount += 1 }).eraseToAnyPublisher(),
+                fileLoaded: loaded.eraseToAnyPublisher(), reachedEnd: ended.eraseToAnyPublisher(),
+                failure: failure.eraseToAnyPublisher(), refreshDelay: .seconds(60),
+                loadTimeout: .seconds(60)
+            ) { XCTFail("Retired source must not refresh tracks") }
+            retiredTasks.append(try XCTUnwrap(controller.mpvTrackRefreshTask))
+            retiredTasks.append(try XCTUnwrap(controller.mpvLoadDeadlineTask))
+            // Queue every kind of callback before replacement gets an actor turn.
+            time.send(Double(index + 1))
+            loaded.send(true)
+            ended.send(true)
+            failure.send("retired decoder failed")
+        }
+        let loaded = PassthroughSubject<Bool, Never>()
+        let ready = expectation(description: "Final replacement ready")
+        let observation = controller.$isReady.filter { $0 }.prefix(1).sink { _ in ready.fulfill() }
+        controller.installMPVObservers(
+            timePosition: Empty().eraseToAnyPublisher(), fileLoaded: loaded.eraseToAnyPublisher(),
+            reachedEnd: Empty().eraseToAnyPublisher(), refreshDelay: .seconds(60)
+        ) {}
+        loaded.send(true)
+        await fulfillment(of: [ready], timeout: 3)
+        for task in retiredTasks {
+            await task.value
+            XCTAssertTrue(task.isCancelled)
+        }
+        XCTAssertEqual(cancellationCount, 100)
+        XCTAssertEqual(controller.currentPlaybackTime, 0)
+        XCTAssertNil(controller.errorMessage)
+        XCTAssertTrue(controller.isReady)
+        withExtendedLifetime(observation) {}
+    }
+
+    @MainActor
+    func testRepeatedRealDecoderFailureAndDismissalReleasePlayers() async throws {
+        let controller = makeController()
+        defer { controller.teardown() }
+        for index in 0..<8 {
+            let failure = expectation(description: "Decoder failure \(index)")
+            let observation = controller.$errorMessage.compactMap { $0 }.prefix(1)
+                .sink { _ in failure.fulfill() }
+            controller.errorMessage = nil
+            let missingURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString).appendingPathExtension("mkv")
+            controller.setupMPV(url: missingURL, startTime: 0)
+            weak var retiredPlayer = controller.mpvPlayer
+            controller.mpvPlayer?.attachDrawable(MPVMetalLayer())
+            await fulfillment(of: [failure], timeout: 10)
+            controller.teardown()
+            for _ in 0..<100 where retiredPlayer != nil {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertNil(retiredPlayer, "Failure/retry cycle must release its native player")
+            XCTAssertNil(controller.mpvObservationID)
+            XCTAssertNil(controller.mpvLoadDeadlineTask)
+            XCTAssertNil(controller.mpvTrackRefreshTask)
+            XCTAssertTrue(controller.mpvObservers.isEmpty)
+            XCTAssertFalse(controller.isReady)
+            controller.errorMessage = nil
+            withExtendedLifetime(observation) {}
+        }
+    }
+
+    @MainActor
     private func makeController() -> PreviewPlayerController {
         PreviewPlayerController(videoItem: VideoItem(
             url: URL(fileURLWithPath: "/private/observation-test.mov"),

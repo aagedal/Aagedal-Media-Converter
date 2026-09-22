@@ -89,6 +89,43 @@ final class NativePreviewLoadDeadlineTests: XCTestCase {
     }
 
     @MainActor
+    func testRapidNativeReplacementAndDismissalCannotTriggerFallback() async throws {
+        let (controller, _) = makeController()
+        defer { controller.teardown() }
+        var deadlines: [Task<Void, Never>] = []
+        for index in 0..<100 {
+            controller.removePlayerItemStatusObserver()
+            let item = AVPlayerItem(url: URL(fileURLWithPath: "/private/retired-preview-\(index).mov"))
+            controller.player = AVPlayer(playerItem: item)
+            let observerID = UUID()
+            controller.playerItemStatusObserverID = observerID
+            controller.beginPlayerItemLoadDeadline(for: item, observerID: observerID, timeout: .zero) {
+                XCTFail("A retired source must not launch an MPV fallback")
+            }
+            deadlines.append(try XCTUnwrap(controller.playerItemLoadDeadlineTask))
+            if index.isMultiple(of: 3) {
+                controller.teardown(resetAudioSelection: false)
+            }
+        }
+        controller.removePlayerItemStatusObserver()
+        let replacementItem = AVPlayerItem(url: URL(fileURLWithPath: "/private/final-preview.mov"))
+        let replacement = AVPlayer(playerItem: replacementItem)
+        controller.player = replacement
+        controller.prepareReadyPlayerItem(replacementItem, startTime: 0, verify: { true }, seek: { true })
+        let preparation = try XCTUnwrap(controller.playerItemStatusTask)
+        for deadline in deadlines {
+            await deadline.value
+            XCTAssertTrue(deadline.isCancelled)
+        }
+        await preparation.value
+        XCTAssertTrue(controller.player === replacement)
+        XCTAssertTrue(controller.isReady)
+        XCTAssertFalse(controller.useMPV)
+        XCTAssertNil(controller.playerItemLoadDeadlineTask)
+        XCTAssertNil(controller.errorMessage)
+    }
+
+    @MainActor
     private func makeController() -> (PreviewPlayerController, AVPlayerItem) {
         let url = URL(fileURLWithPath: "/private/native-load-deadline.mov")
         let video = VideoItem(url: url, name: "Preview", size: 0, duration: "00:00:01",

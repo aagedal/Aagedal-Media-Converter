@@ -58,3 +58,23 @@ The compact result and archive checksums are retained in
 release storage. No existing dependency output, app package pin, bundled binary,
 or historical attribution record was replaced. This closes the local rebuild
 feasibility gap, not the runtime CoreAudio release blocker.
+
+## Candidate correspondence audit
+
+Run the read-only candidate verifier before integrating or publishing a build:
+
+```sh
+python3 scripts/verify-mpv-candidate.py \
+  --candidate /private/tmp/amc-mpv-coreaudio-20260922-d \
+  --evidence docs/dependency-patches/mpv-coreaudio-build-2026-09-22.json \
+  --report /private/tmp/amc-mpv-candidate-verification.json
+```
+
+It checks every retained artifact hash, inspects the actual universal framework
+with `lipo`, validates the XCFramework's platform/architecture declarations, and
+compares archived framework/static-library bytes with the build outputs without
+extracting the ZIPs. Missing artifacts, duplicate ZIP members, changed payloads,
+and paths escaping staging fail the audit. The September 22 candidate passed
+all seven artifact hashes and the three archived binary comparisons. This closes
+archive/framework correspondence only; source/dependency provenance, publication,
+app integration, signing, and CoreAudio runtime checks remain open.

@@ -171,4 +171,27 @@ final class CameraCardRecordingGroupingTests: XCTestCase {
         XCTAssertEqual(result.map(\.recordings), [[empty]])
         XCTAssertEqual(result.first?.compatibility, .unknown)
     }
+
+    func testCardScannerOrdersRepeatedClipNamesByNaturalDirectoryPath() {
+        let paths = ["/card/camera10/clip1.mov", "/card/camera2/clip1.mov",
+                     "/card/camera1/clip10.mov", "/card/camera1/clip2.mov"]
+        let urls = paths.map { URL(fileURLWithPath: $0) }
+        let expected = [urls[1], urls[0], urls[3], urls[2]]
+        XCTAssertEqual(CameraCardScanner.sortedForImport(urls), expected)
+        XCTAssertEqual(CameraCardScanner.sortedForImport(Array(urls.reversed())), expected)
+        XCTAssertEqual(Set(CameraCardScanner.sortedForImport(urls)), Set(urls))
+    }
+
+    func testCardScannerEquivalentNaturalNamesDoNotDependOnEnumerationOrder() {
+        let urls = ["/card/A/clip01.mov", "/card/a/clip1.mov", "/card/A/clip1.mov"]
+            .map { URL(fileURLWithPath: $0) }
+        let expected = CameraCardScanner.sortedForImport(urls)
+        for rotation in urls.indices {
+            let rotated = Array(urls[rotation...]) + Array(urls[..<rotation])
+            XCTAssertEqual(CameraCardScanner.sortedForImport(rotated), expected)
+            XCTAssertEqual(CameraCardScanner.sortedForImport(Array(rotated.reversed())), expected)
+        }
+        XCTAssertEqual(expected.count, urls.count)
+        XCTAssertEqual(Set(expected), Set(urls))
+    }
 }
