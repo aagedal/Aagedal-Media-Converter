@@ -932,6 +932,15 @@ native/MPV replay. The error panels were visually reviewed. See the
 This does not resolve the bundled CoreAudio dependency blocker or establish
 physical-drive removal and OS-level permission recovery.
 
+MPV source loading now has a 30-second deadline. A decoder that reports neither
+readiness nor failure enters the existing bilingual Retry flow, preserves audio
+selection, and retires callbacks before teardown. Readiness, replacement, and
+dismissal cancel the deadline. All 12 focused MPV observation tests pass,
+including three new deadline regressions and the real missing-source check. See
+the [load deadline validation record](4.5-preview-load-deadline-validation-2026-09-22.md).
+This bounds asynchronous MPV loading only; native-player loading, synchronous
+decoder hangs, and broader real-media stress remain unverified.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

@@ -5,6 +5,84 @@ import XCTest
 
 final class MPVPreviewObservationTests: XCTestCase {
     @MainActor
+    func testSilentDecoderTimesOutAndRejectsLateReadinessAndEOF() async throws {
+        let controller = makeController()
+        defer { controller.teardown() }
+        let loaded = PassthroughSubject<Bool, Never>()
+        let ended = PassthroughSubject<Bool, Never>()
+        controller.selectedAudioTrackOrderIndex = 2
+        controller.playbackDidFinish = { XCTFail("Timed-out source must not complete") }
+        controller.installMPVObservers(
+            timePosition: Empty().eraseToAnyPublisher(),
+            fileLoaded: loaded.eraseToAnyPublisher(), reachedEnd: ended.eraseToAnyPublisher(),
+            loadTimeout: .zero
+        ) {}
+        let deadline = try XCTUnwrap(controller.mpvLoadDeadlineTask)
+        await deadline.value
+        XCTAssertNotNil(controller.errorMessage)
+        XCTAssertFalse(controller.isReady)
+        XCTAssertNil(controller.mpvObservationID)
+        XCTAssertNil(controller.mpvLoadDeadlineTask)
+        XCTAssertEqual(controller.selectedAudioTrackOrderIndex, 2)
+        loaded.send(true)
+        ended.send(true)
+        await Task.yield()
+        XCTAssertFalse(controller.isReady)
+    }
+
+    @MainActor
+    func testReadinessCancelsLoadDeadline() async throws {
+        let controller = makeController()
+        defer { controller.teardown() }
+        let loaded = PassthroughSubject<Bool, Never>()
+        let ready = expectation(description: "Ready before deadline")
+        let observation = controller.$isReady.filter { $0 }.prefix(1)
+            .sink { _ in ready.fulfill() }
+        controller.installMPVObservers(
+            timePosition: Empty().eraseToAnyPublisher(),
+            fileLoaded: loaded.eraseToAnyPublisher(), reachedEnd: Empty().eraseToAnyPublisher(),
+            loadTimeout: .seconds(60)
+        ) {}
+        let deadline = try XCTUnwrap(controller.mpvLoadDeadlineTask)
+        loaded.send(true)
+        await fulfillment(of: [ready], timeout: 1)
+        await deadline.value
+        XCTAssertTrue(deadline.isCancelled)
+        XCTAssertNil(controller.mpvLoadDeadlineTask)
+        XCTAssertNil(controller.errorMessage)
+        XCTAssertTrue(controller.isReady)
+        withExtendedLifetime(observation) {}
+    }
+
+    @MainActor
+    func testReplacementAndDismissalCancelPendingLoadDeadlines() async throws {
+        let controller = makeController()
+        for _ in 0..<2 {
+            controller.installMPVObservers(
+                timePosition: Empty().eraseToAnyPublisher(),
+                fileLoaded: Empty().eraseToAnyPublisher(), reachedEnd: Empty().eraseToAnyPublisher(),
+                loadTimeout: .zero
+            ) {}
+            let retiredDeadline = try XCTUnwrap(controller.mpvLoadDeadlineTask)
+            controller.installMPVObservers(
+                timePosition: Empty().eraseToAnyPublisher(),
+                fileLoaded: Empty().eraseToAnyPublisher(), reachedEnd: Empty().eraseToAnyPublisher(),
+                loadTimeout: .seconds(60)
+            ) {}
+            let replacementDeadline = try XCTUnwrap(controller.mpvLoadDeadlineTask)
+            await retiredDeadline.value
+            XCTAssertTrue(retiredDeadline.isCancelled)
+            XCTAssertNil(controller.errorMessage)
+            XCTAssertFalse(replacementDeadline.isCancelled)
+            controller.teardown()
+            await replacementDeadline.value
+            XCTAssertTrue(replacementDeadline.isCancelled)
+            XCTAssertNil(controller.errorMessage)
+            XCTAssertNil(controller.mpvLoadDeadlineTask)
+        }
+    }
+
+    @MainActor
     func testFailureRejectsQueuedReadinessTimeAndCompletion() async throws {
         let controller = makeController()
         defer { controller.teardown() }

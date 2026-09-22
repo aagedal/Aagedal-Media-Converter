@@ -134,6 +134,7 @@ final class PreviewPlayerController: ObservableObject {
     var mpvObservers = Set<AnyCancellable>()
     var mpvObservationID: UUID?
     var mpvTrackRefreshTask: Task<Void, Never>?
+    var mpvLoadDeadlineTask: Task<Void, Never>?
     var primaryAccess: SecurityScopedAccess = .none
     var imageSequenceAudioAccess: SecurityScopedAccess = .none
     weak var playerView: AVPlayerView?

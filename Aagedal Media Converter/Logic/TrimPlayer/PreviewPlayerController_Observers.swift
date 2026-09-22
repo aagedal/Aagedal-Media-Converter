@@ -21,6 +21,7 @@ extension PreviewPlayerController {
         reachedEnd: AnyPublisher<Bool, Never>,
         failure: AnyPublisher<String?, Never> = Empty(completeImmediately: false).eraseToAnyPublisher(),
         refreshDelay: Duration = .milliseconds(500),
+        loadTimeout: Duration = .seconds(30),
         refreshTracks: @escaping @MainActor () -> Void
     ) {
         removeMPVObservers()
@@ -37,6 +38,8 @@ extension PreviewPlayerController {
         fileLoaded.filter { $0 }.prefix(1).sink { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.mpvObservationID == observationID else { return }
+                self.mpvLoadDeadlineTask?.cancel()
+                self.mpvLoadDeadlineTask = nil
                 self.isReady = true
             }
         }.store(in: &mpvObservers)
@@ -51,14 +54,18 @@ extension PreviewPlayerController {
         failure.compactMap { $0 }.prefix(1).sink { [weak self] message in
             Task { @MainActor [weak self] in
                 guard let self, self.mpvObservationID == observationID else { return }
-                self.logger.warning("MPV preview failed: \(message, privacy: .public)")
-                // Retire the failed player's callbacks before stopping it. A stop
-                // notification or queued readiness must not advance the sequence
-                // or make the failed preview ready again.
-                self.teardown(resetAudioSelection: false)
-                self.errorMessage = String(localized: "The source could not be played. Check that it is available and readable, then retry.")
+                self.failMPVPreview(message: message, observationID: observationID)
             }
         }.store(in: &mpvObservers)
+
+        // Bound decoders that never publish readiness or a terminal error.
+        // Keep the controller weak while sleeping and fence replacement/dismissal.
+        mpvLoadDeadlineTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: loadTimeout) }
+            catch { return }
+            guard !Task.isCancelled, let self else { return }
+            self.failMPVPreview(message: "Source loading timed out", observationID: observationID)
+        }
 
         mpvTrackRefreshTask = Task { @MainActor [weak self] in
             do { try await Task.sleep(for: refreshDelay) }
@@ -70,8 +77,19 @@ extension PreviewPlayerController {
         }
     }
 
+    private func failMPVPreview(message: String, observationID: UUID) {
+        guard mpvObservationID == observationID else { return }
+        logger.warning("MPV preview failed: \(message, privacy: .public)")
+        // Retire callbacks before stopping: late readiness/EOF cannot revive or
+        // advance a failed source. Preserve the selected track for Retry.
+        teardown(resetAudioSelection: false)
+        errorMessage = String(localized: "The source could not be played. Check that it is available and readable, then retry.")
+    }
+
     func removeMPVObservers() {
         mpvObservationID = nil
+        mpvLoadDeadlineTask?.cancel()
+        mpvLoadDeadlineTask = nil
         mpvObservers.removeAll()
         mpvTrackRefreshTask?.cancel()
         mpvTrackRefreshTask = nil
