@@ -79,4 +79,27 @@ final class TimelineKeyframeServiceTests: XCTestCase {
         XCTAssertEqual(replacement.status, .unavailable)
         XCTAssertTrue(replacement.times.isEmpty, "Replacing a URL must not return its cached keyframes")
     }
+
+    func testSparseGOPDiscoveryContinuesIntoAdjacentBoundedRegion() async throws {
+        guard let executable = Bundle.main.url(forResource: "ffmpeg", withExtension: nil) else {
+            throw XCTSkip("Bundled ffmpeg unavailable in this test host")
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sparse-keyframes-\(UUID()).mov")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let request = SubprocessRequest(executableURL: executable, arguments: [
+            "-nostdin", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64:r=1:d=200",
+            "-c:v", "libx264", "-g", "90", "-keyint_min", "90", "-sc_threshold", "0",
+            "-bf", "0", "-y", url.path
+        ], timeout: .seconds(20))
+        let generated = try await SubprocessRunner().run(request)
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        guard generated.succeeded else { return }
+
+        let result = try await TimelineKeyframeService().scan(url: url, around: 95, duration: 200)
+        XCTAssertEqual(result.status, .complete)
+        XCTAssertTrue(result.times.contains { abs($0 - 90) < 0.01 })
+        XCTAssertTrue(result.times.contains { abs($0 - 180) < 0.01 },
+                      "The next sync sample is beyond the central 120-second search")
+        XCTAssertTrue(result.scannedRange?.contains(180) == true)
+    }
 }

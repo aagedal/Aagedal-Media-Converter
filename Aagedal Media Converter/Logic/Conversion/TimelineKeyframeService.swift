@@ -115,6 +115,8 @@ actor TimelineKeyframeService {
     }
 
     /// Expand a local search when either neighboring candidate is still unknown.
+    /// Each reader remains bounded to 120 seconds; adjacent completed regions are
+    /// combined only when they establish continuous coverage around the point.
     func scan(url: URL, videoTrackOrdinal: Int = 0, around time: Double,
               duration: Double) async throws -> TimelineKeyframeScan {
         guard time.isFinite, duration.isFinite, duration > 0 else {
@@ -127,8 +129,41 @@ actor TimelineKeyframeService {
         let lacksPrevious = scanned.lowerBound > 0 && !initial.times.contains(where: { $0 <= point })
         let lacksNext = scanned.upperBound < duration.nextDown && !initial.times.contains(where: { $0 >= point })
         guard lacksPrevious || lacksNext else { return initial }
-        return try await scan(url: url, videoTrackOrdinal: videoTrackOrdinal,
-                              range: max(0, point - 60)...min(duration, point + 60), duration: duration)
+        let expanded = try await scan(url: url, videoTrackOrdinal: videoTrackOrdinal,
+                                      range: max(0, point - 60)...min(duration, point + 60), duration: duration)
+        guard SourceIdentity.read(url) == initial.sourceIdentity else {
+            return TimelineKeyframeScan(times: [], scannedRange: nil, status: .unavailable)
+        }
+        guard expanded.status == .complete, expanded.sourceIdentity == initial.sourceIdentity,
+              let expandedRange = expanded.scannedRange else { return initial }
+        var result = expanded
+        // A sparse GOP can exceed the central window. Read at most one additional
+        // window on each missing side, keeping the per-reader time and sample caps.
+        for direction in [-1, 1] {
+            let missing = direction < 0
+                ? result.scannedRange!.lowerBound > 0 && !result.times.contains(where: { $0 <= point })
+                : result.scannedRange!.upperBound < duration.nextDown && !result.times.contains(where: { $0 >= point })
+            guard missing else { continue }
+            let edge = direction < 0 ? expandedRange.lowerBound : expandedRange.upperBound.nextUp
+            let requested = direction < 0
+                ? max(0, edge - Self.maximumScanDuration)...edge
+                : edge...min(duration, edge + Self.maximumScanDuration)
+            let adjacent = try await scan(url: url, videoTrackOrdinal: videoTrackOrdinal,
+                                          range: requested, duration: duration)
+            guard SourceIdentity.read(url) == initial.sourceIdentity else {
+                return TimelineKeyframeScan(times: [], scannedRange: nil, status: .unavailable)
+            }
+            guard adjacent.status == .complete, adjacent.sourceIdentity == initial.sourceIdentity,
+                  let region = adjacent.scannedRange else { continue }
+            let current = result.scannedRange!
+            guard region.lowerBound <= current.upperBound.nextUp,
+                  current.lowerBound <= region.upperBound.nextUp else { continue }
+            result = TimelineKeyframeScan(
+                times: Array(Set(result.times + adjacent.times)).sorted(),
+                scannedRange: min(current.lowerBound, region.lowerBound)...max(current.upperBound, region.upperBound),
+                status: .complete, sourceIdentity: initial.sourceIdentity)
+        }
+        return result
     }
 
     private static func read(url: URL, trackOrdinal: Int,
