@@ -1027,8 +1027,9 @@ tests pass, and the unsigned Release build passes the 45-image/12-notice static
 bundle audit. The Xcode 27 workspace did not retain its generated Swift package
 lockfile, so the project now requires exact revisions for all three packages.
 The strict manifest check binds them to reviewed attribution, and local package
-resolution and an unsigned Debug build pass. A successful signed release archive
-is still required. See the [combined validation record](4.5-card-mpv-release-validation-2026-09-22.md)
+resolution, an unsigned Debug build, and an unsigned Release archive with the
+45-image/12-notice static audit pass. A signed release archive is still required.
+See the [combined validation record](4.5-card-mpv-release-validation-2026-09-22.md)
 and [package pin validation](4.5-package-pin-validation-2026-09-23.md).
 The [September 23 continuation](4.5-continuation-2026-09-23.md) records the
 99-test release-script run, five focused keyframe tests, and camera-card review
