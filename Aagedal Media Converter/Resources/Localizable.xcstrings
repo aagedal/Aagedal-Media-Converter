@@ -17013,6 +17013,17 @@
         }
       }
     },
+    "The source could not be played. Check that it is available and readable, then retry." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kilden kunne ikke spilles av. Kontroller at den er tilgjengelig og lesbar, og prøv igjen."
+          }
+        }
+      }
+    },
     "The SSH key file cannot be read. In Settings > Upload, use Browse to select the key again and grant access." : {
       "localizations" : {
         "nb" : {

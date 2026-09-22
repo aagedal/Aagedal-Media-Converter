@@ -217,6 +217,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var loadStartTime: CFAbsoluteTime = 0
 
     func load(url: URL, startTime: Double = 0, autostart: Bool = false) {
+        error = nil
         loadStartTime = CFAbsoluteTimeGetCurrent()
         logger.info("⏱️ [0.000s] Load starting for: \(url.lastPathComponent)")
 
@@ -551,9 +552,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                                 let reached = value != 0
                                 DispatchQueue.main.async {
                                     self.logger.info("EOF reached (\(reached)), pausing at last frame if needed")
-                                    // Always update reachedEnd to match MPV's state
-                                    // This ensures the observer can fire again after seeking away from EOF
-                                    self.reachedEnd = reached
+                                    // Seeking away resets EOF for replay. A failed
+                                    // or not-yet-loaded source cannot complete a clip.
+                                    self.reachedEnd = reached && self.isFileLoaded && self.error == nil
                                     if reached {
                                         self.isPlaying = false
                                     }
@@ -603,17 +604,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                 case MPV_EVENT_END_FILE:
                     if let dataPtr = OpaquePointer(pointee.data) {
                         let endFile = UnsafePointer<mpv_event_end_file>(dataPtr).pointee
-                        if endFile.reason == MPV_END_FILE_REASON_ERROR {
-                            let errorMsg = String(cString: mpv_error_string(endFile.error))
-                            self.logger.error("MPV end file error: \(errorMsg)")
-                            DispatchQueue.main.async {
-                                self.error = errorMsg
-                            }
+                        DispatchQueue.main.async {
+                            self.handleEndFile(reason: endFile.reason, errorCode: endFile.error)
                         }
-                    }
-                    DispatchQueue.main.async {
-                        self.isPlaying = false
-                        self.reachedEnd = true
                     }
 
                 case MPV_EVENT_START_FILE:
@@ -628,6 +621,20 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     // MARK: - MPV Commands & Properties
+
+    /// Only natural EOF completes a clip. Stop/replacement and decoder failures
+    /// also emit END_FILE and must never advance a stitching sequence.
+    @MainActor
+    func handleEndFile(reason: mpv_end_file_reason, errorCode: Int32) {
+        isPlaying = false
+        if reason == MPV_END_FILE_REASON_ERROR {
+            let message = String(cString: mpv_error_string(errorCode))
+            logger.error("MPV end file error: \(message)")
+            isFileLoaded = false
+            error = message
+        }
+        reachedEnd = reason == MPV_END_FILE_REASON_EOF && error == nil
+    }
 
     /// Execute a command using mpv_command_string - simpler than mpv_command
     private func commandString(_ cmd: String) {

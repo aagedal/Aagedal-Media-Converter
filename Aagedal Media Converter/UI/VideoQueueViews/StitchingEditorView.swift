@@ -1536,7 +1536,7 @@ private struct StitchingSequencePreview: View {
             return true
         }, currentPlaybackTime: $playbackTime)
         .clipped()
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: controller.errorMessage == nil ? .ignore : .contain)
         .accessibilityLabel(previewAccessibilityLabel)
         .accessibilityIdentifier("stitching.preview")
         .onAppear {
@@ -1608,6 +1608,7 @@ private struct StitchingSequencePreview: View {
     private var previewAccessibilityLabel: String {
 #if DEBUG
         if ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1" {
+            if controller.errorMessage != nil { return "failed" }
             return "\(controller.useImageSequence ? "images" : controller.useMPV ? "mpv" : "native") \(controller.isReady ? "ready" : "loading")"
         }
 #endif

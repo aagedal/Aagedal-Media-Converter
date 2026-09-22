@@ -1,8 +1,152 @@
 import Combine
+import Libmpv
 import XCTest
 @testable import Aagedal_Media_Converter
 
 final class MPVPreviewObservationTests: XCTestCase {
+    @MainActor
+    func testFailureRejectsQueuedReadinessTimeAndCompletion() async throws {
+        let controller = makeController()
+        defer { controller.teardown() }
+        let failure = PassthroughSubject<String?, Never>()
+        let loaded = PassthroughSubject<Bool, Never>()
+        let time = PassthroughSubject<Double, Never>()
+        let ended = PassthroughSubject<Bool, Never>()
+        let failed = expectation(description: "Failure shown")
+        let observation = controller.$errorMessage.compactMap { $0 }.prefix(1)
+            .sink { _ in failed.fulfill() }
+        controller.isReady = true
+        controller.isPreparing = true
+        controller.selectedAudioTrackOrderIndex = 2
+        controller.playbackDidFinish = { XCTFail("A failed clip must not complete") }
+        controller.installMPVObservers(
+            timePosition: time.eraseToAnyPublisher(), fileLoaded: loaded.eraseToAnyPublisher(),
+            reachedEnd: ended.eraseToAnyPublisher(), failure: failure.eraseToAnyPublisher(),
+            refreshDelay: .seconds(60)
+        ) { XCTFail("Failed decoder must not refresh tracks") }
+        let refresh = try XCTUnwrap(controller.mpvTrackRefreshTask)
+        failure.send("decoder failed")
+        // Already enqueued actor callbacks must also be rejected after failure.
+        loaded.send(true)
+        time.send(99)
+        ended.send(true)
+        await fulfillment(of: [failed], timeout: 1)
+        await refresh.value
+        XCTAssertFalse(controller.isReady)
+        XCTAssertFalse(controller.isPreparing)
+        XCTAssertEqual(controller.currentPlaybackTime, 0)
+        XCTAssertEqual(controller.selectedAudioTrackOrderIndex, 2)
+        XCTAssertTrue(refresh.isCancelled)
+        XCTAssertTrue(controller.mpvObservers.isEmpty)
+        withExtendedLifetime(observation) {}
+    }
+
+    @MainActor
+    func testReplacementRejectsQueuedFailureAndRemainsPlayable() async {
+        let controller = makeController()
+        defer { controller.teardown() }
+        let failure = PassthroughSubject<String?, Never>()
+        controller.installMPVObservers(
+            timePosition: Empty().eraseToAnyPublisher(), fileLoaded: Empty().eraseToAnyPublisher(),
+            reachedEnd: Empty().eraseToAnyPublisher(), failure: failure.eraseToAnyPublisher()
+        ) {}
+        failure.send("old source failed")
+        let loaded = PassthroughSubject<Bool, Never>()
+        let time = PassthroughSubject<Double, Never>()
+        let ready = expectation(description: "Replacement ready")
+        let moved = expectation(description: "Replacement clock")
+        let completed = expectation(description: "Replacement EOF")
+        var observations = Set<AnyCancellable>()
+        controller.$isReady.filter { $0 }.prefix(1).sink { _ in ready.fulfill() }.store(in: &observations)
+        controller.$currentPlaybackTime.filter { $0 == 3 }.prefix(1)
+            .sink { _ in moved.fulfill() }.store(in: &observations)
+        let ended = PassthroughSubject<Bool, Never>()
+        controller.playbackDidFinish = { completed.fulfill() }
+        controller.installMPVObservers(
+            timePosition: time.eraseToAnyPublisher(), fileLoaded: loaded.eraseToAnyPublisher(),
+            reachedEnd: ended.eraseToAnyPublisher()
+        ) {}
+        let replacementID = controller.mpvObservationID
+        loaded.send(true)
+        time.send(3)
+        ended.send(true)
+        await fulfillment(of: [ready, moved, completed], timeout: 1)
+        XCTAssertNil(controller.errorMessage)
+        XCTAssertEqual(controller.mpvObservationID, replacementID)
+        XCTAssertTrue(controller.isReady)
+        withExtendedLifetime(observations) {}
+    }
+
+    @MainActor
+    func testTeardownRejectsQueuedFailureAndClearsReadiness() async {
+        let controller = makeController()
+        let failure = PassthroughSubject<String?, Never>()
+        let unexpected = expectation(description: "Retired failure")
+        unexpected.isInverted = true
+        let observation = controller.$errorMessage.compactMap { $0 }.sink { _ in unexpected.fulfill() }
+        controller.installMPVObservers(
+            timePosition: Empty().eraseToAnyPublisher(), fileLoaded: Empty().eraseToAnyPublisher(),
+            reachedEnd: Empty().eraseToAnyPublisher(), failure: failure.eraseToAnyPublisher()
+        ) {}
+        controller.isReady = true
+        failure.send("retired source failed")
+        controller.teardown()
+        await fulfillment(of: [unexpected], timeout: 0.1)
+        XCTAssertFalse(controller.isReady)
+        XCTAssertNil(controller.errorMessage)
+        withExtendedLifetime(observation) {}
+    }
+
+    @MainActor
+    func testOnlyNaturalMPVEndCompletesClipAndNewLoadClearsFailure() {
+        let player = MPVPlayer()
+        for reason in [MPV_END_FILE_REASON_STOP, MPV_END_FILE_REASON_QUIT, MPV_END_FILE_REASON_REDIRECT] {
+            player.reachedEnd = true
+            player.isPlaying = true
+            player.handleEndFile(reason: reason, errorCode: 0)
+            XCTAssertFalse(player.reachedEnd)
+            XCTAssertFalse(player.isPlaying)
+            XCTAssertNil(player.error)
+        }
+        player.isFileLoaded = true
+        player.handleEndFile(reason: MPV_END_FILE_REASON_ERROR, errorCode: MPV_ERROR_LOADING_FAILED.rawValue)
+        XCTAssertNotNil(player.error)
+        XCTAssertFalse(player.reachedEnd)
+        XCTAssertFalse(player.isFileLoaded)
+        player.handleEndFile(reason: MPV_END_FILE_REASON_EOF, errorCode: 0)
+        XCTAssertFalse(player.reachedEnd, "A late EOF must not complete a failed source")
+        // A pending load (before a view attaches) also starts a fresh error state.
+        player.load(url: URL(fileURLWithPath: "/private/replacement.mkv"))
+        XCTAssertNil(player.error)
+        player.handleEndFile(reason: MPV_END_FILE_REASON_EOF, errorCode: 0)
+        XCTAssertTrue(player.reachedEnd)
+    }
+
+    @MainActor
+    func testMissingSourceReportsPreviewFailureWithoutCompletingClip() async throws {
+        let controller = makeController()
+        defer { controller.teardown() }
+        let failure = expectation(description: "Preview reports the real decoder failure")
+        let completed = expectation(description: "A missing source is not a completed clip")
+        completed.isInverted = true
+        let observation = controller.$errorMessage.compactMap { $0 }.prefix(1)
+            .sink { _ in failure.fulfill() }
+        controller.playbackDidFinish = { completed.fulfill() }
+        let missingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathExtension("mkv")
+        controller.setupMPV(url: missingURL, startTime: 2)
+        let mpv = try XCTUnwrap(controller.mpvPlayer)
+        mpv.attachDrawable(MPVMetalLayer())
+        await fulfillment(of: [failure], timeout: 10)
+        await fulfillment(of: [completed], timeout: 0.1)
+        XCTAssertNotNil(mpv.error, "Exercise a real libmpv load failure")
+        XCTAssertFalse(controller.isReady)
+        XCTAssertFalse(controller.isPreparing)
+        XCTAssertNil(controller.mpvPlayer)
+        XCTAssertNil(controller.mpvObservationID)
+        withExtendedLifetime(observation) {}
+    }
+
     @MainActor
     private func makeController() -> PreviewPlayerController {
         PreviewPlayerController(videoItem: VideoItem(
@@ -98,13 +242,15 @@ final class MPVPreviewObservationTests: XCTestCase {
         let loaded = PassthroughSubject<Bool, Never>()
         let ended = PassthroughSubject<Bool, Never>()
         let cancelled = expectation(description: "All subscriptions cancelled")
-        cancelled.expectedFulfillmentCount = 3
+        let failure = PassthroughSubject<String?, Never>()
+        cancelled.expectedFulfillmentCount = 4
         let staleRefresh = expectation(description: "Retired refresh")
         staleRefresh.isInverted = true
         controller.installMPVObservers(
             timePosition: time.handleEvents(receiveCancel: { cancelled.fulfill() }).eraseToAnyPublisher(),
             fileLoaded: loaded.handleEvents(receiveCancel: { cancelled.fulfill() }).eraseToAnyPublisher(),
             reachedEnd: ended.handleEvents(receiveCancel: { cancelled.fulfill() }).eraseToAnyPublisher(),
+            failure: failure.handleEvents(receiveCancel: { cancelled.fulfill() }).eraseToAnyPublisher(),
             refreshDelay: .seconds(60)
         ) { staleRefresh.fulfill() }
         let refresh = try XCTUnwrap(controller.mpvTrackRefreshTask)

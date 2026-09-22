@@ -360,7 +360,8 @@ final class PreviewPlayerController: ObservableObject {
         installMPVObservers(
             timePosition: mpv.$timePos.eraseToAnyPublisher(),
             fileLoaded: mpv.$isFileLoaded.eraseToAnyPublisher(),
-            reachedEnd: mpv.$reachedEnd.eraseToAnyPublisher()
+            reachedEnd: mpv.$reachedEnd.eraseToAnyPublisher(),
+            failure: mpv.$error.eraseToAnyPublisher()
         ) { [weak self] in
             guard let self else { return }
             self.refreshAudioTrackOptions(for: self.videoItem, playerItem: nil)
@@ -1376,6 +1377,7 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func teardown(resetAudioSelection: Bool = true) {
+        isReady = false
         trimPlayback.invalidate()
         removeMPVObservers()
         audioSelectionOperationID = nil

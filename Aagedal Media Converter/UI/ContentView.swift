@@ -1755,6 +1755,11 @@ struct ContentView: View {
                     item.trimEnd = items.isEmpty ? 3 : 4
                     items.append(item)
                 }
+                if environment["AMC_UI_TEST_MISSING_STITCHING_SOURCE"] == "1" {
+                    // Retain imported metadata, then exercise a real decoder
+                    // failure when the sequence reaches its unavailable source.
+                    try FileManager.default.removeItem(at: secondURL)
+                }
                 let group = EncodingGroup(name: "UI Test Sequence", items: items, preset: fixturePreset)
                 encodingGroups.append(group)
                 queueOrder.append(group.id)

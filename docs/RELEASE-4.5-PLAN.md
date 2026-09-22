@@ -15,10 +15,10 @@ Created: 2026-09-11.
 - 4.5 is the development target for an initial local MCP interface.
 - No release date is committed. Confirm scope after the feasibility milestone.
 
-The checked-in development metadata is **4.5.0 (577)**. This is not a frozen or
+The development metadata is **4.5.0 (582)**. This is not a frozen or
 signed release candidate.
 
-## Implementation progress — through 2026-09-21
+## Implementation progress — through 2026-09-22
 
 The first shared-boundary increment is implemented without selecting an IPC
 transport prematurely:
@@ -919,6 +919,18 @@ for review. Import activation still requires span resolution and a reviewed UI.
 A live shared-service regression also verifies every selected 24-bit sample in
 all six surround channels for trimmed WAV, FLAC, and ProRes output. See the
 [continuation validation record](4.5-end-guidance-surround-grouping-validation-2026-09-21.md).
+
+MPV decoder failures now stop stitching and show a bilingual error with accessible
+Retry instead of treating the failed source as a completed clip. Natural EOF is
+separated from stop/replacement/error events, and observer retirement rejects
+queued callbacks after failure, replacement, or dismissal. A real missing-source
+regression failed before the fix and passes afterward alongside focused lifecycle
+and timeline coverage. All 1,136 unit tests, 81 release-script tests, localization
+checks, and four serial UI checks pass, including bilingual failure/retry and
+native/MPV replay. The error panels were visually reviewed. See the
+[preview failure recovery record](4.5-preview-failure-recovery-validation-2026-09-22.md).
+This does not resolve the bundled CoreAudio dependency blocker or establish
+physical-drive removal and OS-level permission recovery.
 
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving

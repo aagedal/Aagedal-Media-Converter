@@ -687,6 +687,48 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStitchingUnavailableSourceStopsAndAllowsRetryInBothLanguages() throws {
+        for (language, locale, pauseLabel) in [("en", "en_US", "Play sequence"), ("nb", "nb_NO", "Spill av sekvens")] {
+            launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", language: language, locale: locale,
+                      previewContainer: "mkv", stitching: true, missingStitchingSource: true)
+            let edit = element("group.edit")
+            XCTAssertTrue(edit.waitForExistence(timeout: 30))
+            edit.click()
+            let preview = element("stitching.preview")
+            let play = element("stitching.play")
+            let selected = element("stitching.selectedClip")
+            XCTAssertTrue(waitForLabel("mpv ready", of: preview, timeout: 30))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.mkv", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("failed", of: preview, timeout: 15))
+            XCTAssertTrue(waitForLabel(pauseLabel, of: play, timeout: 5))
+            XCTAssertEqual(element("stitching.timecode").value as? String, "00:00:02:00 / 00:00:04:00",
+                           "A failed source must remain at its requested in-point, not complete the sequence")
+            let retry = element("preview.retry")
+            XCTAssertTrue(retry.waitForExistence(timeout: 5))
+            XCTAssertTrue(retry.isHittable)
+            attachWindowScreenshot(named: "Stitching unavailable source - \(language)")
+            retry.click()
+            // The file remains unavailable; Retry must show the error again and
+            // never turn failure into successful sequence completion.
+            XCTAssertTrue(waitForLabel("failed", of: preview, timeout: 15))
+            XCTAssertTrue(waitForLabel(pauseLabel, of: play, timeout: 5))
+            XCTAssertEqual(selected.value as? String, "ui-test-second.mkv")
+            element("stitching.fit").click()
+            element("group.timeline").coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.05)).click()
+            XCTAssertTrue(waitForValue("ui-test-fixture.mkv", of: selected, timeout: 5))
+            XCTAssertTrue(waitForLabel("mpv ready", of: preview, timeout: 30))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.mkv", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("failed", of: preview, timeout: 15))
+            XCTAssertTrue(waitForLabel(pauseLabel, of: play, timeout: 5))
+            element("group.done").click()
+            XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+            terminateAndCleanFixtures()
+        }
+    }
+
+    @MainActor
     func testNativeStitchingSequencePlaybackAndReplay() throws {
         try exerciseStitchingSequence(container: "mp4", expectedBackend: "AVPlayer")
     }
@@ -1162,6 +1204,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         previewContainer: String? = nil,
         stitching: Bool = false,
         delayedStitchingLoad: Bool = false,
+        missingStitchingSource: Bool = false,
         resetAgentAccess: Bool = false
     ) {
         app = XCUIApplication()
@@ -1189,6 +1232,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }
         if delayedStitchingLoad {
             app.launchEnvironment["AMC_UI_TEST_DELAY_STITCHING_LOAD"] = "1"
+        }
+        if missingStitchingSource {
+            app.launchEnvironment["AMC_UI_TEST_MISSING_STITCHING_SOURCE"] = "1"
         }
         if let previewContainer {
             app.launchEnvironment["AMC_UI_TEST_PREVIEW_CONTAINER"] = previewContainer
