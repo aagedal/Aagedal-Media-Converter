@@ -1039,10 +1039,13 @@ regions while retaining per-reader limits and source-identity checks; six focuse
 tests pass. The retained MPV candidate verifier now checks the patched CoreAudio
 source against build evidence before inspecting its archives, with 20 focused
 script tests passing. The [named-client continuation](4.5-named-client-validation-2026-09-23.md)
-records direct helper discovery and successful Claude Code and Codex registration,
-but no live named-client tool call: Claude Code needs authentication, the Codex
-headless run was blocked by local state permissions, and OpenCode exited with
-signal 9. MPV integration still needs a published versioned asset, an MPVKit
+records direct helper discovery and successful Claude Code and Codex registration.
+A later Codex CLI run invoked the packaged `list_presets` tool with `{}` and
+received structured errors: cold launch timed out, then, after the app was
+opened separately, Agent Access was disabled. No named client has yet returned
+presets or completed the conversion workflow. Claude Code needs authentication,
+and OpenCode exited with signal 9. MPV integration still needs a published
+versioned asset, an MPVKit
 package revision and exact app pin, provenance, and affected-macOS runtime checks.
 The integrated Debug unit suite passes 1,178 tests, all 102 release-script
 tests pass, and the updated unsigned Release archive passes the static
