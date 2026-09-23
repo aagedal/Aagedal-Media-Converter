@@ -1,5 +1,8 @@
 # v.4.5.0 (Development)
 
+Moved Agent Access and Tool Diagnostics to the bottom of the Settings sidebar,
+keeping everyday settings easier to reach.
+
 4.5 development has started with the shared application boundary and signed
 local transport needed for agent access. Final client compatibility, specialized
 manual-job coverage, wider Shortcut coverage, bilingual visual review, and

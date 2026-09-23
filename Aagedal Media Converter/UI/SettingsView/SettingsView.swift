@@ -10,8 +10,6 @@ struct SettingsView: View {
 
     private enum SettingsTab: String, CaseIterable, Hashable {
         case general
-        case agentAccess
-        case tools
         case encoding
         case fileNames
         case metadata
@@ -28,6 +26,8 @@ struct SettingsView: View {
         case sync
         case updates
         case shortcuts
+        case agentAccess
+        case tools
 
         var label: String {
             switch self {
