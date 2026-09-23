@@ -2257,7 +2257,7 @@ struct ApplicationFileAccessAuthorizer: Sendable {
     }
 
     /// Explicit opt-out for isolated tests whose temporary paths do not carry
-    /// App Sandbox bookmarks.
+    /// stored security-scoped bookmarks.
     static let unrestricted = ApplicationFileAccessAuthorizer { _, _ in
         ApplicationFileAccessLease {}
     }

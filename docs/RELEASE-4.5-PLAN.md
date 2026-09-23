@@ -1063,6 +1063,11 @@ stitch-marker explanation was translated. An unrelated permission prompt
 obscured 13 Norwegian captures, which still need clean visual review. See the
 [locale UI continuation](4.5-locale-ui-validation-2026-09-23.md).
 
+The [4.5 runtime access scope](4.5-runtime-access-scope-2026-09-23.md) records
+the configured unsandboxed direct-distribution target and separates the app's
+bookmark approval policy from OS sandbox enforcement. The final signed artifact
+and real lost-volume behavior still need validation.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
@@ -1220,9 +1225,11 @@ record retention and idempotency-key lifetime before implementation.
 
 ### 1. Feasibility and scope decision
 
-Prove a signed app and bundled helper can connect under the chosen App Sandbox
-scope, launch the app if needed, inspect an approved file, and return structured data. Test denied and
-revoked folder access. Verify compatibility with Claude Code, Codex, and OpenCode.
+Prove a signed app and bundled helper can connect under the configured runtime
+scope, launch the app if needed, inspect an approved file, and return structured
+data. Test denied and removed folder approvals and unavailable approved files.
+Verify compatibility with Claude Code, Codex, and OpenCode. If App Sandbox is
+enabled in a later target, repeat this matrix under that scope.
 
 Exit: documented IPC/transport decision, supported-client list, setup flow,
 initial preset/override matrix, and an effort estimate. If file access or packaging
@@ -1264,7 +1271,8 @@ and UI screenshots. Verify any added dependency's packaging and license.
 - Cancellation during preparation, encoding, and final output publication.
 - Actual output metadata and representative playback for each supported preset,
   including audio-channel and timecode preservation where promised.
-- Existing manual import, preview, conversion, App Intents, and sandboxed access.
+- Existing manual import, preview, conversion, App Intents, and the app's
+  approved-file access policy under the configured runtime scope.
 - No separate FFmpeg or helper-runtime installation required for supported tools.
 
 ## Deferred decisions
