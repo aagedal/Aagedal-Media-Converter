@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A45A99000000000000000003 /* AnonymousUsageIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45A99000000000000000001 /* AnonymousUsageIndicator.swift */; };
-		A45A99000000000000000004 /* AnonymousUsageIndicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */; };
 		00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */; };
 		010A25E4BFF94166AD0C8126 /* AV2AudioTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */; };
 		042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */; };
@@ -199,10 +197,12 @@
 		A4591900000000000000000F /* StitchMarkerExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4591900000000000000000E /* StitchMarkerExportTests.swift */; };
 		A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */; };
 		A45921000000000000000011 /* CameraCardRecordingGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45921000000000000000012 /* CameraCardRecordingGrouping.swift */; };
-		A45922000000000000000101 /* CameraCardRecordingMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000102 /* CameraCardRecordingMetadata.swift */; };
 		A45921000000000000000013 /* CameraCardRecordingGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45921000000000000000014 /* CameraCardRecordingGroupingTests.swift */; };
-		A45922000000000000000105 /* NativePreviewLoadDeadlineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000106 /* NativePreviewLoadDeadlineTests.swift */; };
+		A45922000000000000000101 /* CameraCardRecordingMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000102 /* CameraCardRecordingMetadata.swift */; };
 		A45922000000000000000103 /* CameraCardRecordingMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000104 /* CameraCardRecordingMetadataTests.swift */; };
+		A45922000000000000000105 /* NativePreviewLoadDeadlineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45922000000000000000106 /* NativePreviewLoadDeadlineTests.swift */; };
+		A45A99000000000000000003 /* AnonymousUsageIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45A99000000000000000001 /* AnonymousUsageIndicator.swift */; };
+		A45A99000000000000000004 /* AnonymousUsageIndicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */; };
 		A77C1C13727AF20711BFF51D /* VideoFileCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FAC27FC4405A72BB163575D /* VideoFileCellView.swift */; };
 		A7FDCC612BAD184830F774E4 /* WhisperSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6956B138C1E69D90CBBCB7D3 /* WhisperSettingsView.swift */; };
 		A872D919C52C4AC59BD31CA6 /* VisionOCREngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3133DAB4DB1E47E29DFC6CF4 /* VisionOCREngine.swift */; };
@@ -377,8 +377,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A45A99000000000000000001 /* AnonymousUsageIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousUsageIndicator.swift; sourceTree = "<group>"; };
-		A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousUsageIndicatorTests.swift; sourceTree = "<group>"; };
 		02B1DCFCB3DC44408B8C4598 /* MergeCompatibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicy.swift; sourceTree = "<group>"; };
 		045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettings.swift; sourceTree = "<group>"; };
 		06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLifecycleTests.swift; sourceTree = "<group>"; };
@@ -579,10 +577,12 @@
 		A4591900000000000000000E /* StitchMarkerExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StitchMarkerExportTests.swift; sourceTree = "<group>"; };
 		A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleAgentCoexistenceTests.swift; sourceTree = "<group>"; };
 		A45921000000000000000012 /* CameraCardRecordingGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingGrouping.swift; sourceTree = "<group>"; };
-		A45922000000000000000102 /* CameraCardRecordingMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingMetadata.swift; sourceTree = "<group>"; };
 		A45921000000000000000014 /* CameraCardRecordingGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingGroupingTests.swift; sourceTree = "<group>"; };
-		A45922000000000000000106 /* NativePreviewLoadDeadlineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePreviewLoadDeadlineTests.swift; sourceTree = "<group>"; };
+		A45922000000000000000102 /* CameraCardRecordingMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingMetadata.swift; sourceTree = "<group>"; };
 		A45922000000000000000104 /* CameraCardRecordingMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCardRecordingMetadataTests.swift; sourceTree = "<group>"; };
+		A45922000000000000000106 /* NativePreviewLoadDeadlineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePreviewLoadDeadlineTests.swift; sourceTree = "<group>"; };
+		A45A99000000000000000001 /* AnonymousUsageIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousUsageIndicator.swift; sourceTree = "<group>"; };
+		A45A99000000000000000002 /* AnonymousUsageIndicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousUsageIndicatorTests.swift; sourceTree = "<group>"; };
 		A4796A97B7CD776CF35F1314 /* WhisperModelManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WhisperModelManager.swift; sourceTree = "<group>"; };
 		A90606000000000000000202 /* bmx-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "bmx-LICENSE.txt"; sourceTree = "<group>"; };
 		A90606000000000000000203 /* mpv-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mpv-LICENSE.txt"; sourceTree = "<group>"; };
@@ -2156,7 +2156,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 582;
+				CURRENT_PROJECT_VERSION = 589;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
@@ -2213,7 +2213,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 582;
+				CURRENT_PROJECT_VERSION = 589;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
