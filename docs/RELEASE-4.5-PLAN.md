@@ -1068,6 +1068,18 @@ the configured unsandboxed direct-distribution target and separates the app's
 bookmark approval policy from OS sandbox enforcement. The final signed artifact
 and real lost-volume behavior still need validation.
 
+The [MCP cold-launch recheck](4.5-mcp-cold-launch-recheck-2026-09-23.md) confirmed
+helper initialization but not a successful app result: the installed build 577
+predates the source launch-polling fix, and its Agent Access preference remains
+disabled. A newly packaged build is needed for named-client acceptance.
+The [Settings locale recapture](4.5-locale-ui-recapture-2026-09-23.md) passed the
+English/Norwegian 19-pane UI test and reviewed 18 unobscured Norwegian panes;
+the Sync capture was covered by a transient window. The
+[supported-preset output signal check](4.5-output-signal-validation-2026-09-23.md)
+passed focused live H.264, HEVC, ProRes, Proxy, Audio Only, and separate MCP
+Stream Copy tests, checking decoded audio tone as well as probed media properties.
+Representative in-app playback and longer real-world sources remain open.
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost
