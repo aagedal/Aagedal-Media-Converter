@@ -1383,6 +1383,9 @@ cannot be submitted through this flow. The scanner still lacks trusted
 format-specific span identity, so automatic continuation detection remains off.
 The reviewed import now applies the same card-name validation as ordinary import
 and retains the chosen upload server for its resulting groups.
+The generated two-file card now has an English/Norwegian review-to-group UI test,
+but its first run only compiled: the UI runner hung before connecting. See the
+[camera-card UI continuation](4.5-camera-card-review-ui-continuation-2026-09-23.md).
 
 Remaining live validation and automation:
 

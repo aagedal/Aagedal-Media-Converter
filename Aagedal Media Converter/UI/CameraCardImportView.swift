@@ -120,6 +120,7 @@ struct CameraCardImportView: View {
                 Text("Card name")
                     .font(.body)
                 TextField("e.g. Interview_Day1", text: $masterName)
+                    .accessibilityIdentifier("cameraCard.name")
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 320, idealWidth: 460, maxWidth: .infinity)
 
@@ -178,6 +179,7 @@ struct CameraCardImportView: View {
                         applySelectedServer()
                         onReviewDateSplit()
                     }
+                    .accessibilityIdentifier("cameraCard.review")
                     .disabled(isPreparingDateSplit || !isNameValid)
                     if isPreparingDateSplit {
                         ProgressView().controlSize(.small)
@@ -442,7 +444,9 @@ struct CameraCardRecordingReviewView: View {
                         }
                     }
                     Divider()
-                    Text("Proposed groups: \(proposal.count)").font(.headline)
+                    Text("Proposed groups: \(proposal.count)")
+                        .font(.headline)
+                        .accessibilityIdentifier("cameraCard.review.proposal")
                     ForEach(Array(proposal.enumerated()), id: \.offset) { index, group in
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Group \(index + 1): \(group.urls.count) clips")
@@ -474,6 +478,7 @@ struct CameraCardRecordingReviewView: View {
                 Spacer()
                 Button("Cancel", role: .cancel, action: onCancel)
                 Button("Import proposed groups") { onImport(proposal) }
+                    .accessibilityIdentifier("cameraCard.review.import")
                     .keyboardShortcut(.defaultAction)
                     .disabled(hasUnmergeableSpan)
             }

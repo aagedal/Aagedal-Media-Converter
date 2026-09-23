@@ -655,6 +655,37 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testGeneratedCameraCardReviewImportsGroupInBothLanguages() throws {
+        for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
+            launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC",
+                      language: language, locale: locale, previewContainer: "mp4",
+                      cameraCard: true)
+            let name = element("cameraCard.name")
+            XCTAssertTrue(name.waitForExistence(timeout: 30), app.debugDescription)
+            XCTAssertEqual(name.value as? String, "UI Test Card")
+            let review = element("cameraCard.review")
+            XCTAssertTrue(review.isEnabled)
+            review.click()
+            let proposal = element("cameraCard.review.proposal")
+            XCTAssertTrue(proposal.waitForExistence(timeout: 30), app.debugDescription)
+            XCTAssertTrue(proposal.label.contains("1"), proposal.label)
+            attachWindowScreenshot(named: "Camera card review - \(language)")
+            element("cameraCard.review.import").click()
+            let edit = element("group.edit")
+            XCTAssertTrue(edit.waitForExistence(timeout: 30), app.debugDescription)
+            edit.click()
+            let files = element("group.files")
+            XCTAssertTrue(files.waitForExistence(timeout: 10))
+            XCTAssertTrue(files.staticTexts["C0001.mp4"].exists)
+            XCTAssertTrue(files.staticTexts["C0002.mp4"].exists)
+            XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+            XCTAssertTrue(element("stitching.selectedClip").waitForExistence(timeout: 5))
+            element("group.done").click()
+            terminateAndCleanFixtures()
+        }
+    }
+
+    @MainActor
     func testStitchingSplitKeepsDurationAndAllowsIndependentTrim() throws {
         launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
         defer { terminateAndCleanFixtures() }
@@ -1262,6 +1293,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         damagedHistory: Bool = false,
         previewContainer: String? = nil,
         stitching: Bool = false,
+        cameraCard: Bool = false,
         delayedStitchingLoad: Bool = false,
         missingStitchingSource: Bool = false,
         resetAgentAccess: Bool = false
@@ -1288,6 +1320,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         if stitching {
             app.launchEnvironment["AMC_UI_TEST_STITCHING"] = "1"
             app.launchEnvironment["AMC_UI_TEST_STITCHING_PRESET"] = defaultPreset
+        }
+        if cameraCard {
+            app.launchEnvironment["AMC_UI_TEST_CAMERA_CARD"] = "1"
         }
         if delayedStitchingLoad {
             app.launchEnvironment["AMC_UI_TEST_DELAY_STITCHING_LOAD"] = "1"

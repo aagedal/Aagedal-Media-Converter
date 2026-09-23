@@ -1861,7 +1861,26 @@ struct ContentView: View {
             currentOutputFolder = directory
 
             let fixtureURL = try await Self.generateUITestFixture(in: directory)
-            if environment["AMC_UI_TEST_STITCHING"] == "1" {
+            if environment["AMC_UI_TEST_CAMERA_CARD"] == "1" {
+                let cardURL = directory.appendingPathComponent("Generated Camera Card", isDirectory: true)
+                try FileManager.default.createDirectory(at: cardURL, withIntermediateDirectories: true)
+                for name in ["C0001", "C0002"] {
+                    try FileManager.default.copyItem(
+                        at: fixtureURL,
+                        to: cardURL.appendingPathComponent("\(name).\(fixtureURL.pathExtension)")
+                    )
+                }
+                let scannedURLs = CameraCardScanner.scanForVideoFiles(in: cardURL)
+                guard scannedURLs.count == 2 else { throw UITestFixtureError.cardScanFailed }
+                cameraCardMasterName = "UI Test Card"
+                cameraCardConcatEnabled = true
+                cameraCardAutoEncodeEnabled = false
+                cameraCardUploadEnabled = false
+                cameraCardPresetRaw = ExportPreset.h264.rawValue
+                cameraCardImportState = CameraCardImportState(
+                    folderURL: cardURL, videoURLs: scannedURLs, hasRemovableSources: false
+                )
+            } else if environment["AMC_UI_TEST_STITCHING"] == "1" {
                 let secondURL = directory.appendingPathComponent("ui-test-second.\(fixtureURL.pathExtension)")
                 try FileManager.default.copyItem(at: fixtureURL, to: secondURL)
                 let fixturePreset = ExportPreset(rawValue: environment["AMC_UI_TEST_STITCHING_PRESET"] ?? "") ?? .h264
@@ -1934,6 +1953,7 @@ struct ContentView: View {
     private enum UITestFixtureError: LocalizedError {
         case missingFFmpeg
         case generationFailed(Int32)
+        case cardScanFailed
 
         var errorDescription: String? {
             switch self {
@@ -1941,6 +1961,8 @@ struct ContentView: View {
                 return "The bundled FFmpeg executable could not be resolved."
             case .generationFailed(let status):
                 return "FFmpeg exited with status \(status)."
+            case .cardScanFailed:
+                return "The generated camera card did not contain two scanned clips."
             }
         }
     }
