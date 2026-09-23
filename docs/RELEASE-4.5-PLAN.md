@@ -1354,7 +1354,9 @@ the [continuation record](4.5-stitching-playback-validation-2026-09-20.md).
 Generated reordered/trimmed Stream Copy export validation now passes through
 the real group conversion path, including decoded frame identity, chapters, and
 note sidecars; see the [export record](4.5-stitching-reordered-export-validation-2026-09-20.md).
-An editor-driven export and the broader real-media matrix remain open.
+A generated editor-driven trim and completed merged output now pass the focused
+[UI validation](4.5-editor-export-ui-validation-2026-09-23.md). Decoded export
+inspection and the broader real-media matrix remain open.
 
 Before release, manually validate native and MPV sequence playback, transition
 from a trimmed out-point to the next trimmed in-point, pause while loading, replay

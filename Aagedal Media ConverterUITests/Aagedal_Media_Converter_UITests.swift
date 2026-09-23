@@ -629,6 +629,32 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStitchingTimelineEditExportsMergedOutput() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        edit.click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+
+        let timecode = element("stitching.timecode")
+        let originalDuration = (timecode.value as? String) ?? timecode.label
+        element("group.timeline").coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.05)).click()
+        app.typeKey("q", modifierFlags: [])
+        XCTAssertNotEqual((timecode.value as? String) ?? timecode.label, originalDuration)
+        element("group.done").click()
+
+        let output = element("group.output")
+        XCTAssertFalse(output.exists)
+        let conversion = element("toolbar.conversion")
+        XCTAssertTrue(waitForEnabled(true, of: conversion, timeout: 5))
+        conversion.click()
+        XCTAssertTrue(output.waitForExistence(timeout: 45), app.debugDescription)
+        XCTAssertTrue(waitForLabel("Start Conversion", of: conversion, timeout: 5))
+    }
+
+    @MainActor
     func testStitchingSplitKeepsDurationAndAllowsIndependentTrim() throws {
         launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
         defer { terminateAndCleanFixtures() }

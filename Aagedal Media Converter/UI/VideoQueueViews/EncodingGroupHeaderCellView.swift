@@ -516,6 +516,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
         // width/height, so the encoding-group versions follow suit instead of
         // the larger 28pt action-button footprint.
         configureNaturalIconButton(concatOutputButton, symbolName: "magnifyingglass.circle.fill", tint: .systemBlue, action: #selector(concatOutputFinderClicked))
+        concatOutputButton.setAccessibilityIdentifier("group.output")
         concatOutputButton.toolTip = String(localized: "Show merged output in Finder")
 
         configureNaturalIconButton(concatCopyPathButton, symbolName: "doc.on.doc.fill", tint: .systemBlue, action: #selector(concatCopyPathClicked))
