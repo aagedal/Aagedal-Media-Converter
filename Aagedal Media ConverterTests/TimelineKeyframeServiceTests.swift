@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import Aagedal_Media_Converter
 
@@ -78,6 +79,28 @@ final class TimelineKeyframeServiceTests: XCTestCase {
         let replacement = try await service.scan(url: url, videoTrackOrdinal: 0, range: 0...5, duration: 6)
         XCTAssertEqual(replacement.status, .unavailable)
         XCTAssertTrue(replacement.times.isEmpty, "Replacing a URL must not return its cached keyframes")
+    }
+
+    func testRapidCancellationWithRealMedia() async throws {
+        guard let input = ProcessInfo.processInfo.environment["TIMELINE_KEYFRAME_STRESS_INPUT"] else {
+            throw XCTSkip("Set TIMELINE_KEYFRAME_STRESS_INPUT to a media file to exercise reader cancellation")
+        }
+        let url = URL(fileURLWithPath: input)
+        let duration = try await AVURLAsset(url: url).load(.duration).seconds
+        let service = TimelineKeyframeService()
+        for index in 0..<20 {
+            let point = min(duration - 1, Double(index % 10) * 2 + 1)
+            let task = Task {
+                try await service.scan(url: url, range: point...min(duration, point + 5), duration: duration)
+            }
+            try await Task.sleep(for: .milliseconds(3))
+            task.cancel()
+            do {
+                _ = try await task.value
+            } catch is CancellationError {
+                // Cancellation during a native sample read is expected.
+            }
+        }
     }
 
     func testSparseGOPDiscoveryContinuesIntoAdjacentBoundedRegion() async throws {

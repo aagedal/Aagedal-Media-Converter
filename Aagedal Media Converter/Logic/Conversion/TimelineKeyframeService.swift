@@ -180,7 +180,7 @@ actor TimelineKeyframeService {
             }
             let reader = try AVAssetReader(asset: asset)
             cancellation.install(reader)
-            defer { cancellation.clear() }
+            defer { cancellation.finish() }
             try Task.checkCancellation()
             reader.timeRange = CMTimeRange(start: CMTime(seconds: range.lowerBound, preferredTimescale: 600_000),
                                           duration: CMTime(seconds: range.upperBound - range.lowerBound,
@@ -194,7 +194,7 @@ actor TimelineKeyframeService {
             guard reader.startReading() else {
                 return TimelineKeyframeScan(times: [], scannedRange: nil, status: .unavailable)
             }
-            defer { if reader.status == .reading { reader.cancelReading() } }
+            cancellation.didStartReading()
             let deadline = ContinuousClock.now.advanced(by: .seconds(8))
             let watchdog = Task {
                 do { try await Task.sleep(for: .seconds(8)); cancellation.cancel() } catch {}
@@ -228,30 +228,55 @@ actor TimelineKeyframeService {
 }
 
 /// AVAssetReader cancellation must also reach an active compressed-sample read.
+/// A reader is only cancelled after startReading succeeds, and at most once:
+/// AVFoundation can crash when cancellation races with cleanup on another task.
 private final class ReaderCancellation: @unchecked Sendable {
     private let lock = NSLock()
     private var reader: AVAssetReader?
+    private var started = false
     private var cancelled = false
+    private var cancelIssued = false
 
     func install(_ reader: AVAssetReader) {
         lock.lock()
         self.reader = reader
-        let cancelNow = cancelled
         lock.unlock()
-        if cancelNow { reader.cancelReading() }
     }
 
-    func clear() {
+    func didStartReading() {
         lock.lock()
-        reader = nil
+        started = true
+        let current = readerToCancelIfNeeded()
         lock.unlock()
+        current?.cancelReading()
     }
 
     func cancel() {
         lock.lock()
         cancelled = true
-        let current = reader
+        let current = readerToCancelIfNeeded()
         lock.unlock()
         current?.cancelReading()
+    }
+
+    func finish() {
+        lock.lock()
+        let current: AVAssetReader?
+        if started, !cancelIssued, reader?.status == .reading {
+            cancelIssued = true
+            current = reader
+        } else {
+            current = nil
+        }
+        reader = nil
+        lock.unlock()
+        current?.cancelReading()
+    }
+
+    /// Called with the lock held. Only active readers can be interrupted.
+    private func readerToCancelIfNeeded() -> AVAssetReader? {
+        guard started, cancelled, !cancelIssued else { return nil }
+        cancelIssued = true
+        return reader
     }
 }
