@@ -361,6 +361,7 @@ private struct AnonymousUsageConsentView: View {
                 .font(.callout)
             HStack {
                 Button("Don't send data") { choose(.decline) }
+                    .accessibilityIdentifier("anonymousUsage.decline")
                 Spacer()
                 Button("Allow anonymous usage count") { choose(.allow) }
             }

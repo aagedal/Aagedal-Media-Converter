@@ -1258,6 +1258,12 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             }
         }
         app.launch()
+        // A fresh test installation may show the first-open usage choice. Make
+        // the explicit no-reporting choice before tests interact with the window.
+        let declineUsage = element("anonymousUsage.decline")
+        if declineUsage.exists {
+            declineUsage.click()
+        }
     }
 
     @MainActor
