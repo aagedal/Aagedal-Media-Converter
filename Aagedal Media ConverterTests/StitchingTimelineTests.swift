@@ -84,6 +84,27 @@ final class StitchingTimelineTests: XCTestCase {
         XCTAssertEqual(items, [source])
     }
 
+    func testSelectedClipDeletionCanBeUndoneAndRedone() {
+        let original = [clip(duration: 10), clip(duration: 20), clip(duration: 30)]
+        var items = original
+        var history = StitchingEditHistory()
+        StitchingTimeline.removeSelected(&items, ids: [original[0].id, original[2].id])
+        history.record(from: original, to: items)
+        XCTAssertEqual(items.map(\.id), [original[1].id])
+        XCTAssertTrue(history.canUndo)
+        history.restore(&items)
+        XCTAssertEqual(items, original)
+        history.restore(&items, redo: true)
+        XCTAssertEqual(items.map(\.id), [original[1].id])
+
+        let beforeRemovingLast = items
+        StitchingTimeline.removeSelected(&items, ids: [original[1].id])
+        history.record(from: beforeRemovingLast, to: items)
+        XCTAssertTrue(items.isEmpty)
+        history.restore(&items)
+        XCTAssertEqual(items, beforeRemovingLast)
+    }
+
     func testKeyframeSnappingStaysWithinAllowedTrimBounds() {
         XCTAssertEqual(StitchingTimeline.nearestKeyframe(3.8, in: [0, 2, 4, 6], bounds: 0...3.9), 2)
         XCTAssertEqual(StitchingTimeline.nearestKeyframe(3.8, in: [0, 2, 4, 6], bounds: 0...6), 4)

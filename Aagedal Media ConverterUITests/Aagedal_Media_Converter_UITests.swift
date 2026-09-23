@@ -533,21 +533,31 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [visibleMarkers], timeout: 30), .completed,
                        "Stream Copy must show candidate keyframes while free trimming remains enabled")
+        let info = element("stitching.timelineInfo")
+        XCTAssertTrue(info.exists)
+        XCTAssertFalse(element("stitching.requestedCut").exists)
+        info.click()
         XCTAssertTrue(element("stitching.requestedCut").waitForExistence(timeout: 5))
         XCTAssertTrue(element("stitching.requestedEnd").waitForExistence(timeout: 5))
         XCTAssertTrue(element("stitching.seekEstimate").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("stitching.streamCopyBoundaryGuidance").exists)
+        info.click()
         let timecode = element("stitching.timecode")
         let duration = (timecode.value as? String) ?? timecode.label
         snap.click()
         XCTAssertEqual(String(describing: snap.value ?? ""), "1")
+        info.click()
         XCTAssertTrue(element("stitching.requestedCut").waitForNonExistence(timeout: 5))
         XCTAssertTrue(element("stitching.requestedEnd").waitForNonExistence(timeout: 5))
         XCTAssertTrue(element("stitching.seekEstimate").waitForNonExistence(timeout: 5))
+        info.click()
         snap.click()
         XCTAssertEqual(String(describing: snap.value ?? ""), "0")
+        info.click()
         XCTAssertTrue(element("stitching.requestedCut").waitForExistence(timeout: 5))
         XCTAssertTrue(element("stitching.requestedEnd").waitForExistence(timeout: 5))
         XCTAssertTrue(element("stitching.seekEstimate").waitForExistence(timeout: 5))
+        info.click()
         XCTAssertEqual((timecode.value as? String) ?? timecode.label, duration)
         XCTAssertTrue(markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 })
         let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -587,6 +597,29 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         end.click(forDuration: 0.1, thenDragTo: start)
         XCTAssertTrue(element("stitching.deleteRange").wait(for: \.isEnabled, toEqual: true, timeout: 5),
                       "Reverse drags must select the same deletable interval")
+        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        XCTAssertNotEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertNotEqual(durationText(), originalDuration)
+    }
+
+    @MainActor
+    func testStitchingBackspaceDeletesSelectedClipAndUndoRestoresIt() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+        let timeline = element("group.timeline")
+        let timecode = element("stitching.timecode")
+        func durationText() -> String {
+            ((timecode.value as? String) ?? timecode.label).components(separatedBy: " / ").last ?? ""
+        }
+        let originalDuration = durationText()
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.4)).click()
         app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
         XCTAssertNotEqual(durationText(), originalDuration)
         app.typeKey("z", modifierFlags: .command)

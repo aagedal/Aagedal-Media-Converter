@@ -22,6 +22,10 @@ enum StitchingTimeline {
         items.insert(contentsOf: moving, at: insertion)
     }
 
+    static func removeSelected(_ items: inout [VideoItem], ids: Set<UUID>) {
+        items.removeAll { ids.contains($0.id) }
+    }
+
     static func selectionRange(from anchor: UUID, through target: UUID, in ids: [UUID]) -> Set<UUID> {
         guard let first = ids.firstIndex(of: anchor), let last = ids.firstIndex(of: target) else { return [target] }
         return Set(ids[min(first, last)...max(first, last)])
@@ -319,6 +323,7 @@ struct StitchingEditorView<FileList: View>: View {
     @State private var keyframeSourceIdentities: [URL: TimelineKeyframeService.SourceIdentity] = [:]
     @State private var keyframeLoading = false
     @State private var keyframeScannedRanges: [URL: [ClosedRange<Double>]] = [:]
+    @State private var showsTimelineInfo = false
     private struct ClipRange: Equatable {
         let id: UUID
         let bounds: ClosedRange<Double>
@@ -353,6 +358,7 @@ struct StitchingEditorView<FileList: View>: View {
     @State private var scrollPosition = ScrollPosition(edge: .leading)
     @State private var scrubTask: Task<Void, Never>?
     @State private var pendingScrubTime: Double?
+    @State private var isScrubbingTimeline = false
     @State private var zoom: Double = 1
     @State private var fittedDuration: Double?
     @State private var fitRequest = UUID()
@@ -420,7 +426,7 @@ struct StitchingEditorView<FileList: View>: View {
                             onZoom: { keyboardZoomSteps += $0 },
                             onAddMarker: addMarker,
                             onSplit: splitAtPlayhead,
-                            onDeleteRange: deleteSelectedRange,
+                            onDeleteSelection: deleteSelection,
                             onClearRange: clearSelectedRange,
                             onToggleRange: toggleRangeMode,
                             onUndo: { restoreEdit() },
@@ -469,6 +475,7 @@ struct StitchingEditorView<FileList: View>: View {
                     .help("Undo timeline edit (⌘Z)")
                     .accessibilityLabel("Undo timeline edit")
                     .accessibilityIdentifier("stitching.undo")
+                    .keyboardShortcut("z", modifiers: .command)
                     .disabled(!canEditHistory || !editHistory.canUndo || trimGestureBefore != nil)
                     Button { restoreEdit(redo: true) } label: {
                         Image(systemName: "arrow.uturn.forward")
@@ -476,6 +483,7 @@ struct StitchingEditorView<FileList: View>: View {
                     .help("Redo timeline edit (⇧⌘Z)")
                     .accessibilityLabel("Redo timeline edit")
                     .accessibilityIdentifier("stitching.redo")
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
                     .disabled(!canEditHistory || !editHistory.canRedo || trimGestureBefore != nil)
                     Button(action: splitAtPlayhead) {
                         Label("Split", systemImage: "scissors")
@@ -500,10 +508,10 @@ struct StitchingEditorView<FileList: View>: View {
                     Toggle("Range", isOn: $rangeMode)
                         .toggleStyle(.button)
                         .keyboardShortcut("r", modifiers: [])
-                        .help("Toggle Range mode (R), or hold Command while dragging across a clip to select a range. Backspace deletes it; Option+X or Escape clears it.")
+                        .help("Toggle Range mode (R), or hold Command while dragging across a clip to select a range. Backspace deletes the selected range or clips; Option+X or Escape clears a range.")
                         .accessibilityIdentifier("stitching.rangeTool")
-                    Button("Delete range", action: deleteSelectedRange)
-                        .disabled(selectedRange == nil || !canEditHistory)
+                    Button(selectedRange == nil ? "Delete selected clips" : "Delete range", action: deleteSelection)
+                        .disabled((selectedRange == nil && selectedClipIDs.isEmpty) || !canEditHistory)
                         .keyboardShortcut(.delete, modifiers: [])
                         .accessibilityIdentifier("stitching.deleteRange")
                     Button("Clear range") { clearSelectedRange() }
@@ -518,73 +526,27 @@ struct StitchingEditorView<FileList: View>: View {
                     }
                     Spacer()
                     if rangeMode {
-                        Text("Drag within a clip · Backspace: delete range · ⌥X: clear")
+                        Text("Drag within a clip · Backspace: delete selection · ⌥X: clear range")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 timeline
-                if isStreamCopy {
-                    Toggle("Snap trims and ranges to keyframes", isOn: $snapToKeyframes)
-                        .accessibilityIdentifier("stitching.keyframeSnap")
-                    if snapToKeyframes {
-                        Text(keyframeLoading ? "Finding keyframes…" : (keyframes[item.url]?.isEmpty == false ? "Trims and ranges snap to the nearest available keyframe." : "Keyframes unavailable for this clip. Using frame snapping."))
-                            .font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    if isStreamCopy {
+                        Toggle("Snap trims and ranges to keyframes", isOn: $snapToKeyframes)
+                            .fixedSize()
+                            .accessibilityIdentifier("stitching.keyframeSnap")
                     }
-                    if !snapToKeyframes {
-                        let requested = item.effectiveTrimStart
-                        let display = StitchingTimeline.timeDisplay(requested, frameRate: StitchingTimeline.frameRate(for: item))
-                        Text("Requested start: \(display)")
-                            .font(.caption.monospacedDigit())
-                            .accessibilityIdentifier("stitching.requestedCut")
-                        if let candidate = StitchingTimeline.precedingSeekCandidate(
-                            requested, times: keyframes[item.url] ?? [],
-                            scannedRanges: keyframeScannedRanges[item.url] ?? []) {
-                            let candidateDisplay = StitchingTimeline.timeDisplay(candidate, frameRate: StitchingTimeline.frameRate(for: item))
-                            let difference = (requested - candidate).formatted(.number.precision(.fractionLength(3)))
-                            Text("Estimated seek point: \(candidateDisplay) (\(difference) s earlier). Export can differ.")
-                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                .accessibilityIdentifier("stitching.seekEstimate")
-                        } else {
-                            Text("Seek estimate unavailable near this cut.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        let requestedEnd = item.effectiveTrimEnd
-                        let endDisplay = StitchingTimeline.timeDisplay(requestedEnd, frameRate: StitchingTimeline.frameRate(for: item))
-                        Text("Requested end: \(endDisplay)")
-                            .font(.caption.monospacedDigit())
-                            .accessibilityIdentifier("stitching.requestedEnd")
-                        if let reference = StitchingTimeline.followingKeyframeReference(
-                            requestedEnd, times: keyframes[item.url] ?? [],
-                            scannedRanges: keyframeScannedRanges[item.url] ?? []) {
-                            let referenceDisplay = StitchingTimeline.timeDisplay(reference, frameRate: StitchingTimeline.frameRate(for: item))
-                            let difference = (reference - requestedEnd).formatted(.number.precision(.fractionLength(3)))
-                            Text("Keyframe at or after end: \(referenceDisplay) (\(difference) s later). This does not predict the exported end.")
-                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityIdentifier("stitching.endKeyframeReference")
-                        } else {
-                            Text("No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes.")
-                                .font(.caption).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityIdentifier("stitching.endKeyframeUnavailable")
-                        }
-                    }
-                    Label {
-                        Text("Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ.")
-                            .fixedSize(horizontal: false, vertical: true)
-                    } icon: {
+                    Button { showsTimelineInfo.toggle() } label: {
                         Image(systemName: "info.circle")
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("stitching.streamCopyBoundaryGuidance")
-                }
-                HStack(spacing: 12) {
-                    Text("J/K/L: reverse • pause • play · R: range mode · ⌘B: split · ⌘Z: undo · M: marker · Q/W: trim start/end")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Image(systemName: "questionmark.circle")
-                        .foregroundStyle(.secondary)
-                        .help("Pinch to zoom. Drag clips to reorder; Command-drag selects a time range within a clip. Shift-click selects a range of clips; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed. Q trims the start to the playhead; W trims the end. Later clips close the gap.")
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Timeline information")
+                    .accessibilityIdentifier("stitching.timelineInfo")
+                    .help(isStreamCopy ? "Show timeline shortcuts and Stream Copy cut details" : "Show timeline shortcuts and gestures")
+                    .popover(isPresented: $showsTimelineInfo, arrowEdge: .bottom) {
+                        timelineInfo(for: item)
+                    }
                     Picker("Waveform height", selection: $waveformVisualScale) {
                         ForEach([1.0, 2, 4, 8, 16], id: \.self) { scale in
                             Text("\(Int(scale))×").tag(scale)
@@ -628,7 +590,12 @@ struct StitchingEditorView<FileList: View>: View {
             }
         }
         .task(id: keyframeRequestID) {
-            guard isStreamCopy else { return }
+            keyframeLoading = false
+            guard isStreamCopy, !isScrubbingTimeline else { return }
+            // Let rapid seeks settle before opening a reader. A canceled reader
+            // finishes its current sample before teardown, so scans during a drag
+            // compete with the preview for decoder and disk resources.
+            do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
             keyframeLoading = true
             defer { if !Task.isCancelled { keyframeLoading = false } }
             let previewID = selectedID ?? group.items.first?.id
@@ -729,6 +696,76 @@ struct StitchingEditorView<FileList: View>: View {
         }
     }
 
+    private func timelineInfo(for item: VideoItem) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Timeline information").font(.headline)
+            if isStreamCopy {
+                Divider()
+                Text("Stream Copy cuts").font(.subheadline.weight(.semibold))
+                Text(item.url.lastPathComponent)
+                    .font(.caption).foregroundStyle(.secondary)
+                if snapToKeyframes {
+                    Text(keyframeLoading ? "Finding keyframes…" : (keyframes[item.url]?.isEmpty == false ? "Trims and ranges snap to the nearest available keyframe." : "Keyframes unavailable for this clip. Using frame snapping."))
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    let requested = item.effectiveTrimStart
+                    let display = StitchingTimeline.timeDisplay(requested, frameRate: StitchingTimeline.frameRate(for: item))
+                    Text("Requested start: \(display)")
+                        .font(.caption.monospacedDigit())
+                        .accessibilityIdentifier("stitching.requestedCut")
+                    if let candidate = StitchingTimeline.precedingSeekCandidate(
+                        requested, times: keyframes[item.url] ?? [],
+                        scannedRanges: keyframeScannedRanges[item.url] ?? []) {
+                        let candidateDisplay = StitchingTimeline.timeDisplay(candidate, frameRate: StitchingTimeline.frameRate(for: item))
+                        let difference = (requested - candidate).formatted(.number.precision(.fractionLength(3)))
+                        Text("Estimated seek point: \(candidateDisplay) (\(difference) s earlier). Export can differ.")
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("stitching.seekEstimate")
+                    } else {
+                        Text("Seek estimate unavailable near this cut.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    let requestedEnd = item.effectiveTrimEnd
+                    let endDisplay = StitchingTimeline.timeDisplay(requestedEnd, frameRate: StitchingTimeline.frameRate(for: item))
+                    Text("Requested end: \(endDisplay)")
+                        .font(.caption.monospacedDigit())
+                        .accessibilityIdentifier("stitching.requestedEnd")
+                    if let reference = StitchingTimeline.followingKeyframeReference(
+                        requestedEnd, times: keyframes[item.url] ?? [],
+                        scannedRanges: keyframeScannedRanges[item.url] ?? []) {
+                        let referenceDisplay = StitchingTimeline.timeDisplay(reference, frameRate: StitchingTimeline.frameRate(for: item))
+                        let difference = (reference - requestedEnd).formatted(.number.precision(.fractionLength(3)))
+                        Text("Keyframe at or after end: \(referenceDisplay) (\(difference) s later). This does not predict the exported end.")
+                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("stitching.endKeyframeReference")
+                    } else {
+                        Text("No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes.")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("stitching.endKeyframeUnavailable")
+                    }
+                }
+                Text("Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("stitching.streamCopyBoundaryGuidance")
+            }
+            Divider()
+            Text("Shortcuts and gestures").font(.subheadline.weight(.semibold))
+            Text("J/K/L: reverse, pause, play (repeat J or L to speed up).")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("R: range · Backspace: delete selected range or clips · ⌥X: clear range · ⌘B: split · ⌘Z: undo · M: marker · Q/W: trim start/end.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Drag the ruler to scrub, clip edges to trim, or clips to reorder. Command-drag selects a time range; Shift-click selects multiple clips; ⌘-click toggles a clip. Pinch to zoom. Later clips close the gap after trimming.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(width: 440, alignment: .leading)
+    }
+
     private var timeline: some View {
         GeometryReader { geometry in
             let scale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * zoom)
@@ -760,6 +797,7 @@ struct StitchingEditorView<FileList: View>: View {
                                 scrubTask = nil
                                 pendingScrubTime = nil
                                 scrub(value.location.x / scale)
+                                isScrubbingTimeline = false
                             })
                         HStack(spacing: 0) {
                             ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
@@ -968,6 +1006,7 @@ struct StitchingEditorView<FileList: View>: View {
     }
     private func scheduleScrub(_ time: Double) {
         isPlaying = false
+        isScrubbingTimeline = true
         pendingScrubTime = time
         guard scrubTask == nil else { return }
         scrubTask = Task { @MainActor in
@@ -1032,6 +1071,11 @@ struct StitchingEditorView<FileList: View>: View {
         zoom = 1
         fitRequest = UUID()
     }
+    private func preserveTimelineScale() {
+        // Structural edits change the sum of full source durations, even when
+        // the visible sequence changes little. Keep the current time-to-pixel scale.
+        if fittedDuration == nil { fittedDuration = sourceTotal }
+    }
     private func restoreEdit(redo: Bool = false) {
         guard canEditHistory, !showsMarkerEditor, trimGestureBefore == nil,
               redo ? editHistory.canRedo : editHistory.canUndo else { return }
@@ -1069,6 +1113,8 @@ struct StitchingEditorView<FileList: View>: View {
         scrubTask?.cancel()
         scrubTask = nil
         pendingScrubTime = nil
+        guard StitchingTimeline.splitPoint(at: time, in: group.items) != nil else { return }
+        preserveTimelineScale()
         guard let id = StitchingTimeline.split(&group.items, at: time),
               let item = group.items.first(where: { $0.id == id }) else { return }
         if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
@@ -1078,6 +1124,7 @@ struct StitchingEditorView<FileList: View>: View {
     }
 
     private var keyframeRequestID: String {
+        if isScrubbingTimeline { return "scrubbing" }
         let items = group.items.map {
             "\($0.id)-\($0.url.absoluteString)-\(floor($0.effectiveTrimStart / 5))-\(floor($0.effectiveTrimEnd / 5))"
         }.joined(separator: "|")
@@ -1120,6 +1167,35 @@ struct StitchingEditorView<FileList: View>: View {
         return true
     }
 
+    private func deleteSelection() {
+        if selectedRange != nil { deleteSelectedRange() }
+        else { deleteSelectedClips() }
+    }
+
+    private func deleteSelectedClips() {
+        let selected = selectedClipIDs.intersection(Set(group.items.map(\.id)))
+        guard canEditHistory, !showsMarkerEditor, trimGestureBefore == nil,
+              !selected.isEmpty else { return }
+        let time = sequenceTime
+        isPlaying = false
+        scrubTask?.cancel()
+        scrubTask = nil
+        pendingScrubTime = nil
+        preserveTimelineScale()
+        StitchingTimeline.removeSelected(&group.items, ids: selected)
+        selectedClipIDs.removeAll()
+        selectionAnchor = nil
+        if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
+        if let location = StitchingTimeline.location(at: min(time, total), in: group.items) {
+            selectedClipIDs = [location.id]
+            selectionAnchor = location.id
+            seek(location.id, to: location.sourceTime)
+        } else {
+            selectedID = nil
+            sourceTime = 0
+        }
+    }
+
     private func deleteSelectedRange() {
         guard canEditHistory, !showsMarkerEditor, let selection = selectedRange else { return }
         isPlaying = false
@@ -1127,6 +1203,7 @@ struct StitchingEditorView<FileList: View>: View {
         scrubTask = nil
         pendingScrubTime = nil
         let time = sequenceTime
+        preserveTimelineScale()
         StitchingTimeline.deleteRange(&group.items, id: selection.id, range: selection.bounds)
         selectedRange = nil
         group.lastSortMode = nil
@@ -1465,7 +1542,7 @@ private struct StitchingSequencePreview: View {
     let onZoom: (Int) -> Void
     let onAddMarker: () -> Void
     let onSplit: () -> Void
-    let onDeleteRange: () -> Void
+    let onDeleteSelection: () -> Void
     let onClearRange: () -> Bool
     let onToggleRange: () -> Void
     let onUndo: () -> Void
@@ -1481,7 +1558,7 @@ private struct StitchingSequencePreview: View {
     @State private var preparedID: UUID?
 
     init(item: Binding<VideoItem>, initialTime: Double, seekRequest: StitchingSeek, isPlaying: Binding<Bool>, audioTrack: Binding<Int>, shuttleRate: Float,
-         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onDeleteRange: @escaping () -> Void, onClearRange: @escaping () -> Bool, onToggleRange: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
+         onTime: @escaping (Double) -> Void, onTogglePlayback: @escaping () -> Void, onShuttle: @escaping (Int) -> Void, onFit: @escaping () -> Void, onZoom: @escaping (Int) -> Void, onAddMarker: @escaping () -> Void, onSplit: @escaping () -> Void, onDeleteSelection: @escaping () -> Void, onClearRange: @escaping () -> Bool, onToggleRange: @escaping () -> Void, onUndo: @escaping () -> Void, onRedo: @escaping () -> Void, onRippleTrim: @escaping (Bool) -> Void, onFinished: @escaping () -> Void, onAssets: @escaping ([URL]) -> Void) {
         _item = item
         self.initialTime = initialTime
         self.seekRequest = seekRequest
@@ -1495,7 +1572,7 @@ private struct StitchingSequencePreview: View {
         self.onZoom = onZoom
         self.onAddMarker = onAddMarker
         self.onSplit = onSplit
-        self.onDeleteRange = onDeleteRange
+        self.onDeleteSelection = onDeleteSelection
         self.onClearRange = onClearRange
         self.onToggleRange = onToggleRange
         self.onUndo = onUndo
@@ -1563,7 +1640,7 @@ private struct StitchingSequencePreview: View {
             case "j": onShuttle(-1)
             case "k": onShuttle(0)
             case "l": onShuttle(1)
-            case "\u{7f}", "\u{08}": onDeleteRange()
+            case "\u{7f}", "\u{08}": onDeleteSelection()
             case "r": onToggleRange()
             case "m": onAddMarker()
             case "q": onRippleTrim(true)

@@ -335,24 +335,26 @@ struct SourceAudioMeterPanel: View {
             if (stream?.channels ?? 0) > 8 {
                 Text("Channels 1–8 of \(stream?.channels ?? 0)").font(.caption2)
             }
-            Picker("Track", selection: Binding(
-                get: { selectedGroup?.id ?? -1 },
-                set: { id in
-                    guard let group = groups.first(where: { $0.id == id }),
-                          !group.tracks.contains(streamIndex ?? -1) else { return }
-                    selectTrack(group.id)
+            if let selectedGroup {
+                Picker("Track", selection: Binding(
+                    get: { selectedGroup.id },
+                    set: { id in
+                        guard let group = groups.first(where: { $0.id == id }),
+                              !group.tracks.contains(streamIndex ?? -1) else { return }
+                        selectTrack(group.id)
+                    }
+                )) {
+                    ForEach(groups) { group in
+                        Text(groupTitle(group)).tag(group.id)
+                    }
                 }
-            )) {
-                ForEach(groups) { group in
-                    Text(groupTitle(group)).tag(group.id)
-                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .disabled(groups.count < 2)
+                .accessibilityLabel("Meter and preview audio track")
+                .accessibilityIdentifier("stitching.audioTrack")
+                .help("Select the audio track for preview playback and metering.")
             }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .disabled(groups.count < 2)
-            .accessibilityLabel("Meter and preview audio track")
-            .accessibilityIdentifier("stitching.audioTrack")
-            .help("Select the audio track for preview playback and metering.")
         }
         .padding(8)
         .frame(width: min(300, max(156, CGFloat(labels.count) * 18 + 32)))

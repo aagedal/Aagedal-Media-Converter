@@ -89,15 +89,15 @@ actor TimelineKeyframeService {
             try Task.checkCancellation()
             return cached
         }
-        let cancellation = ReaderCancellation()
+        let interruption = ScanInterruption()
         let task = Task.detached(priority: .utility) {
-            try await Self.read(url: url, trackOrdinal: videoTrackOrdinal, range: bounded, cancellation: cancellation)
+            try await Self.read(url: url, trackOrdinal: videoTrackOrdinal, range: bounded, interruption: interruption)
         }
         var result = try await withTaskCancellationHandler {
             try await task.value
         } onCancel: {
             task.cancel()
-            cancellation.cancel()
+            interruption.request()
         }
         try Task.checkCancellation()
         guard SourceIdentity.read(url) == identity else {
@@ -167,7 +167,7 @@ actor TimelineKeyframeService {
     }
 
     private static func read(url: URL, trackOrdinal: Int,
-                             range: ClosedRange<Double>, cancellation: ReaderCancellation) async throws -> TimelineKeyframeScan {
+                             range: ClosedRange<Double>, interruption: ScanInterruption) async throws -> TimelineKeyframeScan {
         let asset = AVURLAsset(url: url)
         // CMTimeRange ends are exclusive. Do not claim that a keyframe exactly
         // at the requested upper boundary has been inspected by this reader.
@@ -179,8 +179,9 @@ actor TimelineKeyframeService {
                 return TimelineKeyframeScan(times: [], scannedRange: nil, status: .unavailable)
             }
             let reader = try AVAssetReader(asset: asset)
-            cancellation.install(reader)
-            defer { cancellation.finish() }
+            // AVAssetReader is confined to this task. Calling cancelReading from
+            // another task can race with copyNextSampleBuffer inside AVFoundation.
+            defer { if reader.status == .reading { reader.cancelReading() } }
             try Task.checkCancellation()
             reader.timeRange = CMTimeRange(start: CMTime(seconds: range.lowerBound, preferredTimescale: 600_000),
                                           duration: CMTime(seconds: range.upperBound - range.lowerBound,
@@ -194,16 +195,19 @@ actor TimelineKeyframeService {
             guard reader.startReading() else {
                 return TimelineKeyframeScan(times: [], scannedRange: nil, status: .unavailable)
             }
-            cancellation.didStartReading()
             let deadline = ContinuousClock.now.advanced(by: .seconds(8))
             let watchdog = Task {
-                do { try await Task.sleep(for: .seconds(8)); cancellation.cancel() } catch {}
+                do { try await Task.sleep(for: .seconds(8)); interruption.request() } catch {}
             }
             defer { watchdog.cancel() }
             var times: [Double] = []
             var samples = 0
-            while let sample = output.copyNextSampleBuffer() {
+            while true {
                 try Task.checkCancellation()
+                if interruption.requested {
+                    return TimelineKeyframeScan(times: Array(Set(times)).sorted(), scannedRange: coverage, status: .partial)
+                }
+                guard let sample = output.copyNextSampleBuffer() else { break }
                 samples += 1
                 guard samples <= 100_000, ContinuousClock.now < deadline else {
                     return TimelineKeyframeScan(times: Array(Set(times)).sorted(), scannedRange: coverage, status: .partial)
@@ -227,56 +231,21 @@ actor TimelineKeyframeService {
     }
 }
 
-/// AVAssetReader cancellation must also reach an active compressed-sample read.
-/// A reader is only cancelled after startReading succeeds, and at most once:
-/// AVFoundation can crash when cancellation races with cleanup on another task.
-private final class ReaderCancellation: @unchecked Sendable {
+/// Cancellation and the watchdog only signal the scanning task. Reader teardown
+/// must happen on that task, after copyNextSampleBuffer has returned.
+private final class ScanInterruption: @unchecked Sendable {
     private let lock = NSLock()
-    private var reader: AVAssetReader?
-    private var started = false
-    private var cancelled = false
-    private var cancelIssued = false
+    private var isRequested = false
 
-    func install(_ reader: AVAssetReader) {
+    var requested: Bool {
         lock.lock()
-        self.reader = reader
-        lock.unlock()
+        defer { lock.unlock() }
+        return isRequested
     }
 
-    func didStartReading() {
+    func request() {
         lock.lock()
-        started = true
-        let current = readerToCancelIfNeeded()
+        isRequested = true
         lock.unlock()
-        current?.cancelReading()
-    }
-
-    func cancel() {
-        lock.lock()
-        cancelled = true
-        let current = readerToCancelIfNeeded()
-        lock.unlock()
-        current?.cancelReading()
-    }
-
-    func finish() {
-        lock.lock()
-        let current: AVAssetReader?
-        if started, !cancelIssued, reader?.status == .reading {
-            cancelIssued = true
-            current = reader
-        } else {
-            current = nil
-        }
-        reader = nil
-        lock.unlock()
-        current?.cancelReading()
-    }
-
-    /// Called with the lock held. Only active readers can be interrupted.
-    private func readerToCancelIfNeeded() -> AVAssetReader? {
-        guard started, cancelled, !cancelIssued else { return nil }
-        cancelIssued = true
-        return reader
     }
 }

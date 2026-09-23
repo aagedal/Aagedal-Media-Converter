@@ -82,10 +82,26 @@ final class TimelineKeyframeServiceTests: XCTestCase {
     }
 
     func testRapidCancellationWithRealMedia() async throws {
-        guard let input = ProcessInfo.processInfo.environment["TIMELINE_KEYFRAME_STRESS_INPUT"] else {
-            throw XCTSkip("Set TIMELINE_KEYFRAME_STRESS_INPUT to a media file to exercise reader cancellation")
+        let url: URL
+        var generatedURL: URL?
+        defer { if let generatedURL { try? FileManager.default.removeItem(at: generatedURL) } }
+        if let input = ProcessInfo.processInfo.environment["TIMELINE_KEYFRAME_STRESS_INPUT"] {
+            url = URL(fileURLWithPath: input)
+        } else {
+            guard let executable = Bundle.main.url(forResource: "ffmpeg", withExtension: nil) else {
+                throw XCTSkip("Bundled ffmpeg unavailable in this test host")
+            }
+            url = FileManager.default.temporaryDirectory.appendingPathComponent("keyframe-cancellation-\(UUID()).mov")
+            generatedURL = url
+            let request = SubprocessRequest(executableURL: executable, arguments: [
+                "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                "testsrc2=size=320x180:rate=60:duration=30", "-c:v", "libx264",
+                "-preset", "ultrafast", "-g", "60", "-y", url.path
+            ], timeout: .seconds(30))
+            let generated = try await SubprocessRunner().run(request)
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+            guard generated.succeeded else { return }
         }
-        let url = URL(fileURLWithPath: input)
         let duration = try await AVURLAsset(url: url).load(.duration).seconds
         let service = TimelineKeyframeService()
         for index in 0..<20 {
