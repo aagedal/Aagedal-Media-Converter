@@ -3951,6 +3951,18 @@ final class ApplicationJobContractTests: XCTestCase {
             )
             XCTAssertEqual(record.outputURLs, [plannedURL])
             XCTAssertTrue(FileManager.default.fileExists(atPath: plannedURL.path))
+            let inspection = try await ApplicationMediaInspector.live.inspect(plannedURL)
+            XCTAssertEqual(inspection.videoStreams.count, videoCodec == nil ? 0 : 1, presetID.rawValue)
+            XCTAssertEqual(inspection.audioStreams.count, 1, presetID.rawValue)
+            XCTAssertEqual(inspection.audioStreams.first?.sampleRate, 48_000, presetID.rawValue)
+            XCTAssertEqual(inspection.audioStreams.first?.channels, 1, presetID.rawValue)
+            if videoCodec != nil {
+                let expectedDimensions = presetID == .proxy ? (1440, 1080) : (64, 48)
+                XCTAssertEqual(inspection.videoStreams.first?.width, expectedDimensions.0, presetID.rawValue)
+                XCTAssertEqual(inspection.videoStreams.first?.height, expectedDimensions.1, presetID.rawValue)
+                XCTAssertEqual(inspection.frameCount, 24, presetID.rawValue)
+            }
+            XCTAssertEqual(inspection.durationSeconds ?? 0, 1, accuracy: 0.1, presetID.rawValue)
             let metadata = try runBundledFFmpeg([
                 "-hide_banner", "-i", plannedURL.path,
                 "-map", "0", "-f", "null", "-"
@@ -3961,6 +3973,23 @@ final class ApplicationJobContractTests: XCTestCase {
                 XCTAssertFalse(metadata.contains("Video:"), metadata)
             }
             XCTAssertTrue(metadata.contains("Audio: \(audioCodec)"), metadata)
+
+            // A decodable audio stream can still be silent or contain the wrong
+            // channel. Verify the interior of the generated 440 Hz tone.
+            let pcmURL = destinationURL.appendingPathComponent("decoded-audio.pcm")
+            try runBundledFFmpeg([
+                "-v", "error", "-xerror", "-i", plannedURL.path, "-map", "0:a:0",
+                "-ar", "48000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "s16le", pcmURL.path
+            ])
+            let pcm = try Data(contentsOf: pcmURL)
+            let samples = stride(from: 0, to: pcm.count - 1, by: 2).map { offset in
+                Int16(bitPattern: UInt16(pcm[offset]) | UInt16(pcm[offset + 1]) << 8)
+            }
+            XCTAssertGreaterThanOrEqual(samples.count, 36_000, presetID.rawValue)
+            guard samples.count >= 36_000 else { continue }
+            let interior = samples[12_000..<36_000]
+            let crossings = zip(interior, interior.dropFirst()).filter { $0 < 0 && $1 >= 0 }.count
+            XCTAssertEqual(Double(crossings), 220, accuracy: 2, presetID.rawValue)
         }
     }
 
