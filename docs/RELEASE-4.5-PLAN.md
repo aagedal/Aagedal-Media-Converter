@@ -1052,6 +1052,17 @@ tests pass, and the updated unsigned Release archive passes the static
 45-image/12-notice bundle audit. These checks are recorded in the
 [September 23 continuation](4.5-continuation-2026-09-23.md).
 
+The MCP helper now polls for the app endpoint while Launch Services completes
+its cold-launch callback. A pending launch has a 30-second bound, and an app
+that launched without enabling Agent Access has ten more seconds to expose its
+endpoint. The focused packaged helper test passes, but the installed
+named-client cold-launch case still needs a successful rerun. See the
+[helper launch validation](4.5-helper-launch-poll-validation-2026-09-23.md).
+The full captured Settings screenshot set was reviewed; a missing Norwegian
+stitch-marker explanation was translated. An unrelated permission prompt
+obscured 13 Norwegian captures, which still need clean visual review. See the
+[locale UI continuation](4.5-locale-ui-validation-2026-09-23.md).
+
 Remaining priorities: validate stitching with broader real media and decoder-loading
 stress; exercise full Claude Code, Codex, and OpenCode workflows after resolving
 the OpenCode installation issue; validate actual OS-level grant revocation/lost

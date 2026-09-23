@@ -300,7 +300,9 @@ private final class MCPStdioServer {
 private struct AppIPCClient {
     func send(_ request: [String: Any]) throws -> [String: Any] {
         let requestData = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
-        for attempt in 0..<51 {
+        var launchResult: LockedLaunchResult?
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        while true {
             if let remote = CFMessagePortCreateRemote(nil, ipcPortName as CFString) {
                 var responseData: Unmanaged<CFData>?
                 let status = CFMessagePortSendRequest(
@@ -323,14 +325,27 @@ private struct AppIPCClient {
                 return response
             }
 
-            if attempt == 0 { try launchApplication() }
-            Thread.sleep(forTimeInterval: 0.2)
+            if launchResult == nil {
+                launchResult = try launchApplication()
+            }
+            let now = ProcessInfo.processInfo.systemUptime
+            // A successful launch can still have a disabled endpoint. While
+            // Launch Services is pending, allow slower cold starts to finish.
+            if let outcome = launchResult?.outcome {
+                if outcome.hasError { throw HelperError.appLaunchFailed }
+                guard now - outcome.completedAt < 10 else { throw HelperError.accessDisabled }
+            } else {
+                guard now - startedAt < 30 else { throw HelperError.launchTimedOut }
+            }
+            // The stdio server uses the main thread, where NSWorkspace may
+            // deliver its completion callback. Keep that run loop responsive.
+            if !RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.2)) {
+                Thread.sleep(forTimeInterval: 0.2)
+            }
         }
-
-        throw HelperError.accessDisabled
     }
 
-    private func launchApplication() throws {
+    private func launchApplication() throws -> LockedLaunchResult {
         let helperURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let appURL = helperURL
             .deletingLastPathComponent()
@@ -341,39 +356,28 @@ private struct AppIPCClient {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.allowsRunningApplicationSubstitution = false
-        let completion = DispatchSemaphore(value: 0)
         let launchResult = LockedLaunchResult()
         NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
             launchResult.store(hasError: error != nil)
-            completion.signal()
         }
-        let deadline = Date().addingTimeInterval(10)
-        while completion.wait(timeout: .now()) != .success {
-            guard Date() < deadline else { throw HelperError.launchTimedOut }
-            // MCPStdioServer runs on the main thread. Keep its run loop alive so
-            // NSWorkspace can deliver a main-thread completion handler.
-            if !RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05)) {
-                Thread.sleep(forTimeInterval: 0.05)
-            }
-        }
-        if launchResult.hasError { throw HelperError.appLaunchFailed }
+        return launchResult
     }
 }
 
 private final class LockedLaunchResult: @unchecked Sendable {
     private let lock = NSLock()
-    private var storedHasError = false
+    private var storedOutcome: (hasError: Bool, completedAt: TimeInterval)?
 
-    var hasError: Bool {
+    var outcome: (hasError: Bool, completedAt: TimeInterval)? {
         lock.lock()
         defer { lock.unlock() }
-        return storedHasError
+        return storedOutcome
     }
 
     func store(hasError: Bool) {
         lock.lock()
         defer { lock.unlock() }
-        storedHasError = hasError
+        storedOutcome = (hasError, ProcessInfo.processInfo.systemUptime)
     }
 }
 
