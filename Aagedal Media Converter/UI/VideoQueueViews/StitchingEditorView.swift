@@ -391,9 +391,13 @@ struct StitchingEditorView<FileList: View>: View {
         StitchingTimeline.sequenceTimeDisplay(seconds, frameRate: sequenceFrameRate, startTimecode: sequenceStartTimecode)
     }
     private var sequenceTimecodeHelp: String {
-        if sequenceFrameRate == nil { return "Relative time · mixed or unknown frame rates" }
-        if sequenceStartTimecode == nil { return "Relative timecode · no starting timecode on the first clip" }
-        return "Output timecode follows the first clip’s settings. Reordering the first clip changes the timeline timecode. The value after / is the sequence duration."
+        if sequenceFrameRate == nil {
+            return String(localized: "Relative time · mixed or unknown frame rates")
+        }
+        if sequenceStartTimecode == nil {
+            return String(localized: "Relative timecode · no starting timecode on the first clip")
+        }
+        return String(localized: "Output timecode follows the first clip’s settings. Reordering the first clip changes the timeline timecode. The value after / is the sequence duration.")
     }
     private var sourceTotal: Double {
         max(1, group.items.reduce(0) { $0 + ($1.durationSeconds.isFinite ? max(0, $1.durationSeconds) : 0) })
@@ -899,8 +903,8 @@ struct StitchingEditorView<FileList: View>: View {
                                         .frame(width: 18, height: 22)
                                 }
                                 .buttonStyle(.plain)
-                                .help("Marked: " + marker.text)
-                                .accessibilityLabel("Marked: " + marker.text)
+                                .help(String(localized: "Marked: \(marker.text)"))
+                                .accessibilityLabel(Text("Marked: \(marker.text)"))
                                 .accessibilityIdentifier("stitching.marker")
                                 .offset(x: max(0, (offset(index) + marker.sourceTime - item.effectiveTrimStart) * scale - 9), y: 7)
                             }
