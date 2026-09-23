@@ -77,4 +77,8 @@ fastlane/test_output
 
 # Claude Code
 .claude/
-docs/growing-file-research/tools/__pycache__/
+
+# Python tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
