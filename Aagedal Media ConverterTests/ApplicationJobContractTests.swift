@@ -2999,7 +2999,7 @@ final class ApplicationJobContractTests: XCTestCase {
                 ApplicationAgentToolFailure(error: error),
                 ApplicationAgentToolFailure(
                     code: .sourceAccessDenied,
-                    message: "Access to the source has not been approved in the app: clip.mov."
+                    message: "Access to the source has not been approved in the app: clip.mov. Add its folder in Agent Access settings or import the file, then retry."
                 )
             )
         }

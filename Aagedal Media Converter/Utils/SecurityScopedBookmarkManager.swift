@@ -19,10 +19,14 @@ enum SecurityScopedAccess: Sendable {
 
 final class SecurityScopedBookmarkManager: @unchecked Sendable {
     static let shared = SecurityScopedBookmarkManager()
+    static let agentSourceFolders = SecurityScopedBookmarkManager(
+        bookmarksKey: "agentSourceFolderBookmarks",
+        readOnlyKey: "agentSourceFolderBookmarksReadOnly"
+    )
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "BookmarkManager")
     private let userDefaults: UserDefaults
-    private let bookmarksKey = "securityScopedBookmarks"
-    private let readOnlyKey = "securityScopedBookmarksReadOnly"
+    private let bookmarksKey: String
+    private let readOnlyKey: String
     private let lock = NSRecursiveLock()
     private var activeBookmarks: [URL: (url: URL, count: Int)] = [:]
     private let createBookmark: (URL, URL.BookmarkCreationOptions) throws -> Data
@@ -32,6 +36,8 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
 
     init(
         defaults: UserDefaults = .standard,
+        bookmarksKey: String = "securityScopedBookmarks",
+        readOnlyKey: String = "securityScopedBookmarksReadOnly",
         createBookmark: @escaping (URL, URL.BookmarkCreationOptions) throws -> Data = {
             try $0.bookmarkData(options: $1, includingResourceValuesForKeys: nil, relativeTo: nil)
         },
@@ -45,6 +51,8 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         stopScope: @escaping (URL) -> Void = { $0.stopAccessingSecurityScopedResource() }
     ) {
         userDefaults = defaults
+        self.bookmarksKey = bookmarksKey
+        self.readOnlyKey = readOnlyKey
         self.createBookmark = createBookmark
         self.resolveData = resolveData
         self.startScope = startScope
@@ -53,6 +61,34 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
 
     func saveBookmark(for url: URL) -> Bool {
         saveBookmark(for: url, storageURL: url, readOnly: true)
+    }
+
+    /// Paths selected for this manager's stored folder grants. A missing volume
+    /// remains listed so the user can reconnect it or remove the approval.
+    func storedFolderURLs() -> [URL] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey) else { return [] }
+        return bookmarks.compactMap { key, value in
+            guard value is Data, let url = URL(string: key), url.isFileURL else { return nil }
+            return url
+        }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    /// Removes future access. A lease already held by a running job is released
+    /// by its owner when that job finishes.
+    @discardableResult
+    func removeBookmark(for url: URL) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let key = url.standardizedFileURL.absoluteString
+        guard var bookmarks = try? storedDictionary(forKey: bookmarksKey),
+              var modes = try? storedDictionary(forKey: readOnlyKey) else { return false }
+        bookmarks.removeValue(forKey: key)
+        modes.removeValue(forKey: key)
+        userDefaults.set(bookmarks, forKey: bookmarksKey)
+        userDefaults.set(modes, forKey: readOnlyKey)
+        return true
     }
 
     /// Saves a security-scoped bookmark that allows both read and write access.

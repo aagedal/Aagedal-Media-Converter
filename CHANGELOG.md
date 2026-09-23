@@ -22,6 +22,10 @@ signed Release-package validation are still open.
 
 ## Local agent access
 
+- Added persistent approved source folders in Agent Access settings. A selected
+  folder gives local MCP clients read access to files in its subfolders; removing
+  it revokes that folder grant for future requests. Output folders still require
+  their own writable approval.
 - Added stable identifiers for the initial H.264, HEVC, ProRes, Proxy, Audio Only,
   and Stream Copy agent preset subset.
 - Added a versioned conversion submission and job record contract with explicit

@@ -217,6 +217,40 @@ final class SecurityScopedBookmarkManagerTests: XCTestCase {
         XCTAssertEqual(stops, [directory])
     }
 
+    func testAgentFolderApprovalPersistsForDescendantsAndRemovalRevokesIt() throws {
+        let defaults = try isolatedDefaults()
+        let folder = URL(fileURLWithPath: "/Users/test/Movies", isDirectory: true)
+        let nestedSource = folder.appendingPathComponent("Sony/CLIP/recording.mp4")
+        let adjacentSource = URL(fileURLWithPath: "/Users/test/Movies-Other/recording.mp4")
+        let makeManager = {
+            SecurityScopedBookmarkManager(
+                defaults: defaults,
+                bookmarksKey: "agentSourceFolderBookmarks",
+                readOnlyKey: "agentSourceFolderBookmarksReadOnly",
+                createBookmark: { _, _ in Data([1]) },
+                resolveData: { _ in (folder, false) },
+                startScope: { _ in true },
+                stopScope: { _ in }
+            )
+        }
+        let selected = makeManager()
+        XCTAssertTrue(selected.saveBookmark(for: folder))
+
+        let relaunched = makeManager()
+        XCTAssertEqual(relaunched.storedFolderURLs(), [folder])
+        let authorizer = ApplicationFileAccessAuthorizer.storedBookmarks(
+            using: SecurityScopedBookmarkManager(defaults: defaults),
+            additionalReadFolders: relaunched
+        )
+        XCTAssertNotNil(authorizer.acquire(nestedSource, .read))
+        XCTAssertNil(authorizer.acquire(nestedSource, .write))
+        XCTAssertNil(authorizer.acquire(adjacentSource, .read))
+
+        XCTAssertTrue(relaunched.removeBookmark(for: folder))
+        XCTAssertTrue(relaunched.storedFolderURLs().isEmpty)
+        XCTAssertNil(authorizer.acquire(nestedSource, .read))
+    }
+
     func testReadOnlyStoredBookmarkCannotAuthorizeWritableDestination() throws {
         let defaults = try isolatedDefaults()
         let directory = URL(fileURLWithPath: "/selected/read-only", isDirectory: true)

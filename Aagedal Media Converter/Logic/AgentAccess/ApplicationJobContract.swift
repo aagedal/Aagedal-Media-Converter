@@ -2239,9 +2239,15 @@ struct ApplicationFileAccessAuthorizer: Sendable {
 
     let acquire: Acquire
 
-    static let live = storedBookmarks(using: .shared)
+    static let live = storedBookmarks(
+        using: .shared,
+        additionalReadFolders: .agentSourceFolders
+    )
 
-    static func storedBookmarks(using manager: SecurityScopedBookmarkManager) -> Self {
+    static func storedBookmarks(
+        using manager: SecurityScopedBookmarkManager,
+        additionalReadFolders: SecurityScopedBookmarkManager? = nil
+    ) -> Self {
         ApplicationFileAccessAuthorizer { url, mode in
             let access = manager.startAccessingStoredBookmark(
                 containing: url,
@@ -2250,6 +2256,17 @@ struct ApplicationFileAccessAuthorizer: Sendable {
             guard case .none = access else {
                 return ApplicationFileAccessLease {
                     manager.stopAccessing(access)
+                }
+            }
+            if mode == .read, let additionalReadFolders {
+                let folderAccess = additionalReadFolders.startAccessingStoredBookmark(
+                    containing: url,
+                    requiresWriteAccess: false
+                )
+                guard case .none = folderAccess else {
+                    return ApplicationFileAccessLease {
+                        additionalReadFolders.stopAccessing(folderAccess)
+                    }
                 }
             }
             return nil
@@ -3577,13 +3594,13 @@ private extension ApplicationJobError {
         case .sourceUnavailable(let url):
             "The source file is unavailable: \(url.lastPathComponent)."
         case .sourceAccessDenied(let url):
-            "Access to the source has not been approved in the app: \(url.lastPathComponent)."
+            "Access to the source has not been approved in the app: \(url.lastPathComponent). Add its folder in Agent Access settings or import the file, then retry."
         case .sourceChanged(let url):
             "The source changed after planning: \(url.lastPathComponent)."
         case .destinationUnavailable:
             "The destination folder is unavailable or not writable."
         case .destinationAccessDenied:
-            "Writable access to the destination has not been approved in the app."
+            "Writable access to the destination has not been approved in the app. Choose the output folder in Aagedal Media Converter, then retry."
         case .unsupportedSourceExtension(let url):
             "The source has no usable extension for stream copy: \(url.lastPathComponent)."
         case .duplicateOutput(let url):

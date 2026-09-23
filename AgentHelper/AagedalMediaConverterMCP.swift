@@ -102,7 +102,7 @@ private final class MCPStdioServer {
                 "name": "Aagedal Media Converter",
                 "version": "4.5.0"
             ],
-            "instructions": "Grant source and destination folder access in Aagedal Media Converter before planning conversions."
+            "instructions": "Add source folders in Aagedal Media Converter Settings > Agent Access > Approved source folders, and choose a writable output folder in the app before planning conversions."
         ])
     }
 

@@ -18,6 +18,12 @@ Created: 2026-09-11.
 The development metadata is **4.5.0 (582)**. This is not a frozen or
 signed release candidate.
 
+Agent Access settings now let users save and remove approved source folders for
+local MCP reads, including descendant files. The folders use a separate bookmark
+store from other app features; output write access remains a separate approval.
+The named-client matrix still needs a real approved-folder conversion and a
+revocation/reconnect check against a packaged build.
+
 ## Implementation progress — through 2026-09-22
 
 The first shared-boundary increment is implemented without selecting an IPC

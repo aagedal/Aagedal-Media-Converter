@@ -1,234 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Review recording-date groups…" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Se gjennom grupper etter opptaksdato …" } } }
-    },
-    "Reading recording metadata…" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Leser opptaksmetadata …" } } }
-    },
-    "Review recording-date groups" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Se gjennom grupper etter opptaksdato" } } }
-    },
-    "Dates use %@. Camera dates take precedence over container dates. Files without either date stay together in their own consecutive groups. Mark every segment that continues the recording above it before importing." : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Datoer bruker tidssonen %@. Kameradatoer går foran containerdatoer. Filer uten noen av datoene holdes samlet i egne sammenhengende grupper. Merk hvert segment som fortsetter opptaket over før du importerer." } } }
-    },
-    "Grouping" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Gruppering" } } }
-    },
-    "Split by recording day" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Del etter opptaksdag" } } }
-    },
-    "Keep single group" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Behold én gruppe" } } }
-    },
-    "Also split after gaps longer than two hours" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Del også ved opphold på mer enn to timer" } } }
-    },
-    "Continues previous recording" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Fortsetter forrige opptak" } } }
-    },
-    "Date unknown" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Ukjent dato" } } }
-    },
-    "Proposed groups: %lld" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Foreslåtte grupper: %lld" } } }
-    },
-    "Group %lld: %lld clips" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Gruppe %lld: %lld klipp" } } }
-    },
-    "Format metadata incomplete; this group will import without concatenation." : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Formatmetadata mangler; denne gruppen importeres uten sammenføyning." } } }
-    },
-    "Formats conflict; this group will import without concatenation." : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Formatene er ulike; denne gruppen importeres uten sammenføyning." } } }
-    },
-    "A multi-file recording has incompatible or incomplete format metadata. Resolve its continuation marks or import the card without date splitting." : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Et opptak med flere filer har ulike eller ufullstendige formatmetadata. Rett merkene for fortsettelse, eller importer kortet uten datodeling." } } }
-    },
-    "Import proposed groups" : {
-      "localizations" : { "nb" : { "stringUnit" : { "state" : "translated", "value" : "Importer foreslåtte grupper" } } }
-    },
-    "Help count active installations" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hjelp oss å telle aktive installasjoner"
-          }
-        }
-      }
-    },
-    "An anonymous count helps us understand whether Aagedal Media Converter is being used and guides development. If you allow it, this Mac sends one random weekly token at most once per day when the app opens." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En anonym telling hjelper oss å forstå om Aagedal Media Converter blir brukt, og gir retning for utviklingen. Hvis du tillater det, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes."
-          }
-        }
-      }
-    },
-    "Example data sent: {\"token\": \"a weekly random-looking value\"}. No files, paths, media details, conversion activity, account details, hardware IDs, or OS details are included." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eksempel på data som sendes: {\"token\": \"en tilfeldig utseende ukekode\"}. Ingen filer, filbaner, mediedetaljer, konverteringsaktivitet, kontoopplysninger, maskinvare-ID-er eller OS-detaljer er inkludert."
-          }
-        }
-      }
-    },
-    "The count is for active installations, not people. You can change this choice in General Settings at any time." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tellingen gjelder aktive installasjoner, ikke personer. Du kan endre valget når som helst i Generelle innstillinger."
-          }
-        }
-      }
-    },
-    "Don't send data" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ikke send data"
-          }
-        }
-      }
-    },
-    "Allow anonymous usage count" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tillat anonym brukstelling"
-          }
-        }
-      }
-    },
-    "Anonymous usage count" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anonym brukstelling"
-          }
-        }
-      }
-    },
-    "When enabled, this Mac sends one random weekly token at most once per day when the app opens. It contains no files, paths, media, conversion, account, hardware, or OS details. This counts active installations, not people." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Når dette er slått på, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes. Den inneholder ingen filer, filbaner, medier, konverteringer, kontoopplysninger, maskinvare- eller OS-detaljer. Dette teller aktive installasjoner, ikke personer."
-          }
-        }
-      }
-    },
-    "Requested end: %@": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ønsket slutt: %@"
-          }
-        }
-      }
-    },
-    "Keyframe at or after end: %@ (%@ s later). This does not predict the exported end.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nøkkelbilde ved eller etter slutten: %@ (%@ s senere). Dette forutsier ikke slutten på eksporten."
-          }
-        }
-      }
-    },
-    "No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fant ikke noe påfølgende nøkkelbilde i det undersøkte området. Slutten på eksporten kan ikke anslås ut fra nøkkelbilder."
-          }
-        }
-      }
-    },
-    "Requested start: %@": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ønsket start: %@"
-          }
-        }
-      }
-    },
-    "Estimated seek point: %@ (%@ s earlier). Export can differ.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anslått søkepunkt: %@ (%@ s tidligere). Eksporten kan avvike."
-          }
-        }
-      }
-    },
-    "Seek estimate unavailable near this cut.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Søkeanslag er ikke tilgjengelig nær dette klippet."
-          }
-        }
-      }
-    },
-    "Keyframe candidates: %lld" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kandidater for nøkkelbilder: %lld"
-          }
-        }
-      }
-    },
-    "DVD subtitle color palette is invalid. OCR requires 16 comma-separated RGB colors with six hexadecimal digits each." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "DVD-undertekstenes fargepalett er ugyldig. OCR krever 16 kommaseparerte RGB-farger med seks heksadesimale sifre hver."
-          }
-        }
-      }
-    },
-    "DVD subtitle color palette is missing. OCR requires the original 16-color palette; use a source that includes it." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "DVD-undertekstenes fargepalett mangler. OCR krever den opprinnelige paletten med 16 farger. Bruk en kilde som inneholder den."
-          }
-        }
-      }
-    },
-    "Editing directly from removable media can be slow, especially for long recordings. For smoother editing, copy the card to local storage first. You can also continue importing from the card." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Redigering direkte fra flyttbare medier kan være tregt, særlig for lange opptak. Kopier kortet til lokal lagring først for jevnere redigering. Du kan også fortsette å importere fra kortet."
-          }
-        }
-      }
-    },
     "" : {
       "shouldTranslate" : false
     },
@@ -1463,6 +1235,16 @@
         }
       }
     },
+    "A multi-file recording has incompatible or incomplete format metadata. Resolve its continuation marks or import the card without date splitting." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Et opptak med flere filer har ulike eller ufullstendige formatmetadata. Rett merkene for fortsettelse, eller importer kortet uten datodeling."
+          }
+        }
+      }
+    },
     "AAC is widely compatible. PCM is uncompressed lossless." : {
       "localizations" : {
         "nb" : {
@@ -1822,6 +1604,16 @@
         }
       }
     },
+    "Add Source Folder…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til kildemappe …"
+          }
+        }
+      }
+    },
     "Add the selected video files to the Aagedal VideoLoop Converter queue." : {
       "comment" : "Description of the \"Add to Encode Queue\" app intent.",
       "isCommentAutoGenerated" : true,
@@ -2008,6 +1800,16 @@
         }
       }
     },
+    "Allow anonymous usage count" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tillat anonym brukstelling"
+          }
+        }
+      }
+    },
     "Allow local MCP clients to use Aagedal Media Converter" : {
       "localizations" : {
         "nb" : {
@@ -2054,12 +1856,32 @@
         }
       }
     },
+    "Also split after gaps longer than two hours" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del også ved opphold på mer enn to timer"
+          }
+        }
+      }
+    },
     "Alternative: Install via Homebrew (Recommended)" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alternativ: Installer via Homebrew (anbefalt)"
+          }
+        }
+      }
+    },
+    "An anonymous count helps us understand whether Aagedal Media Converter is being used and guides development. If you allow it, this Mac sends one random weekly token at most once per day when the app opens." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En anonym telling hjelper oss å forstå om Aagedal Media Converter blir brukt, og gir retning for utviklingen. Hvis du tillater det, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes."
           }
         }
       }
@@ -2163,6 +1985,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Merknad"
+          }
+        }
+      }
+    },
+    "Anonymous usage count" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anonym brukstelling"
           }
         }
       }
@@ -2350,6 +2182,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bekreft beskjæring"
+          }
+        }
+      }
+    },
+    "Approve Folder" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjenn mappe"
+          }
+        }
+      }
+    },
+    "Approved source folders" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjente kildemapper"
           }
         }
       }
@@ -3322,6 +3174,16 @@
         }
       }
     },
+    "By default, stitched output starts at the first clip’s source timecode plus its trim-in offset. Enable this to use its original starting timecode. Manual timecode is always used exactly as entered." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Som standard starter sammenføyd video på det første klippets kildetidskode pluss inntrimforskyvningen. Slå på dette for å bruke klippets opprinnelige starttidskode. Manuell tidskode brukes alltid nøyaktig som angitt."
+          }
+        }
+      }
+    },
     "Cached models: %lld" : {
       "comment" : "A label that shows the number of cached models. The argument is the number of cached models.",
       "isCommentAutoGenerated" : true,
@@ -3785,6 +3647,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sjekker …"
+          }
+        }
+      }
+    },
+    "Choose a folder whose files and subfolders local MCP clients may read." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg en mappe der lokale MCP-klienter kan lese filene og undermappene."
           }
         }
       }
@@ -4562,6 +4434,16 @@
         }
       }
     },
+    "Continues previous recording" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortsetter forrige opptak"
+          }
+        }
+      }
+    },
     "Control + R to load a new random tip" : {
       "comment" : "A footnote",
       "isCommentAutoGenerated" : true,
@@ -5272,6 +5154,16 @@
         }
       }
     },
+    "Could not save folder access" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke lagre mappetilgang"
+          }
+        }
+      }
+    },
     "Could not start" : {
       "localizations" : {
         "nb" : {
@@ -5784,6 +5676,16 @@
         }
       }
     },
+    "Date unknown" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ukjent dato"
+          }
+        }
+      }
+    },
     "Date:" : {
       "comment" : "A label for the date of the report.",
       "isCommentAutoGenerated" : true,
@@ -5792,6 +5694,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dato:"
+          }
+        }
+      }
+    },
+    "Dates use %@. Camera dates take precedence over container dates. Files without either date stay together in their own consecutive groups. Mark every segment that continues the recording above it before importing." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datoer bruker tidssonen %@. Kameradatoer går foran containerdatoer. Filer uten noen av datoene holdes samlet i egne sammenhengende grupper. Merk hvert segment som fortsetter opptaket over før du importerer."
           }
         }
       }
@@ -6365,6 +6277,16 @@
         }
       }
     },
+    "Disabling" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deaktivering"
+          }
+        }
+      }
+    },
     "Display" : {
       "localizations" : {
         "nb" : {
@@ -6452,6 +6374,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ikke fjern noen tegn"
+          }
+        }
+      }
+    },
+    "Don't send data" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke send data"
           }
         }
       }
@@ -6833,6 +6765,26 @@
         }
       }
     },
+    "DVD subtitle color palette is invalid. OCR requires 16 comma-separated RGB colors with six hexadecimal digits each." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DVD-undertekstenes fargepalett er ugyldig. OCR krever 16 kommaseparerte RGB-farger med seks heksadesimale sifre hver."
+          }
+        }
+      }
+    },
+    "DVD subtitle color palette is missing. OCR requires the original 16-color palette; use a source that includes it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DVD-undertekstenes fargepalett mangler. OCR krever den opprinnelige paletten med 16 farger. Bruk en kilde som inneholder den."
+          }
+        }
+      }
+    },
     "Dynamic Range" : {
       "comment" : "A label for the \"Dynamic Range\" setting in the screen capture settings view.",
       "isCommentAutoGenerated" : true,
@@ -6985,6 +6937,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rediger under opptak med maksimal kompatibilitet. Maskinvarekodet H.264, fragmentert .mov."
+          }
+        }
+      }
+    },
+    "Editing directly from removable media can be slow, especially for long recordings. For smoother editing, copy the card to local storage first. You can also continue importing from the card." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redigering direkte fra flyttbare medier kan være tregt, særlig for lange opptak. Kopier kortet til lokal lagring først for jevnere redigering. Du kan også fortsette å importere fra kortet."
           }
         }
       }
@@ -7524,6 +7486,16 @@
         }
       }
     },
+    "Estimated seek point: %@ (%@ s earlier). Export can differ." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anslått søkepunkt: %@ (%@ s tidligere). Eksporten kan avvike."
+          }
+        }
+      }
+    },
     "ETA: %@" : {
       "comment" : "A label showing the estimated time of arrival for the current file being processed. The argument is the ETA (estimated time of arrival) for the current file.",
       "isCommentAutoGenerated" : true,
@@ -7580,6 +7552,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "eu-west-2 (London)"
+          }
+        }
+      }
+    },
+    "Example data sent: {\"token\": \"a weekly random-looking value\"}. No files, paths, media details, conversion activity, account details, hardware IDs, or OS details are included." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksempel på data som sendes: {\"token\": \"en tilfeldig utseende ukekode\"}. Ingen filer, filbaner, mediedetaljer, konverteringsaktivitet, kontoopplysninger, maskinvare-ID-er eller OS-detaljer er inkludert."
           }
         }
       }
@@ -8011,6 +7993,7 @@
       }
     },
     "File access and disabling" : {
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
@@ -8106,6 +8089,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Filnavn beholdes som de er (etter konvertering av mellomrom og skandinaviske tegn ovenfor)."
+          }
+        }
+      }
+    },
+    "Files in these folders and their subfolders are available to local MCP clients. Choose output folders in the app before converting. MCP requests cannot approve new locations." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filer i disse mappene og undermappene deres er tilgjengelige for lokale MCP-klienter. Velg utdatamapper i appen før konvertering. MCP-forespørsler kan ikke godkjenne nye plasseringer."
           }
         }
       }
@@ -8345,6 +8338,16 @@
         }
       }
     },
+    "Format metadata incomplete; this group will import without concatenation." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formatmetadata mangler; denne gruppen importeres uten sammenføyning."
+          }
+        }
+      }
+    },
     "Format: HH:MM:SS:FF (00-23 hours, 00-29 frames @ 30fps) or HH:MM:SS;FF for drop-frame" : {
       "comment" : "A description of the timecode format with specific frame rate information.",
       "isCommentAutoGenerated" : true,
@@ -8377,6 +8380,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Formater"
+          }
+        }
+      }
+    },
+    "Formats conflict; this group will import without concatenation." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formatene er ulike; denne gruppen importeres uten sammenføyning."
           }
         }
       }
@@ -8690,6 +8703,16 @@
         }
       }
     },
+    "Group %lld: %lld clips" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppe %lld: %lld klipp"
+          }
+        }
+      }
+    },
     "Group folder" : {
       "comment" : "System symbol name for a folder icon used in a group header.",
       "isCommentAutoGenerated" : true,
@@ -8722,6 +8745,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gruppeforhåndsinnstillinger forutsetter at den oppførte strømrekkefølgen er kanalrekkefølgen ved avspilling. Kontroller filens ruting eller MCA-etiketter før du bruker et gruppert resultat til kvalitetskontroll."
+          }
+        }
+      }
+    },
+    "Grouping" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppering"
           }
         }
       }
@@ -8818,6 +8851,16 @@
         }
       }
     },
+    "Help count active installations" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hjelp oss å telle aktive installasjoner"
+          }
+        }
+      }
+    },
     "HEVC 10-bit 4:2:2 (Hardware)" : {
       "localizations" : {
         "nb" : {
@@ -8830,6 +8873,7 @@
     },
     "HH:MM:SS · mixed or unknown frame rates" : {
       "comment" : "A description of the frame rate of a sequence.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "nb" : {
@@ -8841,6 +8885,7 @@
       }
     },
     "HH:MM:SS:FF · %@ fps · non-drop-frame" : {
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
@@ -9108,6 +9153,18 @@
         }
       }
     },
+    "Ignore trim offset for stitched timecode" : {
+      "comment" : "A",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorer trimforskyvning for tidskode i sammenføyd video"
+          }
+        }
+      }
+    },
     "Image Sequence (%@)" : {
       "localizations" : {
         "nb" : {
@@ -9360,6 +9417,16 @@
         }
       }
     },
+    "Import proposed groups" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer foreslåtte grupper"
+          }
+        }
+      }
+    },
     "Import Settings…" : {
       "comment" : "A button that imports settings from a file.",
       "isCommentAutoGenerated" : true,
@@ -9373,6 +9440,7 @@
       }
     },
     "Import source files and choose output folders in the app before an agent uses them. Agent requests cannot grant or expand file access." : {
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
@@ -9853,6 +9921,16 @@
         }
       }
     },
+    "Keep single group" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold én gruppe"
+          }
+        }
+      }
+    },
     "Keep Subtitles" : {
       "localizations" : {
         "nb" : {
@@ -9977,6 +10055,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tastatursnarveier:"
+          }
+        }
+      }
+    },
+    "Keyframe at or after end: %@ (%@ s later). This does not predict the exported end." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nøkkelbilde ved eller etter slutten: %@ (%@ s senere). Dette forutsier ikke slutten på eksporten."
+          }
+        }
+      }
+    },
+    "Keyframe candidates: %lld" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kandidater for nøkkelbilder: %lld"
           }
         }
       }
@@ -11332,6 +11430,16 @@
         }
       }
     },
+    "No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fant ikke noe påfølgende nøkkelbilde i det undersøkte området. Slutten på eksporten kan ikke anslås ut fra nøkkelbilder."
+          }
+        }
+      }
+    },
     "No profiles" : {
       "comment" : "A message displayed when there are no FTP profiles.",
       "isCommentAutoGenerated" : true,
@@ -12142,6 +12250,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Utdatanavn: %@"
+          }
+        }
+      }
+    },
+    "Output TC" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utdata-TC"
           }
         }
       }
@@ -13314,6 +13432,16 @@
         }
       }
     },
+    "Proposed groups: %lld" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foreslåtte grupper: %lld"
+          }
+        }
+      }
+    },
     "ProRes 4444 (Visually Lossless)" : {
       "localizations" : {
         "nb" : {
@@ -13590,6 +13718,16 @@
         }
       }
     },
+    "Reading recording metadata…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leser opptaksmetadata …"
+          }
+        }
+      }
+    },
     "Ready" : {
       "comment" : "A label displayed next to the version of the installed whisper.cpp binary.",
       "isCommentAutoGenerated" : true,
@@ -13774,6 +13912,28 @@
         }
       }
     },
+    "Relative clip timecode (HH:MM:SS:FF)" : {
+      "comment" : "A label that displays the relative time of a clip.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relativ klipptidskode (HH:MM:SS:FF)"
+          }
+        }
+      }
+    },
+    "Relative TC" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relativ TC"
+          }
+        }
+      }
+    },
     "Relative Timecode (REL TC)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13792,6 +13952,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Versjonsmerknader"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern"
           }
         }
       }
@@ -13965,6 +14135,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Forespørselen mislyktes"
+          }
+        }
+      }
+    },
+    "Requested end: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ønsket slutt: %@"
+          }
+        }
+      }
+    },
+    "Requested start: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ønsket start: %@"
           }
         }
       }
@@ -14385,6 +14575,26 @@
         }
       }
     },
+    "Review recording-date groups" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se gjennom grupper etter opptaksdato"
+          }
+        }
+      }
+    },
+    "Review recording-date groups…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se gjennom grupper etter opptaksdato …"
+          }
+        }
+      }
+    },
     "Run" : {
       "comment" : "A button that runs the selected metrics.",
       "isCommentAutoGenerated" : true,
@@ -14760,6 +14970,16 @@
         }
       }
     },
+    "Seek estimate unavailable near this cut." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Søkeanslag er ikke tilgjengelig nær dette klippet."
+          }
+        }
+      }
+    },
     "Seek forward 1 frame" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15045,6 +15265,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Velg kodek for proxyfiler. HEVC er mest effektivt, ProRes Proxy er bredt kompatibelt, DNx er for Avid-arbeidsflyter."
+          }
+        }
+      }
+    },
+    "Select the folder again or choose another location." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg mappen på nytt, eller velg en annen plassering."
           }
         }
       }
@@ -16019,6 +16249,16 @@
         }
       }
     },
+    "Split by recording day" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del etter opptaksdag"
+          }
+        }
+      }
+    },
     "Split the clip at the playhead (⌘B). Trim either part independently." : {
       "localizations" : {
         "nb" : {
@@ -16886,6 +17126,16 @@
         }
       }
     },
+    "The count is for active installations, not people. You can change this choice in General Settings at any time." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tellingen gjelder aktive installasjoner, ikke personer. Du kan endre valget når som helst i Generelle innstillinger."
+          }
+        }
+      }
+    },
     "The crop geometry is invalid for this source." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -17013,6 +17263,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "De lagrede dataene er beholdt. Nye planer fungerer så lenge appen er åpen, men kan ikke lagres før du tilbakestiller lagringen av nedlastingsplaner."
+          }
+        }
+      }
+    },
+    "The saved folder approvals could not be changed." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De lagrede mappegodkjenningene kunne ikke endres."
           }
         }
       }
@@ -19613,6 +19873,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Når dette er aktivert, tar det signerte hjelpeverktøyet imot forespørsler fra lokale MCP-klienter og sender dem til denne appen. Appen forblir eier av hver godkjente konvertering."
+          }
+        }
+      }
+    },
+    "When enabled, this Mac sends one random weekly token at most once per day when the app opens. It contains no files, paths, media, conversion, account, hardware, or OS details. This counts active installations, not people." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når dette er slått på, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes. Den inneholder ingen filer, filbaner, medier, konverteringer, kontoopplysninger, maskinvare- eller OS-detaljer. Dette teller aktive installasjoner, ikke personer."
           }
         }
       }

@@ -16,12 +16,17 @@ closed, but Agent Access must already be enabled in the app. OpenCode's
 [local MCP configuration](https://opencode.ai/docs/mcp-servers/) documents the
 required `type` and `command` fields.
 
-Before asking a client to inspect or convert media, import the source in the app
-and choose the output folder there. Agent requests use those existing file grants;
-they cannot approve a new source or output location. If a drive is unavailable
-or a grant is lost, reconnect the drive or select the file/folder again in the
-app and make a new plan. A plan lasts 15 minutes, and submission rechecks access,
-source identity, and output collisions. Existing outputs are preserved.
+Before asking a client to inspect or convert media, open **Settings → Agent
+Access → Approved source folders** and add a folder such as Movies. The approval
+also covers files in its subfolders and persists across app launches. Files
+imported through the app continue to use their existing individual grants.
+Choose the output folder in the app as before; source-folder approval does not
+grant write access. Remove a folder from the list to revoke that folder's
+MCP-specific grant for future requests. Other grants saved by app features may
+still cover a file. Agent requests cannot approve a new location. If a drive is
+unavailable or a grant is lost, reconnect the drive or select the location again
+in the app and make a new plan. A plan lasts 15 minutes, and submission rechecks
+access, source identity, and output collisions. Existing outputs are preserved.
 
 The first agent release supports H.264, HEVC, ProRes, Proxy, Audio Only, and
 Stream Copy. A client can call `list_presets`, `inspect_media`,

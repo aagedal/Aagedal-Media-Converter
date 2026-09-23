@@ -64,6 +64,8 @@ struct AgentAccessSettingsView: View {
     @State private var connectionStatus = String(localized: "Not tested")
     @State private var isTesting = false
     @State private var isUpdatingAccess = false
+    @State private var approvedSourceFolders: [URL] = []
+    @State private var folderAccessError: String?
 
     private var helperURL: URL {
         Bundle.main.bundleURL
@@ -159,9 +161,33 @@ struct AgentAccessSettingsView: View {
                 }
             }
 
-            Section("File access and disabling") {
-                Text("Import source files and choose output folders in the app before an agent uses them. Agent requests cannot grant or expand file access.")
+            Section("Approved source folders") {
+                Text("Files in these folders and their subfolders are available to local MCP clients. Choose output folders in the app before converting. MCP requests cannot approve new locations.")
                     .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                ForEach(approvedSourceFolders, id: \.absoluteString) { folder in
+                    HStack {
+                        Text(folder.path)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Remove") {
+                            if SecurityScopedBookmarkManager.agentSourceFolders.removeBookmark(for: folder) {
+                                reloadApprovedSourceFolders()
+                            } else {
+                                folderAccessError = String(localized: "The saved folder approvals could not be changed.")
+                            }
+                        }
+                    }
+                }
+
+                Button("Add Source Folder…") {
+                    chooseSourceFolder()
+                }
+                .accessibilityIdentifier("settings.agentAccess.addSourceFolder")
+            }
+
+            Section("Disabling") {
                 Text("Turning access off rejects new connections. Jobs already accepted by the app continue and remain available in job history.")
                     .font(.callout)
             }
@@ -169,7 +195,16 @@ struct AgentAccessSettingsView: View {
         .formStyle(.grouped)
         .navigationTitle("Local Agent Access")
         .padding(.horizontal, 12)
+        .alert("Could not save folder access", isPresented: Binding(
+            get: { folderAccessError != nil },
+            set: { if !$0 { folderAccessError = nil } }
+        )) {
+            Button("OK", role: .cancel) { folderAccessError = nil }
+        } message: {
+            Text(folderAccessError ?? "")
+        }
         .onAppear {
+            reloadApprovedSourceFolders()
             if accessEnabled {
                 if ApplicationAgentIPCServer.shared.isRunning {
                     connectionStatus = String(localized: "Ready")
@@ -183,6 +218,28 @@ struct AgentAccessSettingsView: View {
             } else {
                 connectionStatus = String(localized: "Not connected")
             }
+        }
+    }
+
+    private func reloadApprovedSourceFolders() {
+        approvedSourceFolders = SecurityScopedBookmarkManager.agentSourceFolders.storedFolderURLs()
+    }
+
+    private func chooseSourceFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Approve Folder")
+        panel.message = String(localized: "Choose a folder whose files and subfolders local MCP clients may read.")
+        panel.begin { response in
+            guard response == .OK, let folder = panel.url else { return }
+            let selectedFolder = folder.standardizedFileURL
+            guard SecurityScopedBookmarkManager.agentSourceFolders.saveBookmark(for: selectedFolder) else {
+                folderAccessError = String(localized: "Select the folder again or choose another location.")
+                return
+            }
+            reloadApprovedSourceFolders()
         }
     }
 
