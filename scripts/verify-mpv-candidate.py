@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import plistlib
+import stat
 import subprocess
 import zipfile
 
@@ -23,13 +24,30 @@ PATCHED_SOURCE = "dist/libmpv-v0.41.0/audio/out/ao_coreaudio.c"
 
 def archive_path(name):
     """Reject ambiguous ZIP paths without extracting any archive content."""
-    if not isinstance(name, str) or not name or "\\" in name:
+    if not isinstance(name, str) or not name or "\\" in name or "\x00" in name:
         raise ValueError(f"Unsafe archive path: {name!r}")
     path = PurePosixPath(name)
     if (path.is_absolute() or ".." in path.parts
             or str(path) != name.rstrip("/")):
         raise ValueError(f"Unsafe archive path: {name}")
     return name
+
+
+def verify_archive_links(bundle):
+    """Reject links that could escape or ambiguously resolve when SwiftPM unpacks a ZIP."""
+    for member in bundle.infolist():
+        mode = stat.S_IFMT(member.external_attr >> 16)
+        if mode != stat.S_IFLNK:
+            continue
+        if member.file_size > 4096:
+            raise ValueError(f"Oversized archive symlink: {member.filename}")
+        try:
+            target = bundle.read(member).decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError(f"Invalid archive symlink target: {member.filename}") from error
+        archive_path(target)
+        if target.endswith("/"):
+            raise ValueError(f"Unsafe archive symlink target: {member.filename}")
 
 
 def digest(stream):
@@ -95,6 +113,7 @@ def verify(root, evidence, architecture_reader=None):
                 raise ValueError(f"Duplicate ZIP members: {archive}")
             for name in names:
                 archive_path(name)
+            verify_archive_links(bundle)
             if archive == ARCHIVE:
                 info = plistlib.loads(bundle.read(PREFIX + "Info.plist"))
                 libraries = info.get("AvailableLibraries", [])

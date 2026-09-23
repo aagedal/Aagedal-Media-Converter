@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import io
 import plistlib
+import stat
 from pathlib import Path
 import tempfile
 import unittest
@@ -157,6 +158,29 @@ class MPVCandidateTests(unittest.TestCase):
     def test_parent_paths_fail(self):
         with self.assertRaisesRegex(ValueError, "Unsafe"):
             MODULE.contained(self.root, "../outside")
+
+    def test_archive_symlinks_must_have_safe_relative_targets(self):
+        for target in ("/outside", "../outside", "a/../../outside", "a\\outside", "a//outside"):
+            with self.subTest(target=target):
+                stream = io.BytesIO()
+                with zipfile.ZipFile(stream, "w") as bundle:
+                    link = zipfile.ZipInfo("Libmpv.xcframework/link")
+                    link.create_system = 3
+                    link.external_attr = (stat.S_IFLNK | 0o777) << 16
+                    bundle.writestr(link, target)
+                with zipfile.ZipFile(stream) as bundle:
+                    with self.assertRaisesRegex(ValueError, "Unsafe archive path"):
+                        MODULE.verify_archive_links(bundle)
+
+    def test_archive_symlink_accepts_framework_relative_target(self):
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w") as bundle:
+            link = zipfile.ZipInfo("Libmpv.xcframework/Libmpv.framework/Libmpv")
+            link.create_system = 3
+            link.external_attr = (stat.S_IFLNK | 0o777) << 16
+            bundle.writestr(link, "Versions/Current/Libmpv")
+        with zipfile.ZipFile(stream) as bundle:
+            MODULE.verify_archive_links(bundle)
 
 
 if __name__ == "__main__":
