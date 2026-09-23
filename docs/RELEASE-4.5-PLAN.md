@@ -1362,10 +1362,11 @@ The existing approximate-cut guidance remains applicable.
 Completed keyframe scans now also serve contained bounded requests for the same
 source identity and video track. Moving nearby trim handles can reuse inspected
 coverage without rereading compressed samples. A preserved local FFmpeg 9.0.1
-build contains `ffprobe`, but adding its roughly 52 MB executable requires an
-explicit bundle-size, signing, license/provenance, and release-packaging review.
-The 4.5 app continues to use bounded native discovery until that decision is
-made; it does not use a user's Homebrew `ffprobe` for keyframe candidates.
+build contains `ffprobe`, but its executable is absent from the current checkout
+and local temporary outputs. The [packaging review](4.5-ffprobe-packaging-review-2026-09-23.md)
+keeps bounded native discovery for 4.5 until the candidate's bytes, source/license
+attribution, bundle size, signing, and Release package can be verified. The app
+does not use a user's Homebrew `ffprobe` for keyframe candidates.
 
 The editor also includes split and range deletion, multiple-clip selection,
 drag reordering, undo/redo, scalable waveform envelopes, and source audio meters.
@@ -1387,7 +1388,7 @@ Remaining refinements:
   exported end. Actual out-point estimates and temporary export-boundary previews
   remain open. Do not claim decoded preview is exact
   Stream Copy output. Merge preparation uses input-side `-ss`, `-t`, and `-c copy`.
-- Resolve the absent ffprobe packaging decision, then probe packet keyframe
+- Recover and validate an attributed bundled ffprobe, then probe packet keyframe
   flags/timestamps using the selected bundled tool, scoped to
   the selected video stream; cache by source identity and normalize source start
   timestamps. Prefer bounded, cancellable scans around edited regions on long
