@@ -82,8 +82,13 @@ class MCPHelperTests(unittest.TestCase):
         self.assertEqual(len(responses), 2)
         self.assertEqual(responses[0]["result"]["protocolVersion"], "2025-06-18")
         self.assertEqual({tool["name"] for tool in responses[1]["result"]["tools"]},
-                         {"inspect_media", "list_presets", "list_jobs", "plan_conversion",
-                          "submit_conversion", "get_job", "cancel_job"})
+                         {"inspect_media", "list_media", "list_presets", "list_jobs",
+                          "get_app_status", "plan_conversion", "get_plan",
+                          "submit_conversion", "get_job", "wait_for_job", "cancel_job"})
+        media_tool = next(tool for tool in responses[1]["result"]["tools"]
+                          if tool["name"] == "list_media")
+        self.assertEqual(media_tool["inputSchema"]["properties"]["limit"]["maximum"], 100)
+        self.assertEqual(media_tool["inputSchema"]["required"], [])
         jobs_tool = next(tool for tool in responses[1]["result"]["tools"]
                          if tool["name"] == "list_jobs")
         self.assertEqual(jobs_tool["inputSchema"]["properties"]["limit"]["maximum"], 100)

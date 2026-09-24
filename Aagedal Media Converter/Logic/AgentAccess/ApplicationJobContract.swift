@@ -962,6 +962,23 @@ struct ApplicationAgentJobList: Codable, Equatable, Sendable {
     let hasMore: Bool
 }
 
+struct ApplicationAgentJobWaitResult: Codable, Equatable, Sendable {
+    let job: ApplicationAgentJSONValue
+    let changed: Bool
+    let timedOut: Bool
+    let isTerminal: Bool
+}
+
+struct ApplicationAgentAppStatus: Codable, Equatable, Sendable {
+    let appVersion: String
+    let buildNumber: String
+    let ipcSchemaVersion: Int
+    let manualQueueCount: Int
+    let serviceJobCount: Int
+    let activeJobCount: Int
+    let terminalJobCount: Int
+}
+
 @MainActor
 final class ApplicationVisibleQueueRegistry {
     static let shared = ApplicationVisibleQueueRegistry()
@@ -3383,6 +3400,23 @@ struct ApplicationMediaSubtitleStream: Codable, Equatable, Sendable {
     let durationSeconds: Double?
 }
 
+struct ApplicationMediaListEntry: Codable, Equatable, Sendable {
+    let name: String
+    let path: String
+    let isDirectory: Bool
+    let sizeBytes: Int64?
+    let modifiedAt: Date?
+}
+
+struct ApplicationMediaList: Codable, Equatable, Sendable {
+    let entries: [ApplicationMediaListEntry]
+    let total: Int
+    let offset: Int
+    let hasMore: Bool
+    /// Nil means the response lists the approved source folders themselves.
+    let folderPath: String?
+}
+
 /// Structured result returned by `inspect_media`. It intentionally exposes
 /// factual source metadata rather than the app's display-formatted strings.
 struct ApplicationMediaInspection: Codable, Equatable, Sendable {
@@ -3716,6 +3750,7 @@ struct ApplicationAgentTools: Sendable {
     private let fileAccessAuthorizer: ApplicationFileAccessAuthorizer
     private let mediaInspector: ApplicationMediaInspector
     private let presetSettingsProvider: PresetSettingsProvider
+    private let approvedSourceFolders: @Sendable () -> [URL]
     private let now: NowProvider
 
     init(
@@ -3725,13 +3760,95 @@ struct ApplicationAgentTools: Sendable {
         presetSettingsProvider: @escaping PresetSettingsProvider = {
             ApplicationPresetSettings(presetID: $0, defaults: .standard)
         },
+        approvedSourceFolders: @escaping @Sendable () -> [URL] = {
+            SecurityScopedBookmarkManager.agentSourceFolders.storedFolderURLs()
+        },
         now: @escaping NowProvider = Date.init
     ) {
         self.jobService = jobService
         self.fileAccessAuthorizer = fileAccessAuthorizer
         self.mediaInspector = mediaInspector
         self.presetSettingsProvider = presetSettingsProvider
+        self.approvedSourceFolders = approvedSourceFolders
         self.now = now
+    }
+
+    func listMedia(
+        folderURL: URL? = nil,
+        nameContains: String? = nil,
+        extensions: [String]? = nil,
+        offset: Int = 0,
+        limit: Int = 100
+    ) throws -> ApplicationMediaList {
+        guard offset >= 0, (1...100).contains(limit),
+              (nameContains?.count ?? 0) <= 128,
+              (extensions?.count ?? 0) <= 20,
+              (extensions ?? []).allSatisfy({ !$0.isEmpty && $0.count <= 16 && $0.allSatisfy { $0.isLetter || $0.isNumber } }) else {
+            throw ApplicationAgentTransportError.invalidArguments(
+                "offset must be non-negative, limit 1–100, name_contains at most 128 characters, and extensions at most 20 short alphanumeric values."
+            )
+        }
+
+        let roots = approvedSourceFolders()
+            .map { $0.standardizedFileURL.resolvingSymlinksInPath() }
+            .filter(\.isFileURL)
+        let entries: [ApplicationMediaListEntry]
+        if let folderURL {
+            guard folderURL.isFileURL else { throw ApplicationJobError.nonFileURL(folderURL) }
+            let folder = folderURL.standardizedFileURL.resolvingSymlinksInPath()
+            guard roots.contains(where: { Self.contains(folder, in: $0) }),
+                  let lease = fileAccessAuthorizer.acquire(folder, .read) else {
+                throw ApplicationJobError.sourceAccessDenied(folderURL)
+            }
+            defer { lease.release() }
+            let values = try folder.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values.isDirectory == true, values.isSymbolicLink != true else {
+                throw ApplicationAgentTransportError.invalidArguments("folder_path must name an approved directory.")
+            }
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: folder,
+                includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+            let allowedExtensions = Set((extensions ?? []).map { $0.lowercased() })
+            entries = try contents.compactMap { child in
+                let values = try child.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey])
+                guard values.isSymbolicLink != true else { return nil }
+                let directory = values.isDirectory == true
+                guard directory || (values.isRegularFile == true && AppConstants.supportedVideoExtensions.contains(child.pathExtension.lowercased())) else { return nil }
+                if !directory && !allowedExtensions.isEmpty && !allowedExtensions.contains(child.pathExtension.lowercased()) { return nil }
+                guard nameContains.map({ child.lastPathComponent.localizedCaseInsensitiveContains($0) }) ?? true else { return nil }
+                return ApplicationMediaListEntry(
+                    name: child.lastPathComponent,
+                    path: child.path,
+                    isDirectory: directory,
+                    sizeBytes: directory ? nil : values.fileSize.map(Int64.init),
+                    modifiedAt: values.contentModificationDate
+                )
+            }
+        } else {
+            entries = roots.compactMap { root in
+                guard let lease = fileAccessAuthorizer.acquire(root, .read) else { return nil }
+                defer { lease.release() }
+                guard (try? root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]))?.isDirectory == true else { return nil }
+                guard nameContains.map({ root.lastPathComponent.localizedCaseInsensitiveContains($0) }) ?? true else { return nil }
+                return ApplicationMediaListEntry(name: root.lastPathComponent, path: root.path, isDirectory: true, sizeBytes: nil, modifiedAt: nil)
+            }
+        }
+        let sorted = entries.sorted {
+            if $0.isDirectory != $1.isDirectory { return $0.isDirectory }
+            return $0.path.localizedStandardCompare($1.path) == .orderedAscending
+        }
+        let page = offset < sorted.count ? Array(sorted.dropFirst(offset).prefix(limit)) : []
+        return ApplicationMediaList(entries: page, total: sorted.count, offset: offset,
+                                    hasMore: offset + page.count < sorted.count,
+                                    folderPath: folderURL?.standardizedFileURL.path)
+    }
+
+    private static func contains(_ target: URL, in root: URL) -> Bool {
+        let targetParts = target.pathComponents
+        let rootParts = root.pathComponents
+        return targetParts.count >= rootParts.count && Array(targetParts.prefix(rootParts.count)) == rootParts
     }
 
     func inspectMedia(at sourceURL: URL) async throws -> ApplicationMediaInspection {
@@ -3807,12 +3924,75 @@ struct ApplicationAgentTools: Sendable {
         )
     }
 
+    func getAppStatus() async throws -> ApplicationAgentAppStatus {
+        let manualJobs = await ApplicationVisibleQueueRegistry.shared.jobs
+        let serviceJobs = try await jobService.allRecords(now: now())
+        let states = manualJobs.map(\.state) + serviceJobs.map(\.state)
+        return ApplicationAgentAppStatus(
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+            buildNumber: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
+            ipcSchemaVersion: ApplicationAgentIPCRequest.currentSchemaVersion,
+            manualQueueCount: manualJobs.count,
+            serviceJobCount: serviceJobs.count,
+            activeJobCount: states.filter { !$0.isTerminal }.count,
+            terminalJobCount: states.filter(\.isTerminal).count
+        )
+    }
+
     func getJobForAgent(jobID: ApplicationJobID) async throws -> ApplicationAgentJSONValue {
         if let record = try await jobService.record(for: jobID, now: now()) {
             return try ApplicationAgentJSONValue(encoding: record)
         }
         if let visible = await ApplicationVisibleQueueRegistry.shared.jobs.first(where: { $0.id == jobID }) {
             return try ApplicationAgentJSONValue(encoding: visible)
+        }
+        throw ApplicationJobError.unknownJob(jobID)
+    }
+
+    /// Waits for a state transition or terminal result without holding an app
+    /// actor or blocking conversion work. A client may pass its last observed
+    /// state so a transition between calls is returned immediately.
+    func waitForJob(
+        jobID: ApplicationJobID,
+        knownState: ApplicationJobState? = nil,
+        timeoutSeconds: Int = 30
+    ) async throws -> ApplicationAgentJobWaitResult {
+        guard (1...30).contains(timeoutSeconds) else {
+            throw ApplicationAgentTransportError.invalidArguments(
+                "timeout_seconds must be between 1 and 30."
+            )
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(timeoutSeconds))
+        var initialState = knownState
+        while true {
+            let snapshot = try await jobSnapshotForAgent(jobID: jobID)
+            if initialState == nil { initialState = snapshot.state }
+            let changed = snapshot.state != initialState
+            if changed || snapshot.state.isTerminal {
+                return ApplicationAgentJobWaitResult(
+                    job: snapshot.value, changed: changed,
+                    timedOut: false, isTerminal: snapshot.state.isTerminal
+                )
+            }
+            let remaining = ContinuousClock.now.duration(to: deadline)
+            if remaining <= .zero {
+                return ApplicationAgentJobWaitResult(
+                    job: snapshot.value, changed: false,
+                    timedOut: true, isTerminal: false
+                )
+            }
+            try await Task.sleep(for: min(remaining, .milliseconds(250)))
+        }
+    }
+
+    private func jobSnapshotForAgent(
+        jobID: ApplicationJobID
+    ) async throws -> (state: ApplicationJobState, value: ApplicationAgentJSONValue) {
+        if let record = try await jobService.record(for: jobID, now: now()) {
+            return (record.state, try ApplicationAgentJSONValue(encoding: record))
+        }
+        if let visible = await ApplicationVisibleQueueRegistry.shared.jobs.first(where: { $0.id == jobID }) {
+            return (visible.state, try ApplicationAgentJSONValue(encoding: visible))
         }
         throw ApplicationJobError.unknownJob(jobID)
     }
@@ -3834,6 +4014,17 @@ struct ApplicationAgentTools: Sendable {
             capturedAt: capturedAt
         )
         return try await jobService.plan(request, now: capturedAt)
+    }
+
+    func getPlan(planID: ApplicationPlanID) async throws -> ApplicationConversionPlan {
+        let currentTime = now()
+        guard let plan = try await jobService.plan(for: planID, now: currentTime) else {
+            throw ApplicationJobError.unknownPlan(planID)
+        }
+        guard plan.expiresAt > currentTime else {
+            throw ApplicationJobError.expiredPlan(planID)
+        }
+        return plan
     }
 
     func submitConversion(

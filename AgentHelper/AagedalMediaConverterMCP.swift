@@ -212,7 +212,7 @@ private final class MCPStdioServer {
     }
 
     private static let toolNames = Set([
-        "inspect_media", "list_presets", "list_jobs", "plan_conversion", "submit_conversion", "get_job", "cancel_job"
+        "inspect_media", "list_media", "list_presets", "list_jobs", "get_app_status", "plan_conversion", "get_plan", "submit_conversion", "get_job", "wait_for_job", "cancel_job"
     ])
 
     private static var toolDefinitions: [[String: Any]] { [
@@ -222,6 +222,20 @@ private final class MCPStdioServer {
             "inputSchema": objectSchema(
                 properties: ["source_path": pathProperty("Absolute path to the local media file.")],
                 required: ["source_path"]
+            )
+        ],
+        [
+            "name": "list_media",
+            "description": "Browse approved source folders and their immediate media files or subfolders. Omit folder_path to list approved roots. Results are paginated and folder grants are never expanded.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "folder_path": pathProperty("Absolute path to an approved source folder or one of its subfolders."),
+                    "name_contains": ["type": "string", "maxLength": 128],
+                    "extensions": ["type": "array", "maxItems": 20, "items": ["type": "string", "pattern": "^[A-Za-z0-9]{1,16}$"]],
+                    "offset": ["type": "integer", "minimum": 0],
+                    "limit": ["type": "integer", "minimum": 1, "maximum": 100]
+                ],
+                required: []
             )
         ],
         [
@@ -239,6 +253,11 @@ private final class MCPStdioServer {
                 ],
                 required: []
             )
+        ],
+        [
+            "name": "get_app_status",
+            "description": "Get the running app version, transport schema version, and current manual and service queue counts.",
+            "inputSchema": objectSchema(properties: [:], required: [])
         ],
         [
             "name": "plan_conversion",
@@ -270,10 +289,32 @@ private final class MCPStdioServer {
             )
         ],
         [
+            "name": "get_plan",
+            "description": "Retrieve a conversion plan by ID while it remains valid, including expiry, outputs, and warnings.",
+            "inputSchema": objectSchema(
+                properties: ["plan_id": uuidProperty("Plan identifier returned by plan_conversion.")],
+                required: ["plan_id"]
+            )
+        ],
+        [
             "name": "get_job",
             "description": "Get a durable conversion record or a current manual queue summary by ID.",
             "inputSchema": objectSchema(
                 properties: ["job_id": uuidProperty("Job identifier returned by submit_conversion or list_jobs.")],
+                required: ["job_id"]
+            )
+        ],
+        [
+            "name": "wait_for_job",
+            "description": "Wait up to 30 seconds for a job state change or terminal result, then return its current record or manual queue summary. Pass the last observed state to catch a transition that happened between calls.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "job_id": uuidProperty("Job identifier returned by submit_conversion or list_jobs."),
+                    "known_state": ["type": "string", "enum": [
+                        "queued", "running", "cancelling", "succeeded", "failed", "cancelled", "interrupted"
+                    ]],
+                    "timeout_seconds": ["type": "integer", "minimum": 1, "maximum": 30]
+                ],
                 required: ["job_id"]
             )
         ],

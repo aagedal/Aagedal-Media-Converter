@@ -28,11 +28,15 @@ These are the helper's wire names, independent of localized labels:
 | Tool | Required arguments | Successful `structuredContent` |
 | --- | --- | --- |
 | `list_presets` | `{}` | `presets` array |
+| `list_media` | Optional `folder_path`, `name_contains`, `extensions`, `offset`, `limit` | Approved roots or media entries with paths and pagination |
 | `list_jobs` | Optional `offset`, `limit` | `jobs` array, `total`, `offset`, `hasMore` |
+| `get_app_status` | `{}` | App and transport versions, manual/service/active/terminal job counts |
 | `inspect_media` | `source_path` | Media inspection object |
 | `plan_conversion` | `source_paths` array, `destination_path`, `preset_id` | Plan with `id`, `request`, `outputs`, and `warnings` |
+| `get_plan` | `plan_id` | Current plan and its expiry, outputs, and warnings |
 | `submit_conversion` | `plan_id` | Acceptance with `record.id` and `wasAlreadyAccepted` |
 | `get_job` | `job_id` | Durable job record, or current manual queue summary |
+| `wait_for_job` | `job_id`; optional `known_state`, `timeout_seconds` (1–30) | `job`, `changed`, `timedOut`, `isTerminal` |
 | `cancel_job` | `job_id` | Job with `id`, `state`, and `outputURLs` |
 
 Paths are absolute filesystem paths; identifiers are UUID strings. The preset

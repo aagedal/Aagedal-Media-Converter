@@ -29,13 +29,28 @@ in the app and make a new plan. A plan lasts 15 minutes, and submission rechecks
 access, source identity, and output collisions. Existing outputs are preserved.
 
 The first agent release supports H.264, HEVC, ProRes, Proxy, Audio Only, and
-Stream Copy. A client can call `list_presets`, `list_jobs`, `inspect_media`,
-`plan_conversion`, `submit_conversion`, `get_job`, and `cancel_job`. `list_jobs`
+Stream Copy. A client can call `list_presets`, `list_media`, `list_jobs`, `inspect_media`,
+`plan_conversion`, `get_plan`, `submit_conversion`, `get_job`, `wait_for_job`,
+`cancel_job`, and `get_app_status`.
+`get_plan` returns an existing plan by ID while it is valid, including its expiry,
+proposed outputs, and warnings.
+`list_media` without a folder path returns the folders approved in Agent Access.
+With `folder_path`, it returns immediate subfolders and supported media files,
+with optional filename and extension filters and pages of up to 100 entries.
+Symlinks and hidden items are omitted. Use a returned file path with
+`inspect_media` or `plan_conversion`.
+
+`list_jobs`
 returns IDs, state, filenames, and pagination for the visible manual queue and
 durable shared-service jobs. It omits full source paths from the list. Manual
 queue IDs work with `get_job` while the row remains in the current app session;
 they cannot be passed to `cancel_job`. Shared-service job IDs remain durable and
-can be cancelled through MCP. Accepted jobs
+can be cancelled through MCP. `get_app_status` reports the running app and IPC
+versions plus counts of manual, service, active, and terminal jobs.
+`wait_for_job` waits up to 30 seconds for a state change or terminal state and
+returns the current job plus `changed`, `timedOut`, and `isTerminal` flags. Pass
+`known_state` from a previous result to catch changes between calls. It also
+works for manual queue IDs while their rows remain visible. Accepted jobs
 continue after a client disconnects. Their status and results remain available
 for 30 days; unfinished work becomes interrupted after an app restart and is not
 automatically restarted. Turning Agent Access off rejects new connections while

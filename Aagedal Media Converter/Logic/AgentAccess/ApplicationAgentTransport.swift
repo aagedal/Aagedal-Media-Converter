@@ -7,11 +7,15 @@ import Foundation
 
 enum ApplicationAgentToolName: String, CaseIterable, Codable, Sendable {
     case inspectMedia = "inspect_media"
+    case listMedia = "list_media"
     case listPresets = "list_presets"
     case listJobs = "list_jobs"
+    case getAppStatus = "get_app_status"
     case planConversion = "plan_conversion"
+    case getPlan = "get_plan"
     case submitConversion = "submit_conversion"
     case getJob = "get_job"
+    case waitForJob = "wait_for_job"
     case cancelJob = "cancel_job"
 }
 
@@ -156,6 +160,21 @@ struct ApplicationAgentRequestDispatcher: Sendable {
                     value: await tools.inspectMedia(at: sourceURL)
                 )
 
+            case .listMedia:
+                try request.arguments.validateKeys(["folder_path", "name_contains", "extensions", "offset", "limit"])
+                let folderURL = try request.arguments.optionalString(named: "folder_path")
+                    .map { try Self.fileURL(path: $0, argument: "folder_path") }
+                return try .success(
+                    requestID: request.requestID,
+                    value: try tools.listMedia(
+                        folderURL: folderURL,
+                        nameContains: try request.arguments.optionalString(named: "name_contains"),
+                        extensions: try request.arguments.optionalStringArray(named: "extensions"),
+                        offset: try request.arguments.optionalInteger(named: "offset") ?? 0,
+                        limit: try request.arguments.optionalInteger(named: "limit") ?? 100
+                    )
+                )
+
             case .listPresets:
                 try request.arguments.validateKeys([])
                 return try .success(requestID: request.requestID, value: tools.listPresets())
@@ -167,6 +186,13 @@ struct ApplicationAgentRequestDispatcher: Sendable {
                 return try .success(
                     requestID: request.requestID,
                     value: await tools.listJobs(offset: offset, limit: limit)
+                )
+
+            case .getAppStatus:
+                try request.arguments.validateKeys([])
+                return try .success(
+                    requestID: request.requestID,
+                    value: await tools.getAppStatus()
                 )
 
             case .planConversion:
@@ -197,6 +223,16 @@ struct ApplicationAgentRequestDispatcher: Sendable {
                     value: await tools.planConversion(input)
                 )
 
+            case .getPlan:
+                try request.arguments.validateKeys(["plan_id"])
+                let planID = try ApplicationPlanID(
+                    request.arguments.requiredUUID(named: "plan_id")
+                )
+                return try .success(
+                    requestID: request.requestID,
+                    value: await tools.getPlan(planID: planID)
+                )
+
             case .submitConversion:
                 try request.arguments.validateKeys(["plan_id"])
                 let planID = try ApplicationPlanID(
@@ -215,6 +251,30 @@ struct ApplicationAgentRequestDispatcher: Sendable {
                 return try .success(
                     requestID: request.requestID,
                     value: await tools.getJobForAgent(jobID: jobID)
+                )
+
+            case .waitForJob:
+                try request.arguments.validateKeys(["job_id", "known_state", "timeout_seconds"])
+                let jobID = try ApplicationJobID(
+                    request.arguments.requiredUUID(named: "job_id")
+                )
+                let knownState: ApplicationJobState?
+                if let raw = try request.arguments.optionalString(named: "known_state") {
+                    guard let parsed = ApplicationJobState(rawValue: raw) else {
+                        throw ApplicationAgentTransportError.invalidArguments(
+                            "known_state must be a job state returned by get_job."
+                        )
+                    }
+                    knownState = parsed
+                } else {
+                    knownState = nil
+                }
+                let timeout = try request.arguments.optionalInteger(named: "timeout_seconds") ?? 30
+                return try .success(
+                    requestID: request.requestID,
+                    value: await tools.waitForJob(
+                        jobID: jobID, knownState: knownState, timeoutSeconds: timeout
+                    )
                 )
 
             case .cancelJob:
@@ -319,6 +379,19 @@ extension Dictionary where Key == String, Value == ApplicationAgentJSONValue {
                 throw ApplicationAgentTransportError.invalidArguments(
                     "\(name) must contain only non-empty strings."
                 )
+            }
+            return string
+        }
+    }
+
+    fileprivate func optionalStringArray(named name: String) throws -> [String]? {
+        guard let value = self[name] else { return nil }
+        guard case .array(let values) = value else {
+            throw ApplicationAgentTransportError.invalidArguments("\(name) must be an array of strings.")
+        }
+        return try values.map { value in
+            guard case .string(let string) = value, !string.isEmpty else {
+                throw ApplicationAgentTransportError.invalidArguments("\(name) must contain only non-empty strings.")
             }
             return string
         }

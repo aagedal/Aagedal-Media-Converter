@@ -2822,6 +2822,40 @@ final class ApplicationJobContractTests: XCTestCase {
         ))
     }
 
+    func testListMediaBrowsesApprovedFoldersWithFiltersAndPagination() throws {
+        let root = try makeTemporaryDirectory()
+        let clips = root.appendingPathComponent("Clips", isDirectory: true)
+        try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
+        try Data().write(to: root.appendingPathComponent("Alpha.mov"))
+        try Data().write(to: root.appendingPathComponent("Beta.mp4"))
+        try Data().write(to: root.appendingPathComponent("note.txt"))
+        let outside = try makeTemporaryDirectory().appendingPathComponent("outside.mov")
+        try Data().write(to: outside)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("linked.mov"), withDestinationURL: outside
+        )
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            fileAccessAuthorizer: .unrestricted,
+            approvedSourceFolders: { [root] in [root] }
+        )
+
+        XCTAssertEqual(try tools.listMedia().entries.map(\.path), [root.path])
+        let first = try tools.listMedia(folderURL: root, limit: 1)
+        XCTAssertEqual(first.total, 3)
+        XCTAssertTrue(first.hasMore)
+        XCTAssertEqual(first.entries.first?.name, "Clips")
+        let next = try tools.listMedia(folderURL: root, offset: 1, limit: 2)
+        XCTAssertEqual(next.entries.map(\.name), ["Alpha.mov", "Beta.mp4"])
+        XCTAssertFalse(next.hasMore)
+        XCTAssertEqual(try tools.listMedia(folderURL: root, extensions: ["MOV"]).entries.map(\.name),
+                       ["Clips", "Alpha.mov"])
+        XCTAssertEqual(try tools.listMedia(folderURL: root, nameContains: "beta").entries.map(\.name),
+                       ["Beta.mp4"])
+        XCTAssertThrowsError(try tools.listMedia(folderURL: outside.deletingLastPathComponent()))
+        XCTAssertThrowsError(try tools.listMedia(folderURL: root.appendingPathComponent("..")))
+    }
+
     func testAgentToolsInspectionRetainsAccessAndReturnsCodableMetadata() async throws {
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("clip.mov")
@@ -3124,6 +3158,25 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(plan.request.capturedAt, instant)
         XCTAssertEqual(plan.createdAt, instant)
         XCTAssertEqual(plan.request.presetSettings.presetID, .hevc)
+        let recoveredPlan = try await tools.getPlan(planID: plan.id)
+        XCTAssertEqual(recoveredPlan, plan)
+        let expiredView = ApplicationAgentTools(
+            jobService: service,
+            fileAccessAuthorizer: .unrestricted,
+            now: { instant.addingTimeInterval(16 * 60) }
+        )
+        do {
+            _ = try await expiredView.getPlan(planID: plan.id)
+            XCTFail("Expected an expired plan to be rejected")
+        } catch {
+            XCTAssertEqual(ApplicationAgentToolFailure(error: error).code, .expiredPlan)
+        }
+        do {
+            _ = try await tools.getPlan(planID: ApplicationPlanID())
+            XCTFail("Expected an unknown plan to be rejected")
+        } catch {
+            XCTAssertEqual(ApplicationAgentToolFailure(error: error).code, .unknownPlan)
+        }
 
         let accepted = try await tools.submitConversion(planID: plan.id)
         let listed = try await tools.listJobs()
@@ -3169,6 +3222,9 @@ final class ApplicationJobContractTests: XCTestCase {
         let tools = ApplicationAgentTools(
             jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted)
         )
+        let status = try await tools.getAppStatus()
+        XCTAssertEqual(status.manualQueueCount, 2)
+        XCTAssertGreaterThanOrEqual(status.activeJobCount, 2)
         let firstPage = try await tools.listJobs(limit: 1)
         XCTAssertEqual(firstPage.total, 2)
         XCTAssertTrue(firstPage.hasMore)
@@ -3213,6 +3269,79 @@ final class ApplicationJobContractTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testWaitForJobObservesManualQueueTransitionAndTerminalState() async throws {
+        var file = VideoItem(
+            url: URL(fileURLWithPath: "/private/films/clip.mov"),
+            name: "clip.mov", size: 0, duration: "00:00:05",
+            status: .waiting, progress: 0, eta: nil
+        )
+        let registry = ApplicationVisibleQueueRegistry.shared
+        registry.replace(files: [file], groups: [], order: [file.id], selectedPreset: .h264)
+        defer { registry.clear() }
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        )
+        let jobID = ApplicationJobID(file.id)
+        var runningFile = file
+        runningFile.status = .converting
+        let transitioningFile = runningFile
+
+        let transition = Task { @MainActor in
+            try await Task.sleep(for: .milliseconds(100))
+            registry.replace(
+                files: [transitioningFile], groups: [], order: [transitioningFile.id],
+                selectedPreset: .h264
+            )
+        }
+        let result = try await tools.waitForJob(
+            jobID: jobID, knownState: .queued, timeoutSeconds: 2
+        )
+        try await transition.value
+        XCTAssertTrue(result.changed)
+        XCTAssertFalse(result.timedOut)
+        XCTAssertFalse(result.isTerminal)
+        guard case .object(let job) = result.job else {
+            return XCTFail("Expected a manual queue summary")
+        }
+        XCTAssertEqual(job["state"], .string("running"))
+
+        let unchanged = try await tools.waitForJob(
+            jobID: jobID, knownState: .running, timeoutSeconds: 1
+        )
+        XCTAssertFalse(unchanged.changed)
+        XCTAssertTrue(unchanged.timedOut)
+        XCTAssertFalse(unchanged.isTerminal)
+
+        file.status = .done
+        registry.replace(files: [file], groups: [], order: [file.id], selectedPreset: .h264)
+        let completed = try await tools.waitForJob(
+            jobID: jobID, knownState: .succeeded, timeoutSeconds: 1
+        )
+        XCTAssertFalse(completed.changed)
+        XCTAssertFalse(completed.timedOut)
+        XCTAssertTrue(completed.isTerminal)
+    }
+
+    func testWaitForJobRejectsInvalidTimeoutAndUnknownJob() async throws {
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        )
+        let unknown = ApplicationJobID()
+        do {
+            _ = try await tools.waitForJob(jobID: unknown, timeoutSeconds: 0)
+            XCTFail("Expected invalid timeout")
+        } catch let error as ApplicationAgentTransportError {
+            guard case .invalidArguments = error else { return XCTFail("Unexpected error") }
+        }
+        do {
+            _ = try await tools.waitForJob(jobID: unknown, timeoutSeconds: 1)
+            XCTFail("Expected unknown job")
+        } catch let error as ApplicationJobError {
+            XCTAssertEqual(error, .unknownJob(unknown))
+        }
+    }
+
     func testAgentTransportDispatchesTypedToolsAndRejectsInvalidArguments() async throws {
         let dispatcher = ApplicationAgentRequestDispatcher(
             tools: ApplicationAgentTools(
@@ -3235,6 +3364,20 @@ final class ApplicationJobContractTests: XCTestCase {
               case .array? = jobList["jobs"] else {
             return XCTFail("Expected an object-shaped job list")
         }
+        let statusResponse = await dispatcher.response(to: ApplicationAgentIPCRequest(tool: .getAppStatus))
+        guard case .object(let appStatus)? = statusResponse.result else {
+            return XCTFail("Expected an object-shaped app status")
+        }
+        XCTAssertEqual(
+            appStatus["ipcSchemaVersion"],
+            .integer(Int64(ApplicationAgentIPCRequest.currentSchemaVersion))
+        )
+        XCTAssertNotNil(appStatus["appVersion"])
+        XCTAssertNotNil(appStatus["manualQueueCount"])
+        let invalidStatus = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .getAppStatus, arguments: ["unknown": .bool(true)]
+        ))
+        XCTAssertEqual(invalidStatus.failure?.code, .invalidArguments)
         let invalidPage = await dispatcher.response(to: ApplicationAgentIPCRequest(
             tool: .listJobs, arguments: ["limit": .integer(101)]
         ))
@@ -3270,6 +3413,17 @@ final class ApplicationJobContractTests: XCTestCase {
             ]
         ))
         XCTAssertEqual(unavailablePlan.failure?.code, .sourceUnavailable)
+
+        let missingPlan = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .getPlan,
+            arguments: ["plan_id": .string(UUID().uuidString)]
+        ))
+        XCTAssertEqual(missingPlan.failure?.code, .unknownPlan)
+        let invalidPlanID = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .getPlan,
+            arguments: ["plan_id": .string("not-a-uuid")]
+        ))
+        XCTAssertEqual(invalidPlanID.failure?.code, .invalidArguments)
 
         let unexpectedArgumentResponse = await dispatcher.response(to: ApplicationAgentIPCRequest(
             tool: .listPresets,
