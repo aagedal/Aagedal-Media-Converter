@@ -351,6 +351,85 @@ private final class MCPStdioServer {
 
 private struct AppIPCClient {
     func send(_ request: [String: Any]) throws -> [String: Any] {
+        if request["tool"] as? String == "wait_for_job",
+           let arguments = request["arguments"] as? [String: Any],
+           let jobID = arguments["job_id"] as? String,
+           UUID(uuidString: jobID) != nil,
+           arguments.keys.allSatisfy({ ["job_id", "known_state", "timeout_seconds"].contains($0) }),
+           arguments["timeout_seconds"] == nil || arguments["timeout_seconds"] is Int,
+           let requestID = request["requestID"] as? String {
+            let timeout = arguments["timeout_seconds"] as? Int ?? 30
+            guard (1...30).contains(timeout) else { return try sendSingle(request) }
+            let knownState = arguments["known_state"] as? String
+            let states = ["queued", "running", "cancelling", "succeeded", "failed", "cancelled", "interrupted"]
+            guard arguments["known_state"] == nil || knownState.map(states.contains) == true else {
+                return try sendSingle(request)
+            }
+            return try waitForJob(
+                requestID: requestID,
+                jobID: jobID,
+                knownState: knownState,
+                timeout: timeout
+            )
+        }
+        return try sendSingle(request)
+    }
+
+    // The app's CFMessagePort callback is serial. Keep long polling in the
+    // helper so another client can inspect or cancel a job while this one waits.
+    private func waitForJob(
+        requestID: String,
+        jobID: String,
+        knownState: String?,
+        timeout: Int
+    ) throws -> [String: Any] {
+        var deadline: TimeInterval?
+        var initialState = knownState
+        while true {
+            let pollID = UUID().uuidString.lowercased()
+            let response = try sendSingle([
+                "schemaVersion": ipcSchemaVersion,
+                "requestID": pollID,
+                "tool": "get_job",
+                "arguments": ["job_id": jobID]
+            ])
+            guard let responseID = response["requestID"] as? String,
+                  responseID.caseInsensitiveCompare(pollID) == .orderedSame,
+                  response["schemaVersion"] as? Int == ipcSchemaVersion else {
+                throw HelperError.invalidResponse
+            }
+            if let failure = response["failure"] {
+                return ["schemaVersion": ipcSchemaVersion, "requestID": requestID, "failure": failure]
+            }
+            guard let job = response["result"] as? [String: Any],
+                  let state = job["state"] as? String else {
+                throw HelperError.invalidResponse
+            }
+            if deadline == nil {
+                deadline = ProcessInfo.processInfo.systemUptime + Double(timeout)
+            }
+            if initialState == nil { initialState = state }
+            let changed = state != initialState
+            let isTerminal = ["succeeded", "failed", "cancelled", "interrupted"].contains(state)
+            let remaining = (deadline ?? ProcessInfo.processInfo.systemUptime) - ProcessInfo.processInfo.systemUptime
+            let timedOut = !changed && !isTerminal && remaining <= 0
+            if changed || isTerminal || timedOut {
+                return [
+                    "schemaVersion": ipcSchemaVersion,
+                    "requestID": requestID,
+                    "result": [
+                        "job": job,
+                        "changed": changed,
+                        "timedOut": timedOut,
+                        "isTerminal": isTerminal
+                    ]
+                ]
+            }
+            Thread.sleep(forTimeInterval: min(0.25, max(0, remaining)))
+        }
+    }
+
+    private func sendSingle(_ request: [String: Any]) throws -> [String: Any] {
         let requestData = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
         var launchResult: LockedLaunchResult?
         let startedAt = ProcessInfo.processInfo.systemUptime

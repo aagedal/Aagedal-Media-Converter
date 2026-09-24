@@ -3909,6 +3909,113 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertFalse(copiedMetadata.contains("01:02:03:04"), copiedMetadata)
         XCTAssertTrue(record.request.acceptedSettingsSummary(sourceIndex: nil).contains("Timecode: Disabled"))
 
+        let manualFile = VideoItem(
+            url: sourceURL, name: sourceURL.lastPathComponent, size: 0,
+            duration: "00:00:01", status: .waiting, progress: 0, eta: nil
+        )
+        await MainActor.run {
+            ApplicationVisibleQueueRegistry.shared.replace(
+                files: [manualFile], groups: [], order: [manualFile.id], selectedPreset: .h264
+            )
+        }
+        defer {
+            Task { @MainActor in ApplicationVisibleQueueRegistry.shared.clear() }
+        }
+
+        let listing = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "list_jobs", "arguments": ["limit": 1]
+            ]],
+            ["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": [
+                "name": "list_jobs", "arguments": ["offset": 1, "limit": 1]
+            ]],
+            ["jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": [
+                "name": "get_job", "arguments": ["job_id": manualFile.id.uuidString]
+            ]]
+        ])
+        let firstPage = try XCTUnwrap(
+            (listing[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(firstPage["total"] as? Int, 2)
+        XCTAssertEqual(firstPage["hasMore"] as? Bool, true)
+        let visibleJob = try XCTUnwrap((firstPage["jobs"] as? [[String: Any]])?.first)
+        XCTAssertEqual(visibleJob["id"] as? String, manualFile.id.uuidString.lowercased())
+        XCTAssertEqual(visibleJob["isDurable"] as? Bool, false)
+        XCTAssertEqual(visibleJob["canCancel"] as? Bool, false)
+        XCTAssertEqual(visibleJob["sourceNames"] as? [String], [sourceURL.lastPathComponent])
+        XCTAssertNil(visibleJob["sourceURLs"])
+
+        let secondPage = try XCTUnwrap(
+            (listing[2]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(secondPage["total"] as? Int, 2)
+        XCTAssertEqual(secondPage["hasMore"] as? Bool, false)
+        let durableJob = try XCTUnwrap((secondPage["jobs"] as? [[String: Any]])?.first)
+        XCTAssertEqual(durableJob["id"] as? String, jobID)
+        XCTAssertEqual(durableJob["isDurable"] as? Bool, true)
+        XCTAssertEqual(durableJob["state"] as? String, "succeeded")
+        XCTAssertNil(durableJob["sourceURLs"])
+
+        let manualLookup = try XCTUnwrap(
+            (listing[3]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(manualLookup["id"] as? String, manualFile.id.uuidString.lowercased())
+        XCTAssertNil(manualLookup["sourceURLs"])
+
+        let waitingHelper = Process()
+        waitingHelper.executableURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/aagedal-media-converter-mcp")
+        waitingHelper.environment = ProcessInfo.processInfo.environment.merging([
+            "AMC_UI_TEST_AGENT_PORT_ID": portID.uuidString
+        ]) { _, replacement in replacement }
+        let waitingInput = Pipe()
+        let waitingOutput = Pipe()
+        waitingHelper.standardInput = waitingInput
+        waitingHelper.standardOutput = waitingOutput
+        try waitingHelper.run()
+        defer { if waitingHelper.isRunning { waitingHelper.terminate() } }
+        let waitMessages: [[String: Any]] = [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "wait_for_job", "arguments": [
+                    "job_id": manualFile.id.uuidString,
+                    "known_state": "queued", "timeout_seconds": 4
+                ]
+            ]]
+        ]
+        let waitData = try waitMessages.reduce(Data()) { accumulated, message in
+            accumulated + (try JSONSerialization.data(withJSONObject: message)) + Data([0x0A])
+        }
+        waitingInput.fileHandleForWriting.write(waitData)
+        try waitingInput.fileHandleForWriting.close()
+        try await Task.sleep(for: .milliseconds(350))
+
+        let statusStarted = Date()
+        let simultaneous = try runPackagedMCPHelper(portID: portID, messages: [
+            initialize, initialized,
+            ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
+                "name": "get_app_status", "arguments": [:]
+            ]]
+        ])
+        let statusElapsed = Date().timeIntervalSince(statusStarted)
+        XCTAssertLessThan(statusElapsed, 2.5, "A waiting helper blocked another MCP client")
+        let appStatus = try XCTUnwrap(
+            (simultaneous[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(appStatus["manualQueueCount"] as? Int, 1)
+
+        waitingHelper.waitUntilExit()
+        XCTAssertEqual(waitingHelper.terminationStatus, 0)
+        let waitResponses = try waitingOutput.fileHandleForReading.readDataToEndOfFile()
+            .split(separator: 0x0A)
+            .map { try XCTUnwrap(JSONSerialization.jsonObject(with: Data($0)) as? [String: Any]) }
+        let waitResult = try XCTUnwrap(
+            (waitResponses[1]["result"] as? [String: Any])?["structuredContent"] as? [String: Any]
+        )
+        XCTAssertEqual(waitResult["timedOut"] as? Bool, true, String(describing: waitResponses))
+        XCTAssertEqual(waitResult["changed"] as? Bool, false, String(describing: waitResponses))
+
         let followUp = try runPackagedMCPHelper(portID: portID, messages: [
             initialize, initialized,
             ["jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": [
@@ -3927,6 +4034,7 @@ final class ApplicationJobContractTests: XCTestCase {
         )
         XCTAssertEqual(retry["wasAlreadyAccepted"] as? Bool, true)
         XCTAssertEqual((retry["record"] as? [String: Any])?["id"] as? String, jobID)
+        await MainActor.run { ApplicationVisibleQueueRegistry.shared.clear() }
     }
 
     func testLiveFirstPartyStreamCopyPreservesConfiguredTimecodeAndChannels() async throws {

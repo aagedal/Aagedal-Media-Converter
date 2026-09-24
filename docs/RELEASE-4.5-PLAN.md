@@ -15,7 +15,7 @@ Created: 2026-09-11.
 - 4.5 is the development target for an initial local MCP interface.
 - No release date is committed. Confirm scope after the feasibility milestone.
 
-The development metadata is **4.5.0 (582)**. This is not a frozen or
+The development metadata is **4.5.0 (591)**. This is not a frozen or
 signed release candidate.
 
 The 2026-09-24 job-list continuation adds `list_jobs` for visible manual queue
@@ -23,6 +23,9 @@ entries and durable shared jobs, with IDs that `get_job` can inspect. The
 focused app/helper tests pass; a newly installed Release build still needs a
 live manual-queue and agent-job listing check. See the
 [job-list validation record](4.5-mcp-job-list-validation-2026-09-24.md).
+The expanded local tool set also includes approved-folder browsing, plan
+retrieval, job waiting, and app status. See the
+[tool expansion validation record](4.5-mcp-expanded-tools-validation-2026-09-24.md).
 
 Agent Access settings now let users save and remove approved source folders for
 local MCP reads, including descendant files. The folders use a separate bookmark
