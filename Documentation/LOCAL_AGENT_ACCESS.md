@@ -29,8 +29,13 @@ in the app and make a new plan. A plan lasts 15 minutes, and submission rechecks
 access, source identity, and output collisions. Existing outputs are preserved.
 
 The first agent release supports H.264, HEVC, ProRes, Proxy, Audio Only, and
-Stream Copy. A client can call `list_presets`, `inspect_media`,
-`plan_conversion`, `submit_conversion`, `get_job`, and `cancel_job`. Accepted jobs
+Stream Copy. A client can call `list_presets`, `list_jobs`, `inspect_media`,
+`plan_conversion`, `submit_conversion`, `get_job`, and `cancel_job`. `list_jobs`
+returns IDs, state, filenames, and pagination for the visible manual queue and
+durable shared-service jobs. It omits full source paths from the list. Manual
+queue IDs work with `get_job` while the row remains in the current app session;
+they cannot be passed to `cancel_job`. Shared-service job IDs remain durable and
+can be cancelled through MCP. Accepted jobs
 continue after a client disconnects. Their status and results remain available
 for 30 days; unfinished work becomes interrupted after an app restart and is not
 automatically restarted. Turning Agent Access off rejects new connections while

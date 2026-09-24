@@ -938,6 +938,96 @@ struct ApplicationJobRecord: Codable, Equatable, Sendable {
     var diagnostic: String?
 }
 
+/// A bounded, path-free description of work visible in the app. Legacy manual
+/// queue entries use their existing row/group UUID while service jobs retain
+/// their durable job ID. Legacy IDs are valid for get_job while the row remains
+/// in the current app session; only service jobs support cancel_job.
+struct ApplicationAgentJobSummary: Codable, Equatable, Sendable {
+    let id: ApplicationJobID
+    let kind: String
+    let origin: ApplicationJobOrigin
+    let state: ApplicationJobState
+    let name: String
+    let sourceNames: [String]
+    let preset: String?
+    let progress: Double?
+    let canCancel: Bool
+    let isDurable: Bool
+}
+
+struct ApplicationAgentJobList: Codable, Equatable, Sendable {
+    let jobs: [ApplicationAgentJobSummary]
+    let total: Int
+    let offset: Int
+    let hasMore: Bool
+}
+
+@MainActor
+final class ApplicationVisibleQueueRegistry {
+    static let shared = ApplicationVisibleQueueRegistry()
+
+    private(set) var jobs: [ApplicationAgentJobSummary] = []
+
+    func replace(
+        files: [VideoItem],
+        groups: [EncodingGroup],
+        order: [UUID],
+        selectedPreset: ExportPreset
+    ) {
+        let filesByID = Dictionary(uniqueKeysWithValues: files.map { ($0.id, $0) })
+        let groupsByID = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
+        var result: [ApplicationAgentJobSummary] = []
+        var seen = Set<UUID>()
+        for id in order where seen.insert(id).inserted {
+            if let file = filesByID[id] {
+                // Service-owned rows are represented once by their authoritative
+                // record, even when one batch has several visible source rows.
+                if file.applicationJobID != nil { continue }
+                result.append(Self.summary(
+                    id: id, name: file.name, items: [file],
+                    preset: file.status == .waiting ? selectedPreset.rawValue : nil,
+                    kind: "manual_file"
+                ))
+            } else if let group = groupsByID[id], !group.items.isEmpty {
+                result.append(Self.summary(
+                    id: id, name: group.name, items: group.items,
+                    preset: group.status == .waiting
+                        ? (group.preset ?? selectedPreset).rawValue
+                        : group.preset?.rawValue,
+                    kind: "manual_group"
+                ))
+            }
+        }
+        jobs = result
+    }
+
+    func clear() { jobs = [] }
+
+    private static func summary(
+        id: UUID, name: String, items: [VideoItem], preset: String?, kind: String
+    ) -> ApplicationAgentJobSummary {
+        let status = items.map(\.status)
+        let state: ApplicationJobState
+        if status.contains(where: { $0 == .converting }) {
+            state = .running
+        } else if !status.isEmpty && status.allSatisfy({ $0 == .done }) {
+            state = .succeeded
+        } else if status.contains(where: { $0 == .failed }) {
+            state = .failed
+        } else if status.contains(where: { $0 == .cancelled }) {
+            state = .cancelled
+        } else {
+            state = .queued
+        }
+        return ApplicationAgentJobSummary(
+            id: ApplicationJobID(id), kind: kind, origin: .manual, state: state,
+            name: name, sourceNames: items.map { $0.url.lastPathComponent }, preset: preset,
+            progress: items.isEmpty ? nil : items.map(\.progress).reduce(0, +) / Double(items.count),
+            canCancel: false, isDurable: false
+        )
+    }
+}
+
 struct ApplicationJobAcceptance: Codable, Equatable, Sendable {
     let record: ApplicationJobRecord
     let wasAlreadyAccepted: Bool
@@ -3613,7 +3703,7 @@ private extension ApplicationJobError {
     }
 }
 
-/// Implements the proposed six-tool contract without assuming MCP, XPC, or any
+/// Implements the local-agent tool contract without assuming MCP, XPC, or any
 /// other transport. A future helper only decodes input, calls these methods, and
 /// encodes either the returned Codable value or `ApplicationAgentToolFailure`.
 struct ApplicationAgentTools: Sendable {
@@ -3681,6 +3771,50 @@ struct ApplicationAgentTools: Sendable {
                 supportedOverrides: []
             )
         }
+    }
+
+    func listJobs(offset: Int = 0, limit: Int = 100) async throws -> ApplicationAgentJobList {
+        guard offset >= 0, (1...100).contains(limit) else {
+            throw ApplicationAgentTransportError.invalidArguments(
+                "offset must be non-negative and limit must be between 1 and 100."
+            )
+        }
+        let visible = await ApplicationVisibleQueueRegistry.shared.jobs
+        let records = try await jobService.allRecords(now: now())
+        let durable = records.sorted {
+            if $0.state.isTerminal != $1.state.isTerminal { return !$0.state.isTerminal }
+            if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+            return $0.id.description < $1.id.description
+        }.map { record in
+            ApplicationAgentJobSummary(
+                id: record.id, kind: "conversion", origin: record.request.origin,
+                state: record.state,
+                name: record.request.sourceURLs.count == 1
+                    ? record.request.sourceURLs[0].lastPathComponent
+                    : "\(record.request.sourceURLs.count) files",
+                sourceNames: record.request.sourceURLs.map(\.lastPathComponent),
+                preset: record.request.presetID.rawValue,
+                progress: record.progress,
+                canCancel: !record.state.isTerminal,
+                isDurable: true
+            )
+        }
+        let all = visible + durable
+        let page = offset < all.count ? Array(all.dropFirst(offset).prefix(limit)) : []
+        return ApplicationAgentJobList(
+            jobs: page, total: all.count, offset: offset,
+            hasMore: offset + page.count < all.count
+        )
+    }
+
+    func getJobForAgent(jobID: ApplicationJobID) async throws -> ApplicationAgentJSONValue {
+        if let record = try await jobService.record(for: jobID, now: now()) {
+            return try ApplicationAgentJSONValue(encoding: record)
+        }
+        if let visible = await ApplicationVisibleQueueRegistry.shared.jobs.first(where: { $0.id == jobID }) {
+            return try ApplicationAgentJSONValue(encoding: visible)
+        }
+        throw ApplicationJobError.unknownJob(jobID)
     }
 
     func planConversion(

@@ -3126,6 +3126,10 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(plan.request.presetSettings.presetID, .hevc)
 
         let accepted = try await tools.submitConversion(planID: plan.id)
+        let listed = try await tools.listJobs()
+        XCTAssertTrue(listed.jobs.contains(where: {
+            $0.id == accepted.record.id && $0.isDurable && $0.origin == .localAgent
+        }))
         let acceptedRecord = try await tools.getJob(jobID: accepted.record.id)
         XCTAssertEqual(acceptedRecord, accepted.record)
         XCTAssertEqual(
@@ -3140,6 +3144,73 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(cancelled.state, .cancelled)
         let cancelledRecord = try await tools.getJob(jobID: accepted.record.id)
         XCTAssertEqual(cancelledRecord.state, .cancelled)
+    }
+
+    @MainActor
+    func testListJobsIncludesVisibleManualQueueAndSupportsLookupAndPagination() async throws {
+        let file = VideoItem(
+            url: URL(fileURLWithPath: "/private/films/The Matrix.mkv"),
+            name: "The Matrix.mkv", size: 0, duration: "02:16:18",
+            status: .waiting, progress: 0, eta: nil
+        )
+        let groupFile = VideoItem(
+            url: URL(fileURLWithPath: "/private/films/C0001.mov"),
+            name: "C0001.mov", size: 0, duration: "00:00:10",
+            status: .converting, progress: 0.5, eta: nil
+        )
+        let group = EncodingGroup(name: "Card A", items: [groupFile], preset: .prores)
+        let registry = ApplicationVisibleQueueRegistry.shared
+        registry.replace(
+            files: [file], groups: [group], order: [file.id, group.id],
+            selectedPreset: .videoLoop
+        )
+        defer { registry.clear() }
+
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        )
+        let firstPage = try await tools.listJobs(limit: 1)
+        XCTAssertEqual(firstPage.total, 2)
+        XCTAssertTrue(firstPage.hasMore)
+        XCTAssertEqual(firstPage.jobs[0].id, ApplicationJobID(file.id))
+        XCTAssertEqual(firstPage.jobs[0].name, "The Matrix.mkv")
+        XCTAssertEqual(firstPage.jobs[0].state, .queued)
+        XCTAssertEqual(firstPage.jobs[0].preset, ExportPreset.videoLoop.rawValue)
+        XCTAssertFalse(firstPage.jobs[0].isDurable)
+        XCTAssertFalse(firstPage.jobs[0].canCancel)
+        let secondPage = try await tools.listJobs(offset: 1, limit: 1)
+        XCTAssertEqual(secondPage.jobs.map(\.id), [ApplicationJobID(group.id)])
+        XCTAssertEqual(secondPage.jobs[0].sourceNames, ["C0001.mov"])
+        XCTAssertEqual(secondPage.jobs[0].state, .running)
+
+        guard case .object(let lookup) = try await tools.getJobForAgent(jobID: ApplicationJobID(file.id)) else {
+            return XCTFail("Expected a manual queue summary")
+        }
+        XCTAssertEqual(lookup["name"], .string("The Matrix.mkv"))
+        XCTAssertNil(lookup["sourceURLs"], "Manual queue lookup must not disclose unapproved source paths")
+        registry.clear()
+        do {
+            _ = try await tools.getJobForAgent(jobID: ApplicationJobID(file.id))
+            XCTFail("Removed manual queue entries must not remain addressable")
+        } catch let error as ApplicationJobError {
+            XCTAssertEqual(error, .unknownJob(ApplicationJobID(file.id)))
+        }
+    }
+
+    func testListJobsRejectsInvalidPagination() async throws {
+        let tools = ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted)
+        )
+        for (offset, limit) in [(-1, 1), (0, 0), (0, 101)] {
+            do {
+                _ = try await tools.listJobs(offset: offset, limit: limit)
+                XCTFail("Expected pagination rejection")
+            } catch let error as ApplicationAgentTransportError {
+                guard case .invalidArguments = error else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+            }
+        }
     }
 
     func testAgentTransportDispatchesTypedToolsAndRejectsInvalidArguments() async throws {
@@ -3158,6 +3229,16 @@ final class ApplicationJobContractTests: XCTestCase {
             return XCTFail("Expected a preset array")
         }
         XCTAssertEqual(presets.count, ApplicationPresetID.allCases.count)
+
+        let jobsResponse = await dispatcher.response(to: ApplicationAgentIPCRequest(tool: .listJobs))
+        guard case .object(let jobList)? = jobsResponse.result,
+              case .array? = jobList["jobs"] else {
+            return XCTFail("Expected an object-shaped job list")
+        }
+        let invalidPage = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .listJobs, arguments: ["limit": .integer(101)]
+        ))
+        XCTAssertEqual(invalidPage.failure?.code, .invalidArguments)
 
         let invalidRequest = ApplicationAgentIPCRequest(
             tool: .inspectMedia,

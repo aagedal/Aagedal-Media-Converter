@@ -212,7 +212,7 @@ private final class MCPStdioServer {
     }
 
     private static let toolNames = Set([
-        "inspect_media", "list_presets", "plan_conversion", "submit_conversion", "get_job", "cancel_job"
+        "inspect_media", "list_presets", "list_jobs", "plan_conversion", "submit_conversion", "get_job", "cancel_job"
     ])
 
     private static var toolDefinitions: [[String: Any]] { [
@@ -228,6 +228,17 @@ private final class MCPStdioServer {
             "name": "list_presets",
             "description": "List the stable conversion presets supported for local agent access and their currently resolved settings.",
             "inputSchema": objectSchema(properties: [:], required: [])
+        ],
+        [
+            "name": "list_jobs",
+            "description": "List visible manual queue entries and durable conversion jobs with IDs, state, and source filenames. Results are paginated; manual queue IDs remain valid only while their rows exist in this app session.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "offset": ["type": "integer", "minimum": 0],
+                    "limit": ["type": "integer", "minimum": 1, "maximum": 100]
+                ],
+                required: []
+            )
         ],
         [
             "name": "plan_conversion",
@@ -260,15 +271,15 @@ private final class MCPStdioServer {
         ],
         [
             "name": "get_job",
-            "description": "Get the durable state, progress, diagnostics, and outputs for a conversion job.",
+            "description": "Get a durable conversion record or a current manual queue summary by ID.",
             "inputSchema": objectSchema(
-                properties: ["job_id": uuidProperty("Job identifier returned by submit_conversion.")],
+                properties: ["job_id": uuidProperty("Job identifier returned by submit_conversion or list_jobs.")],
                 required: ["job_id"]
             )
         ],
         [
             "name": "cancel_job",
-            "description": "Request cancellation of a queued or running conversion job.",
+            "description": "Request cancellation of a queued or running shared-service conversion job. Manual queue entries returned by list_jobs cannot be cancelled through this tool.",
             "inputSchema": objectSchema(
                 properties: ["job_id": uuidProperty("Job identifier returned by submit_conversion.")],
                 required: ["job_id"]

@@ -22,6 +22,8 @@ signed Release-package validation are still open.
 
 ## Local agent access
 
+- Added `list_jobs` with IDs and state for the visible manual queue and durable
+  conversion records. Current manual queue IDs can be inspected with `get_job`.
 - Added persistent approved source folders in Agent Access settings. A selected
   folder gives local MCP clients read access to files in its subfolders; removing
   it revokes that folder grant for future requests. Output folders still require

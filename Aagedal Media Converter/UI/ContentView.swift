@@ -270,6 +270,13 @@ struct ContentView: View {
         }
     }
 
+    private func publishVisibleQueue() {
+        ApplicationVisibleQueueRegistry.shared.replace(
+            files: droppedFiles, groups: encodingGroups,
+            order: queueOrder, selectedPreset: selectedPreset
+        )
+    }
+
     /// Presets that are currently visible in the picker
     private var visiblePresets: [ExportPreset] {
         presetManager.visiblePresets
@@ -571,6 +578,7 @@ struct ContentView: View {
                 scheduleAutoEncode: scheduleAutoEncode
             ))
             .task {
+                publishVisibleQueue()
                 let updates = await ApplicationJobService.shared.recordUpdates()
                 for await records in updates {
                     guard !Task.isCancelled else { return }
@@ -587,7 +595,12 @@ struct ContentView: View {
                     refreshExpectedOutputURLs(for: selectedPreset)
                 }
                 scheduleMergeCompatibilityEvaluation()
+                publishVisibleQueue()
             }
+            .onChange(of: encodingGroups) { _, _ in publishVisibleQueue() }
+            .onChange(of: queueOrder) { _, _ in publishVisibleQueue() }
+            .onChange(of: selectedPreset) { _, _ in publishVisibleQueue() }
+            .onDisappear { ApplicationVisibleQueueRegistry.shared.clear() }
             .onChange(of: animatedStillFormat) { _, _ in
                 if selectedPreset == .animatedStill {
                     refreshExpectedOutputURLs(for: selectedPreset)

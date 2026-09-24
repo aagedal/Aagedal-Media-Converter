@@ -12,7 +12,7 @@ client executable/version, date, and transcript location for every run.
 | --- | --- |
 | Version/help commands run | Client executable is available |
 | Client accepts a server entry | Registration syntax is accepted |
-| Client reports connected / discovers six tools | Client-to-helper initialization works |
+| Client reports connected / discovers seven tools | Client-to-helper initialization works |
 | Actual client invokes the tools and receives app results | The recorded workflow works in that client |
 
 A custom JSON-RPC driver using a client's name in `clientInfo` does not establish
@@ -28,10 +28,11 @@ These are the helper's wire names, independent of localized labels:
 | Tool | Required arguments | Successful `structuredContent` |
 | --- | --- | --- |
 | `list_presets` | `{}` | `presets` array |
+| `list_jobs` | Optional `offset`, `limit` | `jobs` array, `total`, `offset`, `hasMore` |
 | `inspect_media` | `source_path` | Media inspection object |
 | `plan_conversion` | `source_paths` array, `destination_path`, `preset_id` | Plan with `id`, `request`, `outputs`, and `warnings` |
 | `submit_conversion` | `plan_id` | Acceptance with `record.id` and `wasAlreadyAccepted` |
-| `get_job` | `job_id` | Job with `id`, `state`, and `outputURLs` |
+| `get_job` | `job_id` | Durable job record, or current manual queue summary |
 | `cancel_job` | `job_id` | Job with `id`, `state`, and `outputURLs` |
 
 Paths are absolute filesystem paths; identifiers are UUID strings. The preset

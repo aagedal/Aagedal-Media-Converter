@@ -18,6 +18,12 @@ Created: 2026-09-11.
 The development metadata is **4.5.0 (582)**. This is not a frozen or
 signed release candidate.
 
+The 2026-09-24 job-list continuation adds `list_jobs` for visible manual queue
+entries and durable shared jobs, with IDs that `get_job` can inspect. The
+focused app/helper tests pass; a newly installed Release build still needs a
+live manual-queue and agent-job listing check. See the
+[job-list validation record](4.5-mcp-job-list-validation-2026-09-24.md).
+
 Agent Access settings now let users save and remove approved source folders for
 local MCP reads, including descendant files. The folders use a separate bookmark
 store from other app features; output write access remains a separate approval.
@@ -1216,9 +1222,10 @@ Do not commit to a transport that requires users to install a separate runtime.
 | --- | --- |
 | `inspect_media` | Structured streams, duration, dimensions, frame rate, audio, and available timecode metadata |
 | `list_presets` | Stable preset identifiers, resolved settings, and supported overrides |
+| `list_jobs` | Paginated visible manual queue and durable job summaries with IDs, state, and filenames |
 | `plan_conversion` | Validated plan ID, captured settings, proposed outputs, warnings, and errors |
 | `submit_conversion` | Job IDs for an accepted plan; returns before encoding completes |
-| `get_job` | State, stage/progress where available, diagnostics, and output locations |
+| `get_job` | Durable job state and outputs, or a current manual queue summary by its listed ID |
 | `cancel_job` | Cancellation acknowledgement followed by observable terminal state |
 
 Keep the schema versioned and bounded. Return stable error codes with readable

@@ -8,6 +8,7 @@ import Foundation
 enum ApplicationAgentToolName: String, CaseIterable, Codable, Sendable {
     case inspectMedia = "inspect_media"
     case listPresets = "list_presets"
+    case listJobs = "list_jobs"
     case planConversion = "plan_conversion"
     case submitConversion = "submit_conversion"
     case getJob = "get_job"
@@ -159,6 +160,15 @@ struct ApplicationAgentRequestDispatcher: Sendable {
                 try request.arguments.validateKeys([])
                 return try .success(requestID: request.requestID, value: tools.listPresets())
 
+            case .listJobs:
+                try request.arguments.validateKeys(["offset", "limit"])
+                let offset = try request.arguments.optionalInteger(named: "offset") ?? 0
+                let limit = try request.arguments.optionalInteger(named: "limit") ?? 100
+                return try .success(
+                    requestID: request.requestID,
+                    value: await tools.listJobs(offset: offset, limit: limit)
+                )
+
             case .planConversion:
                 try request.arguments.validateKeys([
                     "source_paths", "destination_path", "preset_id", "request_id",
@@ -204,7 +214,7 @@ struct ApplicationAgentRequestDispatcher: Sendable {
                 )
                 return try .success(
                     requestID: request.requestID,
-                    value: await tools.getJob(jobID: jobID)
+                    value: await tools.getJobForAgent(jobID: jobID)
                 )
 
             case .cancelJob:
@@ -286,6 +296,16 @@ extension Dictionary where Key == String, Value == ApplicationAgentJSONValue {
             )
         }
         return string
+    }
+
+    fileprivate func optionalInteger(named name: String) throws -> Int? {
+        guard let value = self[name] else { return nil }
+        guard case .integer(let integer) = value, let result = Int(exactly: integer) else {
+            throw ApplicationAgentTransportError.invalidArguments(
+                "\(name) must be an integer."
+            )
+        }
+        return result
     }
 
     fileprivate func requiredStringArray(named name: String) throws -> [String] {
