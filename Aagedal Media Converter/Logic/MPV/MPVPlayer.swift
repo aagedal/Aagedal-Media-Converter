@@ -57,6 +57,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     @Published var error: String?
     @Published var reachedEnd = false
 
+    /// Active libmpv audio backend, used when diagnosing playback/device failures.
+    var currentAudioOutput: String? { getString("current-ao") }
+
     private var isInitialized = false
     private var startPaused = false
     private var wakeupContext: UnsafeMutableRawPointer?

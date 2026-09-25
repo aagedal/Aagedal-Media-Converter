@@ -42,4 +42,19 @@ final class AnonymousUsageIndicatorTests: XCTestCase {
         indicator.reportOnOpen()
         XCTAssertNil(defaults.object(forKey: AnonymousUsageChoice.lastAttemptKey))
     }
+
+    @MainActor
+    func testDeferredReleaseDoesNotReportWithStoredConsentAndEndpoint() throws {
+        let name = "AnonymousUsageIndicatorTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set(AnonymousUsageChoice.allow.rawValue, forKey: AnonymousUsageChoice.defaultsKey)
+        let endpoint = try XCTUnwrap(URL(string: "https://example.invalid/usage"))
+        let indicator = AnonymousUsageIndicator(defaults: defaults, endpoint: endpoint)
+
+        indicator.reportOnOpen()
+
+        XCTAssertFalse(AnonymousUsageIndicator.enabledForThisRelease)
+        XCTAssertNil(defaults.object(forKey: AnonymousUsageChoice.lastAttemptKey))
+    }
 }

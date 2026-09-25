@@ -18,6 +18,12 @@ Created: 2026-09-11.
 The development metadata is **4.5.0 (591)**. This is not a frozen or
 signed release candidate.
 
+The anonymous usage indicator is deferred from 4.5. The first-launch prompt
+and General Settings control are removed, and reporting is gated off even if an
+earlier build saved consent or an endpoint is configured. The implementation and
+privacy design remain for a future release.
+See the [deferral validation](4.5-anonymous-usage-deferral-2026-09-25.md).
+
 The 2026-09-24 job-list continuation adds `list_jobs` for visible manual queue
 entries and durable shared jobs, with IDs that `get_job` can inspect. The
 focused app/helper tests pass; a newly installed Release build still needs a
@@ -900,6 +906,11 @@ cleanup fix and retained its complete two-commit patch. Independent app-side fix
 remove MPVPlayer's callback retention cycle and correct 32-bit flag reads. The
 bundled library remains unchanged; its rebuild and crash validation remain a
 release blocker. See the [MPV investigation and rebuild steps](4.5-mpv-lifetime-and-coreaudio-2026-09-21.md).
+The [patched-candidate runtime check](4.5-mpv-coreaudio-runtime-validation-2026-09-25.md)
+now passes 15 MPV-focused app tests, including four real CoreAudio playback and
+teardown cycles. Three generated MKV sequence plays/replays also completed in
+the candidate-linked Debug app. The UI test runner did not start, and the app
+still pins the older library, so this does not close the blocker.
 
 The next continuation adds zoom-aware keyframe candidates to Stream Copy
 filmstrips, including while snapping is disabled. Dense candidate clusters remain
@@ -1009,9 +1020,10 @@ timezone, optional gaps over two hours, compatibility partitions, and a
 single-group choice. Incomplete or conflicting multi-file recordings block the
 proposed import. Physical-card fixtures and live import/export checks remain open.
 
-The anonymous usage indicator now has a first-open choice, a General Settings
-control, a device-only Keychain secret, weekly tokens, and a daily HTTPS client.
-There is no configured endpoint, so the client sends nothing. Server-side
+At the September 22 validation point, the anonymous usage indicator had a
+first-open choice, a General Settings control, a device-only Keychain secret,
+weekly tokens, and a daily HTTPS client. The user-facing controls and reporting
+entry points have since been removed for 4.5. Server-side
 aggregation, public policy, and the rolling-seven-day metric decision remain
 open; unlinkable weekly tokens cannot deduplicate one installation across a
 week boundary in that rolling window. See [privacy design and endpoint
@@ -1103,28 +1115,12 @@ post-actions and broader stream-copy/audio/merge output cases; visually review t
 new bilingual panels; and complete Developer ID signing/notarization, clean
 installation/update checks, release notes, and retained package reports.
 
-### Privacy-preserving usage indicator
+### Privacy-preserving usage indicator — deferred from 4.5
 
-Implemented an explicit first-launch choice for a small aggregate usage indicator. The
-dialog offers **Allow anonymous usage count** and **Don't send data**, explains why
-the count helps development, describes the reporting frequency, and shows an
-illustrative payload. No option is preselected; declining produces no network
-request for this feature, and the choice can be changed later in Settings.
-
-When the user allows reporting, the app creates a random installation secret in
-the device-only Keychain and derives a different pseudonymous token for each
-calendar week. It sends that token at most once per day when the app opens over
-HTTPS. The request contains no filenames, paths, media or conversion details,
-account information, hardware identifiers, or OS metadata. The server assigns
-the date/week, stores only the minimum data needed for aggregation, avoids
-retaining client IP addresses, and reports distinct active installations during
-the last seven days. The product copy must say “active installations,” not
-“active users,” because one person may use several Macs and a Mac may be shared.
-
-The client is implemented with a clear off switch and remains separate from the
-existing quality-analysis feature. An endpoint, server controls, and a public
-privacy policy are required before any reports can be sent. The client does not
-collect conversion analytics.
+The first-launch choice and General Settings control were removed for 4.5.
+`reportOnOpen` returns immediately even with stored consent and a configured
+endpoint. The privacy design and endpoint requirements are retained in
+[the future-feature note](ANONYMOUS-USAGE-PRIVACY.md).
 
 ## Beta readiness snapshot — 2026-09-15
 

@@ -1,10 +1,14 @@
 # Anonymous usage count
 
-Aagedal Media Converter asks before enabling its anonymous usage count. The
-initial choice has no selected default. Choosing **Don't send data** makes no
-network request for this feature. The choice can be changed under General
-Settings at any time. This feature is separate from quality analysis and does
-not collect conversion analytics.
+This feature is deferred from version 4.5. The first-launch choice and General
+Settings control are absent, and the reporting client is disabled even if a
+previous build saved consent or an endpoint is configured. This document retains
+the design requirements for a future release.
+
+When reintroduced, the app must ask before enabling its anonymous usage count.
+The initial choice must have no selected default. Choosing **Don't send data**
+must make no network request. This feature is separate from quality analysis and
+does not collect conversion analytics.
 
 If enabled, the app creates a random 32-byte installation secret in the
 device-only macOS Keychain. With a configured endpoint, it derives a
@@ -22,9 +26,9 @@ people: one person may use several Macs, and a Mac may be shared.
 
 ## Endpoint requirements before activation
 
-The client reads an `AnonymousUsageEndpoint` HTTPS URL from its app bundle.
-There is currently no configured endpoint, so it sends nothing even after
-consent. Before an endpoint is added, the server must be implemented and
+The dormant client can read an `AnonymousUsageEndpoint` HTTPS URL from its app
+bundle, but the 4.5 release gate prevents reporting regardless of that value.
+Before a future release enables reporting, the server must be implemented and
 reviewed to assign the receipt date and week, store only data required for
 seven-day distinct-installation counts, avoid retaining client IP addresses
 in application and proxy logs, and publish a retention schedule and the

@@ -19,8 +19,6 @@ struct GeneralSettingsView: View {
     @AppStorage(AppConstants.playSoundOnErrorKey) private var playSoundOnError = AppConstants.defaultPlaySoundOnError
     @AppStorage(AppConstants.preferredTimecodeDisplayModeKey) private var preferredTimecodeDisplayMode = AppConstants.defaultPreferredTimecodeDisplayMode
 
-    @AppStorage(AnonymousUsageChoice.defaultsKey) private var anonymousUsageChoice = ""
-
     @State private var outputFolderError: String?
     @State private var showingOutputFolderError = false
     @State private var cleanupService = OutputFolderCleanupService.shared
@@ -30,7 +28,6 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             outputFolderSection
-            anonymousUsageSection
             queueDisplaySection
             timecodeDisplaySection
             soundSection
@@ -57,18 +54,6 @@ struct GeneralSettingsView: View {
         }
     }
 
-
-    private var anonymousUsageSection: some View {
-        Section("Anonymous usage count") {
-            Toggle("Allow anonymous usage count", isOn: Binding(
-                get: { anonymousUsageChoice == AnonymousUsageChoice.allow.rawValue },
-                set: { AnonymousUsageIndicator.shared.setChoice($0 ? .allow : .decline) }
-            ))
-            Text("When enabled, this Mac sends one random weekly token at most once per day when the app opens. It contains no files, paths, media, conversion, account, hardware, or OS details. This counts active installations, not people.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
 
     private var outputFolderSection: some View {
         Section(header: Text("Output Location")) {

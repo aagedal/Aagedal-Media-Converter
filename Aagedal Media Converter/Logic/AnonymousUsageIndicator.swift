@@ -40,6 +40,9 @@ enum AnonymousUsagePayload {
 @MainActor
 final class AnonymousUsageIndicator {
     static let shared = AnonymousUsageIndicator()
+    // The feature is deferred from 4.5. Keep reporting disabled even if a
+    // previously saved choice or endpoint remains on this Mac.
+    static let enabledForThisRelease = false
 
     private let defaults: UserDefaults
     private let endpoint: URL?
@@ -69,8 +72,9 @@ final class AnonymousUsageIndicator {
         }
     }
 
-    /// Called once for an app opening; also used immediately after first consent.
+    /// Reserved for a future release. No 4.5 caller can initiate reporting.
     func reportOnOpen(now: Date = Date()) {
+        guard Self.enabledForThisRelease else { return }
         guard AnonymousUsagePayload.shouldAttempt(
             choice: choice,
             lastAttempt: defaults.object(forKey: AnonymousUsageChoice.lastAttemptKey) as? Date,

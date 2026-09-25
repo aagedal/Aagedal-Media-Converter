@@ -302,6 +302,50 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testRepeatedCoreAudioPlaybackAndTeardown() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mpv-coreaudio-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("tone.mkv")
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let generator = Process()
+        generator.executableURL = URL(fileURLWithPath: ffmpeg)
+        generator.arguments = [
+            "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=2",
+            "-c:a", "pcm_s16le", "-ac", "2", source.path,
+        ]
+        try generator.run()
+        generator.waitUntilExit()
+        XCTAssertEqual(generator.terminationStatus, 0)
+
+        for cycle in 0..<4 {
+            var player: MPVPlayer? = MPVPlayer()
+            weak var retiredPlayer = player
+            player?.attachDrawable(MPVMetalLayer())
+            XCTAssertNil(player?.error, "MPV setup failed in cycle \(cycle)")
+            player?.volume = 0
+            player?.load(url: source, autostart: true)
+            for _ in 0..<250 where !(player?.isFileLoaded == true && (player?.timePos ?? 0) > 0.1) {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            XCTAssertTrue(player?.isFileLoaded == true, "Audio source did not load in cycle \(cycle)")
+            XCTAssertGreaterThan(player?.timePos ?? 0, 0.1, "Audio clock did not advance in cycle \(cycle)")
+            XCTAssertNil(player?.error, "Audio playback failed in cycle \(cycle)")
+            guard let audioOutput = player?.currentAudioOutput else {
+                throw XCTSkip("No system audio output was available to exercise CoreAudio")
+            }
+            XCTAssertEqual(audioOutput, "coreaudio", "Playback used an unexpected audio backend")
+            player = nil
+            for _ in 0..<100 where retiredPlayer != nil {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertNil(retiredPlayer, "CoreAudio player was retained after cycle \(cycle)")
+        }
+    }
+
+    @MainActor
     private func makeController() -> PreviewPlayerController {
         PreviewPlayerController(videoItem: VideoItem(
             url: URL(fileURLWithPath: "/private/observation-test.mov"),
