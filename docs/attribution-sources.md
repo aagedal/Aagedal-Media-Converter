@@ -39,9 +39,11 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
   database and its upstream acknowledgement. Its source package identifies
   required platform tools and dependencies in `Package.swift`.
 
-Detailed evidence is retained under `docs/provenance/4.4-local-builds/`. Build
-recipes describe their dependencies; use the recorded revisions instead of
-current branches. Where a local source archive has no upstream download URL,
+Detailed evidence for the existing dependency set is retained under
+`docs/provenance/4.4-local-builds/`. The 4.5 patched MPVKit package and source
+archive are recorded in `docs/4.5-mpv-coreaudio-package-validation-2026-09-25.md`.
+Build recipes describe their dependencies; use the recorded revisions instead
+of current branches. Where a local source archive has no upstream download URL,
 retain that archive or restore it from the source companion. Regenerating or
 changing an archive requires reviewing its contents and updating its recorded
 hash; do not simply remove it from the manifest to make the release gate pass.

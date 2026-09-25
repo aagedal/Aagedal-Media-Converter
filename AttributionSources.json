@@ -579,9 +579,9 @@
     },
     {
       "component": "mpv",
-      "path": "build/attribution/mpvkit/mpv-local-source.tar.gz",
-      "bytes": 7278254,
-      "sha256": "006ff824d2ccfb4b4ddc417c9f9bac27266f49c944ccc3c458b9390194e8647f"
+      "path": "build/attribution/mpvkit/mpv-coreaudio-4.5-source.tar.gz",
+      "bytes": 7240237,
+      "sha256": "4ee0318085084c9bd8f4e8d3daea0ca5748f24236af504eab92158ceeec1c204"
     },
     {
       "component": "FFmpeg",
@@ -598,16 +598,16 @@
     },
     {
       "component": "MPVKit pinned wrapper and build sources",
-      "path": "build/attribution/mpvkit/MPVKit-pinned-source.tar.gz",
-      "bytes": 81749,
-      "sha256": "c29dc8723087ef1b05c194504016af4bdecb30eba75ba878a2828123445dacad",
-      "url": "https://github.com/aagedal/MPVKit/tree/230c3174f1515898f24599147ad61c2a277d0dc2"
+      "path": "build/attribution/mpvkit/MPVKit-coreaudio-pinned-source.tar.gz",
+      "bytes": 81755,
+      "sha256": "ada4069c5aad428456f19f8207a43e931072629399b1ee23d1a91676c8357fed",
+      "url": "https://github.com/aagedal/MPVKit/tree/2d80ed953c8bdb79c46241ceaaaa29d6f1209c63"
     },
     {
       "component": "MPVKit local patches and build configuration",
-      "path": "build/attribution/mpvkit/local-build-configuration.tar.gz",
-      "bytes": 88489,
-      "sha256": "dcf6f53b16f5077fc33329091be20ec0b022d1f5ea15f4d5eb7568167ad07fa8"
+      "path": "build/attribution/mpvkit/coreaudio-build-configuration.tar.gz",
+      "bytes": 92607,
+      "sha256": "a86e2befaa0a1d6df3a3afe2dca6888e324638bc44b266e57d7af679222c7602"
     },
     {
       "component": "MPVKit crc-catalog upstream source (crate VCS revision)",

@@ -101,8 +101,11 @@ The script rechecks candidate hashes, architecture and archive correspondence,
 then reads the actual arm64 and x86_64 Meson options before copying the archive.
 The prepared asset's SwiftPM checksum is
 `abd855457c4783efdb9a5827faa0f1439392cba32150550b1694fe79e6fb3856`.
-`release-preparation.json` retains the checks and release steps. The asset is
-still in temporary storage, unpublished, and marked `release_ready: false`.
-Publish it under a new versioned MPVKit release, update that package's GPL
-binary-target URL/checksum, then pin this app to the resulting package revision
-and validate the app before treating the dependency update as integrated.
+`release-preparation.json` retains the checks and release steps. The MPVKit
+revision, versioned tag, binary asset, and matching source archive have been
+published with explicit user authorization. This app's package pin and source
+attribution now refer to that revision. See
+`../4.5-mpv-coreaudio-package-validation-2026-09-25.md` for published hashes,
+app build/test results, and remaining release gates. The original preparation
+record remains marked `release_ready: false` because it describes the earlier
+local stage, not a final app release.
