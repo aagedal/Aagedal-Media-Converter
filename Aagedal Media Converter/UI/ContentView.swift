@@ -2063,11 +2063,15 @@ struct ContentView: View {
                 let itemID = item.id
 
                 Task(priority: .utility) {
+                    guard let sourceAccess = ApplicationFileAccessAuthorizer.live.acquire(
+                        sourceURL, .read
+                    ) else { return }
+                    defer { sourceAccess.release() }
                     let details = await VideoFileUtils.loadDetails(
                         for: sourceURL,
                         outputFolder: record.request.destinationFolderURL.path,
                         preset: preset,
-                        generateRowThumbnailIfMissing: false
+                        generateRowThumbnailIfMissing: true
                     )
                     await MainActor.run {
                         guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }),

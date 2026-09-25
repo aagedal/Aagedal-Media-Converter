@@ -2318,6 +2318,15 @@ enum ApplicationFileAccessMode: Equatable, Sendable {
     case write
 }
 
+enum ApplicationDefaultOutputFolder {
+    static func currentURL(defaults: UserDefaults = .standard) -> URL {
+        let savedPath = defaults.string(forKey: "outputFolder")
+        let path = savedPath.flatMap { NSString(string: $0).isAbsolutePath ? $0 : nil }
+            ?? AppConstants.defaultOutputDirectory.path
+        return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+    }
+}
+
 /// A balanced security-scope lease. Planning and submission retain all source
 /// and destination grants for the full filesystem validation operation.
 final class ApplicationFileAccessLease: @unchecked Sendable {
@@ -2348,12 +2357,14 @@ struct ApplicationFileAccessAuthorizer: Sendable {
 
     static let live = storedBookmarks(
         using: .shared,
-        additionalReadFolders: .agentSourceFolders
+        additionalReadFolders: .agentSourceFolders,
+        defaultOutputFolder: { ApplicationDefaultOutputFolder.currentURL() }
     )
 
     static func storedBookmarks(
         using manager: SecurityScopedBookmarkManager,
-        additionalReadFolders: SecurityScopedBookmarkManager? = nil
+        additionalReadFolders: SecurityScopedBookmarkManager? = nil,
+        defaultOutputFolder: (@Sendable () -> URL?)? = nil
     ) -> Self {
         ApplicationFileAccessAuthorizer { url, mode in
             let access = manager.startAccessingStoredBookmark(
@@ -2375,6 +2386,15 @@ struct ApplicationFileAccessAuthorizer: Sendable {
                         additionalReadFolders.stopAccessing(folderAccess)
                     }
                 }
+            }
+            // The app's configured output folder is already its intended write
+            // destination. Older installs may have this preference without a
+            // saved bookmark; filesystem validation still checks writability.
+            if mode == .write,
+               let defaultOutputFolder = defaultOutputFolder?(),
+               url.standardizedFileURL.resolvingSymlinksInPath()
+                   == defaultOutputFolder.standardizedFileURL.resolvingSymlinksInPath() {
+                return ApplicationFileAccessLease {}
             }
             return nil
         }
@@ -3636,7 +3656,7 @@ struct ApplicationPlanConversionInput: Codable, Equatable, Sendable {
     let requestID: UUID
     let requesterID: String
     let sourceURLs: [URL]
-    let destinationFolderURL: URL
+    let destinationFolderURL: URL?
     let presetID: ApplicationPresetID
     let idempotencyKey: String?
 
@@ -3645,7 +3665,7 @@ struct ApplicationPlanConversionInput: Codable, Equatable, Sendable {
         requestID: UUID = UUID(),
         requesterID: String,
         sourceURLs: [URL],
-        destinationFolderURL: URL,
+        destinationFolderURL: URL? = nil,
         presetID: ApplicationPresetID,
         idempotencyKey: String? = nil
     ) {
@@ -3751,6 +3771,7 @@ struct ApplicationAgentTools: Sendable {
     private let mediaInspector: ApplicationMediaInspector
     private let presetSettingsProvider: PresetSettingsProvider
     private let approvedSourceFolders: @Sendable () -> [URL]
+    private let defaultOutputFolder: @Sendable () -> URL
     private let now: NowProvider
 
     init(
@@ -3763,6 +3784,9 @@ struct ApplicationAgentTools: Sendable {
         approvedSourceFolders: @escaping @Sendable () -> [URL] = {
             SecurityScopedBookmarkManager.agentSourceFolders.storedFolderURLs()
         },
+        defaultOutputFolder: @escaping @Sendable () -> URL = {
+            ApplicationDefaultOutputFolder.currentURL()
+        },
         now: @escaping NowProvider = Date.init
     ) {
         self.jobService = jobService
@@ -3770,6 +3794,7 @@ struct ApplicationAgentTools: Sendable {
         self.mediaInspector = mediaInspector
         self.presetSettingsProvider = presetSettingsProvider
         self.approvedSourceFolders = approvedSourceFolders
+        self.defaultOutputFolder = defaultOutputFolder
         self.now = now
     }
 
@@ -4007,7 +4032,7 @@ struct ApplicationAgentTools: Sendable {
             origin: .localAgent,
             requesterID: input.requesterID,
             sourceURLs: input.sourceURLs,
-            destinationFolderURL: input.destinationFolderURL,
+            destinationFolderURL: input.destinationFolderURL ?? defaultOutputFolder(),
             presetID: input.presetID,
             presetSettings: presetSettingsProvider(input.presetID),
             idempotencyKey: input.idempotencyKey,

@@ -102,7 +102,7 @@ private final class MCPStdioServer {
                 "name": "Aagedal Media Converter",
                 "version": "4.5.0"
             ],
-            "instructions": "Add source folders in Aagedal Media Converter Settings > Agent Access > Approved source folders, and choose a writable output folder in the app before planning conversions."
+            "instructions": "Add source folders in Aagedal Media Converter Settings > Agent Access > Approved source folders. Conversions use the app's default output folder unless destination_path names another folder already approved for writing in the app."
         ])
     }
 
@@ -261,7 +261,7 @@ private final class MCPStdioServer {
         ],
         [
             "name": "plan_conversion",
-            "description": "Validate sources and destination, capture preset settings, and reserve a deterministic conversion plan without starting work.",
+            "description": "Validate sources and destination, capture preset settings, and reserve a deterministic conversion plan without starting work. Uses the app's default output folder when destination_path is omitted.",
             "inputSchema": objectSchema(
                 properties: [
                     "source_paths": [
@@ -269,7 +269,7 @@ private final class MCPStdioServer {
                         "minItems": 1,
                         "items": pathProperty("Absolute source path.")
                     ],
-                    "destination_path": pathProperty("Absolute path to an approved writable folder."),
+                    "destination_path": pathProperty("Optional absolute path to an approved writable folder. Omit to use the app's default output folder."),
                     "preset_id": [
                         "type": "string",
                         "enum": ["h264", "hevc", "prores", "proxy", "audio_only", "stream_copy"]
@@ -277,7 +277,7 @@ private final class MCPStdioServer {
                     "request_id": ["type": "string", "format": "uuid"],
                     "idempotency_key": ["type": "string", "minLength": 1, "maxLength": 128]
                 ],
-                required: ["source_paths", "destination_path", "preset_id"]
+                required: ["source_paths", "preset_id"]
             )
         ],
         [

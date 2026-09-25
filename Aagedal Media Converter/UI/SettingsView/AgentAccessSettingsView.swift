@@ -162,7 +162,7 @@ struct AgentAccessSettingsView: View {
             }
 
             Section("Approved source folders") {
-                Text("Files in these folders and their subfolders are available to local MCP clients. Choose output folders in the app before converting. MCP requests cannot approve new locations.")
+                Text("Files in these folders and their subfolders are available to local MCP clients. Conversions use the app's default output folder unless another writable folder is selected in the app. MCP requests cannot approve new locations.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
 

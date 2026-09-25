@@ -2822,6 +2822,34 @@ final class ApplicationJobContractTests: XCTestCase {
         ))
     }
 
+    func testAgentPlanDefaultsToConfiguredOutputFolder() async throws {
+        let directory = try makeTemporaryDirectory()
+        let source = directory.appendingPathComponent("clip.mov")
+        let output = directory.appendingPathComponent("exports", isDirectory: true)
+        try Data("source".utf8).write(to: source)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        let dispatcher = ApplicationAgentRequestDispatcher(tools: ApplicationAgentTools(
+            jobService: ApplicationJobService(fileAccessAuthorizer: .unrestricted),
+            defaultOutputFolder: { output }
+        ))
+        let response = await dispatcher.response(to: ApplicationAgentIPCRequest(
+            tool: .planConversion,
+            arguments: [
+                "source_paths": .array([.string(source.path)]),
+                "preset_id": .string("h264"),
+                "requester_id": .string("Test")
+            ]
+        ))
+
+        XCTAssertNil(response.failure)
+        guard case .object(let plan)? = response.result,
+              case .object(let request)? = plan["request"] else {
+            return XCTFail("Expected a conversion plan")
+        }
+        XCTAssertEqual(request["destinationFolderURL"], .string(output.absoluteString))
+    }
+
     func testListMediaBrowsesApprovedFoldersWithFiltersAndPagination() throws {
         let root = try makeTemporaryDirectory()
         let clips = root.appendingPathComponent("Clips", isDirectory: true)

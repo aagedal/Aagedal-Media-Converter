@@ -202,7 +202,8 @@ struct ApplicationAgentRequestDispatcher: Sendable {
                 ])
                 let sourceURLs = try request.arguments.requiredStringArray(named: "source_paths")
                     .map { try Self.fileURL(path: $0, argument: "source_paths") }
-                let destinationURL = try request.arguments.requiredFileURL(named: "destination_path")
+                let destinationURL = try request.arguments.optionalString(named: "destination_path")
+                    .map { try Self.fileURL(path: $0, argument: "destination_path") }
                 let presetRaw = try request.arguments.requiredString(named: "preset_id")
                 guard let presetID = ApplicationPresetID(rawValue: presetRaw) else {
                     throw ApplicationAgentTransportError.invalidArguments(

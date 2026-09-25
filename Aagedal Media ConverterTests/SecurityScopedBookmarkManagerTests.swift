@@ -3,6 +3,27 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class SecurityScopedBookmarkManagerTests: XCTestCase {
+    func testConfiguredDefaultOutputNeedsNoSeparateBookmark() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DefaultOutputTests-\(UUID().uuidString)", isDirectory: true)
+        let output = directory.appendingPathComponent("Media_Exports", isDirectory: true)
+        let other = directory.appendingPathComponent("Other", isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+
+        let manager = SecurityScopedBookmarkManager(defaults: try isolatedDefaults())
+        let authorizer = ApplicationFileAccessAuthorizer.storedBookmarks(
+            using: manager, defaultOutputFolder: { output }
+        )
+
+        let lease = try XCTUnwrap(authorizer.acquire(output, .write))
+        lease.release()
+        XCTAssertNil(authorizer.acquire(output, .read))
+        XCTAssertNil(authorizer.acquire(other, .write))
+        XCTAssertNil(authorizer.acquire(output.appendingPathComponent("nested"), .write))
+    }
+
     func testNativeFolderBookmarkRejectsSiblingAndSymlinkEscape() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("NativeBookmarkTests-\(UUID().uuidString)", isDirectory: true)
