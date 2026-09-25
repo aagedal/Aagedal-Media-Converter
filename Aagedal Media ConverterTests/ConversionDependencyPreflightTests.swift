@@ -4,7 +4,7 @@ import XCTest
 
 final class ConversionDependencyPreflightTests: XCTestCase {
     func testAudioPreflightTimeoutPreservesUnknownTopologyPolicy() async throws {
-        let preflight = ConversionDependencyPreflight { $0 == .asdcpWrap ? nil : "/bin/sh" }
+        let preflight = ConversionDependencyPreflight { $0 == .raw2bmx ? nil : "/bin/sh" }
         let request = ConversionRequest(inputURL: URL(fileURLWithPath: "/tmp/input.mov"), outputURL: URL(fileURLWithPath: "/tmp/out"), preset: .imfJ2K)
         let failure = try await preflight.audioFailure(for: request, timeout: .milliseconds(10)) { _ in
             try? await Task.sleep(for: .seconds(60))
@@ -13,28 +13,27 @@ final class ConversionDependencyPreflightTests: XCTestCase {
         XCTAssertNil(failure)
     }
 
-    func testIMFExportRejectsBeforeResolvingToolsProbingOrCreatingOutput() async throws {
+    func testIMFExportMissingEncoderDoesNotCreateOutput() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         for preset in [ExportPreset.imfJ2K, .imfProRes] {
             let converter = FFMPEGConverter(
-                ffmpegPathProvider: { XCTFail("Disabled export must not resolve FFmpeg"); return nil },
+                ffmpegPathProvider: { nil },
                 dependencyPreflight: ConversionDependencyPreflight { _ in
-                    XCTFail("Disabled export must not resolve helpers"); return nil
+                    XCTFail("Missing encoder must stop before dependency preflight"); return nil
                 },
                 preflightAudioStreamProvider: { _ in
-                    XCTFail("Disabled export must not probe input"); return nil
+                    XCTFail("Missing encoder must stop before probing"); return nil
                 }
             )
-            let completed = expectation(description: "IMF conformance restriction reported")
+            let completed = expectation(description: "IMF missing encoder reported")
             completed.assertForOverFulfill = true
             await converter.convert(
                 request: ConversionRequest(inputURL: directory.appendingPathComponent("input.mov"), outputURL: directory.appendingPathComponent("out"), preset: preset),
                 progressUpdate: { _, _ in XCTFail("No encoding should start") },
                 completion: { success, reason in
                     XCTAssertFalse(success)
-                    XCTAssertTrue(reason?.contains("IMF export is temporarily unavailable") == true)
-                    XCTAssertTrue(reason?.contains("validated IMF mastering tool") == true)
+                    XCTAssertTrue(reason?.contains("FFmpeg binary not found") == true)
                     completed.fulfill()
                 }
             )
@@ -44,7 +43,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
         }
     }
 
-    func testIMFExportRestrictionPreservesExistingOutput() async throws {
+    func testIMFEncoderPreflightPreservesExistingOutput() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -52,13 +51,13 @@ final class ConversionDependencyPreflightTests: XCTestCase {
         let original = Data("existing delivery must survive rejection".utf8)
         try original.write(to: output)
         for preset in [ExportPreset.imfJ2K, .imfProRes] {
-            let converter = FFMPEGConverter()
+            let converter = FFMPEGConverter(ffmpegPathProvider: { nil })
             await converter.convert(
                 request: ConversionRequest(inputURL: directory.appendingPathComponent("input.mov"), outputURL: output, preset: preset),
-                progressUpdate: { _, _ in XCTFail("Disabled export must not start") },
+                progressUpdate: { _, _ in XCTFail("No encoding should start") },
                 completion: { success, reason in
                     XCTAssertFalse(success)
-                    XCTAssertTrue(reason?.contains("IMF export is temporarily unavailable") == true)
+                    XCTAssertTrue(reason?.contains("FFmpeg binary not found") == true)
                 }
             )
             XCTAssertEqual(try Data(contentsOf: output), original)
@@ -67,7 +66,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
     }
 
     func testUnknownAndConcatIMFAudioAreProbedBeforeEncoding() async throws {
-        let preflight = ConversionDependencyPreflight { $0 == .asdcpWrap ? nil : "/bin/sh" }
+        let preflight = ConversionDependencyPreflight { $0 == .raw2bmx ? nil : "/bin/sh" }
         let input = URL(fileURLWithPath: "/tmp/representative.mov")
         let inputArguments: [[String]?] = [nil, ["-f", "concat", "-i", "/tmp/list.txt"]]
         for arguments in inputArguments {
@@ -76,7 +75,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
                 XCTAssertEqual(url, input)
                 return [.init(index: 1, channels: 2, channelLayout: "stereo", codecName: "aac")]
             }
-            XCTAssertTrue(failure?.contains("asdcp-wrap") == true)
+            XCTAssertTrue(failure?.contains("raw2bmx") == true)
             let silent = try await preflight.audioFailure(for: request) { _ in [] }
             XCTAssertNil(silent)
             let unknown = try await preflight.audioFailure(for: request) { _ in nil }
@@ -85,7 +84,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
     }
 
     func testImageSequenceCompanionAndExplicitAudioRequireWrapperWithoutProbe() async throws {
-        let preflight = ConversionDependencyPreflight { $0 == .asdcpWrap ? nil : "/bin/sh" }
+        let preflight = ConversionDependencyPreflight { $0 == .raw2bmx ? nil : "/bin/sh" }
         for request in [
             ConversionRequest(inputURL: URL(fileURLWithPath: "/tmp/audio.wav"), outputURL: URL(fileURLWithPath: "/tmp/out"), preset: .imfProRes),
             ConversionRequest(inputURL: URL(fileURLWithPath: "/tmp/frames"), outputURL: URL(fileURLWithPath: "/tmp/out"), preset: .imfProRes,
@@ -95,7 +94,7 @@ final class ConversionDependencyPreflightTests: XCTestCase {
                 XCTFail("Explicit audio sources do not need probing")
                 return nil
             }
-            XCTAssertTrue(failure?.contains("asdcp-wrap") == true)
+            XCTAssertTrue(failure?.contains("raw2bmx") == true)
         }
         let silent = ConversionRequest(inputURL: URL(fileURLWithPath: "/tmp/frames"), outputURL: URL(fileURLWithPath: "/tmp/out"), preset: .imfJ2K,
                                        customInputArguments: ["-framerate", "24", "-i", "/tmp/frame_%04d.png"])
@@ -120,11 +119,10 @@ final class ConversionDependencyPreflightTests: XCTestCase {
     }
 
     func testIMFAudioRequiresWrapperOnlyWhenAudioIsKnownPresent() {
-        let preflight = ConversionDependencyPreflight { $0 == .asdcpWrap ? nil : "/bin/sh" }
-        for preset in [ExportPreset.imfJ2K, .imfProRes] {
-            XCTAssertNil(preflight.failure(for: preset, sourceAudioKnownPresent: false))
-            XCTAssertTrue(preflight.failure(for: preset, sourceAudioKnownPresent: true)?.contains("asdcp-wrap") == true)
-        }
+        let preflight = ConversionDependencyPreflight { $0 == .raw2bmx ? nil : "/bin/sh" }
+        XCTAssertNil(preflight.failure(for: .imfProRes, sourceAudioKnownPresent: false))
+        XCTAssertTrue(preflight.failure(for: .imfProRes, sourceAudioKnownPresent: true)?.contains("raw2bmx") == true)
+        XCTAssertTrue(preflight.failure(for: .imfJ2K, sourceAudioKnownPresent: false)?.contains("raw2bmx") == true)
         XCTAssertNil(preflight.failure(for: .h264, sourceAudioKnownPresent: true))
     }
 

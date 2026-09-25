@@ -28,10 +28,16 @@ unavailable or a grant is lost, reconnect the drive or select the location again
 in the app and make a new plan. A plan lasts 15 minutes, and submission rechecks
 access, source identity, and output collisions. Existing outputs are preserved.
 
-The first agent release supports H.264, HEVC, ProRes, Proxy, Audio Only, and
-Stream Copy. A client can call `list_presets`, `list_media`, `list_jobs`, `inspect_media`,
+Agent Access lists all 17 built-in presets. All can be planned and run:
+Video Loop, Video Loop with Sound, Animated Still, H.264, HEVC, AV1, AV2,
+TV HEVC, TV AVC-Intra, ProRes, Proxy, Audio Only, Stream Copy, Image Sequence,
+and DCP, plus the experimental IMF App 2e and RDD 45 presets. IMF output should
+be validated in the target mastering or delivery tool. Custom preset slots are excluded because they
+can contain arbitrary FFmpeg settings. A client can call `list_presets`, `list_media`, `list_jobs`, `inspect_media`,
 `plan_conversion`, `get_plan`, `submit_conversion`, `get_job`, `wait_for_job`,
 `cancel_job`, and `get_app_status`.
+For DCP, the planned output is a working folder containing the finished
+ISDCF-named package folder.
 `get_plan` returns an existing plan by ID while it is valid, including its expiry,
 proposed outputs, and warnings.
 `list_media` without a folder path returns the folders approved in Agent Access.

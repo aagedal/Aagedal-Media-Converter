@@ -50,26 +50,26 @@ enum IMFContentKind: String, CaseIterable, Identifiable, Sendable {
 
 /// Selects which IMF Application the export targets. Each Application has its own
 /// ST 2067-x specification controlling the video essence codec and constraints.
-enum IMFApplication: String, CaseIterable, Identifiable, Sendable {
+enum IMFApplication: String, CaseIterable, Identifiable, Codable, Sendable {
     /// ST 2067-21: J2K Application #2 Extended (cinema/broadcast HD/UHD).
     case app2e = "app2e"
-    /// ST 2067-50: Apple ProRes Application #5.
-    case app5 = "app5"
+    /// Apple ProRes IMF per SMPTE RDD 45.
+    case rdd45 = "rdd45"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
         case .app2e: return "App #2e (JPEG 2000)"
-        case .app5:  return "App #5 (ProRes)"
+        case .rdd45: return "RDD 45 (ProRes)"
         }
     }
 }
 
 // MARK: - IMF Resolution
 
-/// IMF-allowed image resolutions (HD and UHD; both ST 2067-21 and ST 2067-50 permit these).
-enum IMFResolution: String, CaseIterable, Identifiable, Sendable {
+/// Image resolutions offered by the experimental App #2e and RDD 45 exporters.
+enum IMFResolution: String, CaseIterable, Identifiable, Codable, Sendable {
     case hd1080 = "HD 1920x1080"
     case uhd2160 = "UHD 3840x2160"
 
@@ -102,7 +102,7 @@ enum IMFResolution: String, CaseIterable, Identifiable, Sendable {
 
 /// IMF-allowed frame rates. Drop-frame variants (23.976, 29.97, 59.94) are represented as
 /// non-integer edit rates per ST 2067-2.
-enum IMFFrameRate: String, CaseIterable, Identifiable, Sendable {
+enum IMFFrameRate: String, CaseIterable, Identifiable, Codable, Sendable {
     case fps23_976 = "23.976 fps"
     case fps24 = "24 fps"
     case fps25 = "25 fps"
@@ -165,7 +165,7 @@ enum IMFFrameRate: String, CaseIterable, Identifiable, Sendable {
 // MARK: - IMF Color Encoding (App #2e)
 
 /// Color encoding for App #2e essences. Drives FFmpeg color-tagging flags and the bmx wrap.
-enum IMFColorEncoding: String, CaseIterable, Identifiable, Sendable {
+enum IMFColorEncoding: String, CaseIterable, Identifiable, Codable, Sendable {
     case rec709 = "Rec. 709 (HD SDR)"
     case rec2020SDR = "Rec. 2020 (UHD SDR)"
     case rec2020PQ = "Rec. 2020 PQ (HDR10)"
@@ -214,11 +214,11 @@ enum IMFColorEncoding: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-// MARK: - IMF ProRes Profile (App #5)
+// MARK: - IMF ProRes Profile (RDD 45)
 
-/// ProRes profiles permitted by ST 2067-50 (App #5). Excludes Proxy / LT / 422 / 422 LT —
+/// ProRes profiles supported by the RDD 45 exporter. Excludes Proxy / LT / 422 / 422 LT —
 /// IMF requires a high-quality master profile.
-enum IMFProResProfile: String, CaseIterable, Identifiable, Sendable {
+enum IMFProResProfile: String, CaseIterable, Identifiable, Codable, Sendable {
     case proRes422HQ = "ProRes 422 HQ"
     case proRes4444 = "ProRes 4444"
     case proRes4444XQ = "ProRes 4444 XQ"
@@ -247,7 +247,7 @@ enum IMFProResProfile: String, CaseIterable, Identifiable, Sendable {
 // MARK: - IMF Scaling
 
 /// How source video is fitted into the IMF container resolution.
-enum IMFScalingMode: String, CaseIterable, Identifiable, Sendable {
+enum IMFScalingMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case fit = "Fit (letterbox/pillarbox)"
     case fill = "Fill (crop to fill)"
 

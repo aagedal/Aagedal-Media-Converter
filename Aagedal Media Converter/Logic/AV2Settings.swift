@@ -7,7 +7,7 @@ import Foundation
 /// Immutable encoding preferences captured before an AV2 command builder suspends.
 /// Passing the same snapshot to multiple builders keeps geometry, bit depth and
 /// chunking, container and audio consistent even if Settings changes during conversion.
-struct AV2Settings: Sendable {
+struct AV2Settings: Codable, Equatable, Sendable {
     let container: AV2Container
     let audioCodec: AV2AudioCodec
     let audioBitrate: AudioBitrate

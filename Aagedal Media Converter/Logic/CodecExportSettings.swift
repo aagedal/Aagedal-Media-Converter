@@ -6,7 +6,7 @@ import Foundation
 
 /// Immutable codec, broadcast, proxy, animated-still, Stream Copy, and custom export preferences, resolved before asynchronous work.
 /// Derived command arguments intentionally retain the existing preset codec policy.
-struct CodecExportSettings: Sendable {
+struct CodecExportSettings: Codable, Equatable, Sendable {
     let fileNameContext: FileNameTemplateContext
     let container: CodecContainer?
     let fileExtension: String

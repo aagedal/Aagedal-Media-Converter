@@ -44,7 +44,7 @@ struct ConversionDependencyPreflight: Sendable {
 
         if let failure = Self.failure(for: helper, path: pathProvider(helper)) { return failure }
         if (preset == .imfJ2K || preset == .imfProRes), sourceAudioKnownPresent {
-            return Self.failure(for: .asdcpWrap, path: pathProvider(.asdcpWrap))
+            return Self.failure(for: .raw2bmx, path: pathProvider(.raw2bmx))
         }
         return nil
     }
@@ -61,7 +61,7 @@ struct ConversionDependencyPreflight: Sendable {
         try Task.checkCancellation()
         guard request.preset == .imfJ2K || request.preset == .imfProRes,
               !(request.audioRoutingConfig.map { $0.isCustomized && $0.outputTracks.isEmpty } ?? false),
-              let failure = Self.failure(for: .asdcpWrap, path: pathProvider(.asdcpWrap)) else {
+              let failure = Self.failure(for: .raw2bmx, path: pathProvider(.raw2bmx)) else {
             return nil
         }
         let source = FFMPEGConverter.packageAudioInput(

@@ -272,7 +272,12 @@ private final class MCPStdioServer {
                     "destination_path": pathProperty("Optional absolute path to an approved writable folder. Omit to use the app's default output folder."),
                     "preset_id": [
                         "type": "string",
-                        "enum": ["h264", "hevc", "prores", "proxy", "audio_only", "stream_copy"]
+                        "enum": [
+                            "video_loop", "video_loop_with_sound", "animated_still",
+                            "h264", "hevc", "av1", "av2", "tv_hevc", "tv_avc_intra",
+                            "prores", "proxy", "audio_only", "stream_copy",
+                            "image_sequence", "dcp", "imf_app_2e", "imf_rdd_45"
+                        ]
                     ],
                     "request_id": ["type": "string", "format": "uuid"],
                     "idempotency_key": ["type": "string", "minLength": 1, "maxLength": 128]

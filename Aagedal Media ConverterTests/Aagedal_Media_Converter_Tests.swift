@@ -11748,29 +11748,24 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(try xmlTexts(named: "AnnotationText", at: pklURL).first, "QC & mastering <approved>")
     }
 
-    func testIMFManifestAssemblyMovesDummyEssencesAndRoundTripsPackage() async throws {
+    func testIMFManifestAssemblyLinksMXFEssencesAndRoundTripsPackage() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("AagedalMediaConverterIMFManifestTests-\(UUID().uuidString)", isDirectory: true)
         let packageDirectory = temporaryDirectory.appendingPathComponent("IMP Package", isDirectory: true)
         try FileManager.default.createDirectory(at: packageDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
-        let videoSource = temporaryDirectory.appendingPathComponent("picture.mxf")
-        let audioSource = temporaryDirectory.appendingPathComponent("sound.mxf")
-        let videoData = Data("dummy IMF picture essence".utf8)
-        let audioData = Data("dummy IMF sound essence".utf8)
-        try videoData.write(to: videoSource)
-        try audioData.write(to: audioSource)
+        let (videoSource, audioSource) = try makeIMFTestEssences(in: temporaryDirectory, includeAudio: true)
 
         let assembled = await IMFManifestWriter.shared.assembleIMP(
             videoMXFURL: videoSource,
             audioMXFURL: audioSource,
             outputDirectoryURL: packageDirectory,
             title: "Episode & <Special>",
-            application: .app2e,
-            editRateNumerator: 30_000,
-            editRateDenominator: 1_001,
-            frameCount: 90,
+            application: .rdd45,
+            editRateNumerator: 24,
+            editRateDenominator: 1,
+            frameCount: 24,
             itemMetadata: IMFItemMetadata(
                 contentKind: .episode,
                 annotationText: "Archive & delivery <master>",
@@ -11781,7 +11776,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         XCTAssertTrue(assembled)
         XCTAssertFalse(FileManager.default.fileExists(atPath: videoSource.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: audioSource.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(audioSource).path))
 
         let files = try FileManager.default.contentsOfDirectory(
             at: packageDirectory,
@@ -11793,8 +11788,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let pklURL = try XCTUnwrap(files.first { $0.lastPathComponent.hasPrefix("PKL_") })
         let assetMapURL = packageDirectory.appendingPathComponent("ASSETMAP.xml")
 
-        XCTAssertEqual(try Data(contentsOf: videoURL), videoData)
-        XCTAssertEqual(try Data(contentsOf: audioURL), audioData)
+        XCTAssertGreaterThan(try XCTUnwrap(videoURL.resourceValues(forKeys: [.fileSizeKey]).fileSize), 0)
+        XCTAssertGreaterThan(try XCTUnwrap(audioURL.resourceValues(forKeys: [.fileSizeKey]).fileSize), 0)
         try assertPackingList(
             at: pklURL,
             describes: [cplURL, videoURL, audioURL]
@@ -11811,14 +11806,28 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             parsed.essences.map { $0.mxfURL.resolvingSymlinksInPath().path },
             [videoURL, audioURL].map { $0.resolvingSymlinksInPath().path }
         )
-        XCTAssertEqual(try Data(contentsOf: parsed.essences[0].mxfURL), videoData)
-        XCTAssertEqual(try Data(contentsOf: parsed.essences[1].mxfURL), audioData)
-
-        XCTAssertEqual(try xmlTexts(named: "AnnotationText", at: cplURL).first, "Archive & delivery <master>")
+        XCTAssertEqual(try xmlTexts(named: "Annotation", at: cplURL).first, "Archive & delivery <master>")
         XCTAssertEqual(try xmlTexts(named: "ContentKind", at: cplURL), [IMFContentKind.episode.rawValue])
-        XCTAssertEqual(try xmlTexts(named: "EditRate", at: cplURL), ["30000 1001"])
-        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["90", "90"])
-        XCTAssertEqual(try xmlTexts(named: "SourceDuration", at: cplURL), ["90", "90"])
+        XCTAssertEqual(try xmlTexts(named: "EditRate", at: cplURL), ["24 1", "24 1", "48000 1"])
+        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["24", "48000"])
+        XCTAssertEqual(try xmlTexts(named: "SourceDuration", at: cplURL), ["24", "48000"])
+        let descriptors = try xmlTexts(named: "EssenceDescriptor", at: cplURL)
+        XCTAssertEqual(descriptors.count, 2)
+        let cpl = try XMLDocument(contentsOf: cplURL, options: [])
+        let descriptorIDs = Set(try cpl.nodes(forXPath:
+            "//*[local-name()='EssenceDescriptor']/*[local-name()='Id']").compactMap(\.stringValue))
+        XCTAssertEqual(descriptorIDs, Set(try xmlTexts(named: "SourceEncoding", at: cplURL)))
+        let trackIDs = Set(try xmlTexts(named: "TrackFileId", at: cplURL))
+        var wrappedIDs: [String] = []
+        for url in [videoURL, audioURL] {
+            let metadataData = await BMXService.shared.getMXFXMLInfo(url: url)
+            let metadata = try XCTUnwrap(metadataData)
+            let document = try XMLDocument(data: metadata)
+            let package = try XCTUnwrap(document.nodes(forXPath:
+                "//*[local-name()='file']/*[local-name()='primary_package']").first as? XMLElement)
+            wrappedIDs.append(try XCTUnwrap(package.attribute(forName: "idau")?.stringValue))
+        }
+        XCTAssertEqual(trackIDs, Set(wrappedIDs))
     }
 
     func testPackageManifestAssemblyOmitsAudioAssetsWhenSourceHasNoAudio() async throws {
@@ -11831,9 +11840,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
         let dcpVideoSource = temporaryDirectory.appendingPathComponent("dcp-picture.mxf")
-        let imfVideoSource = temporaryDirectory.appendingPathComponent("imf-picture.mxf")
+        let (imfVideoSource, _) = try makeIMFTestEssences(in: temporaryDirectory, includeAudio: false)
         try Data("silent DCP picture essence".utf8).write(to: dcpVideoSource)
-        try Data("silent IMF picture essence".utf8).write(to: imfVideoSource)
 
         let dcpAssembled = await DCPService.shared.assembleDCP(
             videoMXFURL: dcpVideoSource,
@@ -11850,7 +11858,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             audioMXFURL: nil,
             outputDirectoryURL: imfDirectory,
             title: "Silent IMF",
-            application: .app5,
+            application: .rdd45,
             editRateNumerator: 24,
             editRateDenominator: 1,
             frameCount: 24,
@@ -11883,6 +11891,35 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             describes: [imfPKLURL, imfCPLURL, imfVideoURL]
         )
         XCTAssertEqual(try IMFPackageParser.parsePackage(folder: imfDirectory).essences.map(\.kind), [.mainImage])
+    }
+
+    private func makeIMFTestEssences(in directory: URL, includeAudio: Bool) throws -> (URL, URL?) {
+        func run(_ executable: String, _ arguments: [String]) throws {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+            let errors = Pipe()
+            process.standardError = errors
+            try process.run()
+            process.waitUntilExit()
+            XCTAssertEqual(process.terminationStatus, 0, String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "")
+        }
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let intermediate = directory.appendingPathComponent("imf-intermediate.mxf")
+        try run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                         "testsrc2=size=64x64:rate=24:duration=1", "-frames:v", "24", "-c:v", "prores_ks",
+                         "-profile:v", "3", "-pix_fmt", "yuv422p10le", "-an", "-f", "mxf", intermediate.path])
+        let bmxtranswrap = try XCTUnwrap(BinaryPathResolver.bmxtranswrapPath)
+        let video = directory.appendingPathComponent("imf-picture.mxf")
+        try run(bmxtranswrap, ["-t", "imf", "-o", video.path, "-p", intermediate.path])
+        guard includeAudio else { return (video, nil) }
+        let wav = directory.appendingPathComponent("sound.wav")
+        try run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                         "sine=frequency=440:duration=1", "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", wav.path])
+        let raw2bmx = try XCTUnwrap(BinaryPathResolver.raw2bmxPath)
+        let audio = directory.appendingPathComponent("sound.mxf")
+        try run(raw2bmx, ["-t", "imf", "-o", audio.path, "--track-map", "singlemca", "--wave", wav.path])
+        return (video, audio)
     }
 
     func testIMFJ2KCommandUsesRationalRateHDRTagsAndFillGeometry() throws {

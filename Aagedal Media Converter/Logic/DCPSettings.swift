@@ -5,7 +5,7 @@
 import Foundation
 
 /// Captured once so JPEG 2000 encoding and DCP packaging use the same preferences.
-struct DCPSettings: Sendable {
+struct DCPSettings: Codable, Equatable, Sendable {
     let resolution: DCPResolution
     let frameRate: DCPFrameRate
     let bitrate: DCPBitrate

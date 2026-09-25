@@ -209,7 +209,7 @@ enum CommentMetadataPlan: Equatable, Sendable {
 /// Source tags and chapters are distinct from item-authored comment/timecode values.
 /// A nil input retains FFmpeg's automatic mapping for presets that historically used it.
 /// Custom presets keep ownership of their own mapping and muxer flags.
-enum SourceMetadataPlan: Equatable, Sendable {
+enum SourceMetadataPlan: Codable, Equatable, Sendable {
     case unchanged
     case preserve(input: Int?)
     case strip
@@ -391,7 +391,7 @@ enum FFMPEGCommandBuilder {
 
         let inputPlan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
         let presetArguments = capturedDCPSettings?.ffmpegArguments
-            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .rdd45)
             ?? capturedImageSequenceSettings?.ffmpegArguments
             ?? capturedAudioOnlySettings?.ffmpegArguments
             ?? capturedCodecSettings?.ffmpegArguments
@@ -1089,7 +1089,7 @@ extension FFMPEGCommandBuilder {
 
         // Preset encoding arguments (sanitized for our custom video pipeline)
         var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
-            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .rdd45)
             ?? capturedImageSequenceSettings?.ffmpegArguments
             ?? capturedAudioOnlySettings?.ffmpegArguments
             ?? capturedCodecSettings?.ffmpegArguments

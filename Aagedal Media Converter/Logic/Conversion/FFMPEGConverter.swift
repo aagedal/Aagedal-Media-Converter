@@ -562,12 +562,6 @@ actor FFMPEGConverter {
         let inputURL = request.inputURL
         let outputURL = request.outputURL
         let preset = request.preset
-        // The current writer cannot provide descriptors linked to the encoded MXF essence.
-        // Reject all entry paths (including saved presets and Shortcuts) before any work or output.
-        if preset == .imfJ2K || preset == .imfProRes {
-            completion(false, String(localized: "IMF export is temporarily unavailable because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.", comment: "Release restriction on IMF exports until package conformance is established. IMF import remains available."))
-            return
-        }
         let trimPreparationError = preset == .av2
             ? AV2TrimPlan(start: request.trimStart, end: request.trimEnd).preparationError
             : FFMPEGTrimPlan(start: request.trimStart, end: request.trimEnd).preparationError
@@ -717,6 +711,14 @@ actor FFMPEGConverter {
             // Create working directory for the package output
             let subfolderName = outputURL.lastPathComponent
             let subfolderURL = outputDir.appendingPathComponent(subfolderName, isDirectory: true)
+            if let requiredOutputURL = request.requiredOutputURL {
+                guard subfolderURL.standardizedFileURL == requiredOutputURL.standardizedFileURL,
+                      !fileManager.fileExists(atPath: subfolderURL.path) else {
+                    activeConversionID = nil
+                    completion(false, ApplicationJobErrorCode.outputCollision.rawValue)
+                    return
+                }
+            }
 
             var finalSubfolderURL = subfolderURL
             var counter = 1
@@ -752,8 +754,7 @@ actor FFMPEGConverter {
             outputFileURL = jp2Dir.appendingPathComponent("frame_%06d.jp2")
             Self.logger.info("\(isDCPExport ? "DCP" : "IMF App 2e"): FFmpeg will output JP2 image sequence")
         } else if isIMFProResExport {
-            // IMF App #5: create package working directory; FFmpeg writes to a temp MOV that we
-            // later rewrap to OP1a MXF and assemble into the package.
+            // IMF RDD 45: FFmpeg writes an intermediate MXF for bmxtranswrap.
             let subfolderName = outputURL.lastPathComponent
             let subfolderURL = outputDir.appendingPathComponent(subfolderName, isDirectory: true)
             var finalSubfolderURL = subfolderURL
@@ -770,13 +771,20 @@ actor FFMPEGConverter {
                 return
             }
             imfSubfolderURL = finalSubfolderURL
-            // FFmpeg outputs to a temp MOV inside the working folder; bmxtranswrap will produce the OP1a MXF.
-            outputFileURL = finalSubfolderURL.appendingPathComponent("imf_prores_temp.mov")
-            Self.logger.info("IMF App 5: FFmpeg will output ProRes MOV for OP1a rewrap")
+            outputFileURL = finalSubfolderURL.appendingPathComponent("imf_prores_temp.mxf")
+            Self.logger.info("IMF RDD 45: FFmpeg will output intermediate ProRes MXF")
         } else if let imageSequenceSettings = capturedImageSequenceSettings {
             // Create subfolder: outputDir/basename_seq/
             let subfolderName = outputURL.lastPathComponent
             let subfolderURL = outputDir.appendingPathComponent(subfolderName, isDirectory: true)
+            if let requiredOutputURL = request.requiredOutputURL {
+                guard subfolderURL.standardizedFileURL == requiredOutputURL.standardizedFileURL,
+                      !fileManager.fileExists(atPath: subfolderURL.path) else {
+                    activeConversionID = nil
+                    completion(false, ApplicationJobErrorCode.outputCollision.rawValue)
+                    return
+                }
+            }
 
             // Ensure unique folder name
             var finalSubfolderURL = subfolderURL
@@ -1273,7 +1281,7 @@ actor FFMPEGConverter {
                 // Validate output file exists and has content.
                 // FFmpeg can exit 0 while producing empty/corrupt output (disk full, I/O error, etc.)
                 // Skip validation for image sequence and DCP / IMF App 2e exports (they produce directories).
-                // For IMF App 5 we still validate the temp MOV here; the rewrap-to-MXF step is the IMF arm below.
+                // For IMF RDD 45 we validate the intermediate MXF before rewrapping it.
                 if success && !capturedIsImageSequenceExport && !capturedIsDCPExport && !capturedIsIMFJ2KExport {
                     let fileToValidate = capturedNeedsBMXRewrap ? (capturedTempMXFURL ?? capturedFinalOutputURL) : capturedFinalOutputURL
                     if let validationError = Self.validateOutputFile(at: fileToValidate) {
@@ -1616,7 +1624,7 @@ actor FFMPEGConverter {
                     let resolution = imfSettings.resolution
                     let frameRate = imfSettings.frameRate
                     let color = imfSettings.color
-                    let application: IMFApplication = capturedIsIMFJ2KExport ? .app2e : .app5
+                    let application: IMFApplication = capturedIsIMFJ2KExport ? .app2e : .rdd45
 
                     let fm = FileManager.default
                     var imfVideoMXF: URL? = nil
@@ -1755,9 +1763,9 @@ actor FFMPEGConverter {
                             Self.cleanupTempFile(at: jp2Dir, label: "IMF JP2 images")
                         }
                     } else if capturedIsIMFProResExport {
-                        // ProRes MOV → bmxtranswrap → OP1a MXF
+                        // ProRes MXF → bmxtranswrap → IMF OP1a MXF
                         progressUpdate(0.78, "Creating IMF video essence")
-                        print("[IMF] App 5 branch — input MOV: \(capturedFinalOutputURL.lastPathComponent)")
+                        print("[IMF] RDD 45 branch — input MXF: \(capturedFinalOutputURL.lastPathComponent)")
                         let tmpVideoMXF = FileManager.default.temporaryDirectory
                             .appendingPathComponent("imf_video_\(UUID().uuidString).mxf")
 
@@ -1789,23 +1797,34 @@ actor FFMPEGConverter {
                             success = false
                         } else if bmxResult.success {
                             imfVideoMXF = tmpVideoMXF
-                            Self.logger.info("IMF video essence created (App #5)")
+                            Self.logger.info("IMF video essence created (RDD 45)")
                         } else {
                             Self.logger.error("bmxtranswrap failed for IMF ProRes video essence")
                             errorReason = Self.dcpIMFErrorReason(
-                                base: String(localized: "IMF video wrap failed: bmxtranswrap rejected ProRes essence", comment: "Shown when bmxtranswrap cannot rewrap the ProRes MOV into IMF App 5 OP1a MXF."),
+                                base: String(localized: "IMF video wrap failed: bmxtranswrap rejected ProRes essence", comment: "Shown when bmxtranswrap cannot rewrap the intermediate ProRes MXF into an IMF RDD 45 OP1a MXF."),
                                 stderr: bmxResult.stderr
                             )
                             success = false
                         }
-                        // Remove the temporary MOV; if user wants to keep, they can use the .prores preset directly.
+                        // Remove the intermediate MXF unless requested for debugging.
                         let keepIntermediates = imfSettings.keepIntermediates
                         if !keepIntermediates {
-                            Self.cleanupTempFile(at: capturedFinalOutputURL, label: "IMF ProRes temp MOV")
+                            Self.cleanupTempFile(at: capturedFinalOutputURL, label: "IMF ProRes temp MXF")
                         }
                     }
 
-                    // ----- Audio essence wrap (shared between App #2e and App #5) -----
+                    // Use the wrapped MXF's exact duration for audio padding and the CPL.
+                    // Source container duration can round up by a frame on short clips.
+                    if success, let videoMXF = imfVideoMXF {
+                        if let wrappedFrameCount = await IMFManifestWriter.shared.pictureFrameCount(for: videoMXF) {
+                            exactPictureFrameCount = wrappedFrameCount
+                        } else {
+                            errorReason = String(localized: "IMF video wrap failed: could not read the wrapped MXF duration", comment: "Shown when the app cannot inspect the finished IMF picture track file.")
+                            success = false
+                        }
+                    }
+
+                    // ----- Audio essence wrap (shared between App #2e and RDD 45) -----
                     var imfAudioMXF: URL? = nil
                     if success {
                         progressUpdate(0.86, "Extracting audio for IMF")
@@ -1868,22 +1887,19 @@ actor FFMPEGConverter {
                                 print("[IMF] WAV padding skipped (frameCount=\(pictureFrameCount))")
                             }
 
-                            // Wrap PCM WAV → IMF audio MXF using asdcp-wrap. bmxtranswrap is
-                            // MXF-only (it cannot ingest WAV), so the prior call always failed
-                            // with "Failed to open MXF file '…wav'". asdcp-wrap supports raw
-                            // PCM input and produces a SMPTE-labelled audio essence — same
-                            // tool the DCP path uses for its audio MXF.
-                            if let asdcpPath = BinaryPathResolver.asdcpWrapPath {
+                            // raw2bmx's IMF writer produces clip-wrapped OP1a PCM with a
+                            // 48 kHz edit rate. asdcp-wrap produces a DCP-style OPAtom
+                            // track with a picture edit rate, unsuitable for an IMF CPL.
+                            if let raw2bmxPath = BinaryPathResolver.raw2bmxPath {
                                 let audioWrapArgs: [String] = [
-                                    "-p", frameRate.ffmpegValue,
-                                    "-L",                          // SMPTE Universal Labels
-                                    wavURL.path,
-                                    tmpAudioMXF.path
+                                    "-t", "imf", "-o", tmpAudioMXF.path,
+                                    "--track-map", "singlemca",
+                                    "--wave", wavURL.path
                                 ]
-                                Self.logger.info("Launching asdcp-wrap for IMF audio")
+                                Self.logger.info("Launching raw2bmx for IMF audio")
                                 let wrapResult = await self?.runTrackedPackageWrapper(
                                     conversionID: conversionID,
-                                    executablePath: asdcpPath,
+                                    executablePath: raw2bmxPath,
                                     arguments: audioWrapArgs,
                                     outputURL: tmpAudioMXF
                                 ) ?? .cancelled
@@ -1893,12 +1909,12 @@ actor FFMPEGConverter {
                                         Self.logger.info("asdcp-wrap IMF audio output: \(diagnostic.prefix(500), privacy: .public)")
                                     }
                                     imfAudioMXF = tmpAudioMXF
-                                    Self.logger.info("IMF audio essence created (asdcp-wrap)")
+                                    Self.logger.info("IMF audio essence created (raw2bmx)")
                                     progressUpdate(0.94, "Wrapping audio essence")
                                 case .failed(_, let reason, let diagnostic):
                                     Self.logger.error("asdcp-wrap failed for IMF audio: \(diagnostic.prefix(300), privacy: .public)")
                                     errorReason = Self.dcpIMFErrorReason(
-                                        base: String(localized: "IMF audio wrap failed: \(reason)", comment: "Shown when asdcp-wrap cannot create the IMF audio essence."),
+                                        base: String(localized: "IMF audio wrap failed: \(reason)", comment: "Shown when raw2bmx cannot create the IMF audio essence."),
                                         stderr: diagnostic
                                     )
                                     success = false
@@ -1907,8 +1923,8 @@ actor FFMPEGConverter {
                                     success = false
                                 }
                             } else {
-                                Self.logger.error("asdcp-wrap not found — cannot create IMF audio essence")
-                                errorReason = String(localized: "IMF audio wrap failed: asdcp-wrap not found", comment: "Shown when the bundled asdcp-wrap binary cannot be located, blocking IMF audio essence creation.")
+                                Self.logger.error("raw2bmx not found — cannot create IMF audio essence")
+                                errorReason = String(localized: "IMF audio wrap failed: raw2bmx not found", comment: "Shown when the bundled raw2bmx binary cannot be located, blocking IMF audio essence creation.")
                                 success = false
                             }
                             Self.cleanupTempFile(at: wavURL, label: "IMF audio WAV")
@@ -1964,6 +1980,7 @@ actor FFMPEGConverter {
                                 editRateNumerator: frameRate.editRateNumerator,
                                 editRateDenominator: frameRate.editRateDenominator,
                                 frameCount: max(frameCount, 1),
+                                color: color,
                                 itemMetadata: capturedRequest.imfMetadata,
                                 progress: { imfProgress in
                                     let overall = 0.94 + imfProgress * 0.06
@@ -4700,9 +4717,8 @@ actor FFMPEGConverter {
         await FFMPEGProbeService.getVideoDuration(for: url)
     }
 
-    /// Uses the produced App 2e image count when available so audio padding and the CPL agree
-    /// exactly with the wrapped picture essence. App 5 has no intermediate frame sequence, so it
-    /// retains the duration-based calculation.
+    /// Uses the exact wrapped picture frame count when available so audio padding and the CPL
+    /// agree with the MXF. Falls back to source duration before wrapping has completed.
     static func resolvedIMFPictureFrameCount(
         exactFrameCount: Int?,
         duration: Double?,

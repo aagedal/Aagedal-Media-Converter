@@ -296,7 +296,7 @@ final class FileNameSettingsMigrationTests: XCTestCase {
             XCTAssertEqual(context.resolution, "4K")
             XCTAssertEqual(context.framerate, "60")
             XCTAssertEqual(context.presetSuffix, preset == .imfJ2K ? "_imf2e" : "_imf5")
-            let arguments = captured.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            let arguments = captured.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .rdd45)
             let rateIndex = try XCTUnwrap(arguments.firstIndex(of: "-r"))
             XCTAssertEqual(arguments[rateIndex + 1], "60000/1001")
             XCTAssertEqual(FileNameTemplateContext(preset: preset, defaults: defaults).resolution, "2K")

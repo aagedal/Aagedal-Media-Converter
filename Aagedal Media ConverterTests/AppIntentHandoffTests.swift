@@ -60,7 +60,7 @@ final class AppIntentHandoffTests: XCTestCase {
         }
     }
 
-    func testSharedBridgeMapsOnlyInitialSupportedPresets() {
+    func testSharedBridgeMapsBuiltInPresets() {
         let expected: [(ExportPreset, ApplicationPresetID)] = [
             (.h264, .h264), (.h265, .hevc), (.prores, .proRes),
             (.proxy, .proxy), (.audioOnly, .audioOnly), (.streamCopy, .streamCopy)
@@ -69,9 +69,9 @@ final class AppIntentHandoffTests: XCTestCase {
             XCTAssertEqual(ApplicationPresetID(exportPreset: preset), applicationID)
             XCTAssertEqual(applicationID.exportPreset, preset)
         }
-        XCTAssertNil(ApplicationPresetID(exportPreset: .videoLoop))
-        XCTAssertNil(ApplicationPresetID(exportPreset: .av1))
-        XCTAssertNil(ApplicationPresetID(exportPreset: .dcp))
+        XCTAssertEqual(ApplicationPresetID(exportPreset: .videoLoop), .videoLoop)
+        XCTAssertEqual(ApplicationPresetID(exportPreset: .av1), .av1)
+        XCTAssertEqual(ApplicationPresetID(exportPreset: .dcp), .dcp)
         XCTAssertNil(ApplicationPresetID(exportPreset: .custom1))
     }
 

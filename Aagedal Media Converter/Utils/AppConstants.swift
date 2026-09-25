@@ -485,7 +485,7 @@ enum AppConstants {
     static let defaultDCPScalingMode = "Fill (crop to fill)"
     static let dcpKeepJP2ImagesKey = "dcpKeepJP2Images"
 
-    // IMF preset settings (App #2e and App #5 share these unless suffixed)
+    // IMF preset settings (App #2e and RDD 45 share these unless suffixed)
     static let imfApplicationKey = "imfApplication"
     static let defaultIMFApplication = "app2e"          // IMFApplication.rawValue
     static let imfResolutionKey = "imfResolution"

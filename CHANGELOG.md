@@ -18,6 +18,11 @@ signed Release-package validation are still open.
 
 ## Local agent access
 
+- Expanded the MCP catalog to all 17 built-in presets. Fifteen are runnable,
+  including AV1, AV2, DCP, and image sequences; the two IMF presets are shown
+  as unavailable pending package conformance. Custom slots remain excluded.
+  Accepted jobs snapshot the additional preset settings and reserve their
+  planned package or image-sequence folder names.
 - Added `list_jobs` with IDs and state for the visible manual queue and durable
   conversion records. Current manual queue IDs can be inspected with `get_job`.
 - Added persistent approved source folders in Agent Access settings. A selected
@@ -160,7 +165,7 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 - **AV2 Matroska exports preserve audio timing and padding**, including delayed tracks, trims, AAC preroll, and Opus codec delay. Additional AAC channel layouts are supported.
 - **AV2 assembly rejects damaged or incompatible segments.** Invalid trims and unsupported generated-video combinations report errors instead of producing incomplete output.
 - **DCP frame preparation reports damaged frames and write failures** before wrapping a package.
-- **IMF export is temporarily unavailable** while package descriptors and standards conformance are validated. Existing IMF settings are preserved.
+- **IMF App 2e and RDD 45 exports are experimental.** Packages now link CPL resources to wrapped MXF track IDs and essence descriptors. Validate each package in the target mastering or delivery tool; multi-track audio and packaged subtitles remain outside this initial export scope.
 - **Failed and cancelled conversions clean up their partial outputs**, while existing files and source media remain protected from replacement.
 
 ## Cancellation and recovery

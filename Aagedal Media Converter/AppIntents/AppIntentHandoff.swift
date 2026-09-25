@@ -55,7 +55,8 @@ enum AppIntentApplicationJobBridge {
         capturedAt: Date = Date(),
         defaults: UserDefaults = .standard
     ) -> ApplicationConversionRequest? {
-        guard let presetID = ApplicationPresetID(exportPreset: preset) else { return nil }
+        guard let presetID = ApplicationPresetID(exportPreset: preset),
+              presetID.usesExistingManualSharedBridge else { return nil }
 
         var seen = Set<URL>()
         let uniqueSources = sourceURLs.filter {
@@ -169,6 +170,7 @@ enum ManualApplicationJobBridge {
         let destinationSettings = OutputDestinationSettings(defaults: defaults)
         guard !mergeClipsEnabled,
               let presetID = ApplicationPresetID(exportPreset: preset),
+              presetID.usesExistingManualSharedBridge,
               !items.isEmpty,
               items.allSatisfy({ isRepresentable($0, preset: preset) }) else {
             return nil

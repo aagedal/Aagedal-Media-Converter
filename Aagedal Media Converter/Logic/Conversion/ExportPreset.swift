@@ -173,7 +173,7 @@ enum AVCIntraClass: String, CaseIterable, Identifiable {
 }
 
 /// Audio channel count options for AVC-Intra preset
-enum AVCIntraAudioChannels: String, CaseIterable, Identifiable {
+enum AVCIntraAudioChannels: String, CaseIterable, Identifiable, Codable {
     case ch4 = "4 Channels"
     case ch8 = "8 Channels"
     case ch16 = "16 Channels"
@@ -190,7 +190,7 @@ enum AVCIntraAudioChannels: String, CaseIterable, Identifiable {
 }
 
 /// Container options for Stream Copy preset
-enum StreamCopyContainer: String, CaseIterable, Identifiable {
+enum StreamCopyContainer: String, CaseIterable, Identifiable, Codable {
     case keepCurrent = "Keep Current"
     case mov = "MOV"
     case mp4 = "MP4"
@@ -286,7 +286,7 @@ enum H265Encoder: String, CaseIterable, Identifiable {
 }
 
 /// Container format options for codec presets
-enum CodecContainer: String, CaseIterable, Identifiable {
+enum CodecContainer: String, CaseIterable, Identifiable, Codable {
     case mp4 = "MP4"
     case mov = "MOV"
     case mkv = "MKV"
@@ -458,7 +458,7 @@ enum AV1VarianceBoostCurve: String, CaseIterable, Identifiable {
 // MARK: - AV2 (experimental, avmenc) option models
 
 /// Rate-control mode for the experimental AV2 (avmenc) preset.
-enum AV2RateControlMode: String, CaseIterable, Identifiable {
+enum AV2RateControlMode: String, CaseIterable, Identifiable, Codable {
     case constantQuality = "Constant Quality"
     case targetBitrate = "Target Bitrate"
 
@@ -491,7 +491,7 @@ enum AV2EncodingSpeed: Int, CaseIterable, Identifiable {
 }
 
 /// Input bit depth choice for AV2. "Auto" derives from the source's bit depth.
-enum AV2BitDepthOption: String, CaseIterable, Identifiable {
+enum AV2BitDepthOption: String, CaseIterable, Identifiable, Codable {
     case auto = "Auto"
     case eight = "8-bit"
     case ten = "10-bit"
@@ -513,7 +513,7 @@ enum AV2BitDepthOption: String, CaseIterable, Identifiable {
 /// `ivf` is the raw, video-only AV2 bitstream (no audio). `mkv` wraps the AV2 video together with
 /// a re-encoded audio track using the app's own Matroska muxer — FFmpeg cannot write AV2 yet, so
 /// the muxing is done in-app (see ``MatroskaMuxer``).
-enum AV2Container: String, CaseIterable, Identifiable {
+enum AV2Container: String, CaseIterable, Identifiable, Codable {
     case ivf = "IVF (video only)"
     case mkv = "Matroska (.mkv, with audio)"
 
@@ -529,7 +529,7 @@ enum AV2Container: String, CaseIterable, Identifiable {
 
 /// Audio codec used by the AV2 `.mkv` muxer. The source audio is re-encoded to this codec via
 /// FFmpeg and packetised into the Matroska container in-app.
-enum AV2AudioCodec: String, CaseIterable, Identifiable {
+enum AV2AudioCodec: String, CaseIterable, Identifiable, Codable {
     case aac = "AAC"
     case opus = "Opus"
 
@@ -566,7 +566,7 @@ enum AV2AudioCodec: String, CaseIterable, Identifiable {
 }
 
 /// Resolution limit for codec presets
-enum CodecResolutionLimit: String, CaseIterable, Identifiable {
+enum CodecResolutionLimit: String, CaseIterable, Identifiable, Codable {
     case r720 = "720p"
     case r1080 = "1080p"
     case r1440 = "1440p"
@@ -693,7 +693,7 @@ enum CodecAudioFormat: String, CaseIterable, Identifiable {
 }
 
 /// AAC/Opus bitrate options
-enum AudioBitrate: String, CaseIterable, Identifiable {
+enum AudioBitrate: String, CaseIterable, Identifiable, Codable {
     case k96 = "96 kbps"
     case k128 = "128 kbps"
     case k160 = "160 kbps"
@@ -799,7 +799,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     case imageSequence = "Image Sequence"
     case dcp = "DCP (Digital Cinema Package)"
     case imfJ2K = "IMF (App 2e — JPEG 2000)"
-    case imfProRes = "IMF (App 5 — ProRes)"
+    case imfProRes = "IMF (RDD 45 — ProRes)"
     case custom1 = "Custom"
     case custom2 = "Custom 2"
     case custom3 = "Custom 3"
@@ -937,7 +937,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .imfJ2K:
             return NSLocalizedString("PRESET_IMF_J2K_DESCRIPTION", comment: "Description for IMF App 2e (JPEG 2000) preset")
         case .imfProRes:
-            return NSLocalizedString("PRESET_IMF_PRORES_DESCRIPTION", comment: "Description for IMF App 5 (ProRes) preset")
+            return NSLocalizedString("PRESET_IMF_PRORES_DESCRIPTION", comment: "Description for IMF RDD 45 (ProRes) preset")
         case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
             return NSLocalizedString("PRESET_CUSTOM_DESCRIPTION", comment: "Description for Custom preset")
         }
@@ -982,7 +982,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .imfJ2K:
             return "_imf2e"
         case .imfProRes:
-            return "_imf5"
+            return "_imfrdd45"
         case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
             guard let slot = customSlotIndex else { return "_custom" }
             return Self.customFileSuffix(for: slot, defaults: defaults)
@@ -1608,7 +1608,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .imfJ2K:
             return IMFSettings().ffmpegArguments(application: .app2e)
         case .imfProRes:
-            return IMFSettings().ffmpegArguments(application: .app5)
+            return IMFSettings().ffmpegArguments(application: .rdd45)
         case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
             return codecFFmpegArguments(defaults: .standard)
         }

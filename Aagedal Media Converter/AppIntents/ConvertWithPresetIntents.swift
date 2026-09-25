@@ -299,8 +299,8 @@ struct ConvertToIMFJ2KIntent: ConvertWithPresetIntent {
 
 struct ConvertToIMFProResIntent: ConvertWithPresetIntent {
     static let preset: ExportPreset = .imfProRes
-    static let title: LocalizedStringResource = "Convert to IMF (App 5 — ProRes)"
-    static let description = IntentDescription("Encode the selected videos with the IMF App 5 (ProRes) preset, saving alongside the source files and starting conversion immediately.")
+    static let title: LocalizedStringResource = "Convert to IMF (RDD 45 — ProRes)"
+    static let description = IntentDescription("Encode the selected videos with the experimental IMF RDD 45 (ProRes) preset, saving alongside the source files and starting conversion immediately.")
 
     @Parameter(title: "Video Files", supportedContentTypes: [.movie])
     var videos: [IntentFile]

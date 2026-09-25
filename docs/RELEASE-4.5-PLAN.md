@@ -1144,6 +1144,15 @@ signed artifact's dependency/license report retained with the release.
 
 ## Intended outcome
 
+### Preset scope update — 2026-09-25
+
+The MCP catalog now lists all 17 built-in presets. All are runnable,
+including AV1, AV2, DCP, image sequences, and experimental IMF App 2e and
+RDD 45. Custom preset slots remain
+outside Agent Access because their user-defined FFmpeg options need a separate
+validation policy. The earlier six-preset statements below describe the first
+implementation and its validation history.
+
 An agent on the user's Mac can inspect media, discover the user's presets, plan
 a conversion, and submit it to the app. The user sees agent-created jobs in the
 same queue as manual work and can inspect their settings, preview media, and

@@ -485,7 +485,7 @@ struct PresetsSettingsView: View {
 
         if selectedPreset == .imfJ2K || selectedPreset == .imfProRes {
             settingsCard {
-                Text("IMF export is temporarily unavailable because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool.")
+                Text("Experimental IMF export. Validate the package in your target mastering or delivery tool before use. This version writes a single video track and one PCM audio track; packaged subtitles and multi-track audio are not yet supported.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -568,7 +568,7 @@ struct PresetsSettingsView: View {
                     }
                     .help("Retain the JP2 image sequence and temp MXF files after the IMP is assembled. Useful for debugging.")
 
-                    Text("JPEG 2000 video in MXF (App #2e). PCM audio with MCA labels. CPL/PKL/ASSETMAP manifests.")
+                    Text("JPEG 2000 video in MXF (App #2e), one PCM audio track, and CPL/PKL/ASSETMAP manifests.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -648,7 +648,7 @@ struct PresetsSettingsView: View {
                         Text("Keep intermediate files")
                     }
 
-                    Text("Apple ProRes video in MXF (App #5). PCM audio with MCA labels. CPL/PKL/ASSETMAP manifests.")
+                    Text("Apple ProRes video in MXF (RDD 45). PCM audio and CPL/PKL/ASSETMAP manifests.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

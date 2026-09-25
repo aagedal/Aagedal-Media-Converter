@@ -8,32 +8,73 @@ import SwiftMediaMetadata
 /// Versioned identifiers exposed at the application boundary. These values stay
 /// independent of localized preset names and mutable user-facing labels.
 enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
+    case videoLoop = "video_loop"
+    case videoLoopWithSound = "video_loop_with_sound"
+    case animatedStill = "animated_still"
     case h264 = "h264"
     case hevc = "hevc"
+    case av1 = "av1"
+    case av2 = "av2"
+    case tvHEVC = "tv_hevc"
+    case tvAVCIntra = "tv_avc_intra"
     case proRes = "prores"
     case proxy = "proxy"
     case audioOnly = "audio_only"
     case streamCopy = "stream_copy"
+    case imageSequence = "image_sequence"
+    case dcp = "dcp"
+    case imfJ2K = "imf_app_2e"
+    case imfProRes = "imf_rdd_45"
+
+    var isRunnable: Bool { true }
+    var usesExistingManualSharedBridge: Bool {
+        switch self {
+        case .h264, .hevc, .proRes, .proxy, .audioOnly, .streamCopy: true
+        default: false
+        }
+    }
 
     var exportPreset: ExportPreset {
         switch self {
+        case .videoLoop: .videoLoop
+        case .videoLoopWithSound: .videoLoopWithSound
+        case .animatedStill: .animatedStill
         case .h264: .h264
         case .hevc: .h265
+        case .av1: .av1
+        case .av2: .av2
+        case .tvHEVC: .tvHEVC
+        case .tvAVCIntra: .tvAVCIntra
         case .proRes: .prores
         case .proxy: .proxy
         case .audioOnly: .audioOnly
         case .streamCopy: .streamCopy
+        case .imageSequence: .imageSequence
+        case .dcp: .dcp
+        case .imfJ2K: .imfJ2K
+        case .imfProRes: .imfProRes
         }
     }
 
     init?(exportPreset: ExportPreset) {
         switch exportPreset {
+        case .videoLoop: self = .videoLoop
+        case .videoLoopWithSound: self = .videoLoopWithSound
+        case .animatedStill: self = .animatedStill
         case .h264: self = .h264
         case .h265: self = .hevc
+        case .av1: self = .av1
+        case .av2: self = .av2
+        case .tvHEVC: self = .tvHEVC
+        case .tvAVCIntra: self = .tvAVCIntra
         case .prores: self = .proRes
         case .proxy: self = .proxy
         case .audioOnly: self = .audioOnly
         case .streamCopy: self = .streamCopy
+        case .imageSequence: self = .imageSequence
+        case .dcp: self = .dcp
+        case .imfJ2K: self = .imfJ2K
+        case .imfProRes: self = .imfProRes
         default: return nil
         }
     }
@@ -64,6 +105,7 @@ enum ApplicationContainerID: String, Codable, Sendable {
     case wav
     case m4a
     case flac
+    case other
 }
 
 enum ApplicationVideoEncoderID: String, Codable, Sendable {
@@ -380,6 +422,16 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
     let preserveMetadata: Bool
     let keepSubtitles: Bool
     let fileName: ApplicationFileNameSettings
+    /// Exact immutable arguments/settings for built-in presets added after the
+    /// original six-preset wire contract. Nil keeps older persisted jobs valid.
+    let capturedCodec: CodecExportSettings?
+    let capturedAV2: AV2Settings?
+    let capturedDCP: DCPSettings?
+    let capturedIMF: IMFSettings?
+    let capturedImageSequence: ImageSequenceSettings?
+    let fileNameContext: FileNameTemplateContext?
+    let outputExtension: String?
+    let outputIsDirectory: Bool?
 
     init(
         presetID: ApplicationPresetID,
@@ -397,6 +449,14 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
         self.preserveMetadata = preserveMetadata
         self.keepSubtitles = keepSubtitles
         self.fileName = fileName
+        capturedCodec = nil
+        capturedAV2 = nil
+        capturedDCP = nil
+        capturedIMF = nil
+        capturedImageSequence = nil
+        fileNameContext = nil
+        outputExtension = nil
+        outputIsDirectory = nil
     }
 
     init(presetID: ApplicationPresetID, defaults: UserDefaults = .standard) {
@@ -407,8 +467,44 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
             && preset != .audioOnly
             && defaults.bool(forKey: AppConstants.keepSubtitlesKey)
         fileName = ApplicationFileNameSettings(preset: preset, defaults: defaults)
+        capturedCodec = CodecExportSettings(preset: preset, defaults: defaults)
+        capturedAV2 = preset == .av2 ? AV2Settings(defaults: defaults) : nil
+        capturedDCP = preset == .dcp ? DCPSettings(defaults: defaults) : nil
+        capturedIMF = (preset == .imfJ2K || preset == .imfProRes)
+            ? IMFSettings(defaults: defaults) : nil
+        capturedImageSequence = preset == .imageSequence
+            ? ImageSequenceSettings(defaults: defaults) : nil
+        fileNameContext = capturedCodec?.fileNameContext ?? FileNameTemplateContext(
+            preset: preset, defaults: defaults,
+            av2Settings: capturedAV2, dcpSettings: capturedDCP
+        )
+        outputExtension = switch presetID {
+        case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
+             .av2, .tvHEVC, .tvAVCIntra:
+            capturedAV2?.container.fileExtension ?? capturedCodec?.fileExtension
+        case .imageSequence, .dcp, .imfJ2K, .imfProRes:
+            ""
+        default:
+            nil
+        }
+        outputIsDirectory = preset == .imageSequence || preset == .dcp
+            || preset == .imfJ2K || preset == .imfProRes
 
         switch presetID {
+        case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
+             .tvHEVC, .tvAVCIntra:
+            let ext = capturedCodec?.fileExtension ?? preset.fileExtension
+            containerID = ApplicationContainerID(rawValue: ext) ?? .other
+            video = nil
+            audio = nil
+        case .av2:
+            containerID = capturedAV2?.container == .mkv ? .mkv : .other
+            video = nil
+            audio = nil
+        case .imageSequence, .dcp, .imfJ2K, .imfProRes:
+            containerID = .other
+            video = nil
+            audio = nil
         case .h264:
             let container = Self.codecContainer(
                 defaults.string(forKey: AppConstants.h264ContainerKey),
@@ -1058,6 +1154,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
     case nonFileURL(URL)
     case invalidIdempotencyKey
     case presetSettingsMismatch
+    case unavailablePreset(ApplicationPresetID)
     case invalidSourceSettings(URL)
     case idempotencyConflict
     case unknownJob(ApplicationJobID)
@@ -1084,6 +1181,7 @@ enum ApplicationJobError: Error, Equatable, Sendable {
         case .nonFileURL: .nonFileURL
         case .invalidIdempotencyKey: .invalidIdempotencyKey
         case .presetSettingsMismatch: .presetSettingsMismatch
+        case .unavailablePreset: .unavailablePreset
         case .invalidSourceSettings: .invalidSourceSettings
         case .idempotencyConflict: .idempotencyConflict
         case .unknownJob: .unknownJob
@@ -1114,6 +1212,7 @@ enum ApplicationJobErrorCode: String, Codable, Sendable {
     case nonFileURL = "non_file_url"
     case invalidIdempotencyKey = "invalid_idempotency_key"
     case presetSettingsMismatch = "preset_settings_mismatch"
+    case unavailablePreset = "unavailable_preset"
     case invalidSourceSettings = "invalid_source_settings"
     case idempotencyConflict = "idempotency_conflict"
     case unknownJob = "unknown_job"
@@ -1466,6 +1565,9 @@ actor ApplicationJobRegistry {
         guard request.presetID == request.presetSettings.presetID else {
             throw ApplicationJobError.presetSettingsMismatch
         }
+        guard request.presetID.isRunnable else {
+            throw ApplicationJobError.unavailablePreset(request.presetID)
+        }
         if let sourceSettings = request.sourceSettings {
             guard sourceSettings.count == request.sourceURLs.count else {
                 throw ApplicationJobError.invalidSourceSettings(
@@ -1705,6 +1807,10 @@ final class ApplicationJobProgressReporter: @unchecked Sendable {
 /// resolved into the existing immutable execution settings.
 struct ApplicationFFmpegConversion: Sendable {
     let request: ConversionRequest
+    let av2Settings: AV2Settings?
+    let dcpSettings: DCPSettings?
+    let imfSettings: IMFSettings?
+    let imageSequenceSettings: ImageSequenceSettings?
     let audioOnlySettings: AudioOnlySettings?
     let codecSettings: CodecExportSettings?
     let subtitleSettings: SubtitleExportSettings
@@ -1740,7 +1846,11 @@ struct ApplicationFFmpegRunner: Sendable {
                 let completion = ApplicationFFmpegCompletion()
                 await converter.convert(
                     request: conversion.request,
+                    av2Settings: conversion.av2Settings,
+                    dcpSettings: conversion.dcpSettings,
+                    imfSettings: conversion.imfSettings,
                     audioOnlySettings: conversion.audioOnlySettings,
+                    imageSequenceSettings: conversion.imageSequenceSettings,
                     codecSettings: conversion.codecSettings,
                     subtitleSettings: conversion.subtitleSettings,
                     commentSettings: conversion.commentSettings,
@@ -1947,11 +2057,12 @@ actor ApplicationFFmpegJobExecutor {
             $0.sourceURL == output.sourceURL
         }
         let defaults = try ApplicationExecutionDefaults(settings: settings)
+        let directoryOutput = settings.outputIsDirectory == true
         var conversionRequest = ConversionRequest(
             inputURL: output.sourceURL,
             // FFMPEGConverter takes an output base name and appends the captured
             // container extension itself. The plan already names the final file.
-            outputURL: output.outputURL.deletingPathExtension(),
+            outputURL: directoryOutput ? output.outputURL : output.outputURL.deletingPathExtension(),
             preset: plan.request.presetID.exportPreset,
             requiredOutputURL: output.outputURL,
             comment: sourceSettings?.comment ?? "",
@@ -1976,9 +2087,13 @@ actor ApplicationFFmpegJobExecutor {
 #endif
         return ApplicationFFmpegConversion(
             request: conversionRequest,
+            av2Settings: settings.capturedAV2,
+            dcpSettings: settings.capturedDCP,
+            imfSettings: settings.capturedIMF,
+            imageSequenceSettings: settings.capturedImageSequence,
             audioOnlySettings: plan.request.presetID == .audioOnly
                 ? AudioOnlySettings(defaults: defaults.value) : nil,
-            codecSettings: CodecExportSettings(
+            codecSettings: settings.capturedCodec ?? CodecExportSettings(
                 preset: plan.request.presetID.exportPreset,
                 defaults: defaults.value
             ),
@@ -2015,6 +2130,27 @@ private final class ApplicationExecutionDefaults {
         defaults: UserDefaults
     ) throws {
         switch settings.presetID {
+        case .videoLoop, .videoLoopWithSound, .animatedStill, .av1,
+             .tvHEVC, .tvAVCIntra:
+            guard settings.capturedCodec != nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+        case .av2:
+            guard settings.capturedAV2 != nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+        case .imageSequence:
+            guard settings.capturedImageSequence != nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+        case .dcp:
+            guard settings.capturedDCP != nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
+        case .imfJ2K, .imfProRes:
+            guard settings.capturedIMF != nil else {
+                throw ApplicationExecutionSettingsError.invalidPresetSettings
+            }
         case .h264:
             try populateCodecSettings(
                 settings, defaults: defaults,
@@ -3254,7 +3390,7 @@ actor ApplicationJobService {
     ) throws -> [ApplicationPlannedOutput] {
         let naming = request.presetSettings.fileName
         let preferences = naming.fileNamePreferences
-        let context = FileNameTemplateContext(
+        let context = request.presetSettings.fileNameContext ?? FileNameTemplateContext(
             presetSuffix: naming.presetSuffix,
             resolution: request.presetSettings.video?.maximumHeight.map { "\($0)p" } ?? "",
             framerate: ""
@@ -3272,7 +3408,7 @@ actor ApplicationJobService {
                 context: context,
                 date: request.capturedAt
             )
-            let fileExtension = try outputExtension(
+            let fileExtension = try request.presetSettings.outputExtension ?? outputExtension(
                 for: request.presetSettings.containerID,
                 sourceURL: sourceURL
             )
@@ -3282,7 +3418,9 @@ actor ApplicationJobService {
                 outputURL: destinationFolderURL(
                     for: request,
                     sourceIndex: index
-                ).appendingPathComponent(fileName)
+                ).appendingPathComponent(
+                    fileName, isDirectory: request.presetSettings.outputIsDirectory == true
+                )
             )
         }
     }
@@ -3645,6 +3783,8 @@ enum ApplicationConversionOverrideID: String, Codable, Sendable {
 struct ApplicationPresetDescriptor: Codable, Equatable, Sendable {
     let id: ApplicationPresetID
     let displayName: String
+    let isAvailable: Bool
+    let unavailableReason: String?
     let settings: ApplicationPresetSettings
     let supportedOverrides: [ApplicationConversionOverrideID]
 }
@@ -3721,6 +3861,8 @@ private extension ApplicationJobError {
             "The idempotency key is empty or invalid."
         case .presetSettingsMismatch:
             "The captured settings do not match the requested preset."
+        case .unavailablePreset:
+            "The selected preset is unavailable."
         case .invalidSourceSettings(let url):
             "The per-file settings are invalid for \(url.lastPathComponent)."
         case .idempotencyConflict:
@@ -3908,7 +4050,9 @@ struct ApplicationAgentTools: Sendable {
         ApplicationPresetID.allCases.map { presetID in
             ApplicationPresetDescriptor(
                 id: presetID,
-                displayName: presetID.exportPreset.rawValue,
+                displayName: presetID.exportPreset.displayName,
+                isAvailable: presetID.isRunnable,
+                unavailableReason: presetID.isRunnable ? nil : "The selected preset is unavailable.",
                 settings: presetSettingsProvider(presetID),
                 supportedOverrides: []
             )
@@ -4025,6 +4169,9 @@ struct ApplicationAgentTools: Sendable {
     func planConversion(
         _ input: ApplicationPlanConversionInput
     ) async throws -> ApplicationConversionPlan {
+        guard input.presetID.isRunnable else {
+            throw ApplicationJobError.unavailablePreset(input.presetID)
+        }
         let capturedAt = now()
         let request = ApplicationConversionRequest(
             schemaVersion: input.schemaVersion,

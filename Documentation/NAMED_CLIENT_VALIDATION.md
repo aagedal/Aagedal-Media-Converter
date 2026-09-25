@@ -39,9 +39,10 @@ These are the helper's wire names, independent of localized labels:
 | `wait_for_job` | `job_id`; optional `known_state`, `timeout_seconds` (1–30) | `job`, `changed`, `timedOut`, `isTerminal` |
 | `cancel_job` | `job_id` | Job with `id`, `state`, and `outputURLs` |
 
-Paths are absolute filesystem paths; identifiers are UUID strings. The preset
-wire identifiers are `h264`, `hevc`, `prores`, `proxy`, `audio_only`, and
-`stream_copy`. Pass the plan's `id` as `plan_id`, then the acceptance's
+Paths are absolute filesystem paths; identifiers are UUID strings. Call
+`list_presets` for the current built-in preset IDs and availability. The 15
+runnable built-ins include DCP and image sequences; the two IMF entries are
+listed as unavailable. Custom slots are excluded. Pass the plan's `id` as `plan_id`, then the acceptance's
 `record.id` as `job_id`. The helper also returns text containing the JSON result.
 An MCP response with `isError: true` is a failed operation even when the transport
 itself succeeds; preserve its error instead of treating it as workflow completion.

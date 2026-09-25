@@ -21,13 +21,17 @@ actor IMFManifestWriter {
 
     // MARK: - Public API
 
+    func pictureFrameCount(for videoMXFURL: URL) async -> Int? {
+        await IMFMXFMetadata.read(videoMXFURL, expectedKind: "Picture")?.duration
+    }
+
     /// Assembles an IMF Master Package directory from already-encoded video and audio MXF files.
     /// - Parameters:
     ///   - videoMXFURL: Encoded video essence (J2K or ProRes) wrapped to OP1a MXF.
     ///   - audioMXFURL: Encoded audio essence (PCM) wrapped to OP1a MXF, or nil if source has no audio.
     ///   - outputDirectoryURL: Empty package directory the manifests and renamed essences will be written into.
     ///   - title: ContentTitleText displayed by IMF players.
-    ///   - application: Selects App #2e or App #5 — only affects annotation text and metadata, not file structure.
+    ///   - application: Selects App #2e or RDD 45 identity for the CPL.
     ///   - editRateNumerator/editRateDenominator: Edit rate for the composition (e.g. 24/1, 30000/1001).
     ///   - frameCount: Total intrinsic duration in edit-rate units.
     ///   - itemMetadata: Per-item user metadata (ContentKind, AnnotationText, AudioLanguage).
@@ -42,17 +46,34 @@ actor IMFManifestWriter {
         editRateNumerator: Int,
         editRateDenominator: Int,
         frameCount: Int,
+        color: IMFColorEncoding = .rec709,
         itemMetadata: IMFItemMetadata? = nil,
         progress: @escaping @Sendable (Double) -> Void
     ) async -> Bool {
         logger.info("Assembling IMP: \(title) (\(application.displayName), \(frameCount) frames @ \(editRateNumerator)/\(editRateDenominator))")
 
-        // Generate all asset UUIDs upfront so cross-references are stable.
+        guard let videoMetadata = await IMFMXFMetadata.read(videoMXFURL, expectedKind: "Picture"),
+              videoMetadata.duration >= frameCount else {
+            logger.error("IMF video MXF metadata is missing or shorter than the composition")
+            return false
+        }
+        let audioMetadata: IMFMXFMetadata?
+        if let audioMXFURL {
+            guard let inspected = await IMFMXFMetadata.read(audioMXFURL, expectedKind: "Sound") else {
+                logger.error("IMF audio MXF metadata is missing")
+                return false
+            }
+            audioMetadata = inspected
+        } else {
+            audioMetadata = nil
+        }
+
+        // Generate all manifest-only UUIDs upfront so cross-references are stable.
         let cplUUID = SMPTEPackageUtils.urnUUID()
         let pklUUID = SMPTEPackageUtils.urnUUID()
         let assetMapUUID = SMPTEPackageUtils.urnUUID()
-        let videoUUID = SMPTEPackageUtils.urnUUID()
-        let audioUUID = audioMXFURL != nil ? SMPTEPackageUtils.urnUUID() : nil
+        let videoUUID = videoMetadata.trackFileID
+        let audioUUID = audioMetadata?.trackFileID
         let videoResourceUUID = SMPTEPackageUtils.urnUUID()
         let audioResourceUUID = audioMXFURL != nil ? SMPTEPackageUtils.urnUUID() : nil
         let imageSequenceUUID = SMPTEPackageUtils.urnUUID()
@@ -137,7 +158,13 @@ actor IMFManifestWriter {
             audioResourceUUID: audioResourceUUID,
             audioTrackFileUUID: audioUUID,
             audioLanguage: audioLanguage,
-            applicationLabel: application.displayName
+            applicationLabel: application.displayName,
+            application: application,
+            color: color,
+            videoMetadata: videoMetadata,
+            audioMetadata: audioMetadata,
+            videoHash: videoHash,
+            audioHash: audioHash
         )
         let cplURL = outputDirectoryURL.appendingPathComponent(cplFileName)
         do {
@@ -230,7 +257,7 @@ actor IMFManifestWriter {
         let appTag: String
         switch application {
         case .app2e: appTag = "App2e"
-        case .app5:  appTag = "App5"
+        case .rdd45: appTag = "RDD45"
         }
         let langCode = String(audioLanguage.prefix(3)).uppercased()
         let dateFormatter = DateFormatter()
@@ -259,7 +286,13 @@ actor IMFManifestWriter {
         audioResourceUUID: String?,
         audioTrackFileUUID: String?,
         audioLanguage: String,
-        applicationLabel: String
+        applicationLabel: String,
+        application: IMFApplication,
+        color: IMFColorEncoding,
+        videoMetadata: IMFMXFMetadata,
+        audioMetadata: IMFMXFMetadata?,
+        videoHash: String,
+        audioHash: String?
     ) -> String {
         let editRate = "\(editRateNumerator) \(editRateDenominator)"
         let escapedTitle = SMPTEPackageUtils.xmlEscape(title)
@@ -271,18 +304,21 @@ actor IMFManifestWriter {
 
         var sequences = """
                   <SequenceList>
-                    <cc:MainImageSequence xmlns:cc="http://www.smpte-ra.org/schemas/2067-2/2016">
+                    <cc:MainImageSequence>
                       <Id>\(imageSequenceUUID)</Id>
                       <TrackId>\(SMPTEPackageUtils.urnUUID())</TrackId>
                       <ResourceList>
                         <Resource xsi:type="TrackFileResourceType">
                           <Id>\(videoResourceUUID)</Id>
+                          <EditRate>\(videoMetadata.editRate.replacingOccurrences(of: "/", with: " "))</EditRate>
                           <IntrinsicDuration>\(frameCount)</IntrinsicDuration>
                           <EntryPoint>0</EntryPoint>
                           <SourceDuration>\(frameCount)</SourceDuration>
                           <RepeatCount>1</RepeatCount>
                           <TrackFileId>\(videoTrackFileUUID)</TrackFileId>
-                          <SourceEncoding>\(SMPTEPackageUtils.urnUUID())</SourceEncoding>
+                          <SourceEncoding>\(videoMetadata.descriptorID)</SourceEncoding>
+                          <Hash>\(SMPTEPackageUtils.base64SHA1(hex: videoHash))</Hash>
+                          <HashAlgorithm Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
                         </Resource>
                       </ResourceList>
                     </cc:MainImageSequence>
@@ -290,21 +326,26 @@ actor IMFManifestWriter {
 
         if let audioSeqUUID = audioSequenceUUID,
            let audioResUUID = audioResourceUUID,
-           let audioTfUUID = audioTrackFileUUID {
+           let audioTfUUID = audioTrackFileUUID,
+           let audioMetadata, let audioHash {
+            let audioDuration = audioMetadata.duration
             sequences += """
 
-                    <cc:MainAudioSequence xmlns:cc="http://www.smpte-ra.org/schemas/2067-2/2016">
+                    <cc:MainAudioSequence>
                       <Id>\(audioSeqUUID)</Id>
                       <TrackId>\(SMPTEPackageUtils.urnUUID())</TrackId>
                       <ResourceList>
                         <Resource xsi:type="TrackFileResourceType">
                           <Id>\(audioResUUID)</Id>
-                          <IntrinsicDuration>\(frameCount)</IntrinsicDuration>
+                          <EditRate>\(audioMetadata.editRate.replacingOccurrences(of: "/", with: " "))</EditRate>
+                          <IntrinsicDuration>\(audioDuration)</IntrinsicDuration>
                           <EntryPoint>0</EntryPoint>
-                          <SourceDuration>\(frameCount)</SourceDuration>
+                          <SourceDuration>\(audioDuration)</SourceDuration>
                           <RepeatCount>1</RepeatCount>
                           <TrackFileId>\(audioTfUUID)</TrackFileId>
-                          <SourceEncoding>\(SMPTEPackageUtils.urnUUID())</SourceEncoding>
+                          <SourceEncoding>\(audioMetadata.descriptorID)</SourceEncoding>
+                          <Hash>\(SMPTEPackageUtils.base64SHA1(hex: audioHash))</Hash>
+                          <HashAlgorithm Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
                         </Resource>
                       </ResourceList>
                     </cc:MainAudioSequence>
@@ -318,27 +359,37 @@ actor IMFManifestWriter {
 
         return """
         <?xml version="1.0" encoding="UTF-8"?>
-        <CompositionPlaylist xmlns="http://www.smpte-ra.org/schemas/2067-3/2016/CPL"
+        <CompositionPlaylist xmlns="http://www.smpte-ra.org/schemas/2067-3/2016"
                              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                             xmlns:dcml="http://www.smpte-ra.org/schemas/433/2008/dcmlTypes/">
+                             xmlns:cc="http://www.smpte-ra.org/ns/2067-2/2020"
+                             xmlns:reg="http://www.smpte-ra.org/reg/335/2012"
+                             xmlns:aaf="http://www.smpte-ra.org/reg/395/2014/13/1/aaf">
           <Id>\(cplUUID)</Id>
-          <AnnotationText>\(escapedAnnotation)</AnnotationText>
+          <Annotation>\(escapedAnnotation)</Annotation>
           <IssueDate>\(now)</IssueDate>
           <Issuer>Aagedal Media Converter</Issuer>
           <Creator>Aagedal Media Converter (\(escapedAppLabel))</Creator>
           <ContentTitle>\(escapedTitle)</ContentTitle>
           <ContentKind>\(contentKind.rawValue)</ContentKind>
-          <ContentVersion>
-            <Id>\(contentVersionUUID)</Id>
-            <LabelText>\(escapedTitle)_v1</LabelText>
-          </ContentVersion>
-          <EssenceDescriptorList/>
+          <ContentVersionList>
+            <ContentVersion>
+              <Id>\(contentVersionUUID)</Id>
+              <LabelText>\(escapedTitle)_v1</LabelText>
+            </ContentVersion>
+          </ContentVersionList>
+          <EssenceDescriptorList>
+        \(videoMetadata.descriptorXML(color: color))
+        \(audioMetadata?.descriptorXML(color: color) ?? "")
+          </EssenceDescriptorList>
           <CompositionTimecode>
             <TimecodeDropFrame>false</TimecodeDropFrame>
-            <TimecodeRate>\(editRateNumerator)</TimecodeRate>
+            <TimecodeRate>\(Int((Double(editRateNumerator) / Double(editRateDenominator)).rounded()))</TimecodeRate>
             <TimecodeStartAddress>00:00:00:00</TimecodeStartAddress>
           </CompositionTimecode>
           <EditRate>\(editRate)</EditRate>
+          <ExtensionProperties>
+            <cc:ApplicationIdentification>\(application == .app2e ? "http://www.smpte-ra.org/ns/2067-21/2021" : "tag:apple.com,2017:imf:rdd45:2017")</cc:ApplicationIdentification>
+          </ExtensionProperties>
           <LocaleList>
             <Locale>
               <LanguageList>
@@ -385,6 +436,7 @@ actor IMFManifestWriter {
               <Size>\(cplSize)</Size>
               <Type>text/xml</Type>
               <OriginalFileName>\(cplFileName)</OriginalFileName>
+              <HashAlgorithm Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
             </Asset>
             <Asset>
               <Id>\(videoUUID)</Id>
@@ -393,6 +445,7 @@ actor IMFManifestWriter {
               <Size>\(videoSize)</Size>
               <Type>application/mxf</Type>
               <OriginalFileName>\(videoFileName)</OriginalFileName>
+              <HashAlgorithm Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
             </Asset>
         """
 
@@ -406,6 +459,7 @@ actor IMFManifestWriter {
               <Size>\(aSize)</Size>
               <Type>application/mxf</Type>
               <OriginalFileName>\(aFileName)</OriginalFileName>
+              <HashAlgorithm Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
             </Asset>
             """
         }
@@ -502,7 +556,7 @@ actor IMFManifestWriter {
 
         return """
         <?xml version="1.0" encoding="UTF-8"?>
-        <AssetMap xmlns="http://www.smpte-ra.org/schemas/2067-8/2016/AM">
+        <AssetMap xmlns="http://www.smpte-ra.org/schemas/429-9/2007/AM">
           <Id>\(assetMapUUID)</Id>
           <AnnotationText>\(escapedAnnotation)</AnnotationText>
           <Creator>Aagedal Media Converter</Creator>
@@ -514,5 +568,150 @@ actor IMFManifestWriter {
           </AssetList>
         </AssetMap>
         """
+    }
+}
+
+/// The small subset of MXF header metadata needed for a single-track experimental IMP.
+/// Values come from the MXF after wrapping, rather than from the requested encode settings.
+private struct IMFMXFMetadata {
+    let trackFileID: String
+    let descriptorID = SMPTEPackageUtils.urnUUID()
+    let kind: String
+    let editRate: String
+    let duration: Int
+    let containerUL: String
+    let compressionUL: String?
+    let width: Int?
+    let height: Int?
+    let aspectRatio: String?
+    let componentDepth: Int?
+    let horizontalSubsampling: Int?
+    let verticalSubsampling: Int?
+    let audioSampleRate: String?
+    let audioChannels: Int?
+    let audioBits: Int?
+    let audioBlockAlign: Int?
+    let linkedTrackID: Int
+
+    static func read(_ url: URL, expectedKind: String) async -> Self? {
+        guard let data = await BMXService.shared.getMXFXMLInfo(url: url),
+              let document = try? XMLDocument(data: data),
+              let op = try? document.nodes(forXPath: "//*[local-name()='op_label']").first?.stringValue,
+              op == "OP1A",
+              let package = try? document.nodes(forXPath: "//*[local-name()='file']/*[local-name()='primary_package']").first as? XMLElement,
+              let trackFileID = package.attribute(forName: "idau")?.stringValue,
+              trackFileID.hasPrefix("urn:uuid:"),
+              let track = try? document.nodes(forXPath: "//*[local-name()='clip']/*[local-name()='tracks']/*[local-name()='track']").first,
+              let kind = value("essence_kind", in: track), kind == expectedKind,
+              let rate = value("edit_rate", in: track),
+              let durationElement = try? track.nodes(forXPath: "./*[local-name()='duration']").first as? XMLElement,
+              let durationText = durationElement.attribute(forName: "count")?.stringValue,
+              let duration = Int(durationText), duration > 0,
+              let containerUL = value("ec_label", in: track),
+              let linkedID = value("track_id", in: track, scope: ".//*[local-name()='file_source']/*"),
+              let linkedTrackID = Int(linkedID) else { return nil }
+
+        let picture = try? track.nodes(forXPath: "./*[local-name()='picture_descriptor']").first
+        let sound = try? track.nodes(forXPath: "./*[local-name()='sound_descriptor']").first
+        if kind == "Picture" {
+            guard let picture, value("stored_width", in: picture) != nil,
+                  value("stored_height", in: picture) != nil,
+                  let cdci = try? picture.nodes(forXPath: "./*[local-name()='cdci_descriptor']"),
+                  !cdci.isEmpty else { return nil }
+        } else if sound == nil { return nil }
+        return Self(
+            trackFileID: trackFileID, kind: kind, editRate: rate, duration: duration,
+            containerUL: containerUL,
+            compressionUL: picture.flatMap { value("coding_label", in: $0) },
+            width: picture.flatMap { value("stored_width", in: $0) }.flatMap(Int.init),
+            height: picture.flatMap { value("stored_height", in: $0) }.flatMap(Int.init),
+            aspectRatio: picture.flatMap { value("aspect_ratio", in: $0) },
+            componentDepth: picture.flatMap { value("component_depth", in: $0, scope: ".//*[local-name()='cdci_descriptor']/*") }.flatMap(Int.init),
+            horizontalSubsampling: picture.flatMap { value("horiz_subsamp", in: $0, scope: ".//*[local-name()='cdci_descriptor']/*") }.flatMap(Int.init),
+            verticalSubsampling: picture.flatMap { value("vert_subsamp", in: $0, scope: ".//*[local-name()='cdci_descriptor']/*") }.flatMap(Int.init),
+            audioSampleRate: sound.flatMap { value("sampling_rate", in: $0) },
+            audioChannels: sound.flatMap { value("channel_count", in: $0) }.flatMap(Int.init),
+            audioBits: sound.flatMap { value("bits_per_sample", in: $0) }.flatMap(Int.init),
+            audioBlockAlign: sound.flatMap { value("block_align", in: $0) }.flatMap(Int.init),
+            linkedTrackID: linkedTrackID
+        )
+    }
+
+    private static func value(_ name: String, in node: XMLNode, scope: String = "./*") -> String? {
+        try? node.nodes(forXPath: "\(scope)[local-name()='\(name)']").first?.stringValue
+    }
+
+    func descriptorXML(color: IMFColorEncoding) -> String {
+        if kind == "Sound" {
+            let channels = audioChannels ?? 0
+            let bits = audioBits ?? 0
+            let block = audioBlockAlign ?? 0
+            let rate = audioSampleRate ?? "48000/1"
+            let samples = Int(rate.split(separator: "/").first ?? "48000") ?? 48000
+            return """
+                <EssenceDescriptor>
+                  <Id>\(descriptorID)</Id>
+                  <aaf:WAVEPCMDescriptor>
+                    <reg:LinkedTrackID>\(linkedTrackID)</reg:LinkedTrackID>
+                    <reg:InstanceID>\(SMPTEPackageUtils.urnUUID())</reg:InstanceID>
+                    <reg:AudioSampleRate>\(rate)</reg:AudioSampleRate>
+                    <reg:SampleRate>\(rate)</reg:SampleRate>
+                    <reg:ChannelCount>\(channels)</reg:ChannelCount>
+                    <reg:QuantizationBits>\(bits)</reg:QuantizationBits>
+                    <reg:BlockAlign>\(block)</reg:BlockAlign>
+                    <reg:AverageBytesPerSecond>\(samples * block)</reg:AverageBytesPerSecond>
+                    <reg:ContainerFormat>\(containerUL)</reg:ContainerFormat>
+                    <reg:ChannelAssignment>urn:smpte:ul:060e2b34.0401010d.04020210.04010000</reg:ChannelAssignment>
+                    <reg:EssenceLength>\(duration)</reg:EssenceLength>
+                  </aaf:WAVEPCMDescriptor>
+                </EssenceDescriptor>
+                """
+        }
+
+        let (primaries, transfer, matrix) = color.imfDescriptorULs
+        return """
+            <EssenceDescriptor>
+              <Id>\(descriptorID)</Id>
+              <aaf:CDCIDescriptor>
+                <reg:HorizontalSubsampling>\(horizontalSubsampling ?? 2)</reg:HorizontalSubsampling>
+                <reg:VerticalSubsampling>\(verticalSubsampling ?? 1)</reg:VerticalSubsampling>
+                <reg:ComponentDepth>\(componentDepth ?? 10)</reg:ComponentDepth>
+                <reg:BlackRefLevel>64</reg:BlackRefLevel>
+                <reg:WhiteRefLevel>940</reg:WhiteRefLevel>
+                <reg:ColorRange>897</reg:ColorRange>
+                <reg:LinkedTrackID>\(linkedTrackID)</reg:LinkedTrackID>
+                <reg:InstanceID>\(SMPTEPackageUtils.urnUUID())</reg:InstanceID>
+                <reg:DisplayWidth>\(width ?? 0)</reg:DisplayWidth>
+                <reg:DisplayHeight>\(height ?? 0)</reg:DisplayHeight>
+                <reg:StoredWidth>\(width ?? 0)</reg:StoredWidth>
+                <reg:StoredHeight>\(height ?? 0)</reg:StoredHeight>
+                <reg:FrameLayout>FullFrame</reg:FrameLayout>
+                <reg:ImageAspectRatio>\(aspectRatio ?? "16/9")</reg:ImageAspectRatio>
+                <reg:SampleRate>\(editRate)</reg:SampleRate>
+                <reg:TransferCharacteristic>\(transfer)</reg:TransferCharacteristic>
+                <reg:ColorPrimaries>\(primaries)</reg:ColorPrimaries>
+                <reg:CodingEquations>\(matrix)</reg:CodingEquations>
+                <reg:ContainerFormat>\(containerUL)</reg:ContainerFormat>
+                <reg:PictureCompression>\(compressionUL ?? "")</reg:PictureCompression>
+                <reg:EssenceLength>\(duration)</reg:EssenceLength>
+              </aaf:CDCIDescriptor>
+            </EssenceDescriptor>
+            """
+    }
+}
+
+private extension IMFColorEncoding {
+    var imfDescriptorULs: (String, String, String) {
+        let rec709Primaries = "urn:smpte:ul:060e2b34.04010106.04010101.03030000"
+        let rec709Transfer = "urn:smpte:ul:060e2b34.04010101.04010101.01020000"
+        let rec709Matrix = "urn:smpte:ul:060e2b34.04010101.04010101.02020000"
+        let rec2020Primaries = "urn:smpte:ul:060e2b34.0401010d.04010101.03040000"
+        let rec2020Matrix = "urn:smpte:ul:060e2b34.0401010d.04010101.02060000"
+        switch self {
+        case .rec709: return (rec709Primaries, rec709Transfer, rec709Matrix)
+        case .rec2020SDR: return (rec2020Primaries, "urn:smpte:ul:060e2b34.0401010d.04010101.01090000", rec2020Matrix)
+        case .rec2020PQ: return (rec2020Primaries, "urn:smpte:ul:060e2b34.0401010d.04010101.010a0000", rec2020Matrix)
+        case .rec2020HLG: return (rec2020Primaries, "urn:smpte:ul:060e2b34.0401010d.04010101.010b0000", rec2020Matrix)
+        }
     }
 }

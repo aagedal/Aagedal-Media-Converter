@@ -30,13 +30,31 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertEqual(server["enabled"] as? Bool, true)
     }
 
-    func testSupportedPresetIDsAreStableAndMapToInitialPresetSubset() {
+    func testBuiltInPresetIDsAreStableAndExcludeCustomSlots() {
         XCTAssertEqual(ApplicationPresetID.allCases.map(\.rawValue), [
-            "h264", "hevc", "prores", "proxy", "audio_only", "stream_copy"
+            "video_loop", "video_loop_with_sound", "animated_still",
+            "h264", "hevc", "av1", "av2", "tv_hevc", "tv_avc_intra",
+            "prores", "proxy", "audio_only", "stream_copy", "image_sequence",
+            "dcp", "imf_app_2e", "imf_rdd_45"
         ])
         XCTAssertEqual(ApplicationPresetID.allCases.map(\.exportPreset), [
-            .h264, .h265, .prores, .proxy, .audioOnly, .streamCopy
+            .videoLoop, .videoLoopWithSound, .animatedStill,
+            .h264, .h265, .av1, .av2, .tvHEVC, .tvAVCIntra,
+            .prores, .proxy, .audioOnly, .streamCopy, .imageSequence,
+            .dcp, .imfJ2K, .imfProRes
         ])
+        XCTAssertEqual(ApplicationPresetID.allCases.filter(\.isRunnable).count, 17)
+    }
+
+    func testIMFPresetsCaptureRunnableSettings() throws {
+        for presetID in [ApplicationPresetID.imfJ2K, .imfProRes] {
+            XCTAssertTrue(presetID.isRunnable)
+            let settings = ApplicationPresetSettings(presetID: presetID)
+            XCTAssertNotNil(settings.capturedIMF)
+            XCTAssertEqual(settings.outputIsDirectory, true)
+            XCTAssertEqual(try JSONDecoder().decode(ApplicationPresetSettings.self,
+                                                   from: JSONEncoder().encode(settings)), settings)
+        }
     }
 
     func testRequestAndJobIDRoundTripThroughJSON() throws {
@@ -2268,7 +2286,7 @@ final class ApplicationJobContractTests: XCTestCase {
             executor: adapter.jobExecutor
         )
 
-        for presetID in ApplicationPresetID.allCases {
+        for presetID in ApplicationPresetID.allCases.filter(\.isRunnable) {
             let sourceURL = directory.appendingPathComponent("\(presetID.rawValue).mov")
             try Data(presetID.rawValue.utf8).write(to: sourceURL)
             let request = makeRequest(
@@ -2288,17 +2306,18 @@ final class ApplicationJobContractTests: XCTestCase {
         }
 
         let snapshots = await harness.snapshots()
-        XCTAssertEqual(snapshots.map(\.preset), [.h264, .h265, .prores, .proxy, .audioOnly, .streamCopy])
-        XCTAssertEqual(Set(snapshots.map(\.outputURL)).count, ApplicationPresetID.allCases.count)
-        XCTAssertTrue(snapshots[0].ffmpegArguments.contains("libx264"))
-        XCTAssertTrue(snapshots[1].ffmpegArguments.contains("libx265"))
-        XCTAssertTrue(snapshots[2].ffmpegArguments.contains("prores_videotoolbox"))
-        XCTAssertTrue(snapshots[3].ffmpegArguments.contains("hevc_videotoolbox"))
-        XCTAssertEqual(snapshots[4].audioOnlyFormat, .wav)
-        XCTAssertTrue(snapshots[4].ffmpegArguments.contains("pcm_s24le"))
-        XCTAssertTrue(snapshots[5].ffmpegArguments.contains("copy"))
-        XCTAssertEqual(snapshots[0].keepsSubtitles, true)
-        XCTAssertEqual(snapshots[4].keepsSubtitles, false)
+        XCTAssertEqual(snapshots.map(\.preset), ApplicationPresetID.allCases.filter(\.isRunnable).map(\.exportPreset))
+        XCTAssertEqual(Set(snapshots.map(\.outputURL)).count, 15)
+        let byPreset = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.preset, $0) })
+        XCTAssertTrue(byPreset[.h264]?.ffmpegArguments.contains("libx264") == true)
+        XCTAssertTrue(byPreset[.h265]?.ffmpegArguments.contains("libx265") == true)
+        XCTAssertTrue(byPreset[.prores]?.ffmpegArguments.contains("prores_videotoolbox") == true)
+        XCTAssertTrue(byPreset[.proxy]?.ffmpegArguments.contains("hevc_videotoolbox") == true)
+        XCTAssertEqual(byPreset[.audioOnly]?.audioOnlyFormat, .wav)
+        XCTAssertTrue(byPreset[.audioOnly]?.ffmpegArguments.contains("pcm_s24le") == true)
+        XCTAssertTrue(byPreset[.streamCopy]?.ffmpegArguments.contains("copy") == true)
+        XCTAssertEqual(byPreset[.h264]?.keepsSubtitles, true)
+        XCTAssertEqual(byPreset[.audioOnly]?.keepsSubtitles, false)
     }
 
     func testFFmpegAdapterExecutesCapturedSettingsAfterDefaultsChange() async throws {
@@ -2810,9 +2829,9 @@ final class ApplicationJobContractTests: XCTestCase {
         let presets = tools.listPresets()
 
         XCTAssertEqual(presets.map(\.id), ApplicationPresetID.allCases)
-        XCTAssertEqual(presets.map(\.displayName), [
-            "H.264 / AVC", "H.265 / HEVC", "ProRes", "Proxy", "Audio Only", "Stream Copy"
-        ])
+        XCTAssertEqual(presets.map(\.displayName), ApplicationPresetID.allCases.map { $0.exportPreset.displayName })
+        XCTAssertEqual(presets.filter(\.isAvailable).count, 17)
+        XCTAssertTrue(presets.allSatisfy(\.isAvailable))
         XCTAssertTrue(presets.allSatisfy { $0.supportedOverrides.isEmpty })
         XCTAssertEqual(presets.first { $0.id == .h264 }?.settings.containerID, .mkv)
         XCTAssertEqual(presets.first { $0.id == .audioOnly }?.settings.containerID, .flac)
@@ -3600,12 +3619,12 @@ final class ApplicationJobContractTests: XCTestCase {
         let presetResult = try XCTUnwrap(responses[1]["result"] as? [String: Any])
         XCTAssertEqual(presetResult["isError"] as? Bool, false)
         let presetContent = try XCTUnwrap(presetResult["structuredContent"] as? [String: Any])
-        XCTAssertEqual((presetContent["presets"] as? [[String: Any]])?.count, 6)
+        XCTAssertEqual((presetContent["presets"] as? [[String: Any]])?.count, 17)
         let presetText = try XCTUnwrap((presetResult["content"] as? [[String: Any]])?.first?["text"] as? String)
         let textContent = try XCTUnwrap(
             JSONSerialization.jsonObject(with: Data(presetText.utf8)) as? [String: Any]
         )
-        XCTAssertEqual((textContent["presets"] as? [[String: Any]])?.count, 6)
+        XCTAssertEqual((textContent["presets"] as? [[String: Any]])?.count, 17)
 
         let planResult = try XCTUnwrap(responses[2]["result"] as? [String: Any])
         XCTAssertEqual(planResult["isError"] as? Bool, false)
@@ -4361,6 +4380,121 @@ final class ApplicationJobContractTests: XCTestCase {
             let interior = samples[12_000..<36_000]
             let crossings = zip(interior, interior.dropFirst()).filter { $0 < 0 && $1 >= 0 }.count
             XCTAssertEqual(Double(crossings), 220, accuracy: 2, presetID.rawValue)
+        }
+    }
+
+    func testLiveImageSequenceCreatesExactlyThePlannedDirectory() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        let destinationURL = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=0.25",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: destinationURL,
+            presetID: .imageSequence, idempotencyKey: nil, defaults: defaults
+        ))
+        let plannedURL = try XCTUnwrap(plan.outputs.first?.outputURL)
+        XCTAssertTrue(plan.request.presetSettings.outputIsDirectory == true)
+        XCTAssertTrue(plannedURL.pathExtension.isEmpty)
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(
+            service: service, jobID: accepted.record.id, state: .succeeded
+        )
+        XCTAssertEqual(record.outputURLs, [plannedURL])
+        let files = try FileManager.default.contentsOfDirectory(
+            at: plannedURL, includingPropertiesForKeys: nil
+        )
+        XCTAssertTrue(files.contains { $0.pathExtension == "png" })
+    }
+
+    func testLiveDCPCreatesExactlyThePlannedPackage() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        let destinationURL = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=0.125",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=0.125",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+            "-shortest", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        let plan = try await service.plan(makeRequest(
+            sourceURLs: [sourceURL], destinationFolderURL: destinationURL,
+            presetID: .dcp, idempotencyKey: nil, defaults: defaults
+        ))
+        let plannedURL = try XCTUnwrap(plan.outputs.first?.outputURL)
+        XCTAssertTrue(plan.request.presetSettings.outputIsDirectory == true)
+        let accepted = try await service.submit(planID: plan.id)
+        let record = try await waitForRecord(
+            service: service, jobID: accepted.record.id, state: .succeeded
+        )
+        XCTAssertEqual(record.outputURLs, [plannedURL])
+        let files = try FileManager.default.contentsOfDirectory(
+            at: plannedURL, includingPropertiesForKeys: nil
+        )
+        let packageURL = try XCTUnwrap(files.first {
+            (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+                && $0.lastPathComponent != "jp2"
+        })
+        let packageFiles = try FileManager.default.contentsOfDirectory(
+            at: packageURL, includingPropertiesForKeys: nil
+        )
+        XCTAssertTrue(packageFiles.contains { $0.pathExtension.lowercased() == "mxf" })
+        XCTAssertTrue(packageFiles.contains { $0.lastPathComponent.hasPrefix("cpl_") })
+    }
+
+    func testLiveIMFPresetsCreatePlannedPackageDirectories() async throws {
+        let directory = try makeTemporaryDirectory()
+        let sourceURL = directory.appendingPathComponent("source.mov")
+        let destinationURL = directory.appendingPathComponent("outputs", isDirectory: true)
+        try FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true)
+        try runBundledFFmpeg([
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=24:duration=0.125",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", sourceURL.path
+        ])
+        let defaults = try makeDefaults()
+        let adapter = ApplicationFFmpegJobExecutor(runner: .live())
+        let service = ApplicationJobService(
+            fileAccessAuthorizer: .unrestricted,
+            executor: adapter.jobExecutor
+        )
+        for presetID in [ApplicationPresetID.imfProRes, .imfJ2K] {
+            let plan = try await service.plan(makeRequest(
+                sourceURLs: [sourceURL], destinationFolderURL: destinationURL,
+                presetID: presetID, idempotencyKey: nil, defaults: defaults
+            ))
+            let plannedURL = try XCTUnwrap(plan.outputs.first?.outputURL)
+            XCTAssertTrue(plan.request.presetSettings.outputIsDirectory == true)
+            let accepted = try await service.submit(planID: plan.id)
+            let record = try await waitForRecord(
+                service: service, jobID: accepted.record.id, state: .succeeded
+            )
+            XCTAssertEqual(record.outputURLs, [plannedURL])
+            let packages = try FileManager.default.contentsOfDirectory(
+                at: plannedURL, includingPropertiesForKeys: nil
+            )
+            XCTAssertTrue(packages.contains {
+                FileManager.default.fileExists(atPath:
+                    $0.appendingPathComponent("ASSETMAP.xml").path)
+            })
         }
     }
 
