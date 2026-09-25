@@ -644,7 +644,13 @@ actor ConversionManager: Sendable {
 
         var arguments = ["-y"]
         if hasStartTrim {
-            arguments.append(contentsOf: ["-ss", FFMPEGCommandBuilder.ffmpegTimeString(from: start)])
+            // A millisecond-rounded seek can land just before a fractional-rate
+            // keyframe that the timeline snapped to (for example 10/23.976 fps).
+            // Stream copy must seek at or just after that point so FFmpeg chooses
+            // the intended preceding sync sample rather than the previous GOP.
+            let seek = decodeTrim ? FFMPEGCommandBuilder.ffmpegTimeString(from: start)
+                : String(format: "%.6f", ceil(start * 1_000_000) / 1_000_000)
+            arguments.append(contentsOf: ["-ss", seek])
         }
 
         arguments.append(contentsOf: ["-i", item.url.path])

@@ -1946,7 +1946,7 @@ struct ContentView: View {
                 "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)",
                 "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)",
                 "-map", "0:v:0", "-map", "1:a:0",
-                "-c:v", "mpeg4", "-q:v", "5", "-pix_fmt", "yuv420p",
+                "-c:v", "mpeg4", "-q:v", "5", "-g", "12", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-shortest", fixtureURL.path,
             ],
             timeout: .seconds(30),

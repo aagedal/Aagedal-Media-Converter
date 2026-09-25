@@ -318,11 +318,11 @@ struct StitchingEditorView<FileList: View>: View {
     let isStreamCopy: Bool
     @State private var rangeMode = false
     @State private var selectedRange: ClipRange?
-    @State private var snapToKeyframes = false
     @State private var keyframes: [URL: [Double]] = [:]
     @State private var keyframeSourceIdentities: [URL: TimelineKeyframeService.SourceIdentity] = [:]
     @State private var keyframeLoading = false
     @State private var keyframeScannedRanges: [URL: [ClosedRange<Double>]] = [:]
+    @State private var keyframeEditTask: Task<Void, Never>?
     @State private var showsTimelineInfo = false
     private struct ClipRange: Equatable {
         let id: UUID
@@ -537,9 +537,8 @@ struct StitchingEditorView<FileList: View>: View {
                 timeline
                 HStack(spacing: 12) {
                     if isStreamCopy {
-                        Toggle("Snap trims and ranges to keyframes", isOn: $snapToKeyframes)
-                            .fixedSize()
-                            .accessibilityIdentifier("stitching.keyframeSnap")
+                        Text(keyframeLoading ? "Finding keyframes…" : "Stream Copy trims snap to keyframes")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Button { showsTimelineInfo.toggle() } label: {
                         Image(systemName: "info.circle")
@@ -603,7 +602,7 @@ struct StitchingEditorView<FileList: View>: View {
             keyframeLoading = true
             defer { if !Task.isCancelled { keyframeLoading = false } }
             let previewID = selectedID ?? group.items.first?.id
-            let items = snapToKeyframes ? group.items : group.items.filter { $0.id == previewID }
+            let items = group.items
             for item in items {
                 let points = [item.effectiveTrimStart, item.effectiveTrimEnd]
                     + (item.id == previewID ? [sourceTime] : [])
@@ -612,29 +611,13 @@ struct StitchingEditorView<FileList: View>: View {
                         let scan = try await TimelineKeyframeService.shared.scan(
                             url: item.url, around: point, duration: item.durationSeconds)
                         try Task.checkCancellation()
-                        if keyframeSourceIdentities[item.url] != scan.sourceIdentity || scan.sourceIdentity == nil {
-                            keyframes[item.url] = []
-                            keyframeScannedRanges[item.url] = []
-                        }
-                        keyframeSourceIdentities[item.url] = scan.sourceIdentity
-                        // Incomplete scans never establish coverage or snapping candidates.
-                        guard scan.status == .complete, let region = scan.scannedRange else { continue }
-                        keyframes[item.url] = Array(Set((keyframes[item.url] ?? []) + scan.times)).sorted()
-                        var regions = (keyframeScannedRanges[item.url] ?? []) + [region]
-                        regions.sort { $0.lowerBound < $1.lowerBound }
-                        var merged: [ClosedRange<Double>] = []
-                        for region in regions {
-                            if let last = merged.last, region.lowerBound <= last.upperBound.nextUp {
-                                merged[merged.count - 1] = last.lowerBound...max(last.upperBound, region.upperBound)
-                            } else { merged.append(region) }
-                        }
-                        keyframeScannedRanges[item.url] = merged
+                        retainKeyframeScan(scan, for: item.url)
+                        alignStoredStreamCopyTrims(for: item.id)
                     } catch { if Task.isCancelled { return } }
                 }
             }
         }
         .onChange(of: rangeMode) { _, _ in selectedRange = nil }
-        .onChange(of: snapToKeyframes) { _, _ in selectedRange = nil }
         .onChange(of: group.items) { old, new in
             if old.map(\.id) != new.map(\.id) || zip(old, new).contains(where: { $0.trimStart != $1.trimStart || $0.trimEnd != $1.trimEnd }) {
                 selectedRange = nil
@@ -692,6 +675,8 @@ struct StitchingEditorView<FileList: View>: View {
             }.padding(20).frame(width: 380)
         }
         .onDisappear {
+            keyframeEditTask?.cancel()
+            keyframeEditTask = nil
             isPlaying = false
             scrubTask?.cancel()
             scrubTask = nil
@@ -708,47 +693,51 @@ struct StitchingEditorView<FileList: View>: View {
                 Text("Stream Copy cuts").font(.subheadline.weight(.semibold))
                 Text(item.url.lastPathComponent)
                     .font(.caption).foregroundStyle(.secondary)
-                if snapToKeyframes {
-                    Text(keyframeLoading ? "Finding keyframes…" : (keyframes[item.url]?.isEmpty == false ? "Trims and ranges snap to the nearest available keyframe." : "Keyframes unavailable for this clip. Using frame snapping."))
+                if keyframes[item.url]?.isEmpty == false {
+                    Text("Trims and ranges snap to scanned keyframes. Keyframe ticks appear on the clip.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
-                    let requested = item.effectiveTrimStart
-                    let display = StitchingTimeline.timeDisplay(requested, frameRate: StitchingTimeline.frameRate(for: item))
-                    Text("Requested start: \(display)")
-                        .font(.caption.monospacedDigit())
-                        .accessibilityIdentifier("stitching.requestedCut")
-                    if let candidate = StitchingTimeline.precedingSeekCandidate(
-                        requested, times: keyframes[item.url] ?? [],
-                        scannedRanges: keyframeScannedRanges[item.url] ?? []) {
-                        let candidateDisplay = StitchingTimeline.timeDisplay(candidate, frameRate: StitchingTimeline.frameRate(for: item))
-                        let difference = (requested - candidate).formatted(.number.precision(.fractionLength(3)))
-                        Text("Estimated seek point: \(candidateDisplay) (\(difference) s earlier). Export can differ.")
-                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                            .accessibilityIdentifier("stitching.seekEstimate")
-                    } else {
-                        Text("Seek estimate unavailable near this cut.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    let requestedEnd = item.effectiveTrimEnd
-                    let endDisplay = StitchingTimeline.timeDisplay(requestedEnd, frameRate: StitchingTimeline.frameRate(for: item))
-                    Text("Requested end: \(endDisplay)")
-                        .font(.caption.monospacedDigit())
-                        .accessibilityIdentifier("stitching.requestedEnd")
-                    if let reference = StitchingTimeline.followingKeyframeReference(
-                        requestedEnd, times: keyframes[item.url] ?? [],
-                        scannedRanges: keyframeScannedRanges[item.url] ?? []) {
-                        let referenceDisplay = StitchingTimeline.timeDisplay(reference, frameRate: StitchingTimeline.frameRate(for: item))
-                        let difference = (reference - requestedEnd).formatted(.number.precision(.fractionLength(3)))
-                        Text("Keyframe at or after end: \(referenceDisplay) (\(difference) s later). This does not predict the exported end.")
-                            .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("stitching.endKeyframeReference")
-                    } else {
-                        Text("No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes.")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("stitching.endKeyframeUnavailable")
-                    }
+                    Text(keyframeLoading ? "Finding keyframes…" : "Keyframes unavailable for this clip. Trim edits require a verified keyframe.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text("If a keyframe cannot be verified near an edit, that edit will not move.")
+                    .font(.caption).foregroundStyle(.secondary)
+                let requested = item.effectiveTrimStart
+                let display = StitchingTimeline.timeDisplay(requested, frameRate: StitchingTimeline.frameRate(for: item))
+                Text("Requested start: \(display)")
+                    .font(.caption.monospacedDigit())
+                    .accessibilityIdentifier("stitching.requestedCut")
+                if let candidate = StitchingTimeline.precedingSeekCandidate(
+                    requested, times: keyframes[item.url] ?? [],
+                    scannedRanges: keyframeScannedRanges[item.url] ?? []) {
+                    let candidateDisplay = StitchingTimeline.timeDisplay(candidate, frameRate: StitchingTimeline.frameRate(for: item))
+                    let difference = (requested - candidate).formatted(.number.precision(.fractionLength(3)))
+                    Text("Estimated seek point: \(candidateDisplay) (\(difference) s earlier). Export can differ.")
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("stitching.seekEstimate")
+                } else {
+                    Text("Seek estimate unavailable near this cut.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                let requestedEnd = item.effectiveTrimEnd
+                let endDisplay = StitchingTimeline.timeDisplay(requestedEnd, frameRate: StitchingTimeline.frameRate(for: item))
+                Text("Requested end: \(endDisplay)")
+                    .font(.caption.monospacedDigit())
+                    .accessibilityIdentifier("stitching.requestedEnd")
+                if let reference = StitchingTimeline.followingKeyframeReference(
+                    requestedEnd, times: keyframes[item.url] ?? [],
+                    scannedRanges: keyframeScannedRanges[item.url] ?? []) {
+                    let referenceDisplay = StitchingTimeline.timeDisplay(reference, frameRate: StitchingTimeline.frameRate(for: item))
+                    let difference = (reference - requestedEnd).formatted(.number.precision(.fractionLength(3)))
+                    Text("Keyframe at or after end: \(referenceDisplay) (\(difference) s later). This does not predict the exported end.")
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("stitching.endKeyframeReference")
+                } else {
+                    Text("No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("stitching.endKeyframeUnavailable")
                 }
                 Text("Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -1090,6 +1079,9 @@ struct StitchingEditorView<FileList: View>: View {
         pendingScrubTime = nil
         cancelClipDrag()
         editHistory.restore(&group.items, redo: redo)
+        if isStreamCopy {
+            for id in group.items.map(\.id) { alignStoredStreamCopyTrims(for: id) }
+        }
         group.lastSortMode = nil
         if group.sequentialNamingEnabled { group.normalizeSequentialNaming() }
         if let location = StitchingTimeline.location(at: min(time, total), in: group.items) {
@@ -1117,6 +1109,34 @@ struct StitchingEditorView<FileList: View>: View {
         scrubTask?.cancel()
         scrubTask = nil
         pendingScrubTime = nil
+        if isStreamCopy {
+            guard let location = StitchingTimeline.location(at: time, in: group.items),
+                  let item = group.items.first(where: { $0.id == location.id }) else { return }
+            let frame = 1 / (StitchingTimeline.frameRate(for: item) ?? 100)
+            let lower = item.effectiveTrimStart + frame
+            let upper = item.effectiveTrimEnd - frame
+            guard lower <= upper else { return }
+            let bounds = lower...upper
+            if let point = scannedKeyframe(location.sourceTime, item: item, bounds: bounds) {
+                performSplit(at: time + point - location.sourceTime)
+            } else {
+                keyframeEditTask?.cancel()
+                keyframeEditTask = Task { @MainActor in
+                    guard let scan = try? await TimelineKeyframeService.shared.scan(
+                        url: item.url, around: location.sourceTime, duration: item.durationSeconds),
+                        !Task.isCancelled else { return }
+                    retainKeyframeScan(scan, for: item.url)
+                    guard let current = group.items.first(where: { $0.id == item.id }),
+                          let point = scannedKeyframe(location.sourceTime, item: current, bounds: bounds) else { return }
+                    performSplit(at: time + point - location.sourceTime)
+                }
+            }
+            return
+        }
+        performSplit(at: time)
+    }
+
+    private func performSplit(at time: Double) {
         guard StitchingTimeline.splitPoint(at: time, in: group.items) != nil else { return }
         preserveTimelineScale()
         guard let id = StitchingTimeline.split(&group.items, at: time),
@@ -1132,7 +1152,47 @@ struct StitchingEditorView<FileList: View>: View {
         let items = group.items.map {
             "\($0.id)-\($0.url.absoluteString)-\(floor($0.effectiveTrimStart / 5))-\(floor($0.effectiveTrimEnd / 5))"
         }.joined(separator: "|")
-        return "\(isStreamCopy)-\(snapToKeyframes)-\(selectedID?.uuidString ?? "")-\(floor(sourceTime / 15))-\(items)"
+        return "\(isStreamCopy)-\(selectedID?.uuidString ?? "")-\(floor(sourceTime / 15))-\(items)"
+    }
+
+    private func retainKeyframeScan(_ scan: TimelineKeyframeScan, for url: URL) {
+        if keyframeSourceIdentities[url] != scan.sourceIdentity || scan.sourceIdentity == nil {
+            keyframes[url] = []
+            keyframeScannedRanges[url] = []
+        }
+        keyframeSourceIdentities[url] = scan.sourceIdentity
+        guard scan.status == .complete, let region = scan.scannedRange else { return }
+        keyframes[url] = Array(Set((keyframes[url] ?? []) + scan.times)).sorted()
+        let regions = ((keyframeScannedRanges[url] ?? []) + [region]).sorted { $0.lowerBound < $1.lowerBound }
+        var merged: [ClosedRange<Double>] = []
+        for region in regions {
+            if let last = merged.last, region.lowerBound <= last.upperBound.nextUp {
+                merged[merged.count - 1] = last.lowerBound...max(last.upperBound, region.upperBound)
+            } else {
+                merged.append(region)
+            }
+        }
+        keyframeScannedRanges[url] = merged
+    }
+
+    private func alignStoredStreamCopyTrims(for id: UUID) {
+        guard isStreamCopy, trimGestureBefore == nil,
+              let index = group.items.firstIndex(where: { $0.id == id }) else { return }
+        var item = group.items[index]
+        let gap = 1 / (StitchingTimeline.frameRate(for: item) ?? 100)
+        if let start = item.trimStart, start > 0, item.effectiveTrimEnd - gap >= 0,
+           let point = scannedKeyframe(start, item: item, bounds: 0...(item.effectiveTrimEnd - gap)) {
+            item.trimStart = point
+        }
+        if let end = item.trimEnd, item.effectiveTrimStart + gap <= item.durationSeconds,
+           let point = scannedKeyframe(end, item: item,
+                                       bounds: (item.effectiveTrimStart + gap)...item.durationSeconds) {
+            item.trimEnd = point
+        }
+        if item.trimStart != group.items[index].trimStart || item.trimEnd != group.items[index].trimEnd {
+            group.items[index].trimStart = item.trimStart
+            group.items[index].trimEnd = item.trimEnd
+        }
     }
 
     private func scannedKeyframe(_ time: Double, item: VideoItem, bounds: ClosedRange<Double>) -> Double? {
@@ -1149,12 +1209,11 @@ struct StitchingEditorView<FileList: View>: View {
         return candidate
     }
 
-    private func rangeBoundary(_ item: VideoItem, value: Double) -> Double {
+    private func rangeBoundary(_ item: VideoItem, value: Double) -> Double? {
         let bounds = item.effectiveTrimStart...item.effectiveTrimEnd
         let clamped = min(bounds.upperBound, max(bounds.lowerBound, value))
         if clamped == bounds.lowerBound || clamped == bounds.upperBound { return clamped }
-        if isStreamCopy, snapToKeyframes,
-           let point = scannedKeyframe(clamped, item: item, bounds: bounds) { return point }
+        if isStreamCopy { return scannedKeyframe(clamped, item: item, bounds: bounds) }
         let rate = StitchingTimeline.frameRate(for: item)
         return min(bounds.upperBound, max(bounds.lowerBound, rate.map { (clamped * $0).rounded() / $0 } ?? clamped))
     }
@@ -1239,14 +1298,40 @@ struct StitchingEditorView<FileList: View>: View {
         let gap = 1 / (StitchingTimeline.frameRate(for: item) ?? 100)
         let bounds = start ? 0...max(0, item.effectiveTrimEnd - gap)
             : min(item.durationSeconds, item.effectiveTrimStart + gap)...item.durationSeconds
-        if isStreamCopy, snapToKeyframes,
-           let point = scannedKeyframe(value, item: item, bounds: bounds) {
-            if start { group.items[index].trimStart = point }
-            else { group.items[index].trimEnd = point }
+        if isStreamCopy {
+            keyframeEditTask?.cancel()
+            if start && value <= 0 {
+                applyKeyframeTrim(id, start: true, point: 0)
+            } else if !start && value >= item.durationSeconds {
+                applyKeyframeTrim(id, start: false, point: item.durationSeconds)
+            } else if let point = scannedKeyframe(value, item: item, bounds: bounds) {
+                applyKeyframeTrim(id, start: start, point: point)
+            } else {
+                keyframeEditTask = Task { @MainActor in
+                    guard let scan = try? await TimelineKeyframeService.shared.scan(
+                        url: item.url, around: value, duration: item.durationSeconds),
+                        !Task.isCancelled else { return }
+                    retainKeyframeScan(scan, for: item.url)
+                    guard let current = group.items.first(where: { $0.id == id }),
+                          current.url == item.url else { return }
+                    let currentGap = 1 / (StitchingTimeline.frameRate(for: current) ?? 100)
+                    let currentBounds = start ? 0...max(0, current.effectiveTrimEnd - currentGap)
+                        : min(current.durationSeconds, current.effectiveTrimStart + currentGap)...current.durationSeconds
+                    guard let point = scannedKeyframe(value, item: current, bounds: currentBounds) else { return }
+                    applyKeyframeTrim(id, start: start, point: point)
+                }
+            }
         } else {
             StitchingTimeline.trim(&group.items[index], start: start, to: value)
+            seek(id, to: start ? group.items[index].effectiveTrimStart : group.items[index].effectiveTrimEnd)
         }
-        seek(id, to: start ? group.items[index].effectiveTrimStart : group.items[index].effectiveTrimEnd)
+    }
+
+    private func applyKeyframeTrim(_ id: UUID, start: Bool, point: Double) {
+        guard let index = group.items.firstIndex(where: { $0.id == id }) else { return }
+        if start { group.items[index].trimStart = point == 0 ? nil : point }
+        else { group.items[index].trimEnd = point == group.items[index].durationSeconds ? nil : point }
+        seek(id, to: point)
     }
     private func selectClip(_ id: UUID) {
         guard group.status != .converting else { return }
@@ -1270,10 +1355,29 @@ struct StitchingEditorView<FileList: View>: View {
         scrubTask?.cancel()
         scrubTask = nil
         pendingScrubTime = nil
-        let a = rangeBoundary(item, value: item.effectiveTrimStart + start)
-        let b = rangeBoundary(item, value: item.effectiveTrimStart + end)
-        selectedRange = a == b ? nil : ClipRange(id: item.id, bounds: min(a, b)...max(a, b))
-        seek(item.id, to: b)
+        let requestedA = item.effectiveTrimStart + start
+        let requestedB = item.effectiveTrimStart + end
+        if let a = rangeBoundary(item, value: requestedA),
+           let b = rangeBoundary(item, value: requestedB) {
+            selectedRange = a == b ? nil : ClipRange(id: item.id, bounds: min(a, b)...max(a, b))
+            seek(item.id, to: b)
+            return
+        }
+        guard isStreamCopy else { return }
+        keyframeEditTask?.cancel()
+        keyframeEditTask = Task { @MainActor in
+            for requested in [requestedA, requestedB] {
+                guard let scan = try? await TimelineKeyframeService.shared.scan(
+                    url: item.url, around: requested, duration: item.durationSeconds),
+                    !Task.isCancelled else { return }
+                retainKeyframeScan(scan, for: item.url)
+            }
+            guard let current = group.items.first(where: { $0.id == item.id }),
+                  let a = rangeBoundary(current, value: requestedA),
+                  let b = rangeBoundary(current, value: requestedB) else { return }
+            selectedRange = a == b ? nil : ClipRange(id: item.id, bounds: min(a, b)...max(a, b))
+            seek(item.id, to: b)
+        }
     }
 
     private func selectDraggedRange(_ id: UUID, value: DragGesture.Value, widths: [Double], scale: Double) {

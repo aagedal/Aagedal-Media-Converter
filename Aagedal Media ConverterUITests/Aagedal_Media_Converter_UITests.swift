@@ -488,6 +488,10 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
         element("group.edit").click()
         XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        let keyframeMarkers = app.descendants(matching: .any).matching(identifier: "stitching.keyframeMarkers")
+        XCTAssertTrue(keyframeMarkers.allElementsBoundByIndex.allSatisfy {
+            (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) == 0
+        }, "Reencoded timelines must not show Stream Copy keyframe ticks")
         let timeline = element("group.timeline")
         let timecode = element("stitching.timecode")
         func totalFrames() -> Int {
@@ -517,22 +521,20 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
-    func testStitchingKeyframeMarkersDoNotRequireSnapping() throws {
+    func testStitchingStreamCopyAlwaysShowsKeyframeMarkers() throws {
         launchApp(generatedFixture: true, defaultPreset: "Stream Copy", previewContainer: "mp4", stitching: true)
         defer { terminateAndCleanFixtures() }
         XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
         element("group.edit").click()
         XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
         element("stitching.fit").click()
-        let snap = app.checkBoxes["Snap trims and ranges to keyframes"]
-        XCTAssertTrue(snap.exists, app.debugDescription)
-        XCTAssertEqual(String(describing: snap.value ?? ""), "0")
+        XCTAssertFalse(app.checkBoxes["Snap trims and ranges to keyframes"].exists)
         let markers = app.descendants(matching: .any).matching(identifier: "stitching.keyframeMarkers")
         let visibleMarkers = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 }
         }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [visibleMarkers], timeout: 30), .completed,
-                       "Stream Copy must show candidate keyframes while free trimming remains enabled")
+                       "Stream Copy must show scanned keyframe ticks")
         let info = element("stitching.timelineInfo")
         XCTAssertTrue(info.exists)
         XCTAssertFalse(element("stitching.requestedCut").exists)
@@ -544,24 +546,26 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         info.click()
         let timecode = element("stitching.timecode")
         let duration = (timecode.value as? String) ?? timecode.label
-        snap.click()
-        XCTAssertEqual(String(describing: snap.value ?? ""), "1")
-        info.click()
-        XCTAssertTrue(element("stitching.requestedCut").waitForNonExistence(timeout: 5))
-        XCTAssertTrue(element("stitching.requestedEnd").waitForNonExistence(timeout: 5))
-        XCTAssertTrue(element("stitching.seekEstimate").waitForNonExistence(timeout: 5))
-        info.click()
-        snap.click()
-        XCTAssertEqual(String(describing: snap.value ?? ""), "0")
-        info.click()
-        XCTAssertTrue(element("stitching.requestedCut").waitForExistence(timeout: 5))
-        XCTAssertTrue(element("stitching.requestedEnd").waitForExistence(timeout: 5))
-        XCTAssertTrue(element("stitching.seekEstimate").waitForExistence(timeout: 5))
-        info.click()
         XCTAssertEqual((timecode.value as? String) ?? timecode.label, duration)
         XCTAssertTrue(markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 })
+        func frames(_ text: String) -> Int {
+            let parts = text.split(separator: ":").compactMap { Int($0) }
+            guard parts.count == 4 else { XCTFail("Unexpected timecode: \(text)"); return -1 }
+            return ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * 24 + parts[3]
+        }
+        let initialFrames = frames(String(duration.split(separator: "/").last ?? "").trimmingCharacters(in: .whitespaces))
+        let timeline = element("group.timeline")
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.19, dy: 0.05)).click()
+        let requested = (timecode.value as? String) ?? timecode.label
+        let requestedFrames = frames(String(requested.split(separator: "/").first ?? "").trimmingCharacters(in: .whitespaces))
+        XCTAssertNotEqual(requestedFrames % 12, 0, "The test must request a cut between keyframes")
+        app.typeKey("q", modifierFlags: [])
+        let afterTrim = (timecode.value as? String) ?? timecode.label
+        let removedFrames = initialFrames - frames(String(afterTrim.split(separator: "/").last ?? "").trimmingCharacters(in: .whitespaces))
+        XCTAssertGreaterThan(removedFrames, 0)
+        XCTAssertEqual(removedFrames % 12, 0, "Stream Copy must snap the trim to the fixture's 12-frame GOP")
         let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "stitching-keyframe-candidates-free-trim"
+        screenshot.name = "stitching-stream-copy-keyframe-ticks"
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }

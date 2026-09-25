@@ -5051,6 +5051,55 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveFractionalRateStreamCopyStartsAtSnappedKeyframeAndSourceTimecode() async throws {
+        let directory = try makeTemporaryDirectory()
+        let source = directory.appendingPathComponent("fractional.mov")
+        let rate = 24_000.0 / 1_001.0
+        try runBundledFFmpeg([
+            "-v", "error", "-y", "-f", "lavfi", "-i",
+            "testsrc2=size=64x48:rate=24000/1001:duration=3",
+            "-timecode", "01:00:00:00", "-c:v", "libx264", "-g", "10",
+            "-keyint_min", "10", "-sc_threshold", "0", "-bf", "0",
+            "-pix_fmt", "yuv420p", source.path
+        ])
+        let defaults = try makeDefaults()
+        let settings = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        let manager = ConversionManager(preparationSettingsProvider: { _ in settings })
+        let queue = ApplicationMergeLiveQueue(items: (0..<2).map { _ in
+            var item = VideoItem(
+                url: source, name: source.lastPathComponent, size: 0,
+                duration: "00:00:03", durationSeconds: 3, status: .waiting,
+                progress: 0, eta: "", outputURL: nil
+            )
+            item.trimStart = 10 / rate
+            item.trimEnd = 30 / rate
+            item.includeDateTag = false
+            return item
+        })
+        await manager.convertGroup(
+            items: queue.binding, outputFolder: directory.path, preset: .streamCopy,
+            concatEnabled: true, groupName: "fractional-keyframe",
+            transcriptionEnabled: false, uploadEnabled: false, analyticsEnabled: false
+        )
+        XCTAssertTrue(queue.items.allSatisfy { $0.status == .done })
+        let output = try XCTUnwrap(queue.items.first?.outputURL)
+        let metadata = try await ApplicationMediaInspector.live.inspect(output)
+        XCTAssertEqual(metadata.timecode, "01:00:00:10")
+
+        func firstFrame(_ url: URL, name: String, sourceFrameTen: Bool = false) throws -> Data {
+            let destination = directory.appendingPathComponent(name + ".yuv")
+            var args = ["-v", "error", "-xerror", "-i", url.path, "-map", "0:v:0"]
+            if sourceFrameTen { args += ["-vf", "select='eq(n,10)'"] }
+            try runBundledFFmpeg(args + [
+                "-frames:v", "1", "-pix_fmt", "yuv420p", "-f", "rawvideo", destination.path
+            ])
+            return try Data(contentsOf: destination)
+        }
+        XCTAssertEqual(try firstFrame(output, name: "actual"),
+                       try firstFrame(source, name: "expected", sourceFrameTen: true))
+    }
+
+    @MainActor
     func testLiveMergedGroupCompletesBeforeWaitingAgentExecutes() async throws {
         try await checkLiveMergedGroupBeforeAgent(withAudio: false)
     }
@@ -5128,6 +5177,16 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     @MainActor
+    func testLiveKeyframeSnappedStreamCopyUsesSourceFrameTimecodeForOutputAndChapters() async throws {
+        for openGOP in [false, true] {
+            try await checkLiveMergedGroupBeforeAgent(
+                withAudio: true, audioCodec: "aac", exportMarkers: true,
+                audioChannels: 2, longGOP: true, openGOP: openGOP, sourceTimecodes: true
+            )
+        }
+    }
+
+    @MainActor
     func testLiveUnsnappedOpenGOPAACMergedGroupPreservesSourceFrames() async throws {
         try await checkLiveMergedGroupBeforeAgent(
             withAudio: true, audioCodec: "aac", audioChannels: 2,
@@ -5147,7 +5206,7 @@ final class ApplicationJobContractTests: XCTestCase {
     private func checkLiveMergedGroupBeforeAgent(
         withAudio: Bool, audioCodec: String = "pcm_s16le", exportMarkers: Bool = false,
         audioChannels: Int = 1, longGOP: Bool = false, openGOP: Bool = false,
-        requestedStart: Double = 0.5
+        requestedStart: Double = 0.5, sourceTimecodes: Bool = false
     ) async throws {
         let directory = try makeTemporaryDirectory()
         let sources = ["first", "second"].map { directory.appendingPathComponent($0 + ".mov") }
@@ -5181,6 +5240,9 @@ final class ApplicationJobContractTests: XCTestCase {
             if withAudio {
                 arguments += ["-c:a", audioCodec]
                 if audioCodec == "aac" { arguments += ["-b:a", "\(audioChannels * 96)k"] }
+            }
+            if sourceTimecodes {
+                arguments += ["-timecode", index == 0 ? "01:00:00:00" : "02:00:00:00"]
             }
             try runBundledFFmpeg(arguments + [source.path])
         }
@@ -5256,7 +5318,11 @@ final class ApplicationJobContractTests: XCTestCase {
         XCTAssertFalse(record.outputURLs.contains(merged))
         if exportMarkers {
             let media = try await StitchMarkerMedia.read(merged)
-            XCTAssertEqual(media.chapters.map(\.title), ["Cut: first.mov", "Cut: second.mov"])
+            let expectedTitles = sourceTimecodes
+                ? ["Cut: first.mov • Source TC: 01:00:00:12",
+                   "Cut: second.mov • Source TC: 02:00:00:12"]
+                : ["Cut: first.mov", "Cut: second.mov"]
+            XCTAssertEqual(media.chapters.map(\.title), expectedTitles)
             XCTAssertEqual(try XCTUnwrap(media.chapters.first?.start), 0, accuracy: 0.001)
             // The chapter and concat boundary include compressed packet tails.
             XCTAssertEqual(try XCTUnwrap(media.chapters.last?.start), 1, accuracy: 2 * 1024.0 / 48_000 + (longGOP ? 4.0 / 24 : 0))
@@ -5276,6 +5342,9 @@ final class ApplicationJobContractTests: XCTestCase {
                 + (openGOP ? 16.0 / 24 : (longGOP ? 8.0 / 24 : 0))
             XCTAssertEqual(try XCTUnwrap(metadata.durationSeconds), 2, accuracy: durationTolerance)
             XCTAssertEqual(metadata.frameCount, longGOP && output == merged ? 52 : 48)
+            if sourceTimecodes && output == merged {
+                XCTAssertEqual(metadata.timecode, "01:00:00:12")
+            }
             XCTAssertEqual(metadata.audioStreams.count, withAudio ? 1 : 0)
             if withAudio {
                 XCTAssertEqual(metadata.audioStreams.first?.channels, audioChannels)
