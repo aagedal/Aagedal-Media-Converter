@@ -1,5 +1,28 @@
 # Isolated MPV CoreAudio rebuild
 
+The 2026-09-26 runtime probe found stale AudioUnit cleanup in the published
+CoreAudio `.1` candidate. The recipe now also applies
+`mpv-0.41.0-coreaudio-clear-failed-unit.patch` and disables the separate CLI
+player (`cplayer=false`). The fresh universal replacement and matching source are
+published as `aagedal-1.0.0-n8.1.2-coreaudio.2`, and the app is pinned to
+`400202b687841fb394cbf0ef59ad8c6fcfc1275b`. See the
+[failure-cleanup validation](../4.5-mpv-coreaudio-failure-cleanup-validation-2026-09-26.md).
+
+To repeat the isolated runtime check after an Xcode build:
+
+```bash
+python3 scripts/verify-mpv-coreaudio-runtime.py \
+  --products /path/to/DerivedData/Build/Products/Debug \
+  --ffmpeg "Aagedal Media Converter/Binaries/ffmpeg" \
+  --output /private/tmp/mpv-coreaudio-runtime-new
+```
+
+Use `--libmpv /path/to/candidate/Libmpv.framework/Versions/A/Libmpv` to test a
+local replacement without changing the app or package cache. Normal login-session
+audio-service access is required. The four modes cover actual silent playback,
+simulated device notification, and forced initialization/format failures; physical
+device changes and signed application checks remain separate.
+
 `rebuild-mpv-coreaudio.py` stages a macOS GPL libmpv-only build from the pinned
 local MPVKit recipe and its existing dependency outputs. It applies the complete
 retained upstream CoreAudio initialization-failure patch explicitly, including

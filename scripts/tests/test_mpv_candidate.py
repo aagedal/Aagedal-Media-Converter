@@ -91,6 +91,13 @@ class MPVCandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Retained CoreAudio patch hash mismatch"):
             self.verify()
 
+    def test_cleanup_followup_hash_is_checked_when_present(self):
+        self.evidence["cleanup_followup_sha256"] = hashlib.sha256(MODULE.FOLLOWUP_PATCH.read_bytes()).hexdigest()
+        self.assertFalse(self.verify()["release_ready"])
+        self.evidence["cleanup_followup_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "cleanup follow-up patch hash mismatch"):
+            self.verify()
+
     def test_archive_with_valid_hash_but_different_binary_fails(self):
         self.make_archives(framework=b"different")
         with self.assertRaisesRegex(ValueError, "differs"):

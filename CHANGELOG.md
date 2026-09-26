@@ -16,6 +16,12 @@ signed Release-package validation are still open.
 - Kept clips from each camera-card folder together in the review and checked
   multi-file recording compatibility independently of a conflicting whole group.
 
+## Preview
+
+- Updated the bundled MPV CoreAudio backend to register device listeners after
+  successful initialization and clear disposed AudioUnit handles during failure
+  cleanup.
+
 ## Local agent access
 
 - Expanded the MCP catalog to all 17 built-in presets. Fifteen are runnable,

@@ -18,6 +18,7 @@ ARCHIVE = "dist/release/Libmpv.xcframework.zip"
 STATIC_ARCHIVE = "dist/release/libmpv-all.zip"
 PREFIX = "Libmpv.xcframework/"
 PATCH = Path(__file__).resolve().parents[1] / "docs/dependency-patches/mpv-0.41.0-coreaudio-init-failure.patch"
+FOLLOWUP_PATCH = PATCH.with_name("mpv-0.41.0-coreaudio-clear-failed-unit.patch")
 SOURCE_DIFF = "source-before-coreaudio.patch"
 PATCHED_SOURCE = "dist/libmpv-v0.41.0/audio/out/ao_coreaudio.c"
 
@@ -82,6 +83,11 @@ def verify(root, evidence, architecture_reader=None):
         with path.open("rb") as stream:
             if digest(stream) != expected_hash:
                 raise ValueError(f"{label} hash mismatch")
+    # Historical candidates predate this follow-up and keep their original audit.
+    if "cleanup_followup_sha256" in evidence:
+        with FOLLOWUP_PATCH.open("rb") as stream:
+            if digest(stream) != evidence["cleanup_followup_sha256"]:
+                raise ValueError("CoreAudio cleanup follow-up patch hash mismatch")
     rows = evidence.get("candidate_archives", []) + evidence.get("candidate_binaries", [])
     expected = {}
     for row in rows:

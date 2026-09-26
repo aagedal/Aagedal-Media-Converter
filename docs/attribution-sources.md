@@ -42,6 +42,12 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
 Detailed evidence for the existing dependency set is retained under
 `docs/provenance/4.4-local-builds/`. The 4.5 patched MPVKit package and source
 archive are recorded in `docs/4.5-mpv-coreaudio-package-validation-2026-09-25.md`.
+The replacement `coreaudio.2` package at revision
+`400202b687841fb394cbf0ef59ad8c6fcfc1275b` includes the additional failed-unit
+handle cleanup; its published source and updated compile/patch records replace
+the active CoreAudio source/configuration entries in `AttributionSources.json`.
+The 4.4 provenance remains historical. See
+`docs/4.5-mpv-coreaudio-failure-cleanup-validation-2026-09-26.md`.
 Build recipes describe their dependencies; use the recorded revisions instead
 of current branches. Where a local source archive has no upstream download URL,
 retain that archive or restore it from the source companion. Regenerating or

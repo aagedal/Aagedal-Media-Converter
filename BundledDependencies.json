@@ -6,7 +6,7 @@
       "identity": "mpvkit",
       "path": "SwiftPackages/mpvkit",
       "sourceURL": "https://github.com/aagedal/MPVKit.git",
-      "revision": "2d80ed953c8bdb79c46241ceaaaa29d6f1209c63",
+      "revision": "400202b687841fb394cbf0ef59ad8c6fcfc1275b",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/mpvkit-LICENSE.txt",
       "requiredSourceComponents": [
@@ -696,8 +696,8 @@
     {
       "component": "mpv",
       "path": "build/attribution/mpvkit/mpv-coreaudio-4.5-source.tar.gz",
-      "bytes": 7240237,
-      "sha256": "4ee0318085084c9bd8f4e8d3daea0ca5748f24236af504eab92158ceeec1c204"
+      "bytes": 12313086,
+      "sha256": "da2b0dfe33c59d7aa7c02c130b3dbc339aa31bcf9efc1c294a4c105ef085d913"
     },
     {
       "component": "FFmpeg",
@@ -715,15 +715,15 @@
     {
       "component": "MPVKit pinned wrapper and build sources",
       "path": "build/attribution/mpvkit/MPVKit-coreaudio-pinned-source.tar.gz",
-      "bytes": 81755,
-      "sha256": "ada4069c5aad428456f19f8207a43e931072629399b1ee23d1a91676c8357fed",
-      "url": "https://github.com/aagedal/MPVKit/tree/2d80ed953c8bdb79c46241ceaaaa29d6f1209c63"
+      "bytes": 81751,
+      "sha256": "9a48cc6bf5bc8af168b652429df5bfbcf22921277de8339e691d4c0aa51a5128",
+      "url": "https://github.com/aagedal/MPVKit/tree/400202b687841fb394cbf0ef59ad8c6fcfc1275b"
     },
     {
       "component": "MPVKit local patches and build configuration",
       "path": "build/attribution/mpvkit/coreaudio-build-configuration.tar.gz",
-      "bytes": 92607,
-      "sha256": "a86e2befaa0a1d6df3a3afe2dca6888e324638bc44b266e57d7af679222c7602"
+      "bytes": 93863,
+      "sha256": "302c4e8f620f795551a93eaf163dc7eab77e6af89ac12d4d5c34c268859fa977"
     },
     {
       "component": "MPVKit crc-catalog upstream source (crate VCS revision)",
@@ -996,7 +996,7 @@
     {
       "path": "Licenses/mpvkit-LICENSE.txt",
       "bytes": 2624561,
-      "sha256": "9efde7864d00f1c073e1218517af97cfe362821e7e24241ece3b00c0aed0a80d"
+      "sha256": "282b19ce88e5e774c154847c25a253a7c3c4bf18b1ea0375dff7539c7adcd573"
     },
     {
       "path": "Licenses/rclone-LICENSE.txt",

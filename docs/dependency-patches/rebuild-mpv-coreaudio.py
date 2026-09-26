@@ -43,6 +43,7 @@ def main():
     root, output = args.mpvkit.resolve(), args.output.resolve()
     source = root / "dist/libmpv-v0.41.0"
     patch = Path(__file__).with_name("mpv-0.41.0-coreaudio-init-failure.patch").resolve()
+    followup = Path(__file__).with_name("mpv-0.41.0-coreaudio-clear-failed-unit.patch").resolve()
     if revision(root) != RECIPE_REVISION or revision(source) != MPV_REVISION:
         parser.error("Unexpected MPVKit/mpv source revision; review the recipe before updating pins")
     if run(["git", "-C", str(root), "status", "--porcelain"], capture_output=True).stdout:
@@ -79,12 +80,20 @@ def main():
         if child.is_dir() and child.name not in ("libmpv", "libmpv-v0.41.0", "release"):
             (output / "dist" / child.name).symlink_to(child, target_is_directory=True)
     run(["git", "apply", str(patch)], cwd=staged_source)
+    run(["git", "apply", str(followup)], cwd=staged_source)
     recipe_patch = output / "Sources/BuildScripts/patch/libmpv/0004-coreaudio-init-failure.patch"
     shutil.copy2(patch, recipe_patch)
+    shutil.copy2(followup, recipe_patch.with_name("0005-coreaudio-clear-failed-unit.patch"))
     entrypoint = output / "Sources/BuildScripts/XCFrameworkBuild/main.swift"
     text = entrypoint.read_text()
     start, end = text.index("    // SSL\n"), text.index("    try BuildMPV().buildALL()")
-    entrypoint.write_text(text[:start] + text[end:])
+    text = text[:start] + text[end:]
+    # Only the static libmpv payload is shipped. Building the separate CLI also
+    # links historical Homebrew paths from dependency .pc files unnecessarily.
+    cli_option = '        if !(platform == .macos && arch.executable) {\n            array.append("-Dcplayer=false")\n        }'
+    if text.count(cli_option) != 1:
+        raise RuntimeError("Unexpected upstream CLI player option")
+    entrypoint.write_text(text.replace(cli_option, '        array.append("-Dcplayer=false")'))
     # The upstream launcher replaces the environment, losing the sandbox's
     # writable temporary directory and compiler module cache location.
     base = output / "Sources/BuildScripts/XCFrameworkBuild/base.swift"
@@ -102,6 +111,7 @@ def main():
         "mpvkit_revision": RECIPE_REVISION,
         "mpv_revision": MPV_REVISION,
         "patch_sha256": hashlib.sha256(patch.read_bytes()).hexdigest(),
+        "cleanup_followup_sha256": hashlib.sha256(followup.read_bytes()).hexdigest(),
         "source_before_coreaudio_diff_sha256": hashlib.sha256(source_diff.encode()).hexdigest(),
         "source_input_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
         "source_status": run(["git", "-C", str(source), "status", "--porcelain", "--untracked-files=all"], capture_output=True).stdout,

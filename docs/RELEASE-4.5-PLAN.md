@@ -1115,6 +1115,23 @@ post-actions and broader stream-copy/audio/merge output cases; visually review t
 new bilingual panels; and complete Developer ID signing/notarization, clean
 installation/update checks, release notes, and retained package reports.
 
+### MPV CoreAudio failure-cleanup continuation — 2026-09-26
+
+Targeted runtime checks found a second cleanup defect in the published CoreAudio
+candidate: failed AudioUnit initialization/configuration disposed the unit without
+clearing its handle before outer cleanup reused it. A retained local follow-up
+clears that handle. The fresh arm64/x86_64 replacement passes 16 isolated runtime
+cycles covering playback, simulated device notification and both forced failures;
+all 105 release-script tests pass. The replacement binary and matching source are
+published as `aagedal-1.0.0-n8.1.2-coreaudio.2`; the app and attribution are pinned
+to revision `400202b687841fb394cbf0ef59ad8c6fcfc1275b`. Published asset hashes and
+Xcode's resolved binary match the tested candidate. All 15 signed MPV observation
+tests and the separate signed stitching replay UI test pass. An Apple Development
+signed Release archive passes strict/deep signature and Hardened Runtime/bundle
+checks for 45 Mach-O images and 12 license notices. Physical device-change
+validation and final Developer ID/notarized distribution remain open. See the
+[failure-cleanup validation](4.5-mpv-coreaudio-failure-cleanup-validation-2026-09-26.md).
+
 ### Privacy-preserving usage indicator — deferred from 4.5
 
 The first-launch choice and General Settings control were removed for 4.5.
