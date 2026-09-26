@@ -794,13 +794,19 @@ struct StitchingEditorView<FileList: View>: View {
                             })
                         HStack(spacing: 0) {
                             ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
+                                let clipWidth: Double = clipWidths[index]
+                                let clipOffset: Double = clipWidths.prefix(index).reduce(0, +)
+                                let visibleStart: Double = max(0, min(clipWidth, scrollOffset - 10 - clipOffset))
+                                let visibleEnd: Double = max(0, min(clipWidth, scrollOffset + geometry.size.width - 10 - clipOffset))
+                                let visibleRange: ClosedRange<Double> = visibleStart...visibleEnd
+                                let clipKeyframes: [Double] = isStreamCopy ? (keyframes[item.url] ?? []) : []
                                 StitchingTimelineClip(
                                     item: item, selected: selectedClipIDs.contains(item.id), scale: scale,
                                     thumbnailURLs: filmstrips[item.id] ?? [],
-                                    keyframeTimes: isStreamCopy ? keyframes[item.url] ?? [] : [],
+                                    keyframeTimes: clipKeyframes,
                                     assets: previewAssets[item.id],
                                     waveformVisualScale: waveformVisualScale,
-                                    visibleRange: max(0, min(clipWidths[index], scrollOffset - 10 - clipWidths.prefix(index).reduce(0, +)))...max(0, min(clipWidths[index], scrollOffset + geometry.size.width - 10 - clipWidths.prefix(index).reduce(0, +))),
+                                    visibleRange: visibleRange,
                                     onSelect: { selectClip(item.id) },
                                     reorderGesture: clipDrag(item.id, widths: clipWidths, scale: scale),
                                     onTrim: { start, value in setTrim(item.id, start: start, value: value) },
