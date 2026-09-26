@@ -1,10 +1,13 @@
-# Local agent access (4.5 development)
+# Local agent access (4.5)
 
 Agent Access is opt-in. Open **Settings → Agent Access**, turn on local MCP
 access, and use **Test Connection**. The app shows setup for Claude Desktop,
 Claude Code, Codex, and OpenCode. Select your client and copy its configuration
 or Terminal command. Keep the app at that path after adding the server, then
-restart the client.
+restart the client. When switching from a development build to an installed
+release, copy the setup from the installed app and restart the client again. An
+already-running helper can keep using the old development path even after its
+saved configuration changes.
 
 Claude Desktop uses the displayed `mcpServers` JSON. Claude Code and Codex use
 their displayed `claude mcp add` and `codex mcp add` commands. OpenCode uses the
@@ -32,8 +35,12 @@ Agent Access lists all 17 built-in presets. All can be planned and run:
 Video Loop, Video Loop with Sound, Animated Still, H.264, HEVC, AV1, AV2,
 TV HEVC, TV AVC-Intra, ProRes, Proxy, Audio Only, Stream Copy, Image Sequence,
 and DCP, plus the experimental IMF App 2e and RDD 45 presets. IMF output should
-be validated in the target mastering or delivery tool. Custom preset slots are excluded because they
-can contain arbitrary FFmpeg settings. A client can call `list_presets`, `list_media`, `list_jobs`, `inspect_media`,
+be validated in the target mastering or delivery tool. The initial IMF scope is
+one image track and one PCM audio track, without packaged subtitles or multiple
+audio tracks. Custom preset slots are excluded because they can contain arbitrary
+FFmpeg settings.
+
+A client can call `list_presets`, `list_media`, `list_jobs`, `inspect_media`,
 `plan_conversion`, `get_plan`, `submit_conversion`, `get_job`, `wait_for_job`,
 `cancel_job`, and `get_app_status`.
 For DCP, the planned output is a working folder containing the finished
@@ -46,8 +53,7 @@ with optional filename and extension filters and pages of up to 100 entries.
 Symlinks and hidden items are omitted. Use a returned file path with
 `inspect_media` or `plan_conversion`.
 
-`list_jobs`
-returns IDs, state, filenames, and pagination for the visible manual queue and
+`list_jobs` returns IDs, state, filenames, and pagination for the visible manual queue and
 durable shared-service jobs. It omits full source paths from the list. Manual
 queue IDs work with `get_job` while the row remains in the current app session;
 they cannot be passed to `cancel_job`. Shared-service job IDs remain durable and
@@ -62,7 +68,25 @@ for 30 days; unfinished work becomes interrupted after an app restart and is not
 automatically restarted. Turning Agent Access off rejects new connections while
 already accepted jobs continue.
 
-The first agent contract does not offer a timecode override. Agent conversions
+## Conversion workflow
+
+1. Call `list_media` to find approved folders and media, then `inspect_media` for
+   the selected source.
+2. Call `list_presets` for current preset IDs and settings.
+3. Call `plan_conversion` with `source_paths` and `preset_id`. Omit
+   `destination_path` to use the app's configured output folder, or supply an
+   approved writable destination. Review the returned outputs and warnings.
+4. Submit the returned plan ID with `submit_conversion`. Keep the accepted job
+   ID; retrying the same accepted plan returns the original job.
+5. Follow it with `get_job` or `wait_for_job`, or cancel it with `cancel_job`.
+   Use the terminal result's output paths to locate the completed export.
+
+If access, the source, or output availability changes, resolve the issue in the
+app and create a new plan. Agents cannot grant themselves folder access.
+
+## Timecode and local access policy
+
+The agent contract does not offer a timecode override. Agent conversions
 disable output timecode, including Stream Copy of a source with a timecode track.
 The accepted-settings inspector shows this policy. Manual and Shortcut jobs keep
 their configured preserve-source or manual timecode behavior.

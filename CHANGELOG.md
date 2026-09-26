@@ -1,161 +1,65 @@
-# v.4.5.0 (Development)
+# v.4.5.0 (Unreleased)
 
-Moved Agent Access and Tool Diagnostics to the bottom of the Settings sidebar,
-keeping everyday settings easier to reach.
-
-4.5 development has started with the shared application boundary and signed
-local transport needed for agent access. Final client compatibility, specialized
-manual-job coverage, wider Shortcut coverage, bilingual visual review, and
-signed Release-package validation are still open.
-
-## Import
-
-- Added an optional camera-card recording-date review with explicit continuation
-  marks for spanned recordings, a single-group choice, optional splitting after
-  gaps over two hours, and compatibility checks before import.
-- Kept clips from each camera-card folder together in the review and checked
-  multi-file recording compatibility independently of a conflicting whole group.
-
-## Preview
-
-- Updated the bundled MPV CoreAudio backend to register device listeners after
-  successful initialization and clear disposed AudioUnit handles during failure
-  cleanup.
+Local MCP access lets agents inspect media and run conversions through the app's
+queue. This release also adds a stitching timeline, camera-card import review,
+and more reliable MPV audio-device switching.
 
 ## Local agent access
 
-- Expanded the MCP catalog to all 17 built-in presets. Fifteen are runnable,
-  including AV1, AV2, DCP, and image sequences; the two IMF presets are shown
-  as unavailable pending package conformance. Custom slots remain excluded.
-  Accepted jobs snapshot the additional preset settings and reserve their
-  planned package or image-sequence folder names.
-- Added `list_jobs` with IDs and state for the visible manual queue and durable
-  conversion records. Current manual queue IDs can be inspected with `get_job`.
-- Added persistent approved source folders in Agent Access settings. A selected
-  folder gives local MCP clients read access to files in its subfolders; removing
-  it revokes that folder grant for future requests. Output folders still require
-  their own writable approval.
-- Added stable identifiers for the initial H.264, HEVC, ProRes, Proxy, Audio Only,
-  and Stream Copy agent preset subset.
-- Added a versioned conversion submission and job record contract with explicit
-  manual, App Intent, and local-agent origins.
-- Added actor-owned job registration, requester-scoped idempotency, stable error
-  codes, lifecycle transitions, cancellation acknowledgement, and explicit
-  restart interruption.
-- Added immutable, Codable snapshots of the resolved codec, container, audio,
-  metadata, subtitle, and filename settings for every preset in the initial agent
-  subset. Accepted retries now reject a changed settings snapshot instead of
-  silently inheriting newer preferences.
-- Added versioned conversion plans with deterministic output names, source
-  identity capture, expiry, collision warnings, submit-time stale-source and
-  collision rejection, and actor-owned output reservations. Retrying either the
-  same plan or a newly planned request with the same idempotency key returns the
-  original accepted job.
-- Persisted versioned plans, job records, and idempotency identities atomically.
-  App restart now restores terminal results, marks unfinished work interrupted,
-  and prunes expired plans and terminal history under explicit retention windows.
-- Required persisted user-approved read access for every planned source and a
-  writable grant for the destination. Planning and submission balance the
-  narrowest matching security-scoped bookmark, and submission rejects access
-  that was revoked after planning with stable permission error codes.
-- Added an app-owned, serialized executor handoff for accepted jobs. It keeps
-  approved file access alive through execution, rechecks queued inputs before
-  launch, publishes progress and terminal results, enforces planned outputs, and
-  routes cancellation only to the active job owner.
-- Serialized shared-service FFmpeg execution with legacy manual and group
-  conversion batches. A cancelled legacy request waiting for engine access now
-  skips preparation, while retries during a still-draining cancellation retain
-  their immediate rejection behavior.
-- Connected the shared job service to the bundled FFmpeg conversion engine. The
-  adapter reconstructs all six supported presets from the immutable settings
-  snapshot, aggregates batch progress, stops on the first failed file, rejects
-  settings it cannot represent faithfully, waits for the converter's asynchronous
-  completion and output validation, and drains targeted cancellation.
-- Added transport-neutral implementations of the six proposed agent operations:
-  inspect media, list presets, plan and submit conversions, get a job, and cancel
-  a job. Their Codable payloads include structured stream/timecode metadata,
-  captured preset settings, local-agent request ownership, and stable path-safe
-  errors.
-- Added a runtime-free stdio MCP helper as a separate Hardened Runtime Xcode
-  target, embedded and signed with the app. It exposes the six bounded tool
-  schemas, forwards versioned typed JSON over a local app-owned message port,
-  launches the enclosing app when needed, and leaves accepted jobs app-owned
-  after the client disconnects.
-- Limited helper retries to app startup before an IPC port exists. A failed
-  request sent to a live port now reports its transport error once instead of
-  replaying the tool call. The helper also keeps the client-derived requester ID
-  authoritative for plans and waits for app launch without blocking main-thread
-  completion delivery. `list_presets` now returns an object-shaped MCP structured
-  result with a `presets` array for clients that validate tool result schemas.
-- Made helper cold launch select the app bundle that contains it, even when
-  another installation with the same bundle identifier is running. Non-object
-  MCP tool arguments now return an invalid-parameters error instead of being
-  silently treated as an empty object.
-- Fixed shared-job output naming so the FFmpeg adapter passes the planned base
-  name to the converter, which appends the captured container extension. Live
-  execution now fails if FFmpeg reports success without creating the planned
-  file. A packaged-helper Stream Copy workflow now verifies the planned file
-  exists, decodes, and remains available after an MCP client reconnects. Live
-  adapter checks also verify the planned file, decodable streams, and output
-  codecs for H.264, HEVC, ProRes, Proxy, and Audio Only.
-- Kept a targeted cancellation received just before FFmpeg starts, and rechecked
-  the shared job state after its running transition so a cancellation recorded
-  during persistence skips execution.
-- Added opt-in Agent Access settings with a connection test, copyable MCP client
-  configuration, helper discovery, approved-folder guidance, and an explicit
-  policy that disabling access stops new requests without cancelling accepted
-  jobs. Endpoint startup and shutdown run away from the UI thread, and the complete
-  opt-in/diagnostic/disable flow is covered in English and Norwegian. The
-  connection test now launches the bundled MCP helper and checks its actual
-  stdio-to-app preset response, so helper launch or transport failures cannot
-  appear as a healthy in-process connection.
-- Added copyable, client-specific setup for Claude Desktop, Claude Code, Codex,
-  and OpenCode, plus a [local agent access guide](Documentation/LOCAL_AGENT_ACCESS.md)
-  covering folder grants, reconnects, job retention, and same-session access.
-- Projected shared-service jobs into the existing visible queue with live state
-  and progress, accepted output locations, origin and stable job-ID labels, and
-  per-job cancellation. Legacy manual queue selection, bulk cancellation, and
-  dock progress now leave shared-service rows under their authoritative owner.
-- Routed file-bearing H.264, HEVC, ProRes, Proxy, Audio Only, and Stream Copy
-  Shortcut conversions through the same persisted planner and serialized
-  executor as agent work. The handoff preserves request identity, approved file
-  access, and captured preset, naming, date-tag, timecode, and comment settings;
-  “Save next to original” now captures and authorizes each source's effective
-  destination, including configured subfolders, while wider presets retain their
-  established path.
-- Routed ordinary ungrouped manual conversions for the same six presets through
-  the persisted application planner and serialized executor. Manual batches keep
-  their existing visible rows and preserve per-file comments, trim, crop, mute,
-  audio routing, custom output names, date-tag, and timecode choices. Those
-  settings are validated, persisted, shown in each row's accepted-settings
-  inspector, and applied without re-reading the queue or current preferences.
-  “Save next to original” destinations, including per-source custom subfolders,
-  are captured and authorized for each row without granting an unused batch
-  destination. Groups, generated waveform behavior, and post-actions still fall
-  back before submission. Dormant waveform preferences on ordinary video no
-  longer force that fallback.
-- Kept the main conversion toolbar, bulk actions, auto-encode, and merge controls
-  synchronized with service-owned work after manual handoff. Shared jobs remain
-  visibly active and the main Cancel action now targets their stable job IDs.
-- Added a queue inspector for every shared job's immutable accepted settings,
-  including codecs, container, quality/rate controls, metadata, subtitles,
-  filename policy, destination, and capture time. Agent jobs now explicitly show
-  their default disabled timecode and date-tag behavior.
-- Added Norwegian translations for Agent Access setup and connection states,
-  shared-job origin labels, and the complete accepted-settings inspector,
-  including locale-aware numbers, dates, destinations, and per-file adjustments.
-- Made the disabled IMF export explanation release-neutral so it remains accurate
-  while conformance work is deferred.
+- Opt-in **Settings → Agent Access** with a connection test and copyable setup
+  for Claude Desktop, Claude Code, Codex, and OpenCode. The bundled helper can
+  launch the app; no separate FFmpeg or helper runtime is required.
+- Eleven tools cover approved-folder browsing, media inspection, preset discovery,
+  conversion planning and submission, plan retrieval, job listing/status/waiting,
+  cancellation, and app status. All 17 built-in presets are available, including
+  experimental IMF App 2e and RDD 45. Custom FFmpeg slots are excluded.
+- Source-folder approvals persist across launches and cover subfolders. Output
+  locations require separate write approval. Planning previews filenames and
+  warnings; submission rechecks access, source identity, and output collisions.
+- Accepted jobs keep their captured settings, appear in the queue with Agent
+  labels and stable IDs, and continue after a client disconnects. Repeated
+  submissions return the original job. Results remain available for 30 days;
+  unfinished work becomes interrupted after an app restart.
+- Ordinary manual and Shortcut conversions for H.264, HEVC, ProRes, Proxy,
+  Audio Only, and Stream Copy share the persisted planner and serialized executor.
+  Their configured trims, crop, audio routing, names, destinations, comments,
+  and timecode remain attached to each accepted job.
+- Added an accepted-settings inspector and Norwegian translations for Agent
+  Access, connection states, and shared-job details. Agent conversions disable
+  output timecode; manual and Shortcut jobs keep their configured behavior.
 
-## Dependencies and release checks
+See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md).
 
-- Updated SwiftMediaMetadata to 3.0.1, including its bounded-memory Sony RTMD
-  track discovery fix, and refreshed the pinned source and attribution evidence.
+## Stitching and import
 
-## Interface fixes
+- Added a stitching timeline with filmstrips, sequence playback, zoom and Fit,
+  ripple trimming, clip reordering, splitting, range deletion, and undo.
+- Added keyframe guidance for trimming. Stream Copy cuts remain approximate;
+  a keyframe-aligned selection does not guarantee an exact exported out-point.
+- Stitched exports support Resolve EDL clip markers and embedded chapters in
+  MOV, MP4, M4V, and MKV, with a Keep/Replace choice for existing chapters.
+- Added camera-card recording-date review, explicit continuation marks for
+  spanned recordings, optional splitting after gaps over two hours, and
+  compatibility checks. Clips stay grouped by card folder during review.
 
-- Restored inline output filename renaming from both double-click and the queue
-  context menu, including grouped queue items.
+## Preview and interface
+
+- Updated MPVKit to the CoreAudio `.2` package, fixing device-listener registration
+  and stale AudioUnit handles during initialization failure cleanup.
+- Restored inline output filename renaming from double-click and the queue
+  context menu, including grouped items.
+- Moved Agent Access and Tool Diagnostics to the bottom of the Settings sidebar.
+
+## Export and dependencies
+
+- Enabled experimental IMF App 2e and RDD 45 exports with corrected CPL links to
+  MXF track IDs and essence descriptors. The initial scope is one image track
+  and one PCM audio track; packaged subtitles and multiple audio tracks are
+  unsupported. Validate packages in the target mastering or delivery tool.
+- Updated SwiftMediaMetadata to 3.0.1, including bounded-memory Sony RTMD track
+  discovery, and refreshed dependency source and license records.
+- Deferred the anonymous usage indicator; its prompt and Settings control are
+  removed and reporting is disabled.
 
 # v.4.4.0
 

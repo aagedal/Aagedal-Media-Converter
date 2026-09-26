@@ -6,13 +6,25 @@ The [setup guide](LOCAL_AGENT_ACCESS.md) describes enabling access and registeri
 the embedded helper. Record the exact app build, installed path, macOS version,
 client executable/version, date, and transcript location for every run.
 
+## Latest recorded client run
+
+The [installed Codex Release 596 record](../docs/4.5-codex-release-mcp-validation-2026-09-26.md)
+covers all eleven tools, successful conversion, cancellation, retry deduplication,
+cold launch, and terminal-result recovery. Active-client reconnect and active-job
+restart were not run in that continuation. The user subsequently reported
+[OpenCode MCP passed](../docs/4.5-user-release-validation-2026-09-26.md), alongside
+real-card imports, timeline editing, playback, and conversions to different
+formats. OpenCode tool details were not supplied; this is user-performed evidence.
+Claude Code setup is available, but its actual workflow is not covered by these
+latest records.
+
 ## Evidence levels
 
 | Observation | What it establishes |
 | --- | --- |
 | Version/help commands run | Client executable is available |
 | Client accepts a server entry | Registration syntax is accepted |
-| Client reports connected / discovers seven tools | Client-to-helper initialization works |
+| Client reports connected / discovers the tool catalog | Client-to-helper initialization works |
 | Actual client invokes the tools and receives app results | The recorded workflow works in that client |
 
 A custom JSON-RPC driver using a client's name in `clientInfo` does not establish
@@ -32,7 +44,7 @@ These are the helper's wire names, independent of localized labels:
 | `list_jobs` | Optional `offset`, `limit` | `jobs` array, `total`, `offset`, `hasMore` |
 | `get_app_status` | `{}` | App and transport versions, manual/service/active/terminal job counts |
 | `inspect_media` | `source_path` | Media inspection object |
-| `plan_conversion` | `source_paths` array, `destination_path`, `preset_id` | Plan with `id`, `request`, `outputs`, and `warnings` |
+| `plan_conversion` | `source_paths` array, `preset_id`; optional `destination_path` | Plan with `id`, `request`, `outputs`, and `warnings` |
 | `get_plan` | `plan_id` | Current plan and its expiry, outputs, and warnings |
 | `submit_conversion` | `plan_id` | Acceptance with `record.id` and `wasAlreadyAccepted` |
 | `get_job` | `job_id` | Durable job record, or current manual queue summary |
@@ -40,9 +52,9 @@ These are the helper's wire names, independent of localized labels:
 | `cancel_job` | `job_id` | Job with `id`, `state`, and `outputURLs` |
 
 Paths are absolute filesystem paths; identifiers are UUID strings. Call
-`list_presets` for the current built-in preset IDs and availability. The 15
-runnable built-ins include DCP and image sequences; the two IMF entries are
-listed as unavailable. Custom slots are excluded. Pass the plan's `id` as `plan_id`, then the acceptance's
+`list_presets` for the current built-in preset IDs and availability. All 17
+built-ins are runnable, including experimental IMF App 2e and RDD 45.
+Custom slots are excluded. Pass the plan's `id` as `plan_id`, then the acceptance's
 `record.id` as `job_id`. The helper also returns text containing the JSON result.
 An MCP response with `isError: true` is a failed operation even when the transport
 itself succeeds; preserve its error instead of treating it as workflow completion.
@@ -61,7 +73,7 @@ itself succeeds; preserve its error instead of treating it as workflow completio
    run. A job that finishes before cancellation is an inconclusive cancellation
    check; retry with a longer fixture.
 5. Start a real session in the client under test with its registered MCP server.
-   Use only the six media converter MCP tools for media operations. Shell-based
+   Use the media converter MCP tools for app conversion operations. Shell-based
    direct helper calls are separate transport evidence.
 
 ## Successful conversion and reconnect
@@ -127,5 +139,10 @@ For each client, record **pass**, **fail**, **blocked**, or **not run** for:
 
 Attach transcript excerpts and output observations to each claim. Record errors
 verbatim and identify the last step reached. Keep this client compatibility gate
-separate from the six-preset output matrix, sandbox scope decision, access-loss
+separate from the supported-preset output matrix, runtime access scope, access-loss
 tests, signing/notarization, and clean-install review.
+
+The [2026-09-26 installed Codex validation](../docs/4.5-codex-release-mcp-validation-2026-09-26.md)
+records conversion, cancellation, same-plan retry, cold launch and terminal-result
+retention against Release 596. Active-client reconnect and active-job restart
+interruption remain separate checks.

@@ -1,43 +1,63 @@
-# Proposed 4.5 release — Local agent access
+# 4.5 release — Local agent access and stitching
 
-Status: signed local transport, visible shared-job queue projection, initial
-Shortcut submission including per-source destinations, and ordinary manual
-shared-queue submission with common per-file settings and destinations
-implemented on `codex/release-4.5`;
-live manual success/cancellation and bilingual Agent Access diagnostics now pass.
-Beta readiness still depends on named-client, access-loss, output-matrix, sandbox
-scope, and Release-package validation.
-Created: 2026-09-11.
+Updated: 2026-09-26. Current installed test build: **4.5.0 (596)**.
 
-## Release context
+Implementation and release testing have progressed to documentation preparation.
+The owner reports real camera-card imports, timeline editing, file playback,
+conversion to different formats, and OpenCode MCP passed. Detailed results below
+record only the checks with retained evidence or an explicit user report; the
+older dated entries are historical snapshots, not the current remaining-work list.
+Public release publication is not recorded here.
 
-- 4.4.0 is the current stable release.
-- 4.5 is the development target for an initial local MCP interface.
-- No release date is committed. Confirm scope after the feasibility milestone.
+## Current release scope
 
-The development metadata is **4.5.0 (591)**. This is not a frozen or
-signed release candidate.
+- Opt-in local MCP through the embedded stdio helper and app-owned local IPC.
+  Eleven tools and all 17 built-in presets are available; custom slots are excluded.
+  IMF App 2e and RDD 45 ship as experimental exports.
+- Captured conversion plans, approved source/output access, collision protection,
+  idempotent submission, visible queue jobs, targeted cancellation, and persisted
+  results. Plans expire after 15 minutes; terminal jobs are retained for 30 days.
+- Stitching timeline and sequence preview, trimming/reordering, marker/chapter
+  export, and camera-card recording-date/continuation review.
+- Published and integrated MPVKit CoreAudio `.2` failure-cleanup fixes.
+- Anonymous usage reporting is deferred and disabled.
 
-The anonymous usage indicator is deferred from 4.5. The first-launch prompt
-and General Settings control are removed, and reporting is gated off even if an
-earlier build saved consent or an endpoint is configured. The implementation and
-privacy design remain for a future release.
-See the [deferral validation](4.5-anonymous-usage-deferral-2026-09-25.md).
+User-facing changes are in the [changelog](../CHANGELOG.md), with configuration
+and workflow instructions in the [Agent Access guide](../Documentation/LOCAL_AGENT_ACCESS.md).
 
-The 2026-09-24 job-list continuation adds `list_jobs` for visible manual queue
-entries and durable shared jobs, with IDs that `get_job` can inspect. The
-focused app/helper tests pass; a newly installed Release build still needs a
-live manual-queue and agent-job listing check. See the
-[job-list validation record](4.5-mcp-job-list-validation-2026-09-24.md).
-The expanded local tool set also includes approved-folder browsing, plan
-retrieval, job waiting, and app status. See the
-[tool expansion validation record](4.5-mcp-expanded-tools-validation-2026-09-24.md).
+## Latest validation evidence
 
-Agent Access settings now let users save and remove approved source folders for
-local MCP reads, including descendant files. The folders use a separate bookmark
-store from other app features; output write access remains a separate approval.
-The named-client matrix still needs a real approved-folder conversion and a
-revocation/reconnect check against a packaged build.
+- **User testing:** real card imports, timeline editing, file playback, conversions
+  to different formats, and OpenCode MCP passed. See the
+  [user validation record](4.5-user-release-validation-2026-09-26.md).
+
+- **Installed Codex MCP, Release 596:** all eleven tools exercised across browsing,
+  inspection, planning, successful H.264 conversion, retry deduplication,
+  running-job cancellation, queue state, cold launch, and terminal-result recovery.
+  Both output streams decoded successfully. See the
+  [native client record](4.5-codex-release-mcp-validation-2026-09-26.md).
+- **MPV:** native CoreAudio playback, simulated device notification, forced
+  initialization failures, signed preview tests, and stitching playback UI test
+  pass. The user reports flawless audio-output switching during playback in the
+  simple trim, timeline, and full-screen views. See the
+  [CoreAudio record](4.5-mpv-coreaudio-failure-cleanup-validation-2026-09-26.md).
+- **Packaging:** the signed local Release 595 archive passed bundle, Hardened
+  Runtime, dependency, and license verification against CoreAudio `.2`. This is
+  Apple Development signing evidence; final Developer ID signing/notarization is
+  a separate distribution step.
+
+The retained Codex continuation does not cover active-client disconnect/reconnect,
+active-job app restart, or actual Claude Code workflows. OpenCode MCP and file
+playback are now covered by the separate user report; its exact tool calls and
+format matrix were not recorded. Physical audio
+unplug/device-loss recovery was not described in the user's report. These evidence
+limits do not turn the entire historical roadmap into a release checklist.
+
+## Historical implementation and validation log
+
+The dated entries below preserve what was implemented and verified at each point.
+Later continuations and the current summary above supersede earlier scope and
+remaining-work statements.
 
 ## Implementation progress — through 2026-09-22
 
@@ -1128,9 +1148,23 @@ to revision `400202b687841fb394cbf0ef59ad8c6fcfc1275b`. Published asset hashes a
 Xcode's resolved binary match the tested candidate. All 15 signed MPV observation
 tests and the separate signed stitching replay UI test pass. An Apple Development
 signed Release archive passes strict/deep signature and Hardened Runtime/bundle
-checks for 45 Mach-O images and 12 license notices. Physical device-change
-validation and final Developer ID/notarized distribution remain open. See the
+checks for 45 Mach-O images and 12 license notices. The user reports successful
+live audio-output switching in trim, timeline and full-screen playback on the
+new Release. Unplug/device-loss recovery and final Developer ID/notarized
+distribution remain unverified. See the
 [failure-cleanup validation](4.5-mpv-coreaudio-failure-cleanup-validation-2026-09-26.md).
+
+### Installed Codex MCP continuation — 2026-09-26
+
+After the user restarted the client to replace stale Debug helper processes,
+native Codex MCP calls reached the installed `/Applications` Release 4.5.0 (596).
+All 17 presets, approved-folder browsing, inspection, H.264 planning/submission,
+successful output, same-plan retry, running-job cancellation and visible queue
+states pass. Bundled FFmpeg decodes both successful output streams. After a normal
+idle app quit, an MCP call cold-launched that installation and retrieved both
+terminal jobs unchanged. Active client disconnect/reconnect, active app-restart
+interruption, in-app output playback and Claude Code/OpenCode remain open. See the
+[validation and actual tool transcript](4.5-codex-release-mcp-validation-2026-09-26.md).
 
 ### Privacy-preserving usage indicator — deferred from 4.5
 
@@ -1189,162 +1223,49 @@ The value is reliable access to established media workflows: consistent proxy
 settings, audio and timecode handling, output naming, and observable batch work.
 The app does not need an embedded AI model or an AI-service subscription.
 
-## Proposed first-release scope
-
-- Opt-in local agent access, with connection instructions and a connection test.
-- App-owned execution; the app may launch for a connection and stays responsible
-  for jobs after the agent disconnects. Fully headless operation is deferred.
-- Structured media inspection and discovery of supported presets/settings.
-- Conversion planning with resolved settings, intended destinations, warnings,
-  and validation errors before execution.
-- Submission of one or more files, job status and results, and per-job cancellation.
-- Ordinary file conversions using a tested subset of built-in presets. Select
-  the exact subset during feasibility, starting with H.264, HEVC, ProRes/proxy,
-  audio export, and stream copy where the existing pipeline supports them.
-- User-approved source and destination folders using existing sandbox access
-  mechanisms. Explain how to grant or renew access in the app.
-- Agent origin and job identity visible in the queue; manual work remains usable
-  while an agent is connected.
-
-Initially defer remote/network access, a public REST API, a separate CLI, arbitrary
-FFmpeg arguments, preset/settings mutation, downloads, uploads, recording,
-transcription, and complex exports such as DCP, IMF, and image sequences. These
-remain candidates for later expansion after the shared job contract is proven.
-
-## Architecture direction
-
-### Improvements carried forward from the existing roadmap
-
-Prioritize these as part of the shared agent boundary:
-
-- Section 3.1: move job ownership and request handling out of views.
-- Section 3.2: explicit typed requests/plans with captured settings and validation.
-- Section 3.3: centralize settings needed by those requests; preserve migration
-  behavior and avoid dependence on mutable global selections.
-- Sections 2.2–2.3: cancellation, ownership, and structured error behavior required
-  by the new service and reconnect contract.
-
-These are bounded MCP prerequisites, not a requirement to rewrite all conversion
-code. Existing correctness bugs identified during 4.4 triage stay with 4.4 unless
-the affected feature is explicitly restricted there.
-
-Other carried-forward work is a prioritized follow-up backlog: wider actor and
-filesystem audits; remaining settings migrations; broader accessibility and
-scrolled bilingual review; additional format coverage and generated AV2 video;
-runtime memory measurement, dynamic dependency reachability, and measured binary
-cleanup. Pick individual items after the feasibility milestone. They do not all
-block 4.5, and may move to later releases. Keep dependency attribution and signed
-distribution checks complete for every release; these are not deferred from 4.4.
-
-### Shared service
-
-Introduce a small application service shared by the UI, App Intents, and MCP.
-It accepts explicit requests and exposes job records independently of views.
-Reuse existing conversion services; avoid a wholesale engine rewrite.
-
-The current App Intent handoff is useful precedent for launch buffering, but it
-routes through ContentView notification handlers. ConversionManager also accepts
-SwiftUI bindings. Move only the ownership and request boundaries needed for this
-release behind the shared service.
-
-Prefer a bundled local MCP helper using stdio, subject to a signed-app prototype.
-Decide helper-to-app IPC, launch behavior, and sandbox access in that prototype.
-Do not commit to a transport that requires users to install a separate runtime.
-
-## Proposed tool contract
+## Implemented MCP contract
 
 | Tool | Result |
 | --- | --- |
-| `inspect_media` | Structured streams, duration, dimensions, frame rate, audio, and available timecode metadata |
-| `list_presets` | Stable preset identifiers, resolved settings, and supported overrides |
-| `list_jobs` | Paginated visible manual queue and durable job summaries with IDs, state, and filenames |
-| `plan_conversion` | Validated plan ID, captured settings, proposed outputs, warnings, and errors |
-| `submit_conversion` | Job IDs for an accepted plan; returns before encoding completes |
-| `get_job` | Durable job state and outputs, or a current manual queue summary by its listed ID |
-| `cancel_job` | Cancellation acknowledgement followed by observable terminal state |
+| `get_app_status` | App/transport versions and queue counts |
+| `list_presets` | Current built-in preset IDs, availability, and captured settings |
+| `list_media` | Approved roots or paginated media/subfolders in an approved folder |
+| `inspect_media` | Streams, duration, geometry, frame rate, audio, and available timecode |
+| `plan_conversion` | Plan ID, captured settings, proposed outputs, expiry, and warnings |
+| `get_plan` | Existing valid plan |
+| `submit_conversion` | Accepted job and retry-deduplication result |
+| `list_jobs` | Paginated visible manual queue and durable job summaries |
+| `get_job` | Durable record or current manual queue summary |
+| `wait_for_job` | Current job after a state change, completion, or bounded timeout |
+| `cancel_job` | Targeted shared-job cancellation acknowledgement and state |
 
-Keep the schema versioned and bounded. Return stable error codes with readable
-messages. Advertise only capabilities supported by this interface, even where
-the UI offers additional features.
+The bundled helper uses stdio MCP and typed JSON over the app-owned local message
+port. Execution stays in the app and uses its bundled conversion tools. The
+current direct-distribution target has App Sandbox disabled; approved bookmarks
+are an application-level access policy, not OS sandbox confinement.
 
-Plans capture preset settings, naming rules, destination, and supported per-file
-overrides. Submission rechecks file access, source identity, and output collisions;
-it rejects stale plans rather than silently changing them. Reserve actual output
-names at submission and report them. Default to preserving existing files.
+Submission rechecks access, file identity, and collisions and reserves output
+names. Existing files are preserved. Accepted settings cannot change with later
+preferences. Shared jobs expose queued, running, cancelling, succeeded, failed,
+cancelled, and interrupted states. App restart interrupts unfinished jobs rather
+than silently restarting them. Current manual queue IDs can be inspected and
+waited on while visible, but cannot be cancelled through MCP.
 
-Submission accepts an idempotency key so a retry cannot duplicate accepted work.
-Define per-file outcomes for batch submission. Cancellation applies to the
-specified job and drains its helpers before reaching a terminal state.
+Agent requests do not expose arbitrary FFmpeg arguments or timecode overrides.
+Output timecode is disabled for agent conversions. Output destinations default to
+the app's configured folder when omitted, subject to write approval. Enabling
+access exposes these operations to processes in the same user's launch session;
+disabling it stops new requests while accepted jobs continue.
 
-Job records distinguish queued, running, cancelling, succeeded, failed, cancelled,
-and interrupted work. Persist enough identity and terminal results to answer
-reconnects; app restart must not silently restart incomplete conversions. Define
-record retention and idempotency-key lifetime before implementation.
+Remote access, a public REST API, fully headless operation, custom-preset mutation,
+and agent tools for downloads, uploads, recording, and transcription remain
+outside 4.5. Wider architecture, accessibility, format, and performance work stays
+in the [improvement roadmap](../IMPROVEMENT_PLAN.md).
 
-## Milestones and exit criteria
-
-### 1. Feasibility and scope decision
-
-Prove a signed app and bundled helper can connect under the configured runtime
-scope, launch the app if needed, inspect an approved file, and return structured
-data. Test denied and removed folder approvals and unavailable approved files.
-Verify compatibility with Claude Code, Codex, and OpenCode. If App Sandbox is
-enabled in a later target, repeat this matrix under that scope.
-
-Exit: documented IPC/transport decision, supported-client list, setup flow,
-initial preset/override matrix, and an effort estimate. If file access or packaging
-is impractical, revise the scope before refactoring the queue.
-
-### 2. Shared job boundary
-
-Introduce explicit requests, captured settings, stable IDs, and job state ownership.
-Route the necessary UI/App Intent paths through this boundary without changing
-their existing behavior. Establish coexistence rules for manual and agent work.
-
-Exit: automated coverage for settings capture, duplicate submissions, concurrent
-manual/agent submissions, cancellation ownership, and launch handoff.
-
-### 3. MCP workflow
-
-Implement the six tools over the shared service, including validation, structured
-errors, approved-folder checks, reconnect behavior, and persisted job outcomes.
-
-Exit: a local client can inspect, plan, submit, follow, and cancel a conversion;
-disconnecting the client does not stop an accepted job or lose its result.
-
-### 4. User experience and release validation
-
-Add opt-in settings, setup instructions, connection diagnostics, queue origin
-labels, and readable permission/error guidance. Define disabling behavior so
-new requests stop and already accepted work has an explicit, visible policy.
-
-Exit: Debug build and relevant unit/UI tests pass; a signed Release package passes
-the end-to-end matrix below. Update release notes and include setup documentation
-and UI screenshots. Verify any added dependency's packaging and license.
-
-## Release acceptance matrix
-
-- Fresh setup, app closed/open, client disconnect/reconnect, and app restart.
-- File access granted, denied, revoked, or lost on an unavailable external drive.
-- Invalid inputs, unsupported options, stale plans, and output-name collisions.
-- Duplicate requests and concurrent agent/manual queue operations.
-- Cancellation during preparation, encoding, and final output publication.
-- Actual output metadata and representative playback for each supported preset,
-  including audio-channel and timecode preservation where promised.
-- Existing manual import, preview, conversion, App Intents, and the app's
-  approved-file access policy under the configured runtime scope.
-- No separate FFmpeg or helper-runtime installation required for supported tools.
-
-## Deferred decisions
-
-Resolve during milestone 1: exact MCP client targets, IPC mechanism, minimum
-supported macOS implications, supported trim/audio/timecode overrides, folder-grant
-UX, and batch acceptance semantics. Resolve before milestone 3: job retention,
-plan expiry, reconnect guarantees, and protocol compatibility policy.
-
-4.5 ships when the supported workflow is dependable. Additional formats and agent
-tools should not delay that core scope.
-
+The [named-client runbook](../Documentation/NAMED_CLIENT_VALIDATION.md) remains
+available for additional compatibility testing. Its matrix is broader than the
+latest recorded Codex continuation; do not infer a passed check from setup
+instructions or historical helper-driver tests.
 
 ## Stitching editor — 2026-09-19
 

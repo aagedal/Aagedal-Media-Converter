@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-23
+Last reviewed: 2026-09-26
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -8,9 +8,11 @@ issue link when it starts.
 
 ## Release split and completion rule
 
-4.4.0 is stable. **4.5 is the local agent-access release in development.** The
-release plans below govern remaining scope; the numbered sections retain
-implementation evidence and history.
+4.4.0 is stable. **4.5 is in release documentation preparation**, with local
+agent access, stitching, and MPV CoreAudio fixes. The current summary in the
+[4.5 release plan](docs/RELEASE-4.5-PLAN.md) supersedes older readiness snapshots.
+The numbered sections below retain implementation evidence and follow-up work;
+completing this whole roadmap is not a release prerequisite.
 
 - [4.4 release plan](docs/RELEASE-4.4-PLAN.md): a finite release checklist covering
   concrete correctness issues, live regression validation, dependency attribution,
