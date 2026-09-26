@@ -814,6 +814,42 @@ struct StitchingEditorView<FileList: View>: View {
         .id(item.id)
     }
 
+    @ViewBuilder
+    private func timelineMarkers(scale: Double) -> some View {
+        ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
+            let trimStart: Double = item.effectiveTrimStart
+            let trimEnd: Double = trimStart + StitchingTimeline.duration(item)
+            let markers: [StitchTimelineMarker] = item.timelineMarkers.filter {
+                $0.sourceTime >= trimStart && $0.sourceTime < trimEnd
+            }
+            ForEach(markers) { marker in
+                timelineMarker(marker, item: item, index: index, scale: scale)
+            }
+        }
+    }
+
+    private func timelineMarker(_ marker: StitchTimelineMarker, item: VideoItem,
+                                index: Int, scale: Double) -> some View {
+        let label: String = String(localized: "Marked: \(marker.text)")
+        let position: Double = max(0, (offset(index) + marker.sourceTime - item.effectiveTrimStart) * scale - 9)
+        return Button {
+            isPlaying = false
+            seek(item.id, to: marker.sourceTime)
+            editingMarkerID = marker.id
+            markerText = marker.text
+            showsMarkerEditor = true
+        } label: {
+            Image(systemName: "bookmark.fill")
+                .foregroundStyle(.yellow)
+                .frame(width: 18, height: 22)
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .accessibilityLabel(Text("Marked: \(marker.text)"))
+        .accessibilityIdentifier("stitching.marker")
+        .offset(x: position, y: 7)
+    }
+
     private var timeline: some View {
         GeometryReader { geometry in
             let scale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * zoom)
@@ -890,29 +926,7 @@ struct StitchingEditorView<FileList: View>: View {
                             .allowsHitTesting(false)
                     }
                     .overlay(alignment: .topLeading) {
-                        ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
-                            ForEach(item.timelineMarkers.filter {
-                                $0.sourceTime >= item.effectiveTrimStart &&
-                                $0.sourceTime < item.effectiveTrimStart + StitchingTimeline.duration(item)
-                            }) { marker in
-                                Button {
-                                    isPlaying = false
-                                    seek(item.id, to: marker.sourceTime)
-                                    editingMarkerID = marker.id
-                                    markerText = marker.text
-                                    showsMarkerEditor = true
-                                } label: {
-                                    Image(systemName: "bookmark.fill")
-                                        .foregroundStyle(.yellow)
-                                        .frame(width: 18, height: 22)
-                                }
-                                .buttonStyle(.plain)
-                                .help(String(localized: "Marked: \(marker.text)"))
-                                .accessibilityLabel(Text("Marked: \(marker.text)"))
-                                .accessibilityIdentifier("stitching.marker")
-                                .offset(x: max(0, (offset(index) + marker.sourceTime - item.effectiveTrimStart) * scale - 9), y: 7)
-                            }
-                        }
+                        timelineMarkers(scale: scale)
                     }
                     .padding(.horizontal, 10)
                     .padding(.bottom, 8)
