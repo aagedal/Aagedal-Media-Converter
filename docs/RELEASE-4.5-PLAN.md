@@ -1153,6 +1153,16 @@ outside Agent Access because their user-defined FFmpeg options need a separate
 validation policy. The earlier six-preset statements below describe the first
 implementation and its validation history.
 
+### IMF release decision — 2026-09-26
+
+Experimental IMF App #2e and ProRes RDD 45 support is accepted for the 4.5
+release. Both presets remain enabled in the app and Agent Access, with the
+experimental notice in Preset Settings. XML schema validation, Photon checks,
+and external delivery conformance work are deferred; they are not 4.5 release
+blockers. The release does not claim validated delivery conformance. The current
+scope remains one image track and one PCM audio track, without packaged subtitles
+or multiple audio tracks.
+
 An agent on the user's Mac can inspect media, discover the user's presets, plan
 a conversion, and submit it to the app. The user sees agent-created jobs in the
 same queue as manual work and can inspect their settings, preview media, and
