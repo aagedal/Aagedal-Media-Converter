@@ -586,6 +586,11 @@ final class OCRAgentCoexistenceTests: XCTestCase {
 
     @MainActor
     func testAgentCancellationPreservesRealTesseractOCRPublication() async throws {
+        guard let directory = BinaryPathResolver.tessdataDirectory,
+              FileManager.default.fileExists(atPath: URL(fileURLWithPath: directory)
+                .appendingPathComponent("eng.traineddata").path) else {
+            throw XCTSkip("Real Tesseract OCR requires the optional English language pack (eng.traineddata)")
+        }
         try await checkCoexistence(cancelAgent: true, useRealTesseract: true)
     }
 

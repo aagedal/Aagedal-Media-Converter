@@ -4039,7 +4039,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertEqual(request.executableURL.path, bmxPath)
         XCTAssertEqual(request.arguments, [
-            "-t", "op1a",
+            "-t", "imf",
             "--color-prim", "bt2020",
             "--transfer-ch", "st2084",
             "--coding-eq", "bt2020",

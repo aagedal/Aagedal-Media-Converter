@@ -2307,7 +2307,7 @@ final class ApplicationJobContractTests: XCTestCase {
 
         let snapshots = await harness.snapshots()
         XCTAssertEqual(snapshots.map(\.preset), ApplicationPresetID.allCases.filter(\.isRunnable).map(\.exportPreset))
-        XCTAssertEqual(Set(snapshots.map(\.outputURL)).count, 15)
+        XCTAssertEqual(Set(snapshots.map(\.outputURL)).count, 17)
         let byPreset = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.preset, $0) })
         XCTAssertTrue(byPreset[.h264]?.ffmpegArguments.contains("libx264") == true)
         XCTAssertTrue(byPreset[.h265]?.ffmpegArguments.contains("libx265") == true)
@@ -4020,6 +4020,8 @@ final class ApplicationJobContractTests: XCTestCase {
         let waitingOutput = Pipe()
         waitingHelper.standardInput = waitingInput
         waitingHelper.standardOutput = waitingOutput
+        let waitingExited = expectation(description: "Waiting MCP helper exited")
+        waitingHelper.terminationHandler = { _ in waitingExited.fulfill() }
         try waitingHelper.run()
         defer { if waitingHelper.isRunning { waitingHelper.terminate() } }
         let waitMessages: [[String: Any]] = [
@@ -4052,9 +4054,15 @@ final class ApplicationJobContractTests: XCTestCase {
         )
         XCTAssertEqual(appStatus["manualQueueCount"] as? Int, 1)
 
-        waitingHelper.waitUntilExit()
+        // Drain stdout before waiting for exit: a response can exceed the pipe
+        // buffer on CI and otherwise leave the child blocked while writing.
+        let waitResponseData = await Task.detached {
+            waitingOutput.fileHandleForReading.readDataToEndOfFile()
+        }.value
+        await fulfillment(of: [waitingExited], timeout: 10)
+        guard !waitingHelper.isRunning else { throw CocoaError(.fileReadUnknown) }
         XCTAssertEqual(waitingHelper.terminationStatus, 0)
-        let waitResponses = try waitingOutput.fileHandleForReading.readDataToEndOfFile()
+        let waitResponses = try waitResponseData
             .split(separator: 0x0A)
             .map { try XCTUnwrap(JSONSerialization.jsonObject(with: Data($0)) as? [String: Any]) }
         let waitResult = try XCTUnwrap(
@@ -4130,6 +4138,7 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     func testLiveReencodedJobAppliesCapturedTimecodePolicy() async throws {
+        try await Self.requireProResHardwareEncoder()
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("timecoded.mov")
         try runBundledFFmpeg([
@@ -4175,6 +4184,7 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     func testLiveReencodedJobPreservesSelectedAudioTrackOrderAndContent() async throws {
+        try await Self.requireProResHardwareEncoder()
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("multitrack.mov")
         try runBundledFFmpeg([
@@ -4295,6 +4305,7 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     func testLiveSupportedPresetJobsCreateTheirPlannedOutputs() async throws {
+        try await Self.requireProResHardwareEncoder()
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("source.mov")
         try runBundledFFmpeg([
@@ -4715,6 +4726,7 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     func testLiveLongGOPTrimPreservesDecodedFramesAndAudioSampleRange() async throws {
+        try await Self.requireProResHardwareEncoder()
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("long-gop.mov")
         // One four-second GOP, B-frames, and a tone change inside the selected range
@@ -4955,6 +4967,7 @@ final class ApplicationJobContractTests: XCTestCase {
     }
 
     func testLiveLosslessSurroundExportsPreserveEverySelectedChannelSample() async throws {
+        try await Self.requireProResHardwareEncoder()
         let directory = try makeTemporaryDirectory()
         let sourceURL = directory.appendingPathComponent("six-channel.mov")
         // Different chirps in all six channels detect swaps, silence, downmixing,
@@ -5156,6 +5169,7 @@ final class ApplicationJobContractTests: XCTestCase {
 
     @MainActor
     func testLiveReencodedTimelineHasExactJoinAndTrimmedStartTimecode() async throws {
+        try await Self.requireProResHardwareEncoder()
         let directory = try makeTemporaryDirectory()
         let sources = ["red", "blue"].map { directory.appendingPathComponent($0 + ".mov") }
         for (index, source) in sources.enumerated() {
@@ -5617,7 +5631,14 @@ final class ApplicationJobContractTests: XCTestCase {
             "AMC_UI_TEST_AGENT_PORT_ID": portID.uuidString
         ]) { _, replacement in replacement }
         let input = Pipe()
-        let output = Pipe()
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MCP-test-output-\(UUID().uuidString).jsonl")
+        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+        let output = try FileHandle(forWritingTo: outputURL)
+        defer {
+            try? output.close()
+            try? FileManager.default.removeItem(at: outputURL)
+        }
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
         process.standardInput = input
@@ -5636,7 +5657,7 @@ final class ApplicationJobContractTests: XCTestCase {
         process.waitUntilExit()
         XCTAssertEqual(process.terminationStatus, 0)
 
-        return try output.fileHandleForReading.readDataToEndOfFile()
+        return try Data(contentsOf: outputURL)
             .split(separator: 0x0A)
             .map { line in
                 try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
@@ -5673,6 +5694,24 @@ final class ApplicationJobContractTests: XCTestCase {
             capturedAt: capturedAt,
             defaults: defaults
         )
+    }
+
+    /// These integration tests exercise the shipped hardware-only ProRes preset.
+    /// Hosted macOS runners do not necessarily expose a ProRes media engine.
+    private static func requireProResHardwareEncoder() async throws {
+        let binary = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: binary),
+            arguments: ["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=128x96:rate=24",
+                        "-frames:v", "1", "-c:v", "prores_videotoolbox", "-profile:v", "standard",
+                        "-f", "null", "-"],
+            timeout: .seconds(15)
+        ))
+        if !result.succeeded && result.standardErrorText.contains("Cannot create compression session: -12908") {
+            throw XCTSkip("This host does not expose the ProRes VideoToolbox encoder (-12908)")
+        }
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+        guard result.succeeded else { throw CocoaError(.executableRuntimeMismatch) }
     }
 
     private func makeDefaults() throws -> UserDefaults {
