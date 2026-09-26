@@ -759,6 +759,61 @@ struct StitchingEditorView<FileList: View>: View {
         .frame(width: 440, alignment: .leading)
     }
 
+    @ViewBuilder
+    private func timelineClip(item: VideoItem, index: Int, clipWidths: [Double],
+                              scale: Double, viewportWidth: Double) -> some View {
+        let clipWidth: Double = clipWidths[index]
+        let clipOffset: Double = clipWidths.prefix(index).reduce(0, +)
+        let visibleStart: Double = max(0, min(clipWidth, scrollOffset - 10 - clipOffset))
+        let visibleEnd: Double = max(0, min(clipWidth, scrollOffset + viewportWidth - 10 - clipOffset))
+        let visibleRange: ClosedRange<Double> = visibleStart...visibleEnd
+        let clipKeyframes: [Double] = isStreamCopy ? (keyframes[item.url] ?? []) : []
+        StitchingTimelineClip(
+            item: item, selected: selectedClipIDs.contains(item.id), scale: scale,
+            thumbnailURLs: filmstrips[item.id] ?? [],
+            keyframeTimes: clipKeyframes,
+            assets: previewAssets[item.id],
+            waveformVisualScale: waveformVisualScale,
+            visibleRange: visibleRange,
+            onSelect: { selectClip(item.id) },
+            reorderGesture: clipDrag(item.id, widths: clipWidths, scale: scale),
+            onTrim: { start, value in setTrim(item.id, start: start, value: value) },
+            onTrimGesture: { active in
+                if active { trimGestureBefore = group.items }
+                else if let before = trimGestureBefore {
+                    editHistory.record(from: before, to: group.items)
+                    trimGestureBefore = nil
+                }
+            }
+        )
+        .overlay {
+            if rangeMode {
+                Rectangle().fill(Color.clear).contentShape(Rectangle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("stitching.rangeSurface")
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            selectRange(in: item, from: value.startLocation.x / scale,
+                                        to: value.location.x / scale)
+                        })
+            }
+        }
+        .overlay(alignment: .leading) {
+            if let selection = selectedRange, selection.id == item.id {
+                let selectionWidth: Double = (selection.bounds.upperBound - selection.bounds.lowerBound) * scale
+                let selectionOffset: Double = (selection.bounds.lowerBound - item.effectiveTrimStart) * scale
+                Rectangle().fill(Color.yellow.opacity(0.3))
+                    .overlay(Rectangle().strokeBorder(Color.yellow, lineWidth: 2))
+                    .frame(width: selectionWidth)
+                    .offset(x: selectionOffset)
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(width: clipWidths[index], height: 164)
+        .opacity(draggedClipIDs.contains(item.id) ? 0.45 : 1)
+        .id(item.id)
+    }
+
     private var timeline: some View {
         GeometryReader { geometry in
             let scale = max(0.01, (geometry.size.width - 20) / (fittedDuration ?? sourceTotal) * zoom)
@@ -794,54 +849,8 @@ struct StitchingEditorView<FileList: View>: View {
                             })
                         HStack(spacing: 0) {
                             ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
-                                let clipWidth: Double = clipWidths[index]
-                                let clipOffset: Double = clipWidths.prefix(index).reduce(0, +)
-                                let visibleStart: Double = max(0, min(clipWidth, scrollOffset - 10 - clipOffset))
-                                let visibleEnd: Double = max(0, min(clipWidth, scrollOffset + geometry.size.width - 10 - clipOffset))
-                                let visibleRange: ClosedRange<Double> = visibleStart...visibleEnd
-                                let clipKeyframes: [Double] = isStreamCopy ? (keyframes[item.url] ?? []) : []
-                                StitchingTimelineClip(
-                                    item: item, selected: selectedClipIDs.contains(item.id), scale: scale,
-                                    thumbnailURLs: filmstrips[item.id] ?? [],
-                                    keyframeTimes: clipKeyframes,
-                                    assets: previewAssets[item.id],
-                                    waveformVisualScale: waveformVisualScale,
-                                    visibleRange: visibleRange,
-                                    onSelect: { selectClip(item.id) },
-                                    reorderGesture: clipDrag(item.id, widths: clipWidths, scale: scale),
-                                    onTrim: { start, value in setTrim(item.id, start: start, value: value) },
-                                    onTrimGesture: { active in
-                                        if active { trimGestureBefore = group.items }
-                                        else if let before = trimGestureBefore {
-                                            editHistory.record(from: before, to: group.items)
-                                            trimGestureBefore = nil
-                                        }
-                                    }
-                                )
-                                .overlay {
-                                    if rangeMode {
-                                        Rectangle().fill(Color.clear).contentShape(Rectangle())
-                                            .accessibilityElement(children: .ignore)
-                                            .accessibilityIdentifier("stitching.rangeSurface")
-                                            .gesture(DragGesture(minimumDistance: 0)
-                                                .onChanged { value in
-                                                    selectRange(in: item, from: value.startLocation.x / scale,
-                                                                to: value.location.x / scale)
-                                                })
-                                    }
-                                }
-                                .overlay(alignment: .leading) {
-                                    if let selection = selectedRange, selection.id == item.id {
-                                        Rectangle().fill(Color.yellow.opacity(0.3))
-                                            .overlay(Rectangle().strokeBorder(Color.yellow, lineWidth: 2))
-                                            .frame(width: (selection.bounds.upperBound - selection.bounds.lowerBound) * scale)
-                                            .offset(x: (selection.bounds.lowerBound - item.effectiveTrimStart) * scale)
-                                            .allowsHitTesting(false)
-                                    }
-                                }
-                                .frame(width: clipWidths[index], height: 164)
-                                .opacity(draggedClipIDs.contains(item.id) ? 0.45 : 1)
-                                .id(item.id)
+                                timelineClip(item: item, index: index, clipWidths: clipWidths,
+                                             scale: scale, viewportWidth: geometry.size.width)
                             }
                             Spacer(minLength: 0)
                         }
