@@ -1,4 +1,4 @@
-# v.4.5.0 (Unreleased)
+# v.4.5.0
 
 Local MCP access lets agents inspect media and run conversions through the app's
 queue. This release also adds a stitching timeline, camera-card import review,
@@ -28,12 +28,13 @@ and more reliable MPV audio-device switching.
   Access, connection states, and shared-job details. Agent conversions disable
   output timecode; manual and Shortcut jobs keep their configured behavior.
 
-See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md).
+See the [setup and workflow guide](https://github.com/aagedal/Aagedal-Media-Converter/blob/main/Documentation/LOCAL_AGENT_ACCESS.md).
 
 ## Stitching and import
 
-- Added a stitching timeline with filmstrips, sequence playback, zoom and Fit,
-  ripple trimming, clip reordering, splitting, range deletion, and undo.
+- Added a stitching timeline with filmstrips, audio waveforms, sequence playback,
+  output timecode, zoom and Fit, ripple trimming, clip reordering, splitting,
+  range deletion, and undo.
 - Added keyframe guidance for trimming. Stream Copy cuts remain approximate;
   a keyframe-aligned selection does not guarantee an exact exported out-point.
 - Stitched exports support Resolve EDL clip markers and embedded chapters in
@@ -44,11 +45,14 @@ See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md).
 
 ## Preview and interface
 
-- Updated MPVKit to the CoreAudio `.2` package, fixing device-listener registration
-  and stale AudioUnit handles during initialization failure cleanup.
+- Improved preview audio-device switching and recovery from audio initialization
+  failures with the updated MPVKit CoreAudio package.
 - Restored inline output filename renaming from double-click and the queue
   context menu, including grouped items.
 - Moved Agent Access and Tool Diagnostics to the bottom of the Settings sidebar.
+- Expanded Norwegian interface translations and added README translations in
+  Norwegian, Spanish, French, Italian, Simplified Chinese, German, Japanese,
+  Brazilian Portuguese, and Korean.
 
 ## Export and dependencies
 
