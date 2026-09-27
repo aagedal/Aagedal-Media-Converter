@@ -309,5 +309,51 @@
             ]]></description>
         </item>
 
+        <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.0</title>
+            <pubDate>Sun, 27 Sep 2026 22:00:48 +0200</pubDate>
+            <sparkle:version>596</sparkle:version>
+            <sparkle:shortVersionString>4.5.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.0/Aagedal_Media_Converter_4-5-0.zip"
+                length="113437026"
+                type="application/octet-stream"
+                sparkle:edSignature="LsjcU4snIC5cVINeJMwnbOt22ndXxcuYoh4gbLAJ62KTAcKtPmHjW0V/uDE0c/e3Pr0nbYOIWBVH+X7UKvxCDg==" />
+            <description><![CDATA[
+                <p>Local MCP access lets agents inspect media and run conversions through the app's queue. This release also adds a stitching timeline, camera-card import review, and more reliable MPV audio-device switching.</p>
+                <h2>Local agent access</h2>
+                <ul>
+                <li>Opt-in <strong>Settings → Agent Access</strong> with a connection test and copyable setup for Claude Desktop, Claude Code, Codex, and OpenCode. The bundled helper can launch the app; no separate FFmpeg or helper runtime is required.</li>
+                <li>Eleven tools cover approved-folder browsing, media inspection, preset discovery, conversion planning and submission, plan retrieval, job listing/status/waiting, cancellation, and app status. All 17 built-in presets are available, including experimental IMF App 2e and RDD 45. Custom FFmpeg slots are excluded.</li>
+                <li>Source-folder approvals persist across launches and cover subfolders. Output locations require separate write approval. Planning previews filenames and warnings; submission rechecks access, source identity, and output collisions.</li>
+                <li>Accepted jobs keep their captured settings, appear in the queue with Agent labels and stable IDs, and continue after a client disconnects. Repeated submissions return the original job. Results remain available for 30 days; unfinished work becomes interrupted after an app restart.</li>
+                <li>Ordinary manual and Shortcut conversions for H.264, HEVC, ProRes, Proxy, Audio Only, and Stream Copy share the persisted planner and serialized executor. Their configured trims, crop, audio routing, names, destinations, comments, and timecode remain attached to each accepted job.</li>
+                <li>Added an accepted-settings inspector and Norwegian translations for Agent Access, connection states, and shared-job details. Agent conversions disable output timecode; manual and Shortcut jobs keep their configured behavior.</li>
+                </ul>
+                <p>See the <a href="https://github.com/aagedal/Aagedal-Media-Converter/blob/main/Documentation/LOCAL_AGENT_ACCESS.md">setup and workflow guide</a>.</p>
+                <h2>Stitching and import</h2>
+                <ul>
+                <li>Added a stitching timeline with filmstrips, audio waveforms, sequence playback, output timecode, zoom and Fit, ripple trimming, clip reordering, splitting, range deletion, and undo.</li>
+                <li>Added keyframe guidance for trimming. Stream Copy cuts remain approximate; a keyframe-aligned selection does not guarantee an exact exported out-point.</li>
+                <li>Stitched exports support Resolve EDL clip markers and embedded chapters in MOV, MP4, M4V, and MKV, with a Keep/Replace choice for existing chapters.</li>
+                <li>Added camera-card recording-date review, explicit continuation marks for spanned recordings, optional splitting after gaps over two hours, and compatibility checks. Clips stay grouped by card folder during review.</li>
+                </ul>
+                <h2>Preview and interface</h2>
+                <ul>
+                <li>Improved preview audio-device switching and recovery from audio initialization failures with the updated MPVKit CoreAudio package.</li>
+                <li>Restored inline output filename renaming from double-click and the queue context menu, including grouped items.</li>
+                <li>Moved Agent Access and Tool Diagnostics to the bottom of the Settings sidebar.</li>
+                <li>Expanded Norwegian interface translations and added README translations in Norwegian, Spanish, French, Italian, Simplified Chinese, German, Japanese, Brazilian Portuguese, and Korean.</li>
+                </ul>
+                <h2>Export and dependencies</h2>
+                <ul>
+                <li>Enabled experimental IMF App 2e and RDD 45 exports with corrected CPL links to MXF track IDs and essence descriptors. The initial scope is one image track and one PCM audio track; packaged subtitles and multiple audio tracks are unsupported. Validate packages in the target mastering or delivery tool.</li>
+                <li>Updated SwiftMediaMetadata to 3.0.1, including bounded-memory Sony RTMD track discovery, and refreshed dependency source and license records.</li>
+                <li>Deferred the anonymous usage indicator; its prompt and Settings control are removed and reporting is disabled.</li>
+                </ul>
+            ]]></description>
+        </item>
+
     </channel>
 </rss>
