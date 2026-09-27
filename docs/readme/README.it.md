@@ -1,10 +1,10 @@
 # Aagedal Media Converter
 
-[English](../../README.md) · [Norsk bokmål](README.nb.md) · [Español](README.es.md) · [简体中文](README.zh-CN.md) · [Français](README.fr.md) · [Italiano](README.it.md)
+[English](../../README.md) · [Norsk bokmål](README.nb.md) · [Español](README.es.md) · [简体中文](README.zh-CN.md) · [Français](README.fr.md) · [Italiano](README.it.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md)
 
 <img alt="Aagedal Media Converter" src="https://github.com/user-attachments/assets/213e64a6-f382-4562-b4cf-797ad1e0f368" />
 
-Un'applicazione macOS leggera e minimalista, semplice in superficie ma con funzionalità potenti. Utilizza FFmpeg, FFprobe, MPV, SwiftMediaMetadata, yt-dlp, rclone e whisper.cpp, ed è scritta interamente in Swift / SwiftUI.
+Un'applicazione macOS leggera e minimalista, semplice in superficie ma con funzionalità potenti. Utilizza FFmpeg, MPV, SwiftMediaMetadata, yt-dlp, rclone e whisper.cpp, ed è scritta interamente in Swift / SwiftUI.
 
 Completamente gratuita e open source. Privata e locale. Il controllo facoltativo degli aggiornamenti è attivo per impostazione predefinita, ma può essere disattivato.
 
@@ -35,11 +35,15 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - **Trascrizione** di video e audio in sottotitoli SRT
 - **Caricamento** su un server dopo la conversione
 
+- **Unire** clip in una timeline con anteprima della sequenza e taglio con ripple
+- **Automatizzare le conversioni tramite MCP locale** con accesso facoltativo per gli agenti
+
 ### Generale
 
 - Anteprima e codifica di quasi tutti i file video
 - Importazione ed esportazione di **sequenze di immagini** (PNG, TIFF, EXR, DPX, JPEG 2000 e altri) con audio associato e controllo del frame rate
-- Esportazione **DCP (Digital Cinema Package)** per il cinema, con codifica JPEG 2000 nello spazio colore XYZ conforme a SMPTE
+- Esportazione **DCP (Digital Cinema Package)** con immagine JPEG 2000 XYZ e audio PCM
+- Esportazione sperimentale di pacchetti **IMF App 2e e RDD 45** da validare nello strumento di consegna
 - Conversione in batch, cartella monitorata e barra di avanzamento
 - Taglio della durata, ritaglio dell'immagine, riassegnazione o rimozione delle tracce audio e unione di clip dello stesso formato
 - Visualizzazione e confronto dei metadati
@@ -85,7 +89,20 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 
 - Unione di file con gli stessi codec, risoluzione, frame rate, profondità di bit e tracce audio
 - La prima clip determina il timecode e il ritaglio dell'immagine
-- Taglio della durata e Stream Copy possono essere combinati per tagliare e unire senza perdita di qualità. Alcuni metadati potrebbero andare persi.
+- Modifica i gruppi nella timeline con strisce di miniature, riproduzione della sequenza, taglio con ripple, riordino, divisione, eliminazione di intervalli e annullamento.
+- Taglia e unisci con Stream Copy senza ricodifica. I tagli dipendono dai fotogrammi chiave della sorgente e possono differire dai limiti selezionati; alcuni metadati potrebbero andare persi.
+- Esporta marcatori di clip in EDL per Resolve e capitoli incorporati, scegliendo se mantenere o sostituire quelli esistenti.
+
+### Importazione da schede della fotocamera
+
+- Esamina le clip per cartella della scheda e data di registrazione prima di importarle.
+- Segna esplicitamente le continuazioni di registrazione e, se desiderato, dividi i gruppi dopo pause superiori a due ore. I controlli di compatibilità aiutano a individuare clip che possono essere unite.
+
+### Accesso locale per gli agenti
+
+Attiva **Settings → Agent Access**, autorizza le cartelle sorgenti e copia la configurazione per il client MCP. L’helper incluso consente agli agenti di esplorare e ispezionare i media autorizzati, pianificare conversioni, inviare lavori, seguirne l’avanzamento e annullarli nella coda dell’app. Sono disponibili tutti i 17 preset integrati; i preset FFmpeg personalizzati sono esclusi. Le esportazioni IMF sono sperimentali.
+
+I lavori accettati continuano dopo la disconnessione del client. I piani sono validi per 15 minuti e i risultati dei lavori terminati restano disponibili per 30 giorni. Le esportazioni tramite agenti disattivano il timecode di output. Consulta la [guida di configurazione e flusso di lavoro](../../Documentation/LOCAL_AGENT_ACCESS.md) per autorizzazioni delle cartelle, configurazione dei client e recupero dei lavori.
 
 ### Animazioni delle forme d'onda audio
 
@@ -176,6 +193,10 @@ Creazione di proxy leggeri in HEVC, ProRes Proxy o DNxHR con limiti di risoluzio
 #### DCP (Digital Cinema Package)
 
 Esportazione DCP conforme a SMPTE. Codifica il video come JPEG 2000 nello spazio XYZ a 12 bit con conversione da BT.709, lo incapsula in MXF tramite asdcp-wrap e genera tutti gli XML SMPTE necessari (CPL, PKL, ASSETMAP, VOLINDEX). Supporta 2K e 4K nei formati Flat, Scope e Full a 24/25/30/48 fps, con bitrate configurabile di 100–250 Mbps. L'audio viene esportato come PCM a 24 bit in una traccia MXF separata. I metadati per elemento includono titolo, tipo di contenuto, annotazione, classificazione e lingua audio. Ridimensionamento: adatta con bande nere o riempi ritagliando.
+
+#### IMF App 2e / RDD 45 (sperimentale)
+
+Esportazione sperimentale di pacchetti IMF con una traccia immagine e una traccia audio PCM. Non sono supportati sottotitoli nel pacchetto né tracce audio multiple. Valida ogni pacchetto nello strumento di mastering o consegna previsto prima della consegna.
 
 #### Image Sequence
 

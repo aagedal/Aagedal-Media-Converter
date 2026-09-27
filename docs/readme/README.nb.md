@@ -1,10 +1,10 @@
 # Aagedal Media Converter
 
-[English](../../README.md) · [Norsk bokmål](README.nb.md) · [Español](README.es.md) · [简体中文](README.zh-CN.md) · [Français](README.fr.md) · [Italiano](README.it.md)
+[English](../../README.md) · [Norsk bokmål](README.nb.md) · [Español](README.es.md) · [简体中文](README.zh-CN.md) · [Français](README.fr.md) · [Italiano](README.it.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md)
 
 <img alt="Aagedal Media Converter" src="https://github.com/user-attachments/assets/213e64a6-f382-4562-b4cf-797ad1e0f368" />
 
-En lett og minimalistisk macOS-app som er enkel på overflaten, men har mange kraftige funksjoner. Bygger på FFmpeg, FFprobe, MPV, SwiftMediaMetadata, yt-dlp, rclone og whisper.cpp, og er skrevet helt i Swift / SwiftUI.
+En lett og minimalistisk macOS-app som er enkel på overflaten, men har mange kraftige funksjoner. Bygger på FFmpeg, MPV, SwiftMediaMetadata, yt-dlp, rclone og whisper.cpp, og er skrevet helt i Swift / SwiftUI.
 
 Helt gratis og med åpen kildekode. Privat og lokal. En valgfri oppdateringssjekk er aktivert som standard, men kan slås av.
 
@@ -35,11 +35,15 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - **Transkriber** video og lyd til SRT-undertekster
 - **Last opp** til en server etter konvertering
 
+- **Sett sammen** klipp i en tidslinje med sekvensforhåndsvisning og ripple-trimming
+- **Automatiser konverteringer med lokal MCP** og valgfri agenttilgang
+
 ### Generelt
 
 - Forhåndsvis og kod nesten alle videofiler
 - Importer og eksporter **bildesekvenser** (PNG, TIFF, EXR, DPX, JPEG 2000 m.m.) med tilknyttet lyd og kontroll over bildefrekvens
-- Eksporter **DCP (Digital Cinema Package)** for kino, med SMPTE-kompatibel JPEG 2000-koding i XYZ-fargerom
+- Eksporter **DCP (Digital Cinema Package)** med JPEG 2000 XYZ-bilde og PCM-lyd
+- Eksporter eksperimentelle **IMF App 2e- og RDD 45**-pakker for validering i leveringsverktøyet
 - Gruppekonvertering, overvåket mappe og fremdriftslinje
 - Trim, beskjær, omruter eller fjern lydspor, og slå sammen klipp i samme format
 - Vis og sammenlign metadata
@@ -85,7 +89,20 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 
 - Slå sammen filer med samme kodek, oppløsning, bildefrekvens, bitdybde og lydspor
 - Første klipp i køen bestemmer tidskode og beskjæring
-- Trim og Stream Copy kan kombineres, slik at klipp kan trimmes og slås sammen uten kvalitetstap. Noe metadata kan gå tapt.
+- Rediger grupper i tidslinjen med filmstriper, sekvensavspilling, ripple-trimming, omorganisering, splitting, områdesletting og angre.
+- Trim og slå sammen med Stream Copy uten omkoding. Kuttene avhenger av kildens nøkkelbilder og kan avvike fra valgte grenser; noe metadata kan gå tapt.
+- Eksporter Resolve EDL-klippmarkører og innebygde kapitler, med valg om å beholde eller erstatte eksisterende kapitler.
+
+### Import fra kamerakort
+
+- Se gjennom klipp etter kortmappe og opptaksdato før import.
+- Merk fortsettelser av opptak eksplisitt, og del eventuelt grupper etter opphold på over to timer. Kompatibilitetssjekker hjelper deg å finne klipp som kan settes sammen.
+
+### Lokal agenttilgang
+
+Aktiver **Settings → Agent Access**, godkjenn kildemapper og kopier oppsettet for MCP-klienten din. Den medfølgende hjelperen lar agenter bla gjennom og undersøke godkjente medier, planlegge konverteringer, sende inn jobber, følge fremdrift og avbryte arbeid i appens kø. Alle 17 innebygde forvalg er tilgjengelige; egendefinerte FFmpeg-forvalg er unntatt. IMF-eksport er eksperimentelt.
+
+Godkjente jobber fortsetter etter at klienten kobler fra. Planer er gyldige i 15 minutter, og resultater fra avsluttede jobber er tilgjengelige i 30 dager. Agenteksport deaktiverer utgående tidskode. Se [oppsetts- og arbeidsflytveiledningen](../../Documentation/LOCAL_AGENT_ACCESS.md) for mappegodkjenning, klientoppsett og gjenoppretting av jobber.
 
 ### Animerte lydbølgeformer
 
@@ -176,6 +193,10 @@ Lette proxyfiler i HEVC, ProRes Proxy eller DNxHR med justerbar oppløsningsgren
 #### DCP (Digital Cinema Package)
 
 SMPTE-kompatibel DCP-eksport. Koder video som JPEG 2000 i 12-bit XYZ-fargerom med konvertering fra BT.709, pakker i MXF med asdcp-wrap og genererer alle nødvendige SMPTE XML-filer (CPL, PKL, ASSETMAP, VOLINDEX). Støtter 2K og 4K i Flat, Scope og Full ved 24/25/30/48 fps, med justerbar bitrate (100–250 Mbps). Lyd eksporteres som 24-bit PCM i et separat MXF-spor. Metadata per element omfatter tittel, innholdstype, merknad, aldersgrense og lydspråk. Skalering: tilpass med svarte felt eller fyll med beskjæring.
+
+#### IMF App 2e / RDD 45 (eksperimentelt)
+
+Eksperimentell IMF-pakkeeksport med ett bildespor og ett PCM-lydspor. Undertekster i pakken og flere lydspor støttes ikke. Valider hver pakke i det aktuelle mastering- eller leveringsverktøyet før levering.
 
 #### Image Sequence
 

@@ -1,10 +1,10 @@
 # Aagedal Media Converter
 
-[English](../../README.md) · [Norsk bokmål](README.nb.md) · [Español](README.es.md) · [简体中文](README.zh-CN.md) · [Français](README.fr.md) · [Italiano](README.it.md)
+[English](../../README.md) · [Norsk bokmål](README.nb.md) · [Español](README.es.md) · [简体中文](README.zh-CN.md) · [Français](README.fr.md) · [Italiano](README.it.md) · [Deutsch](README.de.md) · [日本語](README.ja.md) · [Português (Brasil)](README.pt-BR.md)
 
 <img alt="Aagedal Media Converter" src="https://github.com/user-attachments/assets/213e64a6-f382-4562-b4cf-797ad1e0f368" />
 
-这是一款轻量、简洁的 macOS 应用，界面简单，却内置了丰富而强大的功能。底层使用 FFmpeg、FFprobe、MPV、SwiftMediaMetadata、yt-dlp、rclone 和 whisper.cpp，完全采用 Swift / SwiftUI 编写。
+这是一款轻量、简洁的 macOS 应用，界面简单，却内置了丰富而强大的功能。底层使用 FFmpeg、MPV、SwiftMediaMetadata、yt-dlp、rclone 和 whisper.cpp，完全采用 Swift / SwiftUI 编写。
 
 完全免费、开源。注重隐私，所有处理均在本地进行。可选的更新检查默认开启，也可以关闭。
 
@@ -35,11 +35,15 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - **转录**视频和音频，生成 SRT 字幕
 - 转换后**上传**至服务器
 
+- 在支持序列预览和波纹修剪的时间线上**拼接**片段
+- 通过可选启用的代理访问，使用**本地 MCP 自动化转换**
+
 ### 通用功能
 
 - 预览和编码几乎所有视频文件
 - 导入和导出**图像序列**（PNG、TIFF、EXR、DPX、JPEG 2000 等），支持关联音频和设置帧率
-- 导出用于影院播放的 **DCP（数字电影包）**，采用符合 SMPTE 标准的 JPEG 2000 XYZ 色彩空间编码
+- 导出包含 JPEG 2000 XYZ 图像和 PCM 音频的 **DCP（数字电影包）**
+- 导出实验性的 **IMF App 2e 和 RDD 45** 包，在交付工具中进行验证
 - 批量转换、监视文件夹和进度条
 - 修剪时长、裁剪画面、重新分配或删除音轨，以及合并格式相同的片段
 - 查看和比较元数据
@@ -85,7 +89,20 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 
 - 合并编码格式、分辨率、帧率、位深和音轨相同的文件
 - 队列中的第一个片段决定时间码和画面裁剪设置
-- 可同时使用时长修剪和 Stream Copy，在不损失画质的情况下修剪并合并文件。部分元数据可能丢失。
+- 在拼接时间线中编辑分组，支持胶片条缩略图、序列播放、波纹修剪、重排、分割、范围删除和撤销。
+- 使用 Stream Copy 修剪并合并，无需重新编码。切点取决于源文件的关键帧，可能与选定边界不同；部分元数据可能丢失。
+- 导出 Resolve EDL 片段标记和内嵌章节，已有章节可选择保留或替换。
+
+### 从相机存储卡导入
+
+- 导入前按存储卡文件夹和录制日期查看片段。
+- 明确标记连续录制的后续片段，也可在间隔超过两小时后拆分分组。兼容性检查有助于识别可拼接的片段。
+
+### 本地代理访问
+
+启用 **Settings → Agent Access**，授权源文件夹，并复制 MCP 客户端的配置。随附辅助程序允许代理浏览和检查已授权的媒体、规划转换、提交任务、跟踪进度，以及取消应用队列中的任务。全部 17 个内置预设均可使用；自定义 FFmpeg 预设除外。IMF 导出属于实验性功能。
+
+已接受的任务在客户端断开连接后仍会继续。计划有效期为 15 分钟，已结束任务的结果保留 30 天。代理导出会禁用输出时间码。文件夹授权、客户端配置和任务恢复详见[配置与工作流程指南](../../Documentation/LOCAL_AGENT_ACCESS.md)。
 
 ### 生成音频波形动画
 
@@ -176,6 +193,10 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 #### DCP (Digital Cinema Package)
 
 导出符合 SMPTE 标准的数字电影包。将 BT.709 输入转换为 12 位 XYZ 色彩空间并编码为 JPEG 2000，使用 asdcp-wrap 封装为 MXF，并生成所需的 SMPTE XML 文件（CPL、PKL、ASSETMAP、VOLINDEX）。支持 2K 和 4K 的 Flat、Scope、Full 规格，帧率为 24/25/30/48 fps，码率可设为 100–250 Mbps。音频以 24 位 PCM 导出至独立 MXF 轨道。每项素材的元数据可编辑内容标题、类型、注释、分级和音频语言。缩放模式包括适应画面（加黑边）和填满画面（裁剪）。
+
+#### IMF App 2e / RDD 45（实验性）
+
+实验性的 IMF 包导出，包含一个图像轨道和一个 PCM 音频轨道。不支持包内字幕或多个音频轨道。用于交付之前，请在目标母版制作或交付工具中验证每个包。
 
 #### Image Sequence
 
