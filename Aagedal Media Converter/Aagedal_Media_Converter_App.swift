@@ -73,6 +73,28 @@ struct Aagedal_Media_Converter_App: App {
         // Bring the settings-sync singleton (and its file/UserDefaults observers)
         // online at launch so a snapshot that arrived while closed is pulled in.
         SettingsSyncService.shared.activate()
+
+        // Restore local-agent history before the transport layer is connected.
+        // A damaged snapshot is reported and retained rather than overwritten.
+        Task {
+            do {
+                _ = try await ApplicationJobService.shared.restorePersistedState()
+            } catch {
+                Logger(
+                    subsystem: Bundle.main.bundleIdentifier ?? "AagedalMediaConverter",
+                    category: "AgentAccess"
+                ).error("Failed to restore application jobs: \(error.localizedDescription, privacy: .public)")
+            }
+
+            do {
+                try await ApplicationAgentAccessLifecycle.shared.reconcile()
+            } catch {
+                Logger(
+                    subsystem: Bundle.main.bundleIdentifier ?? "AagedalMediaConverter",
+                    category: "AgentAccess"
+                ).error("Failed to start local agent access: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     var body: some Scene {

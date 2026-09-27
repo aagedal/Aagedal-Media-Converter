@@ -16,7 +16,7 @@ struct MetadataSidecarGenerator {
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "MetadataSidecarGenerator")
 
-    enum SidecarFormat: String, CaseIterable, Identifiable, Sendable {
+    enum SidecarFormat: String, CaseIterable, Identifiable, Codable, Sendable {
         case markdown = "Markdown"
         case json = "JSON"
 

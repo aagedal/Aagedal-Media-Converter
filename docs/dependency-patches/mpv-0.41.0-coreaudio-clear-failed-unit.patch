@@ -1,0 +1,20 @@
+Subject: [PATCH] ao_coreaudio: clear AudioUnit after failed initialization cleanup
+
+init_audiounit() disposes its component on failure. The outer init() error
+path now calls uninit(), so leaving the disposed handle in priv causes Stop,
+Uninitialize and Dispose to be called on that stale handle a second time.
+Clear it after disposal so the outer partial-initialization cleanup skips it.
+
+This local follow-up applies after mpv-0.41.0-coreaudio-init-failure.patch.
+
+diff --git a/audio/out/ao_coreaudio.c b/audio/out/ao_coreaudio.c
+--- a/audio/out/ao_coreaudio.c
++++ b/audio/out/ao_coreaudio.c
+@@ -349,6 +349,7 @@ coreaudio_error_audiounit:
+     AudioUnitUninitialize(p->audio_unit);
+ coreaudio_error_component:
+     AudioComponentInstanceDispose(p->audio_unit);
++    p->audio_unit = NULL;
+ coreaudio_error:
+     return false;
+ }

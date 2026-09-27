@@ -3,6 +3,51 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class SecurityScopedBookmarkManagerTests: XCTestCase {
+    func testConfiguredDefaultOutputNeedsNoSeparateBookmark() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DefaultOutputTests-\(UUID().uuidString)", isDirectory: true)
+        let output = directory.appendingPathComponent("Media_Exports", isDirectory: true)
+        let other = directory.appendingPathComponent("Other", isDirectory: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+
+        let manager = SecurityScopedBookmarkManager(defaults: try isolatedDefaults())
+        let authorizer = ApplicationFileAccessAuthorizer.storedBookmarks(
+            using: manager, defaultOutputFolder: { output }
+        )
+
+        let lease = try XCTUnwrap(authorizer.acquire(output, .write))
+        lease.release()
+        XCTAssertNil(authorizer.acquire(output, .read))
+        XCTAssertNil(authorizer.acquire(other, .write))
+        XCTAssertNil(authorizer.acquire(output.appendingPathComponent("nested"), .write))
+    }
+
+    func testNativeFolderBookmarkRejectsSiblingAndSymlinkEscape() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NativeBookmarkTests-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let approved = directory.appendingPathComponent("approved", isDirectory: true)
+        let sibling = directory.appendingPathComponent("approved-other", isDirectory: true)
+        for folder in [approved, sibling] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data("fixture".utf8).write(to: folder.appendingPathComponent("source.mov"))
+        }
+        let escape = approved.appendingPathComponent("escape", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: escape, withDestinationURL: sibling)
+        let manager = SecurityScopedBookmarkManager(defaults: try isolatedDefaults())
+        XCTAssertTrue(manager.saveWritableBookmark(for: approved))
+        let authorizer = ApplicationFileAccessAuthorizer.storedBookmarks(using: manager)
+        for mode in [ApplicationFileAccessMode.read, .write] {
+            let lease = try XCTUnwrap(authorizer.acquire(approved.appendingPathComponent("source.mov"), mode))
+            // Check containment while the legitimate borrower keeps the scope open.
+            XCTAssertNil(authorizer.acquire(sibling.appendingPathComponent("source.mov"), mode))
+            XCTAssertNil(authorizer.acquire(escape.appendingPathComponent("source.mov"), mode))
+            lease.release()
+        }
+    }
+
     private func isolatedDefaults() throws -> UserDefaults {
         let name = "SecurityScopedBookmarkManagerTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
@@ -163,6 +208,91 @@ final class SecurityScopedBookmarkManagerTests: XCTestCase {
         XCTAssertFalse(manager.startAccessingSecurityScopedResource(for: original))
         manager.stopAccessingSecurityScopedResource(for: original)
     }
+
+    func testStoredFolderBookmarkAuthorizesDescendantAndBalancesAccess() throws {
+        let defaults = try isolatedDefaults()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("StoredBookmarkTests-\(UUID().uuidString)", isDirectory: true)
+        let child = directory.appendingPathComponent("nested/input.mov")
+        defaults.set([directory.absoluteString: Data([1])], forKey: "securityScopedBookmarks")
+        defaults.set([directory.absoluteString: false], forKey: "securityScopedBookmarksReadOnly")
+        var starts: [URL] = []
+        var stops: [URL] = []
+        let manager = SecurityScopedBookmarkManager(
+            defaults: defaults,
+            resolveData: { _ in (directory, false) },
+            startScope: { starts.append($0); return true },
+            stopScope: { stops.append($0) }
+        )
+
+        let access = manager.startAccessingStoredBookmark(
+            containing: child,
+            requiresWriteAccess: false
+        )
+        guard case .bookmark(let storageURL) = access else {
+            return XCTFail("Expected the ancestor folder bookmark to authorize its descendant")
+        }
+        XCTAssertEqual(storageURL, directory)
+        manager.stopAccessing(access)
+        XCTAssertEqual(starts, [directory])
+        XCTAssertEqual(stops, [directory])
+    }
+
+    func testAgentFolderApprovalPersistsForDescendantsAndRemovalRevokesIt() throws {
+        let defaults = try isolatedDefaults()
+        let folder = URL(fileURLWithPath: "/Users/test/Movies", isDirectory: true)
+        let nestedSource = folder.appendingPathComponent("Sony/CLIP/recording.mp4")
+        let adjacentSource = URL(fileURLWithPath: "/Users/test/Movies-Other/recording.mp4")
+        let makeManager = {
+            SecurityScopedBookmarkManager(
+                defaults: defaults,
+                bookmarksKey: "agentSourceFolderBookmarks",
+                readOnlyKey: "agentSourceFolderBookmarksReadOnly",
+                createBookmark: { _, _ in Data([1]) },
+                resolveData: { _ in (folder, false) },
+                startScope: { _ in true },
+                stopScope: { _ in }
+            )
+        }
+        let selected = makeManager()
+        XCTAssertTrue(selected.saveBookmark(for: folder))
+
+        let relaunched = makeManager()
+        XCTAssertEqual(relaunched.storedFolderURLs(), [folder])
+        let authorizer = ApplicationFileAccessAuthorizer.storedBookmarks(
+            using: SecurityScopedBookmarkManager(defaults: defaults),
+            additionalReadFolders: relaunched
+        )
+        XCTAssertNotNil(authorizer.acquire(nestedSource, .read))
+        XCTAssertNil(authorizer.acquire(nestedSource, .write))
+        XCTAssertNil(authorizer.acquire(adjacentSource, .read))
+
+        XCTAssertTrue(relaunched.removeBookmark(for: folder))
+        XCTAssertTrue(relaunched.storedFolderURLs().isEmpty)
+        XCTAssertNil(authorizer.acquire(nestedSource, .read))
+    }
+
+    func testReadOnlyStoredBookmarkCannotAuthorizeWritableDestination() throws {
+        let defaults = try isolatedDefaults()
+        let directory = URL(fileURLWithPath: "/selected/read-only", isDirectory: true)
+        defaults.set([directory.absoluteString: Data([1])], forKey: "securityScopedBookmarks")
+        defaults.set([directory.absoluteString: true], forKey: "securityScopedBookmarksReadOnly")
+        let manager = SecurityScopedBookmarkManager(
+            defaults: defaults,
+            resolveData: { _ in (directory, false) },
+            startScope: { _ in XCTFail("A read-only grant must be filtered before acquisition"); return true },
+            stopScope: { _ in XCTFail("No access was acquired") }
+        )
+
+        let access = manager.startAccessingStoredBookmark(
+            containing: directory,
+            requiresWriteAccess: true
+        )
+        guard case .none = access else {
+            return XCTFail("Expected writable access to be denied")
+        }
+    }
+
     func testMalformedTopLevelStoresRejectSaveWithoutErasingRecoveryData() throws {
         for key in ["securityScopedBookmarks", "securityScopedBookmarksReadOnly"] {
             for malformed: Any in [Data([0, 1, 2]), "unsupported-schema", ["invalid-array"]] {

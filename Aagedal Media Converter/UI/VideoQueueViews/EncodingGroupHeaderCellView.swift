@@ -516,6 +516,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
         // width/height, so the encoding-group versions follow suit instead of
         // the larger 28pt action-button footprint.
         configureNaturalIconButton(concatOutputButton, symbolName: "magnifyingglass.circle.fill", tint: .systemBlue, action: #selector(concatOutputFinderClicked))
+        concatOutputButton.setAccessibilityIdentifier("group.output")
         concatOutputButton.toolTip = String(localized: "Show merged output in Finder")
 
         configureNaturalIconButton(concatCopyPathButton, symbolName: "doc.on.doc.fill", tint: .systemBlue, action: #selector(concatCopyPathClicked))
@@ -536,6 +537,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
         // Opens the standalone editor window where reorder/remove/extract happen.
         // Keeps the main queue focused on high-level queue manipulation.
         configureActionButton(editButton, symbolName: "square.and.pencil", tint: .systemBlue, action: #selector(editClicked))
+        editButton.setAccessibilityIdentifier("group.edit")
         editButton.toolTip = String(localized: "Edit group contents (reorder, remove, rename)")
 
         configureActionButton(resetButton, symbolName: "arrow.counterclockwise.circle.fill", tint: .systemBlue, action: #selector(resetClicked))

@@ -1,0 +1,94 @@
+From e8414d910311ea5663d5a230e85d48a415e6119a Mon Sep 17 00:00:00 2001
+From: Dudemanguy <random342@airmail.cc>
+Date: Tue, 18 Aug 2026 10:06:15 -0500
+Subject: [PATCH 1/2] ao_coreaudio: cleanup ao on init failure
+
+This matches what other AOs and VOs do and properly releases allocated
+resources on failure.
+---
+ audio/out/ao_coreaudio.c | 20 +++++++++++++-------
+ 1 file changed, 13 insertions(+), 7 deletions(-)
+
+diff --git a/audio/out/ao_coreaudio.c b/audio/out/ao_coreaudio.c
+index 4b4bf1d48c0d6..4a582bbc210d8 100644
+--- a/audio/out/ao_coreaudio.c
++++ b/audio/out/ao_coreaudio.c
+@@ -141,6 +141,7 @@ static void init_physical_format(struct ao *ao);
+ static void reinit_latency(struct ao *ao);
+ static bool register_hotplug_cb(struct ao *ao);
+ static void unregister_hotplug_cb(struct ao *ao);
++static void uninit(struct ao *ao);
+ 
+ static bool reinit_device(struct ao *ao) {
+     struct priv *p = ao->priv;
+@@ -196,6 +197,7 @@ static int init(struct ao *ao)
+     return CONTROL_OK;
+ 
+ coreaudio_error:
++    uninit(ao);
+     return CONTROL_ERROR;
+ }
+ 
+@@ -436,14 +438,18 @@ static void uninit(struct ao *ao)
+ {
+     struct priv *p = ao->priv;
+ 
+-    dispatch_sync(p->queue, ^{
+-        cancel_and_release_idle_work(p);
+-    });
+-    dispatch_release(p->queue);
++    if (p->queue) {
++        dispatch_sync(p->queue, ^{
++            cancel_and_release_idle_work(p);
++        });
++        dispatch_release(p->queue);
++    }
+ 
+-    AudioOutputUnitStop(p->audio_unit);
+-    AudioUnitUninitialize(p->audio_unit);
+-    AudioComponentInstanceDispose(p->audio_unit);
++    if (p->audio_unit) {
++        AudioOutputUnitStop(p->audio_unit);
++        AudioUnitUninitialize(p->audio_unit);
++        AudioComponentInstanceDispose(p->audio_unit);
++    }
+ 
+     if (p->original_asbd.mFormatID) {
+         OSStatus err = CA_SET(p->original_asbd_stream,
+
+From 3371b9007754c3aefe719c97ab08325f23e14e88 Mon Sep 17 00:00:00 2001
+From: Dudemanguy <random342@airmail.cc>
+Date: Tue, 18 Aug 2026 10:27:43 -0500
+Subject: [PATCH 2/2] ao_coreaudio: register hotplug after succesful audiounit
+ init
+
+No real point in registering the hotplug if we don't even know if the
+actual ao is going to work or not yet. Just move it down.
+---
+ audio/out/ao_coreaudio.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/audio/out/ao_coreaudio.c b/audio/out/ao_coreaudio.c
+index 4a582bbc210d8..7d421390e9dc3 100644
+--- a/audio/out/ao_coreaudio.c
++++ b/audio/out/ao_coreaudio.c
+@@ -168,9 +168,6 @@ static int init(struct ao *ao)
+     if (!reinit_device(ao))
+         goto coreaudio_error;
+ 
+-    if (!register_hotplug_cb(ao))
+-        goto coreaudio_error;
+-
+     if (p->change_physical_format)
+         init_physical_format(ao);
+ 
+@@ -188,6 +185,9 @@ static int init(struct ao *ao)
+     if (!r)
+         goto coreaudio_error;
+ 
++    if (!register_hotplug_cb(ao))
++        goto coreaudio_error;
++
+     reinit_latency(ao);
+     ao->device_buffer = av_rescale(p->hw_latency_ns, ao->samplerate, 1000000000) * 2;
+ 

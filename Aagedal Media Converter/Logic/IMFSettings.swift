@@ -5,7 +5,7 @@
 import Foundation
 
 /// Captured once so IMF encoding, essence wrapping, manifests, and cleanup agree.
-struct IMFSettings: Sendable {
+struct IMFSettings: Codable, Equatable, Sendable {
     let resolution: IMFResolution
     let frameRate: IMFFrameRate
     let bitrate: DCPBitrate
@@ -56,7 +56,7 @@ struct IMFSettings: Sendable {
                 "-map", "0:v:0",
                 "-an",
             ]
-        case .app5:
+        case .rdd45:
             return ["-hide_banner"] + [
                 "-c:v", "prores_ks",
                 "-profile:v", proResProfile.ffmpegProfile,

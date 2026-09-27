@@ -73,7 +73,7 @@ struct FileNamePreferences: Sendable {
 }
 
 /// Resolved preset labels, captured once before rendering the filename.
-struct FileNameTemplateContext: Sendable {
+struct FileNameTemplateContext: Codable, Equatable, Sendable {
     let presetSuffix: String
     let resolution: String
     let framerate: String

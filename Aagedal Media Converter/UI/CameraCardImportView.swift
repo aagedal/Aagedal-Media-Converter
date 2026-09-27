@@ -24,6 +24,7 @@ struct CameraCardImportView: View {
     @Environment(\.openSettings) private var openSettings
     let clipCount: Int
     let folderName: String
+    let hasRemovableSources: Bool
     @Binding var masterName: String
     @Binding var selectedPreset: ExportPreset
     @Binding var concatEnabled: Bool
@@ -35,6 +36,8 @@ struct CameraCardImportView: View {
     let onCancel: () -> Void
     let onAutoSplit: (() -> Void)?
     let onForceMerge: (() -> Void)?
+    let isPreparingDateSplit: Bool
+    let onReviewDateSplit: () -> Void
 
     private let presetManager = PresetManager.shared
     @State private var servers: [UploadServerEntry] = []
@@ -99,12 +102,25 @@ struct CameraCardImportView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if hasRemovableSources {
+                Label {
+                    Text("Editing directly from removable media can be slow, especially for long recordings. For smoother editing, copy the card to local storage first. You can also continue importing from the card.")
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "info.circle")
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("cameraCardRemovableMediaAdvisory")
+            }
+
             Divider()
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Card name")
                     .font(.body)
                 TextField("e.g. Interview_Day1", text: $masterName)
+                    .accessibilityIdentifier("cameraCard.name")
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 320, idealWidth: 460, maxWidth: .infinity)
 
@@ -158,6 +174,19 @@ struct CameraCardImportView: View {
 
             if clipCount >= 2 {
                 Toggle("Concatenate clips into single file", isOn: $concatEnabled)
+                HStack {
+                    Button("Review recording-date groups…") {
+                        applySelectedServer()
+                        onReviewDateSplit()
+                    }
+                    .accessibilityIdentifier("cameraCard.review")
+                    .disabled(isPreparingDateSplit || !isNameValid)
+                    if isPreparingDateSplit {
+                        ProgressView().controlSize(.small)
+                        Text("Reading recording metadata…")
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             if concatEnabled && clipCount >= 2 {
@@ -324,5 +353,137 @@ struct CameraCardImportView: View {
         guard uploadEnabled,
               let selectedID = selectedServerID ?? servers.first?.id else { return }
         UploadProfileStore.saveSelectedProfileID(selectedID)
+    }
+}
+
+/// Review is mandatory because filenames and adjacent dates cannot identify
+/// multi-file camera recordings. The user marks continuation files explicitly.
+struct CameraCardRecordingReviewView: View {
+    let urls: [URL]
+    let metadata: [URL: VideoMetadata]
+    let cameraMetadata: [URL: CameraMetadata]
+    let timeZone: TimeZone
+    let onImport: ([CameraCardRecordingGrouping.ProposedGroup]) -> Void
+    let onCancel: () -> Void
+
+    @State private var continuesPrevious: Set<URL> = []
+    @State private var splitByDate = true
+    @State private var splitOnLongGaps = false
+
+    private var recordings: [CameraCardRecordingGrouping.Recording] {
+        CameraCardRecordingGrouping.resolvedSegments(
+            urls: urls, continuesPrevious: continuesPrevious
+        ).map {
+            CameraCardRecordingMetadata.recording(
+                resolvedSegmentURLs: $0, metadata: metadata, cameraMetadata: cameraMetadata
+            )
+        }
+    }
+
+    private var proposal: [CameraCardRecordingGrouping.ProposedGroup] {
+        CameraCardRecordingGrouping.proposal(
+            for: recordings,
+            mode: splitByDate ? .recordingDay(splitOnLongGaps: splitOnLongGaps) : .singleGroup,
+            timeZone: timeZone
+        ) { CameraCardRecordingMetadata.compatibility(for: $0, metadata: metadata) }
+    }
+
+    private var hasUnmergeableSpan: Bool {
+        CameraCardRecordingGrouping.hasUnmergeableSpan(in: recordings) {
+            CameraCardRecordingMetadata.compatibility(for: $0, metadata: metadata)
+        }
+    }
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.timeZone = timeZone
+        return formatter
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Review recording-date groups").font(.headline)
+            Text("Dates use \(timeZone.identifier). Camera dates take precedence over container dates. Files without either date stay together in their own consecutive groups. Mark every segment that continues the recording above it before importing.")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            Picker("Grouping", selection: $splitByDate) {
+                Text("Split by recording day").tag(true)
+                Text("Keep single group").tag(false)
+            }
+            .pickerStyle(.segmented)
+            if splitByDate {
+                Toggle("Also split after gaps longer than two hours", isOn: $splitOnLongGaps)
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(urls.enumerated()), id: \.element) { index, url in
+                        HStack {
+                            if index > 0 {
+                                Toggle("Continues previous recording", isOn: Binding(
+                                    get: { continuesPrevious.contains(url) },
+                                    set: { enabled in
+                                        if enabled { continuesPrevious.insert(url) }
+                                        else { continuesPrevious.remove(url) }
+                                    }
+                                ))
+                                .toggleStyle(.checkbox)
+                                .frame(width: 220, alignment: .leading)
+                            } else {
+                                Spacer().frame(width: 220)
+                            }
+                            Text(url.lastPathComponent).lineLimit(1)
+                            Spacer()
+                            if let date = cameraMetadata[url]?.creationDate ?? metadata[url]?.containerCreationDate {
+                                Text(dateFormatter.string(from: date)).foregroundStyle(.secondary)
+                            } else {
+                                Text("Date unknown").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Divider()
+                    Text("Proposed groups: \(proposal.count)")
+                        .font(.headline)
+                        .accessibilityIdentifier("cameraCard.review.proposal")
+                    ForEach(Array(proposal.enumerated()), id: \.offset) { index, group in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Group \(index + 1): \(group.urls.count) clips")
+                                .fontWeight(.medium)
+                            Text(group.urls.map(\.lastPathComponent).joined(separator: ", "))
+                                .lineLimit(2)
+                                .foregroundStyle(.secondary)
+                            if group.requiresReview {
+                                if group.compatibility == .unknown {
+                                    Text("Format metadata incomplete; this group will import without concatenation.")
+                                        .foregroundStyle(.orange)
+                                } else {
+                                    Text("Formats conflict; this group will import without concatenation.")
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 250, maxHeight: 430)
+
+            if hasUnmergeableSpan {
+                Label("A multi-file recording has incompatible or incomplete format metadata. Resolve its continuation marks or import the card without date splitting.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel, action: onCancel)
+                Button("Import proposed groups") { onImport(proposal) }
+                    .accessibilityIdentifier("cameraCard.review.import")
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(hasUnmergeableSpan)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 710, idealWidth: 850)
     }
 }

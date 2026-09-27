@@ -19,6 +19,7 @@ import runpy
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
@@ -191,15 +192,33 @@ def require_complete_licenses(manifest: dict[str, Any]) -> None:
 
 
 def package_inventory() -> list[dict[str, Any]]:
-    """Bind reviewed package attribution to exactly the checked-in source pins."""
+    """Bind reviewed attribution to exact project requirements, not Xcode's mutable lockfile."""
     records = json.loads((REPOSITORY_ROOT / "PackageAttributions.json").read_text())["packages"]
-    resolved = REPOSITORY_ROOT / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-    pins = {pin["identity"]: pin for pin in json.loads(resolved.read_text())["pins"]}
+    project = REPOSITORY_ROOT / "Aagedal Media Converter.xcodeproj/project.pbxproj"
+    project_data = json.loads(command_output(["/usr/bin/plutil", "-convert", "json", "-o", "-", str(project)]))
+    objects = project_data["objects"]
+    project_references = [
+        objects[reference]
+        for entry in objects.values() if entry.get("isa") == "PBXProject"
+        for reference in entry.get("packageReferences", [])
+    ]
+    pins = {}
+    for reference in project_references:
+        if reference.get("isa") != "XCRemoteSwiftPackageReference":
+            raise RuntimeError("Project contains an unsupported Swift package reference")
+        source_url = reference["repositoryURL"]
+        identity = Path(urlparse(source_url).path.removesuffix(".git")).name.lower()
+        requirement = reference["requirement"]
+        if requirement.get("kind") != "revision" or not requirement.get("revision"):
+            raise RuntimeError(f"Swift package must use an exact revision: {identity}")
+        if identity in pins:
+            raise RuntimeError(f"Duplicate Swift package reference: {identity}")
+        pins[identity] = {"location": source_url, "revision": requirement["revision"]}
     if len(records) != len(pins) or {entry["identity"] for entry in records} != pins.keys():
-        raise RuntimeError("Swift package attribution does not cover the resolved package set")
+        raise RuntimeError("Swift package attribution does not cover the project package set")
     for entry in records:
         pin = pins[entry["identity"]]
-        if entry["revision"] != pin["state"]["revision"] or entry["sourceURL"] != pin["location"]:
+        if entry["revision"] != pin["revision"] or entry["sourceURL"] != pin["location"]:
             raise RuntimeError(f"Swift package attribution is stale: {entry['identity']}")
     return records
 

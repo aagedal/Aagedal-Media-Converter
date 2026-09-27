@@ -282,6 +282,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         executionTimeAllowance = 300
         let panes = [
             ("general", "General", "Generelt"),
+            ("agentAccess", "Agent Access", "Agenttilgang"),
             ("encoding", "Encoding Groups", "Kodingsgrupper"),
             ("fileNames", "File Names", "Filnavn"),
             ("metadata", "Metadata", "Metadata"),
@@ -336,6 +337,72 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
                 XCTAssertTrue(waitForSelection(of: row, timeout: 5))
                 attachWindowScreenshot(named: "Locale audit - \(language) - \(identifier)")
             }
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testAgentAccessOptInAndConnectionDiagnosticInBothLanguages() throws {
+        for (language, locale, ready, disabled) in [
+            ("en", "en_US", "Ready", "Disabled"),
+            ("nb", "nb_NO", "Klar", "Deaktivert")
+        ] {
+            launchApp(
+                language: language,
+                locale: locale,
+                resetAgentAccess: true
+            )
+            defer { app.terminate() }
+
+            XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+            app.activate()
+            element("toolbar.settings").click()
+            XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+            let agentAccessTab = element("settings.tab.agentAccess")
+            let agentAccessRow = app.outlineRows.containing(
+                .any,
+                identifier: "settings.tab.agentAccess"
+            ).firstMatch
+            agentAccessTab.click()
+            if !waitForSelection(of: agentAccessRow, timeout: 3) {
+                app.activate()
+                agentAccessTab.click()
+            }
+            XCTAssertTrue(waitForSelection(of: agentAccessRow, timeout: 5))
+
+            let accessToggle = element("settings.agentAccess.enabled")
+            let status = element("settings.agentAccess.connectionStatus")
+            let connectionTest = element("settings.agentAccess.test")
+            XCTAssertTrue(accessToggle.waitForExistence(timeout: 5))
+            XCTAssertTrue(status.waitForExistence(timeout: 5))
+            XCTAssertFalse(connectionTest.isEnabled)
+
+            accessToggle.click()
+            XCTAssertTrue(waitForEnabled(true, of: connectionTest, timeout: 10))
+            XCTAssertTrue(
+                waitForLabelOrValue(ready, of: status, timeout: 10),
+                status.debugDescription
+            )
+            connectionTest.click()
+            XCTAssertTrue(
+                waitForLabelOrValue(ready, of: status, timeout: 10),
+                status.debugDescription
+            )
+            XCTAssertTrue(element("settings.agentAccess.configuration").exists)
+            let clientPicker = element("settings.agentAccess.client")
+            let setup = element("settings.agentAccess.configuration")
+            XCTAssertTrue(clientPicker.exists)
+            for client in ["Claude Desktop", "Claude Code", "Codex", "OpenCode"] {
+                let option = clientPicker.descendants(matching: .any)
+                    .matching(NSPredicate(format: "label == %@", client)).firstMatch
+                XCTAssertTrue(option.waitForExistence(timeout: 5))
+            }
+            XCTAssertTrue(waitForTextContaining("mcpServers", of: setup, timeout: 5))
+            attachWindowScreenshot(named: "Agent Access ready - \(language)")
+
+            accessToggle.click()
+            XCTAssertTrue(waitForLabelOrValue(disabled, of: status, timeout: 5))
+            XCTAssertFalse(connectionTest.isEnabled)
             app.terminate()
         }
     }
@@ -415,6 +482,543 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStitchingRippleShortcutsAndSelectionReset() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        let keyframeMarkers = app.descendants(matching: .any).matching(identifier: "stitching.keyframeMarkers")
+        XCTAssertTrue(keyframeMarkers.allElementsBoundByIndex.allSatisfy {
+            (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) == 0
+        }, "Reencoded timelines must not show Stream Copy keyframe ticks")
+        let timeline = element("group.timeline")
+        let timecode = element("stitching.timecode")
+        func totalFrames() -> Int {
+            let text = (timecode.value as? String) ?? timecode.label
+            let parts = text.components(separatedBy: " / ").last!.split(separator: ":").compactMap { Int($0) }
+            guard parts.count == 4 else { XCTFail("Unexpected timecode: \(text)"); return -1 }
+            return ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * 24 + parts[3]
+        }
+        element("stitching.fit").click()
+        XCTAssertEqual(totalFrames(), 96)
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.05)).click()
+        app.typeKey("q", modifierFlags: [])
+        let afterQ = totalFrames()
+        XCTAssertGreaterThan(afterQ, 48)
+        XCTAssertLessThan(afterQ, 96)
+        element("stitching.fit").click()
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.05)).click()
+        app.typeKey("w", modifierFlags: [])
+        XCTAssertLessThan(totalFrames(), afterQ)
+        element("stitching.fit").click()
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.35)).click()
+        XCUIElement.perform(withKeyModifiers: .shift) {
+            timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.35)).click()
+        }
+        element("stitching.resetTrim").click()
+        XCTAssertEqual(totalFrames(), 288, "Both six-second sources should be fully restored")
+    }
+
+    @MainActor
+    func testStitchingStreamCopyAlwaysShowsKeyframeMarkers() throws {
+        launchApp(generatedFixture: true, defaultPreset: "Stream Copy", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+        XCTAssertFalse(app.checkBoxes["Snap trims and ranges to keyframes"].exists)
+        let markers = app.descendants(matching: .any).matching(identifier: "stitching.keyframeMarkers")
+        let visibleMarkers = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 }
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [visibleMarkers], timeout: 30), .completed,
+                       "Stream Copy must show scanned keyframe ticks")
+        let info = element("stitching.timelineInfo")
+        XCTAssertTrue(info.exists)
+        XCTAssertFalse(element("stitching.requestedCut").exists)
+        info.click()
+        XCTAssertTrue(element("stitching.requestedCut").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("stitching.requestedEnd").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("stitching.seekEstimate").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("stitching.streamCopyBoundaryGuidance").exists)
+        info.click()
+        let timecode = element("stitching.timecode")
+        let duration = (timecode.value as? String) ?? timecode.label
+        XCTAssertEqual((timecode.value as? String) ?? timecode.label, duration)
+        XCTAssertTrue(markers.allElementsBoundByIndex.contains { (Int($0.label.components(separatedBy: ": ").last ?? "") ?? 0) > 0 })
+        func frames(_ text: String) -> Int {
+            let parts = text.split(separator: ":").compactMap { Int($0) }
+            guard parts.count == 4 else { XCTFail("Unexpected timecode: \(text)"); return -1 }
+            return ((parts[0] * 60 + parts[1]) * 60 + parts[2]) * 24 + parts[3]
+        }
+        let initialFrames = frames(String(duration.split(separator: "/").last ?? "").trimmingCharacters(in: .whitespaces))
+        let timeline = element("group.timeline")
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.19, dy: 0.05)).click()
+        let requested = (timecode.value as? String) ?? timecode.label
+        let requestedFrames = frames(String(requested.split(separator: "/").first ?? "").trimmingCharacters(in: .whitespaces))
+        XCTAssertNotEqual(requestedFrames % 12, 0, "The test must request a cut between keyframes")
+        app.typeKey("q", modifierFlags: [])
+        let afterTrim = (timecode.value as? String) ?? timecode.label
+        let removedFrames = initialFrames - frames(String(afterTrim.split(separator: "/").last ?? "").trimmingCharacters(in: .whitespaces))
+        XCTAssertGreaterThan(removedFrames, 0)
+        XCTAssertEqual(removedFrames % 12, 0, "Stream Copy must snap the trim to the fixture's 12-frame GOP")
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "stitching-stream-copy-keyframe-ticks"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
+    func testStitchingRangeDeletionAndUndo() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+        let timecode = element("stitching.timecode")
+        func durationText() -> String {
+            ((timecode.value as? String) ?? timecode.label).components(separatedBy: " / ").last ?? ""
+        }
+        let originalDuration = durationText()
+        element("stitching.rangeTool").click()
+        XCTAssertEqual(String(describing: element("stitching.rangeTool").value ?? ""), "1")
+        // Other desktop apps can open status-item popovers during this test.
+        // Restore focus before synthesizing the timeline drag.
+        app.activate()
+        let rangeSurface = app.descendants(matching: .any).matching(identifier: "stitching.rangeSurface").firstMatch
+        XCTAssertTrue(rangeSurface.waitForExistence(timeout: 5), app.debugDescription)
+        let start = rangeSurface.coordinate(withNormalizedOffset: CGVector(dx: 0.24, dy: 0.4))
+        let end = rangeSurface.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4))
+        // press(forDuration:) sends touch events; the macOS editor needs mouse events.
+        start.click(forDuration: 0.1, thenDragTo: end)
+        XCTAssertTrue(element("stitching.deleteRange").wait(for: \.isEnabled, toEqual: true, timeout: 5), app.debugDescription)
+        XCTAssertEqual(durationText(), originalDuration, "Selecting a range must not trim or reorder clips")
+        element("stitching.clearRange").click()
+        XCTAssertFalse(element("stitching.deleteRange").isEnabled)
+        end.click(forDuration: 0.1, thenDragTo: start)
+        XCTAssertTrue(element("stitching.deleteRange").wait(for: \.isEnabled, toEqual: true, timeout: 5),
+                      "Reverse drags must select the same deletable interval")
+        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        XCTAssertNotEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertNotEqual(durationText(), originalDuration)
+    }
+
+    @MainActor
+    func testStitchingBackspaceDeletesSelectedClipAndUndoRestoresIt() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+        let timeline = element("group.timeline")
+        let timecode = element("stitching.timecode")
+        func durationText() -> String {
+            ((timecode.value as? String) ?? timecode.label).components(separatedBy: " / ").last ?? ""
+        }
+        let originalDuration = durationText()
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.4)).click()
+        app.typeKey(XCUIKeyboardKey.delete, modifierFlags: [])
+        XCTAssertNotEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertNotEqual(durationText(), originalDuration)
+    }
+
+    @MainActor
+    func testStitchingTimelineEditExportsMergedOutput() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        edit.click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+
+        let timecode = element("stitching.timecode")
+        let originalDuration = (timecode.value as? String) ?? timecode.label
+        element("group.timeline").coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.05)).click()
+        app.typeKey("q", modifierFlags: [])
+        XCTAssertNotEqual((timecode.value as? String) ?? timecode.label, originalDuration)
+        element("group.done").click()
+
+        let output = element("group.output")
+        XCTAssertFalse(output.exists)
+        let conversion = element("toolbar.conversion")
+        XCTAssertTrue(waitForEnabled(true, of: conversion, timeout: 5))
+        conversion.click()
+        XCTAssertTrue(output.waitForExistence(timeout: 45), app.debugDescription)
+        XCTAssertTrue(waitForLabel("Start Conversion", of: conversion, timeout: 5))
+    }
+
+    @MainActor
+    func testGeneratedCameraCardReviewImportsGroupInBothLanguages() throws {
+        for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
+            launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC",
+                      language: language, locale: locale, previewContainer: "mp4",
+                      cameraCard: true)
+            let name = element("cameraCard.name")
+            XCTAssertTrue(name.waitForExistence(timeout: 30), app.debugDescription)
+            XCTAssertEqual(name.value as? String, "UI Test Card")
+            let review = element("cameraCard.review")
+            XCTAssertTrue(review.isEnabled)
+            review.click()
+            let proposal = element("cameraCard.review.proposal")
+            XCTAssertTrue(proposal.waitForExistence(timeout: 30), app.debugDescription)
+            XCTAssertTrue(proposal.label.contains("1"), proposal.label)
+            attachWindowScreenshot(named: "Camera card review - \(language)")
+            element("cameraCard.review.import").click()
+            let edit = element("group.edit")
+            XCTAssertTrue(edit.waitForExistence(timeout: 30), app.debugDescription)
+            edit.click()
+            let files = element("group.files")
+            XCTAssertTrue(files.waitForExistence(timeout: 10))
+            XCTAssertTrue(files.staticTexts["C0001.mp4"].exists)
+            XCTAssertTrue(files.staticTexts["C0002.mp4"].exists)
+            XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+            XCTAssertTrue(element("stitching.selectedClip").waitForExistence(timeout: 5))
+            element("group.done").click()
+            terminateAndCleanFixtures()
+        }
+    }
+
+    @MainActor
+    func testStitchingSplitKeepsDurationAndAllowsIndependentTrim() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        element("stitching.fit").click()
+        let timeline = element("group.timeline")
+        let timecode = element("stitching.timecode")
+        func durationText() -> String {
+            ((timecode.value as? String) ?? timecode.label).components(separatedBy: " / ").last ?? ""
+        }
+        let originalDuration = durationText()
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.05)).click()
+        let split = element("stitching.split")
+        XCTAssertTrue(split.isEnabled)
+        app.typeKey("b", modifierFlags: .command)
+        XCTAssertEqual(durationText(), originalDuration)
+        XCTAssertFalse(split.isEnabled, "The new second part starts at the playhead")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertTrue(split.isEnabled, "Undo restores the unsplit source range")
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertFalse(split.isEnabled, "Redo restores the cut")
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.05)).click()
+        app.typeKey("q", modifierFlags: [])
+        XCTAssertNotEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(durationText(), originalDuration)
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertNotEqual(durationText(), originalDuration)
+    }
+
+    @MainActor
+    func testStitchingMarkersCanBeAddedEditedAndDeleted() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("group.edit").waitForExistence(timeout: 30))
+        element("group.edit").click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        app.typeKey("m", modifierFlags: [])
+        XCTAssertTrue(element("stitching.marker").waitForExistence(timeout: 5))
+        app.typeKey("m", modifierFlags: [])
+        let note = element("stitching.markerText")
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.click()
+        app.typeKey("a", modifierFlags: .command)
+        note.typeText("Review music")
+        element("stitching.saveMarker").click()
+        XCTAssertTrue(waitForLabel("Marked: Review music", of: element("stitching.marker"), timeout: 5))
+        element("group.done").click()
+        element("group.edit").click()
+        XCTAssertTrue(element("stitching.marker").waitForExistence(timeout: 10))
+        element("stitching.marker").click()
+        element("stitching.deleteMarker").click()
+        XCTAssertTrue(element("stitching.marker").waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testStitchingColdSeekAndRapidScrub() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: "mp4", stitching: true)
+        defer { terminateAndCleanFixtures() }
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        edit.click()
+        let timeline = element("group.timeline")
+        XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+        element("stitching.fit").click()
+        let early = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.05))
+        let late = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.05))
+        late.click()
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        XCTAssertTrue(waitForValue("ui-test-second.mp4", of: element("stitching.selectedClip"), timeout: 10))
+        // Start on the first clip so the final state proves the drag landed,
+        // rather than merely retaining the preceding cold seek's position.
+        early.click()
+        XCTAssertTrue(waitForValue("ui-test-fixture.mp4", of: element("stitching.selectedClip"), timeout: 10))
+        early.click(forDuration: 0.05, thenDragTo: late)
+        XCTAssertTrue(waitForLabel("native ready", of: element("stitching.preview"), timeout: 30))
+        XCTAssertTrue(waitForValue("ui-test-second.mp4", of: element("stitching.selectedClip"), timeout: 10))
+        let seekLanded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value BEGINSWITH %@", "00:00:03:"),
+            object: element("stitching.timecode")
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [seekLanded], timeout: 5), .completed)
+        attachWindowScreenshot(named: "Dynamic waveform and cold seek")
+        element("group.done").click()
+        XCTAssertTrue(element("stitching.preview").waitForNonExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testStitchingUnavailableSourceStopsAndAllowsRetryInBothLanguages() throws {
+        for (language, locale, pauseLabel) in [("en", "en_US", "Play sequence"), ("nb", "nb_NO", "Spill av sekvens")] {
+            launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", language: language, locale: locale,
+                      previewContainer: "mkv", stitching: true, missingStitchingSource: true)
+            let edit = element("group.edit")
+            XCTAssertTrue(edit.waitForExistence(timeout: 30))
+            edit.click()
+            let preview = element("stitching.preview")
+            let play = element("stitching.play")
+            let selected = element("stitching.selectedClip")
+            XCTAssertTrue(waitForLabel("mpv ready", of: preview, timeout: 30))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.mkv", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("failed", of: preview, timeout: 15))
+            XCTAssertTrue(waitForLabel(pauseLabel, of: play, timeout: 5))
+            XCTAssertEqual(element("stitching.timecode").value as? String, "00:00:02:00 / 00:00:04:00",
+                           "A failed source must remain at its requested in-point, not complete the sequence")
+            let retry = element("preview.retry")
+            XCTAssertTrue(retry.waitForExistence(timeout: 5))
+            XCTAssertTrue(retry.isHittable)
+            attachWindowScreenshot(named: "Stitching unavailable source - \(language)")
+            retry.click()
+            // The file remains unavailable; Retry must show the error again and
+            // never turn failure into successful sequence completion.
+            XCTAssertTrue(waitForLabel("failed", of: preview, timeout: 15))
+            XCTAssertTrue(waitForLabel(pauseLabel, of: play, timeout: 5))
+            XCTAssertEqual(selected.value as? String, "ui-test-second.mkv")
+            element("stitching.fit").click()
+            element("group.timeline").coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.05)).click()
+            XCTAssertTrue(waitForValue("ui-test-fixture.mkv", of: selected, timeout: 5))
+            XCTAssertTrue(waitForLabel("mpv ready", of: preview, timeout: 30))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.mkv", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("failed", of: preview, timeout: 15))
+            XCTAssertTrue(waitForLabel(pauseLabel, of: play, timeout: 5))
+            element("group.done").click()
+            XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+            terminateAndCleanFixtures()
+        }
+    }
+
+    @MainActor
+    func testNativeStitchingSequencePlaybackAndReplay() throws {
+        try exerciseStitchingSequence(container: "mp4", expectedBackend: "AVPlayer")
+    }
+
+    @MainActor
+    func testMPVStitchingSequencePlaybackAndReplay() throws {
+        try exerciseStitchingSequence(container: "mkv", expectedBackend: "MPV")
+    }
+
+    @MainActor
+    func testNativeStitchingPauseAndDismissDuringLoading() throws {
+        try exerciseStitchingDelayedLoad(container: "mp4", backend: "native")
+    }
+
+    @MainActor
+    func testMPVStitchingPauseAndDismissDuringLoading() throws {
+        try exerciseStitchingDelayedLoad(container: "mkv", backend: "mpv")
+    }
+
+    @MainActor
+    private func exerciseStitchingDelayedLoad(container: String, backend: String) throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: container,
+                  stitching: true, delayedStitchingLoad: true)
+        defer { terminateAndCleanFixtures() }
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        let preview = element("stitching.preview")
+        let play = element("stitching.play")
+        let selected = element("stitching.selectedClip")
+        for dismissWhileLoading in [false, true] {
+            edit.click()
+            XCTAssertTrue(waitForLabel("\(backend) ready", of: preview, timeout: 30))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.\(container)", of: selected, timeout: 15))
+            XCTAssertTrue(preview.label.hasSuffix("loading"), "The transition must still be loading")
+            if dismissWhileLoading {
+                element("group.done").click()
+                XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+                edit.click()
+                XCTAssertTrue(waitForLabel("\(backend) ready", of: preview, timeout: 30))
+                // Remain open past the abandoned preparation's delay. It must not
+                // switch sources or start playback in the replacement editor.
+                let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    selected.value as? String != "ui-test-fixture.\(container)" || play.label != "Play sequence"
+                }, object: nil)
+                changed.isInverted = true
+                XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 6), .completed)
+            } else {
+                play.click()
+                XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+                XCTAssertTrue(waitForLabel("\(backend) ready", of: preview, timeout: 30))
+                let backendTime = element("stitching.backendTime")
+                let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let time = Double((backendTime.value as? String) ?? backendTime.label) else { return false }
+                    return abs(time - 2) < 0.15
+                }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed,
+                               "Expected second clip in-point; backend value: \(backendTime.debugDescription)")
+                // Observe the backend clock: the sequence counter deliberately
+                // ignores paused callbacks and alone could hide unwanted playback.
+                let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let time = Double((backendTime.value as? String) ?? backendTime.label) else { return true }
+                    return abs(time - 2) > 0.2
+                }, object: nil)
+                moved.isInverted = true
+                XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 2), .completed)
+                play.click()
+                XCTAssertTrue(waitForValue("00:00:04:00 / 00:00:04:00", of: element("stitching.timecode"), timeout: 15))
+                XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+            }
+            element("group.done").click()
+            XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+        }
+    }
+
+    @MainActor
+    private func exerciseStitchingSequence(container: String, expectedBackend: String) throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", previewContainer: container, stitching: true)
+        defer { terminateAndCleanFixtures() }
+        app.activate()
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 30))
+        for attempt in 0..<2 {
+            edit.click()
+            let timeline = element("group.timeline")
+            XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+            XCTAssertTrue(element("group.files").exists)
+            let preview = element("stitching.preview")
+            XCTAssertTrue(waitForLabel("\(expectedBackend == "AVPlayer" ? "native" : "mpv") ready", of: preview, timeout: 30))
+            let play = element("stitching.play")
+            let selected = element("stitching.selectedClip")
+            let timecode = element("stitching.timecode")
+            XCTAssertTrue(waitForValue("00:00:00:00 / 00:00:04:00", of: timecode, timeout: 10))
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-second.\(container)", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 15))
+            XCTAssertTrue(waitForValue("00:00:04:00 / 00:00:04:00", of: timecode, timeout: 5))
+            // J reverses across the cut and stops at the first trimmed in-point.
+            app.typeText("j")
+            XCTAssertTrue(waitForValue("ui-test-fixture.\(container)", of: selected, timeout: 15))
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 15))
+            XCTAssertTrue(waitForValue("00:00:00:00 / 00:00:04:00", of: timecode, timeout: 5))
+            // K is a pause command, including when already paused. Repeated L speeds up.
+            app.typeText("k")
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+            app.typeText("ll")
+            XCTAssertTrue(waitForValue("1.5×", of: element("stitching.rate"), timeout: 5))
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 15))
+            XCTAssertTrue(waitForValue("00:00:04:00 / 00:00:04:00", of: timecode, timeout: 5))
+            // Replay must seek to the first trimmed in-point after sequence end.
+            play.click()
+            XCTAssertTrue(waitForValue("ui-test-fixture.\(container)", of: selected, timeout: 5))
+            let replayAdvances = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@ AND value != %@",
+                                       "00:00:00:00 / 00:00:04:00", "00:00:04:00 / 00:00:04:00"), object: timecode
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [replayAdvances], timeout: 5), .completed)
+            play.click()
+            XCTAssertTrue(waitForLabel("Play sequence", of: play, timeout: 5))
+            let paused = try XCTUnwrap(timecode.value as? String)
+            let remainsPaused = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value != %@", paused), object: timecode
+            )
+            remainsPaused.isInverted = true
+            XCTAssertEqual(XCTWaiter.wait(for: [remainsPaused], timeout: 1), .completed)
+            attachWindowScreenshot(named: "\(expectedBackend) stitching playback - \(attempt)")
+            element("group.done").click()
+            XCTAssertTrue(preview.waitForNonExistence(timeout: 10))
+        }
+    }
+
+    @MainActor
+    func testNormalTrimHandleHitAreas() throws {
+        launchApp(generatedFixture: true, previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+        app.activate()
+        queueItem.rightClick()
+        app.menuItems["Preview / Trim"].click()
+        XCTAssertTrue(waitForValue("AVPlayer ready", of: element("preview.media"), timeout: 30))
+
+        let timeline = element("trim.timeline")
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        let start = element("trim.timeline.start")
+        let end = element("trim.timeline.end")
+        func waitForTrim(_ seconds: Double, of slider: XCUIElement) -> Bool {
+            let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                guard let value = slider.value as? NSNumber else { return false }
+                return abs(value.doubleValue - seconds) < 0.01
+            }, object: slider)
+            return XCTWaiter.wait(for: [expectation], timeout: 5) == .completed
+        }
+
+        // Grab the transparent padding, not just the two-point visible line.
+        // Edge handles must win over scrubbing even when no trim is set yet.
+        for compact in [false, true] {
+            if compact {
+                element("trim.cropControls").click()
+            }
+            for offset: CGFloat in [-10, 10] {
+                if !compact {
+                    element("trim.reset").click()
+                } else {
+                    app.typeKey("i", modifierFlags: .option)
+                    app.typeKey("o", modifierFlags: .option)
+                }
+                let origin = timeline.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+                let width = timeline.frame.width
+                origin.withOffset(CGVector(dx: 10, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: 10 + width * 0.25, dy: 0)))
+                XCTAssertTrue(waitForTrim(1.5, of: start))
+                XCTAssertTrue(waitForTrim(6.0, of: end))
+
+                origin.withOffset(CGVector(dx: width - 10, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: width * 0.75 - 10, dy: 0)))
+                XCTAssertTrue(waitForTrim(4.5, of: end))
+                XCTAssertTrue(waitForTrim(1.5, of: start))
+
+                // Both sides of an interior handle must adjust that endpoint.
+                origin.withOffset(CGVector(dx: width * 0.25 + offset, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: width * 0.35 + offset, dy: 0)))
+                XCTAssertTrue(waitForTrim(2.1, of: start))
+                XCTAssertTrue(waitForTrim(4.5, of: end))
+
+                origin.withOffset(CGVector(dx: width * 0.75 + offset, dy: 0)).click(forDuration: 0.1, thenDragTo:
+                    origin.withOffset(CGVector(dx: width * 0.65 + offset, dy: 0)))
+                XCTAssertTrue(waitForTrim(3.9, of: end))
+                XCTAssertTrue(waitForTrim(2.1, of: start))
+            }
+            attachWindowScreenshot(named: compact ? "Compact trim handle drag" : "Normal trim handle drag")
+        }
+        element("preview.close").click()
+    }
+
+    @MainActor
     private func exercisePreview(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, previewContainer: container)
         defer { terminateAndCleanFixtures() }
@@ -422,6 +1026,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
 
         for attempt in 0..<2 {
+            app.activate()
             queueItem.rightClick()
             let preview = app.menuItems["Preview / Trim"]
             XCTAssertTrue(preview.waitForExistence(timeout: 5))
@@ -434,8 +1039,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             timecode.click()
             let input = element("trim.timecodeInput")
             XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.click()
+            let audioMeter = element("trim.audioMeter")
+            let meterValue = try XCTUnwrap(audioMeter.value as? NSNumber)
+            // Collapse any automatic initial selection before exercising Select All.
+            input.typeKey(.rightArrow, modifierFlags: [])
             input.typeKey("a", modifierFlags: .command)
             input.typeText("00:00:01:00")
+            XCTAssertTrue(waitForValue("00:00:01:00", of: input, timeout: 5),
+                          "Select All must replace the timecode without triggering preview shortcuts")
+            XCTAssertEqual(audioMeter.value as? NSNumber, meterValue)
             input.typeKey(.return, modifierFlags: [])
             XCTAssertTrue(waitForValue("00:00:01:00", of: timecode, timeout: 10))
             if attempt == 0 {
@@ -497,6 +1110,35 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testRenamesOutputFromDoubleClickAndContextMenu() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC")
+        defer { terminateAndCleanFixtures() }
+
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
+        let outputName = element("queue.item.outputName")
+        XCTAssertTrue(outputName.waitForExistence(timeout: 5))
+
+        outputName.doubleClick()
+        let editor = element("queue.item.outputNameEditor")
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeKey("a", modifierFlags: .command)
+        editor.typeText("double-click-name.mp4")
+        editor.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitForValue("double-click-name.mp4", of: outputName, timeout: 5))
+
+        queueItem.rightClick()
+        let rename = app.menuItems["Rename Output"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        rename.click()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeKey("a", modifierFlags: .command)
+        editor.typeText("context-menu-name.mp4")
+        editor.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitForValue("context-menu-name.mp4", of: outputName, timeout: 5))
+    }
+
+    @MainActor
     func testStartsAndCancelsConversion() throws {
         launchApp(
             generatedFixture: true,
@@ -514,7 +1156,13 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(conversionButton.isEnabled)
         conversionButton.click()
 
-        XCTAssertTrue(waitForValue("converting", of: queueItem, timeout: 10))
+        XCTAssertTrue(
+            waitForValue("converting", of: queueItem, timeout: 10),
+            queueItem.debugDescription
+        )
+        let jobOrigin = element("queue.item.jobOrigin")
+        XCTAssertTrue(jobOrigin.waitForExistence(timeout: 5))
+        XCTAssertEqual(jobOrigin.label, "Manual job")
         XCTAssertTrue(waitForLabel("Cancel Conversion", of: conversionButton, timeout: 5))
         conversionButton.click()
 
@@ -573,7 +1221,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(conversionButton.waitForExistence(timeout: 5))
         conversionButton.click()
 
-        XCTAssertTrue(waitForValue("done", of: queueItem, timeout: 20))
+        XCTAssertTrue(element("queue.item.acceptedSettings").waitForExistence(timeout: 10))
+        element("queue.item.acceptedSettings").click()
+        let acceptedSettings = element("queue.acceptedSettings.text")
+        XCTAssertTrue(acceptedSettings.waitForExistence(timeout: 5))
+        XCTAssertTrue((acceptedSettings.value as? String ?? "").contains("Preset: H.264"))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForValue("done", of: queueItem, timeout: 20),
+            queueItem.debugDescription
+        )
         XCTAssertTrue(waitForLabel("Start Conversion", of: conversionButton, timeout: 5))
         XCTAssertTrue(waitForEnabled(false, of: conversionButton, timeout: 5))
     }
@@ -638,12 +1295,19 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         additionalArguments: [String] = [],
         damagedSchedules: Bool = false,
         damagedHistory: Bool = false,
-        previewContainer: String? = nil
+        previewContainer: String? = nil,
+        stitching: Bool = false,
+        cameraCard: Bool = false,
+        delayedStitchingLoad: Bool = false,
+        missingStitchingSource: Bool = false,
+        resetAgentAccess: Bool = false
     ) {
         app = XCUIApplication()
         app.launchArguments += [
             "-AppleLanguages", "(\(language))",
             "-AppleLocale", locale,
+            // Keep first-launch update permission prompts out of test sessions.
+            "-SUEnableAutomaticChecks", "NO",
             // The installed app and UI-test host share a bundle identifier. Do not
             // inherit a persisted state in which every main window was closed.
             "-ApplePersistenceIgnoreState", "YES",
@@ -652,6 +1316,24 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         ]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        app.launchEnvironment["AMC_UI_TEST_APPLICATION_JOB_STORE_ID"] = UUID().uuidString
+        app.launchEnvironment["AMC_UI_TEST_AGENT_PORT_ID"] = UUID().uuidString
+        if resetAgentAccess {
+            app.launchEnvironment["AMC_UI_TEST_RESET_AGENT_ACCESS"] = "1"
+        }
+        if stitching {
+            app.launchEnvironment["AMC_UI_TEST_STITCHING"] = "1"
+            app.launchEnvironment["AMC_UI_TEST_STITCHING_PRESET"] = defaultPreset
+        }
+        if cameraCard {
+            app.launchEnvironment["AMC_UI_TEST_CAMERA_CARD"] = "1"
+        }
+        if delayedStitchingLoad {
+            app.launchEnvironment["AMC_UI_TEST_DELAY_STITCHING_LOAD"] = "1"
+        }
+        if missingStitchingSource {
+            app.launchEnvironment["AMC_UI_TEST_MISSING_STITCHING_SOURCE"] = "1"
+        }
         if let previewContainer {
             app.launchEnvironment["AMC_UI_TEST_PREVIEW_CONTAINER"] = previewContainer
         }
@@ -704,6 +1386,28 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     @MainActor
     private func waitForLabel(_ label: String, of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let predicate = NSPredicate(format: "label == %@", label)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func waitForLabelOrValue(
+        _ text: String,
+        of element: XCUIElement,
+        timeout: TimeInterval
+    ) -> Bool {
+        let predicate = NSPredicate(format: "label == %@ OR value == %@", text, text)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func waitForTextContaining(
+        _ text: String,
+        of element: XCUIElement,
+        timeout: TimeInterval
+    ) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }

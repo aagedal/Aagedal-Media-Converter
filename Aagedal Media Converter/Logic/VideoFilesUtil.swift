@@ -744,7 +744,7 @@ struct TimecodeConfig: Equatable, Sendable {
 }
 
 struct VideoItem: Identifiable, Equatable, Sendable {
-    let id: UUID = UUID()
+    private(set) var id: UUID = UUID()
     var url: URL
     var name: String
     var size: Int64
@@ -766,6 +766,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var cachedOutputFileSize: Int64? = nil
     var comment: String = ""
     var includeDateTag: Bool = true
+    var timelineMarkers: [StitchTimelineMarker] = []
     var trimStart: Double? = nil
     var trimEnd: Double? = nil
     var loopPlayback: Bool = false
@@ -788,6 +789,13 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var conversionError: String? = nil
     /// Transient status message for multi-phase operations (e.g. "Conforming...", "Merging...")
     var statusMessage: String? = nil
+    /// Identity and origin when this row is owned by the shared application job
+    /// service instead of the legacy view-owned conversion path.
+    var applicationJobID: ApplicationJobID? = nil
+    var applicationJobSourceIndex: Int? = nil
+    var applicationJobOrigin: ApplicationJobOrigin? = nil
+    var applicationPresetID: ApplicationPresetID? = nil
+    var applicationJobSettingsSummary: String? = nil
     /// Whether audio should be muted (removed) in the output
     var isMuted: Bool = false
     /// Image sequence configuration (nil for regular video/audio files)
@@ -863,7 +871,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var subtitleFilePath: URL? = nil
     /// Which method (Whisper or OCR) was chosen by the user for this item
     var subtitleMethod: SubtitleConversionMethod = .whisper
-    /// Absolute stream index of the bitmap subtitle track chosen for OCR. nil = first bitmap track.
+    /// Subtitle-relative stream index of the bitmap subtitle track chosen for OCR. nil = first bitmap track.
     var selectedBitmapSubtitleStreamIndex: Int? = nil
     /// Absolute stream index of the audio track to use for Whisper transcription. nil = default track.
     var selectedAudioStreamIndex: Int? = nil
@@ -944,6 +952,26 @@ struct VideoItem: Identifiable, Equatable, Sendable {
             uploadSpeed = nil
             uploadedRemotePath = nil
         }
+    }
+
+    /// A new timeline instance shares source settings, but never completed job state.
+    func timelineCopy() -> VideoItem {
+        var copy = self
+        copy.id = UUID()
+        copy.resetConversionState()
+        copy.analyticsEnabled = analyticsEnabled
+        copy.outputURL = nil
+        copy.uploadOperationID = nil
+        copy.uploadStatus = .notQueued
+        copy.uploadProgress = 0
+        copy.uploadSpeed = nil
+        copy.uploadedRemotePath = nil
+        copy.subtitleOperationID = nil
+        copy.subtitleStatus = .notQueued
+        copy.subtitleProgress = 0
+        copy.subtitleFilePath = nil
+        copy.timelineMarkers = timelineMarkers.map { StitchTimelineMarker(sourceTime: $0.sourceTime, text: $0.text) }
+        return copy
     }
 
     /// Clears user-configured per-item settings (trim, crop, audio routing, mute, comment, etc.).

@@ -57,25 +57,29 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
 
         if let existing = currentWindow {
             hostingView?.rootView = content
+            fitWindowToScreen(existing)
             existing.makeKeyAndOrderFront(nil)
             return
         }
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: 1120, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = String(localized: "Edit Group")
-        window.minSize = NSSize(width: 560, height: 400)
+        window.minSize = NSSize(width: 960, height: 700)
         window.isReleasedWhenClosed = false
         window.delegate = self
-        // Persist window size/position across opens. Xcode stores the frame in
+        // Persist window size/position across opens. AppKit stores the frame in
         // UserDefaults under this autosave name automatically.
         window.setFrameAutosaveName("GroupEditorWindow")
 
         let hosting = NSHostingView(rootView: content)
+        // The resizable window owns the layout size. In particular, the preview's
+        // intrinsic/ideal size must not expand the window when media loads.
+        hosting.sizingOptions = []
         hosting.autoresizingMask = [.width, .height]
         hosting.frame = window.contentView?.bounds ?? .zero
         window.contentView = hosting
@@ -85,6 +89,8 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
             positionNextToMainWindow(window)
         }
 
+        // Repair oversized saved frames, including those from a larger display.
+        fitWindowToScreen(window)
         currentWindow = window
         hostingView = hosting
         window.makeKeyAndOrderFront(nil)
@@ -117,6 +123,13 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
         hostingView = nil
     }
 
+    private func fitWindowToScreen(_ window: NSWindow) {
+        guard let screen = window.screen ?? NSApp.mainWindow?.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame
+        window.minSize = NSSize(width: min(960, visible.width), height: min(700, visible.height))
+        window.setFrame(GroupEditorWindowLayout.fittedFrame(window.frame, within: visible), display: true)
+    }
+
     private func positionNextToMainWindow(_ window: NSWindow) {
         guard let main = NSApp.mainWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else {
             window.center()
@@ -132,6 +145,21 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
             origin.y = max(sf.minY, min(origin.y, sf.maxY - size.height))
         }
         window.setFrameOrigin(origin)
+    }
+}
+
+/// Keep both new and restored windows inside the usable screen area, excluding
+/// the menu bar and Dock. Preserve a valid user-selected size and position.
+enum GroupEditorWindowLayout {
+    static func fittedFrame(_ frame: NSRect, within visible: NSRect) -> NSRect {
+        let width = min(frame.width, visible.width)
+        let height = min(frame.height, visible.height)
+        return NSRect(
+            x: min(max(frame.minX, visible.minX), visible.maxX - width),
+            y: min(max(frame.minY, visible.minY), visible.maxY - height),
+            width: width,
+            height: height
+        )
     }
 }
 
@@ -232,6 +260,8 @@ struct GroupEditorView: View {
     var onClose: () -> Void
     var onTitleChange: (String) -> Void
 
+    @State private var selectedClipIDs: Set<UUID> = []
+
     private var effectivePreset: ExportPreset { group.preset ?? globalPreset }
 
     private var sortBinding: Binding<GroupEditorSortMode> {
@@ -244,8 +274,17 @@ struct GroupEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+                .disabled(group.status == .converting)
             Divider()
-            itemList
+            if group.concatEnabled {
+                StitchingEditorView(group: $group, isStreamCopy: effectivePreset == .streamCopy,
+                                    selectedClipIDs: $selectedClipIDs) {
+                    itemList
+                }
+            } else {
+                itemList
+                    .disabled(group.status == .converting)
+            }
             Divider()
             footer
         }
@@ -280,7 +319,7 @@ struct GroupEditorView: View {
     }
 
     private var itemList: some View {
-        List {
+        List(selection: $selectedClipIDs) {
             ForEach(group.items) { item in
                 GroupEditorRow(
                     item: item,
@@ -296,11 +335,13 @@ struct GroupEditorView: View {
                     onPlayFullscreen: { onPlayFullscreen(item.id) },
                     onOpenMetadata: { onOpenMetadata([item.id]) }
                 )
+                .tag(item.id)
                 .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
             }
             .onMove(perform: moveItems)
         }
         .listStyle(.plain)
+        .accessibilityIdentifier("group.files")
     }
 
     private var footer: some View {
@@ -317,7 +358,9 @@ struct GroupEditorView: View {
             .labelsHidden()
             .frame(maxWidth: 220)
             .help("Sort items in the group")
+            .disabled(group.status == .converting)
             Button("Done", action: onClose)
+                .accessibilityIdentifier("group.done")
                 .keyboardShortcut(.defaultAction)
         }
         .padding(12)
@@ -551,8 +594,35 @@ private struct GroupEditorRow: View {
     }
 
     private var metadataRow: some View {
+        ViewThatFits(in: .horizontal) {
+            fullMetadataRow.fixedSize(horizontal: true, vertical: false)
+            HStack(spacing: 6) {
+                Text(item.duration)
+                if item.trimStart != nil || item.trimEnd != nil {
+                    Image(systemName: "scissors")
+                        .foregroundColor(.accentColor)
+                        .accessibilityLabel("Trimmed")
+                        .help("Kept: \(item.trimmedDuration.formatted(.number.precision(.fractionLength(2)))) seconds")
+                }
+                if let res = videoResolution {
+                    Text("•")
+                    Text(res)
+                }
+            }
+            .font(.system(size: 10))
+            .foregroundColor(.secondary)
+            .lineLimit(1)
+        }
+    }
+
+    private var fullMetadataRow: some View {
         HStack(spacing: 6) {
             Text(item.duration)
+            if item.trimStart != nil || item.trimEnd != nil {
+                Label("Trimmed", systemImage: "scissors")
+                    .foregroundColor(.accentColor)
+                    .help("Kept: \(item.trimmedDuration.formatted(.number.precision(.fractionLength(2)))) seconds")
+            }
             if let res = videoResolution {
                 Text("•")
                 Text(res)

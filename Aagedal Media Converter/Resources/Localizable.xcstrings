@@ -1,226 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Optional tool — not installed": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Valgfritt verktøy — ikke installert"
-          }
-        }
-      }
-    },
-    "Parakeet is optional and only needed for Parakeet transcription. Install uv using the linked instructions, then run this command in Terminal:": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Parakeet er valgfritt og trengs bare for Parakeet-transkripsjon. Installer uv ved hjelp av veiledningen i lenken, og kjør deretter denne kommandoen i Terminal:"
-          }
-        }
-      }
-    },
-    "Install uv": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Installer uv"
-          }
-        }
-      }
-    },
-    "Parakeet installation instructions": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Installasjonsveiledning for Parakeet"
-          }
-        }
-      }
-    },
-    "In Transcription settings, select Parakeet. If it is installed elsewhere, use Custom path to select parakeet-mlx. Download a model before transcribing.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Velg Parakeet i transkripsjonsinnstillingene. Hvis det er installert et annet sted, bruker du Egendefinert sti til å velge parakeet-mlx. Last ned en modell før du transkriberer."
-          }
-        }
-      }
-    },
-    "Open Transcription Settings": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Åpne transkripsjonsinnstillinger"
-          }
-        }
-      }
-    },
-    "SSIMULACRA2 is optional and only needed for its quality metric. Install Rust using the linked instructions, then run this command in Terminal:": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SSIMULACRA2 er valgfritt og trengs bare for dette kvalitetsmålet. Installer Rust ved hjelp av veiledningen i lenken, og kjør deretter denne kommandoen i Terminal:"
-          }
-        }
-      }
-    },
-    "Install Rust": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Installer Rust"
-          }
-        }
-      }
-    },
-    "SSIMULACRA2 installation instructions": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Installasjonsveiledning for SSIMULACRA2"
-          }
-        }
-      }
-    },
-    "The app looks for ssimulacra2_rs in ~/.cargo/bin, /opt/homebrew/bin, and /usr/local/bin. Standard conversions do not require this tool.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Appen ser etter ssimulacra2_rs i ~/.cargo/bin, /opt/homebrew/bin og /usr/local/bin. Vanlige konverteringer krever ikke dette verktøyet."
-          }
-        }
-      }
-    },
-    "Open Analytics Settings": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Åpne analyseinnstillinger"
-          }
-        }
-      }
-    },
-    "Only Parakeet transcription needs this model. In Transcription settings, select Parakeet, install its tool if needed, then download the selected model or choose an available model.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bare Parakeet-transkripsjon trenger denne modellen. Velg Parakeet i transkripsjonsinnstillingene, installer verktøyet om nødvendig, og last deretter ned den valgte modellen eller velg en tilgjengelig modell."
-          }
-        }
-      }
-    },
-    "In Transcription settings, select Whisper and download the selected model. For a custom model, select the file again to restore access, or choose an available model.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Velg Whisper i transkripsjonsinnstillingene og last ned den valgte modellen. For en egendefinert modell velger du filen på nytt for å gjenopprette tilgang, eller velger en tilgjengelig modell."
-          }
-        }
-      }
-    },
-    "In Downloads settings, choose App Download and install or update the tool. For Homebrew, follow the installation instructions there; for Custom, select an executable file again.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Velg App-nedlasting i nedlastingsinnstillingene og installer eller oppdater verktøyet. For Homebrew følger du installasjonsveiledningen der. For Egendefinert velger du en kjørbar fil på nytt."
-          }
-        }
-      }
-    },
-    "Open Downloads Settings": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Åpne nedlastingsinnstillinger"
-          }
-        }
-      }
-    },
-    "In Upload settings, select App (Bundled) for rclone. If using Homebrew or Custom, check the selected installation and executable path.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Velg App (inkludert) for rclone i opplastingsinnstillingene. Hvis du bruker Homebrew eller Egendefinert, kontrollerer du den valgte installasjonen og stien til den kjørbare filen."
-          }
-        }
-      }
-    },
-    "Open Upload Settings": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Åpne opplastingsinnstillinger"
-          }
-        }
-      }
-    },
-    "In OCR settings, select the bundled Tesseract or select an installed custom executable. If the bundled tool is unavailable, reinstall the app.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Velg den inkluderte Tesseract-versjonen i OCR-innstillingene, eller velg en installert egendefinert kjørbar fil. Installer appen på nytt hvis det inkluderte verktøyet ikke er tilgjengelig."
-          }
-        }
-      }
-    },
-    "Open OCR Settings": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Åpne OCR-innstillinger"
-          }
-        }
-      }
-    },
-    "In Downloads settings, select the bundled FFmpeg or select an installed custom executable. If the bundled tool is unavailable, reinstall the app.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Velg den inkluderte FFmpeg-versjonen i nedlastingsinnstillingene, eller velg en installert egendefinert kjørbar fil. Installer appen på nytt hvis det inkluderte verktøyet ikke er tilgjengelig."
-          }
-        }
-      }
-    },
-    "This helper is bundled with the app. Reinstall the app if it is missing or incompatible.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dette hjelpeverktøyet følger med appen. Installer appen på nytt hvis det mangler eller er inkompatibelt."
-          }
-        }
-      }
-    },
-    "After making changes, return here and click Check Tools again.": {
-      "localizations": {
-        "nb": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Når du har gjort endringer, går du tilbake hit og klikker på Kontroller verktøy på nytt."
-          }
-        }
-      }
-    },
     "" : {
       "shouldTranslate" : false
     },
@@ -675,6 +455,18 @@
         }
       }
     },
+    "%lld clips selected" : {
+      "comment" : "A label showing the number of clips selected in the timeline. The argument is the number of clips selected.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld klipp valgt"
+          }
+        }
+      }
+    },
     "%lld days" : {
       "comment" : "A menu item that lets the user select the number of days after which old encoded files should be automatically deleted.",
       "isCommentAutoGenerated" : true,
@@ -683,6 +475,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld dager"
+          }
+        }
+      }
+    },
+    "%lld dBFS" : {
+      "comment" : "A string that describes the audio level in decibels (dB) of a source audio meter.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld dBFS"
           }
         }
       }
@@ -831,6 +635,16 @@
         }
       }
     },
+    "%lld×" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld×"
+          }
+        }
+      }
+    },
     "%lldch %@" : {
       "comment" : "A label displaying the audio format and channel count of a video stream.",
       "isCommentAutoGenerated" : true,
@@ -974,6 +788,19 @@
           }
         }
       }
+    },
+    "−20" : {
+      "shouldTranslate" : false
+    },
+    "−40" : {
+      "comment" : "A label for the 40 dBFS mark on the audio meter.",
+      "isCommentAutoGenerated" : true,
+      "shouldTranslate" : false
+    },
+    "−60" : {
+      "comment" : "A label for the lowest dBFS value.",
+      "isCommentAutoGenerated" : true,
+      "shouldTranslate" : false
     },
     "⌃M to toggle" : {
       "comment" : "A hint text displayed next to the mute toggle, explaining how to toggle the mute state using the keyboard shortcut.",
@@ -1408,6 +1235,16 @@
         }
       }
     },
+    "A multi-file recording has incompatible or incomplete format metadata. Resolve its continuation marks or import the card without date splitting." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Et opptak med flere filer har ulike eller ufullstendige formatmetadata. Rett merkene for fortsettelse, eller importer kortet uten datodeling."
+          }
+        }
+      }
+    },
     "AAC is widely compatible. PCM is uncompressed lossless." : {
       "localizations" : {
         "nb" : {
@@ -1484,6 +1321,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Om Parakeet"
+          }
+        }
+      }
+    },
+    "Accepted conversion settings" : {
+      "comment" : "Title of a popover showing the accepted conversion settings for a video file.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjente konverteringsinnstillinger"
           }
         }
       }
@@ -1629,6 +1478,16 @@
         }
       }
     },
+    "Add a marker at the playhead (M). Click a timeline marker to edit its note." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til en markør ved avspillingshodet (M). Klikk på en markør i tidslinjen for å redigere notatet."
+          }
+        }
+      }
+    },
     "Add every video from the playlist or channel as separate queue items (downloads run sequentially)" : {
       "localizations" : {
         "nb" : {
@@ -1709,6 +1568,18 @@
         }
       }
     },
+    "Add files to start stitching." : {
+      "comment" : "A description of the content of a view that appears when the user has not added any clips to a stitching session.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til filer for å begynne å slå sammen klipp."
+          }
+        }
+      }
+    },
     "Add profile" : {
       "comment" : "Add/delete buttons for FTP profiles.",
       "isCommentAutoGenerated" : true,
@@ -1733,6 +1604,16 @@
         }
       }
     },
+    "Add Source Folder…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til kildemappe …"
+          }
+        }
+      }
+    },
     "Add the selected video files to the Aagedal VideoLoop Converter queue." : {
       "comment" : "Description of the \"Add to Encode Queue\" app intent.",
       "isCommentAutoGenerated" : true,
@@ -1753,6 +1634,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Legg de valgte videofilene til i køen, sett utdatamappen til samme mappe, og start konvertering."
+          }
+        }
+      }
+    },
+    "Add this entry to your opencode.json configuration, then restart OpenCode. Keep the app installed at the same location." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til denne oppføringen i opencode.json-konfigurasjonen, og start deretter OpenCode på nytt. Behold appen på samme sted."
+          }
+        }
+      }
+    },
+    "Add this stdio server to a local MCP client. Keep the app installed at the same location after configuring the client." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til denne stdio-serveren i en lokal MCP-klient. La appen være installert på samme sted etter at klienten er konfigurert."
           }
         }
       }
@@ -1823,6 +1724,37 @@
         }
       }
     },
+    "After making changes, return here and click Check Tools again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når du har gjort endringer, går du tilbake hit og klikker på Kontroller verktøy på nytt."
+          }
+        }
+      }
+    },
+    "Agent" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent"
+          }
+        }
+      }
+    },
+    "Agent Access" : {
+      "comment" : "Settings sidebar tab.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agenttilgang"
+          }
+        }
+      }
+    },
     "All audio will be removed from output" : {
       "comment" : "A description of what happens when the \"Mute Audio\" toggle is turned on.",
       "isCommentAutoGenerated" : true,
@@ -1868,6 +1800,27 @@
         }
       }
     },
+    "Allow anonymous usage count" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tillat anonym brukstelling"
+          }
+        }
+      }
+    },
+    "Allow local MCP clients to use Aagedal Media Converter" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tillat lokale MCP-klienter å bruke Aagedal Media Converter"
+          }
+        }
+      }
+    },
     "Allow private network downloads" : {
       "comment" : "A toggle that allows or disallows downloading from private networks.",
       "isCommentAutoGenerated" : true,
@@ -1904,12 +1857,33 @@
         }
       }
     },
+    "Also split after gaps longer than two hours" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del også ved opphold på mer enn to timer"
+          }
+        }
+      }
+    },
     "Alternative: Install via Homebrew (Recommended)" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alternativ: Installer via Homebrew (anbefalt)"
+          }
+        }
+      }
+    },
+    "An anonymous count helps us understand whether Aagedal Media Converter is being used and guides development. If you allow it, this Mac sends one random weekly token at most once per day when the app opens." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En anonym telling hjelper oss å forstå om Aagedal Media Converter blir brukt, og gir retning for utviklingen. Hvis du tillater det, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes."
           }
         }
       }
@@ -1961,6 +1935,30 @@
         }
       }
     },
+    "Analyze Whole File" : {
+      "comment" : "A button that analyzes a file for loudness.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyser hele filen"
+          }
+        }
+      }
+    },
+    "Analyzing…" : {
+      "comment" : "The text on a button that is disabled while analyzing.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyserer…"
+          }
+        }
+      }
+    },
     "Animated Still" : {
       "comment" : "Short title for the animated still conversion action.",
       "isCommentAutoGenerated" : true,
@@ -1989,6 +1987,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Merknad"
+          }
+        }
+      }
+    },
+    "Anonymous usage count" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anonym brukstelling"
           }
         }
       }
@@ -2085,11 +2094,22 @@
       }
     },
     "Apple ProRes video in MXF (App #5). PCM audio with MCA labels. CPL/PKL/ASSETMAP manifests." : {
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apple ProRes-video i MXF (App #5). PCM-lyd med MCA-merkelapper. CPL/PKL/ASSETMAP-manifester."
+          }
+        }
+      }
+    },
+    "Apple ProRes video in MXF (RDD 45). PCM audio and CPL/PKL/ASSETMAP manifests." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple ProRes-video i MXF (RDD 45). PCM-lyd og CPL/PKL/ASSETMAP-manifester."
           }
         }
       }
@@ -2176,6 +2196,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bekreft beskjæring"
+          }
+        }
+      }
+    },
+    "Approve Folder" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjenn mappe"
+          }
+        }
+      }
+    },
+    "Approved source folders" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjente kildemapper"
           }
         }
       }
@@ -2305,6 +2345,18 @@
         }
       }
     },
+    "Audio presentation" : {
+      "comment" : "A label for the audio presentation picker.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lydpresentasjon"
+          }
+        }
+      }
+    },
     "Audio Routing View" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2312,6 +2364,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lydruting"
+          }
+        }
+      }
+    },
+    "Audio routing: %@" : {
+      "comment" : "Accepted conversion settings summary: audio routing operation.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lydruting: %@"
           }
         }
       }
@@ -2348,6 +2411,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lydbølge"
+          }
+        }
+      }
+    },
+    "Audio waveform for %@" : {
+      "comment" : "A waveform of the audio for a given item.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lydbølgeform for %@"
+          }
+        }
+      }
+    },
+    "Audio: %@" : {
+      "comment" : "Accepted conversion settings summary: audio codec and bitrate.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyd: %@"
+          }
+        }
+      }
+    },
+    "Audio: Muted" : {
+      "comment" : "Accepted conversion settings summary: audio is muted.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyd: Dempet"
           }
         }
       }
@@ -3091,6 +3188,16 @@
         }
       }
     },
+    "By default, stitched output starts at the first clip’s source timecode plus its trim-in offset. Enable this to use its original starting timecode. Manual timecode is always used exactly as entered." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Som standard starter sammenføyd video på det første klippets kildetidskode pluss inntrimforskyvningen. Slå på dette for å bruke klippets opprinnelige starttidskode. Manuell tidskode brukes alltid nøyaktig som angitt."
+          }
+        }
+      }
+    },
     "Cached models: %lld" : {
       "comment" : "A label that shows the number of cached models. The argument is the number of cached models.",
       "isCommentAutoGenerated" : true,
@@ -3275,6 +3382,17 @@
         }
       }
     },
+    "Captured: %@" : {
+      "comment" : "Accepted conversion settings summary: time the immutable settings were captured.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Innstillinger hentet: %@"
+          }
+        }
+      }
+    },
     "Captures the selected display at native resolution with system audio. Preset and output folder are managed in Settings > Screen Capture." : {
       "comment" : "A footer note explaining the functionality of the capture mode view.",
       "isCommentAutoGenerated" : true,
@@ -3381,6 +3499,24 @@
         }
       }
     },
+    "Channel %lld: %@" : {
+      "comment" : "A tooltip that describes the audio channel and its dBFS level.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Channel %1$lld: %2$@"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kanal %lld: %@"
+          }
+        }
+      }
+    },
     "Channel Operations" : {
       "comment" : "A label displayed above the section of the audio routing view related to channel operations.",
       "isCommentAutoGenerated" : true,
@@ -3389,6 +3525,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kanaloperasjoner"
+          }
+        }
+      }
+    },
+    "Channels 1–8 of %lld" : {
+      "comment" : "A label that shows the number of audio channels in the stream and that is visible when the number of channels exceeds 8.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kanal 1–8 av %lld"
           }
         }
       }
@@ -3513,6 +3661,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sjekker …"
+          }
+        }
+      }
+    },
+    "Choose a folder whose files and subfolders local MCP clients may read." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg en mappe der lokale MCP-klienter kan lese filene og undermappene."
           }
         }
       }
@@ -3680,6 +3838,16 @@
         }
       }
     },
+    "Clear range" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern områdemarkering"
+          }
+        }
+      }
+    },
     "Clear soundfield" : {
       "comment" : "A button that clears the soundfield label for a track.",
       "isCommentAutoGenerated" : true,
@@ -3688,6 +3856,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tøm lydfelt"
+          }
+        }
+      }
+    },
+    "Clear the selected range (⌥X or Escape)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern områdemarkeringen (⌥X eller Escape)"
           }
         }
       }
@@ -3710,6 +3888,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fjern trimmens startpunkt (tilbakestill til begynnelsen)"
+          }
+        }
+      }
+    },
+    "Click a mono meter to listen to that track. All mono meters remain visible." : {
+      "comment" : "A description of the audio track selection.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klikk på en monomåler for å lytte til det sporet. Alle monomålere forblir synlige."
           }
         }
       }
@@ -4023,6 +4213,17 @@
         }
       }
     },
+    "Comment: %@" : {
+      "comment" : "Accepted conversion settings summary: embedded comment.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kommentar: %@"
+          }
+        }
+      }
+    },
     "Compact mode hides comment fields, file sizes, and duration to show more items at once. Action buttons appear in a row under each filename." : {
       "comment" : "A description of the compact view mode in the general settings view.",
       "isCommentAutoGenerated" : true,
@@ -4162,6 +4363,16 @@
         }
       }
     },
+    "Connection" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilkobling"
+          }
+        }
+      }
+    },
     "Connection successful" : {
       "comment" : "A success message displayed when a test connection to the FTP server is successful.",
       "isCommentAutoGenerated" : true,
@@ -4206,6 +4417,17 @@
         }
       }
     },
+    "Container: %@" : {
+      "comment" : "Accepted conversion settings summary: output container.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konteiner: %@"
+          }
+        }
+      }
+    },
     "Content Kind" : {
       "localizations" : {
         "nb" : {
@@ -4222,6 +4444,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Innholdstittel"
+          }
+        }
+      }
+    },
+    "Continues previous recording" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortsetter forrige opptak"
           }
         }
       }
@@ -4666,12 +4898,23 @@
     },
     "Convert to IMF (App 5 — ProRes)" : {
       "comment" : "Title of a Shortcuts action that converts the selected videos to an IMF (Apple ProRes) file.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Konverter til IMF (App 5 — ProRes)"
+          }
+        }
+      }
+    },
+    "Convert to IMF (RDD 45 — ProRes)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konverter til IMF (RDD 45 — ProRes)"
           }
         }
       }
@@ -4794,6 +5037,17 @@
         }
       }
     },
+    "Copy Configuration" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopier konfigurasjon"
+          }
+        }
+      }
+    },
     "Copy diagnostics" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4825,6 +5079,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kopier filsti til sammenslått utdata"
+          }
+        }
+      }
+    },
+    "Copy Setup" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopier oppsett"
           }
         }
       }
@@ -4911,6 +5175,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kunne ikke importere FileZilla-fil"
+          }
+        }
+      }
+    },
+    "Could not save folder access" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke lagre mappetilgang"
+          }
+        }
+      }
+    },
+    "Could not start" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke starte"
           }
         }
       }
@@ -5046,6 +5330,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beskjæringsbredde"
+          }
+        }
+      }
+    },
+    "Crop: %@" : {
+      "comment" : "Accepted conversion settings summary: crop is enabled.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beskjæring: %@"
           }
         }
       }
@@ -5248,6 +5543,16 @@
         }
       }
     },
+    "Custom tracks" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Egendefinerte spor"
+          }
+        }
+      }
+    },
     "Custom yt-dlp path:" : {
       "localizations" : {
         "nb" : {
@@ -5385,6 +5690,27 @@
         }
       }
     },
+    "Date tag: %@" : {
+      "comment" : "Accepted conversion settings summary: filename date tag.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datomerking: %@"
+          }
+        }
+      }
+    },
+    "Date unknown" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ukjent dato"
+          }
+        }
+      }
+    },
     "Date:" : {
       "comment" : "A label for the date of the report.",
       "isCommentAutoGenerated" : true,
@@ -5393,6 +5719,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dato:"
+          }
+        }
+      }
+    },
+    "Dates use %@. Camera dates take precedence over container dates. Files without either date stay together in their own consecutive groups. Mark every segment that continues the recording above it before importing." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datoer bruker tidssonen %@. Kameradatoer går foran containerdatoer. Filer uten noen av datoene holdes samlet i egne sammenhengende grupper. Merk hvert segment som fortsetter opptaket over før du importerer."
           }
         }
       }
@@ -5721,6 +6057,16 @@
         }
       }
     },
+    "Delete" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slett"
+          }
+        }
+      }
+    },
     "Delete All Cached Models" : {
       "comment" : "A button to delete all cached models.",
       "isCommentAutoGenerated" : true,
@@ -5803,6 +6149,26 @@
         }
       }
     },
+    "Delete range" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slett område"
+          }
+        }
+      }
+    },
+    "Delete selected clips" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slett valgte klipp"
+          }
+        }
+      }
+    },
     "deno (JavaScript Runtime)" : {
       "comment" : "The header for the \"deno (JavaScript Runtime)\" section in the YTDL+ settings view.",
       "isCommentAutoGenerated" : true,
@@ -5862,6 +6228,28 @@
         }
       }
     },
+    "Destination: %@" : {
+      "comment" : "Accepted conversion settings summary: output folder.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Målmappe: %@"
+          }
+        }
+      }
+    },
+    "Destination: Per source" : {
+      "comment" : "Accepted conversion settings summary: each source has its own output folder.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Målmappe: Per kilde"
+          }
+        }
+      }
+    },
     "Developer Website" : {
       "localizations" : {
         "en" : {
@@ -5890,6 +6278,16 @@
         }
       }
     },
+    "Disabled" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deaktivert"
+          }
+        }
+      }
+    },
     "Disabled while Merge is on — turn off Merge to enable sequential naming" : {
       "comment" : "Tooltip shown when sequential naming is enabled but Merge is on.",
       "isCommentAutoGenerated" : true,
@@ -5910,6 +6308,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Deaktivert mens Sekvensiell navngivning er på — slå den av for å aktivere Sammenslåing"
+          }
+        }
+      }
+    },
+    "Disabling" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deaktivering"
           }
         }
       }
@@ -6001,6 +6409,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ikke fjern noen tegn"
+          }
+        }
+      }
+    },
+    "Don't send data" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke send data"
           }
         }
       }
@@ -6275,6 +6694,19 @@
         }
       }
     },
+    "Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub." : {
+      "comment" : "A description of how to interact with the timeline.",
+      "extractionState" : "stale",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra klipp for å endre rekkefølgen. Skift-klikk velger et område; ⌘-klikk velger eller fjerner enkeltklipp. Dra en kant for å trimme, eller dra på tidslinjalen for å spole."
+          }
+        }
+      }
+    },
     "Drag last screenshot to another app" : {
       "comment" : "A tooltip for the draggable icon in the trim controls, explaining its function.",
       "isCommentAutoGenerated" : true,
@@ -6283,6 +6715,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dra det siste skjermbildet til en annen app"
+          }
+        }
+      }
+    },
+    "Drag the ruler to scrub, clip edges to trim, or clips to reorder. Command-drag selects a time range; Shift-click selects multiple clips; ⌘-click toggles a clip. Pinch to zoom. Later clips close the gap after trimming." : {
+      "comment" : "A description of the user interface for the timeline.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra i linjalen for å spole, i klippkanter for å trimme eller i klipp for å endre rekkefølgen. Kommando-dra velger et tidsområde; Skift-klikk velger flere klipp; ⌘-klikk veksler valget av et klipp. Knip for å zoome. Senere klipp lukker mellomrommet etter trimming."
+          }
+        }
+      }
+    },
+    "Drag to move. Shift-click to select a range; ⌘-click to toggle selection." : {
+      "comment" : "A tooltip for the handle on a timeline.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra for å flytte. Skift-klikk for å velge et område; ⌘-klikk for å velge eller fjerne et klipp."
           }
         }
       }
@@ -6319,6 +6775,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dra for å dele den sammenslåtte filen"
+          }
+        }
+      }
+    },
+    "Drag to trim the end" : {
+      "comment" : "A description of how to drag to trim the end of a clip.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra for å trimme slutten"
+          }
+        }
+      }
+    },
+    "Drag to trim the start" : {
+      "comment" : "A description of how to drag to trim the start of a clip.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra for å trimme starten"
+          }
+        }
+      }
+    },
+    "Drag within a clip · Backspace: delete range · ⌥X: clear" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra innenfor et klipp · Slettetast: slett område · ⌥X: fjern markering"
+          }
+        }
+      }
+    },
+    "Drag within a clip · Backspace: delete selection · ⌥X: clear range" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra i et klipp · Slettetast: slett utvalg · ⌥X: opphev områdevalg"
+          }
+        }
+      }
+    },
+    "DVD subtitle color palette is invalid. OCR requires 16 comma-separated RGB colors with six hexadecimal digits each." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DVD-undertekstenes fargepalett er ugyldig. OCR krever 16 kommaseparerte RGB-farger med seks heksadesimale sifre hver."
+          }
+        }
+      }
+    },
+    "DVD subtitle color palette is missing. OCR requires the original 16-color palette; use a source that includes it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DVD-undertekstenes fargepalett mangler. OCR krever den opprinnelige paletten med 16 farger. Bruk en kilde som inneholder den."
           }
         }
       }
@@ -6363,6 +6884,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "f.eks. PG-13"
+          }
+        }
+      }
+    },
+    "Edit clip order and trim ranges" : {
+      "comment" : "A toggle that allows the user to edit the order of clips and trim ranges in a group.",
+      "extractionState" : "stale",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rediger klipprekkefølge og trimområder"
           }
         }
       }
@@ -6462,6 +6996,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rediger under opptak med maksimal kompatibilitet. Maskinvarekodet H.264, fragmentert .mov."
+          }
+        }
+      }
+    },
+    "Editing directly from removable media can be slow, especially for long recordings. For smoother editing, copy the card to local storage first. You can also continue importing from the card." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redigering direkte fra flyttbare medier kan være tregt, særlig for lange opptak. Kopier kortet til lokal lagring først for jevnere redigering. Du kan også fortsette å importere fra kortet."
           }
         }
       }
@@ -6727,6 +7271,16 @@
         }
       }
     },
+    "Encode the selected videos with the experimental IMF RDD 45 (ProRes) preset, saving alongside the source files and starting conversion immediately." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konverter de valgte videoene med den eksperimentelle IMF RDD 45-forhåndsinnstillingen (ProRes). Resultatet lagres sammen med kildefilene, og konverteringen starter umiddelbart."
+          }
+        }
+      }
+    },
     "Encode the selected videos with the H.264 / AVC preset, saving alongside the source files and starting conversion immediately." : {
       "comment" : "Description of the intent to encode videos with the H.264 / AVC preset.",
       "isCommentAutoGenerated" : true,
@@ -6765,6 +7319,7 @@
     },
     "Encode the selected videos with the IMF App 5 (ProRes) preset, saving alongside the source files and starting conversion immediately." : {
       "comment" : "Description of the intent to encode videos with the IMF App 5 (ProRes) preset.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "nb" : {
@@ -6887,6 +7442,17 @@
         }
       }
     },
+    "Encoding speed: %@" : {
+      "comment" : "Accepted conversion settings summary: encoding speed.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodehastighet: %@"
+          }
+        }
+      }
+    },
     "Endpoint" : {
       "comment" : "A label for the S3 endpoint.",
       "isCommentAutoGenerated" : true,
@@ -6919,6 +7485,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Motor:"
+          }
+        }
+      }
+    },
+    "Enlarge the waveform visually. Playback and export volume are unchanged. Choose 1× to reset." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forstørr visningen av bølgeformen. Lydnivået ved avspilling og eksport endres ikke. Velg 1× for å tilbakestille."
           }
         }
       }
@@ -6980,6 +7556,16 @@
         }
       }
     },
+    "Estimated seek point: %@ (%@ s earlier). Export can differ." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anslått søkepunkt: %@ (%@ s tidligere). Eksporten kan avvike."
+          }
+        }
+      }
+    },
     "ETA: %@" : {
       "comment" : "A label showing the estimated time of arrival for the current file being processed. The argument is the ETA (estimated time of arrival) for the current file.",
       "isCommentAutoGenerated" : true,
@@ -7036,6 +7622,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "eu-west-2 (London)"
+          }
+        }
+      }
+    },
+    "Example data sent: {\"token\": \"a weekly random-looking value\"}. No files, paths, media details, conversion activity, account details, hardware IDs, or OS details are included." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksempel på data som sendes: {\"token\": \"en tilfeldig utseende ukekode\"}. Ingen filer, filbaner, mediedetaljer, konverteringsaktivitet, kontoopplysninger, maskinvare-ID-er eller OS-detaljer er inkludert."
           }
         }
       }
@@ -7126,6 +7723,16 @@
         }
       }
     },
+    "Experimental IMF export. Validate the package in your target mastering or delivery tool before use. This version writes a single video track and one PCM audio track; packaged subtitles and multi-track audio are not yet supported." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksperimentell IMF-eksport. Valider pakken i mottakerens mastering- eller leveringsverktøy før bruk. Denne versjonen skriver ett videospor og ett PCM-lydspor. Pakkede undertekster og flere lydspor støttes ennå ikke."
+          }
+        }
+      }
+    },
     "Experimental. AV2 is encoded by the bundled avmenc (AOM AVM) encoder. The app can split the encode across all CPU cores for a large speed-up, and optionally mux the result with audio into a Matroska (.mkv) file. AV2 is very new — the output needs an AV2-capable decoder to play and cannot be previewed inside this app yet." : {
       "localizations" : {
         "nb" : {
@@ -7144,6 +7751,19 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eksporter en innstillingsfil du kan beholde som sikkerhetskopi eller importere på en annen Mac. Appen tar også automatiske lokale sikkerhetskopier før den tar i bruk innkommende innstillinger – åpne dem i Finder og bruk «Importer innstillinger …» for å gå tilbake."
+          }
+        }
+      }
+    },
+    "Export clip-boundary markers" : {
+      "comment" : "A toggle that lets the user choose whether to export clip-boundary markers.",
+      "extractionState" : "stale",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksporter markører ved klippgrenser"
           }
         }
       }
@@ -7218,6 +7838,18 @@
         }
       }
     },
+    "Export timeline markers" : {
+      "comment" : "A toggle that lets the user choose whether to export markers for stitched exports.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eksporter tidslinjemarkører"
+          }
+        }
+      }
+    },
     "Extend Auto-Stop" : {
       "comment" : "Screen-recording menu-bar dropdown submenu.",
       "localizations" : {
@@ -7236,6 +7868,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Utvidet PSNR fra Fraunhofer HHI. Persepsjonsvektet PSNR-metrikk målt i dB. Verdier over 42 dB regnes som visuelt tapsfrie."
+          }
+        }
+      }
+    },
+    "Extract %@" : {
+      "comment" : "Accepted conversion settings summary: extract the named audio channel.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trekk ut %@"
           }
         }
       }
@@ -7418,6 +8061,29 @@
         }
       }
     },
+    "File" : {
+      "comment" : "A label for a picker that lets the user choose a file.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fil"
+          }
+        }
+      }
+    },
+    "File access and disabling" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtilgang og deaktivering"
+          }
+        }
+      }
+    },
     "File Name (A–Z)" : {
       "comment" : "Display name for the sort mode option to sort by file name in ascending order.",
       "isCommentAutoGenerated" : true,
@@ -7464,6 +8130,17 @@
         }
       }
     },
+    "Filename processing: %@" : {
+      "comment" : "Accepted conversion settings summary: filename processing.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filnavnbehandling: %@"
+          }
+        }
+      }
+    },
     "Filename restrictions:" : {
       "comment" : "A label for the filename restrictions picker.",
       "isCommentAutoGenerated" : true,
@@ -7476,12 +8153,46 @@
         }
       }
     },
+    "Filename template: %@" : {
+      "comment" : "Accepted conversion settings summary: filename template.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filnavnmal: %@"
+          }
+        }
+      }
+    },
     "Filenames are kept as-is (after space and Scandinavian conversion above)." : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Filnavn beholdes som de er (etter konvertering av mellomrom og skandinaviske tegn ovenfor)."
+          }
+        }
+      }
+    },
+    "Files in these folders and their subfolders are available to local MCP clients. Choose output folders in the app before converting. MCP requests cannot approve new locations." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filer i disse mappene og undermappene deres er tilgjengelige for lokale MCP-klienter. Velg utdatamapper i appen før konvertering. MCP-forespørsler kan ikke godkjenne nye plasseringer."
+          }
+        }
+      }
+    },
+    "Files in these folders and their subfolders are available to local MCP clients. Conversions use the app's default output folder unless another writable folder is selected in the app. MCP requests cannot approve new locations." : {
+      "comment" : "A description of the source folders that can be approved.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filer i disse mappene og undermappene deres er tilgjengelige for lokale MCP-klienter. Konverteringer bruker appens standard utdatamappe med mindre en annen skrivbar mappe er valgt i appen. MCP-forespørsler kan ikke godkjenne nye plasseringer."
           }
         }
       }
@@ -7600,6 +8311,16 @@
         }
       }
     },
+    "Finding keyframes…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finner nøkkelbilder …"
+          }
+        }
+      }
+    },
     "Fisheye" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7607,6 +8328,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fiskeøye"
+          }
+        }
+      }
+    },
+    "Fit" : {
+      "comment" : "A button that fits the timeline to the current selection.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilpass"
+          }
+        }
+      }
+    },
+    "Fit the timeline (⇧Z)" : {
+      "comment" : "A keyboard shortcut to fit the timeline.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilpass tidslinjen (⇧Z)"
           }
         }
       }
@@ -7687,6 +8432,16 @@
         }
       }
     },
+    "Format metadata incomplete; this group will import without concatenation." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formatmetadata mangler; denne gruppen importeres uten sammenføyning."
+          }
+        }
+      }
+    },
     "Format: HH:MM:SS:FF (00-23 hours, 00-29 frames @ 30fps) or HH:MM:SS;FF for drop-frame" : {
       "comment" : "A description of the timecode format with specific frame rate information.",
       "isCommentAutoGenerated" : true,
@@ -7719,6 +8474,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Formater"
+          }
+        }
+      }
+    },
+    "Formats conflict; this group will import without concatenation." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formatene er ulike; denne gruppen importeres uten sammenføyning."
           }
         }
       }
@@ -7776,6 +8541,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bildefrekvens"
+          }
+        }
+      }
+    },
+    "Frame rate unavailable. Start removed: %@; kept: %@; end removed: %@" : {
+      "comment" : "A label displaying the start, kept, and end frames removed from a video clip. The values are shown in frames and time.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Frame rate unavailable. Start removed: %1$@; kept: %2$@; end removed: %3$@"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildefrekvens utilgjengelig. Fjernet fra starten: %@; beholdt: %@; fjernet fra slutten: %@"
           }
         }
       }
@@ -7894,6 +8677,18 @@
         }
       }
     },
+    "Generating waveform…" : {
+      "comment" : "A placeholder text that appears when the waveform is being generated.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Genererer bølgeform…"
+          }
+        }
+      }
+    },
     "GitHub Repository" : {
       "localizations" : {
         "nb" : {
@@ -8002,6 +8797,16 @@
         }
       }
     },
+    "Group %lld: %lld clips" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppe %lld: %lld klipp"
+          }
+        }
+      }
+    },
     "Group folder" : {
       "comment" : "System symbol name for a folder icon used in a group header.",
       "isCommentAutoGenerated" : true,
@@ -8022,6 +8827,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gruppenavn"
+          }
+        }
+      }
+    },
+    "Group presets assume the listed stream order is the playout channel order. Check the file's routing or MCA labels before using a grouped result for QC." : {
+      "comment" : "A description of the warning that appears when you",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppeforhåndsinnstillinger forutsetter at den oppførte strømrekkefølgen er kanalrekkefølgen ved avspilling. Kontroller filens ruting eller MCA-etiketter før du bruker et gruppert resultat til kvalitetskontroll."
+          }
+        }
+      }
+    },
+    "Grouping" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppering"
           }
         }
       }
@@ -8118,12 +8945,47 @@
         }
       }
     },
+    "Help count active installations" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hjelp oss å telle aktive installasjoner"
+          }
+        }
+      }
+    },
     "HEVC 10-bit 4:2:2 (Hardware)" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "HEVC 10-bit 4:2:2 (maskinvare)"
+          }
+        }
+      }
+    },
+    "HH:MM:SS · mixed or unknown frame rates" : {
+      "comment" : "A description of the frame rate of a sequence.",
+      "extractionState" : "stale",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HH:MM:SS · blandede eller ukjente bildefrekvenser"
+          }
+        }
+      }
+    },
+    "HH:MM:SS:FF · %@ fps · non-drop-frame" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HH:MM:SS:FF · %@ fps · non-drop-frame"
           }
         }
       }
@@ -8376,12 +9238,36 @@
         }
       }
     },
+    "If a keyframe cannot be verified near an edit, that edit will not move." : {
+      "comment" : "A note that a cut's start time may not match the nearest keyframe.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvis et nøkkelbilde ikke kan bekreftes i nærheten av en redigering, flyttes ikke redigeringen."
+          }
+        }
+      }
+    },
     "Ignore files older than" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ignorer filer eldre enn"
+          }
+        }
+      }
+    },
+    "Ignore trim offset for stitched timecode" : {
+      "comment" : "A",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorer trimforskyvning for tidskode i sammenføyd video"
           }
         }
       }
@@ -8440,7 +9326,7 @@
       }
     },
     "IMF audio wrap failed: %@" : {
-      "comment" : "Shown when asdcp-wrap cannot create the IMF audio essence.",
+      "comment" : "Shown when raw2bmx cannot create the IMF audio essence.",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
@@ -8452,6 +9338,7 @@
     },
     "IMF audio wrap failed: asdcp-wrap not found" : {
       "comment" : "Shown when the bundled asdcp-wrap binary cannot be located, blocking IMF audio essence creation.",
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
@@ -8461,13 +9348,25 @@
         }
       }
     },
-    "IMF export is unavailable in 4.4 because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool." : {
-      "comment" : "Release restriction on IMF exports until package conformance is established. IMF import remains available.",
+    "IMF audio wrap failed: raw2bmx not found" : {
+      "comment" : "Shown when the bundled raw2bmx binary cannot be located, blocking IMF audio essence creation.",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IMF-eksport er ikke tilgjengelig i 4.4 fordi pakkebeskrivelser og samsvar med standarden ikke er validert. Bruk en annen eksportforhåndsinnstilling og et validert verktøy for IMF-mastering."
+            "value" : "IMF-lyd-wrap mislyktes: raw2bmx ikke funnet"
+          }
+        }
+      }
+    },
+    "IMF export is temporarily unavailable because package descriptors and conformance have not been validated. Use another export preset and a validated IMF mastering tool." : {
+      "comment" : "Release restriction on IMF exports until package conformance is established. IMF import remains available.",
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IMF-eksport er midlertidig utilgjengelig fordi pakkebeskrivelser og samsvar med standarden ikke er validert. Bruk en annen eksportforhåndsinnstilling og et validert verktøy for IMF-mastering."
           }
         }
       }
@@ -8519,12 +9418,23 @@
       }
     },
     "IMF video wrap failed: bmxtranswrap rejected ProRes essence" : {
-      "comment" : "Shown when bmxtranswrap cannot rewrap the ProRes MOV into IMF App 5 OP1a MXF.",
+      "comment" : "Shown when bmxtranswrap cannot rewrap the intermediate ProRes MXF into an IMF RDD 45 OP1a MXF.",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "IMF-video-wrap mislyktes: bmxtranswrap avviste ProRes-essensen"
+          }
+        }
+      }
+    },
+    "IMF video wrap failed: could not read the wrapped MXF duration" : {
+      "comment" : "Shown when the app cannot inspect the finished IMF picture track file.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IMF-video-wrap mislyktes: kunne ikke lese varigheten til den innpakkede MXF-filen"
           }
         }
       }
@@ -8638,6 +9548,16 @@
         }
       }
     },
+    "Import proposed groups" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer foreslåtte grupper"
+          }
+        }
+      }
+    },
     "Import Settings…" : {
       "comment" : "A button that imports settings from a file.",
       "isCommentAutoGenerated" : true,
@@ -8646,6 +9566,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importer innstillinger …"
+          }
+        }
+      }
+    },
+    "Import source files and choose output folders in the app before an agent uses them. Agent requests cannot grant or expand file access." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer kildefiler og velg utdatamapper i appen før en agent bruker dem. Agentforespørsler kan ikke gi eller utvide filtilgang."
           }
         }
       }
@@ -8684,6 +9615,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "om %@"
+          }
+        }
+      }
+    },
+    "In Downloads settings, choose App Download and install or update the tool. For Homebrew, follow the installation instructions there; for Custom, select an executable file again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg App-nedlasting i nedlastingsinnstillingene og installer eller oppdater verktøyet. For Homebrew følger du installasjonsveiledningen der. For Egendefinert velger du en kjørbar fil på nytt."
+          }
+        }
+      }
+    },
+    "In Downloads settings, select the bundled FFmpeg or select an installed custom executable. If the bundled tool is unavailable, reinstall the app." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg den inkluderte FFmpeg-versjonen i nedlastingsinnstillingene, eller velg en installert egendefinert kjørbar fil. Installer appen på nytt hvis det inkluderte verktøyet ikke er tilgjengelig."
+          }
+        }
+      }
+    },
+    "In OCR settings, select the bundled Tesseract or select an installed custom executable. If the bundled tool is unavailable, reinstall the app." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg den inkluderte Tesseract-versjonen i OCR-innstillingene, eller velg en installert egendefinert kjørbar fil. Installer appen på nytt hvis det inkluderte verktøyet ikke er tilgjengelig."
+          }
+        }
+      }
+    },
+    "In Transcription settings, select Parakeet. If it is installed elsewhere, use Custom path to select parakeet-mlx. Download a model before transcribing." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg Parakeet i transkripsjonsinnstillingene. Hvis det er installert et annet sted, bruker du Egendefinert sti til å velge parakeet-mlx. Last ned en modell før du transkriberer."
+          }
+        }
+      }
+    },
+    "In Transcription settings, select Whisper and download the selected model. For a custom model, select the file again to restore access, or choose an available model." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg Whisper i transkripsjonsinnstillingene og last ned den valgte modellen. For en egendefinert modell velger du filen på nytt for å gjenopprette tilgang, eller velger en tilgjengelig modell."
+          }
+        }
+      }
+    },
+    "In Upload settings, select App (Bundled) for rclone. If using Homebrew or Custom, check the selected installation and executable path." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg App (inkludert) for rclone i opplastingsinnstillingene. Hvis du bruker Homebrew eller Egendefinert, kontrollerer du den valgte installasjonen og stien til den kjørbare filen."
           }
         }
       }
@@ -8756,6 +9747,16 @@
         }
       }
     },
+    "Install Rust" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installer Rust"
+          }
+        }
+      }
+    },
     "Install updates automatically" : {
       "comment" : "A toggle that enables automatic installation of new releases.",
       "isCommentAutoGenerated" : true,
@@ -8768,6 +9769,16 @@
         }
       }
     },
+    "Install uv" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installer uv"
+          }
+        }
+      }
+    },
     "Instantly select preset (0 = 10th)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8775,6 +9786,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Velg forhåndsinnstilling direkte (0 = den tiende)"
+          }
+        }
+      }
+    },
+    "Integrated loudness is gated over the complete selected program; it is not an average of the graph." : {
+      "comment" : "A description of the integrated loudness value.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Integrert lydstyrke beregnes med terskling over hele det valgte programmet; den er ikke et gjennomsnitt av grafen."
           }
         }
       }
@@ -8823,6 +9846,28 @@
         }
       }
     },
+    "J/K/L: reverse • pause • play · M: marker" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "J/K/L: bakover • pause • spill av · M: markør"
+          }
+        }
+      }
+    },
+    "J/K/L: reverse • pause • play · R: range mode · ⌘B: split · ⌘Z: undo · M: marker · Q/W: trim start/end" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "J/K/L: bakover • pause • spill av · R: områdemodus · ⌘B: del · ⌘Z: angre · M: markør · Q/W: trim start/slutt"
+          }
+        }
+      }
+    },
     "J/K/L: reverse • pause • play (use for smooth playback)" : {
       "comment" : "A description of keyboard shortcuts for controlling playback speed.",
       "isCommentAutoGenerated" : true,
@@ -8831,6 +9876,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "J/K/L: revers • pause • spill av (bruk for jevn avspilling)"
+          }
+        }
+      }
+    },
+    "J/K/L: reverse, pause, play (repeat J or L to speed up)." : {
+      "comment" : "A description of the keyboard shortcuts for the timeline.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "J/K/L: bakover, pause, spill av (trykk J eller L flere ganger for å øke hastigheten)."
           }
         }
       }
@@ -8855,7 +9912,18 @@
         }
       }
     },
+    "JPEG 2000 video in MXF (App #2e), one PCM audio track, and CPL/PKL/ASSETMAP manifests." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JPEG 2000-video i MXF (App #2e), ett PCM-lydspor og CPL/PKL/ASSETMAP-manifester."
+          }
+        }
+      }
+    },
     "JPEG 2000 video in MXF (App #2e). PCM audio with MCA labels. CPL/PKL/ASSETMAP manifests." : {
+      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
@@ -8952,6 +10020,18 @@
         }
       }
     },
+    "Keep Existing Chapters" : {
+      "comment" : "Button title to keep existing chapters in the stitched file.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold eksisterende kapitler"
+          }
+        }
+      }
+    },
     "Keep intermediate files" : {
       "localizations" : {
         "nb" : {
@@ -8996,12 +10076,58 @@
         }
       }
     },
+    "Keep single group" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold én gruppe"
+          }
+        }
+      }
+    },
     "Keep Subtitles" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Behold undertekster"
+          }
+        }
+      }
+    },
+    "Keep subtitles: %@" : {
+      "comment" : "Accepted conversion settings summary: subtitle preservation.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold undertekster: %@"
+          }
+        }
+      }
+    },
+    "Keep their existing chapters in the stitched file, or replace them with chapters at each clip boundary? Marked notes are added to the chapters either way, and the EDL includes both cuts and notes." : {
+      "comment" : "Text displayed in an alert when a user has chapters in a clip that they want to replace with clip boundaries.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold de eksisterende kapitlene i den sammensydde filen, eller erstatt dem med kapitler ved hver klippgrense? Markerte notater legges til i kapitlene uansett, og EDL-filen inneholder både klippgrenser og notater."
+          }
+        }
+      }
+    },
+    "Keep their existing chapters in the stitched file, or replace them with chapters at each clip boundary? The EDL sidecar will include clip boundaries either way." : {
+      "comment" : "Text for a confirmation alert that appears when a user has chapters in a video that will be replaced by clip boundaries.",
+      "extractionState" : "stale",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vil du beholde de eksisterende kapitlene i den sammenslåtte filen, eller erstatte dem med kapitler ved hver klippgrense? Den separate EDL-filen vil uansett inneholde klippgrensene."
           }
         }
       }
@@ -9052,6 +10178,18 @@
         }
       }
     },
+    "Kept: %@ seconds" : {
+      "comment" : "A tooltip that describes the duration of the video after trimming.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beholdt: %@ sekunder"
+          }
+        }
+      }
+    },
     "Key File" : {
       "comment" : "A label for the SFTP key file path.",
       "isCommentAutoGenerated" : true,
@@ -9072,6 +10210,49 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tastatursnarveier:"
+          }
+        }
+      }
+    },
+    "Keyframe at or after end: %@ (%@ s later). This does not predict the exported end." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nøkkelbilde ved eller etter slutten: %@ (%@ s senere). Dette forutsier ikke slutten på eksporten."
+          }
+        }
+      }
+    },
+    "Keyframe candidates: %lld" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kandidater for nøkkelbilder: %lld"
+          }
+        }
+      }
+    },
+    "Keyframes unavailable for this clip. Trim edits require a verified keyframe." : {
+      "comment" : "A description of why keyframes are unavailable for a clip.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nøkkelbilder er ikke tilgjengelige for dette klippet. Trimming krever et bekreftet nøkkelbilde."
+          }
+        }
+      }
+    },
+    "Keyframes unavailable for this clip. Using frame snapping." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nøkkelbilder er ikke tilgjengelige for dette klippet. Festing til enkeltbilder brukes."
           }
         }
       }
@@ -9252,6 +10433,26 @@
         }
       }
     },
+    "Local agent access" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokal agenttilgang"
+          }
+        }
+      }
+    },
+    "Local Agent Access" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokal agenttilgang"
+          }
+        }
+      }
+    },
     "Local model files are available. Model compatibility has not been tested." : {
       "localizations" : {
         "nb" : {
@@ -9318,6 +10519,18 @@
         }
       }
     },
+    "Loudness range is not considered stable for programs shorter than one minute." : {
+      "comment" : "A warning that the loudness range is not considered stable for programs shorter than one minute.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variasjonsområdet for lydstyrke regnes ikke som stabilt for programmer som er kortere enn ett minutt."
+          }
+        }
+      }
+    },
     "Low (20)" : {
       "localizations" : {
         "nb" : {
@@ -9359,6 +10572,11 @@
           }
         }
       }
+    },
+    "LUFS" : {
+      "comment" : "Value for the x-axis label.",
+      "isCommentAutoGenerated" : true,
+      "shouldTranslate" : false
     },
     "Mac will stay awake until the recording starts." : {
       "comment" : "A tooltip for the clock icon in the bottom bar.",
@@ -9419,6 +10637,36 @@
         }
       }
     },
+    "Marked note" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markert notat"
+          }
+        }
+      }
+    },
+    "Marked: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merket: %@"
+          }
+        }
+      }
+    },
+    "Marker" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markør"
+          }
+        }
+      }
+    },
     "Max" : {
       "comment" : "A label displayed next to the maximum value of a metric.",
       "isCommentAutoGenerated" : true,
@@ -9463,6 +10711,49 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Maks:"
+          }
+        }
+      }
+    },
+    "Maximum height: %@p" : {
+      "comment" : "Accepted conversion settings summary: maximum video height in pixels.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maksimal høyde: %@p"
+          }
+        }
+      }
+    },
+    "MCP client" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP-klient"
+          }
+        }
+      }
+    },
+    "MCP client setup" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oppsett av MCP-klient"
+          }
+        }
+      }
+    },
+    "Media exported with a marker warning" : {
+      "comment" : "Title of an alert that appears when a warning is generated during the export of a video with markers.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medier eksportert med en markøradvarsel"
           }
         }
       }
@@ -9558,6 +10849,16 @@
         }
       }
     },
+    "Merge to Stereo" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå sammen til stereo"
+          }
+        }
+      }
+    },
     "Metadata" : {
       "comment" : "Settings sidebar tab.",
       "localizations" : {
@@ -9599,6 +10900,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Metadata-sidefil"
+          }
+        }
+      }
+    },
+    "Meter and preview audio track" : {
+      "comment" : "A heading for the audio metering and preview controls.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lydspor for måling og forhåndsvisning"
+          }
+        }
+      }
+    },
+    "Meter unavailable" : {
+      "comment" : "A message displayed when the audio meter is unavailable.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Måler utilgjengelig"
           }
         }
       }
@@ -9793,6 +11118,18 @@
         }
       }
     },
+    "Mono tracks (%lld)" : {
+      "comment" : "A title for a group of audio tracks. The argument is the number of tracks in the group.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monospor (%lld)"
+          }
+        }
+      }
+    },
     "Monthly" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9800,6 +11137,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Månedlig"
+          }
+        }
+      }
+    },
+    "Move %lld clips here" : {
+      "comment" : "A tooltip that appears when the user drags and drops a clip onto the timeline. The number in parentheses is the number of clips being moved.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flytt %lld klipp hit"
           }
         }
       }
@@ -9822,6 +11171,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Flytt ut av gruppen (behold i køen)"
+          }
+        }
+      }
+    },
+    "Move Selected Files to New Encoding Group" : {
+      "comment" : "Text for a context menu item that moves the selected files to a new encoding group.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flytt valgte filer til en ny kodingsgruppe"
           }
         }
       }
@@ -10167,6 +11528,18 @@
         }
       }
     },
+    "No audio channels" : {
+      "comment" : "A message displayed when a stream has no audio channels.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen lydkanaler"
+          }
+        }
+      }
+    },
     "No Audio Tracks" : {
       "comment" : "A label displayed when a file contains no audio tracks.",
       "isCommentAutoGenerated" : true,
@@ -10179,6 +11552,18 @@
         }
       }
     },
+    "No audio tracks found" : {
+      "comment" : "A message displayed when no audio tracks are found in the file.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fant ingen lydspor"
+          }
+        }
+      }
+    },
     "No captures yet" : {
       "comment" : "A message displayed when there are no captured videos yet.",
       "isCommentAutoGenerated" : true,
@@ -10187,6 +11572,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ingen opptak enda"
+          }
+        }
+      }
+    },
+    "No clips" : {
+      "comment" : "A label displayed when a user has no clips.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen klipp"
           }
         }
       }
@@ -10207,6 +11604,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ingen mappe er valgt"
+          }
+        }
+      }
+    },
+    "No following keyframe found in the scanned region. Exported end cannot be estimated from keyframes." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fant ikke noe påfølgende nøkkelbilde i det undersøkte området. Slutten på eksporten kan ikke anslås ut fra nøkkelbilder."
           }
         }
       }
@@ -10387,6 +11794,16 @@
         }
       }
     },
+    "Not connected" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke tilkoblet"
+          }
+        }
+      }
+    },
     "Not Found" : {
       "comment" : "A label indicating that the SSIMULACRA2 binary is not available.",
       "isCommentAutoGenerated" : true,
@@ -10407,6 +11824,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ikke installert"
+          }
+        }
+      }
+    },
+    "Not tested" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke testet"
+          }
+        }
+      }
+    },
+    "Note" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notat"
           }
         }
       }
@@ -10630,6 +12067,16 @@
         }
       }
     },
+    "Only Parakeet transcription needs this model. In Transcription settings, select Parakeet, install its tool if needed, then download the selected model or choose an available model." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bare Parakeet-transkripsjon trenger denne modellen. Velg Parakeet i transkripsjonsinnstillingene, installer verktøyet om nødvendig, og last deretter ned den valgte modellen eller velg en tilgjengelig modell."
+          }
+        }
+      }
+    },
     "Opacity" : {
       "comment" : "A label for the waveform opacity slider.",
       "isCommentAutoGenerated" : true,
@@ -10638,6 +12085,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Opasitet"
+          }
+        }
+      }
+    },
+    "Open Analytics Settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne analyseinnstillinger"
           }
         }
       }
@@ -10676,6 +12133,16 @@
         }
       }
     },
+    "Open Downloads Settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne nedlastingsinnstillinger"
+          }
+        }
+      }
+    },
     "Open fullscreen player" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10705,6 +12172,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Åpne metadata"
+          }
+        }
+      }
+    },
+    "Open OCR Settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne OCR-innstillinger"
           }
         }
       }
@@ -10754,6 +12231,16 @@
         }
       }
     },
+    "Open Transcription Settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne transkripsjonsinnstillinger"
+          }
+        }
+      }
+    },
     "Open trim view" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10761,6 +12248,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Åpne trimvisningen"
+          }
+        }
+      }
+    },
+    "Open Upload Settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne opplastingsinnstillinger"
           }
         }
       }
@@ -10816,6 +12313,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Valgfri merknad"
+          }
+        }
+      }
+    },
+    "Optional tool — not installed" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valgfritt verktøy — ikke installert"
           }
         }
       }
@@ -10880,6 +12387,16 @@
         }
       }
     },
+    "Output filename" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utdatafilnavn"
+          }
+        }
+      }
+    },
     "Output Folder" : {
       "comment" : "A section header that instructs the user to set the output folder for their captured content.",
       "isCommentAutoGenerated" : true,
@@ -10904,12 +12421,43 @@
         }
       }
     },
+    "Output name: %@" : {
+      "comment" : "Accepted conversion settings summary: custom output name.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utdatanavn: %@"
+          }
+        }
+      }
+    },
+    "Output TC" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utdata-TC"
+          }
+        }
+      }
+    },
     "Output Timecode" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Utdata tidskode"
+          }
+        }
+      }
+    },
+    "Output timecode follows the first clip’s settings. Reordering the first clip changes the timeline timecode. The value after / is the sequence duration." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utdata-tidskoden følger innstillingene for det første klippet. Hvis du endrer hvilket klipp som kommer først, endres tidskoden på tidslinjen. Verdien etter / er sekvensens varighet."
           }
         }
       }
@@ -10922,6 +12470,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Utdata spor"
+          }
+        }
+      }
+    },
+    "Output: %@" : {
+      "comment" : "A button to select a different output file for the loudness analysis.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utdata: %@"
           }
         }
       }
@@ -11025,6 +12585,16 @@
         }
       }
     },
+    "Parakeet installation instructions" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installasjonsveiledning for Parakeet"
+          }
+        }
+      }
+    },
     "Parakeet is NVIDIA's state-of-the-art automatic speech recognition model, optimized for Apple Silicon via the MLX framework. It can produce highly accurate transcriptions with word-level timestamps." : {
       "comment" : "A description of Parakeet.",
       "isCommentAutoGenerated" : true,
@@ -11033,6 +12603,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Parakeet er NVIDIAs fremste automatiske talegjenkjenningsmodell, optimalisert for Apple Silicon via MLX-rammeverket. Den kan produsere svært nøyaktige transkripsjoner med tidsstempler på ordnivå."
+          }
+        }
+      }
+    },
+    "Parakeet is optional and only needed for Parakeet transcription. Install uv using the linked instructions, then run this command in Terminal:" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parakeet er valgfritt og trengs bare for Parakeet-transkripsjon. Installer uv ved hjelp av veiledningen i lenken, og kjør deretter denne kommandoen i Terminal:"
           }
         }
       }
@@ -11247,6 +12827,17 @@
         }
       }
     },
+    "Per-file adjustments: %@" : {
+      "comment" : "Accepted conversion settings summary: per-file adjustments are enabled.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Justeringer per fil: %@"
+          }
+        }
+      }
+    },
     "Per-item overrides" : {
       "comment" : "A section that allows users to override the filename template for individual items.",
       "isCommentAutoGenerated" : true,
@@ -11266,6 +12857,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Perseptuell kvalitetsmetrikk fra Cloudflare. Måler strukturell likhet på en skala fra 0 til 100. Resultater over 70 tyder på god kvalitet. Krever det eksterne programmet ssimulacra2_rs."
+          }
+        }
+      }
+    },
+    "Pinch to zoom. Drag clips to reorder; Command-drag selects a time range within a clip. Shift-click selects a range of clips; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed. Q trims the start to the playhead; W trims the end. Later clips close the gap." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Knip for å zoome. Dra klipp for å endre rekkefølgen; hold ⌘ mens du drar for å velge et tidsområde i et klipp. Skift-klikk velger en rekke klipp; ⌘-klikk velger eller fjerner enkeltklipp. Dra i en kant for å trimme, eller dra på tidslinjalen for å spole. Trykk J eller L flere ganger for å øke avspillingshastigheten. Q trimmer starten til avspillingshodet; W trimmer slutten. Etterfølgende klipp flyttes for å lukke mellomrommet."
+          }
+        }
+      }
+    },
+    "Pinch to zoom. Drag clips to reorder. Shift-click selects a range; ⌘-click toggles individual clips. Drag an edge to trim, or drag the time ruler to scrub. Repeat J or L to increase playback speed." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Knip for å zoome. Dra klipp for å endre rekkefølgen. Skift-klikk velger et område; ⌘-klikk velger eller fjerner enkeltklipp. Dra i en kant for å trimme, eller dra på tidslinjalen for å spole. Trykk J eller L flere ganger for å øke avspillingshastigheten."
           }
         }
       }
@@ -11324,6 +12937,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spill fremover"
+          }
+        }
+      }
+    },
+    "Play sequence" : {
+      "comment" : "A button that plays a sequence.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spill av sekvens"
           }
         }
       }
@@ -11461,6 +13086,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ta vare på original metadata"
+          }
+        }
+      }
+    },
+    "Preserve metadata: %@" : {
+      "comment" : "Accepted conversion settings summary: metadata preservation.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta vare på metadata: %@"
+          }
+        }
+      }
+    },
+    "Preserve source" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold fra kilde"
           }
         }
       }
@@ -11645,7 +13291,7 @@
       "shouldTranslate" : false
     },
     "PRESET_IMF_PRORES_DESCRIPTION" : {
-      "comment" : "Description for IMF App 5 (ProRes) preset",
+      "comment" : "Description for IMF RDD 45 (ProRes) preset",
       "shouldTranslate" : false
     },
     "PRESET_PRORES_DESCRIPTION" : {
@@ -11767,6 +13413,17 @@
         }
       }
     },
+    "Preset: %@" : {
+      "comment" : "Accepted conversion settings summary: selected preset.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forhåndsinnstilling: %@"
+          }
+        }
+      }
+    },
     "Presets" : {
       "comment" : "Settings sidebar tab.",
       "isCommentAutoGenerated" : true,
@@ -11792,7 +13449,6 @@
       }
     },
     "Preview" : {
-      "extractionState" : "stale",
       "localizations" : {
         "nb" : {
           "stringUnit" : {
@@ -11908,6 +13564,18 @@
         }
       }
     },
+    "Preview: track %lld" : {
+      "comment" : "A label at the bottom of the audio meter panel that shows the track currently being previewed. The argument is the track number.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forhåndsvisning: spor %lld"
+          }
+        }
+      }
+    },
     "Previous in queue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11939,6 +13607,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Profilnavn"
+          }
+        }
+      }
+    },
+    "Program Loudness" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Programlydstyrke"
+          }
+        }
+      }
+    },
+    "Proposed groups: %lld" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foreslåtte grupper: %lld"
           }
         }
       }
@@ -12061,6 +13749,17 @@
         }
       }
     },
+    "Quality: %@" : {
+      "comment" : "Accepted conversion settings summary: numeric quality.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kvalitet: %@"
+          }
+        }
+      }
+    },
     "Queue Display" : {
       "comment" : "A section header in the general settings view.",
       "isCommentAutoGenerated" : true,
@@ -12096,6 +13795,18 @@
         }
       }
     },
+    "R: range · Backspace: delete selected range or clips · ⌥X: clear range · ⌘B: split · ⌘Z: undo · M: marker · Q/W: trim start/end." : {
+      "comment" : "A description of shortcuts and gestures for the timeline.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "R: område · Slettetast: slett valgt område eller klipp · ⌥X: opphev områdevalg · ⌘B: del · ⌘Z: angre · M: markør · Q/W: trim start/slutt."
+          }
+        }
+      }
+    },
     "RAM: %@" : {
       "comment" : "A label displaying the RAM requirement for a specific whisper model. The argument is the RAM requirement for the model.",
       "isCommentAutoGenerated" : true,
@@ -12104,6 +13815,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RAM: %@"
+          }
+        }
+      }
+    },
+    "Range" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Område"
           }
         }
       }
@@ -12182,6 +13903,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Omkod ukompatible klipp til å matche en referanse, og slå deretter alle sammen"
+          }
+        }
+      }
+    },
+    "Reading audio tracks…" : {
+      "comment" : "A placeholder text that appears while the app is reading the audio tracks.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leser lydspor…"
+          }
+        }
+      }
+    },
+    "Reading recording metadata…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leser opptaksmetadata …"
           }
         }
       }
@@ -12314,6 +14057,26 @@
         }
       }
     },
+    "Redo timeline edit" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utfør tidslinjeredigering på nytt"
+          }
+        }
+      }
+    },
+    "Redo timeline edit (⇧⌘Z)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utfør tidslinjeredigering på nytt (⇧⌘Z)"
+          }
+        }
+      }
+    },
     "Redraw" : {
       "comment" : "A button that resets the selection.",
       "isCommentAutoGenerated" : true,
@@ -12350,6 +14113,48 @@
         }
       }
     },
+    "Relative clip timecode (HH:MM:SS:FF)" : {
+      "comment" : "A label that displays the relative time of a clip.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relativ klipptidskode (HH:MM:SS:FF)"
+          }
+        }
+      }
+    },
+    "Relative TC" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relativ TC"
+          }
+        }
+      }
+    },
+    "Relative time · mixed or unknown frame rates" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relativ tid · ulike eller ukjente bildefrekvenser"
+          }
+        }
+      }
+    },
+    "Relative timecode · no starting timecode on the first clip" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relativ tidskode · det første klippet mangler starttidskode"
+          }
+        }
+      }
+    },
     "Relative Timecode (REL TC)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12368,6 +14173,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Versjonsmerknader"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern"
           }
         }
       }
@@ -12519,6 +14334,48 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Erstatt mellomrom med understreker"
+          }
+        }
+      }
+    },
+    "Replace with Clip Boundaries" : {
+      "comment" : "Button title to replace chapters with clip boundaries.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstatt med klippgrenser"
+          }
+        }
+      }
+    },
+    "Request failed" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forespørselen mislyktes"
+          }
+        }
+      }
+    },
+    "Requested end: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ønsket slutt: %@"
+          }
+        }
+      }
+    },
+    "Requested start: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ønsket start: %@"
           }
         }
       }
@@ -12699,6 +14556,16 @@
         }
       }
     },
+    "Reset the start and end trims of all selected clips." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilbakestill start- og sluttpunktene for alle valgte klipp."
+          }
+        }
+      }
+    },
     "Reset to 1" : {
       "comment" : "A button that resets the counter to 1.",
       "isCommentAutoGenerated" : true,
@@ -12741,6 +14608,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nullstill til Nedlastning"
+          }
+        }
+      }
+    },
+    "Reset trim" : {
+      "comment" : "A button that resets the trim of a clip.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilbakestill trimming"
           }
         }
       }
@@ -12917,6 +14796,26 @@
         }
       }
     },
+    "Review recording-date groups" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se gjennom grupper etter opptaksdato"
+          }
+        }
+      }
+    },
+    "Review recording-date groups…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se gjennom grupper etter opptaksdato …"
+          }
+        }
+      }
+    },
     "Run" : {
       "comment" : "A button that runs the selected metrics.",
       "isCommentAutoGenerated" : true,
@@ -12937,6 +14836,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kjør alle"
+          }
+        }
+      }
+    },
+    "Run this command in Terminal, then restart the client. Keep the app installed at the same location." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kjør denne kommandoen i Terminal, og start deretter klienten på nytt. Behold appen på samme sted."
+          }
+        }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagre"
+          }
+        }
+      }
+    },
+    "Save a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. If source chapters exist, ask before replacing them." : {
+      "comment" : "A description of the stitch markers feature.",
+      "extractionState" : "stale",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagre en EDL-fil med Resolve-markører ved siden av sammenslåtte filer, og bygg inn kapitler i MOV, MP4, M4V og MKV. Spør før eksisterende kildekapitler erstattes."
+          }
+        }
+      }
+    },
+    "Save cuts and marked notes in a Resolve marker EDL beside stitched files and embed chapters in MOV, MP4, M4V, and MKV. Cut titles include the source timecode at each clip’s trimmed in-point when available. If source chapters exist, ask before replacing them." : {
+      "comment" : "A description of the stitch markers feature, including source timecode in cut titles when available.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagre klippgrenser og markerte notater i en Resolve-markør-EDL ved siden av sammensydde filer, og bygg inn kapitler i MOV, MP4, M4V og MKV. Klipptitler inkluderer kildetidskoden ved hvert klipps innpunkt etter trimming når den er tilgjengelig. Spør før eksisterende kapitler i kildefilene erstattes."
           }
         }
       }
@@ -13178,6 +15121,18 @@
         }
       }
     },
+    "Seconds" : {
+      "comment" : "Label for the X-axis in a loudness analysis chart.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sekunder"
+          }
+        }
+      }
+    },
     "Secret Access Key" : {
       "comment" : "A label for the user to input their secret access key.",
       "isCommentAutoGenerated" : true,
@@ -13232,6 +15187,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hopp ti bilder bakover"
+          }
+        }
+      }
+    },
+    "Seek estimate unavailable near this cut." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Søkeanslag er ikke tilgjengelig nær dette klippet."
           }
         }
       }
@@ -13503,12 +15468,34 @@
         }
       }
     },
+    "Select the audio track for preview playback and metering." : {
+      "comment" : "A label for the audio track selection in the audio meter panel.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg lydsporet for forhåndsvisning og nivåmåling."
+          }
+        }
+      }
+    },
     "Select the codec for proxy files. HEVC is most efficient, ProRes Proxy is widely compatible, DNx is for Avid workflows." : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Velg kodek for proxyfiler. HEVC er mest effektivt, ProRes Proxy er bredt kompatibelt, DNx er for Avid-arbeidsflyter."
+          }
+        }
+      }
+    },
+    "Select the folder again or choose another location." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg mappen på nytt, eller velg en annen plassering."
           }
         }
       }
@@ -13599,6 +15586,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Valgt kilde ikke funnet."
+          }
+        }
+      }
+    },
+    "Selected: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valgt: %@"
           }
         }
       }
@@ -13843,6 +15840,16 @@
         }
       }
     },
+    "Shortcut" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snarvei"
+          }
+        }
+      }
+    },
     "Shortcuts" : {
       "comment" : "Settings sidebar tab.",
       "isCommentAutoGenerated" : true,
@@ -13866,6 +15873,18 @@
         }
       }
     },
+    "Shortcuts and gestures" : {
+      "comment" : "A heading for shortcuts and gestures in the stitching editor.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snarveier og bevegelser"
+          }
+        }
+      }
+    },
     "Show a condensed view with smaller thumbnails and inline action buttons" : {
       "comment" : "A description of the compact view mode in the general settings view.",
       "isCommentAutoGenerated" : true,
@@ -13874,6 +15893,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vis en kondensert visning med mindre miniatyrbilder og innebygde handlingsknapper"
+          }
+        }
+      }
+    },
+    "Show accepted settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis godkjente innstillinger"
           }
         }
       }
@@ -13932,6 +15961,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vis fil i Finder"
+          }
+        }
+      }
+    },
+    "Show Helper in Finder" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis hjelpeverktøy i Finder"
           }
         }
       }
@@ -14067,6 +16106,26 @@
         }
       }
     },
+    "Show timeline shortcuts and gestures" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis tidslinjesnarveier og bevegelser"
+          }
+        }
+      }
+    },
+    "Show timeline shortcuts and Stream Copy cut details" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis tidslinjesnarveier og detaljer om klippepunkter ved strømkopiering"
+          }
+        }
+      }
+    },
     "Show URL input overlay (for downloading)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14096,6 +16155,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sidefilformat"
+          }
+        }
+      }
+    },
+    "Silent" : {
+      "comment" : "A label that indicates that the audio level is below -60 dBFS.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stille"
           }
         }
       }
@@ -14171,6 +16242,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Minste fil"
+          }
+        }
+      }
+    },
+    "Snap trims and ranges to keyframes" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fest trimpunkter og områder til nøkkelbilder"
           }
         }
       }
@@ -14285,6 +16367,18 @@
         }
       }
     },
+    "Source dBFS" : {
+      "comment" : "A label for the source audio level.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kildenivå i dBFS"
+          }
+        }
+      }
+    },
     "Source File:" : {
       "comment" : "A label for the source file name.",
       "isCommentAutoGenerated" : true,
@@ -14305,6 +16399,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kilden beholder original bildefrekvens. Interlaced-moduser (50i, 59,94i) bruker feltbasert koding."
+          }
+        }
+      }
+    },
+    "Source sample peaks before playback volume and speaker downmixing. Mono tracks are shown together; click a mono meter to choose the preview track." : {
+      "comment" : "A description of the source audio meter.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kildens toppnivåer målt fra lydprøvene før justering av avspillingsvolum og nedmiksing for høyttalere. Monospor vises sammen; klikk på en monomåler for å velge sporet som skal forhåndsvises."
           }
         }
       }
@@ -14342,6 +16448,18 @@
         }
       }
     },
+    "Source: %@" : {
+      "comment" : "A label for a picker that lets the user select a source file. The argument is the name of the source file.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kilde: %@"
+          }
+        }
+      }
+    },
     "Space" : {
       "comment" : "An option to not use a separator between the prefix and suffix.",
       "isCommentAutoGenerated" : true,
@@ -14375,6 +16493,46 @@
         }
       }
     },
+    "Split" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del"
+          }
+        }
+      }
+    },
+    "Split by recording day" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del etter opptaksdag"
+          }
+        }
+      }
+    },
+    "Split the clip at the playhead (⌘B). Trim either part independently." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del klippet ved avspillingshodet (⌘B). Trim hver del uavhengig av den andre."
+          }
+        }
+      }
+    },
+    "Split to Mono" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del til mono"
+          }
+        }
+      }
+    },
     "Splits the clip into independent ranges and encodes them simultaneously, one avmenc per CPU core — the biggest speed-up for AV2. 0 = Auto (one chunk per core). 1 = off (a single encoder using tiles). Higher values force a specific chunk count. Constant-Quality only; tiling below is disabled while chunking is active because chunks already use every core (and untiled chunks compress slightly better)." : {
       "localizations" : {
         "nb" : {
@@ -14397,6 +16555,16 @@
         }
       }
     },
+    "SSIMULACRA2 installation instructions" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installasjonsveiledning for SSIMULACRA2"
+          }
+        }
+      }
+    },
     "SSIMULACRA2 is an external tool that is not bundled with the app. It compares individual frames between the source and encoded video to produce a perceptual quality score. Install it via the Rust toolchain:" : {
       "comment" : "A description of how to install SSIMULACRA2.",
       "isCommentAutoGenerated" : true,
@@ -14405,6 +16573,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "SSIMULACRA2 er et eksternt verktøy som ikke følger med appen. Det sammenligner enkeltbilder mellom kilde- og kodingsvideo for å gi en perseptuell kvalitetsscore. Installer det via Rust-verktøykjeden:"
+          }
+        }
+      }
+    },
+    "SSIMULACRA2 is optional and only needed for its quality metric. Install Rust using the linked instructions, then run this command in Terminal:" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SSIMULACRA2 er valgfritt og trengs bare for dette kvalitetsmålet. Installer Rust ved hjelp av veiledningen i lenken, og kjør deretter denne kommandoen i Terminal:"
           }
         }
       }
@@ -14490,6 +16668,24 @@
         }
       }
     },
+    "Start removed: %lld frames; kept: %lld frames; end removed: %lld frames" : {
+      "comment" : "A label that shows the number of frames removed from the start, the number of frames kept, and the number of frames removed from the end. The first argument is the number of frames removed from the start. The second argument is the number of frames kept. The third argument is the number of frames removed from the end.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Start removed: %1$lld frames; kept: %2$lld frames; end removed: %3$lld frames"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjernet fra starten: %lld bilder; beholdt: %lld bilder; fjernet fra slutten: %lld bilder"
+          }
+        }
+      }
+    },
     "Start reverse playback" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14565,6 +16761,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stereo"
+          }
+        }
+      }
+    },
+    "Stitched Exports" : {
+      "comment" : "A section for exporting stitched video files.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sammenslåtte eksporter"
           }
         }
       }
@@ -14655,6 +16863,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Strømkopiering"
+          }
+        }
+      }
+    },
+    "Stream Copy cuts" : {
+      "comment" : "A label for the section of the timeline that shows the cut of a Stream Copy cut.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klippepunkter ved strømkopiering"
+          }
+        }
+      }
+    },
+    "Stream Copy cuts are approximate. Export may include extra video frames and audio, even at keyframes. Preview and timeline duration show the requested selection; exported boundaries and duration may differ." : {
+      "comment" : "Explains approximate Stream Copy trim boundaries below the stitching timeline.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klippepunkter ved strømkopiering er omtrentlige. Eksporten kan inkludere ekstra videobilder og lyd, selv ved nøkkelbilder. Forhåndsvisningen og tidslinjens varighet viser det valgte området; klippepunkter og varighet i eksporten kan avvike."
+          }
+        }
+      }
+    },
+    "Stream Copy trims snap to keyframes" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stream Copy-trimming festes til nøkkelbilder"
           }
         }
       }
@@ -14809,6 +17051,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Surroundlyd oppdaget"
+          }
+        }
+      }
+    },
+    "Swap L/R" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bytt V/H"
           }
         }
       }
@@ -15093,7 +17345,17 @@
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Test kobling"
+            "value" : "Test tilkobling"
+          }
+        }
+      }
+    },
+    "Testing…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tester …"
           }
         }
       }
@@ -15106,6 +17368,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Appen leveres med en inkludert ffmpeg-binær. Du kan eventuelt peke på en Homebrew- eller egendefinert ffmpeg hvis du trenger spesifikke funksjoner eller kodeker. Metadata-lesing (inkludert kapitler) håndteres internt av SwiftMediaMetadata — ingen ekstern ffprobe er nødvendig."
+          }
+        }
+      }
+    },
+    "The app looks for ssimulacra2_rs in ~/.cargo/bin, /opt/homebrew/bin, and /usr/local/bin. Standard conversions do not require this tool." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appen ser etter ssimulacra2_rs i ~/.cargo/bin, /opt/homebrew/bin og /usr/local/bin. Vanlige konverteringer krever ikke dette verktøyet."
           }
         }
       }
@@ -15126,6 +17398,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Medfølgende FFmpeg er tilstrekkelig for vanlige konverteringer. Valgfrie verktøy trengs bare for tilhørende funksjoner. Velg eller installer dem i innstillingene for Nedlastinger, Opplasting, Transkripsjon, OCR eller Analyse."
+          }
+        }
+      }
+    },
+    "The count is for active installations, not people. You can change this choice in General Settings at any time." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tellingen gjelder aktive installasjoner, ikke personer. Du kan endre valget når som helst i Generelle innstillinger."
           }
         }
       }
@@ -15261,6 +17544,16 @@
         }
       }
     },
+    "The saved folder approvals could not be changed." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De lagrede mappegodkjenningene kunne ikke endres."
+          }
+        }
+      }
+    },
     "The saved output location is not a folder. Choose another output folder in Settings." : {
       "localizations" : {
         "nb" : {
@@ -15384,6 +17677,17 @@
         }
       }
     },
+    "The source could not be played. Check that it is available and readable, then retry." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kilden kunne ikke spilles av. Kontroller at den er tilgjengelig og lesbar, og prøv igjen."
+          }
+        }
+      }
+    },
     "The SSH key file cannot be read. In Settings > Upload, use Browse to select the key again and grant access." : {
       "localizations" : {
         "nb" : {
@@ -15487,6 +17791,18 @@
         }
       }
     },
+    "These clips already contain chapters" : {
+      "comment" : "Alert message when a user has chapters in a video that will be overwritten by a marker-based export.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disse klippene inneholder allerede kapitler"
+          }
+        }
+      }
+    },
     "These fields are embedded in the Composition Playlist (CPL) and Packing List (PKL)." : {
       "comment" : "A description of the fields that are embedded in the IMF's CPL and PKL.",
       "isCommentAutoGenerated" : true,
@@ -15565,6 +17881,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Denne filen er ikke en gyldig rclone-binær (`--version`-sjekk feilet)."
+          }
+        }
+      }
+    },
+    "This helper is bundled with the app. Reinstall the app if it is missing or incompatible." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette hjelpeverktøyet følger med appen. Installer appen på nytt hvis det mangler eller er inkompatibelt."
           }
         }
       }
@@ -15699,6 +18025,18 @@
         }
       }
     },
+    "Time" : {
+      "comment" : "A line graph mark representing a momentary loudness sample.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tid"
+          }
+        }
+      }
+    },
     "Timecode Configuration" : {
       "comment" : "A title for the view that allows the user to configure the timecode for an item.",
       "isCommentAutoGenerated" : true,
@@ -15770,6 +18108,17 @@
         }
       }
     },
+    "Timecode: %@" : {
+      "comment" : "Accepted conversion settings summary: timecode behavior or value.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidskode: %@"
+          }
+        }
+      }
+    },
     "Timed out waiting for microphone permission. Check microphone access in System Settings and try again." : {
       "localizations" : {
         "nb" : {
@@ -15816,6 +18165,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tidsavbrudd under skriving av de siste bildene i skjermopptaket. Filen kan være ufullstendig."
+          }
+        }
+      }
+    },
+    "Timeline" : {
+      "comment" : "A label for the timeline view in the group editor.",
+      "extractionState" : "stale",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidslinje"
+          }
+        }
+      }
+    },
+    "Timeline information" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informasjon om tidslinjen"
           }
         }
       }
@@ -16426,6 +18798,27 @@
         }
       }
     },
+    "Toggle Range mode (R), or hold Command while dragging across a clip to select a range. Backspace deletes it; Option+X or Escape clears it." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå områdemodus av eller på (R), eller hold ⌘ mens du drar over et klipp for å velge et område. Slettetasten sletter området; ⌥X eller Escape fjerner markeringen."
+          }
+        }
+      }
+    },
+    "Toggle Range mode (R), or hold Command while dragging across a clip to select a range. Backspace deletes the selected range or clips; Option+X or Escape clears a range." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på områdemodus (R), eller hold nede Kommando mens du drar over et klipp for å velge et område. Slettetasten sletter det valgte området eller klippene; ⌥X eller Escape opphever områdevalget."
+          }
+        }
+      }
+    },
     "Toggle source file upload on selected items" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16537,6 +18930,16 @@
         }
       }
     },
+    "Track" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spor"
+          }
+        }
+      }
+    },
     "Transcription" : {
       "comment" : "Settings sidebar tab.",
       "isCommentAutoGenerated" : true,
@@ -16593,12 +18996,58 @@
         }
       }
     },
+    "Trim end: %@ s" : {
+      "comment" : "Accepted conversion settings summary: trim end in seconds.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sluttpunkt: %@ s"
+          }
+        }
+      }
+    },
+    "Trim in for %@" : {
+      "comment" : "A button that adjusts the start or end of a video clip. The argument is the name of the video.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimmens innpunkt for %@"
+          }
+        }
+      }
+    },
+    "Trim out for %@" : {
+      "comment" : "A button that adjusts the start or end of a video clip. The argument is the name of the video.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimmens utpunkt for %@"
+          }
+        }
+      }
+    },
     "Trim start" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Startpunkt"
+          }
+        }
+      }
+    },
+    "Trim start: %@ s" : {
+      "comment" : "Accepted conversion settings summary: trim start in seconds.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startpunkt: %@ s"
           }
         }
       }
@@ -16658,12 +19107,77 @@
         }
       }
     },
+    "Trimmed" : {
+      "comment" : "Indicates that a video was trimmed.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimmet"
+          }
+        }
+      }
+    },
+    "Trims and ranges snap to scanned keyframes. Keyframe ticks appear on the clip." : {
+      "comment" : "A description of how keyframes are used in the timeline.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimming og områder festes til skannede nøkkelbilder. Nøkkelbildemarkeringer vises på klippet."
+          }
+        }
+      }
+    },
+    "Trims and ranges snap to the nearest available keyframe." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trimpunkter og områder festes til nærmeste tilgjengelige nøkkelbilde."
+          }
+        }
+      }
+    },
     "Tune" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tune"
+          }
+        }
+      }
+    },
+    "Turning access off rejects new connections. Jobs already accepted by the app continue and remain available in job history." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når tilgangen slås av, avvises nye tilkoblinger. Jobber som appen allerede har godtatt, fortsetter og forblir tilgjengelige i jobbhistorikken."
+          }
+        }
+      }
+    },
+    "Undo timeline edit" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angre tidslinjeredigering"
+          }
+        }
+      }
+    },
+    "Undo timeline edit (⌘Z)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Angre tidslinjeredigering (⌘Z)"
           }
         }
       }
@@ -17210,6 +19724,28 @@
         }
       }
     },
+    "Video bitrate: %@" : {
+      "comment" : "Accepted conversion settings summary: video bitrate.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videobitrate: %@"
+          }
+        }
+      }
+    },
+    "Video encoder: %@" : {
+      "comment" : "Accepted conversion settings summary: video encoder.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videokoder: %@"
+          }
+        }
+      }
+    },
     "Video Files" : {
       "comment" : "Title of a parameter in the \"Add to Encode Queue\" app intent, describing the type of content that can be selected.",
       "isCommentAutoGenerated" : true,
@@ -17229,6 +19765,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Video Multi-Method Assessment Fusion, utviklet av Netflix. Anslår opplevd kvalitet på en skala fra 0 til 100. Resultater over 93 regnes som svært gode."
+          }
+        }
+      }
+    },
+    "Video profile: %@" : {
+      "comment" : "Accepted conversion settings summary: video profile.",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Videoprofil: %@"
           }
         }
       }
@@ -17384,6 +19931,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lydbølge"
+          }
+        }
+      }
+    },
+    "Waveform height" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bølgeformhøyde"
+          }
+        }
+      }
+    },
+    "Waveform unavailable" : {
+      "comment" : "A description of the waveform is unavailable.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bølgeform utilgjengelig"
           }
         }
       }
@@ -17609,6 +20178,27 @@
         }
       }
     },
+    "When enabled, the signed helper accepts requests from local MCP clients and sends them to this app. The app remains the owner of every accepted conversion." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når dette er aktivert, tar det signerte hjelpeverktøyet imot forespørsler fra lokale MCP-klienter og sender dem til denne appen. Appen forblir eier av hver godkjente konvertering."
+          }
+        }
+      }
+    },
+    "When enabled, this Mac sends one random weekly token at most once per day when the app opens. It contains no files, paths, media, conversion, account, hardware, or OS details. This counts active installations, not people." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Når dette er slått på, sender denne Macen én tilfeldig ukentlig kode høyst én gang per dag når appen åpnes. Den inneholder ingen filer, filbaner, medier, konverteringer, kontoopplysninger, maskinvare- eller OS-detaljer. Dette teller aktive installasjoner, ikke personer."
+          }
+        }
+      }
+    },
     "When enabled, Watch Folder Mode starts automatically every time the app launches." : {
       "comment" : "A description of the Watch Folder Mode setting.",
       "isCommentAutoGenerated" : true,
@@ -17707,6 +20297,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hele spillelisten"
+          }
+        }
+      }
+    },
+    "Window" : {
+      "comment" : "Series name for the \"Momentary (400 ms)\" line in the loudness graph.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vindu"
           }
         }
       }
@@ -17874,6 +20476,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "YYYYMMDD (%@)"
+          }
+        }
+      }
+    },
+    "Zoom" : {
+      "comment" : "A label for the zoom slider.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom"
+          }
+        }
+      }
+    },
+    "Zoom the timeline (⌘+ / ⌘−)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom tidslinjen (⌘+ / ⌘−)"
           }
         }
       }

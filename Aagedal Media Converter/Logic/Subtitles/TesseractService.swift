@@ -71,7 +71,7 @@ enum TesseractServiceError: Error, LocalizedError {
 /// Converts bitmap subtitle streams (PGS/VOBSUB) to SRT using Tesseract OCR.
 ///
 /// Pipeline:
-///   1. FFmpeg extracts the subtitle stream to a temporary .sup or .sub file
+///   1. FFmpeg extracts the subtitle stream to a temporary .sup or DVD program stream
 ///   2. PGSParser / VOBSUBParser decodes frames into SubtitleFrame values
 ///   3. Tesseract OCRs each PNG frame
 ///   4. An SRT file is assembled and written to the output directory
@@ -84,6 +84,7 @@ actor TesseractService {
     /// Used both when creating a run dir and when sweeping orphans on launch.
     private static let tempDirPrefix = "TesseractOCR-"
 
+    private let ocrEngine: (any BitmapSubtitleOCREngine)?
     private let subtitleStreamExtractor: TesseractSubtitleStreamExtractor
     private var activeRunIDs: Set<UUID> = []
     private var publicationsByRunID: [UUID: SubtitleSRTPublication] = [:]
@@ -93,7 +94,11 @@ actor TesseractService {
     private var currentExtractionTasks: [UUID: Task<Void, Error>] = [:]
     private var currentOCRTasks: [UUID: Task<String, Error>] = [:]
 
-    init(subprocessRunner: any SubprocessRunning = SubprocessRunner()) {
+    init(
+        subprocessRunner: any SubprocessRunning = SubprocessRunner(),
+        ocrEngine: (any BitmapSubtitleOCREngine)? = nil
+    ) {
+        self.ocrEngine = ocrEngine
         subtitleStreamExtractor = TesseractSubtitleStreamExtractor(
             subprocessRunner: subprocessRunner
         )
@@ -233,17 +238,21 @@ actor TesseractService {
         }
 
         let engine: any BitmapSubtitleOCREngine
-        switch engineKind {
-        case .tesseract:
-            guard let tesseractPath = BinaryPathResolver.tesseractPath else {
-                throw TesseractServiceError.tesseractNotFound
+        if let ocrEngine {
+            engine = ocrEngine
+        } else {
+            switch engineKind {
+            case .tesseract:
+                guard let tesseractPath = BinaryPathResolver.tesseractPath else {
+                    throw TesseractServiceError.tesseractNotFound
+                }
+                engine = TesseractOCREngine(
+                    tesseractPath: tesseractPath,
+                    tessdataPrefix: BinaryPathResolver.tessdataDirectory
+                )
+            case .appleVision:
+                engine = VisionOCREngine()
             }
-            engine = TesseractOCREngine(
-                tesseractPath: tesseractPath,
-                tessdataPrefix: BinaryPathResolver.tessdataDirectory
-            )
-        case .appleVision:
-            engine = VisionOCREngine()
         }
 
         let tempDir = FileManager.default.temporaryDirectory
@@ -276,6 +285,8 @@ actor TesseractService {
         let total = frames.count
         var srtEntries: [(index: Int, start: TimeInterval, end: TimeInterval, text: String)] = []
         var consecutiveFailures = 0
+        var successfulFrames = 0
+        var lastRecognitionFailure: String?
         let maxConsecutiveFailures = 5
 
         for (i, frame) in frames.enumerated() {
@@ -303,6 +314,7 @@ actor TesseractService {
                     task.cancel()
                 }
                 consecutiveFailures = 0
+                successfulFrames += 1
             } catch is CancellationError {
                 throw TesseractServiceError.cancelled
             } catch {
@@ -310,6 +322,7 @@ actor TesseractService {
                 // the engine itself is broken (wrong tessdata path, missing language pack,
                 // unreadable PNG dimensions). Log every failure; bail after a streak.
                 consecutiveFailures += 1
+                lastRecognitionFailure = error.localizedDescription
                 logger.warning("OCR engine failure on frame \(i + 1)/\(total): \(error.localizedDescription, privacy: .public)")
                 if consecutiveFailures >= maxConsecutiveFailures {
                     throw TesseractServiceError.engineUnstable(error.localizedDescription)
@@ -324,6 +337,12 @@ actor TesseractService {
         }
 
         guard !cancelledRunIDs.contains(runID) else { throw TesseractServiceError.cancelled }
+
+        // A short track can exhaust every frame before reaching the failure-streak
+        // limit. Do not publish an empty success when recognition never succeeded.
+        if successfulFrames == 0, let lastRecognitionFailure {
+            throw TesseractServiceError.ocrFailed(lastRecognitionFailure)
+        }
 
         // Step 4 — Write SRT
         progress(TesseractProgress(stage: .writingSRT, percentage: 0.97))
@@ -385,24 +404,29 @@ actor TesseractService {
                 throw TesseractServiceError.parsingFailed(error.localizedDescription)
             }
         } else {
-            // VOBSUB — FFmpeg outputs .sub + .idx
-            let subFile = tempDir.appendingPathComponent("subs.sub")
-            let idxFile = tempDir.appendingPathComponent("subs.idx")
+            // DVD program-stream muxing is supported; VOBSUB pair muxing is not.
+            let subFile = tempDir.appendingPathComponent("subs.vob")
+            let paletteFile = tempDir.appendingPathComponent("palette.txt")
             try await extractStream(
                 source: sourceFile.path,
                 streamIndex: streamIndex,
                 outputPath: subFile.path,
+                palettePath: paletteFile.path,
                 ffmpegPath: ffmpegPath,
                 runID: runID,
                 progress: extractProgress
             )
             progress(TesseractProgress(stage: .parsingFrames, percentage: 0.15))
-            guard FileManager.default.fileExists(atPath: subFile.path),
-                  FileManager.default.fileExists(atPath: idxFile.path) else {
-                throw TesseractServiceError.extractionFailed("VOBSUB .sub/.idx files not created")
+            guard FileManager.default.fileExists(atPath: subFile.path) else {
+                throw TesseractServiceError.extractionFailed("DVD subtitle stream not created")
+            }
+            guard FileManager.default.fileExists(atPath: paletteFile.path) else {
+                throw TesseractServiceError.parsingFailed(VOBSUBParser.PaletteError.missing.localizedDescription)
             }
             do {
-                return try VOBSUBParser.parse(idxURL: idxFile, subURL: subFile)
+                return try VOBSUBParser.parse(programStreamURL: subFile, paletteURL: paletteFile)
+            } catch is CancellationError {
+                throw TesseractServiceError.cancelled
             } catch {
                 throw TesseractServiceError.parsingFailed(error.localizedDescription)
             }
@@ -413,6 +437,7 @@ actor TesseractService {
         source: String,
         streamIndex: Int,
         outputPath: String,
+        palettePath: String? = nil,
         ffmpegPath: String,
         runID: UUID,
         progress: (@Sendable (Double) -> Void)? = nil
@@ -425,6 +450,7 @@ actor TesseractService {
                 source: source,
                 streamIndex: streamIndex,
                 outputPath: outputPath,
+                palettePath: palettePath,
                 ffmpegPath: ffmpegPath,
                 progress: progress
             )
@@ -520,24 +546,27 @@ struct TesseractSubtitleStreamExtractor: Sendable {
         source: String,
         streamIndex: Int,
         outputPath: String,
+        palettePath: String? = nil,
         ffmpegPath: String,
         progress: (@Sendable (Double) -> Void)? = nil
     ) async throws {
         try Task.checkCancellation()
 
+        let dvdInputOptions = palettePath.map { ["-dump_attachment:s:\(streamIndex)", $0, "-copyts"] } ?? []
+        // The DVD muxer rebases the first PTS to its preload; VOB preserves source timing.
+        let dvdOutputOptions = palettePath == nil ? [] : ["-f", "vob", "-avoid_negative_ts", "disabled"]
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
-            arguments: [
-                "-y",
+            arguments: ["-y"] + dvdInputOptions + [
                 "-i", source,
+                // SwiftMediaMetadata numbers subtitles within their stream type.
                 "-map", "0:s:\(streamIndex)",
-                "-c", "copy",
-                outputPath
-            ],
+                "-c", "copy"
+            ] + dvdOutputOptions + [outputPath],
             timeout: Self.timeout,
             standardOutputCaptureLimit: 0,
             standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
-            sensitiveValues: [source, outputPath]
+            sensitiveValues: Set([source, outputPath] + (palettePath.map { [$0] } ?? []))
         )
         let progressParser = TesseractExtractionProgressParser(progress: progress)
 
@@ -569,6 +598,9 @@ struct TesseractSubtitleStreamExtractor: Sendable {
                 request.redactedDiagnostic(error.localizedDescription, limit: 300)
             )
         }
+        // Cancellation can race a successful process exit. Reject its result before
+        // flushing buffered progress or classifying the exit status.
+        try Task.checkCancellation()
         progressParser.finish()
 
         guard result.succeeded else {

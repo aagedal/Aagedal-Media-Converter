@@ -96,6 +96,12 @@ extension VideoFileCellView {
         }
         applyProcessingRing(to: analyticsButton, active: isAnalyzing, color: .systemCyan)
 
+        // Metadata probes can still be pending when the row is rendered. Let the
+        // analysis sheet probe rather than hiding this action prematurely.
+        loudnessButton.isHidden = config.isImageSequence
+        loudnessButton.contentTintColor = .secondaryLabelColor
+        loudnessButton.toolTip = "Analyze program loudness (LUFS) for this file"
+
         // --- Upload button (blue) ---
         uploadButton.isHidden = false
         let isUploading = config.uploadStatus == .uploading
@@ -179,7 +185,9 @@ extension VideoFileCellView {
             deleteButton.toolTip = "Remove from list"
             // Hide rather than disable so we don't carry a faded icon next to the
             // strong delete one. Stack order is [reset, delete] so delete stays put.
-            resetButton.isHidden = config.status == .converting || config.status == .waiting
+            resetButton.isHidden = config.applicationJobID != nil
+                || config.status == .converting
+                || config.status == .waiting
             resetButton.toolTip = "Reset status"
         }
     }
@@ -417,13 +425,19 @@ extension VideoFileCellView {
 
         menu.addItem(.separator())
 
+        menu.addItem(withTitle: String(localized: "Move Selected Files to New Encoding Group"),
+                     action: #selector(ctxMoveSelectionToNewGroup), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+
         let renameItem = menu.addItem(withTitle: "Rename Output", action: #selector(ctxRename), keyEquivalent: "")
         renameItem.target = self
         renameItem.isEnabled = config.status == .waiting
 
         let resetItem = menu.addItem(withTitle: "Reset", action: #selector(ctxReset), keyEquivalent: "")
         resetItem.target = self
-        resetItem.isEnabled = config.status != .waiting && config.status != .converting
+        resetItem.isEnabled = config.applicationJobID == nil
+            && config.status != .waiting
+            && config.status != .converting
 
         let removeItem = menu.addItem(withTitle: "Remove", action: #selector(ctxRemove), keyEquivalent: "")
         removeItem.target = self
@@ -441,7 +455,18 @@ extension VideoFileCellView {
     @objc private func ctxIMFMetadata() { actionHandler?(.showIMFMetadata) }
     @objc private func ctxAudioRouting() { actionHandler?(.showAudioRouting) }
     @objc private func ctxAttachSubtitle() { actionHandler?(.attachSubtitleFile) }
-    @objc private func ctxRename() { actionHandler?(.beginRename) }
+    @objc private func ctxRename() { beginOutputNameEditing() }
     @objc private func ctxReset() { actionHandler?(.reset(optionKeyPressed: false)) }
+    @objc private func ctxMoveSelectionToNewGroup() { actionHandler?(.moveSelectionToNewGroup) }
     @objc private func ctxRemove() { actionHandler?(.delete) }
+}
+
+
+extension VideoFileCellView: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(ctxMoveSelectionToNewGroup) {
+            return canMoveSelectionToNewGroup?() ?? false
+        }
+        return menuItem.isEnabled
+    }
 }

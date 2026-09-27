@@ -7,7 +7,7 @@ import Foundation
 import Sparkle
 import SwiftUI
 
-/// Selects the website mirror for one retry when the primary appcast cannot
+/// Selects the repository mirror for one retry when the primary appcast cannot
 /// be downloaded or parsed. Failures after the appcast loads (for example,
 /// signature validation or installation errors) must not switch feeds.
 private final class SparkleFeedFallbackDelegate: NSObject, SPUUpdaterDelegate {
@@ -99,7 +99,7 @@ final class SparkleUpdater: ObservableObject {
         let isDirectInstall = InstallSource.current == .directDownload
         let active = hasFeedURL && isDirectInstall
         let feedFallbackDelegate = SparkleFeedFallbackDelegate(
-            backupFeedURL: "https://aagedal.me/apps/appcast/mediaconverter.xml"
+            backupFeedURL: "https://raw.githubusercontent.com/aagedal/Aagedal-Media-Converter/main/appcast.xml"
         )
 
         self.isActive = active

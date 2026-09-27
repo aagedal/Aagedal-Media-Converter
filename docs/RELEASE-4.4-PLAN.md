@@ -1,12 +1,18 @@
 # 4.4 release plan — Stabilization and release readiness
 
-Status: automated candidate validation complete; signed and installed-distribution validation pending.
+Status: 4.4.0 released; see the post-release evidence audit for unrecorded gates.
 Created: 2026-09-11.
 
-4.3 is stable; 4.4 is the current release candidate. Ship the improvements already
-implemented once the finite gates below are satisfied. Do not wait for every item in
-IMPROVEMENT_PLAN.md, and do not start MCP or broad architectural refactoring as
-part of release closure. Agent access is proposed for 4.5.
+Release 4.4.0 was tagged at `3a35727`; its appcast entry was committed at
+`57c6c22` and merged to `main` at `89e5f2e`. The unchecked historical items below
+remain unchecked where the repository contains no retained evidence. See the
+[post-release audit](4.4-post-release-audit-2026-09-12.md).
+
+When this plan was created, 4.3 was stable and 4.4 was the current release
+candidate. The implementation was subsequently released as 4.4.0. The finite
+gates below are retained as the historical release checklist. Do not wait for
+every item in IMPROVEMENT_PLAN.md, and do not start MCP or broad architectural
+refactoring as part of release closure. Agent access is proposed for 4.5.
 
 ## Evidence already recorded
 

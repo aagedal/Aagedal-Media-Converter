@@ -45,7 +45,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Microphone access is used to capture your voice on a separate audio track during screen recording.</string>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/aagedal/Aagedal-Media-Converter/main/appcast.xml</string>
+	<string>https://aagedal.me/apps/appcast/mediaconverter.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>i3xudeqe+09I7n+FVFHmPxBa8cEWc3/ljLk3Y9bTEkY=</string>
 	<key>SUAutomaticallyUpdate</key>

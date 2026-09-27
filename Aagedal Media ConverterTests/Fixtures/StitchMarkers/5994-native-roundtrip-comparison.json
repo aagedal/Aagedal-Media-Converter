@@ -1,0 +1,40 @@
+{
+  "status": "passed",
+  "expectedCount": 7,
+  "actualCount": 7,
+  "frameCountModeMatches": true,
+  "missing": [],
+  "unexpected": [],
+  "fixtureProvenance": {
+    "status": "passed",
+    "manifestSHA256": "573bf5e9085cb874955c86976d3ffe4c39c5693446878c78a09b88e3b65c9a3d",
+    "inputSHA256": {
+      "resolve-unique.aagedal-compare.json": "e61bc92cf67cd04b17b2216725ef279c96908b060a57d1dd879d5534e07ded7a",
+      "source-a vs source-b-8571712df122a08d.aagedal-compare.json": "c67528345c2075e41a3a02b5d338277035330dc12e4d846bc66d088bb9b41c6f",
+      "source-a.mov": "d423f9ed8615ba3a03096cbbc52ac5ffeb1aa2f9608aff3f651ff22d68e29829",
+      "source-b.mov": "d423f9ed8615ba3a03096cbbc52ac5ffeb1aa2f9608aff3f651ff22d68e29829"
+    },
+    "reviewFile": "resolve-unique.aagedal-compare.json",
+    "markerCount": 7,
+    "sourcePaths": [
+      "/private/tmp/aagedal-resolve-5994-20260919/source-a.mov",
+      "/private/tmp/aagedal-resolve-5994-20260919/source-b.mov"
+    ],
+    "scope": "Unchanged fixture files and exported source URLs; editor media loading requires native evidence"
+  },
+  "nativeTimeline": {
+    "status": "passed",
+    "snapshotSHA256": "fe082dbc4001473dc75a8d70f76ede4712bc8adcec1d3af67736c71a21bc0348",
+    "project": "Aagedal 5994 Marker Acceptance 20260919",
+    "timeline": "5994 DF current sources",
+    "markerCount": 7,
+    "sourcePath": "/private/tmp/aagedal-resolve-5994-20260919/source-a.mov",
+    "startTimecode": "00:00:58;00",
+    "scope": "Captured Resolve timeline records and source A placement; source B is note provenance only"
+  },
+  "rate": "60000/1001",
+  "editorVersion": "21.1.0.14",
+  "originalSHA256": "0d6a529571e53104eb17d0e0a070f227d0c7bd93662be698a7c53779c8a4540e",
+  "returnedSHA256": "28b67ea9e3ddd30fa39400d42db437ae9c12ea19e7a72d89a66ef04203a0f896",
+  "scope": "EDL comparison, unchanged fixtures and captured native timeline/source-A identity"
+}

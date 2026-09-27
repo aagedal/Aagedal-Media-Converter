@@ -35,6 +35,9 @@ enum AppConstants {
     // Settings window tab to open (used for opening Settings to a specific tab from main window)
     static let settingsTabToOpenKey = "settingsTabToOpen"
 
+    // Local MCP access remains off until the user explicitly enables it.
+    static let localAgentAccessEnabledKey = "localAgentAccessEnabled"
+
     static let defaultScreenshotDirectory: URL = {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         let fallback = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads", isDirectory: true)
@@ -233,6 +236,8 @@ enum AppConstants {
     // Encoding-group defaults applied when a new group is created.
     // Merge and sequential naming are mutually exclusive — the settings UI and
     // toggle handlers enforce that only one can be on at a time.
+    static let exportStitchMarkersKey = "exportStitchMarkers"
+    static let exportStitchMarkersDefault = true
     static let defaultGroupMergeEnabledKey = "defaultGroupMergeEnabled"
     static let defaultGroupSequentialNamingEnabledKey = "defaultGroupSequentialNamingEnabled"
     static let defaultGroupPresetKey = "defaultGroupPreset"
@@ -368,6 +373,8 @@ enum AppConstants {
     /// invalidate every existing user's flag and cause the notice to re-fire.
     static let didShowAutoUpdateNoticeKey = "didShowAutoUpdateNotice"
 
+    static let ignoreStitchTimecodeTrimOffsetKey = "ignoreStitchTimecodeTrimOffset"
+
     // Timecode defaults
     static let defaultTimecodeModeKey = "defaultTimecodeMode"
     static let defaultTimecodeValueKey = "defaultTimecodeValue"
@@ -478,7 +485,7 @@ enum AppConstants {
     static let defaultDCPScalingMode = "Fill (crop to fill)"
     static let dcpKeepJP2ImagesKey = "dcpKeepJP2Images"
 
-    // IMF preset settings (App #2e and App #5 share these unless suffixed)
+    // IMF preset settings (App #2e and RDD 45 share these unless suffixed)
     static let imfApplicationKey = "imfApplication"
     static let defaultIMFApplication = "app2e"          // IMFApplication.rawValue
     static let imfResolutionKey = "imfResolution"

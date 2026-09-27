@@ -8,6 +8,23 @@ import AppKit
 import Libmpv
 import OSLog
 
+/// The C callback owns this box, never the player. It only schedules work: resolving
+/// the weak player on libmpv's callback thread could run its deinit under mpv's
+/// wakeup lock, deadlocking when teardown unregisters that same callback.
+final class MPVWakeupContext: @unchecked Sendable {
+    private let queue: DispatchQueue
+    private let handler: @Sendable () -> Void
+
+    init(queue: DispatchQueue, handler: @escaping @Sendable () -> Void) {
+        self.queue = queue
+        self.handler = handler
+    }
+
+    func schedule() {
+        queue.async(execute: handler)
+    }
+}
+
 /// MPV Player - NOT an actor to allow background thread access for event handling
 /// All @Published property updates are dispatched to main thread
 /// Marked @unchecked Sendable because we handle thread safety manually with DispatchQueue
@@ -18,6 +35,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var mpv: OpaquePointer?
     private var metalLayer: MPVMetalLayer?
     private let queue = DispatchQueue(label: "com.aagedal.mpv", qos: .userInitiated)
+    private let eventQueueKey = DispatchSpecificKey<Bool>()
 
     // Published properties for playback state
     @Published var isPlaying = false
@@ -39,6 +57,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     @Published var error: String?
     @Published var reachedEnd = false
 
+    /// Active libmpv audio backend, used when diagnosing playback/device failures.
+    var currentAudioOutput: String? { getString("current-ao") }
+
     private var isInitialized = false
     private var startPaused = false
     private var wakeupContext: UnsafeMutableRawPointer?
@@ -53,25 +74,23 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     override init() {
         super.init()
+        queue.setSpecific(key: eventQueueKey, value: true)
     }
 
     deinit {
-        // Clean up MPV context
-        if mpv != nil {
+        if let mpv {
+            // libmpv serializes callback replacement with callback execution.
+            // Keep the box alive until unregistering and destroying the handle.
             mpv_set_wakeup_callback(mpv, nil, nil)
-
-            queue.sync {
-                if self.mpv != nil {
-                    mpv_terminate_destroy(self.mpv)
-                    self.mpv = nil
-                }
+            if DispatchQueue.getSpecific(key: eventQueueKey) == true {
+                // The last reference may be released by an event queue block.
+                mpv_terminate_destroy(mpv)
+            } else {
+                queue.sync { mpv_terminate_destroy(mpv) }
             }
         }
-
-        // Release the retained reference from the wakeup callback
         if let ctx = wakeupContext {
-            Unmanaged<MPVPlayer>.fromOpaque(ctx).release()
-            wakeupContext = nil
+            Unmanaged<MPVWakeupContext>.fromOpaque(ctx).release()
         }
     }
 
@@ -180,12 +199,15 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         mpv_observe_property(mpv, 0, MPVProperty.speed, MPV_FORMAT_DOUBLE)
 
         // Set wakeup callback for event handling
-        // Store the context so we can release it in deinit
-        wakeupContext = Unmanaged.passRetained(self).toOpaque()
+        // Retain only a callback box; retaining self here prevents deinit forever.
+        let context = MPVWakeupContext(queue: queue) { [weak self] in
+            self?.readEvents()
+        }
+        wakeupContext = Unmanaged.passRetained(context).toOpaque()
         mpv_set_wakeup_callback(mpv, { ctx in
             guard let client = ctx else { return }
-            let player = Unmanaged<MPVPlayer>.fromOpaque(client).takeUnretainedValue()
-            player.readEvents()
+            let context = Unmanaged<MPVWakeupContext>.fromOpaque(client).takeUnretainedValue()
+            context.schedule()
         }, wakeupContext)
 
         isInitialized = true
@@ -198,6 +220,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var loadStartTime: CFAbsoluteTime = 0
 
     func load(url: URL, startTime: Double = 0, autostart: Bool = false) {
+        error = nil
         loadStartTime = CFAbsoluteTimeGetCurrent()
         logger.info("⏱️ [0.000s] Load starting for: \(url.lastPathComponent)")
 
@@ -516,25 +539,25 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                                 DispatchQueue.main.async { self.duration = value }
                             }
                         case MPVProperty.pause:
-                            if let value = UnsafePointer<Int>(OpaquePointer(property.data))?.pointee {
+                            if let value = UnsafePointer<Int32>(OpaquePointer(property.data))?.pointee {
                                 DispatchQueue.main.async { self.isPlaying = value == 0 }
                             }
                         case MPVProperty.pausedForCache:
-                            if let value = UnsafePointer<Int>(OpaquePointer(property.data))?.pointee {
+                            if let value = UnsafePointer<Int32>(OpaquePointer(property.data))?.pointee {
                                 DispatchQueue.main.async { self.isBusy = value != 0 }
                             }
                         case MPVProperty.seekable:
-                            if let value = UnsafePointer<Int>(OpaquePointer(property.data))?.pointee {
+                            if let value = UnsafePointer<Int32>(OpaquePointer(property.data))?.pointee {
                                 DispatchQueue.main.async { self.isSeekable = value != 0 }
                             }
                         case MPVProperty.eofReached:
-                            if let value = UnsafePointer<Int>(OpaquePointer(property.data))?.pointee {
+                            if let value = UnsafePointer<Int32>(OpaquePointer(property.data))?.pointee {
                                 let reached = value != 0
                                 DispatchQueue.main.async {
                                     self.logger.info("EOF reached (\(reached)), pausing at last frame if needed")
-                                    // Always update reachedEnd to match MPV's state
-                                    // This ensures the observer can fire again after seeking away from EOF
-                                    self.reachedEnd = reached
+                                    // Seeking away resets EOF for replay. A failed
+                                    // or not-yet-loaded source cannot complete a clip.
+                                    self.reachedEnd = reached && self.isFileLoaded && self.error == nil
                                     if reached {
                                         self.isPlaying = false
                                     }
@@ -548,6 +571,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                 case MPV_EVENT_SHUTDOWN:
                     self.logger.info("MPV shutdown event")
                     if self.mpv != nil {
+                        mpv_set_wakeup_callback(self.mpv, nil, nil)
                         mpv_terminate_destroy(self.mpv)
                         self.mpv = nil
                     }
@@ -583,17 +607,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                 case MPV_EVENT_END_FILE:
                     if let dataPtr = OpaquePointer(pointee.data) {
                         let endFile = UnsafePointer<mpv_event_end_file>(dataPtr).pointee
-                        if endFile.reason == MPV_END_FILE_REASON_ERROR {
-                            let errorMsg = String(cString: mpv_error_string(endFile.error))
-                            self.logger.error("MPV end file error: \(errorMsg)")
-                            DispatchQueue.main.async {
-                                self.error = errorMsg
-                            }
+                        DispatchQueue.main.async {
+                            self.handleEndFile(reason: endFile.reason, errorCode: endFile.error)
                         }
-                    }
-                    DispatchQueue.main.async {
-                        self.isPlaying = false
-                        self.reachedEnd = true
                     }
 
                 case MPV_EVENT_START_FILE:
@@ -608,6 +624,20 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     // MARK: - MPV Commands & Properties
+
+    /// Only natural EOF completes a clip. Stop/replacement and decoder failures
+    /// also emit END_FILE and must never advance a stitching sequence.
+    @MainActor
+    func handleEndFile(reason: mpv_end_file_reason, errorCode: Int32) {
+        isPlaying = false
+        if reason == MPV_END_FILE_REASON_ERROR {
+            let message = String(cString: mpv_error_string(errorCode))
+            logger.error("MPV end file error: \(message)")
+            isFileLoaded = false
+            error = message
+        }
+        reachedEnd = reason == MPV_END_FILE_REASON_EOF && error == nil
+    }
 
     /// Execute a command using mpv_command_string - simpler than mpv_command
     private func commandString(_ cmd: String) {

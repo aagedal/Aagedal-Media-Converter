@@ -6,7 +6,7 @@ import Foundation
 import OSLog
 
 /// Immutable opt-in soundfield defaults captured before probing or encoding begins.
-struct AVCIntraMCADefaults: Sendable {
+struct AVCIntraMCADefaults: Codable, Equatable, Sendable {
     private let soundfieldsByChannelCount: [Int: MCAStandardSoundfield]
 
     static let none = AVCIntraMCADefaults(soundfieldsByChannelCount: [:])

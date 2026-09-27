@@ -61,6 +61,8 @@ final class PreviewPlayerController: ObservableObject {
     @Published private(set) var currentWaveformURL: URL?
     @Published private(set) var currentWaveformChunks: [WaveformChunk] = []
     @Published private(set) var currentNativeWaveformImage: NSImage?
+    @Published private(set) var currentChannelWaveformEnvelopes: [WaveformEnvelope] = []
+    @Published private(set) var currentWaveformEnvelope: WaveformEnvelope?
     @Published private(set) var currentChannelWaveformImages: [NSImage] = []
     @Published private(set) var currentChannelWaveformLabels: [String] = []
     @Published private(set) var currentChapters: [Chapter] = []
@@ -127,15 +129,17 @@ final class PreviewPlayerController: ObservableObject {
     var playerItemStatusObserverID: UUID?
     var playerItemStatusOperationID: UUID?
     var playerItemStatusTask: Task<Void, Never>?
+    var playerItemLoadDeadlineTask: Task<Void, Never>?
     private var audioSelectionTask: Task<Void, Never>?
     private var audioSelectionOperationID: UUID?
     var mpvObservers = Set<AnyCancellable>()
     var mpvObservationID: UUID?
     var mpvTrackRefreshTask: Task<Void, Never>?
+    var mpvLoadDeadlineTask: Task<Void, Never>?
     var primaryAccess: SecurityScopedAccess = .none
     var imageSequenceAudioAccess: SecurityScopedAccess = .none
     weak var playerView: AVPlayerView?
-    var selectedAudioTrackOrderIndex: Int = 0
+    @Published var selectedAudioTrackOrderIndex: Int = 0
     var selectedSubtitleTrackOrderIndex: Int = -1  // -1 means subtitles disabled
 
     // MARK: - Audio Monitoring
@@ -242,6 +246,24 @@ final class PreviewPlayerController: ObservableObject {
         useMPV = false
         useImageSequence = false
 
+#if DEBUG
+        // Exercise user actions while a source is unavailable without slowing normal previews.
+        if ProcessInfo.processInfo.environment["AMC_UI_TEST_SESSION"] == "1",
+           ProcessInfo.processInfo.environment["AMC_UI_TEST_DELAY_STITCHING_LOAD"] == "1",
+           videoItem.url.deletingPathExtension().lastPathComponent == "ui-test-second" {
+            preparationTask = Task { @MainActor [weak self] in
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                guard let self, !Task.isCancelled else { return }
+                self.preparationTask = nil
+                self.preparePreviewBackend(startTime: startTime)
+            }
+            return
+        }
+#endif
+        preparePreviewBackend(startTime: startTime)
+    }
+
+    private func preparePreviewBackend(startTime: TimeInterval) {
         // Image sequence preview: load frames directly from disk
         if let config = videoItem.imageSequenceConfig {
             setupImageSequencePreview(config: config, startTime: startTime)
@@ -340,7 +362,8 @@ final class PreviewPlayerController: ObservableObject {
         installMPVObservers(
             timePosition: mpv.$timePos.eraseToAnyPublisher(),
             fileLoaded: mpv.$isFileLoaded.eraseToAnyPublisher(),
-            reachedEnd: mpv.$reachedEnd.eraseToAnyPublisher()
+            reachedEnd: mpv.$reachedEnd.eraseToAnyPublisher(),
+            failure: mpv.$error.eraseToAnyPublisher()
         ) { [weak self] in
             guard let self else { return }
             self.refreshAudioTrackOptions(for: self.videoItem, playerItem: nil)
@@ -637,6 +660,30 @@ final class PreviewPlayerController: ObservableObject {
         }
     }
     
+    /// Restores sequence playback intent after changing source clips.
+    func playShuttle(at rate: Float) {
+        guard isReady, rate.isFinite, rate != 0 else { return }
+        pause()
+        if rate < 0 {
+            reverseSpeed = max(1, min(8, Int(abs(rate))))
+            isReverseSimulating = true
+            startReverseTimer(skip: reverseSpeed)
+            currentPlaybackSpeed = -Float(reverseSpeed)
+        } else {
+            let speed = max(0.25, min(8, rate))
+            if useImageSequence {
+                startImageSequencePlayback()
+                updateImageSequenceSpeed(speed)
+            } else if useMPV, let mpv = mpvPlayer {
+                mpv.rate = speed
+                mpv.play()
+            } else if let player {
+                player.playImmediately(atRate: speed)
+            }
+            currentPlaybackSpeed = speed
+        }
+    }
+
     func stepRate(forward: Bool) {
         trimPlayback.invalidate()
         let step: Float = 0.5
@@ -1030,7 +1077,7 @@ final class PreviewPlayerController: ObservableObject {
                 AudioTrackOption(
                     id: Int(trackID),
                     position: position,
-                    streamIndex: Int(trackID) - 1, // MPV track IDs are 1-based, waveforms are 0-based
+                    streamIndex: position, // Audio ordinal; MPV IDs need not be contiguous.
                     mediaOptionIndex: nil,
                     title: name,
                     subtitle: nil
@@ -1222,9 +1269,12 @@ final class PreviewPlayerController: ObservableObject {
     private var channelWaveformGenerationTask: Task<Void, Never>?
 
     private func updateCurrentWaveform() {
+        channelWaveformGenerationTask?.cancel()
         let streamIndex = selectedAudioStreamIndex()
         // Per-channel waveform images (preferred, shows one waveform per audio channel)
         let channelWaveform = previewAssets?.nativeChannelWaveforms(forAudioStream: streamIndex)
+        currentChannelWaveformEnvelopes = channelWaveform?.channelEnvelopes ?? []
+        currentWaveformEnvelope = (streamIndex == nil || streamIndex == 0) ? previewAssets?.waveformEnvelope : nil
         currentChannelWaveformImages = channelWaveform?.channelImages ?? []
         currentChannelWaveformLabels = channelWaveform?.channelLabels ?? []
         // Native waveform image (fallback, single mono image)
@@ -1237,7 +1287,7 @@ final class PreviewPlayerController: ObservableObject {
         logger.debug("Updated waveform: channels=\(self.currentChannelWaveformImages.count, privacy: .public), native=\(self.currentNativeWaveformImage != nil, privacy: .public), \(self.currentWaveformChunks.count, privacy: .public) chunks, totalDuration: \(self.totalDuration, privacy: .public)s for stream index: \(streamIndex ?? -1, privacy: .public)")
 
         // If per-channel waveform is missing for this stream, generate on demand
-        if currentChannelWaveformImages.isEmpty, let streamIndex {
+        if currentChannelWaveformEnvelopes.isEmpty, let streamIndex {
             generateChannelWaveformOnDemand(for: streamIndex)
         }
     }
@@ -1274,7 +1324,9 @@ final class PreviewPlayerController: ObservableObject {
 
             guard !Task.isCancelled else { return }
 
+            guard self.videoItem.url == url, self.selectedAudioStreamIndex() == streamIndex else { return }
             // Update the published state
+            self.currentChannelWaveformEnvelopes = waveform.channelEnvelopes
             self.currentChannelWaveformImages = waveform.channelImages
             self.currentChannelWaveformLabels = waveform.channelLabels
         }
@@ -1327,6 +1379,7 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func teardown(resetAudioSelection: Bool = true) {
+        isReady = false
         trimPlayback.invalidate()
         removeMPVObservers()
         audioSelectionOperationID = nil
@@ -1389,6 +1442,8 @@ final class PreviewPlayerController: ObservableObject {
         currentWaveformURL = nil
         currentWaveformChunks = []
         currentNativeWaveformImage = nil
+        currentWaveformEnvelope = nil
+        currentChannelWaveformEnvelopes = []
         currentChannelWaveformImages = []
         currentChannelWaveformLabels = []
         channelWaveformGenerationTask?.cancel()

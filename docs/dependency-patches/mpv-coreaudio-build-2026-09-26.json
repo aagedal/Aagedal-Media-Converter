@@ -1,0 +1,65 @@
+{
+  "mpvkit_revision": "230c3174f1515898f24599147ad61c2a277d0dc2",
+  "mpv_revision": "41f6a645068483470267271e1d09966ca3b9f413",
+  "patch_sha256": "09ce40634c7e45aec5a53c12c44666e02301c6581e4fdb334b7a792d3eb905db",
+  "cleanup_followup_sha256": "c3cf61bcf29886ed664a6072f386df11ff02d5b84677b09a657c333a6b374079",
+  "source_before_coreaudio_diff_sha256": "bb42186d3b4fd06d5d569327f78f1885a8d54dea7befbed8ca947e43188d4e2b",
+  "source_input_manifest_sha256": "b284b6816c1d275af65f55615a565231003ff9527d33fdeb98eaabcd45bb37b0",
+  "source_status": " D TOOLS/osxbundle/mpv.app/Contents/Info.plist\n D TOOLS/osxbundle/mpv.app/Contents/MacOS/.gitkeep\n D TOOLS/osxbundle/mpv.app/Contents/MacOS/lib/.gitkeep\n D TOOLS/osxbundle/mpv.app/Contents/PkgInfo\n D TOOLS/osxbundle/mpv.app/Contents/Resources/Assets.car\n D TOOLS/osxbundle/mpv.app/Contents/Resources/document.icns\n D TOOLS/osxbundle/mpv.app/Contents/Resources/icon.icns\n D TOOLS/osxbundle/mpv.app/Contents/Resources/mpv.conf\n M meson.build\n M meson.options\n M osdep/mac/meson.build\n M video/out/gpu/context.c\n M video/out/vulkan/common.h\n?? video/out/vulkan/context_moltenvk.m\n",
+  "dependency_input_directory": "/Users/truls.aagedal/Developer/MPVKit/dist",
+  "restored_bundle_assets": [
+    "TOOLS/osxbundle/mpv.app/Contents/Info.plist",
+    "TOOLS/osxbundle/mpv.app/Contents/MacOS/.gitkeep",
+    "TOOLS/osxbundle/mpv.app/Contents/MacOS/lib/.gitkeep",
+    "TOOLS/osxbundle/mpv.app/Contents/PkgInfo",
+    "TOOLS/osxbundle/mpv.app/Contents/Resources/Assets.car",
+    "TOOLS/osxbundle/mpv.app/Contents/Resources/document.icns",
+    "TOOLS/osxbundle/mpv.app/Contents/Resources/icon.icns",
+    "TOOLS/osxbundle/mpv.app/Contents/Resources/mpv.conf"
+  ],
+  "sdk": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk",
+  "status": "build_succeeded",
+  "release_ready": false,
+  "exit_code": 0,
+  "patched_coreaudio_sha256": "b952bfb9e46b34c5307633a37079790664c51f561cb3f9a53e0eba57e03e6383",
+  "candidate_archives": [
+    {
+      "path": "dist/release/Libmpv.xcframework.zip",
+      "sha256": "7a362047b0bbe39e9f7001e5b9146cd0651c2eadae38ebcd52f16207b42a4f00"
+    },
+    {
+      "path": "dist/release/libmpv-all.zip",
+      "sha256": "e8df52182754ac706c7f916b9683b0e50a65ad62ddeb0b2351ac0ccfb4667479"
+    }
+  ],
+  "candidate_binaries": [
+    {
+      "path": "dist/libmpv/macos/Libmpv.framework/Versions/A/Libmpv",
+      "sha256": "057d89386ea526528d56a7fb5170e2f6413832a3aed84a1f3bb690bf7cce3424"
+    },
+    {
+      "path": "dist/libmpv/macos/scratch/arm64/libmpv.a",
+      "sha256": "06bfa3daaa7a9e709c704bc6ae6f0f7b2bd8e9dae3dbe14a921803547f4e3efd"
+    },
+    {
+      "path": "dist/libmpv/macos/scratch/x86_64/libmpv.a",
+      "sha256": "355d023561698144aee7e3573542f3872cbea7114b12fc314b645bb4732d3794"
+    },
+    {
+      "path": "dist/libmpv/macos/thin/arm64/lib/libmpv.a",
+      "sha256": "06bfa3daaa7a9e709c704bc6ae6f0f7b2bd8e9dae3dbe14a921803547f4e3efd"
+    },
+    {
+      "path": "dist/libmpv/macos/thin/x86_64/lib/libmpv.a",
+      "sha256": "355d023561698144aee7e3573542f3872cbea7114b12fc314b645bb4732d3794"
+    }
+  ],
+  "date": "2026-09-26",
+  "staging_directory": "/private/tmp/amc-mpv-coreaudio-cleanup-20260926-b",
+  "remaining_release_gates": [
+    "Versioned replacement asset publication and application package pin update",
+    "Updated application attribution/source reports",
+    "Signed application playback/replay and Release package checks",
+    "Physical audio-device hotplug/change on affected macOS"
+  ]
+}

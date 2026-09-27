@@ -78,7 +78,7 @@ SCHEME="Aagedal Media Converter"
 
 if [[ -z "${1:-}" || -z "${2:-}" ]]; then
     echo "    Reading version from xcodebuild -showBuildSettings (takes a few seconds)…"
-    BUILD_SETTINGS=$(xcodebuild -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates -project "$PROJECT" -showBuildSettings -scheme "$SCHEME")
+    BUILD_SETTINGS=$(xcodebuild -skipPackageUpdates -project "$PROJECT" -showBuildSettings -scheme "$SCHEME")
 fi
 if [[ -n "${1:-}" ]]; then
     MARKETING_VERSION="$1"
@@ -127,7 +127,7 @@ EOF
 # from also compiling an x86_64 slice that the arm64-only main target would
 # discard at link time. The main target already sets EXCLUDED_ARCHS=x86_64
 # but that setting doesn't always propagate into SPM package builds.
-xcodebuild archive -onlyUsePackageVersionsFromResolvedFile -skipPackageUpdates \
+xcodebuild archive -skipPackageUpdates \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration Release \

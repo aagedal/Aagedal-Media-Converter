@@ -1,6 +1,6 @@
 # Corresponding sources and release attribution
 
-The 4.4 distribution includes a separate `Aagedal_Media_Converter_*_Sources_*.tar`
+Release distributions include a separate `Aagedal_Media_Converter_*_Sources_*.tar`
 companion alongside the application ZIP. It contains reviewed source archives,
 licenses, patches and build instructions for the bundled copyleft components.
 The app's About > Licenses viewer also provides the collected notices offline.
@@ -35,13 +35,21 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
   inputs. The package review distinguishes direct archive/payload matches from
   version/build-date inferences for some upstream runtime notices. It does not
   claim every upstream binary has been independently reproduced.
-- **SwiftMediaMetadata 3.0.0:** the exact pinned source tree, including the GeoNames
+- **SwiftMediaMetadata 3.0.1:** the exact pinned source tree, including the GeoNames
   database and its upstream acknowledgement. Its source package identifies
   required platform tools and dependencies in `Package.swift`.
 
-Detailed evidence is retained under `docs/provenance/4.4-local-builds/`. Build
-recipes describe their dependencies; use the recorded revisions instead of
-current branches. Where a local source archive has no upstream download URL,
+Detailed evidence for the existing dependency set is retained under
+`docs/provenance/4.4-local-builds/`. The 4.5 patched MPVKit package and source
+archive are recorded in `docs/4.5-mpv-coreaudio-package-validation-2026-09-25.md`.
+The replacement `coreaudio.2` package at revision
+`400202b687841fb394cbf0ef59ad8c6fcfc1275b` includes the additional failed-unit
+handle cleanup; its published source and updated compile/patch records replace
+the active CoreAudio source/configuration entries in `AttributionSources.json`.
+The 4.4 provenance remains historical. See
+`docs/4.5-mpv-coreaudio-failure-cleanup-validation-2026-09-26.md`.
+Build recipes describe their dependencies; use the recorded revisions instead
+of current branches. Where a local source archive has no upstream download URL,
 retain that archive or restore it from the source companion. Regenerating or
 changing an archive requires reviewing its contents and updating its recorded
 hash; do not simply remove it from the manifest to make the release gate pass.

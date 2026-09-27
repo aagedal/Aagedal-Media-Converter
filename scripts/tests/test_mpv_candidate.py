@@ -1,0 +1,194 @@
+import hashlib
+import importlib.util
+import io
+import plistlib
+import stat
+from pathlib import Path
+import tempfile
+import unittest
+import zipfile
+
+SPEC = importlib.util.spec_from_file_location("mpv_candidate", Path(__file__).parents[1] / "verify-mpv-candidate.py")
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+
+
+class MPVCandidateTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.payloads = {MODULE.FRAMEWORK: b"universal framework"}
+        self.payloads[MODULE.SOURCE_DIFF] = b"pre-patch diff"
+        self.payloads[MODULE.PATCHED_SOURCE] = b"patched CoreAudio source"
+        for arch in MODULE.ARCHITECTURES:
+            self.payloads[f"dist/libmpv/macos/thin/{arch}/lib/libmpv.a"] = arch.encode()
+        self.library = {"LibraryIdentifier": "macos-arm64_x86_64", "BinaryPath": "Libmpv.framework/Versions/A/Libmpv",
+                        "SupportedPlatform": "macos", "SupportedArchitectures": ["arm64", "x86_64"]}
+        self.make_archives()
+
+    def make_archives(self, framework=None, duplicate=False, extra_member=None):
+        for archive in (MODULE.ARCHIVE, MODULE.STATIC_ARCHIVE):
+            stream = io.BytesIO()
+            with zipfile.ZipFile(stream, "w") as bundle:
+                if extra_member:
+                    bundle.writestr(extra_member, b"unexpected")
+                if archive == MODULE.ARCHIVE:
+                    bundle.writestr(MODULE.PREFIX + "Info.plist", plistlib.dumps({"AvailableLibraries": [self.library]}))
+                    member = MODULE.PREFIX + self.library["LibraryIdentifier"] + "/" + self.library["BinaryPath"]
+                    bundle.writestr(member, framework or self.payloads[MODULE.FRAMEWORK])
+                    if duplicate:
+                        import warnings
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", UserWarning)
+                            bundle.writestr(member, b"duplicate")
+                else:
+                    for arch in MODULE.ARCHITECTURES:
+                        bundle.writestr(f"lib/macos/thin/{arch}/lib/libmpv.a", arch.encode())
+            self.payloads[archive] = stream.getvalue()
+        self.evidence = {
+            "status": "build_succeeded", "exit_code": 0,
+            "patch_sha256": hashlib.sha256(MODULE.PATCH.read_bytes()).hexdigest(),
+            "source_before_coreaudio_diff_sha256": hashlib.sha256(self.payloads[MODULE.SOURCE_DIFF]).hexdigest(),
+            "patched_coreaudio_sha256": hashlib.sha256(self.payloads[MODULE.PATCHED_SOURCE]).hexdigest(),
+            "candidate_binaries": [], "candidate_archives": [],
+        }
+        for name, data in self.payloads.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            if name not in (MODULE.SOURCE_DIFF, MODULE.PATCHED_SOURCE):
+                key = "candidate_archives" if name.endswith(".zip") else "candidate_binaries"
+                self.evidence[key].append({"path": name, "sha256": hashlib.sha256(data).hexdigest()})
+
+    def verify(self, architectures=("arm64", "x86_64"), thin_architectures=None):
+        def read_architectures(path):
+            if path.name == "libmpv.a":
+                return thin_architectures or (path.parents[1].name,)
+            return architectures
+        return MODULE.verify(self.root, self.evidence, read_architectures)
+
+    def test_corresponding_candidate_passes_without_claiming_release_ready(self):
+        self.assertFalse(self.verify()["release_ready"])
+
+    def test_changed_payload_fails(self):
+        (self.root / MODULE.FRAMEWORK).write_bytes(b"changed")
+        with self.assertRaisesRegex(ValueError, "hash mismatch"):
+            self.verify()
+
+    def test_changed_patched_source_fails(self):
+        (self.root / MODULE.PATCHED_SOURCE).write_bytes(b"different")
+        with self.assertRaisesRegex(ValueError, "Patched CoreAudio source hash mismatch"):
+            self.verify()
+
+    def test_changed_pre_patch_diff_fails(self):
+        (self.root / MODULE.SOURCE_DIFF).write_bytes(b"different")
+        with self.assertRaisesRegex(ValueError, "Pre-patch source diff hash mismatch"):
+            self.verify()
+
+    def test_changed_patch_hash_fails(self):
+        self.evidence["patch_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "Retained CoreAudio patch hash mismatch"):
+            self.verify()
+
+    def test_cleanup_followup_hash_is_checked_when_present(self):
+        self.evidence["cleanup_followup_sha256"] = hashlib.sha256(MODULE.FOLLOWUP_PATCH.read_bytes()).hexdigest()
+        self.assertFalse(self.verify()["release_ready"])
+        self.evidence["cleanup_followup_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "cleanup follow-up patch hash mismatch"):
+            self.verify()
+
+    def test_archive_with_valid_hash_but_different_binary_fails(self):
+        self.make_archives(framework=b"different")
+        with self.assertRaisesRegex(ValueError, "differs"):
+            self.verify()
+
+    def test_incorrect_actual_architecture_fails(self):
+        with self.assertRaisesRegex(ValueError, "exactly"):
+            self.verify(("arm64",))
+
+    def test_mislabeled_thin_archive_fails_even_when_hashes_match(self):
+        with self.assertRaisesRegex(ValueError, "Thin archive must contain exactly"):
+            self.verify(thin_architectures=("arm64",))
+
+    def test_universal_archive_in_thin_location_fails(self):
+        with self.assertRaisesRegex(ValueError, "Thin archive must contain exactly"):
+            self.verify(thin_architectures=("arm64", "x86_64"))
+
+    def test_unsafe_unrelated_zip_member_fails(self):
+        for name in ("../outside", "/absolute", "a/../outside", "a//b", "a/./b", "a\\b"):
+            with self.subTest(name=name):
+                self.make_archives(extra_member=name)
+                with self.assertRaisesRegex(ValueError, "Unsafe archive path"):
+                    self.verify()
+
+    def test_unsafe_metadata_binary_path_fails(self):
+        self.library["BinaryPath"] = "../Libmpv"
+        self.make_archives()
+        with self.assertRaisesRegex(ValueError, "Unsafe archive path"):
+            self.verify()
+
+    def test_nested_library_identifier_fails(self):
+        self.library["LibraryIdentifier"] = "nested/macos-arm64_x86_64"
+        self.make_archives()
+        with self.assertRaisesRegex(ValueError, "binary location"):
+            self.verify()
+
+    def test_incorrect_declared_platform_fails(self):
+        self.library["SupportedPlatform"] = "ios"
+        self.make_archives()
+        with self.assertRaisesRegex(ValueError, "platform"):
+            self.verify()
+
+    def test_duplicate_zip_members_fail(self):
+        self.make_archives(duplicate=True)
+        with self.assertRaisesRegex(ValueError, "Duplicate ZIP"):
+            self.verify()
+
+    def test_missing_evidence_fails(self):
+        self.evidence["candidate_binaries"] = []
+        with self.assertRaisesRegex(ValueError, "missing required"):
+            self.verify()
+
+    def test_failed_build_fails(self):
+        self.evidence["exit_code"] = 1
+        with self.assertRaisesRegex(ValueError, "successful"):
+            self.verify()
+
+    def test_escaping_symlink_fails(self):
+        path = self.root / MODULE.FRAMEWORK
+        path.unlink()
+        path.symlink_to(self.root.parent / "outside")
+        with self.assertRaisesRegex(ValueError, "escapes"):
+            self.verify()
+
+    def test_parent_paths_fail(self):
+        with self.assertRaisesRegex(ValueError, "Unsafe"):
+            MODULE.contained(self.root, "../outside")
+
+    def test_archive_symlinks_must_have_safe_relative_targets(self):
+        for target in ("/outside", "../outside", "a/../../outside", "a\\outside", "a//outside"):
+            with self.subTest(target=target):
+                stream = io.BytesIO()
+                with zipfile.ZipFile(stream, "w") as bundle:
+                    link = zipfile.ZipInfo("Libmpv.xcframework/link")
+                    link.create_system = 3
+                    link.external_attr = (stat.S_IFLNK | 0o777) << 16
+                    bundle.writestr(link, target)
+                with zipfile.ZipFile(stream) as bundle:
+                    with self.assertRaisesRegex(ValueError, "Unsafe archive path"):
+                        MODULE.verify_archive_links(bundle)
+
+    def test_archive_symlink_accepts_framework_relative_target(self):
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w") as bundle:
+            link = zipfile.ZipInfo("Libmpv.xcframework/Libmpv.framework/Libmpv")
+            link.create_system = 3
+            link.external_attr = (stat.S_IFLNK | 0o777) << 16
+            bundle.writestr(link, "Versions/Current/Libmpv")
+        with zipfile.ZipFile(stream) as bundle:
+            MODULE.verify_archive_links(bundle)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,6 +1,6 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-11
+Last reviewed: 2026-09-26
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -8,9 +8,11 @@ issue link when it starts.
 
 ## Release split and completion rule
 
-4.3 is stable. **4.4 is the stabilization release in development; 4.5 is the
-proposed local agent-access release.** The release plans below govern remaining
-scope; the numbered sections retain implementation evidence and history.
+4.4.0 is stable. **4.5 is in release documentation preparation**, with local
+agent access, stitching, and MPV CoreAudio fixes. The current summary in the
+[4.5 release plan](docs/RELEASE-4.5-PLAN.md) supersedes older readiness snapshots.
+The numbered sections below retain implementation evidence and follow-up work;
+completing this whole roadmap is not a release prerequisite.
 
 - [4.4 release plan](docs/RELEASE-4.4-PLAN.md): a finite release checklist covering
   concrete correctness issues, live regression validation, dependency attribution,
@@ -42,6 +44,128 @@ work writing after cancellation must be fixed or have the affected path explicit
 disabled before 4.4. Record a disposition for unresolved risks; do not silently
 reclassify them as polish. Historical time estimates and delivery ordering below
 are not current release commitments.
+
+## 4.5 execution serialization continuation — 2026-09-15
+
+Shared-service FFmpeg jobs and legacy manual/group conversion batches now use
+the same FIFO engine gate. Queued cancellation skips the executor, and a manual
+request cancelled while waiting cannot begin preparation. Existing immediate
+retry rejection during a draining legacy cancellation is preserved. Specialized
+post-conversion follow-ups still need live overlap checks; see the
+[execution serialization validation record](docs/4.5-execution-serialization-validation-2026-09-15.md).
+
+## 4.5 unavailable-source continuation — 2026-09-15
+
+Approved sources missing at request time now return `source_unavailable` from
+both `inspect_media` and `plan_conversion`, including through the typed IPC
+boundary. This gives a client an actionable lost-drive result before work is
+accepted; live bookmarked external-drive recovery remains in the packaged
+acceptance matrix. See the
+[unavailable-source validation record](docs/4.5-unavailable-source-validation-2026-09-15.md).
+
+Inspection also rechecks fresh filesystem attributes after a probe failure:
+loss during probing now has the same stable code, while present malformed media
+retains `media_inspection_failed`. Directories are rejected before probing.
+The focused and full app unit suites and 74 release-script tests pass; see the
+[inspection access-loss validation record](docs/4.5-inspection-access-loss-validation-2026-09-15.md).
+
+## 4.5 Agent Access lifecycle continuation — 2026-09-15
+
+App startup and the Settings opt-in toggle now serialize endpoint transitions
+and re-read the current preference after startup. Disabling access during a
+delayed launch cannot reopen the local message port. The timing regression,
+the full app unit target, all 74 release-script tests, and the
+English/Norwegian helper-based Settings smoke pass. External named-client
+workflows, helper-triggered cold launch, and
+Developer ID Release validation remain open. See the
+[lifecycle validation record](docs/4.5-agent-access-lifecycle-validation-2026-09-15.md).
+
+## 4.5 MCP client setup continuation — 2026-09-15
+
+The helper now confines retries to endpoint startup, reports failed sends once,
+and derives plan requester IDs from the MCP connection even when an undeclared
+argument supplies a different value. Its `list_presets` structured result now
+uses an object with a `presets` field as MCP requires. Cold-launch waiting keeps
+the main run loop available for the workspace completion callback. The packaged
+helper round-trip test, Debug and Release builds, and the 45-image/12-notice
+static Release audit pass. A live cold launch from
+the local Debug bundle is still unverified because Launch Services returned
+`kLSNoExecutableErr` on this host; strict helper signature verification still
+hits the local `CSSMERR_TP_NOT_TRUSTED` trust-chain failure. See the
+[helper transport validation record](docs/4.5-helper-transport-validation-2026-09-15.md).
+
+Agent Access now offers copyable setup for Claude Desktop, Claude Code, Codex,
+and OpenCode. Claude Code reports the embedded helper connected in an isolated
+user-scope configuration; Codex accepts the generated stdio command in an
+isolated configuration. OpenCode's documented local-MCP JSON is covered by a
+focused configuration test, and the packaged helper accepts an OpenCode-named
+MCP initialization and tool-discovery exchange. The OpenCode CLI exits with
+code 137 on this host, so live tool calls from all three named clients remain
+beta acceptance work. The focused bilingual Agent Access UI smoke passes and
+the 1,620-entry localization audit is green. See the
+[client setup validation record](docs/4.5-client-setup-validation-2026-09-15.md).
+
+## 4.5 SwiftMediaMetadata 3.0.1 update — 2026-09-15
+
+The app now resolves SwiftMediaMetadata 3.0.1 at revision
+`8662054299a3e13c49c65f74c564360559d1bf7f`. This adopts bounded-memory Sony
+RTMD discovery while preserving the existing package API and license set. The
+reviewed tag archive exactly matches `git archive` for the resolved revision;
+the package attribution, GeoNames notice, source-component mapping, and bundled
+dependency inventory now point at that release. Four focused upstream RTMD tests,
+all **931 app unit tests**, all **74 release-script tests**, the strict source and
+license gates, the Release build, and the 45-image/12-notice static bundle audit
+pass. See the
+[SwiftMediaMetadata validation record](docs/4.5-swiftmediametadata-3.0.1-validation-2026-09-15.md).
+
+## 4.5 App Intent destination continuation — 2026-09-15
+
+The six supported file-bearing Shortcut presets now keep “Save next to original”
+inside the application-owned planner and executor. Effective destinations are
+captured per source, custom or preset-based subfolders remain immutable after
+handoff, and access persistence no longer creates or authorizes an unused batch
+fallback. Failed submission rows also show the source's intended destination.
+The full unit target passes **931 tests**, all **74 release-script tests** pass,
+the **1,616-entry** localization audit remains green, and the Release static
+audit passes for 45 arm64 Mach-O images and 12 notices. Live security-scoped
+Shortcut execution remains part of the packaged acceptance matrix. See the
+[App Intent destination validation record](docs/4.5-app-intent-destination-validation-2026-09-15.md).
+
+## 4.5 shared-job continuation — through 2026-09-14
+
+The 2026-09-14 continuation closes the first live manual ownership loop. Ordinary
+video is no longer excluded by a dormant waveform preference; the toolbar keeps
+service jobs visibly active and cancels their authoritative job IDs; and the live
+FFmpeg adapter waits for the converter's asynchronous completion instead of
+reporting a false immediate failure. Successful output inspection and active
+cancellation now pass as macOS UI tests. Agent Access opt-in, loopback diagnostics,
+configuration, disabling, and localized status pass in both English and Norwegian.
+The full unit target passes **929 tests**, all **74 release-script tests** pass, and
+the **1,616-entry** localization audit passes. The Release configuration builds
+and its static audit passes for 45 arm64 Mach-O images and 12 notices, while strict
+verification still encounters the recorded local Apple Development trust-chain
+failure. Named MCP clients, packaged
+cold-launch/reconnect/restart, access loss, the six-preset output/playback matrix,
+App Sandbox scope, and Developer ID archive/notarization remain beta gates. See the
+[shared UI ownership validation record](docs/4.5-shared-ui-ownership-validation-2026-09-14.md).
+
+Ordinary manual work for the initial six-preset contract now preserves per-file
+trim, crop, mute, routing, custom names, and “save next to original” destinations
+through the application-owned planner and executor. Effective destinations are
+authorized per source, while old schema-v1 snapshots remain readable. Initial
+Norwegian coverage now includes Agent Access setup, status, shared-job origin,
+and every value label in the immutable accepted-settings inspector, with
+locale-aware number and date formatting.
+
+The full unit target passes **928 tests**, all **74 release-script tests** pass,
+the 1,616-entry localization catalog audit passes, and the preceding Release build passes its
+45-image arm64/Hardened Runtime and 12-notice bundle audit. This is not a signed
+distribution candidate: Claude Code, Codex, and OpenCode tool workflows,
+cold launch/reconnect/restart,
+permission loss, real output/playback, Norwegian visual review, the App Sandbox
+scope decision, and Developer ID archive/notarization remain open. See the
+[4.5 release plan](docs/RELEASE-4.5-PLAN.md) and the latest
+[validation record](docs/4.5-accepted-settings-localization-validation-2026-09-13.md).
 
 ## 4.4 workflow continuation — 2026-09-11
 

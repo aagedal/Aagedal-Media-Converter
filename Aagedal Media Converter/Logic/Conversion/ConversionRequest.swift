@@ -17,6 +17,13 @@ struct ConversionRequest: Sendable {
     let outputURL: URL
     let preset: ExportPreset
 
+    /// Shared jobs must publish to their accepted path rather than choose a new name.
+    var requiredOutputURL: URL? = nil
+    /// Reports the collision-safe path actually reserved by the converter.
+    var outputURLResolved: (@Sendable (URL) -> Void)? = nil
+    var chapterMetadataURL: URL? = nil
+    var chapterMetadataTitles: [String] = []
+
     // MARK: - Metadata
     var comment: String = ""
     var includeDateTag: Bool = true
@@ -35,6 +42,9 @@ struct ConversionRequest: Sendable {
     var audioRoutingConfig: AudioRoutingConfig? = nil
     var cropConfig: CropConfig? = nil
     var timecodeConfig: TimecodeConfig? = nil
+    /// Metadata-only offset when source trimming was already applied (for example, stitching).
+    /// Nil uses the normal trim start; zero explicitly preserves the original timecode.
+    var timecodeTrimStart: Double? = nil
     var isMuted: Bool = false
 
     // MARK: - Special Rendering

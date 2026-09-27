@@ -4039,7 +4039,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertEqual(request.executableURL.path, bmxPath)
         XCTAssertEqual(request.arguments, [
-            "-t", "op1a",
+            "-t", "imf",
             "--color-prim", "bt2020",
             "--transfer-ch", "st2084",
             "--coding-eq", "bt2020",
@@ -5039,7 +5039,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             )
         }
 
-        let (images, labels) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+        let (images, labels, envelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
             url: URL(fileURLWithPath: "/private/fixture/stereo.wav"),
             ffmpegPath: "/private/fixture/ffmpeg",
             streamIndex: 1,
@@ -5055,6 +5055,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(images.map(\.size.width), [800, 800])
         XCTAssertEqual(images.map(\.size.height), [30, 30])
         XCTAssertEqual(labels, ["Left", "Right"])
+        XCTAssertEqual(envelopes.count, 2)
+        XCTAssertEqual(envelopes.map(\.frameCount), [800, 800])
         let request = try XCTUnwrap(runner.lastRequest)
         XCTAssertTrue(request.arguments.contains("0:a:1"))
         XCTAssertFalse(request.arguments.contains("-ac"))
@@ -5411,6 +5413,91 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testTesseractOCREngineRejectsLateSuccessAfterCancellation() async throws {
+        try await checkTesseractLateCompletion(terminationStatus: 0)
+    }
+
+    func testTesseractOCREnginePreservesCancellationOverLateProcessFailure() async throws {
+        try await checkTesseractLateCompletion(terminationStatus: 7)
+    }
+
+    private func checkTesseractLateCompletion(terminationStatus: Int32) async throws {
+        let started = expectation(description: "Recognition subprocess is outstanding")
+        let completion = AsyncTestGate()
+        let runner = RecordingSubprocessRunner { _, _ in
+            started.fulfill()
+            // Model completion racing cancellation without a cooperative runner check.
+            await completion.wait()
+            return SubprocessResult(
+                terminationStatus: terminationStatus, termination: .exited,
+                standardOutput: Data("late recognized text".utf8),
+                standardError: Data("late failure".utf8),
+                discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0,
+                duration: .milliseconds(20)
+            )
+        }
+        let engine = TesseractOCREngine(
+            tesseractPath: "/fixture/tesseract", tessdataPrefix: nil,
+            subprocessRunner: runner
+        )
+        let recognition = Task {
+            try await engine.recognize(
+                pngURL: URL(fileURLWithPath: "/private/tmp/frame.png"), language: "eng"
+            )
+        }
+        await fulfillment(of: [started], timeout: 2)
+        recognition.cancel()
+        completion.open()
+        do {
+            _ = try await recognition.value
+            XCTFail("Cancelled recognition must not return late text")
+        } catch is CancellationError {
+            // Cancellation wins over both successful output and a late exit failure.
+        }
+    }
+
+    func testTesseractOCREngineCancellationDrainsActiveSubprocess() async throws {
+        let ready = expectation(description: "Recognition subprocess reported readiness")
+        let drained = expectation(description: "Recognition subprocess drained")
+        let runner = RecordingSubprocessRunner { request, _ in
+            // Use a controlled long-running process at the engine's subprocess boundary.
+            // Readiness comes from the child, not from entering the runner.
+            let controlled = SubprocessRequest(
+                executableURL: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", "printf 'ready\\n'; exec /bin/sleep 30"],
+                timeout: request.timeout,
+                terminationGracePeriod: .milliseconds(100)
+            )
+            defer { drained.fulfill() }
+            return try await SubprocessRunner().run(controlled) { chunk in
+                if chunk.stream == .standardOutput,
+                   String(decoding: chunk.data, as: UTF8.self).contains("ready") {
+                    ready.fulfill()
+                }
+            }
+        }
+        let engine = TesseractOCREngine(
+            tesseractPath: "/fixture/tesseract", tessdataPrefix: nil,
+            subprocessRunner: runner
+        )
+        let recognition = Task {
+            try await engine.recognize(
+                pngURL: URL(fileURLWithPath: "/private/tmp/frame.png"), language: "eng"
+            )
+        }
+        await fulfillment(of: [ready], timeout: 3)
+        let cancellationStart = ContinuousClock.now
+        recognition.cancel()
+        do {
+            _ = try await recognition.value
+            XCTFail("Active recognition must cancel")
+        } catch is CancellationError {
+            // The production runner has drained before the engine returns cancellation.
+        }
+        XCTAssertLessThan(cancellationStart.duration(to: .now), .seconds(3))
+        await fulfillment(of: [drained], timeout: 1)
+    }
+
     func testVisionOCREngineLoadsPixelsBeforeCallingBoundedPerformer() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("VisionOCR-\(UUID().uuidString)", isDirectory: true)
@@ -5554,6 +5641,54 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertFalse(request.redactedCommandDescription.contains(output))
     }
 
+    func testTesseractSubtitleExtractorSelectsMetadataTrackFromMixedMedia() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OCRStreamSelection-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let source = directory.appendingPathComponent("mixed.mkv")
+        let captions = ["First subtitle track", "Second subtitle track"]
+        let inputs = try captions.enumerated().map { index, text in
+            let url = directory.appendingPathComponent("input-\(index).srt")
+            try "1\n00:00:00,000 --> 00:00:01,000\n\(text)\n".write(
+                to: url, atomically: true, encoding: .utf8
+            )
+            return url
+        }
+        // Text subtitles exercise the same stream-copy extraction boundary without
+        // requiring an OCR model. Video/audio occupy absolute indices 0 and 1.
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: [
+                "-v", "error", "-y", "-f", "lavfi", "-i", "color=size=64x48:rate=24:duration=1",
+                "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo:d=1",
+                "-i", inputs[0].path, "-i", inputs[1].path,
+                "-map", "0:v", "-map", "1:a", "-map", "2:s", "-map", "3:s",
+                "-c:v", "libx264", "-c:a", "aac", "-c:s", "copy", source.path
+            ],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let sourceBytes = try Data(contentsOf: source)
+        let metadata = try await ApplicationMediaInspector.live.inspect(source)
+        XCTAssertEqual(metadata.subtitleStreams.map(\.index), [0, 1])
+        XCTAssertEqual(metadata.subtitleStreams.count, captions.count)
+        let extractor = TesseractSubtitleStreamExtractor()
+        for (index, stream) in metadata.subtitleStreams.enumerated() {
+            let text = try XCTUnwrap(captions.indices.contains(index) ? captions[index] : nil)
+            let output = directory.appendingPathComponent("extracted-\(index).srt")
+            try await extractor.extract(
+                source: source.path, streamIndex: try XCTUnwrap(stream.index),
+                outputPath: output.path, ffmpegPath: ffmpeg
+            )
+            let extracted = try String(contentsOf: output, encoding: .utf8)
+            XCTAssertTrue(extracted.contains(text))
+            XCTAssertFalse(extracted.contains(captions[1 - index]))
+        }
+        XCTAssertEqual(try Data(contentsOf: source), sourceBytes)
+    }
+
     func testTesseractSubtitleExtractorReassemblesSplitProgressOutput() async throws {
         let progressReported = expectation(description: "split FFmpeg progress parsed")
         let runner = RecordingSubprocessRunner { _, outputHandler in
@@ -5668,6 +5803,38 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             XCTAssertFalse(detail.contains("example.com"), detail)
             XCTAssertLessThanOrEqual(detail.count, 319)
         }
+    }
+
+    func testTesseractSubtitleExtractorRejectsSuccessAfterCancellationBeforeFlushingProgress() async throws {
+        let progressValues = OSAllocatedUnfairLock<[Double]>(initialState: [])
+        let runner = RecordingSubprocessRunner { _, outputHandler in
+            outputHandler?(SubprocessOutputChunk(
+                stream: .standardError,
+                data: Data("Duration: 00:00:10.00\nframe=12 time=00:00:05.00 speed=1.0x".utf8)
+            ))
+            withUnsafeCurrentTask { $0?.cancel() }
+            return SubprocessResult(
+                terminationStatus: 0, termination: .exited,
+                standardOutput: Data(), standardError: Data(),
+                discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0,
+                duration: .milliseconds(20)
+            )
+        }
+        let task = Task {
+            try await TesseractSubtitleStreamExtractor(subprocessRunner: runner).extract(
+                source: "/fixture/input.mkv", streamIndex: 0,
+                outputPath: "/fixture/output.sup", ffmpegPath: "/fixture/ffmpeg"
+            ) { value in
+                progressValues.withLock { $0.append(value) }
+            }
+        }
+        do {
+            try await task.value
+            XCTFail("Expected cancellation despite a successful runner result")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertTrue(progressValues.withLock { $0.isEmpty }, "Cancelled output must not flush buffered progress")
     }
 
     func testTesseractSubtitleExtractorPropagatesTaskCancellation() async throws {
@@ -5948,6 +6115,40 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             XCTAssertFalse(message.contains("example.com"))
             XCTAssertLessThanOrEqual(message.count, 550)
         }
+    }
+
+    func testWhisperTranscriberRejectsSuccessAfterCancellationBeforeFlushingProgress() async throws {
+        let progressValues = OSAllocatedUnfairLock<[Double]>(initialState: [])
+        let runner = RecordingSubprocessRunner { _, outputHandler in
+            outputHandler?(SubprocessOutputChunk(
+                stream: .standardError,
+                data: Data("Duration: 00:00:10.00\nframe=12 time=00:00:05.00 speed=1.0x".utf8)
+            ))
+            withUnsafeCurrentTask { $0?.cancel() }
+            return SubprocessResult(
+                terminationStatus: 0, termination: .exited,
+                standardOutput: Data(), standardError: Data(),
+                discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0,
+                duration: .milliseconds(20)
+            )
+        }
+        let task = Task {
+            try await WhisperFFmpegTranscriber(subprocessRunner: runner).transcribe(
+                inputFile: URL(fileURLWithPath: "/fixture/input.mov"),
+                modelPath: URL(fileURLWithPath: "/fixture/model.bin"),
+                outputFile: URL(fileURLWithPath: "/fixture/output.srt"),
+                ffmpegPath: "/fixture/ffmpeg", language: "auto", audioStreamIndex: nil
+            ) { update in
+                progressValues.withLock { $0.append(update.percentage) }
+            }
+        }
+        do {
+            try await task.value
+            XCTFail("Expected cancellation despite a successful runner result")
+        } catch is CancellationError {
+            // Expected.
+        }
+        XCTAssertTrue(progressValues.withLock { $0.isEmpty }, "Cancelled output must not flush buffered progress")
     }
 
     func testWhisperTranscriberPropagatesTaskCancellation() async throws {
@@ -9869,6 +10070,53 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
     }
 
+    func testStitchedTimecodeTrimPreferenceDefaultsToOffsetAndIsCaptured() {
+        let name = "StitchTimecode.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertFalse(ConversionPreparationSettings(preset: .streamCopy, defaults: defaults).ignoreStitchTimecodeTrimOffset)
+        defaults.set(true, forKey: AppConstants.ignoreStitchTimecodeTrimOffsetKey)
+        let captured = ConversionPreparationSettings(preset: .streamCopy, defaults: defaults)
+        defaults.set(false, forKey: AppConstants.ignoreStitchTimecodeTrimOffsetKey)
+        XCTAssertTrue(captured.ignoreStitchTimecodeTrimOffset)
+    }
+
+    func testStitchedTimelineOffsetsPreservedTimecodeButNotManualTimecode() {
+        var first = VideoItem(url: URL(fileURLWithPath: "/tmp/first.mov"), name: "First",
+                              size: 0, duration: "", status: .waiting, progress: 0, eta: nil, outputURL: nil)
+        first.durationSeconds = 20
+        first.trimStart = 5
+        first.metadata = videoMetadata(timecode: "01:00:00:00", frameRate: 25)
+        first.timecodeConfig = nil // Stitching defaults to preserving source timecode.
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first]), "01:00:05:00")
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first], ignoreTrimOffset: true), "01:00:00:00")
+        first.timecodeConfig = TimecodeConfig(mode: .manual("02:00:00:00"))
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first]), "02:00:00:00")
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first], ignoreTrimOffset: true), "02:00:00:00")
+        first.timecodeConfig = TimecodeConfig(mode: .preserveSource)
+        first.metadata = videoMetadata(timecode: "00:00:59;29", frameRate: 30_000.0 / 1001)
+        first.trimStart = 1001.0 / 30_000
+        XCTAssertEqual(StitchingTimeline.outputStartTimecode(for: [first]), "00:01:00;02")
+    }
+
+    func testStitchedTimecodeOffsetDoesNotTrimConcatenatedMediaAgain() async {
+        for (offset, expected) in [(5.0, "01:00:05:00"), (0.0, "01:00:00:00")] {
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: URL(fileURLWithPath: "/tmp/first.mov"),
+                outputFileURL: URL(fileURLWithPath: "/tmp/stitched.mov"),
+                preset: .streamCopy, comment: "", includeDateTag: false,
+                trimStart: nil, trimEnd: nil,
+                timecodeConfig: TimecodeConfig(mode: .preserveSource),
+                timecodeTrimStart: offset,
+                sourceMetadata: videoMetadata(timecode: "01:00:00:00", frameRate: 25),
+                customInputArguments: ["-f", "concat", "-safe", "0", "-i", "/tmp/clips.txt"]
+            )
+            XCTAssertTrue(command.arguments.containsAdjacent("-metadata", "timecode=\(expected)"))
+            XCTAssertFalse(command.arguments.contains("-ss"))
+            XCTAssertFalse(command.arguments.contains("-t"))
+        }
+    }
+
     func testPreservedTimecodeOffsetsByTrimAtSourceFrameRate() async {
         var arguments: [String] = []
 
@@ -11500,29 +11748,24 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(try xmlTexts(named: "AnnotationText", at: pklURL).first, "QC & mastering <approved>")
     }
 
-    func testIMFManifestAssemblyMovesDummyEssencesAndRoundTripsPackage() async throws {
+    func testIMFManifestAssemblyLinksMXFEssencesAndRoundTripsPackage() async throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("AagedalMediaConverterIMFManifestTests-\(UUID().uuidString)", isDirectory: true)
         let packageDirectory = temporaryDirectory.appendingPathComponent("IMP Package", isDirectory: true)
         try FileManager.default.createDirectory(at: packageDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
-        let videoSource = temporaryDirectory.appendingPathComponent("picture.mxf")
-        let audioSource = temporaryDirectory.appendingPathComponent("sound.mxf")
-        let videoData = Data("dummy IMF picture essence".utf8)
-        let audioData = Data("dummy IMF sound essence".utf8)
-        try videoData.write(to: videoSource)
-        try audioData.write(to: audioSource)
+        let (videoSource, audioSource) = try makeIMFTestEssences(in: temporaryDirectory, includeAudio: true)
 
         let assembled = await IMFManifestWriter.shared.assembleIMP(
             videoMXFURL: videoSource,
             audioMXFURL: audioSource,
             outputDirectoryURL: packageDirectory,
             title: "Episode & <Special>",
-            application: .app2e,
-            editRateNumerator: 30_000,
-            editRateDenominator: 1_001,
-            frameCount: 90,
+            application: .rdd45,
+            editRateNumerator: 24,
+            editRateDenominator: 1,
+            frameCount: 24,
             itemMetadata: IMFItemMetadata(
                 contentKind: .episode,
                 annotationText: "Archive & delivery <master>",
@@ -11533,7 +11776,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         XCTAssertTrue(assembled)
         XCTAssertFalse(FileManager.default.fileExists(atPath: videoSource.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: audioSource.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(audioSource).path))
 
         let files = try FileManager.default.contentsOfDirectory(
             at: packageDirectory,
@@ -11545,8 +11788,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let pklURL = try XCTUnwrap(files.first { $0.lastPathComponent.hasPrefix("PKL_") })
         let assetMapURL = packageDirectory.appendingPathComponent("ASSETMAP.xml")
 
-        XCTAssertEqual(try Data(contentsOf: videoURL), videoData)
-        XCTAssertEqual(try Data(contentsOf: audioURL), audioData)
+        XCTAssertGreaterThan(try XCTUnwrap(videoURL.resourceValues(forKeys: [.fileSizeKey]).fileSize), 0)
+        XCTAssertGreaterThan(try XCTUnwrap(audioURL.resourceValues(forKeys: [.fileSizeKey]).fileSize), 0)
         try assertPackingList(
             at: pklURL,
             describes: [cplURL, videoURL, audioURL]
@@ -11563,14 +11806,28 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             parsed.essences.map { $0.mxfURL.resolvingSymlinksInPath().path },
             [videoURL, audioURL].map { $0.resolvingSymlinksInPath().path }
         )
-        XCTAssertEqual(try Data(contentsOf: parsed.essences[0].mxfURL), videoData)
-        XCTAssertEqual(try Data(contentsOf: parsed.essences[1].mxfURL), audioData)
-
-        XCTAssertEqual(try xmlTexts(named: "AnnotationText", at: cplURL).first, "Archive & delivery <master>")
+        XCTAssertEqual(try xmlTexts(named: "Annotation", at: cplURL).first, "Archive & delivery <master>")
         XCTAssertEqual(try xmlTexts(named: "ContentKind", at: cplURL), [IMFContentKind.episode.rawValue])
-        XCTAssertEqual(try xmlTexts(named: "EditRate", at: cplURL), ["30000 1001"])
-        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["90", "90"])
-        XCTAssertEqual(try xmlTexts(named: "SourceDuration", at: cplURL), ["90", "90"])
+        XCTAssertEqual(try xmlTexts(named: "EditRate", at: cplURL), ["24 1", "24 1", "48000 1"])
+        XCTAssertEqual(try xmlTexts(named: "IntrinsicDuration", at: cplURL), ["24", "48000"])
+        XCTAssertEqual(try xmlTexts(named: "SourceDuration", at: cplURL), ["24", "48000"])
+        let descriptors = try xmlTexts(named: "EssenceDescriptor", at: cplURL)
+        XCTAssertEqual(descriptors.count, 2)
+        let cpl = try XMLDocument(contentsOf: cplURL, options: [])
+        let descriptorIDs = Set(try cpl.nodes(forXPath:
+            "//*[local-name()='EssenceDescriptor']/*[local-name()='Id']").compactMap(\.stringValue))
+        XCTAssertEqual(descriptorIDs, Set(try xmlTexts(named: "SourceEncoding", at: cplURL)))
+        let trackIDs = Set(try xmlTexts(named: "TrackFileId", at: cplURL))
+        var wrappedIDs: [String] = []
+        for url in [videoURL, audioURL] {
+            let metadataData = await BMXService.shared.getMXFXMLInfo(url: url)
+            let metadata = try XCTUnwrap(metadataData)
+            let document = try XMLDocument(data: metadata)
+            let package = try XCTUnwrap(document.nodes(forXPath:
+                "//*[local-name()='file']/*[local-name()='primary_package']").first as? XMLElement)
+            wrappedIDs.append(try XCTUnwrap(package.attribute(forName: "idau")?.stringValue))
+        }
+        XCTAssertEqual(trackIDs, Set(wrappedIDs))
     }
 
     func testPackageManifestAssemblyOmitsAudioAssetsWhenSourceHasNoAudio() async throws {
@@ -11583,9 +11840,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
         let dcpVideoSource = temporaryDirectory.appendingPathComponent("dcp-picture.mxf")
-        let imfVideoSource = temporaryDirectory.appendingPathComponent("imf-picture.mxf")
+        let (imfVideoSource, _) = try makeIMFTestEssences(in: temporaryDirectory, includeAudio: false)
         try Data("silent DCP picture essence".utf8).write(to: dcpVideoSource)
-        try Data("silent IMF picture essence".utf8).write(to: imfVideoSource)
 
         let dcpAssembled = await DCPService.shared.assembleDCP(
             videoMXFURL: dcpVideoSource,
@@ -11602,7 +11858,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             audioMXFURL: nil,
             outputDirectoryURL: imfDirectory,
             title: "Silent IMF",
-            application: .app5,
+            application: .rdd45,
             editRateNumerator: 24,
             editRateDenominator: 1,
             frameCount: 24,
@@ -11635,6 +11891,35 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             describes: [imfPKLURL, imfCPLURL, imfVideoURL]
         )
         XCTAssertEqual(try IMFPackageParser.parsePackage(folder: imfDirectory).essences.map(\.kind), [.mainImage])
+    }
+
+    private func makeIMFTestEssences(in directory: URL, includeAudio: Bool) throws -> (URL, URL?) {
+        func run(_ executable: String, _ arguments: [String]) throws {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+            let errors = Pipe()
+            process.standardError = errors
+            try process.run()
+            process.waitUntilExit()
+            XCTAssertEqual(process.terminationStatus, 0, String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "")
+        }
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let intermediate = directory.appendingPathComponent("imf-intermediate.mxf")
+        try run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                         "testsrc2=size=64x64:rate=24:duration=1", "-frames:v", "24", "-c:v", "prores_ks",
+                         "-profile:v", "3", "-pix_fmt", "yuv422p10le", "-an", "-f", "mxf", intermediate.path])
+        let bmxtranswrap = try XCTUnwrap(BinaryPathResolver.bmxtranswrapPath)
+        let video = directory.appendingPathComponent("imf-picture.mxf")
+        try run(bmxtranswrap, ["-t", "imf", "-o", video.path, "-p", intermediate.path])
+        guard includeAudio else { return (video, nil) }
+        let wav = directory.appendingPathComponent("sound.wav")
+        try run(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                         "sine=frequency=440:duration=1", "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", wav.path])
+        let raw2bmx = try XCTUnwrap(BinaryPathResolver.raw2bmxPath)
+        let audio = directory.appendingPathComponent("sound.mxf")
+        try run(raw2bmx, ["-t", "imf", "-o", audio.path, "--track-map", "singlemca", "--wave", wav.path])
+        return (video, audio)
     }
 
     func testIMFJ2KCommandUsesRationalRateHDRTagsAndFillGeometry() throws {

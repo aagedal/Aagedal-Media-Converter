@@ -54,6 +54,7 @@ struct GeneralSettingsView: View {
         }
     }
 
+
     private var outputFolderSection: some View {
         Section(header: Text("Output Location")) {
             VStack(alignment: .leading, spacing: 12) {

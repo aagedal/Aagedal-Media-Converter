@@ -27,6 +27,7 @@ struct PreviewTrimControls: View {
     @State private var justActivated = false
     @State private var pendingCharacter: String?
     @State private var showChapters: Bool = true
+    @AppStorage("trimWaveformVisualScale") private var waveformVisualScale: Double = 4
     @FocusState private var isTimecodeFocused: Bool
 
     var body: some View {
@@ -42,6 +43,9 @@ struct PreviewTrimControls: View {
                     duration: duration,
                     playbackTime: currentPlaybackTime,
                     thumbnails: controller.previewAssets?.thumbnails,
+                    waveformEnvelope: controller.currentWaveformEnvelope,
+                    channelWaveformEnvelopes: controller.currentChannelWaveformEnvelopes,
+                    waveformVisualScale: waveformVisualScale,
                     nativeWaveformImage: controller.currentNativeWaveformImage,
                     channelWaveformImages: controller.currentChannelWaveformImages,
                     channelWaveformLabels: controller.currentChannelWaveformLabels,
@@ -63,6 +67,17 @@ struct PreviewTrimControls: View {
 
                 if !isCompactMode {
                     controlButtons
+                    if controller.currentWaveformEnvelope != nil || !controller.currentChannelWaveformEnvelopes.isEmpty {
+                        Picker("Waveform height", selection: $waveformVisualScale) {
+                            ForEach([1.0, 2, 4, 8, 16], id: \.self) { scale in
+                                Text("\(Int(scale))×").tag(scale)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .accessibilityIdentifier("trim.waveformScale")
+                        .help("Enlarge the waveform visually. Playback and export volume are unchanged. Choose 1× to reset.")
+                    }
                 }
             }
 

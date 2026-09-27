@@ -1,0 +1,3116 @@
+{
+  "client": "Codex native MCP tool calls in this chat",
+  "appVersion": "4.5.0",
+  "build": "596",
+  "helper": "/Applications/Aagedal Media Converter.app/Contents/Helpers/aagedal-media-converter-mcp",
+  "calls": [
+    {
+      "tool": "get_app_status",
+      "args": {},
+      "result": {
+        "activeJobCount": 0,
+        "appVersion": "4.5.0",
+        "buildNumber": "596",
+        "ipcSchemaVersion": 1,
+        "manualQueueCount": 0,
+        "serviceJobCount": 6,
+        "terminalJobCount": 6
+      }
+    },
+    {
+      "tool": "list_presets",
+      "args": {},
+      "result": {
+        "presets": [
+          {
+            "displayName": "VideoLoop",
+            "id": "video_loop",
+            "isAvailable": true,
+            "settings": {
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-bitexact",
+                  "-bsf:v",
+                  "filter_units=remove_types=6",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-vcodec",
+                  "libx264",
+                  "-movflags",
+                  "+faststart",
+                  "-preset",
+                  "veryslow",
+                  "-crf",
+                  "23",
+                  "-minrate",
+                  "3000k",
+                  "-maxrate",
+                  "9000k",
+                  "-bufsize",
+                  "18000k",
+                  "-profile:v",
+                  "main",
+                  "-level:v",
+                  "4.0",
+                  "-an",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_loop",
+                  "resolution": ""
+                },
+                "resolutionLimit": "1080p",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_loop",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_loop",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputExtension": "mp4",
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "video_loop"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "VideoLoop with sound",
+            "id": "video_loop_with_sound",
+            "isAvailable": true,
+            "settings": {
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-bitexact",
+                  "-bsf:v",
+                  "filter_units=remove_types=6",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-vcodec",
+                  "libx264",
+                  "-movflags",
+                  "+faststart",
+                  "-preset",
+                  "veryslow",
+                  "-crf",
+                  "23",
+                  "-minrate",
+                  "3000k",
+                  "-maxrate",
+                  "9000k",
+                  "-bufsize",
+                  "18000k",
+                  "-profile:v",
+                  "main",
+                  "-level:v",
+                  "4.0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "128k",
+                  "-map",
+                  "0:v:0",
+                  "-map",
+                  "0:a",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_loop_audio",
+                  "resolution": ""
+                },
+                "resolutionLimit": "1080p",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_loop_audio",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_loop_audio",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputExtension": "mp4",
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "video_loop_with_sound"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "Animated Still (AVIF)",
+            "id": "animated_still",
+            "isAvailable": true,
+            "settings": {
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-pix_fmt",
+                  "p010le",
+                  "-vcodec",
+                  "libsvtav1",
+                  "-preset",
+                  "6",
+                  "-crf",
+                  "28",
+                  "-an",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),900,-2)':h='if(lte(iw,ih),-2,900)'",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "avif",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_avif",
+                  "resolution": ""
+                },
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "other",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_avif",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_avif",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputExtension": "avif",
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "animated_still"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "H.264 / AVC",
+            "id": "h264",
+            "isAvailable": true,
+            "settings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx264",
+                  "-crf",
+                  "23",
+                  "-preset",
+                  "medium",
+                  "-profile:v",
+                  "high",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h264",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h264",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "h264",
+              "video": {
+                "encoderID": "libx264",
+                "profileID": "h264_high",
+                "quality": 23,
+                "speed": "medium"
+              }
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "H.265 / HEVC",
+            "id": "hevc",
+            "isAvailable": true,
+            "settings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx265",
+                  "-crf",
+                  "28",
+                  "-preset",
+                  "medium",
+                  "-tag:v",
+                  "hvc1",
+                  "-pix_fmt",
+                  "yuv420p10le",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h265",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h265",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h265",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "hevc",
+              "video": {
+                "encoderID": "libx265",
+                "profileID": "hevc_main10",
+                "quality": 28,
+                "speed": "medium"
+              }
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "AV1",
+            "id": "av1",
+            "isAvailable": true,
+            "settings": {
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libsvtav1",
+                  "-crf",
+                  "30",
+                  "-preset",
+                  "6",
+                  "-pix_fmt",
+                  "yuv420p10le",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-movflags",
+                  "+faststart",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_av1",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_av1",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_av1",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputExtension": "mp4",
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "av1"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "AV2",
+            "id": "av2",
+            "isAvailable": true,
+            "settings": {
+              "capturedAV2": {
+                "audioBitrate": "192 kbps",
+                "audioCodec": "Opus",
+                "bitDepth": "Auto",
+                "container": "Matroska (.mkv, with audio)",
+                "parallelChunks": 0,
+                "quality": 110,
+                "rateControlMode": "Constant Quality",
+                "resolutionLimit": "1080p",
+                "speed": 9,
+                "targetBitrate": 4000,
+                "threads": 0,
+                "tileColumns": 0,
+                "tileRows": 0
+              },
+              "containerID": "mkv",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_av2",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_av2",
+                "resolution": "1080p"
+              },
+              "keepSubtitles": false,
+              "outputExtension": "mkv",
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "av2"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "TV (HEVC 10-bit 4:2:2)",
+            "id": "tv_hevc",
+            "isAvailable": true,
+            "settings": {
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MOV",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-pix_fmt",
+                  "p210le",
+                  "-c:v",
+                  "hevc_videotoolbox",
+                  "-b:v",
+                  "18M",
+                  "-profile:v",
+                  "main42210",
+                  "-tag:v",
+                  "hvc1",
+                  "-c:a",
+                  "pcm_s24le",
+                  "-map",
+                  "0:v:0",
+                  "-map",
+                  "0:a",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:-1:-1:color=black",
+                  "-r",
+                  "50",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mov",
+                "fileNameContext": {
+                  "framerate": "50p",
+                  "presetSuffix": "_tv",
+                  "resolution": "1080p"
+                },
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mov",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_tv",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "50p",
+                "presetSuffix": "_tv",
+                "resolution": "1080p"
+              },
+              "keepSubtitles": false,
+              "outputExtension": "mov",
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "tv_hevc"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "TV (AVC-Intra MXF)",
+            "id": "tv_avc_intra",
+            "isAvailable": true,
+            "settings": {
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "avcIntraAudioChannels": "8 Channels",
+                "avcIntraMCADefaults": {
+                  "soundfieldsByChannelCount": {}
+                },
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-pix_fmt",
+                  "yuv422p10le",
+                  "-c:v",
+                  "libx264",
+                  "-b:v",
+                  "100M",
+                  "-g",
+                  "1",
+                  "-bf",
+                  "0",
+                  "-profile:v",
+                  "high422",
+                  "-level:v",
+                  "4.1",
+                  "-map",
+                  "0:v:0",
+                  "-map",
+                  "0:a?",
+                  "-c:a",
+                  "pcm_s24le",
+                  "-ac",
+                  "8",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:-1:-1:color=black",
+                  "-r",
+                  "50",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mxf",
+                "fileNameContext": {
+                  "framerate": "50p",
+                  "presetSuffix": "_avcintra",
+                  "resolution": "1080p"
+                },
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mxf",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_avcintra",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "50p",
+                "presetSuffix": "_avcintra",
+                "resolution": "1080p"
+              },
+              "keepSubtitles": false,
+              "outputExtension": "mxf",
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "tv_avc_intra"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "ProRes",
+            "id": "prores",
+            "isAvailable": true,
+            "settings": {
+              "audio": {
+                "codecID": "pcm_s24le"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MOV",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-pix_fmt",
+                  "yuv422p10le",
+                  "-vcodec",
+                  "prores_videotoolbox",
+                  "-profile:v",
+                  "standard",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-c:a",
+                  "pcm_s24le",
+                  "-map",
+                  "0:v:0",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mov",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_prores",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mov",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_prores",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_prores",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "prores",
+              "video": {
+                "encoderID": "prores_videotoolbox",
+                "profileID": "prores_422"
+              }
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "Proxy",
+            "id": "proxy",
+            "isAvailable": true,
+            "settings": {
+              "audio": {
+                "codecID": "pcm_s24le"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MOV",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-pix_fmt",
+                  "p010le",
+                  "-c:v",
+                  "hevc_videotoolbox",
+                  "-b:v",
+                  "6M",
+                  "-profile:v",
+                  "main10",
+                  "-tag:v",
+                  "hvc1",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1,scale=w='if(lte(iw,ih),1080,-2)':h='if(lte(iw,ih),-2,1080)'",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "pcm_s24le",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mov",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_proxy",
+                  "resolution": "1080p"
+                },
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mov",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_proxy",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_proxy",
+                "resolution": "1080p"
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "proxy",
+              "video": {
+                "bitrate": "6M",
+                "encoderID": "hevc_videotoolbox",
+                "maximumHeight": 1080,
+                "profileID": "hevc_main10"
+              }
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "Audio Only (WAV)",
+            "id": "audio_only",
+            "isAvailable": true,
+            "settings": {
+              "audio": {
+                "codecID": "pcm_s24le"
+              },
+              "containerID": "wav",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_audio",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_audio",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "audio_only"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "Stream Copy",
+            "id": "stream_copy",
+            "isAvailable": true,
+            "settings": {
+              "audio": {
+                "codecID": "stream_copy"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": false,
+                "appliesCrop": false,
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-map",
+                  "0",
+                  "-c",
+                  "copy",
+                  "-map",
+                  "-0:s?",
+                  "-copy_unknown",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_copy",
+                  "resolution": ""
+                },
+                "sourceMetadataPlan": {
+                  "strip": {}
+                },
+                "streamCopyContainer": "Keep Current"
+              },
+              "containerID": "source",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_copy",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_copy",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "stream_copy",
+              "video": {
+                "encoderID": "stream_copy"
+              }
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "Image Sequence (PNG)",
+            "id": "image_sequence",
+            "isAvailable": true,
+            "settings": {
+              "capturedImageSequence": {
+                "format": "PNG",
+                "jpegQuality": 2,
+                "metadataSidecarEnabled": true,
+                "metadataSidecarFormat": "Markdown",
+                "numberingPadding": 6
+              },
+              "containerID": "other",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_seq",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_seq",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputExtension": "",
+              "outputIsDirectory": true,
+              "preserveMetadata": false,
+              "presetID": "image_sequence"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "DCP (Digital Cinema Package)",
+            "id": "dcp",
+            "isAvailable": true,
+            "settings": {
+              "capturedDCP": {
+                "bitrate": "200 Mbps",
+                "frameRate": "24 fps",
+                "keepJP2Images": false,
+                "resolution": "2K Full (2048x1080)",
+                "scalingMode": "Fill (crop to fill)"
+              },
+              "containerID": "other",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_dcp",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "24",
+                "presetSuffix": "_dcp",
+                "resolution": "2K"
+              },
+              "keepSubtitles": false,
+              "outputExtension": "",
+              "outputIsDirectory": true,
+              "preserveMetadata": false,
+              "presetID": "dcp"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "IMF (App 2e — JPEG 2000)",
+            "id": "imf_app_2e",
+            "isAvailable": true,
+            "settings": {
+              "capturedIMF": {
+                "bitrate": "200 Mbps",
+                "color": "Rec. 709 (HD SDR)",
+                "frameRate": "24 fps",
+                "keepIntermediates": false,
+                "proResProfile": "ProRes 422 HQ",
+                "resolution": "HD 1920x1080",
+                "scalingMode": "Fit (letterbox/pillarbox)"
+              },
+              "containerID": "other",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_imf2e",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "24",
+                "presetSuffix": "_imf2e",
+                "resolution": "2K"
+              },
+              "keepSubtitles": false,
+              "outputExtension": "",
+              "outputIsDirectory": true,
+              "preserveMetadata": false,
+              "presetID": "imf_app_2e"
+            },
+            "supportedOverrides": []
+          },
+          {
+            "displayName": "IMF (RDD 45 — ProRes)",
+            "id": "imf_rdd_45",
+            "isAvailable": true,
+            "settings": {
+              "capturedIMF": {
+                "bitrate": "200 Mbps",
+                "color": "Rec. 709 (HD SDR)",
+                "frameRate": "24 fps",
+                "keepIntermediates": false,
+                "proResProfile": "ProRes 422 HQ",
+                "resolution": "HD 1920x1080",
+                "scalingMode": "Fit (letterbox/pillarbox)"
+              },
+              "containerID": "other",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_imfrdd45",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "24",
+                "presetSuffix": "_imfrdd45",
+                "resolution": "2K"
+              },
+              "keepSubtitles": false,
+              "outputExtension": "",
+              "outputIsDirectory": true,
+              "preserveMetadata": false,
+              "presetID": "imf_rdd_45"
+            },
+            "supportedOverrides": []
+          }
+        ]
+      }
+    },
+    {
+      "tool": "inspect_media",
+      "args": {
+        "source_path": "/Users/truls.aagedal/Movies/TestVideo/big-buck-bunny_trailer-.webm"
+      },
+      "result": {
+        "audioStreams": [
+          {
+            "bitRate": 64000,
+            "channels": 1,
+            "codec": "A_VORBIS",
+            "index": 0,
+            "isDefault": true,
+            "sampleRate": 44100
+          }
+        ],
+        "bitRate": 533294,
+        "containerName": "Matroska / WebM",
+        "durationSeconds": 32.48,
+        "formatName": "webm",
+        "frameCount": 812,
+        "schemaVersion": 1,
+        "sizeBytes": 2165175,
+        "sourceURL": "file:///Users/truls.aagedal/Movies/TestVideo/big-buck-bunny_trailer-.webm",
+        "subtitleStreams": [],
+        "timecodes": [],
+        "videoStreams": [
+          {
+            "bitDepth": 8,
+            "chromaSubsampling": "4:2:0",
+            "codec": "V_VP8",
+            "displayAspectRatio": {
+              "denominator": 360,
+              "numerator": 640,
+              "value": 1.7777777777777777
+            },
+            "fieldOrder": "progressive",
+            "frameRate": {
+              "denominator": 1000,
+              "numerator": 25000,
+              "value": 25
+            },
+            "hasAlpha": false,
+            "height": 360,
+            "index": 0,
+            "isDefault": true,
+            "isForced": false,
+            "isInterlaced": false,
+            "pixelAspectRatio": {
+              "denominator": 1,
+              "numerator": 1,
+              "value": 1
+            },
+            "pixelFormat": "yuv420p",
+            "width": 640
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "tool": "plan_conversion",
+      "args": {
+        "preset_id": "h264",
+        "source_paths": [
+          "/Users/truls.aagedal/Movies/TestVideo/big-buck-bunny_trailer-.webm"
+        ],
+        "idempotency_key": "codex-release-596-success-20260926"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:37:48Z",
+        "expiresAt": "2026-09-26T21:52:48Z",
+        "id": "725c62a6-3c91-4802-9741-b9576d47dabb",
+        "outputs": [
+          {
+            "outputURL": "file:///Users/truls.aagedal/Movies/Media_Exports/big-buck-bunny_trailer_h264.mp4",
+            "sourceURL": "file:///Users/truls.aagedal/Movies/TestVideo/big-buck-bunny_trailer-.webm"
+          }
+        ],
+        "request": {
+          "capturedAt": "2026-09-26T21:37:48Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-success-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "1B85AE13-0F4A-432A-BE4C-6B3A08311B06",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/big-buck-bunny_trailer-.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "sources": [
+          {
+            "fileIdentifier": "{length = 16, bytes = 0x0a8f2400000000006745640000000000}",
+            "fileSize": 2165175,
+            "modificationDate": "2025-11-08T15:04:27Z",
+            "url": "file:///Users/truls.aagedal/Movies/TestVideo/big-buck-bunny_trailer-.webm"
+          }
+        ],
+        "warnings": [
+          {
+            "code": "output_already_exists",
+            "url": "file:///Users/truls.aagedal/Movies/Media_Exports/big-buck-bunny_trailer_h264.mp4"
+          }
+        ]
+      }
+    },
+    {
+      "tool": "inspect_media",
+      "args": {
+        "source_path": "/Users/truls.aagedal/Movies/TestVideo/Codex MCP release 596 success.webm"
+      },
+      "result": {
+        "audioStreams": [
+          {
+            "bitRate": 64000,
+            "channels": 1,
+            "codec": "A_VORBIS",
+            "index": 0,
+            "isDefault": true,
+            "sampleRate": 44100
+          }
+        ],
+        "bitRate": 533294,
+        "containerName": "Matroska / WebM",
+        "durationSeconds": 32.48,
+        "formatName": "webm",
+        "frameCount": 812,
+        "schemaVersion": 1,
+        "sizeBytes": 2165175,
+        "sourceURL": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm",
+        "subtitleStreams": [],
+        "timecodes": [],
+        "videoStreams": [
+          {
+            "bitDepth": 8,
+            "chromaSubsampling": "4:2:0",
+            "codec": "V_VP8",
+            "displayAspectRatio": {
+              "denominator": 360,
+              "numerator": 640,
+              "value": 1.7777777777777777
+            },
+            "fieldOrder": "progressive",
+            "frameRate": {
+              "denominator": 1000,
+              "numerator": 25000,
+              "value": 25
+            },
+            "hasAlpha": false,
+            "height": 360,
+            "index": 0,
+            "isDefault": true,
+            "isForced": false,
+            "isInterlaced": false,
+            "pixelAspectRatio": {
+              "denominator": 1,
+              "numerator": 1,
+              "value": 1
+            },
+            "pixelFormat": "yuv420p",
+            "width": 640
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "tool": "inspect_media",
+      "args": {
+        "source_path": "/Users/truls.aagedal/Movies/TestVideo/Codex MCP release 596 cancellation.webm"
+      },
+      "result": {
+        "audioStreams": [
+          {
+            "bitDepth": 32,
+            "bitRate": 64000,
+            "channels": 1,
+            "codec": "A_VORBIS",
+            "index": 0,
+            "isDefault": true,
+            "languageCode": "eng",
+            "sampleRate": 44100
+          }
+        ],
+        "bitRate": 532204,
+        "containerName": "Matroska / WebM",
+        "durationSeconds": 975.03,
+        "formatName": "webm",
+        "frameCount": 24376,
+        "schemaVersion": 1,
+        "sizeBytes": 64864408,
+        "sourceURL": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm",
+        "subtitleStreams": [],
+        "timecodes": [],
+        "videoStreams": [
+          {
+            "bitDepth": 8,
+            "chromaSubsampling": "4:2:0",
+            "codec": "V_VP8",
+            "displayAspectRatio": {
+              "denominator": 360,
+              "numerator": 640,
+              "value": 1.7777777777777777
+            },
+            "fieldOrder": "progressive",
+            "frameRate": {
+              "denominator": 1000,
+              "numerator": 25000,
+              "value": 25
+            },
+            "hasAlpha": false,
+            "height": 360,
+            "index": 0,
+            "isDefault": true,
+            "isForced": false,
+            "isInterlaced": false,
+            "pixelAspectRatio": {
+              "denominator": 1,
+              "numerator": 1,
+              "value": 1
+            },
+            "pixelFormat": "yuv420p",
+            "width": 640
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "tool": "plan_conversion",
+      "args": {
+        "preset_id": "h264",
+        "source_paths": [
+          "/Users/truls.aagedal/Movies/TestVideo/Codex MCP release 596 success.webm"
+        ],
+        "idempotency_key": "codex-release-596-unique-success-20260926"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:38:39Z",
+        "expiresAt": "2026-09-26T21:53:39Z",
+        "id": "d2bac2f7-498e-4fd4-a04d-5a732ba6cf92",
+        "outputs": [
+          {
+            "outputURL": "file:///Users/truls.aagedal/Movies/Media_Exports/Codex_MCP_release_596_success_h264.mp4",
+            "sourceURL": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          }
+        ],
+        "request": {
+          "capturedAt": "2026-09-26T21:38:39Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-unique-success-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "E21456EB-660D-4807-AE5C-210FAFD16B4A",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "sources": [
+          {
+            "fileIdentifier": "{length = 16, bytes = 0x9eace804000000006745640000000000}",
+            "fileSize": 2165175,
+            "modificationDate": "2026-09-26T21:38:17Z",
+            "url": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "tool": "submit_conversion",
+      "args": {
+        "plan_id": "d2bac2f7-498e-4fd4-a04d-5a732ba6cf92"
+      },
+      "result": {
+        "record": {
+          "createdAt": "2026-09-26T21:38:48Z",
+          "id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2",
+          "outputURLs": [],
+          "request": {
+            "capturedAt": "2026-09-26T21:38:39Z",
+            "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+            "idempotencyKey": "codex-release-596-unique-success-20260926",
+            "origin": "local_agent",
+            "presetID": "h264",
+            "presetSettings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx264",
+                  "-crf",
+                  "23",
+                  "-preset",
+                  "medium",
+                  "-profile:v",
+                  "high",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h264",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h264",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "h264",
+              "video": {
+                "encoderID": "libx264",
+                "profileID": "h264_high",
+                "quality": 23,
+                "speed": "medium"
+              }
+            },
+            "requesterID": "codex-mcp-client",
+            "requestID": "E21456EB-660D-4807-AE5C-210FAFD16B4A",
+            "schemaVersion": 1,
+            "sourceURLs": [
+              "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+            ]
+          },
+          "schemaVersion": 1,
+          "state": "queued",
+          "updatedAt": "2026-09-26T21:38:48Z"
+        },
+        "wasAlreadyAccepted": false
+      }
+    },
+    {
+      "tool": "wait_for_job",
+      "args": {
+        "job_id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2",
+        "known_state": "queued",
+        "timeout_seconds": 10
+      },
+      "result": {
+        "changed": true,
+        "isTerminal": true,
+        "job": {
+          "createdAt": "2026-09-26T21:38:48Z",
+          "id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2",
+          "outputURLs": [
+            "file:///Users/truls.aagedal/Movies/Media_Exports/Codex_MCP_release_596_success_h264.mp4"
+          ],
+          "progress": 1,
+          "request": {
+            "capturedAt": "2026-09-26T21:38:39Z",
+            "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+            "idempotencyKey": "codex-release-596-unique-success-20260926",
+            "origin": "local_agent",
+            "presetID": "h264",
+            "presetSettings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx264",
+                  "-crf",
+                  "23",
+                  "-preset",
+                  "medium",
+                  "-profile:v",
+                  "high",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h264",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h264",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "h264",
+              "video": {
+                "encoderID": "libx264",
+                "profileID": "h264_high",
+                "quality": 23,
+                "speed": "medium"
+              }
+            },
+            "requesterID": "codex-mcp-client",
+            "requestID": "E21456EB-660D-4807-AE5C-210FAFD16B4A",
+            "schemaVersion": 1,
+            "sourceURLs": [
+              "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+            ]
+          },
+          "schemaVersion": 1,
+          "stage": "Converting",
+          "state": "succeeded",
+          "updatedAt": "2026-09-26T21:38:49Z"
+        },
+        "timedOut": false
+      }
+    },
+    {
+      "tool": "plan_conversion",
+      "args": {
+        "preset_id": "h264",
+        "source_paths": [
+          "/Users/truls.aagedal/Movies/TestVideo/Codex MCP release 596 cancellation.webm"
+        ],
+        "idempotency_key": "codex-release-596-cancel-20260926"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:39:09Z",
+        "expiresAt": "2026-09-26T21:54:09Z",
+        "id": "4ee735d3-fc84-4384-8b74-f2c94cd4a4ea",
+        "outputs": [
+          {
+            "outputURL": "file:///Users/truls.aagedal/Movies/Media_Exports/Codex_MCP_release_596_cancellation_h264.mp4",
+            "sourceURL": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+          }
+        ],
+        "request": {
+          "capturedAt": "2026-09-26T21:39:09Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-cancel-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "F0E6DD63-8C7D-40BC-AE6E-5FEE5A59BF0B",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "sources": [
+          {
+            "fileIdentifier": "{length = 16, bytes = 0x9face804000000006745640000000000}",
+            "fileSize": 64864408,
+            "modificationDate": "2026-09-26T21:38:17Z",
+            "url": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "tool": "submit_conversion",
+      "args": {
+        "plan_id": "4ee735d3-fc84-4384-8b74-f2c94cd4a4ea"
+      },
+      "result": {
+        "record": {
+          "createdAt": "2026-09-26T21:39:23Z",
+          "id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+          "outputURLs": [],
+          "request": {
+            "capturedAt": "2026-09-26T21:39:09Z",
+            "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+            "idempotencyKey": "codex-release-596-cancel-20260926",
+            "origin": "local_agent",
+            "presetID": "h264",
+            "presetSettings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx264",
+                  "-crf",
+                  "23",
+                  "-preset",
+                  "medium",
+                  "-profile:v",
+                  "high",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h264",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h264",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "h264",
+              "video": {
+                "encoderID": "libx264",
+                "profileID": "h264_high",
+                "quality": 23,
+                "speed": "medium"
+              }
+            },
+            "requesterID": "codex-mcp-client",
+            "requestID": "F0E6DD63-8C7D-40BC-AE6E-5FEE5A59BF0B",
+            "schemaVersion": 1,
+            "sourceURLs": [
+              "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+            ]
+          },
+          "schemaVersion": 1,
+          "state": "queued",
+          "updatedAt": "2026-09-26T21:39:23Z"
+        },
+        "wasAlreadyAccepted": false
+      }
+    },
+    {
+      "tool": "wait_for_job",
+      "args": {
+        "job_id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+        "known_state": "queued",
+        "timeout_seconds": 10
+      },
+      "result": {
+        "changed": true,
+        "isTerminal": false,
+        "job": {
+          "createdAt": "2026-09-26T21:39:23Z",
+          "id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+          "outputURLs": [],
+          "progress": 0.1141708460252505,
+          "request": {
+            "capturedAt": "2026-09-26T21:39:09Z",
+            "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+            "idempotencyKey": "codex-release-596-cancel-20260926",
+            "origin": "local_agent",
+            "presetID": "h264",
+            "presetSettings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx264",
+                  "-crf",
+                  "23",
+                  "-preset",
+                  "medium",
+                  "-profile:v",
+                  "high",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h264",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h264",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "h264",
+              "video": {
+                "encoderID": "libx264",
+                "profileID": "h264_high",
+                "quality": 23,
+                "speed": "medium"
+              }
+            },
+            "requesterID": "codex-mcp-client",
+            "requestID": "F0E6DD63-8C7D-40BC-AE6E-5FEE5A59BF0B",
+            "schemaVersion": 1,
+            "sourceURLs": [
+              "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+            ]
+          },
+          "schemaVersion": 1,
+          "stage": "00:00:15",
+          "state": "running",
+          "updatedAt": "2026-09-26T21:39:25Z"
+        },
+        "timedOut": false
+      }
+    },
+    {
+      "tool": "cancel_job",
+      "args": {
+        "job_id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:39:23Z",
+        "id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+        "outputURLs": [],
+        "progress": 0.3070777309416121,
+        "request": {
+          "capturedAt": "2026-09-26T21:39:09Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-cancel-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "F0E6DD63-8C7D-40BC-AE6E-5FEE5A59BF0B",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "stage": "00:00:12",
+        "state": "cancelling",
+        "updatedAt": "2026-09-26T21:39:29Z"
+      }
+    },
+    {
+      "tool": "wait_for_job",
+      "args": {
+        "job_id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+        "known_state": "cancelling",
+        "timeout_seconds": 10
+      },
+      "result": {
+        "changed": true,
+        "isTerminal": true,
+        "job": {
+          "createdAt": "2026-09-26T21:39:23Z",
+          "diagnostic": "Conversion cancelled.",
+          "id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+          "outputURLs": [],
+          "progress": 0.3070777309416121,
+          "request": {
+            "capturedAt": "2026-09-26T21:39:09Z",
+            "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+            "idempotencyKey": "codex-release-596-cancel-20260926",
+            "origin": "local_agent",
+            "presetID": "h264",
+            "presetSettings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx264",
+                  "-crf",
+                  "23",
+                  "-preset",
+                  "medium",
+                  "-profile:v",
+                  "high",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h264",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h264",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "h264",
+              "video": {
+                "encoderID": "libx264",
+                "profileID": "h264_high",
+                "quality": 23,
+                "speed": "medium"
+              }
+            },
+            "requesterID": "codex-mcp-client",
+            "requestID": "F0E6DD63-8C7D-40BC-AE6E-5FEE5A59BF0B",
+            "schemaVersion": 1,
+            "sourceURLs": [
+              "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+            ]
+          },
+          "schemaVersion": 1,
+          "stage": "00:00:12",
+          "state": "cancelled",
+          "updatedAt": "2026-09-26T21:39:31Z"
+        },
+        "timedOut": false
+      }
+    },
+    {
+      "tool": "submit_conversion",
+      "args": {
+        "plan_id": "d2bac2f7-498e-4fd4-a04d-5a732ba6cf92"
+      },
+      "result": {
+        "record": {
+          "createdAt": "2026-09-26T21:38:48Z",
+          "id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2",
+          "outputURLs": [
+            "file:///Users/truls.aagedal/Movies/Media_Exports/Codex_MCP_release_596_success_h264.mp4"
+          ],
+          "progress": 1,
+          "request": {
+            "capturedAt": "2026-09-26T21:38:39Z",
+            "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+            "idempotencyKey": "codex-release-596-unique-success-20260926",
+            "origin": "local_agent",
+            "presetID": "h264",
+            "presetSettings": {
+              "audio": {
+                "bitrate": "192k",
+                "codecID": "aac"
+              },
+              "capturedCodec": {
+                "appliesAudioRouting": true,
+                "appliesCrop": true,
+                "container": "MP4",
+                "ffmpegArguments": [
+                  "-hide_banner",
+                  "-c:v",
+                  "libx264",
+                  "-crf",
+                  "23",
+                  "-preset",
+                  "medium",
+                  "-profile:v",
+                  "high",
+                  "-pix_fmt",
+                  "yuv420p",
+                  "-movflags",
+                  "+faststart",
+                  "-vf",
+                  "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                  "-map",
+                  "0:v:0",
+                  "-c:a",
+                  "aac",
+                  "-b:a",
+                  "192k",
+                  "-map",
+                  "0:a?",
+                  "-map_metadata",
+                  "-1",
+                  "-map_chapters",
+                  "-1",
+                  "-fflags",
+                  "+bitexact",
+                  "-metadata:s:v:0",
+                  "encoder=",
+                  "-metadata:s:a:0",
+                  "encoder="
+                ],
+                "fileExtension": "mp4",
+                "fileNameContext": {
+                  "framerate": "",
+                  "presetSuffix": "_h264",
+                  "resolution": ""
+                },
+                "resolutionLimit": "Unlimited",
+                "sourceMetadataPlan": {
+                  "strip": {}
+                }
+              },
+              "containerID": "mp4",
+              "fileName": {
+                "counterPadding": 3,
+                "counterStart": 1,
+                "customTemplateEnabled": false,
+                "dateFormat": "yyyyMMdd",
+                "includePresetSuffix": true,
+                "presetSuffix": "_h264",
+                "processingEnabled": true,
+                "replaceScandinavianCharacters": true,
+                "replaceSpaces": true,
+                "specialCharacterRemovalMode": "loose",
+                "template": "{sourceName}_{date}"
+              },
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "keepSubtitles": false,
+              "outputIsDirectory": false,
+              "preserveMetadata": false,
+              "presetID": "h264",
+              "video": {
+                "encoderID": "libx264",
+                "profileID": "h264_high",
+                "quality": 23,
+                "speed": "medium"
+              }
+            },
+            "requesterID": "codex-mcp-client",
+            "requestID": "E21456EB-660D-4807-AE5C-210FAFD16B4A",
+            "schemaVersion": 1,
+            "sourceURLs": [
+              "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+            ]
+          },
+          "schemaVersion": 1,
+          "stage": "Converting",
+          "state": "succeeded",
+          "updatedAt": "2026-09-26T21:38:49Z"
+        },
+        "wasAlreadyAccepted": true
+      }
+    },
+    {
+      "tool": "get_plan",
+      "args": {
+        "plan_id": "d2bac2f7-498e-4fd4-a04d-5a732ba6cf92"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:38:39Z",
+        "expiresAt": "2026-09-26T21:53:39Z",
+        "id": "d2bac2f7-498e-4fd4-a04d-5a732ba6cf92",
+        "outputs": [
+          {
+            "outputURL": "file:///Users/truls.aagedal/Movies/Media_Exports/Codex_MCP_release_596_success_h264.mp4",
+            "sourceURL": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          }
+        ],
+        "request": {
+          "capturedAt": "2026-09-26T21:38:39Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-unique-success-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "E21456EB-660D-4807-AE5C-210FAFD16B4A",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "sources": [
+          {
+            "fileIdentifier": "{length = 16, bytes = 0x9eace804000000006745640000000000}",
+            "fileSize": 2165175,
+            "modificationDate": "2026-09-26T21:38:17Z",
+            "url": "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "tool": "list_jobs",
+      "args": {
+        "limit": 20
+      },
+      "result": {
+        "hasMore": false,
+        "jobs": [
+          {
+            "canCancel": false,
+            "id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+            "isDurable": true,
+            "kind": "conversion",
+            "name": "Codex MCP release 596 cancellation.webm",
+            "origin": "local_agent",
+            "preset": "h264",
+            "progress": 0.3070777309416121,
+            "sourceNames": [
+              "Codex MCP release 596 cancellation.webm"
+            ],
+            "state": "cancelled"
+          },
+          {
+            "canCancel": false,
+            "id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2",
+            "isDurable": true,
+            "kind": "conversion",
+            "name": "Codex MCP release 596 success.webm",
+            "origin": "local_agent",
+            "preset": "h264",
+            "progress": 1,
+            "sourceNames": [
+              "Codex MCP release 596 success.webm"
+            ],
+            "state": "succeeded"
+          }
+        ],
+        "offset": 0,
+        "total": 8
+      },
+      "note": "Unrelated historical job entries omitted."
+    },
+    {
+      "tool": "get_job",
+      "args": {
+        "job_id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:38:48Z",
+        "id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2",
+        "outputURLs": [
+          "file:///Users/truls.aagedal/Movies/Media_Exports/Codex_MCP_release_596_success_h264.mp4"
+        ],
+        "progress": 1,
+        "request": {
+          "capturedAt": "2026-09-26T21:38:39Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-unique-success-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "E21456EB-660D-4807-AE5C-210FAFD16B4A",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "stage": "Converting",
+        "state": "succeeded",
+        "updatedAt": "2026-09-26T21:38:49Z"
+      }
+    },
+    {
+      "tool": "get_app_status",
+      "args": {},
+      "result": {
+        "activeJobCount": 0,
+        "appVersion": "4.5.0",
+        "buildNumber": "596",
+        "ipcSchemaVersion": 1,
+        "manualQueueCount": 0,
+        "serviceJobCount": 8,
+        "terminalJobCount": 8
+      },
+      "note": "After normal UI quit and confirmed absence of installed app process."
+    },
+    {
+      "tool": "get_job",
+      "args": {
+        "job_id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:38:48Z",
+        "id": "639f33fc-3430-45fa-b51b-1b88bbc8bdf2",
+        "outputURLs": [
+          "file:///Users/truls.aagedal/Movies/Media_Exports/Codex_MCP_release_596_success_h264.mp4"
+        ],
+        "progress": 1,
+        "request": {
+          "capturedAt": "2026-09-26T21:38:39Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-unique-success-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "E21456EB-660D-4807-AE5C-210FAFD16B4A",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20success.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "stage": "Converting",
+        "state": "succeeded",
+        "updatedAt": "2026-09-26T21:38:49Z"
+      },
+      "note": "After normal app quit and helper-triggered cold launch."
+    },
+    {
+      "tool": "get_job",
+      "args": {
+        "job_id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb"
+      },
+      "result": {
+        "createdAt": "2026-09-26T21:39:23Z",
+        "diagnostic": "Conversion cancelled.",
+        "id": "4da658d1-febf-441d-8cfb-ae9b5092c4cb",
+        "outputURLs": [],
+        "progress": 0.3070777309416121,
+        "request": {
+          "capturedAt": "2026-09-26T21:39:09Z",
+          "destinationFolderURL": "file:///Users/truls.aagedal/Movies/Media_Exports/",
+          "idempotencyKey": "codex-release-596-cancel-20260926",
+          "origin": "local_agent",
+          "presetID": "h264",
+          "presetSettings": {
+            "audio": {
+              "bitrate": "192k",
+              "codecID": "aac"
+            },
+            "capturedCodec": {
+              "appliesAudioRouting": true,
+              "appliesCrop": true,
+              "container": "MP4",
+              "ffmpegArguments": [
+                "-hide_banner",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-preset",
+                "medium",
+                "-profile:v",
+                "high",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                "-vf",
+                "scale='trunc(ih*dar/2)*2:trunc(ih/2)*2',setsar=1/1",
+                "-map",
+                "0:v:0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-map",
+                "0:a?",
+                "-map_metadata",
+                "-1",
+                "-map_chapters",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-metadata:s:v:0",
+                "encoder=",
+                "-metadata:s:a:0",
+                "encoder="
+              ],
+              "fileExtension": "mp4",
+              "fileNameContext": {
+                "framerate": "",
+                "presetSuffix": "_h264",
+                "resolution": ""
+              },
+              "resolutionLimit": "Unlimited",
+              "sourceMetadataPlan": {
+                "strip": {}
+              }
+            },
+            "containerID": "mp4",
+            "fileName": {
+              "counterPadding": 3,
+              "counterStart": 1,
+              "customTemplateEnabled": false,
+              "dateFormat": "yyyyMMdd",
+              "includePresetSuffix": true,
+              "presetSuffix": "_h264",
+              "processingEnabled": true,
+              "replaceScandinavianCharacters": true,
+              "replaceSpaces": true,
+              "specialCharacterRemovalMode": "loose",
+              "template": "{sourceName}_{date}"
+            },
+            "fileNameContext": {
+              "framerate": "",
+              "presetSuffix": "_h264",
+              "resolution": ""
+            },
+            "keepSubtitles": false,
+            "outputIsDirectory": false,
+            "preserveMetadata": false,
+            "presetID": "h264",
+            "video": {
+              "encoderID": "libx264",
+              "profileID": "h264_high",
+              "quality": 23,
+              "speed": "medium"
+            }
+          },
+          "requesterID": "codex-mcp-client",
+          "requestID": "F0E6DD63-8C7D-40BC-AE6E-5FEE5A59BF0B",
+          "schemaVersion": 1,
+          "sourceURLs": [
+            "file:///Users/truls.aagedal/Movies/TestVideo/Codex%20MCP%20release%20596%20cancellation.webm"
+          ]
+        },
+        "schemaVersion": 1,
+        "stage": "00:00:12",
+        "state": "cancelled",
+        "updatedAt": "2026-09-26T21:39:31Z"
+      },
+      "note": "After normal app quit and helper-triggered cold launch."
+    }
+  ]
+}

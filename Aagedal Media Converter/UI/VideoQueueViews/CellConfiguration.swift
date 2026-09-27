@@ -31,6 +31,9 @@ struct VideoFileCellConfiguration: Equatable {
     /// When set, takes visual precedence over `eta` in the progress label.
     let statusMessage: String?
     let conversionError: String?
+    let applicationJobID: ApplicationJobID?
+    let applicationJobOrigin: ApplicationJobOrigin?
+    let applicationJobSettingsSummary: String?
     let comment: String
     let includeDateTag: Bool
     let outputURL: URL?
@@ -307,17 +310,18 @@ enum CellAction {
     case tabCommentField(forward: Bool)
 
     // Output filename
-    case beginRename
     case commitRename(String?)
 
     // Sheet/popover requests
     case showPreview
+    case moveSelectionToNewGroup
     case showMetadata
     case showAudioRouting
     case showTimecode
     case showDCPMetadata
     case showIMFMetadata
     case showAnalyticsResults
+    case showLoudnessAnalysis
     case showAnalyticsFilePicker
     case showSubtitleTrackSheet
     case showAudioTrackSheet

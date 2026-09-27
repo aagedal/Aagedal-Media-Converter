@@ -25,7 +25,9 @@ enum ConversionQueueState {
 
     static func nextItem(in items: [VideoItem], allowedItemIDs: Set<UUID>?) -> VideoItem? {
         items.first {
-            $0.status == .waiting && (allowedItemIDs?.contains($0.id) ?? true)
+            $0.applicationJobID == nil
+                && $0.status == .waiting
+                && (allowedItemIDs?.contains($0.id) ?? true)
         }
     }
 
@@ -86,7 +88,9 @@ enum ConversionQueueState {
     /// Failed and cancelled items contribute neither work nor duration. Waiting items
     /// still contribute duration, and completed items contribute their full trimmed range.
     static func overallProgress(for items: [VideoItem]) -> Double {
-        let activeItems = items.filter { $0.status != .cancelled && $0.status != .failed }
+        let activeItems = items.filter {
+            $0.applicationJobID == nil && $0.status != .cancelled && $0.status != .failed
+        }
         let totalDuration = activeItems.reduce(0.0) { $0 + $1.trimmedDuration }
         guard totalDuration > 0 else { return 0 }
 
@@ -105,6 +109,7 @@ enum ConversionQueueState {
 
     static func cancel(_ items: inout [VideoItem], scope: CancellationScope) {
         for index in items.indices {
+            guard items[index].applicationJobID == nil else { continue }
             let status = items[index].status
             guard status == .converting ||
                     (scope == .waitingAndConverting && status == .waiting) else { continue }

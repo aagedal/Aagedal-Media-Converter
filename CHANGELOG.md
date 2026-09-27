@@ -1,3 +1,66 @@
+# v.4.5.0 (Unreleased)
+
+Local MCP access lets agents inspect media and run conversions through the app's
+queue. This release also adds a stitching timeline, camera-card import review,
+and more reliable MPV audio-device switching.
+
+## Local agent access
+
+- Opt-in **Settings → Agent Access** with a connection test and copyable setup
+  for Claude Desktop, Claude Code, Codex, and OpenCode. The bundled helper can
+  launch the app; no separate FFmpeg or helper runtime is required.
+- Eleven tools cover approved-folder browsing, media inspection, preset discovery,
+  conversion planning and submission, plan retrieval, job listing/status/waiting,
+  cancellation, and app status. All 17 built-in presets are available, including
+  experimental IMF App 2e and RDD 45. Custom FFmpeg slots are excluded.
+- Source-folder approvals persist across launches and cover subfolders. Output
+  locations require separate write approval. Planning previews filenames and
+  warnings; submission rechecks access, source identity, and output collisions.
+- Accepted jobs keep their captured settings, appear in the queue with Agent
+  labels and stable IDs, and continue after a client disconnects. Repeated
+  submissions return the original job. Results remain available for 30 days;
+  unfinished work becomes interrupted after an app restart.
+- Ordinary manual and Shortcut conversions for H.264, HEVC, ProRes, Proxy,
+  Audio Only, and Stream Copy share the persisted planner and serialized executor.
+  Their configured trims, crop, audio routing, names, destinations, comments,
+  and timecode remain attached to each accepted job.
+- Added an accepted-settings inspector and Norwegian translations for Agent
+  Access, connection states, and shared-job details. Agent conversions disable
+  output timecode; manual and Shortcut jobs keep their configured behavior.
+
+See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md).
+
+## Stitching and import
+
+- Added a stitching timeline with filmstrips, sequence playback, zoom and Fit,
+  ripple trimming, clip reordering, splitting, range deletion, and undo.
+- Added keyframe guidance for trimming. Stream Copy cuts remain approximate;
+  a keyframe-aligned selection does not guarantee an exact exported out-point.
+- Stitched exports support Resolve EDL clip markers and embedded chapters in
+  MOV, MP4, M4V, and MKV, with a Keep/Replace choice for existing chapters.
+- Added camera-card recording-date review, explicit continuation marks for
+  spanned recordings, optional splitting after gaps over two hours, and
+  compatibility checks. Clips stay grouped by card folder during review.
+
+## Preview and interface
+
+- Updated MPVKit to the CoreAudio `.2` package, fixing device-listener registration
+  and stale AudioUnit handles during initialization failure cleanup.
+- Restored inline output filename renaming from double-click and the queue
+  context menu, including grouped items.
+- Moved Agent Access and Tool Diagnostics to the bottom of the Settings sidebar.
+
+## Export and dependencies
+
+- Enabled experimental IMF App 2e and RDD 45 exports with corrected CPL links to
+  MXF track IDs and essence descriptors. The initial scope is one image track
+  and one PCM audio track; packaged subtitles and multiple audio tracks are
+  unsupported. Validate packages in the target mastering or delivery tool.
+- Updated SwiftMediaMetadata to 3.0.1, including bounded-memory Sony RTMD track
+  discovery, and refreshed dependency source and license records.
+- Deferred the anonymous usage indicator; its prompt and Settings control are
+  removed and reporting is disabled.
+
 # v.4.4.0
 
 This release focuses on conversion correctness, reliable cancellation, saved-state recovery, and recording improvements.
@@ -12,7 +75,7 @@ This release focuses on conversion correctness, reliable cancellation, saved-sta
 - **AV2 Matroska exports preserve audio timing and padding**, including delayed tracks, trims, AAC preroll, and Opus codec delay. Additional AAC channel layouts are supported.
 - **AV2 assembly rejects damaged or incompatible segments.** Invalid trims and unsupported generated-video combinations report errors instead of producing incomplete output.
 - **DCP frame preparation reports damaged frames and write failures** before wrapping a package.
-- **IMF export is temporarily unavailable** while package descriptors and standards conformance are validated. Existing IMF settings are preserved.
+- **IMF App 2e and RDD 45 exports are experimental.** Packages now link CPL resources to wrapped MXF track IDs and essence descriptors. Validate each package in the target mastering or delivery tool; multi-track audio and packaged subtitles remain outside this initial export scope.
 - **Failed and cancelled conversions clean up their partial outputs**, while existing files and source media remain protected from replacement.
 
 ## Cancellation and recovery

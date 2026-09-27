@@ -1,6 +1,7 @@
 """Exercise license inventory and publication gating without running bundled tools."""
 import importlib.util
 from pathlib import Path
+import plistlib
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -147,23 +148,36 @@ class DependencyLicenseTests(unittest.TestCase):
 
     def test_package_revision_change_invalidates_review(self):
         import json
-        pin = {"identity": "example", "location": "https://example.com/repo", "state": {"revision": "new"}}
-        resolved = self.root / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-        resolved.parent.mkdir(parents=True)
-        resolved.write_text(json.dumps({"pins": [pin]}))
+        self.write_package_project("https://example.com/example.git", "new")
         (self.root / "PackageAttributions.json").write_text(json.dumps({"packages": [{
-            "identity": "example", "sourceURL": pin["location"], "revision": "old"}]}))
+            "identity": "example", "sourceURL": "https://example.com/example.git", "revision": "old"}]}))
         with self.assertRaisesRegex(RuntimeError, "attribution is stale"):
             manifest.package_inventory()
 
     def test_added_package_requires_attribution_record(self):
         import json
-        resolved = self.root / "Aagedal Media Converter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
-        resolved.parent.mkdir(parents=True)
-        resolved.write_text(json.dumps({"pins": [{"identity": "new", "location": "https://example.com/repo", "state": {"revision": "new"}}]}))
+        self.write_package_project("https://example.com/new.git", "new")
         (self.root / "PackageAttributions.json").write_text(json.dumps({"packages": []}))
         with self.assertRaisesRegex(RuntimeError, "does not cover"):
             manifest.package_inventory()
+
+    def test_moving_package_requirement_is_rejected(self):
+        import json
+        self.write_package_project("https://example.com/example.git", "main", kind="branch")
+        (self.root / "PackageAttributions.json").write_text(json.dumps({"packages": [{
+            "identity": "example", "sourceURL": "https://example.com/example.git", "revision": "old"}]}))
+        with self.assertRaisesRegex(RuntimeError, "must use an exact revision"):
+            manifest.package_inventory()
+
+    def write_package_project(self, source_url, revision, *, kind="revision"):
+        project = self.root / "Aagedal Media Converter.xcodeproj/project.pbxproj"
+        project.parent.mkdir(parents=True)
+        requirement = {kind: revision, "kind": kind}
+        project.write_bytes(plistlib.dumps({"objects": {
+            "project": {"isa": "PBXProject", "packageReferences": ["package"]},
+            "package": {"isa": "XCRemoteSwiftPackageReference", "repositoryURL": source_url,
+                        "requirement": requirement},
+        }}))
 
 
 if __name__ == "__main__":

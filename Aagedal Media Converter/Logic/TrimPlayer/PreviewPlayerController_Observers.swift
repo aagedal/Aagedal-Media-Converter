@@ -19,7 +19,9 @@ extension PreviewPlayerController {
         timePosition: AnyPublisher<Double, Never>,
         fileLoaded: AnyPublisher<Bool, Never>,
         reachedEnd: AnyPublisher<Bool, Never>,
+        failure: AnyPublisher<String?, Never> = Empty(completeImmediately: false).eraseToAnyPublisher(),
         refreshDelay: Duration = .milliseconds(500),
+        loadTimeout: Duration = .seconds(30),
         refreshTracks: @escaping @MainActor () -> Void
     ) {
         removeMPVObservers()
@@ -36,6 +38,8 @@ extension PreviewPlayerController {
         fileLoaded.filter { $0 }.prefix(1).sink { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.mpvObservationID == observationID else { return }
+                self.mpvLoadDeadlineTask?.cancel()
+                self.mpvLoadDeadlineTask = nil
                 self.isReady = true
             }
         }.store(in: &mpvObservers)
@@ -47,6 +51,22 @@ extension PreviewPlayerController {
             }
         }.store(in: &mpvObservers)
 
+        failure.compactMap { $0 }.prefix(1).sink { [weak self] message in
+            Task { @MainActor [weak self] in
+                guard let self, self.mpvObservationID == observationID else { return }
+                self.failMPVPreview(message: message, observationID: observationID)
+            }
+        }.store(in: &mpvObservers)
+
+        // Bound decoders that never publish readiness or a terminal error.
+        // Keep the controller weak while sleeping and fence replacement/dismissal.
+        mpvLoadDeadlineTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: loadTimeout) }
+            catch { return }
+            guard !Task.isCancelled, let self else { return }
+            self.failMPVPreview(message: "Source loading timed out", observationID: observationID)
+        }
+
         mpvTrackRefreshTask = Task { @MainActor [weak self] in
             do { try await Task.sleep(for: refreshDelay) }
             catch { return }
@@ -57,8 +77,19 @@ extension PreviewPlayerController {
         }
     }
 
+    private func failMPVPreview(message: String, observationID: UUID) {
+        guard mpvObservationID == observationID else { return }
+        logger.warning("MPV preview failed: \(message, privacy: .public)")
+        // Retire callbacks before stopping: late readiness/EOF cannot revive or
+        // advance a failed source. Preserve the selected track for Retry.
+        teardown(resetAudioSelection: false)
+        errorMessage = String(localized: "The source could not be played. Check that it is available and readable, then retry.")
+    }
+
     func removeMPVObservers() {
         mpvObservationID = nil
+        mpvLoadDeadlineTask?.cancel()
+        mpvLoadDeadlineTask = nil
         mpvObservers.removeAll()
         mpvTrackRefreshTask?.cancel()
         mpvTrackRefreshTask = nil
@@ -239,6 +270,10 @@ extension PreviewPlayerController {
         removePlayerItemStatusObserver()
         let observerID = UUID()
         playerItemStatusObserverID = observerID
+        beginPlayerItemLoadDeadline(for: playerItem, observerID: observerID) { [weak self] in
+            guard let self else { return }
+            self.setupMPV(url: self.videoItem.url, startTime: startTime)
+        }
         playerItemStatusObserver = playerItem.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
                 guard let self, self.playerItemStatusObserverID == observerID,
@@ -259,6 +294,27 @@ extension PreviewPlayerController {
         }
     }
 
+    /// AVFoundation can remain in `.unknown` indefinitely for unavailable media.
+    /// Retire the native player before attempting the independently bounded MPV fallback.
+    func beginPlayerItemLoadDeadline(
+        for item: AVPlayerItem,
+        observerID: UUID,
+        timeout: Duration = .seconds(30),
+        fallback: @escaping @MainActor () -> Void
+    ) {
+        playerItemLoadDeadlineTask?.cancel()
+        playerItemLoadDeadlineTask = Task { @MainActor [weak self, weak item] in
+            do { try await Task.sleep(for: timeout) }
+            catch { return }
+            guard !Task.isCancelled, let self, let item,
+                  self.playerItemStatusObserverID == observerID,
+                  self.player?.currentItem === item else { return }
+            self.logger.warning("AVPlayer source loading timed out; attempting MPV playback.")
+            self.teardown(resetAudioSelection: false)
+            fallback()
+        }
+    }
+
     /// Both metadata inspection and the initial seek have deadlines. The detached
     /// metadata operation never mutates controller state, even if AVFoundation
     /// finishes after cancellation or after a different item has been installed.
@@ -269,6 +325,8 @@ extension PreviewPlayerController {
         verify: (@Sendable () async throws -> Bool)? = nil,
         seek: (@Sendable () async throws -> Bool)? = nil
     ) {
+        playerItemLoadDeadlineTask?.cancel()
+        playerItemLoadDeadlineTask = nil
         playerItemStatusTask?.cancel()
         let operationID = UUID()
         playerItemStatusOperationID = operationID
@@ -342,6 +400,8 @@ extension PreviewPlayerController {
 
     func removePlayerItemStatusObserver() {
         playerItemStatusObserverID = nil
+        playerItemLoadDeadlineTask?.cancel()
+        playerItemLoadDeadlineTask = nil
         playerItemStatusOperationID = nil
         playerItemStatusTask?.cancel()
         playerItemStatusTask = nil

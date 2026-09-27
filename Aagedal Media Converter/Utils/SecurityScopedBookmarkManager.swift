@@ -11,7 +11,7 @@ import Foundation
 import OSLog
 
 /// Tracks which security-scoped access method succeeded for correct cleanup.
-enum SecurityScopedAccess {
+enum SecurityScopedAccess: Sendable {
     case none
     case direct(URL)
     case bookmark(URL)
@@ -19,10 +19,14 @@ enum SecurityScopedAccess {
 
 final class SecurityScopedBookmarkManager: @unchecked Sendable {
     static let shared = SecurityScopedBookmarkManager()
+    static let agentSourceFolders = SecurityScopedBookmarkManager(
+        bookmarksKey: "agentSourceFolderBookmarks",
+        readOnlyKey: "agentSourceFolderBookmarksReadOnly"
+    )
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "BookmarkManager")
     private let userDefaults: UserDefaults
-    private let bookmarksKey = "securityScopedBookmarks"
-    private let readOnlyKey = "securityScopedBookmarksReadOnly"
+    private let bookmarksKey: String
+    private let readOnlyKey: String
     private let lock = NSRecursiveLock()
     private var activeBookmarks: [URL: (url: URL, count: Int)] = [:]
     private let createBookmark: (URL, URL.BookmarkCreationOptions) throws -> Data
@@ -32,6 +36,8 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
 
     init(
         defaults: UserDefaults = .standard,
+        bookmarksKey: String = "securityScopedBookmarks",
+        readOnlyKey: String = "securityScopedBookmarksReadOnly",
         createBookmark: @escaping (URL, URL.BookmarkCreationOptions) throws -> Data = {
             try $0.bookmarkData(options: $1, includingResourceValuesForKeys: nil, relativeTo: nil)
         },
@@ -45,6 +51,8 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         stopScope: @escaping (URL) -> Void = { $0.stopAccessingSecurityScopedResource() }
     ) {
         userDefaults = defaults
+        self.bookmarksKey = bookmarksKey
+        self.readOnlyKey = readOnlyKey
         self.createBookmark = createBookmark
         self.resolveData = resolveData
         self.startScope = startScope
@@ -53,6 +61,34 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
 
     func saveBookmark(for url: URL) -> Bool {
         saveBookmark(for: url, storageURL: url, readOnly: true)
+    }
+
+    /// Paths selected for this manager's stored folder grants. A missing volume
+    /// remains listed so the user can reconnect it or remove the approval.
+    func storedFolderURLs() -> [URL] {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey) else { return [] }
+        return bookmarks.compactMap { key, value in
+            guard value is Data, let url = URL(string: key), url.isFileURL else { return nil }
+            return url
+        }.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    /// Removes future access. A lease already held by a running job is released
+    /// by its owner when that job finishes.
+    @discardableResult
+    func removeBookmark(for url: URL) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let key = url.standardizedFileURL.absoluteString
+        guard var bookmarks = try? storedDictionary(forKey: bookmarksKey),
+              var modes = try? storedDictionary(forKey: readOnlyKey) else { return false }
+        bookmarks.removeValue(forKey: key)
+        modes.removeValue(forKey: key)
+        userDefaults.set(bookmarks, forKey: bookmarksKey)
+        userDefaults.set(modes, forKey: readOnlyKey)
+        return true
     }
 
     /// Saves a security-scoped bookmark that allows both read and write access.
@@ -131,6 +167,63 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         return true
     }
 
+    /// Opens the narrowest persisted security-scoped grant that contains `url`.
+    /// This is used by non-interactive entry points, which must not treat ordinary
+    /// sandbox visibility as user approval. A legacy bookmark without recorded
+    /// access mode is allowed for writes because older app versions only saved
+    /// writable grants for output locations.
+    func startAccessingStoredBookmark(
+        containing url: URL,
+        requiresWriteAccess: Bool
+    ) -> SecurityScopedAccess {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey) else {
+            return .none
+        }
+        let modes = userDefaults.dictionary(forKey: readOnlyKey) ?? [:]
+        let target = url.standardizedFileURL.resolvingSymlinksInPath()
+        var candidates: [(storageURL: URL, resolvedURL: URL)] = []
+
+        for (key, value) in bookmarks {
+            guard value is Data,
+                  let storageURL = URL(string: key),
+                  storageURL.isFileURL,
+                  !(requiresWriteAccess && (modes[key] as? Bool) == true) else { continue }
+            let resolvedURL: URL
+            if let active = activeBookmarks[storageURL] {
+                // Do not resolve again while a borrower owns the old resolution;
+                // its eventual stop must remain paired with that exact URL.
+                resolvedURL = active.url
+            } else if let resolved = resolveBookmark(for: storageURL) {
+                resolvedURL = resolved
+            } else {
+                continue
+            }
+            let resolved = resolvedURL.standardizedFileURL.resolvingSymlinksInPath()
+            guard Self.url(target, isContainedBy: resolved) else { continue }
+            candidates.append((storageURL, resolvedURL))
+        }
+
+        // Prefer an exact file/folder grant, then the closest ancestor folder.
+        candidates.sort {
+            $0.resolvedURL.standardizedFileURL.pathComponents.count
+                > $1.resolvedURL.standardizedFileURL.pathComponents.count
+        }
+        for candidate in candidates {
+            if var active = activeBookmarks[candidate.storageURL] {
+                active.count += 1
+                activeBookmarks[candidate.storageURL] = active
+                return .bookmark(candidate.storageURL)
+            }
+            guard startScope(candidate.resolvedURL) else { continue }
+            activeBookmarks[candidate.storageURL] = (candidate.resolvedURL, 1)
+            return .bookmark(candidate.storageURL)
+        }
+        return .none
+    }
+
     func stopAccessingSecurityScopedResource(for url: URL) {
         lock.lock()
         defer { lock.unlock() }
@@ -158,5 +251,12 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         case .bookmark(let url): stopAccessingSecurityScopedResource(for: url)
         case .none: break
         }
+    }
+
+    private static func url(_ target: URL, isContainedBy scope: URL) -> Bool {
+        let targetComponents = target.pathComponents
+        let scopeComponents = scope.pathComponents
+        guard scopeComponents.count <= targetComponents.count else { return false }
+        return Array(targetComponents.prefix(scopeComponents.count)) == scopeComponents
     }
 }

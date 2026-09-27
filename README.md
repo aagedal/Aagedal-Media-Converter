@@ -4,7 +4,7 @@
 
 
 
-A lightweight minimalist macOS application that is simple on the surface, but with powerful features baked in. Powered by FFMPEG, FFPROBE, MPV, SwiftMediaMetadata, yt-dlp, rclone, whisper.cpp under the hood and written entirely in Swift / SwiftUI.
+A lightweight minimalist macOS application that is simple on the surface, but with powerful features baked in. Powered by FFmpeg, MPV, SwiftMediaMetadata, yt-dlp, rclone, whisper.cpp under the hood and written entirely in Swift / SwiftUI.
 
 Completely free and open source. Private and local. (An optional update checker is activated by default, but it can be turned off.)
 
@@ -38,12 +38,15 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - **Screen recording** with system sound, and optional separate microphone track (alternative to OBS)
 - **Transcribe** video and audio files to SRT subtitles
 - **Upload** to server after conversion
+- **Stitch** clips in a timeline with sequence preview and ripple trimming
+- **Automate conversions through local MCP** with opt-in agent access
 
 
 ### General
 - Preview and encode almost every video file that exists
 - Import and export **image sequences** (PNG, TIFF, EXR, DPX, JPEG 2000, and more) with audio association and frame rate control
-- Export **DCP (Digital Cinema Package)** for cinema playback, with SMPTE-compliant JPEG 2000 XYZ color space encoding
+- Export **DCP (Digital Cinema Package)** with JPEG 2000 XYZ picture and PCM audio
+- Export experimental **IMF App 2e and RDD 45** packages for validation in your delivery tool
 - Batch conversion, watch folder, progress bar,
 - Trim, crop, reroute or remove audio tracks, merge clips (if in the same format)
 - Metadata view with comparison
@@ -86,7 +89,18 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 ### Merge queued files
 - Merge files into one if they are the same codec, resolution, frame rate, bit depth, and audio tracks.
 - The first clip in the queue works as a master for timecode and crop.
-- Allows trimming and Copy Stream at the same time, allowing you to trim and merge files without any quality loss. (Some metadata may be lost)
+- Edit a group in the stitching timeline with filmstrips, sequence playback, ripple trimming, reordering, splitting, range deletion, and undo.
+- Trim and merge with Stream Copy without re-encoding. Cuts depend on source keyframes and may differ from the selected boundaries; some metadata may be lost.
+- Export Resolve EDL clip markers and embedded chapters, with a Keep/Replace choice when chapters already exist.
+
+### Camera-card import
+- Review clips by card folder and recording date before importing.
+- Mark recording continuations explicitly and optionally split groups after gaps over two hours. Compatibility checks help identify clips that can be stitched.
+
+### Local agent access
+Enable **Settings → Agent Access**, approve source folders, and copy the setup for your MCP client. The bundled helper lets agents browse and inspect approved media, plan conversions, submit jobs, follow progress, and cancel work in the app queue. All 17 built-in presets are available; custom FFmpeg slots are excluded. IMF exports are experimental.
+
+Accepted jobs continue after a client disconnects. Plans last 15 minutes and terminal results remain available for 30 days. Agent exports disable output timecode. See the [setup and workflow guide](Documentation/LOCAL_AGENT_ACCESS.md) for folder approvals, client setup, and job recovery.
 
 ### Generate Audio Waveform Animation
 - Generate Audio Waveform Animations for audio only files
@@ -157,7 +171,10 @@ Apple ProRes (yuv422p10) for edit-friendly masters. Includes the first video and
 Lightweight proxy creation in HEVC, ProRes Proxy, or DNxHR with configurable resolution limits. Retains every audio channel as uncompressed PCM, which is ideal for offline editing and pairing with a dedicated Proxy sub-folder next to the source material.
 
 #### DCP (Digital Cinema Package)
-SMPTE-compliant Digital Cinema Package export. Encodes video as JPEG 2000 in 12-bit XYZ color space with BT.709 input conversion, wraps to MXF using asdcp-wrap, and generates all required SMPTE XML (CPL, PKL, ASSETMAP, VOLINDEX). Supports 2K and 4K Flat, Scope, and Full container sizes at 24/25/30/48 fps with configurable bitrate (100–250 Mbps). Audio is exported as 24-bit PCM in a separate MXF track. Per-item metadata editing includes content title, content kind, annotation, rating, and audio language. Scaling modes: fit (letterbox) or fill (crop).
+Digital Cinema Package export. Encodes video as JPEG 2000 in 12-bit XYZ color space with BT.709 input conversion, wraps to MXF using asdcp-wrap, and generates package XML (CPL, PKL, ASSETMAP, VOLINDEX). Supports 2K and 4K Flat, Scope, and Full container sizes at 24/25/30/48 fps with configurable bitrate (100–250 Mbps). Audio is exported as 24-bit PCM in a separate MXF track. Per-item metadata editing includes content title, content kind, annotation, rating, and audio language. Scaling modes: fit (letterbox) or fill (crop).
+
+#### IMF App 2e / RDD 45 (experimental)
+Experimental IMF package export with one image track and one PCM audio track. Packaged subtitles and multiple audio tracks are unsupported. Validate each package in the target mastering or delivery tool before using it for delivery.
 
 #### Image Sequence
 Import and export image sequences in PNG, JPEG, TIFF, EXR, DPX, BMP, TGA, SGI, JPEG XL, and JPEG 2000. Import auto-detects frame numbering and supports gaps. Audio files can be associated with a sequence for playback and export. Frame rate is configurable per-sequence and can be auto-derived from associated audio duration. Exports include optional metadata sidecar files (Markdown or JSON) with color space, codec, and camera information.

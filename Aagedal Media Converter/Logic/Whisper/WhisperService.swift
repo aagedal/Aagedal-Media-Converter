@@ -330,6 +330,9 @@ struct WhisperFFmpegTranscriber: Sendable {
                 request.redactedDiagnostic(error.localizedDescription, limit: 500)
             )
         }
+        // Cancellation can race a successful process exit. Reject its result before
+        // flushing buffered progress or classifying the exit status.
+        try Task.checkCancellation()
         progressParser.finish()
 
         guard result.succeeded else {

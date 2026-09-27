@@ -54,7 +54,7 @@ enum DCPContentKind: String, CaseIterable, Identifiable, Sendable {
 // MARK: - DCP Resolution
 
 /// DCI resolution options for DCP export
-enum DCPResolution: String, CaseIterable, Identifiable, Sendable {
+enum DCPResolution: String, CaseIterable, Identifiable, Codable, Sendable {
     case twoKFlat = "2K Flat (1998x1080)"
     case twoKScope = "2K Scope (2048x858)"
     case twoKFull = "2K Full (2048x1080)"
@@ -118,7 +118,7 @@ enum DCPResolution: String, CaseIterable, Identifiable, Sendable {
 // MARK: - DCP Frame Rate
 
 /// DCI-compliant frame rates for DCP export
-enum DCPFrameRate: String, CaseIterable, Identifiable, Sendable {
+enum DCPFrameRate: String, CaseIterable, Identifiable, Codable, Sendable {
     case fps24 = "24 fps"
     case fps25 = "25 fps"
     case fps30 = "30 fps"
@@ -163,7 +163,7 @@ enum DCPFrameRate: String, CaseIterable, Identifiable, Sendable {
 // MARK: - DCP Scaling Mode
 
 /// How source video is fitted into the DCP container resolution
-enum DCPScalingMode: String, CaseIterable, Identifiable, Sendable {
+enum DCPScalingMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case fit = "Fit (letterbox/pillarbox)"
     case fill = "Fill (crop to fill)"
 
@@ -180,7 +180,7 @@ enum DCPScalingMode: String, CaseIterable, Identifiable, Sendable {
 // MARK: - DCP Bitrate
 
 /// Video bitrate options for DCP JPEG 2000 encoding
-enum DCPBitrate: String, CaseIterable, Identifiable, Sendable {
+enum DCPBitrate: String, CaseIterable, Identifiable, Codable, Sendable {
     case low = "100 Mbps"
     case medium = "150 Mbps"
     case high = "200 Mbps"

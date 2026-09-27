@@ -209,7 +209,7 @@ enum CommentMetadataPlan: Equatable, Sendable {
 /// Source tags and chapters are distinct from item-authored comment/timecode values.
 /// A nil input retains FFmpeg's automatic mapping for presets that historically used it.
 /// Custom presets keep ownership of their own mapping and muxer flags.
-enum SourceMetadataPlan: Equatable, Sendable {
+enum SourceMetadataPlan: Codable, Equatable, Sendable {
     case unchanged
     case preserve(input: Int?)
     case strip
@@ -341,6 +341,7 @@ enum FFMPEGCommandBuilder {
         audioRoutingConfig: AudioRoutingConfig? = nil,
         cropConfig: CropConfig? = nil,
         timecodeConfig: TimecodeConfig? = nil,
+        timecodeTrimStart: Double? = nil,
         sourceMetadata: VideoMetadata? = nil,
         waveformRequest: WaveformVideoRequest? = nil,
         synthesizedVideoRequest: SynthesizedVideoRequest? = nil,
@@ -349,6 +350,8 @@ enum FFMPEGCommandBuilder {
         visualSourceURL: URL? = nil,
         customInputArguments: [String]? = nil,
         additionalOutputArguments: [String]? = nil,
+        chapterMetadataURL: URL? = nil,
+        chapterMetadataTitles: [String] = [],
         isMuted: Bool = false,
         durationProvider: @Sendable (URL) async -> Double? = { url in
             await FFMPEGProbeService.getVideoDuration(for: url)
@@ -382,13 +385,13 @@ enum FFMPEGCommandBuilder {
             comment: commentPlan,
             timecode: await configuredTimecodePlan(
                 preset: preset, inputURL: inputURL, timecodeConfig: timecodeConfig,
-                sourceMetadata: sourceMetadata, trimStart: normalizedTrimStart
+                sourceMetadata: sourceMetadata, trimStart: timecodeTrimStart ?? normalizedTrimStart
             )
         )
 
         let inputPlan = FFMPEGInputPlan(inputURL: inputURL, customArguments: customInputArguments)
         let presetArguments = capturedDCPSettings?.ffmpegArguments
-            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .rdd45)
             ?? capturedImageSequenceSettings?.ffmpegArguments
             ?? capturedAudioOnlySettings?.ffmpegArguments
             ?? capturedCodecSettings?.ffmpegArguments
@@ -415,6 +418,11 @@ enum FFMPEGCommandBuilder {
         ] : []
         arguments += inputPlan.arguments(seek: trimPlan.seekArguments, fileOptions: fileInputOptions)
 
+        var chapterInputIndex: Int?
+        if let chapterMetadataURL, waveformRequest == nil, synthesizedVideoRequest == nil {
+            chapterInputIndex = arguments.filter { $0 == "-i" }.count
+            arguments += ["-f", "ffmetadata", "-i", chapterMetadataURL.path]
+        }
         let outputArgumentsStart = arguments.count
 
         if let waveformRequest {
@@ -719,6 +727,16 @@ enum FFMPEGCommandBuilder {
             arguments.append(contentsOf: additionalOutputArguments)
         }
         metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+        // These chapters are explicitly authored by the stitching workflow and
+        // must survive the preset's policy for inherited source metadata.
+        if let chapterInputIndex {
+            arguments += ["-map_chapters", String(chapterInputIndex)]
+            // Metadata stripping disables automatic chapter title copying.
+            // Explicit assignments are applied after FFmpeg creates the chapters.
+            for (index, title) in chapterMetadataTitles.enumerated() {
+                arguments += ["-metadata:c:\(index)", "title=\(title)"]
+            }
+        }
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = trimPlan.effectiveDuration
@@ -1071,7 +1089,7 @@ extension FFMPEGCommandBuilder {
 
         // Preset encoding arguments (sanitized for our custom video pipeline)
         var ffmpegArgs = capturedDCPSettings?.ffmpegArguments
-            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .app5)
+            ?? capturedIMFSettings?.ffmpegArguments(application: preset == .imfJ2K ? .app2e : .rdd45)
             ?? capturedImageSequenceSettings?.ffmpegArguments
             ?? capturedAudioOnlySettings?.ffmpegArguments
             ?? capturedCodecSettings?.ffmpegArguments

@@ -5,7 +5,7 @@
 import Foundation
 
 /// Captures encoder, frame naming, and metadata preferences for one export.
-struct ImageSequenceSettings: Sendable {
+struct ImageSequenceSettings: Codable, Equatable, Sendable {
     let format: ImageSequenceFormat
     let jpegQuality: Int
     let numberingPadding: Int

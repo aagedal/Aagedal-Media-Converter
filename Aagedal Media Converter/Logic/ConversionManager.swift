@@ -226,23 +226,27 @@ struct MergePreparationSubprocess: Sendable {
 }
 
 actor ConversionManager: Sendable {
-    @MainActor static let shared = ConversionManager()
+    @MainActor static let shared = ConversionManager(executionGate: .shared)
     private let mergePreparationSubprocess: MergePreparationSubprocess
     private let subtitleEmbeddingSubprocess: SubtitleEmbeddingSubprocess
     private let ffmpegPathProvider: @Sendable () -> String?
     private let transcriptionSettings: any TranscriptionSettingsProviding
     private let ocrSettings: any OCRSettingsProviding
     private let analyticsSettings: any AnalyticsSettingsProviding
+    private let analyticsService: AnalyticsService
     private let preparationSettingsProvider: @Sendable (ExportPreset) -> ConversionPreparationSettings
     private let conversionDetailsLoader: @Sendable (URL, String, ExportPreset) async -> VideoFileUtils.VideoItemDetails
+    private let executionGate: ApplicationConversionExecutionGate
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         ffmpegConverter: FFMPEGConverter = FFMPEGConverter(),
+        executionGate: ApplicationConversionExecutionGate = ApplicationConversionExecutionGate(),
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         transcriptionSettings: any TranscriptionSettingsProviding = PostConversionSettings(),
         ocrSettings: any OCRSettingsProviding = PostConversionSettings(),
         analyticsSettings: any AnalyticsSettingsProviding = PostConversionSettings(),
+        analyticsService: AnalyticsService = .shared,
         preparationSettingsProvider: @escaping @Sendable (ExportPreset) -> ConversionPreparationSettings = {
             ConversionPreparationSettings(preset: $0)
         },
@@ -254,11 +258,13 @@ actor ConversionManager: Sendable {
     ) {
         self.mergePreparationSubprocess = MergePreparationSubprocess(subprocessRunner: subprocessRunner)
         self.ffmpegConverter = ffmpegConverter
+        self.executionGate = executionGate
         self.subtitleEmbeddingSubprocess = SubtitleEmbeddingSubprocess(subprocessRunner: subprocessRunner)
         self.ffmpegPathProvider = ffmpegPathProvider
         self.transcriptionSettings = transcriptionSettings
         self.ocrSettings = ocrSettings
         self.analyticsSettings = analyticsSettings
+        self.analyticsService = analyticsService
         self.conversionDetailsLoader = conversionDetailsLoader
         self.preparationSettingsProvider = preparationSettingsProvider
     }
@@ -274,6 +280,7 @@ actor ConversionManager: Sendable {
 
     private var isConverting = false
     private var pendingCancellationCount = 0
+    private var cancellationGeneration = 0
     private var batchCancellationNeedsCleanup = false
     private var currentProcess: Process?
     private let ffmpegConverter: FFMPEGConverter
@@ -350,6 +357,7 @@ actor ConversionManager: Sendable {
     }
 
     private struct MergeSegment {
+        let timelineMarkers: [StitchTimelineMarker]
         let itemID: UUID
         let originalURL: URL
         let preparedURL: URL
@@ -441,6 +449,7 @@ actor ConversionManager: Sendable {
         guard let (segments, temporaryFiles, totalDuration) = await prepareMergeSegments(
             from: orderedWaitingItems,
             durationLookup: durationLookup,
+            decodeTrims: preset != .streamCopy && orderedWaitingItems.contains(where: hasActiveTrim),
             batchID: batchID
         ) else {
             return nil
@@ -518,6 +527,7 @@ actor ConversionManager: Sendable {
     private func prepareMergeSegments(
         from items: [VideoItem],
         durationLookup: [UUID: Double],
+        decodeTrims: Bool,
         batchID: UUID
     ) async -> ([MergeSegment], [URL], Double?)? {
         var segments: [MergeSegment] = []
@@ -536,12 +546,13 @@ actor ConversionManager: Sendable {
                 totalDuration += segmentDuration
             }
 
-            if hasTrim {
-                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID) else {
+            if hasTrim || decodeTrims {
+                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID, decodeTrim: decodeTrims) else {
                     cleanupTemporaryFiles(temporaryFiles)
                     return nil
                 }
                 let segment = MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id,
                     originalURL: item.url,
                     preparedURL: trimmedURL,
@@ -555,6 +566,7 @@ actor ConversionManager: Sendable {
                 temporaryFiles.append(trimmedURL)
             } else {
                 let segment = MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id,
                     originalURL: item.url,
                     preparedURL: item.url,
@@ -610,13 +622,13 @@ actor ConversionManager: Sendable {
         return false
     }
 
-    private func prepareTrimmedClip(for item: VideoItem, batchID: UUID) async -> URL? {
+    private func prepareTrimmedClip(for item: VideoItem, batchID: UUID, decodeTrim: Bool = false) async -> URL? {
         guard let ffmpegPath = BinaryPathResolver.ffmpegPath else {
             mergeLogger.error("FFmpeg binary not found while preparing trimmed clip for \(item.name, privacy: .public)")
             return nil
         }
 
-        let fileExtension = item.url.pathExtension.isEmpty ? "mp4" : item.url.pathExtension
+        let fileExtension = decodeTrim ? "mkv" : (item.url.pathExtension.isEmpty ? "mp4" : item.url.pathExtension)
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("trimmed_\(UUID().uuidString).\(fileExtension)")
 
@@ -632,7 +644,13 @@ actor ConversionManager: Sendable {
 
         var arguments = ["-y"]
         if hasStartTrim {
-            arguments.append(contentsOf: ["-ss", FFMPEGCommandBuilder.ffmpegTimeString(from: start)])
+            // A millisecond-rounded seek can land just before a fractional-rate
+            // keyframe that the timeline snapped to (for example 10/23.976 fps).
+            // Stream copy must seek at or just after that point so FFmpeg chooses
+            // the intended preceding sync sample rather than the previous GOP.
+            let seek = decodeTrim ? FFMPEGCommandBuilder.ffmpegTimeString(from: start)
+                : String(format: "%.6f", ceil(start * 1_000_000) / 1_000_000)
+            arguments.append(contentsOf: ["-ss", seek])
         }
 
         arguments.append(contentsOf: ["-i", item.url.path])
@@ -641,7 +659,30 @@ actor ConversionManager: Sendable {
             arguments.append(contentsOf: ["-t", FFMPEGCommandBuilder.ffmpegTimeString(from: duration)])
         }
 
-        arguments.append(contentsOf: ["-c", "copy", "-avoid_negative_ts", "make_zero", tempURL.path])
+        if decodeTrim {
+            // Prepare every segment in the same lossless format, including untrimmed
+            // neighbours. Input seeking discards preroll while decoding; the final
+            // requested codec is encoded only once, after concatenation.
+            arguments.append(contentsOf: [
+                "-map", "0:v?", "-map", "0:a?",
+                "-c:v", "ffv1", "-level:v", "3", "-c:a", "pcm_f64le",
+                "-fps_mode:v", "passthrough"
+            ])
+        } else {
+            arguments.append(contentsOf: ["-c", "copy"])
+        }
+        if hasStartTrim && !decodeTrim {
+            // Open GOPs can carry leading pictures after the first copied
+            // keyframe in decode order, but before it in presentation order.
+            // Those pictures depend on the discarded GOP. At a concat join
+            // they can decode against the preceding clip and produce corrupt
+            // frames. Remove only that leading video preroll; preserve packet
+            // contents, subsequent B-frame reordering, and all audio packets.
+            arguments.append(contentsOf: [
+                "-bsf:v", "noise=amount=0:drop='not(eq(pts,nopts))*lt(pts,startpts)'"
+            ])
+        }
+        arguments.append(contentsOf: ["-avoid_negative_ts", "make_zero", tempURL.path])
 
         let success = await runMergePreparationFFmpeg(
             at: ffmpegPath,
@@ -786,6 +827,86 @@ actor ConversionManager: Sendable {
             return
         }
 
+        let av2Settings = plan.settings.av2
+        let dcpSettings = plan.settings.dcp
+        let imfSettings = plan.settings.imf
+        let audioOnlySettings = plan.settings.audioOnly
+        let codecSettings = plan.settings.codec
+        let outputExtension = av2Settings?.container.fileExtension
+            ?? audioOnlySettings?.format.fileExtension
+            ?? codecSettings?.outputExtension(for: plan.segments.first?.originalURL)
+            ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
+        var cutMarkers: [StitchCutMarker] = []
+        var markerWarning: String?
+        var chapterMetadataURL: URL?
+        var chapterMetadataTitles: [String] = []
+        if plan.settings.exportStitchMarkers {
+            do {
+                var media: [StitchMarkerMedia] = []
+                var sourceTimecodes: [String?] = []
+                var sourceHasChapters = false
+                for segment in plan.segments {
+                    var prepared = try await StitchMarkerMedia.read(segment.preparedURL)
+                    guard isBatchActive(batchID) else { return }
+                    sourceHasChapters = sourceHasChapters || prepared.hasChapterMetadata
+                    var original = prepared
+                    if segment.isTemporary {
+                        original = try await StitchMarkerMedia.read(segment.originalURL)
+                        guard isBatchActive(batchID) else { return }
+                        sourceHasChapters = sourceHasChapters || original.hasChapterMetadata
+                        if prepared.chapters.isEmpty, !original.chapters.isEmpty {
+                            prepared = StitchMarkerMedia(
+                                duration: prepared.duration, frameRate: prepared.frameRate, timecode: prepared.timecode,
+                                chapters: StitchMarkerExport.retainedChapters(original.chapters,
+                                    trimStart: segment.trimStart ?? 0, duration: prepared.duration),
+                                hasChapterMetadata: original.hasChapterMetadata)
+                        }
+                    }
+                    sourceTimecodes.append(StitchMarkerExport.sourceTimecode(original, trimStart: segment.trimStart ?? 0))
+                    media.append(prepared)
+                }
+                cutMarkers = try StitchMarkerExport.cuts(
+                    names: plan.segments.map { $0.originalURL.lastPathComponent },
+                    durations: media.map(\.duration), sourceTimecodes: sourceTimecodes
+                )
+                var noteMarkers: [StitchCutMarker] = []
+                var markerOffset = 0.0
+                for (segment, source) in zip(plan.segments, media) {
+                    noteMarkers += StitchMarkerExport.notes(segment.timelineMarkers,
+                        trimStart: segment.trimStart ?? 0, trimEnd: segment.trimEnd,
+                        duration: source.duration, offset: markerOffset)
+                    markerOffset += source.duration
+                }
+                cutMarkers = StitchMarkerExport.chapters(from: cutMarkers + noteMarkers)
+                // Pin concat's scheduling to the same measured segment durations
+                // used for marker placement, including Stream Copy trim preroll.
+                let concat = zip(plan.segments, media).map { segment, source in
+                    let path = segment.preparedURL.path.replacingOccurrences(of: "'", with: "'\\''")
+                    return "file '\(path)'\nduration \(FFMPEGCommandBuilder.ffmpegTimeString(from: source.duration))"
+                }.joined(separator: "\n")
+                try concat.write(to: plan.listFileURL, atomically: true, encoding: .utf8)
+                if StitchMarkerExport.supportedChapterExtensions.contains(outputExtension.lowercased()),
+                   plan.waveformRequest == nil, plan.synthesizedVideoRequest == nil {
+                    let replace = sourceHasChapters ? await StitchMarkerExport.shouldReplaceExistingChapters() : true
+                    guard isBatchActive(batchID) else { return }
+                    let preserved = StitchMarkerExport.concatenateChapters(media)
+                    let chapters = replace ? cutMarkers : StitchMarkerExport.chapters(from: preserved + noteMarkers)
+                    if sourceHasChapters && !replace && preserved.isEmpty {
+                        throw NSError(domain: "StitchMarkers", code: 1, userInfo: [NSLocalizedDescriptionKey:
+                            "Existing chapter metadata could not be preserved after preparation. Automatic chapter replacement was skipped."])
+                    }
+                    let text = try StitchMarkerExport.chapterMetadata(chapters)
+                    let url = plan.listFileURL.deletingPathExtension().appendingPathExtension("ffmetadata")
+                    try text.write(to: url, atomically: true, encoding: .utf8)
+                    chapterMetadataURL = url
+                    chapterMetadataTitles = chapters.map { $0.title.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ") }
+                }
+            } catch {
+                markerWarning = "Clip markers: " + error.localizedDescription
+            }
+        }
+        let resolvedOutput = OSAllocatedUnfairLock(initialState: plan.outputBaseURL.appendingPathExtension(outputExtension))
+
         let customInputs = ["-f", "concat", "-safe", "0", "-i", plan.listFileURL.path]
 
         let mergeOutputArguments: [String]? = plan.preset == .streamCopy ? [
@@ -817,6 +938,9 @@ actor ConversionManager: Sendable {
             inputURL: primaryInput.url,
             outputURL: plan.outputBaseURL,
             preset: plan.preset,
+            outputURLResolved: { url in resolvedOutput.withLock { $0 = url } },
+            chapterMetadataURL: chapterMetadataURL,
+            chapterMetadataTitles: chapterMetadataTitles,
             comment: plan.comment,
             includeDateTag: plan.includeDateTag,
             expectedDuration: plan.totalDuration,
@@ -824,6 +948,9 @@ actor ConversionManager: Sendable {
             audioRoutingConfig: mergeAudioRoutingConfig,
             cropConfig: mergeCropConfig,
             timecodeConfig: mergeTimecodeConfig,
+            // The media is already trimmed in the prepared segments. Offset only
+            // the preserved metadata, without trimming the concatenated input again.
+            timecodeTrimStart: plan.settings.ignoreStitchTimecodeTrimOffset ? 0 : primaryInput.effectiveTrimStart,
             isMuted: plan.preset == .streamCopy ? false : primaryInput.isMuted,
             waveformRequest: plan.waveformRequest,
             synthesizedVideoRequest: plan.synthesizedVideoRequest,
@@ -834,15 +961,9 @@ actor ConversionManager: Sendable {
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let mergeUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
-        let av2Settings = plan.settings.av2
-        let dcpSettings = plan.settings.dcp
-        let imfSettings = plan.settings.imf
-        let audioOnlySettings = plan.settings.audioOnly
-        let codecSettings = plan.settings.codec
-        let outputExtension = av2Settings?.container.fileExtension
-            ?? audioOnlySettings?.format.fileExtension
-            ?? codecSettings?.outputExtension(for: plan.segments.first?.originalURL)
-            ?? plan.preset.outputExtension(for: plan.segments.first?.originalURL)
+        let capturedMarkers = cutMarkers
+        let capturedMarkerWarning = markerWarning
+        let capturedChapterURL = chapterMetadataURL
         await ffmpegConverter.convert(
             request: mergeRequest,
             av2Settings: av2Settings,
@@ -877,6 +998,10 @@ actor ConversionManager: Sendable {
                     await self.handleMergeCompletion(
                         plan: plan,
                         outputExtension: outputExtension,
+                        resolvedOutputURL: resolvedOutput.withLock { $0 },
+                        cutMarkers: capturedMarkers,
+                        markerWarning: capturedMarkerWarning,
+                        chapterMetadataURL: capturedChapterURL,
                         inputItems: inputItems,
                         callbackOwnership: callbackOwnership,
                         followUpOwnership: mergeFollowUpOwnership,
@@ -907,6 +1032,7 @@ actor ConversionManager: Sendable {
     }
 
     private func cleanupMergeArtifacts(for plan: MergePlan) {
+        try? FileManager.default.removeItem(at: plan.listFileURL.deletingPathExtension().appendingPathExtension("ffmetadata"))
         do {
             try FileManager.default.removeItem(at: plan.listFileURL)
         } catch {
@@ -975,7 +1101,9 @@ actor ConversionManager: Sendable {
                 return nil
             }
 
-            let segmentDuration = durationLookup[item.id] ?? item.durationSeconds
+            let segmentDuration = resolveSegmentDuration(
+                for: item, baseDuration: durationLookup[item.id], hasTrim: hasActiveTrim(item)
+            ) ?? item.durationSeconds
             totalDuration += segmentDuration
 
             // Check if this item matches the reference format
@@ -987,7 +1115,8 @@ actor ConversionManager: Sendable {
 
             let needsConformance = analysis?.needsConformance ?? true
 
-            if needsConformance {
+            if needsConformance || hasActiveTrim(item) {
+                // Decode trimmed clips too, so the requested cut survives conformance.
                 // Re-encode to match reference (trim applied in same pass)
                 await statusUpdate("Conforming clip \(index + 1) of \(items.count): \(item.name)")
                 guard let conformedURL = await prepareConformedClip(
@@ -999,26 +1128,16 @@ actor ConversionManager: Sendable {
                     return nil
                 }
                 segments.append(MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id, originalURL: item.url, preparedURL: conformedURL,
                     trimStart: item.trimStart, trimEnd: item.trimEnd,
                     isTemporary: true, duration: segmentDuration, isConformed: true
                 ))
                 temporaryFiles.append(conformedURL)
-            } else if hasActiveTrim(item) {
-                // Already matches but needs trim — stream copy trim
-                guard let trimmedURL = await prepareTrimmedClip(for: item, batchID: batchID) else {
-                    cleanupTemporaryFiles(temporaryFiles)
-                    return nil
-                }
-                segments.append(MergeSegment(
-                    itemID: item.id, originalURL: item.url, preparedURL: trimmedURL,
-                    trimStart: item.trimStart, trimEnd: item.trimEnd,
-                    isTemporary: true, duration: segmentDuration, isConformed: false
-                ))
-                temporaryFiles.append(trimmedURL)
             } else {
                 // Already matches, no trim — use original
                 segments.append(MergeSegment(
+                    timelineMarkers: item.timelineMarkers,
                     itemID: item.id, originalURL: item.url, preparedURL: item.url,
                     trimStart: nil, trimEnd: nil,
                     isTemporary: false, duration: segmentDuration, isConformed: false
@@ -1133,6 +1252,10 @@ actor ConversionManager: Sendable {
     private func handleMergeCompletion(
         plan: MergePlan,
         outputExtension: String,
+        resolvedOutputURL: URL,
+        cutMarkers: [StitchCutMarker],
+        markerWarning: String?,
+        chapterMetadataURL: URL?,
         inputItems: [VideoItem],
         callbackOwnership: ConversionCallbackOwnership,
         followUpOwnership: [UUID: ConversionCallbackOwnership],
@@ -1141,9 +1264,28 @@ actor ConversionManager: Sendable {
         droppedFiles: Binding<[VideoItem]>,
         batchID: UUID
     ) async {
+        defer { if let chapterMetadataURL { try? FileManager.default.removeItem(at: chapterMetadataURL) } }
         guard isBatchActive(batchID) else { return }
 
-        let finalURL = plan.outputBaseURL.appendingPathExtension(outputExtension)
+        let finalURL = resolvedOutputURL
+        var exportWarning = markerWarning
+        if success, !cutMarkers.isEmpty {
+            do {
+                let output = try await StitchMarkerMedia.read(finalURL)
+                guard isBatchActive(batchID) else { return }
+                guard let rate = output.frameRate else { throw StitchMarkerError.invalidRate }
+                let text = try StitchMarkerExport.resolveEDL(title: finalURL.lastPathComponent + " Timeline Markers",
+                                                            markers: try StitchMarkerExport.coalescedForEDL(cutMarkers, frameRate: rate), frameRate: rate, startTimecode: output.timecode)
+                let access = SecurityScopedBookmarkManager.shared.startAccessing(url: finalURL.deletingLastPathComponent())
+                defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+                _ = try StitchMarkerExport.writeEDL(text, alongside: finalURL)
+            } catch { exportWarning = "Clip markers: " + error.localizedDescription }
+        }
+        let completedWarning = exportWarning
+        if success, let completedWarning {
+            mergeLogger.warning("\(completedWarning, privacy: .public)")
+            await StitchMarkerExport.presentWarning(completedWarning, outputURL: finalURL)
+        }
 
         // Capture file size - try with security-scoped access
         var outputFileSizeBytes: Int64?
@@ -1165,7 +1307,7 @@ actor ConversionManager: Sendable {
                     droppedFiles.wrappedValue[index].progress = success ? 1.0 : 0.0
                     droppedFiles.wrappedValue[index].outputURL = success ? finalURL : nil
                     droppedFiles.wrappedValue[index].outputFileSizeBytes = outputFileSizeBytes
-                    droppedFiles.wrappedValue[index].conversionError = success ? nil : errorReason
+                    droppedFiles.wrappedValue[index].conversionError = success ? completedWarning : errorReason
                     droppedFiles.wrappedValue[index].eta = nil
                     droppedFiles.wrappedValue[index].statusMessage = nil
                 }
@@ -1483,6 +1625,40 @@ actor ConversionManager: Sendable {
         conformanceMetadata: [UUID: VideoMetadata]? = nil
     ) async {
         guard !isConverting, pendingCancellationCount == 0 else { return }
+        let generation = cancellationGeneration
+        let gateID = await executionGate.acquire()
+        if generation == cancellationGeneration {
+            await convertGroupHoldingGate(
+                items: items,
+                outputFolder: outputFolder,
+                preset: preset,
+                concatEnabled: concatEnabled,
+                groupName: groupName,
+                transcriptionEnabled: transcriptionEnabled,
+                uploadEnabled: uploadEnabled,
+                analyticsEnabled: analyticsEnabled,
+                conformanceMergeEnabled: conformanceMergeEnabled,
+                conformanceReferenceItemID: conformanceReferenceItemID,
+                conformanceMetadata: conformanceMetadata
+            )
+        }
+        await executionGate.release(gateID)
+    }
+
+    private func convertGroupHoldingGate(
+        items: Binding<[VideoItem]>,
+        outputFolder: String,
+        preset: ExportPreset,
+        concatEnabled: Bool,
+        groupName: String? = nil,
+        transcriptionEnabled: Bool,
+        uploadEnabled: Bool,
+        analyticsEnabled: Bool,
+        conformanceMergeEnabled: Bool = false,
+        conformanceReferenceItemID: UUID? = nil,
+        conformanceMetadata: [UUID: VideoMetadata]? = nil
+    ) async {
+        guard !isConverting, pendingCancellationCount == 0 else { return }
         allowedItemIDs = nil
         let batchID = UUID()
         activeBatchID = batchID
@@ -1580,6 +1756,28 @@ actor ConversionManager: Sendable {
     }
 
     func startConversion(
+        droppedFiles: Binding<[VideoItem]>,
+        outputFolder: String,
+        preset: ExportPreset = .videoLoop,
+        mergeClipsEnabled: Bool = false,
+        limitToIDs: Set<UUID>? = nil
+    ) async {
+        guard !isConverting, pendingCancellationCount == 0 else { return }
+        let generation = cancellationGeneration
+        let gateID = await executionGate.acquire()
+        if generation == cancellationGeneration {
+            await startConversionHoldingGate(
+                droppedFiles: droppedFiles,
+                outputFolder: outputFolder,
+                preset: preset,
+                mergeClipsEnabled: mergeClipsEnabled,
+                limitToIDs: limitToIDs
+            )
+        }
+        await executionGate.release(gateID)
+    }
+
+    private func startConversionHoldingGate(
         droppedFiles: Binding<[VideoItem]>,
         outputFolder: String,
         preset: ExportPreset = .videoLoop,
@@ -2085,6 +2283,7 @@ actor ConversionManager: Sendable {
     }
 
     private func cancelConversions(scope: ConversionQueueState.CancellationScope) async {
+        cancellationGeneration &+= 1
         pendingCancellationCount += 1
         batchCancellationNeedsCleanup = true
         isConverting = false
@@ -2827,7 +3026,7 @@ actor ConversionManager: Sendable {
         guard beganAttempt else { return }
 
         do {
-            let results = try await AnalyticsService.shared.runAnalytics(
+            let results = try await analyticsService.runAnalytics(
                 sourceFile: sourceURL,
                 encodedFile: encodedURL,
                 enabledMetrics: enabledMetrics,

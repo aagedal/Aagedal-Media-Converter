@@ -1,0 +1,544 @@
+// Aagedal Media Converter MCP helper
+// Copyright 2026 Truls Aagedal
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import AppKit
+import CoreFoundation
+import Foundation
+
+private let ipcPortName: String = {
+#if DEBUG
+    if let identifier = ProcessInfo.processInfo.environment["AMC_UI_TEST_AGENT_PORT_ID"],
+       UUID(uuidString: identifier) != nil {
+        return "com.aagedal.tests.agent.\(identifier)"
+    }
+#endif
+    return "com.aagedal.Aagedal-Media-Converter.agent.v1"
+}()
+private let ipcSchemaVersion = 1
+private let supportedProtocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
+
+@main
+private struct AagedalMediaConverterMCP {
+    static func main() {
+        let server = MCPStdioServer()
+        server.run()
+    }
+}
+
+private final class MCPStdioServer {
+    private var clientName = "local-mcp-client"
+
+    func run() {
+        while let line = readLine(strippingNewline: true) {
+            guard !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            autoreleasepool {
+                handle(line: line)
+            }
+        }
+    }
+
+    private func handle(line: String) {
+        guard let data = line.data(using: .utf8),
+              let value = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else {
+            writeError(id: nil, code: -32700, message: "Invalid JSON.")
+            return
+        }
+        guard let message = value as? [String: Any],
+              message["jsonrpc"] as? String == "2.0",
+              let method = message["method"] as? String else {
+            writeError(id: nil, code: -32600, message: "Invalid JSON-RPC request.")
+            return
+        }
+
+        // MCP operations are requests. Notifications never produce responses or
+        // invoke app tools, including when a request method is sent without an ID.
+        guard let id = message["id"] else { return }
+        guard Self.isValidRequestID(id) else {
+            writeError(id: nil, code: -32600, message: "Request ID must be a string or integer.")
+            return
+        }
+        guard message["params"] == nil || message["params"] is [String: Any] else {
+            writeError(id: id, code: -32602, message: "Request parameters must be an object.")
+            return
+        }
+        switch method {
+        case "initialize":
+            initialize(message: message, id: id)
+        case "ping":
+            writeResult(id: id, result: [:])
+        case "tools/list":
+            writeResult(id: id, result: ["tools": Self.toolDefinitions])
+        case "tools/call":
+            callTool(message: message, id: id)
+        default:
+            writeError(id: id, code: -32601, message: "Method not found: \(method)")
+        }
+    }
+
+    private static func isValidRequestID(_ value: Any) -> Bool {
+        if value is String { return true }
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return false }
+        let numericValue = number.doubleValue
+        return numericValue.isFinite && numericValue.rounded(.towardZero) == numericValue
+    }
+
+    private func initialize(message: [String: Any], id: Any?) {
+        let params = message["params"] as? [String: Any]
+        let requestedVersion = params?["protocolVersion"] as? String
+        if let client = params?["clientInfo"] as? [String: Any],
+           let name = client["name"] as? String,
+           !name.isEmpty {
+            clientName = Self.requesterID(from: name)
+        }
+        let negotiatedVersion = requestedVersion.flatMap {
+            supportedProtocolVersions.contains($0) ? $0 : nil
+        } ?? supportedProtocolVersions[0]
+        writeResult(id: id, result: [
+            "protocolVersion": negotiatedVersion,
+            "capabilities": ["tools": ["listChanged": false]],
+            "serverInfo": [
+                "name": "Aagedal Media Converter",
+                "version": "4.5.0"
+            ],
+            "instructions": "Add source folders in Aagedal Media Converter Settings > Agent Access > Approved source folders. Conversions use the app's default output folder unless destination_path names another folder already approved for writing in the app."
+        ])
+    }
+
+    private func callTool(message: [String: Any], id: Any?) {
+        guard let params = message["params"] as? [String: Any],
+              let name = params["name"] as? String,
+              Self.toolNames.contains(name) else {
+            writeError(id: id, code: -32602, message: "Unknown or missing tool name.")
+            return
+        }
+        let argumentsValue = params["arguments"]
+        guard argumentsValue == nil || argumentsValue is [String: Any] else {
+            writeError(id: id, code: -32602, message: "Tool arguments must be an object.")
+            return
+        }
+        var arguments = argumentsValue as? [String: Any] ?? [:]
+        if name == "plan_conversion" {
+            arguments["requester_id"] = clientName
+        }
+        let requestID = UUID()
+        let request: [String: Any] = [
+            "schemaVersion": ipcSchemaVersion,
+            "requestID": requestID.uuidString.lowercased(),
+            "tool": name,
+            "arguments": arguments
+        ]
+
+        do {
+            let response = try AppIPCClient().send(request)
+            guard let responseID = response["requestID"] as? String,
+                  responseID.caseInsensitiveCompare(requestID.uuidString) == .orderedSame,
+                  response["schemaVersion"] as? Int == ipcSchemaVersion,
+                  (response["result"] == nil) != (response["failure"] == nil) else {
+                throw HelperError.invalidResponse
+            }
+            if let failure = response["failure"] as? [String: Any] {
+                let message = failure["message"] as? String ?? "The operation failed."
+                writeResult(id: id, result: [
+                    "content": [["type": "text", "text": message]],
+                    "structuredContent": ["error": failure],
+                    "isError": true
+                ])
+                return
+            }
+            guard let result = response["result"] else { throw HelperError.invalidResponse }
+            let structuredResult: [String: Any]
+            if name == "list_presets", let presets = result as? [Any] {
+                structuredResult = ["presets": presets]
+            } else if let object = result as? [String: Any] {
+                structuredResult = object
+            } else {
+                throw HelperError.invalidResponse
+            }
+            let prettyData = try JSONSerialization.data(
+                withJSONObject: structuredResult,
+                options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            )
+            let text = String(decoding: prettyData, as: UTF8.self)
+            writeResult(id: id, result: [
+                "content": [["type": "text", "text": text]],
+                "structuredContent": structuredResult,
+                "isError": false
+            ])
+        } catch {
+            let message: String
+            if let helperError = error as? HelperError {
+                message = helperError.localizedDescription
+            } else {
+                message = "Could not communicate with Aagedal Media Converter."
+            }
+            writeResult(id: id, result: [
+                "content": [["type": "text", "text": message]],
+                "structuredContent": [
+                    "error": ["code": "transport_unavailable", "message": message]
+                ],
+                "isError": true
+            ])
+        }
+    }
+
+    private func writeResult(id: Any?, result: Any) {
+        write(["jsonrpc": "2.0", "id": id ?? NSNull(), "result": result])
+    }
+
+    private func writeError(id: Any?, code: Int, message: String) {
+        write([
+            "jsonrpc": "2.0",
+            "id": id ?? NSNull(),
+            "error": ["code": code, "message": message]
+        ])
+    }
+
+    private func write(_ message: [String: Any]) {
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: message,
+            options: [.sortedKeys, .withoutEscapingSlashes]
+        ) else { return }
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write(Data([0x0A]))
+    }
+
+    private static func requesterID(from name: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+        let scalars = name.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
+        let value = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return String((value.isEmpty ? "local-mcp-client" : value).prefix(64))
+    }
+
+    private static let toolNames = Set([
+        "inspect_media", "list_media", "list_presets", "list_jobs", "get_app_status", "plan_conversion", "get_plan", "submit_conversion", "get_job", "wait_for_job", "cancel_job"
+    ])
+
+    private static var toolDefinitions: [[String: Any]] { [
+        [
+            "name": "inspect_media",
+            "description": "Inspect a local media file for structured stream, duration, rate, and timecode metadata. The file must already have approved read access in the app.",
+            "inputSchema": objectSchema(
+                properties: ["source_path": pathProperty("Absolute path to the local media file.")],
+                required: ["source_path"]
+            )
+        ],
+        [
+            "name": "list_media",
+            "description": "Browse approved source folders and their immediate media files or subfolders. Omit folder_path to list approved roots. Results are paginated and folder grants are never expanded.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "folder_path": pathProperty("Absolute path to an approved source folder or one of its subfolders."),
+                    "name_contains": ["type": "string", "maxLength": 128],
+                    "extensions": ["type": "array", "maxItems": 20, "items": ["type": "string", "pattern": "^[A-Za-z0-9]{1,16}$"]],
+                    "offset": ["type": "integer", "minimum": 0],
+                    "limit": ["type": "integer", "minimum": 1, "maximum": 100]
+                ],
+                required: []
+            )
+        ],
+        [
+            "name": "list_presets",
+            "description": "List the stable conversion presets supported for local agent access and their currently resolved settings.",
+            "inputSchema": objectSchema(properties: [:], required: [])
+        ],
+        [
+            "name": "list_jobs",
+            "description": "List visible manual queue entries and durable conversion jobs with IDs, state, and source filenames. Results are paginated; manual queue IDs remain valid only while their rows exist in this app session.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "offset": ["type": "integer", "minimum": 0],
+                    "limit": ["type": "integer", "minimum": 1, "maximum": 100]
+                ],
+                required: []
+            )
+        ],
+        [
+            "name": "get_app_status",
+            "description": "Get the running app version, transport schema version, and current manual and service queue counts.",
+            "inputSchema": objectSchema(properties: [:], required: [])
+        ],
+        [
+            "name": "plan_conversion",
+            "description": "Validate sources and destination, capture preset settings, and reserve a deterministic conversion plan without starting work. Uses the app's default output folder when destination_path is omitted.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "source_paths": [
+                        "type": "array",
+                        "minItems": 1,
+                        "items": pathProperty("Absolute source path.")
+                    ],
+                    "destination_path": pathProperty("Optional absolute path to an approved writable folder. Omit to use the app's default output folder."),
+                    "preset_id": [
+                        "type": "string",
+                        "enum": [
+                            "video_loop", "video_loop_with_sound", "animated_still",
+                            "h264", "hevc", "av1", "av2", "tv_hevc", "tv_avc_intra",
+                            "prores", "proxy", "audio_only", "stream_copy",
+                            "image_sequence", "dcp", "imf_app_2e", "imf_rdd_45"
+                        ]
+                    ],
+                    "request_id": ["type": "string", "format": "uuid"],
+                    "idempotency_key": ["type": "string", "minLength": 1, "maxLength": 128]
+                ],
+                required: ["source_paths", "preset_id"]
+            )
+        ],
+        [
+            "name": "submit_conversion",
+            "description": "Submit a valid conversion plan to the app-owned queue and return its job immediately.",
+            "inputSchema": objectSchema(
+                properties: ["plan_id": uuidProperty("Plan identifier returned by plan_conversion.")],
+                required: ["plan_id"]
+            )
+        ],
+        [
+            "name": "get_plan",
+            "description": "Retrieve a conversion plan by ID while it remains valid, including expiry, outputs, and warnings.",
+            "inputSchema": objectSchema(
+                properties: ["plan_id": uuidProperty("Plan identifier returned by plan_conversion.")],
+                required: ["plan_id"]
+            )
+        ],
+        [
+            "name": "get_job",
+            "description": "Get a durable conversion record or a current manual queue summary by ID.",
+            "inputSchema": objectSchema(
+                properties: ["job_id": uuidProperty("Job identifier returned by submit_conversion or list_jobs.")],
+                required: ["job_id"]
+            )
+        ],
+        [
+            "name": "wait_for_job",
+            "description": "Wait up to 30 seconds for a job state change or terminal result, then return its current record or manual queue summary. Pass the last observed state to catch a transition that happened between calls.",
+            "inputSchema": objectSchema(
+                properties: [
+                    "job_id": uuidProperty("Job identifier returned by submit_conversion or list_jobs."),
+                    "known_state": ["type": "string", "enum": [
+                        "queued", "running", "cancelling", "succeeded", "failed", "cancelled", "interrupted"
+                    ]],
+                    "timeout_seconds": ["type": "integer", "minimum": 1, "maximum": 30]
+                ],
+                required: ["job_id"]
+            )
+        ],
+        [
+            "name": "cancel_job",
+            "description": "Request cancellation of a queued or running shared-service conversion job. Manual queue entries returned by list_jobs cannot be cancelled through this tool.",
+            "inputSchema": objectSchema(
+                properties: ["job_id": uuidProperty("Job identifier returned by submit_conversion.")],
+                required: ["job_id"]
+            )
+        ]
+    ] }
+
+    private static func objectSchema(
+        properties: [String: Any],
+        required: [String]
+    ) -> [String: Any] {
+        [
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": false
+        ]
+    }
+
+    private static func pathProperty(_ description: String) -> [String: Any] {
+        ["type": "string", "description": description, "minLength": 1]
+    }
+
+    private static func uuidProperty(_ description: String) -> [String: Any] {
+        ["type": "string", "format": "uuid", "description": description]
+    }
+}
+
+private struct AppIPCClient {
+    func send(_ request: [String: Any]) throws -> [String: Any] {
+        if request["tool"] as? String == "wait_for_job",
+           let arguments = request["arguments"] as? [String: Any],
+           let jobID = arguments["job_id"] as? String,
+           UUID(uuidString: jobID) != nil,
+           arguments.keys.allSatisfy({ ["job_id", "known_state", "timeout_seconds"].contains($0) }),
+           arguments["timeout_seconds"] == nil || arguments["timeout_seconds"] is Int,
+           let requestID = request["requestID"] as? String {
+            let timeout = arguments["timeout_seconds"] as? Int ?? 30
+            guard (1...30).contains(timeout) else { return try sendSingle(request) }
+            let knownState = arguments["known_state"] as? String
+            let states = ["queued", "running", "cancelling", "succeeded", "failed", "cancelled", "interrupted"]
+            guard arguments["known_state"] == nil || knownState.map(states.contains) == true else {
+                return try sendSingle(request)
+            }
+            return try waitForJob(
+                requestID: requestID,
+                jobID: jobID,
+                knownState: knownState,
+                timeout: timeout
+            )
+        }
+        return try sendSingle(request)
+    }
+
+    // The app's CFMessagePort callback is serial. Keep long polling in the
+    // helper so another client can inspect or cancel a job while this one waits.
+    private func waitForJob(
+        requestID: String,
+        jobID: String,
+        knownState: String?,
+        timeout: Int
+    ) throws -> [String: Any] {
+        var deadline: TimeInterval?
+        var initialState = knownState
+        while true {
+            let pollID = UUID().uuidString.lowercased()
+            let response = try sendSingle([
+                "schemaVersion": ipcSchemaVersion,
+                "requestID": pollID,
+                "tool": "get_job",
+                "arguments": ["job_id": jobID]
+            ])
+            guard let responseID = response["requestID"] as? String,
+                  responseID.caseInsensitiveCompare(pollID) == .orderedSame,
+                  response["schemaVersion"] as? Int == ipcSchemaVersion else {
+                throw HelperError.invalidResponse
+            }
+            if let failure = response["failure"] {
+                return ["schemaVersion": ipcSchemaVersion, "requestID": requestID, "failure": failure]
+            }
+            guard let job = response["result"] as? [String: Any],
+                  let state = job["state"] as? String else {
+                throw HelperError.invalidResponse
+            }
+            if deadline == nil {
+                deadline = ProcessInfo.processInfo.systemUptime + Double(timeout)
+            }
+            if initialState == nil { initialState = state }
+            let changed = state != initialState
+            let isTerminal = ["succeeded", "failed", "cancelled", "interrupted"].contains(state)
+            let remaining = (deadline ?? ProcessInfo.processInfo.systemUptime) - ProcessInfo.processInfo.systemUptime
+            let timedOut = !changed && !isTerminal && remaining <= 0
+            if changed || isTerminal || timedOut {
+                return [
+                    "schemaVersion": ipcSchemaVersion,
+                    "requestID": requestID,
+                    "result": [
+                        "job": job,
+                        "changed": changed,
+                        "timedOut": timedOut,
+                        "isTerminal": isTerminal
+                    ]
+                ]
+            }
+            Thread.sleep(forTimeInterval: min(0.25, max(0, remaining)))
+        }
+    }
+
+    private func sendSingle(_ request: [String: Any]) throws -> [String: Any] {
+        let requestData = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
+        var launchResult: LockedLaunchResult?
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        while true {
+            if let remote = CFMessagePortCreateRemote(nil, ipcPortName as CFString) {
+                var responseData: Unmanaged<CFData>?
+                let status = CFMessagePortSendRequest(
+                    remote,
+                    0,
+                    requestData as CFData,
+                    5,
+                    300,
+                    CFRunLoopMode.defaultMode.rawValue,
+                    &responseData
+                )
+                guard status == kCFMessagePortSuccess else {
+                    throw HelperError.transportStatus(status)
+                }
+                guard let responseData else { throw HelperError.invalidResponse }
+                let data = responseData.takeRetainedValue() as Data
+                guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw HelperError.invalidResponse
+                }
+                return response
+            }
+
+            if launchResult == nil {
+                launchResult = try launchApplication()
+            }
+            let now = ProcessInfo.processInfo.systemUptime
+            // A successful launch can still have a disabled endpoint. While
+            // Launch Services is pending, allow slower cold starts to finish.
+            if let outcome = launchResult?.outcome {
+                if outcome.hasError { throw HelperError.appLaunchFailed }
+                guard now - outcome.completedAt < 10 else { throw HelperError.accessDisabled }
+            } else {
+                guard now - startedAt < 30 else { throw HelperError.launchTimedOut }
+            }
+            // The stdio server uses the main thread, where NSWorkspace may
+            // deliver its completion callback. Keep that run loop responsive.
+            if !RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.2)) {
+                Thread.sleep(forTimeInterval: 0.2)
+            }
+        }
+    }
+
+    private func launchApplication() throws -> LockedLaunchResult {
+        let helperURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let appURL = helperURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        guard appURL.pathExtension == "app" else { throw HelperError.appBundleNotFound }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.allowsRunningApplicationSubstitution = false
+        let launchResult = LockedLaunchResult()
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
+            launchResult.store(hasError: error != nil)
+        }
+        return launchResult
+    }
+}
+
+private final class LockedLaunchResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedOutcome: (hasError: Bool, completedAt: TimeInterval)?
+
+    var outcome: (hasError: Bool, completedAt: TimeInterval)? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedOutcome
+    }
+
+    func store(hasError: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedOutcome = (hasError, ProcessInfo.processInfo.systemUptime)
+    }
+}
+
+private enum HelperError: LocalizedError {
+    case accessDisabled
+    case appBundleNotFound
+    case appLaunchFailed
+    case launchTimedOut
+    case transportStatus(Int32)
+    case invalidResponse
+
+    var errorDescription: String? {
+        switch self {
+        case .accessDisabled:
+            "Local agent access is disabled. Enable it in Aagedal Media Converter Settings."
+        case .appBundleNotFound:
+            "The MCP helper must run from inside Aagedal Media Converter.app."
+        case .appLaunchFailed:
+            "Aagedal Media Converter could not be launched."
+        case .launchTimedOut:
+            "Timed out while launching Aagedal Media Converter."
+        case .transportStatus(let status):
+            "The connection to Aagedal Media Converter failed with status \(status)."
+        case .invalidResponse:
+            "Aagedal Media Converter returned an invalid response."
+        }
+    }
+}

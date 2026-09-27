@@ -58,6 +58,9 @@ struct TesseractOCREngine: BitmapSubtitleOCREngine {
             throw TesseractOCREngineError.processStartFailed(error.localizedDescription)
         }
 
+        // Cancellation may race subprocess completion; never accept its late result.
+        try Task.checkCancellation()
+
         guard result.succeeded else {
             let stderr = request.redactedDiagnostic(
                 result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),

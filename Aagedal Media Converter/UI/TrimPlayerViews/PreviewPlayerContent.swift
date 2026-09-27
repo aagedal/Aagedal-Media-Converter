@@ -186,6 +186,7 @@ struct PreviewPlayerContent: View {
                         controller.preparePreview(startTime: item.effectiveTrimStart)
                     }
                     .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("preview.retry")
                 }
                 .padding()
             } else if showPreviewUnavailable {

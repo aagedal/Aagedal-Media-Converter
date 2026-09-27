@@ -86,7 +86,7 @@ struct ImageSequenceConfig: Equatable, Sendable {
 }
 
 /// Supported image sequence formats
-enum ImageSequenceFormat: String, CaseIterable, Identifiable, Sendable {
+enum ImageSequenceFormat: String, CaseIterable, Identifiable, Codable, Sendable {
     case png = "PNG"
     case jpeg = "JPEG"
     case tiff = "TIFF"

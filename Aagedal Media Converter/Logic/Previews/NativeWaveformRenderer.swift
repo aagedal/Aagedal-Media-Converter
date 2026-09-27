@@ -18,6 +18,78 @@ struct SendableImage: @unchecked Sendable {
 struct SendableChannelWaveform: @unchecked Sendable {
     let channelImages: [NSImage]
     let channelLabels: [String]
+    var channelEnvelopes: [WaveformEnvelope] = []
+}
+
+/// Peak envelopes retain amplitude precision independently of display size.
+/// Each coarser level combines adjacent bins, preserving short transients.
+struct WaveformEnvelope: Sendable {
+    struct Peak: Sendable, Equatable {
+        var minimum: Float
+        var maximum: Float
+    }
+    let levels: [[Peak]]
+    let duration: Double
+    let framesPerBin: Int
+    let frameCount: Int
+
+    init(pcmData: Data, channelCount: Int, sampleRate: Double, minimumFramesPerBin: Int = 256, channel: Int? = nil) {
+        let channels = max(1, channelCount)
+        frameCount = pcmData.count / (MemoryLayout<Float>.size * channels)
+        duration = Double(frameCount) / max(1, sampleRate)
+        // Bound retained data even for exceptionally long recordings.
+        framesPerBin = max(1, max(minimumFramesPerBin, Int(ceil(Double(frameCount) / 2_000_000))))
+        let bins = (frameCount + framesPerBin - 1) / framesPerBin
+        var base = [Peak](repeating: Peak(minimum: 0, maximum: 0), count: bins)
+        let binSize = framesPerBin
+        let frames = frameCount
+        let selectedChannels = channel.map { min(channels - 1, max(0, $0))..<(min(channels - 1, max(0, $0)) + 1) } ?? (0..<channels)
+        pcmData.withUnsafeBytes { raw in
+            let samples = raw.bindMemory(to: Float.self)
+            for frame in 0..<frames {
+                let bin = frame / binSize
+                for channel in selectedChannels {
+                    let value = samples[frame * channels + channel]
+                    guard value.isFinite else { continue }
+                    base[bin].minimum = min(base[bin].minimum, max(-1, value))
+                    base[bin].maximum = max(base[bin].maximum, min(1, value))
+                }
+            }
+        }
+        var pyramid = [base]
+        while let previous = pyramid.last, previous.count > 1 {
+            var next: [Peak] = []
+            next.reserveCapacity((previous.count + 1) / 2)
+            for index in stride(from: 0, to: previous.count, by: 2) {
+                let other = previous[min(index + 1, previous.count - 1)]
+                next.append(Peak(minimum: min(previous[index].minimum, other.minimum),
+                                 maximum: max(previous[index].maximum, other.maximum)))
+            }
+            pyramid.append(next)
+        }
+        levels = pyramid
+    }
+
+    func level(secondsPerPixel: Double) -> Int {
+        guard duration > 0, frameCount > 0, secondsPerPixel > 0 else { return 0 }
+        let baseSeconds = Double(framesPerBin) / Double(frameCount) * duration
+        return min(levels.count - 1, max(0, Int(floor(log2(max(1, secondsPerPixel / baseSeconds))))))
+    }
+
+    func peak(from start: Double, to end: Double, level: Int) -> Peak {
+        guard duration > 0, frameCount > 0, start < duration, end > 0 else {
+            return Peak(minimum: 0, maximum: 0)
+        }
+        let index = min(levels.count - 1, max(0, level))
+        let values = levels[index]
+        guard !values.isEmpty else { return Peak(minimum: 0, maximum: 0) }
+        let secondsPerBin = Double(framesPerBin) * pow(2, Double(index)) / Double(frameCount) * duration
+        let lower = min(values.count - 1, max(0, Int(floor(start / secondsPerBin))))
+        let upper = min(values.count, max(lower + 1, Int(ceil(end / secondsPerBin))))
+        return values[lower..<upper].reduce(Peak(minimum: 0, maximum: 0)) {
+            Peak(minimum: min($0.minimum, $1.minimum), maximum: max($0.maximum, $1.maximum))
+        }
+    }
 }
 
 /// Renders audio waveform images natively in Swift from raw PCM data.
@@ -40,12 +112,24 @@ struct NativeWaveformRenderer {
         colorHex: String = "FF2D78",
         subprocessRunner: any SubprocessRunning = SubprocessRunner()
     ) async throws -> NSImage {
+        try await generateWaveformAssets(url: url, ffmpegPath: ffmpegPath, streamIndex: streamIndex,
+                                        duration: duration, width: width, height: height,
+                                        colorHex: colorHex, includeEnvelope: false,
+                                        subprocessRunner: subprocessRunner).image
+    }
+
+    static nonisolated func generateWaveformAssets(
+        url: URL, ffmpegPath: String, streamIndex: Int, duration: Double, width: Int, height: Int,
+        colorHex: String = "FF2D78", includeEnvelope: Bool = true, channelCount: Int = 1,
+        subprocessRunner: any SubprocessRunning = SubprocessRunner()
+    ) async throws -> (image: NSImage, envelope: WaveformEnvelope?) {
+        let channels = includeEnvelope ? max(1, channelCount) : 1
         let effectiveWidth = max(400, width)
 
         // Downsample to reduce data: aim for ~100 samples per output pixel column.
         // This is plenty for visual waveform accuracy while keeping data manageable
         // (e.g. a 1-hour file at 1kHz ≈ 14 MB vs 700+ MB at full rate).
-        let idealRate = max(1000, min(48000, Int(ceil(Double(effectiveWidth) * 100.0 / max(duration, 0.1)))))
+        let idealRate = includeEnvelope ? 48000 : max(1000, min(48000, Int(ceil(Double(effectiveWidth) * 100.0 / max(duration, 0.1)))))
 
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("com.aagedal.MediaConverter.waveforms.\(UUID().uuidString)")
@@ -54,13 +138,15 @@ struct NativeWaveformRenderer {
 
         let pcmFile = tempDir.appendingPathComponent("audio.raw")
 
-        // Decode to mono f32le PCM
+        // Preserve channels for the envelope so opposite-phase audio cannot cancel its peaks.
         let arguments: [String] = [
             "-hide_banner", "-loglevel", "error",
             "-i", url.path,
             "-vn",
             "-map", "0:a:\(streamIndex)",
-            "-ac", "1",
+            "-ac", "\(channels)",
+            // Preserve delayed tracks and timestamp gaps on the source timeline.
+            "-af", "aresample=\(idealRate):async=1:first_pts=0",
             "-ar", "\(idealRate)",
             "-f", "f32le",
             "-c:a", "pcm_f32le",
@@ -76,14 +162,14 @@ struct NativeWaveformRenderer {
         )
         try Task.checkCancellation()
 
-        let pcmData = try Data(contentsOf: pcmFile)
-        let totalFrames = pcmData.count / MemoryLayout<Float>.size
+        let pcmData = try Data(contentsOf: pcmFile, options: .mappedIfSafe)
+        let totalFrames = pcmData.count / (MemoryLayout<Float>.size * channels)
         guard totalFrames > 0 else {
             throw PreviewAssetError.generationFailed("No audio samples decoded")
         }
 
         // Compute amplitudes
-        let (mins, maxs) = computeAmplitudes(pcmData: pcmData, channelCount: 1, channel: 0, totalFrames: totalFrames, width: effectiveWidth)
+        let (mins, maxs) = computeAmplitudes(pcmData: pcmData, channelCount: channels, channel: 0, totalFrames: totalFrames, width: effectiveWidth)
 
         try Task.checkCancellation()
 
@@ -97,7 +183,10 @@ struct NativeWaveformRenderer {
             throw PreviewAssetError.generationFailed("Failed to render waveform image")
         }
 
-        return image
+        let envelope = includeEnvelope
+            ? WaveformEnvelope(pcmData: pcmData, channelCount: channels, sampleRate: Double(idealRate)) : nil
+        try Task.checkCancellation()
+        return (image, envelope)
     }
 
     // MARK: - Amplitude Computation
@@ -209,7 +298,7 @@ struct NativeWaveformRenderer {
         heightPerChannel: Int,
         colorHex: String = "FF2D78",
         subprocessRunner: any SubprocessRunning = SubprocessRunner()
-    ) async throws -> ([NSImage], [String]) {
+    ) async throws -> ([NSImage], [String], [WaveformEnvelope]) {
         let effectiveWidth = max(800, width)
         let effectiveChannelCount = max(1, channelCount)
 
@@ -228,6 +317,7 @@ struct NativeWaveformRenderer {
             "-i", url.path,
             "-vn",
             "-map", "0:a:\(streamIndex)",
+            "-af", "aresample=\(idealRate):async=1:first_pts=0",
             "-ar", "\(idealRate)",
             "-f", "f32le",
             "-c:a", "pcm_f32le",
@@ -253,6 +343,9 @@ struct NativeWaveformRenderer {
         let (r, g, b) = parseHexColor(colorHex)
         let labels = channelNames(count: effectiveChannelCount, layout: channelLayout)
         var images: [NSImage] = []
+        var envelopes: [WaveformEnvelope] = []
+        // Share the envelope memory budget across channels for long recordings.
+        let binSize = max(256, Int(ceil(Double(totalFrames) * Double(effectiveChannelCount) / 2_000_000)))
 
         for ch in 0..<effectiveChannelCount {
             try Task.checkCancellation()
@@ -273,13 +366,17 @@ struct NativeWaveformRenderer {
                 continue
             }
             images.append(image)
+            envelopes.append(WaveformEnvelope(pcmData: pcmData, channelCount: effectiveChannelCount,
+                                               sampleRate: Double(idealRate), minimumFramesPerBin: binSize,
+                                               channel: ch))
         }
 
         guard !images.isEmpty else {
             throw PreviewAssetError.generationFailed("Failed to render any channel waveform images")
         }
 
-        return (images, labels)
+        try Task.checkCancellation()
+        return (images, labels, envelopes)
     }
 
     // MARK: - Channel Labels

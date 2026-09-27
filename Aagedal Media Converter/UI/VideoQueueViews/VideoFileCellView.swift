@@ -40,6 +40,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
     private(set) var currentItemID: UUID?
     var actionHandler: ((CellAction) -> Void)?
+    var canMoveSelectionToNewGroup: (() -> Bool)?
     internal var currentConfig: VideoFileCellConfiguration?
 
     // MARK: - Card Container
@@ -70,6 +71,11 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     private let arrowLabel = NSTextField(labelWithString: "→")
     private let outputNameLabel = NSTextField(labelWithString: "")
     private let outputNameField = NSTextField() // editable, hidden by default
+    private let jobOriginLabel = NSTextField(labelWithString: "")
+    private let jobSettingsButton = NSButton()
+    private var jobSettingsPopover: NSPopover?
+    private var isEditingOutputName = false
+    private var shouldCommitOutputNameOnEndEditing = true
     private let mergeIndicator = NSImageView()
     private let finderButton = NSButton()
     private let downloadedFinderButton = NSButton()
@@ -98,6 +104,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     let transcriptionButton = NSButton()
     let ocrButton = NSButton()
     let analyticsButton = NSButton()
+    let loudnessButton = NSButton()
     let commentToggleButton = NSButton()
     let metadataToggleButton = NSButton()
 
@@ -510,12 +517,37 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         outputNameLabel.lineBreakMode = .byTruncatingMiddle
         outputNameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         outputNameLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        outputNameLabel.setAccessibilityIdentifier("queue.item.outputName")
+
+        configureLabel(jobOriginLabel, font: .systemFont(ofSize: 10, weight: .semibold))
+        jobOriginLabel.textColor = .secondaryLabelColor
+        jobOriginLabel.isHidden = true
+        jobOriginLabel.setContentHuggingPriority(.required, for: .horizontal)
+        jobOriginLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        jobOriginLabel.setAccessibilityIdentifier("queue.item.jobOrigin")
+
+        jobSettingsButton.image = NSImage(
+            systemSymbolName: "info.circle",
+            accessibilityDescription: String(localized: "Show accepted settings")
+        )
+        jobSettingsButton.isBordered = false
+        jobSettingsButton.bezelStyle = .inline
+        jobSettingsButton.target = self
+        jobSettingsButton.action = #selector(showAcceptedJobSettings)
+        jobSettingsButton.isHidden = true
+        jobSettingsButton.toolTip = String(localized: "Show accepted settings")
+        jobSettingsButton.setAccessibilityIdentifier("queue.item.acceptedSettings")
+        jobSettingsButton.setContentHuggingPriority(.required, for: .horizontal)
 
         // Editable output name field (hidden by default)
         outputNameField.font = .systemFont(ofSize: 13, weight: .semibold)
         outputNameField.isHidden = true
         outputNameField.delegate = self
         outputNameField.translatesAutoresizingMaskIntoConstraints = false
+        outputNameField.placeholderString = String(localized: "Output filename")
+        outputNameField.setAccessibilityIdentifier("queue.item.outputNameEditor")
+        outputNameField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        outputNameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         // Merge indicator
         mergeIndicator.image = NSImage(systemSymbolName: "link", accessibilityDescription: "Merge")
@@ -592,7 +624,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // keep their natural width instead of being force-equalized (which created a
         // big gap when one filename was much longer than the other).
         filenameStack.setViews(
-            [inputNameLabel, arrowLabel, outputNameLabel, outputNameField, mergeIndicator],
+            [jobOriginLabel, jobSettingsButton, inputNameLabel, arrowLabel, outputNameLabel, outputNameField, mergeIndicator],
             in: .leading
         )
         filenameStack.setViews(
@@ -735,6 +767,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         setupToggleButton(ocrButton, symbol: "text.viewfinder", action: #selector(ocrButtonClicked))
         ocrButton.isHidden = true
         setupToggleButton(analyticsButton, symbol: "chart.bar.xaxis", action: #selector(analyticsButtonClicked))
+        setupToggleButton(loudnessButton, symbol: "waveform.path", action: #selector(loudnessButtonClicked))
         setupToggleButton(uploadButton, symbol: "icloud.and.arrow.up", action: #selector(uploadButtonClicked))
 
         // Dividers between process toggles, the metadata group, and destructive actions.
@@ -761,7 +794,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         trailingSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         trailingSpacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        for view in [encodeButton, autoEncodeButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, uploadButton,
+        for view in [encodeButton, autoEncodeButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, loudnessButton, uploadButton,
                      metaDivider,
                      dateTagButton, commentToggleButton, metadataToggleButton, waveformButton, waveformBgButton,
                      trailingSpacer,
@@ -964,6 +997,28 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
                 tip += "\n\nSource: \(source)"
             }
             inputNameLabel.toolTip = tip
+        }
+        if isFirstConfigure
+            || prev?.applicationJobID != config.applicationJobID
+            || prev?.applicationJobOrigin != config.applicationJobOrigin
+            || prev?.applicationJobSettingsSummary != config.applicationJobSettingsSummary {
+            if let jobID = config.applicationJobID,
+               let origin = config.applicationJobOrigin {
+                let shortID = jobID.description.prefix(8).uppercased()
+                jobOriginLabel.stringValue = "\(origin.displayName.uppercased()) · \(shortID)"
+                jobOriginLabel.toolTip = "\(origin.displayName) job \(jobID.description)"
+                jobOriginLabel.isHidden = false
+                jobOriginLabel.setAccessibilityLabel("\(origin.displayName) job")
+                jobOriginLabel.setAccessibilityValue(jobID.description)
+                jobSettingsButton.isHidden = config.applicationJobSettingsSummary == nil
+            } else {
+                jobOriginLabel.stringValue = ""
+                jobOriginLabel.toolTip = nil
+                jobOriginLabel.isHidden = true
+                jobSettingsButton.isHidden = true
+            }
+            jobSettingsPopover?.performClose(nil)
+            jobSettingsPopover = nil
         }
         // Also re-render when name changes — for yt-dlp downloads the output name
         // is derived from item.name (e.g. "Fetching info..." → YouTube title), so
@@ -1230,6 +1285,10 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        isEditingOutputName = false
+        shouldCommitOutputNameOnEndEditing = true
+        outputNameField.isHidden = true
+        outputNameLabel.isHidden = false
         errorDetailsPopover?.performClose(nil)
         errorDetailsPopover = nil
         displayedDiagnosticReport = nil
@@ -1566,6 +1625,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         let opt = NSEvent.modifierFlags.contains(.option)
         actionHandler?(.toggleAnalytics(optionPressed: opt))
     }
+    @objc private func loudnessButtonClicked() { actionHandler?(.showLoudnessAnalysis) }
     @objc private func encodeButtonClicked() {
         let opt = NSEvent.modifierFlags.contains(.option)
         actionHandler?(.encodeNow(optionPressed: opt))
@@ -1583,7 +1643,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         }
     }
 
-    // MARK: - NSTextFieldDelegate (comment field)
+    // MARK: - NSTextFieldDelegate
 
     func controlTextDidChange(_ obj: Notification) {
         guard let field = obj.object as? NSTextField, field === commentField else { return }
@@ -1604,8 +1664,12 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     }
 
     func controlTextDidEndEditing(_ obj: Notification) {
-        guard let field = obj.object as? NSTextField, field === commentField else { return }
-        actionHandler?(.commentFocusChanged(false))
+        guard let field = obj.object as? NSTextField else { return }
+        if field === outputNameField {
+            finishOutputNameEditing(commit: shouldCommitOutputNameOnEndEditing)
+        } else if field === commentField {
+            actionHandler?(.commentFocusChanged(false))
+        }
     }
 
     /// NSTextFieldDelegate entry point for special keys. NSTextField inside an
@@ -1614,6 +1678,27 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     /// Shift-Tab here so the coordinator can hand focus to the next row's
     /// comment field (same behavior as the SwiftUI queue rows had).
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if control === outputNameField {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)):
+                shouldCommitOutputNameOnEndEditing = true
+                window?.makeFirstResponder(nil)
+                if isEditingOutputName {
+                    finishOutputNameEditing(commit: true)
+                }
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                shouldCommitOutputNameOnEndEditing = false
+                window?.makeFirstResponder(nil)
+                if isEditingOutputName {
+                    finishOutputNameEditing(commit: false)
+                }
+                return true
+            default:
+                return false
+            }
+        }
+
         guard control === commentField else { return false }
         switch commandSelector {
         case #selector(NSResponder.insertTab(_:)):
@@ -1632,6 +1717,45 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             return true
         default:
             return false
+        }
+    }
+
+    /// Switches the output filename label to the inline editor. Both the
+    /// double-click and context-menu entry points use this method so their
+    /// focus, commit, and cancellation behavior cannot drift apart.
+    func beginOutputNameEditing() {
+        guard let config = currentConfig, config.status == .waiting else { return }
+
+        outputNameField.stringValue = displayOutputFilename(config: config)
+        shouldCommitOutputNameOnEndEditing = true
+        isEditingOutputName = true
+        outputNameLabel.isHidden = true
+        outputNameField.isHidden = false
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+
+        let itemID = config.itemID
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.isEditingOutputName,
+                  self.currentConfig?.itemID == itemID else { return }
+            self.window?.makeFirstResponder(self.outputNameField)
+            self.outputNameField.currentEditor()?.selectAll(nil)
+        }
+    }
+
+    private func finishOutputNameEditing(commit: Bool) {
+        guard isEditingOutputName else { return }
+        let draft = outputNameField.stringValue
+        isEditingOutputName = false
+        shouldCommitOutputNameOnEndEditing = true
+        outputNameField.isHidden = true
+        outputNameLabel.isHidden = false
+        needsLayout = true
+
+        if commit {
+            let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            actionHandler?(.commitRename(trimmed.isEmpty ? nil : trimmed))
         }
     }
 
@@ -1659,7 +1783,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
         // Double-click on the output filename → begin rename
         if event.clickCount == 2 && labelContains(outputNameLabel, point: location) {
-            actionHandler?(.beginRename)
+            beginOutputNameEditing()
             return
         }
 
@@ -1739,6 +1863,47 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         guard let displayedDiagnosticReport else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(displayedDiagnosticReport, forType: .string)
+    }
+
+    @objc private func showAcceptedJobSettings() {
+        guard let summary = currentConfig?.applicationJobSettingsSummary else { return }
+        jobSettingsPopover?.performClose(nil)
+
+        let title = NSTextField(labelWithString: String(localized: "Accepted conversion settings"))
+        title.font = .boldSystemFont(ofSize: 14)
+        let text = NSTextView()
+        text.isEditable = false
+        text.isSelectable = true
+        text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        text.string = summary
+        text.textContainerInset = NSSize(width: 8, height: 8)
+        text.isHorizontallyResizable = false
+        text.autoresizingMask = [.width]
+        text.textContainer?.widthTracksTextView = true
+        text.setAccessibilityIdentifier("queue.acceptedSettings.text")
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        scroll.documentView = text
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        text.frame = NSRect(x: 0, y: 0, width: 400, height: 240)
+        let stack = NSStackView(views: [title, scroll])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        NSLayoutConstraint.activate([
+            scroll.widthAnchor.constraint(equalToConstant: 400),
+            scroll.heightAnchor.constraint(equalToConstant: 240)
+        ])
+        let controller = NSViewController()
+        controller.view = stack
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = controller
+        popover.contentSize = NSSize(width: 432, height: 300)
+        jobSettingsPopover = popover
+        popover.show(relativeTo: jobSettingsButton.bounds, of: jobSettingsButton, preferredEdge: .maxY)
     }
 
 }

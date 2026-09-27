@@ -46,6 +46,7 @@ struct VideoFileListView: View {
     var onDoubleClick: () -> Void
     var onDelete: (IndexSet) -> Void
     var onReset: (Int, Bool) -> Void
+    var onCancelApplicationJob: ((ApplicationJobID) -> Void)? = nil
     var preset: ExportPreset
     var mergeClipsEnabled: Bool
     var mergeClipsAvailable: Bool
@@ -113,6 +114,7 @@ struct VideoFileListView: View {
     @State private var sortOverlayDismissTask: DispatchWorkItem?
     /// Item whose analytics results should be presented, nil = sheet dismissed
     @State private var analyticsResultsItemID: UUID?
+    @State private var loudnessItemID: UUID?
     /// Group ID of the most recently created group (via Cmd+N or menu). Drives the
     /// "New group created" toast and its "Scroll to show" button.
     @State private var lastCreatedGroupID: UUID?
@@ -232,6 +234,7 @@ struct VideoFileListView: View {
                     },
                     onDelete: onDelete,
                     onReset: onReset,
+                    onCancelApplicationJob: onCancelApplicationJob,
                     onOpenTrim: onOpenTrim,
                     onOpenTrimWithCrop: onOpenTrimWithCrop,
                     onOpenTimecode: onOpenTimecode,
@@ -241,6 +244,9 @@ struct VideoFileListView: View {
                     onOpenIMFMetadata: onOpenIMFMetadata,
                     onOpenAnalyticsResults: { itemID in
                         analyticsResultsItemID = itemID
+                    },
+                    onOpenLoudnessAnalysis: { itemID in
+                        loudnessItemID = itemID
                     },
                     onToggleDateTag: onToggleDateTag,
                     onPlayFullscreen: onPlayFullscreen,
@@ -364,6 +370,18 @@ struct VideoFileListView: View {
             set: { if !$0 { analyticsResultsItemID = nil } }
         )) {
             analyticsResultsSheetContent
+        }
+        .sheet(isPresented: Binding(
+            get: { loudnessItemID != nil },
+            set: { if !$0 { loudnessItemID = nil } }
+        )) {
+            if let itemID = loudnessItemID,
+               let item = droppedFiles.first(where: { $0.id == itemID }) {
+                LoudnessAnalysisView(
+                    sourceFile: item.url,
+                    outputFile: item.outputFileExists ? item.outputURL : nil
+                )
+            }
         }
         .sheet(item: $pendingTrackPicker) { picker in
             TrackPickerSheet(

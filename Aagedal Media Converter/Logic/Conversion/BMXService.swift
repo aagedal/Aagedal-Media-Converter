@@ -155,7 +155,7 @@ actor BMXService {
         progress: @escaping @Sendable (Double) -> Void
     ) async -> BMXRewrapResult {
         var arguments: [String] = [
-            "-t", "op1a",
+            "-t", "imf",
         ]
 
         if let value = colorPrimaries {
@@ -532,6 +532,27 @@ actor BMXService {
         }
 
         return nil
+    }
+
+    /// Header metadata for linking a newly written MXF into an IMF CPL.
+    func getMXFXMLInfo(url: URL) async -> Data? {
+        guard !Task.isCancelled, let path = mxf2rawPathProvider(),
+              FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let request = mxf2rawRequest(
+            executablePath: path,
+            arguments: ["--info", "--info-format", "xml", url.path],
+            sourceURL: url,
+            outputCaptureLimit: Self.infoCaptureLimit
+        )
+        do {
+            let result = try await subprocessRunner.run(request)
+            try Task.checkCancellation()
+            guard result.succeeded, result.discardedStandardOutputBytes == 0 else { return nil }
+            return result.standardOutput
+        } catch {
+            logger.error("Unable to inspect IMF MXF metadata: \(error.localizedDescription, privacy: .private(mask: .hash))")
+            return nil
+        }
     }
 
     /// Checks if an MXF file is OP1a compliant

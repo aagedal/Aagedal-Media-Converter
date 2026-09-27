@@ -690,6 +690,147 @@ actor AnalyticsService {
 
 }
 
+
+/// Measures one audio presentation from one complete file. The measurement is made
+/// on the joined PCM before null output encoding; graph samples are not averaged
+/// to obtain the gated, whole-program integrated value.
+actor LoudnessAnalysisService {
+    static let shared = LoudnessAnalysisService()
+
+    private let runner: any SubprocessRunning
+    private let ffmpegPathProvider: @Sendable () -> String?
+
+    init(
+        runner: any SubprocessRunning = SubprocessRunner(),
+        ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath }
+    ) {
+        self.runner = runner
+        self.ffmpegPathProvider = ffmpegPathProvider
+    }
+
+    func analyze(file: URL, presentation: LoudnessPresentation) async throws -> LoudnessResults {
+        guard let ffmpegPath = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
+        guard !presentation.streamIndices.isEmpty,
+              Set(presentation.streamIndices).count == presentation.streamIndices.count,
+              presentation.streamIndices.allSatisfy({ $0 >= 0 }) else {
+            throw AnalyticsError.parsingFailed("Invalid loudness track grouping")
+        }
+        if case .surround51(let indices) = presentation, indices.count != 6 {
+            throw AnalyticsError.parsingFailed("A 5.1 grouping requires exactly six mono tracks")
+        }
+
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+
+        let graph = Self.filterGraph(for: presentation)
+        let request = SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: ["-hide_banner", "-nostdin", "-nostats", "-i", file.path,
+                        "-filter_complex", graph, "-map", "[metered]", "-f", "null", "-"],
+            timeout: .seconds(12 * 60 * 60),
+            standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 64 * 1024,
+            sensitiveValues: [ffmpegPath, file.path]
+        )
+        let collector = LoudnessLogCollector()
+        let result = try await runner.run(request) { chunk in
+            if case .standardError = chunk.stream { collector.consume(chunk.data) }
+        }
+        try Task.checkCancellation()
+        collector.finish()
+        guard result.succeeded else {
+            throw AnalyticsError.parsingFailed(request.redactedDiagnostic(result.standardErrorText, limit: 500))
+        }
+        return try collector.results(presentation: presentation, summary: result.standardErrorText)
+    }
+
+    static func filterGraph(for presentation: LoudnessPresentation) -> String {
+        let inputs = presentation.streamIndices.map { "[0:a:\($0)]" }.joined()
+        let join: String
+        switch presentation {
+        case .track:
+            join = ""
+        case .stereo:
+            join = "join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR,"
+        case .surround51:
+            join = "join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,"
+        }
+        return "\(inputs)\(join)ebur128=peak=true[metered]"
+    }
+}
+
+/// FFmpeg reports 10 measurements per second. Retain the readings for accurate
+/// graph decimation while always parsing its separate gated final summary.
+private final class LoudnessLogCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending = ""
+    private var samples: [LoudnessSample] = []
+
+    func consume(_ data: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        pending += String(decoding: data, as: UTF8.self)
+        while let end = pending.firstIndex(of: "\n") {
+            let line = String(pending[..<end])
+            pending.removeSubrange(...end)
+            parse(line)
+        }
+    }
+
+    func finish() {
+        lock.lock()
+        defer { lock.unlock() }
+        if !pending.isEmpty { parse(pending) }
+        pending = ""
+    }
+
+    func results(presentation: LoudnessPresentation, summary: String) throws -> LoudnessResults {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let summaryStart = summary.range(of: "Summary:", options: .backwards) else {
+            throw AnalyticsError.parsingFailed("FFmpeg did not report a loudness summary")
+        }
+        let final = String(summary[summaryStart.upperBound...])
+        guard let integrated = Self.value(after: "Integrated loudness:", key: "I:", in: final),
+              let range = Self.value(after: "Loudness range:", key: "LRA:", in: final) else {
+            throw AnalyticsError.parsingFailed("Incomplete loudness summary")
+        }
+        let peak = Self.value(after: "True peak:", key: "Peak:", in: final)
+        return LoudnessResults(
+            presentation: presentation,
+            integratedLUFS: integrated,
+            loudnessRangeLU: range,
+            maximumTruePeakDBTP: peak,
+            samples: samples
+        )
+    }
+
+    private func parse(_ line: String) {
+        guard let seconds = Self.number(after: "t:", in: line),
+              seconds.isFinite, seconds >= 0 else { return }
+        let momentary = Self.number(after: "M:", in: line)
+        let shortTerm = Self.number(after: "S:", in: line)
+        samples.append(LoudnessSample(
+            seconds: seconds,
+            momentaryLUFS: momentary.flatMap { $0 <= -70 ? nil : $0 },
+            shortTermLUFS: shortTerm.flatMap { $0 <= -70 ? nil : $0 }
+        ))
+    }
+
+    private static func value(after section: String, key: String, in summary: String) -> Double? {
+        guard let start = summary.range(of: section) else { return nil }
+        return number(after: key, in: String(summary[start.upperBound...]))
+    }
+
+    private static func number(after key: String, in text: String) -> Double? {
+        guard let range = text.range(of: key) else { return nil }
+        let suffix = text[range.upperBound...].drop(while: { $0.isWhitespace })
+        let token = suffix.prefix(while: { !$0.isWhitespace })
+        guard let number = Double(token), number.isFinite else { return nil }
+        return number
+    }
+}
+
 /// Serializes FFmpeg's arbitrary stderr chunks into complete CR/LF records before
 /// interpreting duration and timestamp progress.
 private final class AnalyticsFFmpegProgressParser: @unchecked Sendable {

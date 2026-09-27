@@ -144,6 +144,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     // Callbacks
     var onDelete: (IndexSet) -> Void
     var onReset: (Int, Bool) -> Void
+    var onCancelApplicationJob: ((ApplicationJobID) -> Void)? = nil
     var onOpenTrim: ((UUID) -> Void)?
     var onOpenTrimWithCrop: ((UUID) -> Void)?
     var onOpenTimecode: ((UUID) -> Void)?
@@ -152,6 +153,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     var onOpenDCPMetadata: ((UUID) -> Void)?
     var onOpenIMFMetadata: ((UUID) -> Void)?
     var onOpenAnalyticsResults: ((UUID) -> Void)?
+    var onOpenLoudnessAnalysis: ((UUID) -> Void)?
     var onToggleDateTag: ((Int) -> Void)?
     var onPlayFullscreen: ((UUID) -> Void)?
     var onRenameOutputFileName: ((UUID, String?) -> Void)?
@@ -505,6 +507,9 @@ struct VideoQueueTableView: NSViewRepresentable {
                 if case .groupItem = displayRows[row] { isGroupItem = true } else { isGroupItem = false }
                 let config = buildCellConfiguration(item: item, isGroupItem: isGroupItem)
                 let capturedID = item.id
+                cell.canMoveSelectionToNewGroup = { [weak self] in
+                    self?.groupingSelection(for: capturedID) != nil
+                }
                 cell.configure(with: config) { [weak self] (action: CellAction) in
                     guard let self else { return }
                     self.handleCellAction(action, itemID: capturedID, displayRows: self.cachedDisplayRows, row: row)
@@ -865,6 +870,9 @@ struct VideoQueueTableView: NSViewRepresentable {
                         if case .groupItem = displayRows[row] { isGroupItem = true } else { isGroupItem = false }
                         let config = buildCellConfiguration(item: item, isGroupItem: isGroupItem)
                         let capturedID = item.id
+                        appkitCell.canMoveSelectionToNewGroup = { [weak self] in
+                            self?.groupingSelection(for: capturedID) != nil
+                        }
                         appkitCell.configure(with: config) { [weak self] (action: CellAction) in
                             guard let self else { return }
                             self.handleCellAction(action, itemID: capturedID, displayRows: self.cachedDisplayRows, row: row)
@@ -1018,6 +1026,9 @@ struct VideoQueueTableView: NSViewRepresentable {
                 eta: item.eta,
                 statusMessage: item.statusMessage,
                 conversionError: item.conversionError,
+                applicationJobID: item.applicationJobID,
+                applicationJobOrigin: item.applicationJobOrigin,
+                applicationJobSettingsSummary: item.applicationJobSettingsSummary,
                 comment: item.comment,
                 includeDateTag: item.includeDateTag,
                 outputURL: item.outputURL,
@@ -1029,7 +1040,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 showCommentField: isGroupItem ? false : parent.showCommentField,
                 showDateTagButton: isGroupItem ? false : parent.showDateTagButton,
                 isFocusedComment: parent.focusedCommentID == item.id,
-                preset: parent.preset,
+                preset: item.applicationPresetID?.exportPreset ?? parent.preset,
                 mergeClipsEnabled: isGroupItem ? false : parent.mergeClipsEnabled,
                 mergeClipsAvailable: isGroupItem ? false : parent.mergeClipsAvailable,
                 outputFileExists: item.outputFileExists,
@@ -1304,8 +1315,17 @@ struct VideoQueueTableView: NSViewRepresentable {
             return itemToGroupID[itemID]
         }
 
+        private func groupingSelection(for clickedID: UUID) -> Set<UUID>? {
+            let ids: Set<UUID> = parent.selection.contains(clickedID) ? parent.selection : [clickedID]
+            return QueueGrouping.canMove(ids, files: parent.droppedFiles, groups: parent.encodingGroups) ? ids : nil
+        }
+
         func handleCellAction(_ action: CellAction, itemID: UUID, displayRows: [FlatQueueRow], row: Int) {
             switch action {
+            case .moveSelectionToNewGroup:
+                guard let ids = groupingSelection(for: itemID) else { return }
+                NotificationCenter.default.post(name: .createEncodingGroup, object: nil,
+                                                userInfo: ["itemIDs": ids])
             case .delete:
                 Task { @MainActor in
                     await ConversionManager.shared.cancelSubtitleEmbedding(
@@ -1334,7 +1354,12 @@ struct VideoQueueTableView: NSViewRepresentable {
                     }
                 }
             case .cancel:
-                Task { await ConversionManager.shared.cancelItem(with: itemID) }
+                if let item = parent.droppedFiles.first(where: { $0.id == itemID }),
+                   let jobID = item.applicationJobID {
+                    parent.onCancelApplicationJob?(jobID)
+                } else {
+                    Task { await ConversionManager.shared.cancelItem(with: itemID) }
+                }
             case .cancelDownload:
                 DownloadManager.shared.cancelDownload(itemID: itemID)
             case .stopLiveRecording:
@@ -1468,6 +1493,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                         parent.droppedFiles[idx].analyticsEnabled.toggle()
                     }
                 }
+            case .showLoudnessAnalysis:
+                parent.onOpenLoudnessAnalysis?(itemID)
             case .toggleAutoEncode:
                 if let idx = droppedFilesIndex[itemID] {
                     parent.droppedFiles[idx].autoEncodeAfterDownload.toggle()
@@ -1499,8 +1526,6 @@ struct VideoQueueTableView: NSViewRepresentable {
                 }
             case .tabCommentField(let forward):
                 parent.onTabCommentField?(forward)
-            case .beginRename:
-                parent.onRenameOutputFileName?(itemID, nil)
             case .commitRename(let name):
                 parent.onRenameOutputFileName?(itemID, name)
             case .showPreview:
