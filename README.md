@@ -1,5 +1,7 @@
 # Aagedal Media Converter
 
+[English](README.md) · [Norsk bokmål](docs/readme/README.nb.md) · [Español](docs/readme/README.es.md) · [简体中文](docs/readme/README.zh-CN.md) · [Français](docs/readme/README.fr.md) · [Italiano](docs/readme/README.it.md) · [Deutsch](docs/readme/README.de.md) · [日本語](docs/readme/README.ja.md) · [Português (Brasil)](docs/readme/README.pt-BR.md) · [한국어](docs/readme/README.ko.md)
+
 <img alt="SCR-20260426-ugrc" src="https://github.com/user-attachments/assets/213e64a6-f382-4562-b4cf-797ad1e0f368" />
 
 
@@ -153,7 +155,12 @@ Highly compatible H.264/AVC encoding with a choice between fast VideoToolbox har
 Modern 10-bit H.265/HEVC encoding. Hardware encoding via VideoToolbox keeps exports quick, while libx265 software encoding can be chosen for maximum compression efficiency.
 
 #### AV1
-Next-generation SVT-AV1 encoding with 10-bit support. The best compression efficiency in the app, but it is software only (no hardware acceleration on macOS).
+Next-generation SVT-AV1 encoding with 10-bit support. High compression efficiency, but it is software only (no hardware acceleration on macOS).
+
+#### AV2 (experimental)
+Experimental AV2 encoding using the bundled AOM AVM reference encoder (`avmenc`), introduced in a preview release. Supports 8/10-bit output, constant-quality or variable-bitrate encoding, and configurable speed and resolution. Parallel chunked encoding uses multiple CPU cores in constant-quality mode.
+
+Choose video-only IVF (`.ivf`) or Matroska (`.mkv`) with AAC or Opus audio. Reference encoding is very slow, and the evolving bitstream requires an AV2-capable decoder. The app can decode AV2 files for conversion and thumbnails, but interactive playback is not available yet. Treat AV2 as a format for experimentation rather than delivery.
 
 #### TV (HEVC 10-bit 4:2:2)
 Broadcast delivery format with hardware HEVC 10-bit 4:2:2, configurable resolution/framerate, automatic bitrate scaling, and preservation of all audio channels as 24-bit PCM.
@@ -197,6 +204,11 @@ Ten custom presets (C1–C10) let you supply your own output arguments, suffixes
 
 
 ## Screenshots
+
+#### Group timeline view
+Preview a sequence alongside the clip list, with thumbnails, audio waveforms, trim handles, and output timecode. The timeline also provides split, marker, range-selection, and zoom controls.
+
+![Group editor with sequence preview, clip thumbnails, audio waveforms, and timeline controls](docs/screenshots/group-timeline.jpeg)
 
 #### Trim View
 <img alt="SCR-20260426-ulyb-2" src="https://github.com/user-attachments/assets/0a48088d-e770-402a-a989-dc93d9fcb2c8" />
