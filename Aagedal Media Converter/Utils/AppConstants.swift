@@ -683,6 +683,13 @@ enum AppConstants {
 
     // yt-dlp settings
     static let ytdlpToolsDirectory: URL = {
+#if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if environment["AMC_UI_TEST_SESSION"] == "1",
+           environment["AMC_UI_TEST_YTDLP_FAILURE"] == "1" {
+            return UITestFixtureConfiguration.directory.appendingPathComponent("tools", isDirectory: true)
+        }
+#endif
         let supportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
         let toolsDir = supportDir

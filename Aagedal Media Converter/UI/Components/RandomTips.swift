@@ -12,41 +12,62 @@ import SwiftUI
 @MainActor
 enum RandomTips {
     static let tips: [LocalizedStringKey] = [
-        "Tip: You can change the default encoding preset in the Settings menu.",
-        "Tip: Press Tab to quickly jump between comment fields of different items.",
+        "Tip: Choose your default encoding preset in Settings > Presets.",
+        "Tip: Press Tab or Shift + Tab to move between visible comment fields in the queue.",
         "Tip: Import files with ⌘I, and start converting with ⌘Enter.",
         "Tip: Use ⌘T to open the trim editor for the selected file.",
-        "Tip: Hold Option while resizing the crop box to resize both axes at once.",
+        "Tip: Hold Option while resizing the crop box to scale it from its center. Hold Shift to lock its aspect ratio.",
         "Tip: You can drag items to reorder them in the queue.",
-        "Tip: Hold Option and click Reset to clear both trim points and other settings.",
-        "Tip: Press F to play the selected video in fullscreen.",
+        "Tip: Hold Option when clicking Reset to reverse the reset behavior chosen in General settings.",
+        "Tip: Press ⌘F to play the selected video in fullscreen.",
         "Tip: Use ⌘↑ and ⌘↓ to move selected items up and down in the queue.",
         "Tip: Set up a Watch Folder in Settings to automatically import new files.",
         "Tip: Use Option + A to configure audio routing for the selected file.",
         "Tip: Press Control + D to toggle the date tag on the selected item.",
-        "Tip: In both the Trim Player and the Fullscreen Player, you can use JKL to play backwards, pause, and play forwards. Just like in most NLEs.",
-        "Tip: In both the Trim Player and the Fullscreen Player, you can use arrow keys to jump between frames.",
-        "Tip: In both the Trim Player and the Fullscreen Player, you can start typing a number to enter a timecode. Press enter to jump to that timecode.",
-        "Tip: In both the Trim Player and the Fullscreen Player, enter + or - before a number to jump that many seconds forward or backward. If the frame counter is active you will instead jump that many frames.",
-        "Tip: Use T while in either player view, will change the timecode display to show source timecode, relative timecode or frame counter.",
-        "Tip: Use Command + S while in either player view will save a still image of the current frame.",
-        "Tip: Use Control + M will mute the selected files in the queue.",
-        "Tip: In the Trim View hold Command ⌘ while dragging to set both in and out trim point in a single drag.",
-        "Tip: In the Trim View hold Shift ⇧ while dragging in between trim points to move both in and out trim point at once.",
-        "Tip: In the full screen player you can use Command + N to go to the next video in the queue, and Command + B to go back to the previous video in the queue.",
-        "Tip: In the full screen player the UI overlay disappears immidiately if you place the mouse on the very right side of the screen.",
-        "Tip: In the player views you can press T to toggle between relative timecode, source timecode and frame counter.",
-        "Tip: Press Control + R to load a random tip here.",
-        "Tip: In the Audio Routing overlay use Control + M to mute all audio. You can also use Command + [1...8] to enable or disable a specific audio source track.",
-        "Tip: In the Crop view you can also use Command + [1...8] to switch between different crop modes. Use CMD + ↑←↓→ to move the crop box. Use CMD + -/+ to resize the crop box.",
+        "Tip: In either player, J starts reverse playback, K toggles playback, and L fast-forwards.",
+        "Tip: In either player, ← and → step one frame; ↑ and ↓ jump ten frames.",
+        "Tip: In either player, type a timecode and press Return to jump to that position.",
+        "Tip: In either player, prefix a number with + or - to seek forward or backward in seconds, or in frames when the frame counter is active.",
+        "Tip: In either player, press T to switch between relative timecode, source timecode, and the frame counter.",
+        "Tip: In either player, press ⌘S to save a still image of the current frame.",
+        "Tip: Press Control + M to toggle mute on the selected queue items.",
+        "Tip: In the trim timeline, hold ⌘ and drag to set both in and out points in one gesture.",
+        "Tip: In the trim timeline, hold Shift and drag between the trim points to move the entire trim range.",
+        "Tip: In fullscreen, use ⌘N for the next video and ⌘B for the previous video in the queue.",
+        "Tip: Move the pointer to the right edge of the fullscreen player to hide its overlay while away from the playback controls.",
+        "Tip: Press Control + R to load a different tip here.",
+        "Tip: In Audio Routing, Control + M toggles mute and ⌘1–8 toggles individual source tracks.",
+        "Tip: In Crop mode, use ⌘1–9 to select an aspect ratio and ⌘0 to reset the crop.",
+        "Tip: In Crop mode, ⌘arrow keys move the crop box; ⌘+ and ⌘- resize it.",
         "Tip: Press Control + K to see all keyboard shortcuts.",
-        "Tip: Command + P opens a preset selector.",
-        "Tip: Command + D opens the Download view",
-        "Tip: Command + 1-9 will quickly change the selected preset.",
-        "Tip: In the full screen player press A to turn on Auto Next. This will automatically play the next item in the queue. Command + L when Auto Next is on, will activate looping, so that you can watch the entire queue on repeat."
+        "Tip: Press ⌘P to open the preset selector.",
+        "Tip: Press ⌘D to download a video from a URL.",
+        "Tip: Use ⌘1–9 to select a visible preset; ⌘0 selects the tenth preset.",
+        "Tip: In fullscreen, press A to toggle Auto Next and play through the queue automatically.",
+        "Tip: With Auto Next enabled in fullscreen, press ⌘L to loop the entire queue.",
+        "Tip: Use File > Import Camera Card… (⌘⇧I) to scan a memory card or folder for video clips.",
+        "Tip: Camera card import can combine compatible clips into one file, or queue them separately.",
+        "Tip: During camera card import, choose Review recording-date groups… to organize clips by recording date.",
+        "Tip: Press ⌘N to create an encoding group with its own preset and clip settings.",
+        "Tip: Use Option + I to inspect metadata. Select several files to compare their metadata.",
+        "Tip: Press ⌘⇧C to open screen capture and record a screen, window, or selected region.",
+        "Tip: If a website download fails, check for app-managed yt-dlp updates in Downloads settings, then retry."
     ]
 
-    static func randomTip() -> LocalizedStringKey {
-        tips.randomElement() ?? tips[0]
+    static func initialTip() -> LocalizedStringKey {
+#if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        if environment["AMC_UI_TEST_SESSION"] == "1",
+           let rawIndex = environment["AMC_UI_TEST_TIP_INDEX"],
+           let index = Int(rawIndex), tips.indices.contains(index) {
+            return tips[index]
+        }
+#endif
+        return randomTip()
+    }
+
+    static func randomTip(excluding currentTip: LocalizedStringKey? = nil) -> LocalizedStringKey {
+        let candidates = tips.filter { $0 != currentTip }
+        return candidates.randomElement() ?? tips[0]
     }
 }

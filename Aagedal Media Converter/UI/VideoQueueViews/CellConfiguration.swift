@@ -135,6 +135,13 @@ struct VideoFileCellConfiguration: Equatable {
 // MARK: - Queue failure diagnostics
 
 extension VideoFileCellConfiguration {
+    var canSuggestYTDLPUpdate: Bool {
+        QueueFailureDiagnostics.canSuggestYTDLPUpdate(
+            status: status, sourceURL: sourceURL, downloadError: downloadError,
+            isDownloading: isDownloading, fileAlreadyExistsPath: fileAlreadyExistsPath
+        )
+    }
+
     /// Preserve every failed stage, including follow-up failures after a successful encode.
     var failureDetails: String? {
         QueueFailureDiagnostics.details(
@@ -165,6 +172,20 @@ extension VideoFileCellConfiguration {
 }
 
 enum QueueFailureDiagnostics {
+    /// Cancellation, overwrite conflicts and stopped-recording recovery are not
+    /// website extraction failures. Updating yt-dlp is not useful for those states.
+    static func canSuggestYTDLPUpdate(
+        status: ConversionManager.ConversionStatus,
+        sourceURL: String?,
+        downloadError: String?,
+        isDownloading: Bool,
+        fileAlreadyExistsPath: String?
+    ) -> Bool {
+        guard status == .failed, sourceURL != nil, !isDownloading,
+              fileAlreadyExistsPath == nil, let downloadError else { return false }
+        return !["Cancelled", "File already exists", "Stopped - partial file not found"].contains(downloadError)
+    }
+
     static func details(
         downloadError: String?,
         conversionFailed: Bool,

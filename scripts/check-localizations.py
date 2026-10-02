@@ -18,8 +18,10 @@ DEFAULT_AUDIT = ROOT / "scripts/localization-audit.json"
 MISSING_CATEGORIES = {"intentional-format-token"}
 TRANSLATED_CATEGORIES = {"translated-user-interface", "translated-app-intent"}
 PLACEHOLDER_PATTERN = re.compile(
-    r"%(?:\d+\$)?(?:lld|llu|ld|lu|d|u|i|f|g|s|c|@)|\$\{[^}]+\}"
+    r"%(?:\d+\$)?[-+#0']*(?:\d+|\*)?(?:\.(?:\d+|\*))?"
+    r"(?:hh|ll|h|l|L|z|j|t)?[diuoxXfFeEgGaAcsp@%]|\$?\{[A-Za-z_][A-Za-z_0-9]*\}"
 )
+SINGLE_PLURAL_FORM_LOCALES = {"ja", "ko", "zh-Hans"}
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -54,6 +56,48 @@ def placeholders(value: str) -> Counter[str]:
     for match in PLACEHOLDER_PATTERN.findall(value):
         normalized.append(re.sub(r"^%\d+\$", "%", match))
     return Counter(normalized)
+
+
+def format_arguments(value: str) -> Counter[tuple[int, str]]:
+    """Compare argument positions as well as types when a translation reorders them."""
+    arguments: Counter[tuple[int, str]] = Counter()
+    next_position = 1
+    for token in PLACEHOLDER_PATTERN.findall(value):
+        if not token.startswith("%") or token == "%%":
+            continue
+        position = re.match(r"%(\d+)\$", token)
+        if position:
+            arguments[(int(position[1]), token[position.end():])] += 1
+        else:
+            arguments[(next_position, token[1:])] += 1
+            next_position += 1
+    return arguments
+
+
+def locale_errors(strings: dict[str, Any], locale: str) -> list[str]:
+    errors = []
+    for key, entry in strings.items():
+        if entry.get("shouldTranslate") is False:
+            continue
+        localization = entry.get("localizations", {}).get(locale)
+        if not isinstance(localization, dict):
+            errors.append(f"{locale}: missing translation for {key!r}")
+            continue
+        english = entry.get("localizations", {}).get("en", {})
+        source_plural = english.get("variations", {}).get("plural")
+        target_plural = localization.get("variations", {}).get("plural")
+        if source_plural:
+            required_forms = {"other"} if locale in SINGLE_PLURAL_FORM_LOCALES else {"one", "other"}
+            if not isinstance(target_plural, dict) or not required_forms <= set(target_plural):
+                errors.append(f"{locale}: {key!r} needs plural forms {sorted(required_forms)}")
+        source_value = english.get("stringUnit", {}).get("value", key)
+        values = list(localized_values(localization))
+        if not values or any(not value.strip() for value in values):
+            errors.append(f"{locale}: empty translation for {key!r}")
+        for value in values:
+            if placeholders(value) != placeholders(source_value) or format_arguments(value) != format_arguments(source_value):
+                errors.append(f"{locale}: {key!r} has mismatched placeholders in {value!r}")
+    return errors
 
 
 def main() -> int:
@@ -162,6 +206,19 @@ def main() -> int:
                     f"{key!r}: expected {dict(source_placeholders)}, "
                     f"found {dict(localized_placeholders)} in {localized_value!r}"
                 )
+
+    additional_locales = audit.get("additionalLocales", [])
+    if not isinstance(additional_locales, list) or not all(isinstance(item, str) for item in additional_locales):
+        errors.append("additionalLocales must be an array of locale identifiers")
+        additional_locales = []
+    for additional_locale in additional_locales:
+        errors.extend(locale_errors(strings, additional_locale))
+        missing_count = sum(
+            entry.get("shouldTranslate") is not False
+            and additional_locale not in entry.get("localizations", {})
+            for entry in strings.values()
+        )
+        print(f"{additional_locale} catalog audit: {len(strings)} total, {missing_count} missing translatable keys")
 
     counts = Counter(classified.values())
     print(
