@@ -37,31 +37,51 @@ enum LoudnessPresentation: Equatable, Sendable, Identifiable {
         }
     }
 
-    /// Only propose grouping when the participating streams are known to be mono.
+    /// Validate topology before offering or running a user-defined grouping.
+    func isValid(for tracks: [AudioTrackInfo]) -> Bool {
+        let indices = streamIndices
+        guard !indices.isEmpty, Set(indices).count == indices.count,
+              indices.allSatisfy({ index in tracks.contains { $0.streamIndex == index } }) else { return false }
+        switch self {
+        case .track:
+            return true
+        case .stereo:
+            return indices.count == 2 && indices.allSatisfy { index in
+                tracks.first { $0.streamIndex == index }?.channels == 1
+            }
+        case .surround51:
+            return indices.count == 6 && indices.allSatisfy { index in
+                tracks.first { $0.streamIndex == index }?.channels == 1
+            }
+        }
+    }
+
+    /// Only group known mono streams; mixed files can still contain mono pairs.
     static func presets(for tracks: [AudioTrackInfo]) -> [LoudnessPresentation] {
         let singles = tracks.map { LoudnessPresentation.track($0.streamIndex) }
-        guard tracks.count > 1, tracks.allSatisfy({ $0.channels == 1 }) else {
-            return singles
-        }
-        let mono = tracks.map(\.streamIndex).sorted()
+        let mono = tracks.filter { $0.channels == 1 }.map(\.streamIndex).sorted()
         let pairs = stride(from: 0, to: mono.count - mono.count % 2, by: 2).map {
             LoudnessPresentation.stereo(left: mono[$0], right: mono[$0 + 1])
         }
         var presentations = singles + pairs
-        if mono.count == 6 {
-            presentations.append(.surround51(mono))
-            // Alternative file order L, R, C, Ls, Rs, LFE. The enum always
-            // stores indices in meter order L, R, C, LFE, Ls, Rs.
-            presentations.append(.surround51([mono[0], mono[1], mono[2], mono[5], mono[3], mono[4]]))
+        for start in stride(from: 0, to: mono.count - mono.count % 6, by: 6) {
+            let indices = Array(mono[start..<(start + 6)])
+            presentations.append(.surround51(indices))
+            // Alternative file order L, R, C, Ls, Rs, LFE.
+            presentations.append(.surround51([indices[0], indices[1], indices[2], indices[5], indices[3], indices[4]]))
         }
         return presentations
     }
+
 }
 
 struct LoudnessSample: Equatable, Sendable {
     let seconds: Double
     let momentaryLUFS: Double?
     let shortTermLUFS: Double?
+    /// Unweighted levels for each 100 ms window of the selected presentation.
+    var peakDBFS: Double? = nil
+    var rmsDBFS: Double? = nil
 }
 
 struct LoudnessResults: Equatable, Sendable {
@@ -74,18 +94,24 @@ struct LoudnessResults: Equatable, Sendable {
     /// Reduce chart work without discarding momentary/short-term extremes from
     /// any time bucket. The measured final summary remains untouched.
     func graphSamples(maxBuckets: Int = 750) -> [LoudnessSample] {
-        guard samples.count > maxBuckets * 6 else { return samples }
+        guard maxBuckets > 0, samples.count > maxBuckets * 10 else { return samples }
         let bucketSize = (samples.count + maxBuckets - 1) / maxBuckets
         var selected: [LoudnessSample] = []
         for start in stride(from: 0, to: samples.count, by: bucketSize) {
             let end = min(start + bucketSize, samples.count)
             var indices = Set([start, end - 1])
-            for keyPath in [\.momentaryLUFS, \.shortTermLUFS] as [KeyPath<LoudnessSample, Double?>] {
-                let valid = (start..<end).filter { samples[$0][keyPath: keyPath] != nil }
-                if let minimum = valid.min(by: { samples[$0][keyPath: keyPath]! < samples[$1][keyPath: keyPath]! }) {
+            for keyPath in [\.momentaryLUFS, \.shortTermLUFS, \.peakDBFS, \.rmsDBFS] as [KeyPath<LoudnessSample, Double?>] {
+                // Missing readings represent silence or incomplete windows.
+                // Retain a quiet sample too, so decimation does not bridge it.
+                let indicesInBucket = start..<end
+                if let minimum = indicesInBucket.min(by: {
+                    (samples[$0][keyPath: keyPath] ?? -.infinity) < (samples[$1][keyPath: keyPath] ?? -.infinity)
+                }) {
                     indices.insert(minimum)
                 }
-                if let maximum = valid.max(by: { samples[$0][keyPath: keyPath]! < samples[$1][keyPath: keyPath]! }) {
+                if let maximum = indicesInBucket.max(by: {
+                    (samples[$0][keyPath: keyPath] ?? -.infinity) < (samples[$1][keyPath: keyPath] ?? -.infinity)
+                }) {
                     indices.insert(maximum)
                 }
             }
@@ -299,7 +325,7 @@ enum AnalyticsError: Error, LocalizedError {
         case .ffmpegNotFound:
             return "FFmpeg binary not found."
         case .ssimulacra2NotFound:
-            return "ssimulacra2_rs binary not found. Install Rust (curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh), then run: cargo install ssimulacra2_rs --no-default-features"
+            return "The bundled SSIMULACRA2 analysis tool is missing. Reinstall the app to restore it."
         case .sourceFileNotFound:
             return "Source file not found."
         case .encodedFileNotFound:

@@ -15,6 +15,7 @@
 // (at your option) any later version.
 
 import Foundation
+import AVFoundation
 import OSLog
 import SwiftMediaMetadata
 
@@ -86,7 +87,28 @@ enum FFMPEGProbeService {
                     codecName: meta.codec
                 )]
             }
-            return []
+            // WAV, AIFF and other AVFoundation-readable containers still need
+            // track topology even though SwiftMediaMetadata cannot parse them.
+            return try await withSecurityScopedAccess(to: url) {
+                let asset = AVURLAsset(url: url)
+                let tracks = try await asset.loadTracks(withMediaType: .audio)
+                var streams: [AudioStreamInfo] = []
+                for (index, track) in tracks.enumerated() {
+                    try Task.checkCancellation()
+                    let descriptions = try await track.load(.formatDescriptions)
+                    let description = descriptions.first
+                    let channels = description.flatMap { CMAudioFormatDescriptionGetStreamBasicDescription($0) }
+                        .map { Int($0.pointee.mChannelsPerFrame) }
+                    let codec = description.flatMap { description -> String? in
+                        let code = CMFormatDescriptionGetMediaSubType(description)
+                        let bytes = [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: code >> $0) }
+                        return String(bytes: bytes, encoding: .ascii)
+                    }
+                    streams.append(AudioStreamInfo(index: index, channels: channels,
+                                                   channelLayout: nil, codecName: codec))
+                }
+                return streams
+            }
         }
 
         let metadata = try await BoundedVideoMetadataProbe.metadata(for: url, timeout: timeout)

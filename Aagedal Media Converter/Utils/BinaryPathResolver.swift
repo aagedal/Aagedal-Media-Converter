@@ -279,15 +279,15 @@ enum BinaryPathResolver {
     // MARK: - SSIMULACRA2
 
     /// Resolves the path to the ssimulacra2_rs binary.
-    /// Priority: custom path > cargo bin > bundled
+    /// Priority: explicit custom override > bundled helper > legacy external install
     static var ssimulacra2Path: String? {
         if let customPath = resolveCustomSSIMULACRA2Path() {
             return customPath
         }
-        if let cargoPath = resolveCargoSSIMULACRA2Path() {
-            return cargoPath
+        if let bundledPath = resolveBundledSSIMULACRA2Path() {
+            return bundledPath
         }
-        return resolveBundledSSIMULACRA2Path()
+        return resolveCargoSSIMULACRA2Path()
     }
 
     /// Returns whether ssimulacra2_rs is available
@@ -324,7 +324,9 @@ enum BinaryPathResolver {
     }
 
     private static func resolveBundledSSIMULACRA2Path() -> String? {
-        Bundle.main.path(forResource: "ssimulacra2_rs", ofType: nil)
+        guard let path = Bundle.main.path(forResource: "ssimulacra2_rs", ofType: nil),
+              FileManager.default.isExecutableFile(atPath: path) else { return nil }
+        return path
     }
 
     // MARK: - Parakeet-MLX

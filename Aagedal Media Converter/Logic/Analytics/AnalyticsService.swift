@@ -734,7 +734,7 @@ actor LoudnessAnalysisService {
         )
         let collector = LoudnessLogCollector()
         let result = try await runner.run(request) { chunk in
-            if case .standardError = chunk.stream { collector.consume(chunk.data) }
+            if case .standardOutput = chunk.stream { collector.consume(chunk.data) }
         }
         try Task.checkCancellation()
         collector.finish()
@@ -742,6 +742,44 @@ actor LoudnessAnalysisService {
             throw AnalyticsError.parsingFailed(request.redactedDiagnostic(result.standardErrorText, limit: 500))
         }
         return try collector.results(presentation: presentation, summary: result.standardErrorText)
+    }
+
+    /// Run up to two independent programs at once, returning reports in selection
+    /// order while publishing each completed report. Structured cancellation drains
+    /// both active subprocesses before the batch finishes.
+    func analyze(
+        file: URL,
+        presentations: [LoudnessPresentation],
+        onResult: @escaping @Sendable (LoudnessResults) async -> Void = { _ in }
+    ) async throws -> [LoudnessResults] {
+        guard Set(presentations.map(\.id)).count == presentations.count else {
+            throw AnalyticsError.parsingFailed("Select each audio presentation only once")
+        }
+        return try await withThrowingTaskGroup(of: LoudnessResults.self) { group in
+            var nextIndex = 0
+            var measured: [String: LoudnessResults] = [:]
+            func enqueue(_ presentation: LoudnessPresentation) {
+                group.addTask {
+                    try Task.checkCancellation()
+                    return try await self.analyze(file: file, presentation: presentation)
+                }
+            }
+            while nextIndex < min(2, presentations.count) {
+                enqueue(presentations[nextIndex])
+                nextIndex += 1
+            }
+            while let result = try await group.next() {
+                try Task.checkCancellation()
+                measured[result.presentation.id] = result
+                await onResult(result)
+                if nextIndex < presentations.count {
+                    enqueue(presentations[nextIndex])
+                    nextIndex += 1
+                }
+            }
+            try Task.checkCancellation()
+            return presentations.compactMap { measured[$0.id] }
+        }
     }
 
     static func filterGraph(for presentation: LoudnessPresentation) -> String {
@@ -755,7 +793,14 @@ actor LoudnessAnalysisService {
         case .surround51:
             join = "join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,"
         }
-        return "\(inputs)\(join)ebur128=peak=true[metered]"
+        // ebur128 splits audio into 100 ms frames when metadata is enabled.
+        // astats resets for each of those frames, so RMS/peak are window levels,
+        // rather than cumulative peaks over the entire file. Read metadata from
+        // stdout; keep stderr bounded for the separate gated final summary.
+        return "\(inputs)\(join)asetpts=PTS-STARTPTS,"
+            + "ebur128=metadata=1:peak=true:framelog=verbose,"
+            + "astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level+RMS_level,"
+            + "ametadata=print:file=-[metered]"
     }
 }
 
@@ -765,6 +810,8 @@ private final class LoudnessLogCollector: @unchecked Sendable {
     private let lock = NSLock()
     private var pending = ""
     private var samples: [LoudnessSample] = []
+    private var frameSeconds: Double?
+    private var frameValues: [String: Double] = [:]
 
     func consume(_ data: Data) {
         lock.lock()
@@ -781,6 +828,7 @@ private final class LoudnessLogCollector: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         if !pending.isEmpty { parse(pending) }
+        finishFrame()
         pending = ""
     }
 
@@ -806,14 +854,35 @@ private final class LoudnessLogCollector: @unchecked Sendable {
     }
 
     private func parse(_ line: String) {
-        guard let seconds = Self.number(after: "t:", in: line),
-              seconds.isFinite, seconds >= 0 else { return }
-        let momentary = Self.number(after: "M:", in: line)
-        let shortTerm = Self.number(after: "S:", in: line)
+        if line.hasPrefix("frame:") {
+            finishFrame()
+            frameSeconds = Self.number(after: "pts_time:", in: line).flatMap { $0 >= 0 ? $0 : nil }
+            return
+        }
+        guard frameSeconds != nil, line.hasPrefix("lavfi."),
+              let separator = line.firstIndex(of: "=") else { return }
+        let key = String(line[..<separator])
+        // Silence yields -inf for peak/RMS. Preserve it as a missing reading;
+        // only finite values reach chart scales or exported numbers.
+        if let number = Double(line[line.index(after: separator)...]), number.isFinite {
+            frameValues[key] = number
+        }
+    }
+
+    private func finishFrame() {
+        defer {
+            frameSeconds = nil
+            frameValues.removeAll(keepingCapacity: true)
+        }
+        guard let seconds = frameSeconds, !frameValues.isEmpty else { return }
+        let momentary = frameValues["lavfi.r128.M"]
+        let shortTerm = frameValues["lavfi.r128.S"]
         samples.append(LoudnessSample(
             seconds: seconds,
             momentaryLUFS: momentary.flatMap { $0 <= -70 ? nil : $0 },
-            shortTermLUFS: shortTerm.flatMap { $0 <= -70 ? nil : $0 }
+            shortTermLUFS: shortTerm.flatMap { $0 <= -70 ? nil : $0 },
+            peakDBFS: frameValues["lavfi.astats.Overall.Peak_level"],
+            rmsDBFS: frameValues["lavfi.astats.Overall.RMS_level"]
         ))
     }
 

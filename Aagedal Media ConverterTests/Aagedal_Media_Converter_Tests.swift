@@ -16696,3 +16696,59 @@ final class RemoteUploadLeaseTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: target, encoding: .utf8), "preserve me")
     }
 }
+
+
+final class BundledSSIMULACRA2Tests: XCTestCase {
+    func testPackagedHelperAndDependencyNoticesAreAvailable() async throws {
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "ssimulacra2_rs", ofType: nil))
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: path))
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: path), arguments: ["--version"], timeout: .seconds(10)
+        ))
+        XCTAssertTrue(result.succeeded)
+        XCTAssertTrue(result.standardOutputText.contains("ssimulacra2_rs 0.5.2"))
+        let notice = try XCTUnwrap(Bundle.main.url(forResource: "ssimulacra2-LICENSE", withExtension: "txt"))
+        let text = try String(contentsOf: notice, encoding: .utf8)
+        for required in ["BSD 2-Clause License", "Little CMS", "UNICODE LICENSE V3", "Rust 1.89.0 standard library notices"] {
+            XCTAssertTrue(text.contains(required), "Missing bundled notice: \(required)")
+        }
+    }
+
+    func testBundledMetricScoresIdenticalAndDegradedVideos() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let helper = try XCTUnwrap(Bundle.main.path(forResource: "ssimulacra2_rs", ofType: nil))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ssimulacra2-test-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mkv")
+        let encoded = directory.appendingPathComponent("degraded.mp4")
+        for arguments in [
+            ["-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=5:duration=1", "-c:v", "ffv1", source.path],
+            ["-nostdin", "-v", "error", "-i", source.path, "-c:v", "mpeg4", "-q:v", "31", encoded.path]
+        ] {
+            let fixture = try await SubprocessRunner().run(SubprocessRequest(
+                executableURL: URL(fileURLWithPath: ffmpeg), arguments: arguments, timeout: .seconds(30)
+            ))
+            XCTAssertTrue(fixture.succeeded, fixture.standardErrorText)
+        }
+        let service = AnalyticsService(
+            ffmpegPathProvider: { ffmpeg }, ssimulacra2PathProvider: { helper },
+            mediaInfoProvider: StubAnalyticsMediaInfoProvider(duration: 1, resolution: (width: 160, height: 90))
+        )
+        let identical = try await service.runAnalytics(
+            sourceFile: source, encodedFile: source, enabledMetrics: [.ssimulacra2],
+            vmafModel: .vmaf_v0_6_1, ssimulacra2MaxFrames: 2
+        ) { _, _ in }
+        XCTAssertEqual(try XCTUnwrap(identical.first?.overallScore), 100, accuracy: 0.01)
+        let degraded = try await service.runAnalytics(
+            sourceFile: source, encodedFile: encoded, enabledMetrics: [.ssimulacra2],
+            vmafModel: .vmaf_v0_6_1, ssimulacra2MaxFrames: 2
+        ) { _, _ in }
+        let measured = try XCTUnwrap(degraded.first)
+        XCTAssertTrue(measured.overallScore.isFinite)
+        XCTAssertLessThan(measured.overallScore, 95)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(measured.min), measured.overallScore)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(measured.max), measured.overallScore)
+        XCTAssertEqual(measured.metric, .ssimulacra2)
+    }
+}

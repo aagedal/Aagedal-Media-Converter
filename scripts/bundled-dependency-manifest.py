@@ -90,6 +90,13 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "versionArguments": ["version"],
         "versionPattern": r"rclone (v[^\s]+)",
     },
+    "ssimulacra2_rs": {
+        "component": "SSIMULACRA2 Rust image-comparison helper",
+        "license": "BSD-2-Clause AND MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib AND Unicode-3.0",
+        "licenseFile": "Licenses/ssimulacra2-LICENSE.txt",
+        "versionArguments": ["--version"],
+        "versionPattern": r"ssimulacra2_rs ([^\s]+)",
+    },
     "tesseract": {
         "component": "Tesseract OCR",
         "license": "Apache-2.0",
