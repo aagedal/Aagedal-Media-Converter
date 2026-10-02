@@ -265,22 +265,23 @@ xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
 
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     if gh release view "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
-        echo "==> Uploading $RELEASE_ZIP_NAME to existing GitHub release $MARKETING_VERSION"
-        # Publish source material first. A failed binary upload may leave extra
-        # sources, but can never expose a new binary before its sources.
-        gh release upload "$MARKETING_VERSION" "$SOURCE_COMPANION" \
-            --repo "$GITHUB_OWNER/$GITHUB_REPO" --clobber
-        gh release upload "$MARKETING_VERSION" "$RELEASE_ZIP" \
-            --repo "$GITHUB_OWNER/$GITHUB_REPO" --clobber
+        echo "==> Using existing GitHub release $MARKETING_VERSION"
     else
-        echo "==> Creating GitHub release $MARKETING_VERSION"
-        gh release create "$MARKETING_VERSION" "$SOURCE_COMPANION" "$RELEASE_ZIP" --draft \
+        echo "==> Creating draft GitHub release $MARKETING_VERSION"
+        gh release create "$MARKETING_VERSION" --draft \
             --repo "$GITHUB_OWNER/$GITHUB_REPO" \
             --target main \
             --title "$MARKETING_VERSION" \
             --generate-notes
     fi
+    # Upload sources first and stop on any failure before publishing the draft.
+    # curl streams each file and displays transfer progress rather than a spinner.
+    python3 scripts/upload-release-asset.py --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+        --tag "$MARKETING_VERSION" "$SOURCE_COMPANION"
+    python3 scripts/upload-release-asset.py --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+        --tag "$MARKETING_VERSION" "$RELEASE_ZIP"
     # A new (or resumed) draft is made public only after all uploads succeeded.
+    echo "==> Both assets uploaded. Publishing GitHub release $MARKETING_VERSION"
     gh release edit "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" --draft=false
 else
     echo "==> GitHub CLI is unavailable or unauthenticated — skipping upload."
@@ -292,7 +293,7 @@ cp "$APPCAST_CANDIDATE" "$APPCAST"
 
 echo "==> Appended appcast entry. Review and commit:"
 echo "    git diff $APPCAST"
-echo "    git add $APPCAST && git commit -m \"Release $MARKETING_VERSION\" && git push"
+echo "    Commit $APPCAST on a release branch and open a pull request against main."
 
 # -----------------------------------------------------------------------------
 # Update the Homebrew tap cask

@@ -28,6 +28,81 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testEmptyQueueTipsWrapAndRefreshInBothLanguages() throws {
+        for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
+            launchApp(language: language, locale: locale, tipIndex: 15)
+            defer { app.terminate() }
+            let tip = element("queue.empty.tip")
+            XCTAssertTrue(tip.waitForExistence(timeout: 10))
+            app.activate()
+
+            // Exercise wrapping at the main window's minimum width and a
+            // shorter height, rather than checking only the full AX string.
+            let window = app.windows.firstMatch
+            let corner = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 1))
+                .withOffset(CGVector(dx: -2, dy: -2))
+            corner.click(forDuration: 0.1, thenDragTo: corner.withOffset(CGVector(
+                dx: 860 - window.frame.width, dy: 525 - window.frame.height
+            )))
+            XCTAssertGreaterThan(tip.frame.height, 20, "Long tips should occupy several lines")
+            XCTAssertGreaterThanOrEqual(tip.frame.minX, window.frame.minX)
+            XCTAssertLessThanOrEqual(tip.frame.maxX, window.frame.maxX)
+            XCTAssertLessThanOrEqual(tip.frame.maxY, window.frame.maxY)
+            attachWindowScreenshot(named: "Wrapped empty queue tip - \(language)")
+
+            let original = tip.value as? String ?? tip.label
+            tip.click()
+            app.activate()
+            app.typeKey("r", modifierFlags: .control)
+            let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                (tip.value as? String ?? tip.label) != original
+            }, object: tip)
+            XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+            app.terminate()
+        }
+    }
+
+    @MainActor
+    func testNewLanguagesDisplayCameraCardTipAndSettings() throws {
+        executionTimeAllowance = 180
+        let languages = [
+            ("de", "de_DE", "Tipp: Wähle Ablage > Kamerakarte importieren… (⌘⇧I), um auf einer Speicherkarte oder in einem Ordner nach Videoclips zu suchen.", "Allgemein", "Downloads"),
+            ("es", "es_ES", "Consejo: Usa Archivo > Importar tarjeta de cámara… (⌘⇧I) para buscar videoclips en una tarjeta de memoria o carpeta.", "General", "Descargas"),
+            ("fr", "fr_FR", "Astuce : Utilisez Fichier > Importer une carte caméra… (⌘⇧I) pour rechercher des clips vidéo sur une carte mémoire ou dans un dossier.", "Général", "Téléchargements"),
+            ("it", "it_IT", "Suggerimento: Usa File > Importa scheda videocamera… (⌘⇧I) per cercare clip video su una scheda di memoria o in una cartella.", "Generali", "Download"),
+            ("ja", "ja_JP", "ヒント：「ファイル」>「カメラカードを読み込む…」（⌘⇧I）で、メモリカードやフォルダ内の動画クリップを検索できます。", "一般", "ダウンロード"),
+            ("ko", "ko_KR", "팁: 파일 > 카메라 카드 가져오기…(⌘⇧I)를 사용하여 메모리 카드나 폴더에서 동영상 클립을 검색하세요.", "일반", "다운로드"),
+            ("pt-BR", "pt_BR", "Dica: Use Arquivo > Importar cartão de câmera… (⌘⇧I) para procurar clipes de vídeo em um cartão de memória ou pasta.", "Geral", "Downloads"),
+            ("zh-Hans", "zh_CN", "提示：用“文件”>“导入相机存储卡…”（⌘⇧I）可扫描存储卡或文件夹中的视频片段。", "通用", "下载")
+        ]
+        for (language, locale, expectedTip, generalLabel, downloadsLabel) in languages {
+            launchApp(language: language, locale: locale, tipIndex: 33)
+            defer { app.terminate() }
+            let tip = element("queue.empty.tip")
+            XCTAssertTrue(tip.waitForExistence(timeout: 10))
+            XCTAssertEqual(tip.value as? String ?? tip.label, expectedTip, "Camera-card tip in \(language)")
+            app.activate()
+            element("toolbar.settings").click()
+            let settings = element("settings.root")
+            if !settings.waitForExistence(timeout: 3) {
+                app.activate()
+                element("toolbar.settings").click()
+            }
+            XCTAssertTrue(settings.waitForExistence(timeout: 10))
+            for (identifier, expectedLabel) in [("general", generalLabel), ("ytdlp", downloadsLabel)] {
+                let tab = element("settings.tab.\(identifier)")
+                XCTAssertTrue(tab.label == expectedLabel || tab.value as? String == expectedLabel,
+                              "Settings label in \(language): \(expectedLabel)")
+                app.activate()
+                tab.click()
+                XCTAssertTrue(waitForValue(identifier, of: settings, timeout: 5))
+            }
+            attachWindowScreenshot(named: "Localized Downloads settings - \(language)")
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testDamagedScheduleRecoveryInBothLanguages() throws {
         for (language, locale, warningText, cancelTitle) in [
             ("en", "en_US", "Saved download schedules could not be read.", "Cancel"),
@@ -1408,7 +1483,8 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         delayedStitchingLoad: Bool = false,
         missingStitchingSource: Bool = false,
         resetAgentAccess: Bool = false,
-        ytdlpFailure: Bool = false
+        ytdlpFailure: Bool = false,
+        tipIndex: Int? = nil
     ) {
         app = XCUIApplication()
         app.launchArguments += [
@@ -1424,6 +1500,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         ]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        if let tipIndex {
+            app.launchEnvironment["AMC_UI_TEST_TIP_INDEX"] = String(tipIndex)
+        }
         if ytdlpFailure {
             app.launchEnvironment["AMC_UI_TEST_YTDLP_FAILURE"] = "1"
         }

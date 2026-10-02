@@ -152,7 +152,7 @@ struct VideoFileListView: View {
 
     private var isCompactMode: Bool { queueViewMode == "compact" }
 
-    @State private var currentTip: LocalizedStringKey = RandomTips.randomTip()
+    @State private var currentTip: LocalizedStringKey = RandomTips.initialTip()
 
     /// True when any source thinks an external file is being dragged over the
     /// queue area: either the always-on backstop (empty state) or the table's
@@ -174,38 +174,49 @@ struct VideoFileListView: View {
 
             if droppedFiles.isEmpty && encodingGroups.isEmpty {
                 // Empty state with drag and drop instructions
-                VStack {
-                    Image(systemName: "film.stack")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
-                        .padding()
-                        .padding(.top, 36)
-                    Text("Drag and drop video files here")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                    Text("or double-click to import files")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 4)
-                        .padding(.bottom, 24)
+                GeometryReader { geometry in
+                    ScrollView {
+                        VStack {
+                            Image(systemName: "film.stack")
+                                .font(.system(size: 40))
+                                .foregroundColor(.secondary)
+                                .padding()
+                                .padding(.top, 36)
+                            Text("Drag and drop video files here")
+                                .font(.title2)
+                                .foregroundColor(.secondary)
+                            Text("or double-click to import files")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 4)
+                                .padding(.bottom, 24)
 
-                    VStack {
-                        Text(currentTip)
-                            .font(.callout)
-                            .foregroundColor(.secondary.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 40)
-                            .padding(.top, 12)
-                            .padding(.bottom, 30)
-                        Text("Control + R to load a new random tip")
-                            .font(.footnote)
-                            .foregroundColor(.secondary.opacity(0.8))
+                            VStack {
+                                Text(currentTip)
+                                    .font(.callout)
+                                    .foregroundColor(.secondary.opacity(0.8))
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(nil)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("queue.empty.tip")
+                                    .padding(.horizontal, 24)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 30)
+                                Text("Control + R to load a new random tip")
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary.opacity(0.8))
+                            }
+                            // Give the text a concrete width before asking it for its
+                            // full height. An ideal-width proposal can leave a long tip
+                            // as a single truncated line on macOS.
+                            .frame(width: min(500, max(0, geometry.size.width - 48)))
+
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: geometry.size.height)
                     }
-                    .frame(maxWidth: 500)
-
+                    .scrollIndicators(.automatic)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("queue.empty")
                 .accessibilityLabel("Empty conversion queue")
@@ -414,7 +425,7 @@ struct VideoFileListView: View {
                 )
 
                 // Control+R to show a new random tip
-                Button(action: { currentTip = RandomTips.randomTip() }) {
+                Button(action: { currentTip = RandomTips.randomTip(excluding: currentTip) }) {
                     EmptyView()
                 }
                 .keyboardShortcut("r", modifiers: [.control])
@@ -425,7 +436,7 @@ struct VideoFileListView: View {
         .onChange(of: droppedFiles.isEmpty) { wasEmpty, isEmpty in
             // Show a new random tip when the queue becomes empty
             if !wasEmpty && isEmpty {
-                currentTip = RandomTips.randomTip()
+                currentTip = RandomTips.randomTip(excluding: currentTip)
             }
         }
     }
