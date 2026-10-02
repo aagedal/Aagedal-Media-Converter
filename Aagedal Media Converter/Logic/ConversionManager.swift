@@ -2158,6 +2158,7 @@ actor ConversionManager: Sendable {
 
                     if success, let url = outputFileURL {
                         updatedItem.outputURL = url
+                        updatedItem.analyticsSourceRange = AnalyticsSourceRange(start: currentItem.trimStart, end: currentItem.trimEnd)
                         updatedItem.outputFileSizeBytes = capturedSize
                     }
 
@@ -3029,6 +3030,7 @@ actor ConversionManager: Sendable {
             let results = try await analyticsService.runAnalytics(
                 sourceFile: sourceURL,
                 encodedFile: encodedURL,
+                sourceRange: followUp.sourceRange,
                 enabledMetrics: enabledMetrics,
                 vmafModel: vmafModel,
                 ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames,

@@ -9,6 +9,7 @@ struct AnalyticsAttempt: Sendable {
     let operationID: UUID
     let itemID: UUID
     let sourceURL: URL
+    let sourceRange: AnalyticsSourceRange
     let encodedURL: URL
     let durationSeconds: Double
 
@@ -16,6 +17,7 @@ struct AnalyticsAttempt: Sendable {
         operationID = UUID()
         itemID = item.id
         sourceURL = item.url
+        sourceRange = item.analyticsSourceRange ?? AnalyticsSourceRange(start: item.trimStart, end: item.trimEnd)
         self.encodedURL = encodedURL
         durationSeconds = item.durationSeconds
         item.analyticsOperationID = operationID

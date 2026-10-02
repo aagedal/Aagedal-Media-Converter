@@ -2115,6 +2115,12 @@ struct ContentView: View {
             sourceIndex: sourceIndex
         )
         item.outputURL = outputURL
+        if let sourceSettings = record.request.sourceSettings, sourceSettings.indices.contains(sourceIndex) {
+            let settings = sourceSettings[sourceIndex]
+            item.analyticsSourceRange = AnalyticsSourceRange(start: settings.trimStart, end: settings.trimEnd)
+        } else {
+            item.analyticsSourceRange = AnalyticsSourceRange()
+        }
         item.progress = record.progress ?? 0
         item.eta = nil
         item.statusMessage = switch record.state {

@@ -20,22 +20,39 @@ enum AnalyticsExporter {
         settings: AnalyticsAutoExportSettingsSnapshot
     ) {
         guard settings.enabled else { return }
-        let format = settings.format
-
-        let baseName = encodedFileURL.deletingPathExtension().lastPathComponent
-        let exportURL = encodedFileURL.deletingLastPathComponent()
-            .appendingPathComponent("\(baseName)_analytics.\(format.fileExtension)")
-
         do {
-            switch format {
-            case .json:
-                try exportJSON(results: results, to: exportURL)
-            case .pdf:
-                try exportPDF(results: results, to: exportURL)
-            }
+            let exportURL = try autoExport(results: results, encodedFileURL: encodedFileURL, format: settings.format)
             logger.info("Auto-exported analytics to \(exportURL.lastPathComponent, privacy: .public)")
         } catch {
             logger.error("Auto-export failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Exclusive creation also protects against another app process exporting concurrently.
+    @MainActor
+    static func autoExport(results: AnalyticsResults, encodedFileURL: URL, format: AnalyticsExportFormat) throws -> URL {
+        let data: Data
+        switch format {
+        case .json:
+            guard let json = results.toJSON() else {
+                throw AnalyticsError.parsingFailed("Failed to encode results to JSON")
+            }
+            data = json
+        case .pdf:
+            data = pdfData(results: results)
+        }
+        let baseName = encodedFileURL.deletingPathExtension().lastPathComponent + "_analytics"
+        let folder = encodedFileURL.deletingLastPathComponent()
+        var suffix = 0
+        while true {
+            let name = suffix == 0 ? baseName : "\(baseName)_\(suffix)"
+            let url = folder.appendingPathComponent(name).appendingPathExtension(format.fileExtension)
+            do {
+                try data.write(to: url, options: .withoutOverwriting)
+                return url
+            } catch let error as CocoaError where error.code == .fileWriteFileExists {
+                suffix += 1
+            }
         }
     }
 
@@ -50,6 +67,11 @@ enum AnalyticsExporter {
     /// Exports results to a PDF report
     @MainActor
     static func exportPDF(results: AnalyticsResults, to url: URL) throws {
+        try pdfData(results: results).write(to: url, options: .atomic)
+    }
+
+    @MainActor
+    private static func pdfData(results: AnalyticsResults) -> Data {
         let reportView = AnalyticsPDFReportView(results: results)
         let hostingView = NSHostingView(rootView: reportView)
 
@@ -61,8 +83,7 @@ enum AnalyticsExporter {
         let contentHeight = max(fittingSize.height, pageHeight)
         hostingView.frame = CGRect(x: 0, y: 0, width: pageWidth, height: contentHeight)
 
-        let pdfData = hostingView.dataWithPDF(inside: hostingView.bounds)
-        try pdfData.write(to: url)
+        return hostingView.dataWithPDF(inside: hostingView.bounds)
     }
 
     /// Render the same summary and timelines as the analysis sheet on an A4 page.
@@ -208,7 +229,7 @@ private struct AnalyticsPDFReportView: View {
                                 Text("Min")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Text(String(format: "%.1f", min))
+                                Text(min == .infinity ? "∞" : String(format: "%.1f", min))
                                     .font(.body)
                             }
                         }
@@ -218,7 +239,7 @@ private struct AnalyticsPDFReportView: View {
                                 Text("Max")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Text(String(format: "%.1f", max))
+                                Text(max == .infinity ? "∞" : String(format: "%.1f", max))
                                     .font(.body)
                             }
                         }
@@ -227,7 +248,7 @@ private struct AnalyticsPDFReportView: View {
                     if let channels = metric.channelScores, !channels.isEmpty {
                         HStack(spacing: 16) {
                             ForEach(channels.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                                Text("\(key): \(String(format: "%.2f", value)) \(metric.unit)")
+                                Text("\(key): \(value == .infinity ? "∞" : String(format: "%.2f", value)) \(metric.unit)")
                                     .font(.caption)
                             }
                         }

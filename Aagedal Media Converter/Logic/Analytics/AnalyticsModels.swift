@@ -121,6 +121,28 @@ struct LoudnessResults: Equatable, Sendable {
     }
 }
 
+/// The source interval used to produce an output, retained independently of queue edits.
+struct AnalyticsSourceRange: Equatable, Sendable {
+    let start: Double
+    let end: Double?
+
+    init(start: Double? = nil, end: Double? = nil) {
+        self.start = start ?? 0
+        self.end = end
+    }
+
+    var duration: Double? { end.map { $0 - start } }
+    var isValid: Bool {
+        start.isFinite && start >= 0 && (end.map { $0.isFinite && $0 > start } ?? true)
+    }
+
+    var inputArguments: [String] {
+        var arguments = start > 0 ? ["-ss", String(start)] : []
+        if let duration { arguments += ["-t", String(duration)] }
+        return arguments
+    }
+}
+
 /// Available video quality metrics
 enum QualityMetric: String, CaseIterable, Codable, Sendable {
     case vmaf
@@ -196,6 +218,7 @@ struct MetricResult: Codable, Equatable, Sendable {
     let channelScores: [String: Double]?
 
     var formattedScore: String {
+        if overallScore == .infinity { return "∞ \(unit)" }
         switch metric {
         case .psnr, .xpsnr:
             return String(format: "%.2f %@", overallScore, unit)
@@ -263,6 +286,7 @@ struct AnalyticsResults: Codable, Equatable, Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "Infinity", negativeInfinity: "-Infinity", nan: "NaN")
         return try? encoder.encode(self)
     }
 }

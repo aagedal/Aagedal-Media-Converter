@@ -74,6 +74,7 @@ actor AnalyticsService {
     func runAnalytics(
         sourceFile: URL,
         encodedFile: URL,
+        sourceRange: AnalyticsSourceRange = AnalyticsSourceRange(),
         enabledMetrics: [QualityMetric],
         vmafModel: VMAFModel,
         ssimulacra2MaxFrames: Int = AppConstants.defaultSSIMULACRA2MaxFrames,
@@ -81,6 +82,7 @@ actor AnalyticsService {
         progress: @escaping @Sendable (QualityMetric, Double) -> Void
     ) async throws -> [MetricResult] {
         guard !Task.isCancelled else { throw AnalyticsError.cancelled }
+        guard sourceRange.isValid else { throw AnalyticsError.parsingFailed("Invalid source interval for quality analysis") }
 
         for metricTask in metricTasks.values { metricTask.task.cancel() }
         let analysisID = operationID
@@ -125,6 +127,7 @@ actor AnalyticsService {
                         ffmpegPath: ffmpegPath,
                         sourceFile: sourceFile,
                         encodedFile: encodedFile,
+                        sourceRange: sourceRange,
                         vmafModel: vmafModel,
                         ssimulacra2MaxFrames: ssimulacra2MaxFrames
                     ) { metricProgress in
@@ -187,6 +190,7 @@ actor AnalyticsService {
         ffmpegPath: String,
         sourceFile: URL,
         encodedFile: URL,
+        sourceRange: AnalyticsSourceRange,
         vmafModel: VMAFModel,
         ssimulacra2MaxFrames: Int,
         progress: @escaping @Sendable (Double) -> Void
@@ -199,6 +203,7 @@ actor AnalyticsService {
                 ffmpegPath: ffmpegPath,
                 sourceFile: sourceFile,
                 encodedFile: encodedFile,
+                sourceRange: sourceRange,
                 maxFrames: ssimulacra2MaxFrames,
                 progress: progress
             )
@@ -216,18 +221,21 @@ actor AnalyticsService {
             arguments = buildVMAFArguments(
                 encodedFile: encodedFile,
                 sourceFile: sourceFile,
+                sourceRange: sourceRange,
                 model: vmafModel,
                 logPath: logFile
             )
         case .psnr:
             arguments = buildPSNRArguments(
                 encodedFile: encodedFile,
-                sourceFile: sourceFile
+                sourceFile: sourceFile,
+                sourceRange: sourceRange
             )
         case .xpsnr:
             arguments = buildXPSNRArguments(
                 encodedFile: encodedFile,
-                sourceFile: sourceFile
+                sourceFile: sourceFile,
+                sourceRange: sourceRange
             )
         case .ssimulacra2:
             throw AnalyticsError.metricFailed(.ssimulacra2, "SSIMULACRA2 uses a dedicated binary and should not reach the FFmpeg path")
@@ -321,48 +329,53 @@ actor AnalyticsService {
     private func buildVMAFArguments(
         encodedFile: URL,
         sourceFile: URL,
+        sourceRange: AnalyticsSourceRange,
         model: VMAFModel,
         logPath: URL
     ) -> [String] {
         let escapedLogPath = logPath.path.replacingOccurrences(of: ":", with: "\\:")
         let vmafOpts = "libvmaf=model=version=\(model.rawValue):log_path=\(escapedLogPath):log_fmt=json"
         // scale2ref scales source (input 1) to match encoded (input 0) dimensions
-        let filter = "[1:v][0:v]scale2ref=flags=bicubic[ref][dist];[dist][ref]\(vmafOpts)"
+        let filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]\(vmafOpts):shortest=1"
         return [
-            "-i", encodedFile.path,
+            "-i", encodedFile.path
+        ] + sourceRange.inputArguments + [
             "-i", sourceFile.path,
             "-filter_complex", filter,
-            "-f", "null",
+            "-an", "-f", "null",
             "-"
         ]
     }
 
     private func buildPSNRArguments(
         encodedFile: URL,
-        sourceFile: URL
+        sourceFile: URL,
+        sourceRange: AnalyticsSourceRange
     ) -> [String] {
-        let filter = "[1:v][0:v]scale2ref=flags=bicubic[ref][dist];[dist][ref]psnr"
+        let filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]psnr=shortest=1"
         return [
-            "-i", encodedFile.path,
+            "-i", encodedFile.path
+        ] + sourceRange.inputArguments + [
             "-i", sourceFile.path,
             "-filter_complex", filter,
-            "-f", "null",
+            "-an", "-f", "null",
             "-"
         ]
     }
 
     private func buildXPSNRArguments(
         encodedFile: URL,
-        sourceFile: URL
+        sourceFile: URL,
+        sourceRange: AnalyticsSourceRange
     ) -> [String] {
         // XPSNR expects reference first, distorted second
         // scale2ref scales source (input 0) to match encoded (input 1) dimensions
-        let filter = "[0:v][1:v]scale2ref=flags=bicubic[ref][dist];[ref][dist]xpsnr"
-        return [
+        let filter = "[0:v]setpts=PTS-STARTPTS[src];[1:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[ref][dist]xpsnr=shortest=1"
+        return sourceRange.inputArguments + [
             "-i", sourceFile.path,
             "-i", encodedFile.path,
             "-lavfi", filter,
-            "-f", "null",
+            "-an", "-f", "null",
             "-"
         ]
     }
@@ -374,6 +387,7 @@ actor AnalyticsService {
         ffmpegPath: String,
         sourceFile: URL,
         encodedFile: URL,
+        sourceRange: AnalyticsSourceRange,
         maxFrames: Int,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
@@ -381,7 +395,8 @@ actor AnalyticsService {
             throw AnalyticsError.ssimulacra2NotFound
         }
 
-        let duration = try await getVideoDuration(for: encodedFile)
+        let encodedDuration = try await getVideoDuration(for: encodedFile)
+        let duration = min(encodedDuration, sourceRange.duration ?? encodedDuration)
         let resolution = try await getVideoResolution(for: sourceFile)
 
         let frameCount = max(1, maxFrames > 0 ? maxFrames : AppConstants.defaultSSIMULACRA2MaxFrames)
@@ -405,7 +420,7 @@ actor AnalyticsService {
             let encodedFrame = tempDir.appendingPathComponent("encoded_\(String(format: "%04d", i)).png")
 
             // Extract frames from both videos
-            try await extractFrame(ffmpegPath: ffmpegPath, input: sourceFile, timestamp: timestamp, output: sourceFrame, scaleFilter: nil)
+            try await extractFrame(ffmpegPath: ffmpegPath, input: sourceFile, timestamp: timestamp + sourceRange.start, output: sourceFrame, scaleFilter: nil)
             try await extractFrame(ffmpegPath: ffmpegPath, input: encodedFile, timestamp: timestamp, output: encodedFrame, scaleFilter: "scale=\(resolution.width):\(resolution.height)")
 
             // Compare with ssimulacra2_rs
@@ -623,7 +638,7 @@ actor AnalyticsService {
 
     private func parsePSNRResults(from stderrOutput: String) throws -> MetricResult {
         // Parse: [Parsed_psnr_0 @ ...] PSNR y:38.12 u:42.34 v:43.56 average:39.01 min:25.67 max:48.90
-        let pattern = #"PSNR\s+y:([\d.]+)\s+u:([\d.]+)\s+v:([\d.]+)\s+average:([\d.]+)\s+min:([\d.]+)\s+max:([\d.]+)"#
+        let pattern = #"PSNR\s+y:([\d.]+|inf)\s+u:([\d.]+|inf)\s+v:([\d.]+|inf)\s+average:([\d.]+|inf)\s+min:([\d.]+|inf)\s+max:([\d.]+|inf)"#
 
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: stderrOutput, range: NSRange(stderrOutput.startIndex..., in: stderrOutput)) else {
@@ -656,7 +671,7 @@ actor AnalyticsService {
 
     private func parseXPSNRResults(from stderrOutput: String) throws -> MetricResult {
         // Parse: [Parsed_xpsnr_1 @ 0x...] XPSNR  y: 35.0515  u: 49.0707  v: 50.7158  (minimum: 35.0515)
-        let pattern = #"XPSNR\s+y:\s*([\d.]+)\s+u:\s*([\d.]+)\s+v:\s*([\d.]+)\s+\(minimum:\s*([\d.]+)\)"#
+        let pattern = #"XPSNR\s+y:\s*([\d.]+|inf)\s+u:\s*([\d.]+|inf)\s+v:\s*([\d.]+|inf)\s+\(minimum:\s*([\d.]+|inf)\)"#
 
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: stderrOutput, range: NSRange(stderrOutput.startIndex..., in: stderrOutput)) else {

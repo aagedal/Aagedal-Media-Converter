@@ -9,6 +9,7 @@ import Foundation
 struct ConversionFollowUp: Sendable {
     let itemID: UUID
     let sourceURL: URL
+    let sourceRange: AnalyticsSourceRange
     let outputURL: URL?
     let ownership: ConversionCallbackOwnership
     // The retained conversion token also identifies its subtitle service run,
@@ -19,6 +20,7 @@ struct ConversionFollowUp: Sendable {
     init(item: VideoItem, ownership: ConversionCallbackOwnership) {
         itemID = item.id
         sourceURL = item.url
+        sourceRange = item.analyticsSourceRange ?? AnalyticsSourceRange(start: item.trimStart, end: item.trimEnd)
         outputURL = item.outputURL
         self.ownership = ownership
     }
