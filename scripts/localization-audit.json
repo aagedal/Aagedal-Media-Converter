@@ -1,5 +1,15 @@
 {
   "locale": "nb",
+  "additionalLocales": [
+    "de",
+    "es",
+    "fr",
+    "it",
+    "ja",
+    "ko",
+    "pt-BR",
+    "zh-Hans"
+  ],
   "classifications": {
     "intentional-format-token": [
       "",
@@ -14,8 +24,6 @@
       "5 (00001, 00002)",
       "6 (000001, 000002)",
       "brew install rclone",
-      "PRESET_IMF_J2K_DESCRIPTION",
-      "PRESET_IMF_PRORES_DESCRIPTION",
       "yyyyMMdd",
       "LUFS",
       "−20",
@@ -189,7 +197,9 @@
       "When enabled, the signed helper accepts requests from local MCP clients and sends them to this app. The app remains the owner of every accepted conversion.",
       "Window",
       "Zoom",
-      "Zoom the timeline (⌘+ / ⌘−)"
+      "Zoom the timeline (⌘+ / ⌘−)",
+      "PRESET_IMF_J2K_DESCRIPTION",
+      "PRESET_IMF_PRORES_DESCRIPTION"
     ],
     "translated-app-intent": [
       "Animated Still",
@@ -253,7 +263,5 @@
       "Remux the selected videos with the Stream Copy preset (no re-encoding), saving alongside the source files and starting conversion immediately."
     ]
   },
-  "placeholderExceptions": {
-    "%lld track%@": "Norwegian uses the invariant noun ‘spor’, so the English plural suffix argument is intentionally omitted."
-  }
+  "placeholderExceptions": {}
 }

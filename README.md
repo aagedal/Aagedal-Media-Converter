@@ -258,6 +258,8 @@ Preview a sequence alongside the clip list, with thumbnails, audio waveforms, tr
 
 ## Usage
 
+The app interface supports English, Norwegian Bokmål, German, Spanish, French, Italian, Japanese, Korean, Brazilian Portuguese, and Simplified Chinese. It follows the preferred app language set in macOS System Settings. The eight newly added translations are a first pass; strings awaiting language review are marked **Needs Review** in `Aagedal Media Converter/Resources/Localizable.xcstrings`.
+
 1. Launch the app.
 2. Drag video files onto the window **or** click the plus button to import files.
 3. Select an **Export Preset** from the toolbar menu.

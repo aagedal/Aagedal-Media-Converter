@@ -437,7 +437,7 @@ struct AudioRoutingView: View {
 
                 Spacer()
 
-                Text("\(config.outputTracks.count) track\(config.outputTracks.count == 1 ? "" : "s")")
+                Text("\(config.outputTracks.count) tracks")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
