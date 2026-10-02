@@ -935,6 +935,23 @@
       ]
     },
     {
+      "path": "Aagedal Media Converter/Binaries/ssimulacra2_rs",
+      "bytes": 2547920,
+      "sha256": "e0bfdd1d9218429ac838d646498696f8994b93a523a3faeb31f4adea1301b10d",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libiconv.2.dylib"
+      ],
+      "component": "SSIMULACRA2 Rust image-comparison helper",
+      "version": "0.5.2",
+      "license": "BSD-2-Clause AND MIT AND Apache-2.0 AND BSD-3-Clause AND Zlib AND Unicode-3.0",
+      "licenseFile": "Licenses/ssimulacra2-LICENSE.txt"
+    },
+    {
       "path": "Aagedal Media Converter/Binaries/tesseract",
       "bytes": 4751952,
       "sha256": "dc8106187b0078c3413b0b338e11af1d819e86b082819e0d58622d1f5beefd95",
@@ -1009,6 +1026,11 @@
       "sha256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe"
     },
     {
+      "path": "Licenses/ssimulacra2-LICENSE.txt",
+      "bytes": 1289206,
+      "sha256": "8833358613522b52e2ee6ad71f9c00900d1a79bd3d8e87246fcd098da3a874c8"
+    },
+    {
       "path": "Licenses/swiftmediametadata-LICENSE.txt",
       "bytes": 35149,
       "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
@@ -1020,9 +1042,9 @@
     }
   ],
   "summary": {
-    "toolCount": 10,
+    "toolCount": 11,
     "libraryCount": 0,
-    "totalBytes": 137003824,
+    "totalBytes": 139551744,
     "entriesMissingLocalLicenseFile": []
   }
 }
