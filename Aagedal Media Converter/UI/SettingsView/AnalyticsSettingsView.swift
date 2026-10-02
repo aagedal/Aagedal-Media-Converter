@@ -5,6 +5,8 @@
 import SwiftUI
 
 struct AnalyticsSettingsView: View {
+    var showsAutomation = true
+
     @AppStorage(AppConstants.analyticsVMAFModelKey) private var vmafModel = AppConstants.defaultAnalyticsVMAFModel
     @AppStorage(AppConstants.analyticsAutoRunKey) private var autoRunAfterConversion = false
     @AppStorage(AppConstants.analyticsAutoExportKey) private var autoExport = false
@@ -19,7 +21,7 @@ struct AnalyticsSettingsView: View {
 
     var body: some View {
         Form {
-            automationSection
+            if showsAutomation { automationSection }
             metricsSection
             vmafSettingsSection
         }
@@ -82,6 +84,7 @@ struct AnalyticsSettingsView: View {
                 Text(metric.displayName)
             }
             .toggleStyle(SwitchToggleStyle())
+            .accessibilityIdentifier("analysis.metric.\(metric.rawValue)")
 
             Text(LocalizedStringKey(aboutText(for: metric)))
                 .font(.caption)
@@ -107,48 +110,20 @@ struct AnalyticsSettingsView: View {
 
     private var ssimulacra2InlineSettings: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Installation status
-            HStack {
-                Text("ssimulacra2_rs")
-                    .font(.caption)
-                Spacer()
-                if BinaryPathResolver.isSSIMULACRA2Available {
-                    Label("Available", systemImage: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.caption)
-                } else {
-                    Label("Not Found", systemImage: "xmark.circle.fill")
-                        .foregroundColor(.red)
-                        .font(.caption)
-                }
-            }
+            Text("Included with the app. No additional installation is needed.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-            // Installation instructions
             if !BinaryPathResolver.isSSIMULACRA2Available {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("SSIMULACRA2 is an external tool that is not bundled with the app. It compares individual frames between the source and encoded video to produce a perceptual quality score. Install it via the Rust toolchain:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("1. Install Rust:")
-                            .font(.caption).bold()
-                            .foregroundColor(.secondary)
-                        CopyableCommandRow(command: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh")
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("2. Install ssimulacra2_rs:")
-                            .font(.caption).bold()
-                            .foregroundColor(.secondary)
-                        CopyableCommandRow(command: "cargo install ssimulacra2_rs --no-default-features")
-                    }
-                }
+                Label("The bundled analysis tool is missing. Reinstall the app to restore it.", systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
 
             // Frame sampling
             Stepper("Max Frames: \(ssimulacra2MaxFrames)", value: $ssimulacra2MaxFrames, in: 5...500, step: 5)
                 .font(.caption)
+                .accessibilityIdentifier("analysis.ssimulacra2.frames")
 
             Text("Number of frames sampled evenly across the video for comparison. More frames gives higher accuracy but takes longer.")
                 .font(.caption)
@@ -169,6 +144,8 @@ struct AnalyticsSettingsView: View {
                 }
             }
 
+            .accessibilityIdentifier("analysis.vmaf.model")
+
             if let model = VMAFModel(rawValue: vmafModel) {
                 Text(LocalizedStringKey(model.description))
                     .font(.caption)
@@ -188,7 +165,7 @@ struct AnalyticsSettingsView: View {
         case .xpsnr:
             return "Extended PSNR by Fraunhofer HHI. Perceptually weighted PSNR metric measured in dB. Values above 42 dB are considered visually lossless."
         case .ssimulacra2:
-            return "Perceptual quality metric by Cloudflare. Measures structural similarity on a 0-100 scale. Scores above 70 indicate good quality. Requires the external ssimulacra2_rs binary."
+            return "Perceptual quality metric by Cloudflare. Measures structural similarity on a 0-100 scale. Scores above 70 indicate good quality. Included with the app."
         }
     }
 

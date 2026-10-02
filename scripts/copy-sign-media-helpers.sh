@@ -11,7 +11,7 @@ staging_dir="$DERIVED_FILE_DIR/SignedMediaHelpers"
 mkdir -p "$resource_dir"
 mkdir -p "$staging_dir"
 
-for helper in ffmpeg rclone tesseract asdcp-wrap bmxparse raw2bmx bmxtranswrap avmenc avmdec mxf2raw; do
+for helper in ffmpeg rclone tesseract asdcp-wrap bmxparse raw2bmx bmxtranswrap avmenc avmdec mxf2raw ssimulacra2_rs; do
     source_path="$SRCROOT/Aagedal Media Converter/Binaries/$helper"
     staging_path="$staging_dir/$helper"
     output_path="$resource_dir/$helper"

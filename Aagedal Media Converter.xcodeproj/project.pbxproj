@@ -317,6 +317,7 @@
 		VDISPMENU0001000BUILD /* VirtualDisplayMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMENU0001000FREF1 /* VirtualDisplayMenu.swift */; };
 		VDISPMGR00001000BUILD /* VirtualDisplayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */; };
 		VIDITEMIDX00000001 /* VideoItemIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIDITEMIDX00000002 /* VideoItemIndex.swift */; };
+		A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -706,6 +707,8 @@
 		VDISPMENU0001000FREF1 /* VirtualDisplayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayMenu.swift; sourceTree = "<group>"; };
 		VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayManager.swift; sourceTree = "<group>"; };
 		VIDITEMIDX00000002 /* VideoItemIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItemIndex.swift; sourceTree = "<group>"; };
+		A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "ssimulacra2-LICENSE.txt"; sourceTree = "<group>"; };
+		A906AA120000000000000202 /* ssimulacra2_rs */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ssimulacra2_rs; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -815,6 +818,7 @@
 				A90606000000000000000203 /* mpv-LICENSE.txt */,
 				A90606000000000000000202 /* bmx-LICENSE.txt */,
 				8E0C32CE2E09F5E400F22B21 /* ffmpeg-LICENSE.txt */,
+				A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */,
 			);
 			path = Licenses;
 			sourceTree = "<group>";
@@ -823,6 +827,7 @@
 			isa = PBXGroup;
 			children = (
 				8EFBDA8F2EA56F8E005ADDCF /* ffmpeg */,
+				A906AA120000000000000202 /* ssimulacra2_rs */,
 				8488177BC5403EC6637A5C25 /* bmxtranswrap */,
 				AF20AF20AF20AF20AF20AF20 /* avmenc */,
 				AF24AF24AF24AF24AF24AF24 /* avmdec */,
@@ -1567,6 +1572,7 @@
 				A90606000000000000000103 /* mpv-LICENSE.txt in Resources */,
 				A90606000000000000000102 /* bmx-LICENSE.txt in Resources */,
 				A90606000000000000000101 /* ffmpeg-LICENSE.txt in Resources */,
+				A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */,
 				A90606000000000000000100 /* LICENSE in Resources */,
 				8EE6EEA02C31FC6F007B629D /* Assets.xcassets in Resources */,
 			);
@@ -1607,6 +1613,7 @@
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/avmenc",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/avmdec",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/mxf2raw",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/ssimulacra2_rs",
 			);
 			name = "Copy and Sign Media Helpers";
 			outputPaths = (
@@ -1621,6 +1628,7 @@
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/avmenc",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/avmdec",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/mxf2raw",
+				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ssimulacra2_rs",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ffmpeg.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/rclone.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/tesseract.cstemp",
@@ -1631,6 +1639,7 @@
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/avmenc.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/avmdec.cstemp",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/mxf2raw.cstemp",
+				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ssimulacra2_rs.cstemp",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/ffmpeg",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/rclone",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/tesseract",
@@ -1641,6 +1650,7 @@
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/avmenc",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/avmdec",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/mxf2raw",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/ssimulacra2_rs",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/bash;

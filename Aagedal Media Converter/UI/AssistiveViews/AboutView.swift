@@ -93,7 +93,8 @@ private struct BundledLicensesView: View {
         ("GeoNames", "geonames-LICENSE.txt"),
         ("AVM", "avm-LICENSE.txt"),
         ("rclone", "rclone-LICENSE.txt"),
-        ("MPVKit", "mpvkit-LICENSE.txt")
+        ("MPVKit", "mpvkit-LICENSE.txt"),
+        ("SSIMULACRA2", "ssimulacra2-LICENSE.txt")
     ]
 
     private var noticeText: String? {

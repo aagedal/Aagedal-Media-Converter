@@ -16,7 +16,7 @@ struct ToolDiagnosticsSettingsView: View {
             Section {
                 Text("Check the active bundled, Homebrew, or custom tools selected in Settings. Each version check has a five-second limit.")
                     .foregroundStyle(.secondary)
-                Text("The bundled FFmpeg is sufficient for standard conversions. Optional tools are only needed for their related features; select or install them in Downloads, Upload, Transcription, OCR, or Analytics settings.")
+                Text("FFmpeg and SSIMULACRA2 are included with the app. Other tools are only needed for their related features; select or install them in Downloads, Upload, Transcription, or OCR settings.")
                     .foregroundStyle(.secondary)
                 Button(checking ? "Checking Tools…" : "Check Tools") {
                     checking = true
@@ -92,7 +92,6 @@ struct ToolDiagnosticsSettingsView: View {
         let key: String
         switch result.id {
         case "parakeet": key = AppConstants.parakeetCustomPathKey
-        case "ssimulacra2": key = AppConstants.ssimulacra2CustomPathKey
         default: return false
         }
         return (UserDefaults.standard.string(forKey: key) ?? "").isEmpty
@@ -110,11 +109,7 @@ struct ToolDiagnosticsSettingsView: View {
                 Text("In Transcription settings, select Parakeet. If it is installed elsewhere, use Custom path to select parakeet-mlx. Download a model before transcribing.")
                 Button("Open Transcription Settings") { openSettings("whisper") }
             case "ssimulacra2":
-                Text("SSIMULACRA2 is optional and only needed for its quality metric. Install Rust using the linked instructions, then run this command in Terminal:")
-                Link("Install Rust", destination: URL(string: "https://www.rust-lang.org/tools/install")!)
-                CopyableCommandRow(command: "cargo install ssimulacra2_rs --no-default-features")
-                Link("SSIMULACRA2 installation instructions", destination: URL(string: "https://github.com/rust-av/ssimulacra2")!)
-                Text("The app looks for ssimulacra2_rs in ~/.cargo/bin, /opt/homebrew/bin, and /usr/local/bin. Standard conversions do not require this tool.")
+                Text("SSIMULACRA2 is included with the app. If the bundled tool is missing or cannot run, reinstall the app. If a custom executable path is configured, check that executable first.")
                 Button("Open Analytics Settings") { openSettings("analytics") }
             case "parakeet-model":
                 Text("Only Parakeet transcription needs this model. In Transcription settings, select Parakeet, install its tool if needed, then download the selected model or choose an available model.")

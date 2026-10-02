@@ -68,7 +68,7 @@ extension VideoFileCellView {
         }
 
         // --- Analytics button (cyan) ---
-        let showAnalytics = config.hasVideoStream
+        let showAnalytics = !config.isImageSequence
         analyticsButton.isHidden = !showAnalytics
         let isAnalyzing = config.analyticsStatus.isInProgress
         if showAnalytics {
@@ -77,30 +77,24 @@ extension VideoFileCellView {
             if config.hasAnalyticsResults {
                 analyticsIcon = "chart.bar.xaxis.ascending"
                 analyticsColor = .systemGreen
-                analyticsButton.toolTip = "View quality analytics results. ⌥-click to rerun."
+                analyticsButton.toolTip = "Open audio and video analysis"
             } else if isAnalyzing {
                 analyticsIcon = "chart.bar.xaxis.ascending"
                 analyticsColor = .systemCyan
-                analyticsButton.toolTip = "Analytics in progress"
+                analyticsButton.toolTip = "Open audio and video analysis"
             } else if config.analyticsEnabled {
                 analyticsIcon = "chart.bar.xaxis.ascending"
                 analyticsColor = .systemCyan
-                analyticsButton.toolTip = "Quality analytics will run after encoding"
+                analyticsButton.toolTip = "Open audio and video analysis"
             } else {
                 analyticsIcon = "chart.bar.xaxis"
                 analyticsColor = .secondaryLabelColor
-                analyticsButton.toolTip = "Enable quality analytics (VMAF/PSNR/SSIMULACRA2)"
+                analyticsButton.toolTip = "Open audio and video analysis"
             }
             analyticsButton.image = VideoFileCellView.Symbol.named(analyticsIcon)
             analyticsButton.contentTintColor = analyticsColor
         }
         applyProcessingRing(to: analyticsButton, active: isAnalyzing, color: .systemCyan)
-
-        // Metadata probes can still be pending when the row is rendered. Let the
-        // analysis sheet probe rather than hiding this action prematurely.
-        loudnessButton.isHidden = config.isImageSequence
-        loudnessButton.contentTintColor = .secondaryLabelColor
-        loudnessButton.toolTip = "Analyze program loudness (LUFS) for this file"
 
         // --- Upload button (blue) ---
         uploadButton.isHidden = false

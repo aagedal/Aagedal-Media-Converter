@@ -114,7 +114,6 @@ struct VideoFileListView: View {
     @State private var sortOverlayDismissTask: DispatchWorkItem?
     /// Item whose analytics results should be presented, nil = sheet dismissed
     @State private var analyticsResultsItemID: UUID?
-    @State private var loudnessItemID: UUID?
     /// Group ID of the most recently created group (via Cmd+N or menu). Drives the
     /// "New group created" toast and its "Scroll to show" button.
     @State private var lastCreatedGroupID: UUID?
@@ -245,9 +244,6 @@ struct VideoFileListView: View {
                     onOpenAnalyticsResults: { itemID in
                         analyticsResultsItemID = itemID
                     },
-                    onOpenLoudnessAnalysis: { itemID in
-                        loudnessItemID = itemID
-                    },
                     onToggleDateTag: onToggleDateTag,
                     onPlayFullscreen: onPlayFullscreen,
                     onRenameOutputFileName: onRenameOutputFileName,
@@ -370,18 +366,6 @@ struct VideoFileListView: View {
             set: { if !$0 { analyticsResultsItemID = nil } }
         )) {
             analyticsResultsSheetContent
-        }
-        .sheet(isPresented: Binding(
-            get: { loudnessItemID != nil },
-            set: { if !$0 { loudnessItemID = nil } }
-        )) {
-            if let itemID = loudnessItemID,
-               let item = droppedFiles.first(where: { $0.id == itemID }) {
-                LoudnessAnalysisView(
-                    sourceFile: item.url,
-                    outputFile: item.outputFileExists ? item.outputURL : nil
-                )
-            }
         }
         .sheet(item: $pendingTrackPicker) { picker in
             TrackPickerSheet(
@@ -1558,13 +1542,28 @@ struct VideoFileListView: View {
     @ViewBuilder
     private var analyticsResultsSheetContent: some View {
         if let itemID = analyticsResultsItemID,
-           let item = droppedFiles.first(where: { $0.id == itemID }),
-           let results = item.analyticsResults {
-            AnalyticsResultsView(results: results) { metrics in
-                Task { @MainActor in
-                    await analyzeMetrics(itemID: itemID, metrics: metrics)
+           let item = droppedFiles.first(where: { $0.id == itemID }) {
+            MediaAnalysisView(item: Binding(
+                get: { droppedFiles.first(where: { $0.id == itemID }) ?? item },
+                set: { updated in
+                    if let index = droppedFiles.firstIndex(where: { $0.id == itemID }) {
+                        droppedFiles[index] = updated
+                    }
                 }
-            }
+            ), onRunVideo: { metrics in
+                Task { @MainActor in
+                    await runManualAnalytics(itemID: itemID, requestedMetrics: metrics)
+                }
+            }, onCancelVideo: {
+                guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }) else { return }
+                let operationID = droppedFiles[index].analyticsOperationID
+                droppedFiles[index].analyticsOperationID = nil
+                droppedFiles[index].analyticsStatus = droppedFiles[index].analyticsResults == nil ? .notQueued : .completed
+                droppedFiles[index].analyticsProgress = 0
+                if let operationID {
+                    Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                }
+            })
         }
     }
 

@@ -1082,6 +1082,71 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testBundledSSIMULACRA2RunsFromAnalysisOverlay() throws {
+        launchApp(generatedFixture: true, additionalArguments: [
+            "-analyticsEnabledMetrics", "(ssimulacra2)", "-ssimulacra2MaxFrames", "5"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        element("toolbar.conversion").click()
+        XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        element("queue.analysis").click()
+        XCTAssertTrue(element("analysis.ssimulacra2.frames").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Not installed"].exists)
+        XCTAssertTrue(element("analysis.video.run").isEnabled)
+        element("analysis.video.run").click()
+        XCTAssertTrue(element("analysis.result.ssimulacra2").waitForExistence(timeout: 45),
+                      "The signed bundled helper must run in the sandbox without any user installation")
+        attachWindowScreenshot(named: "Bundled SSIMULACRA2 - completed analysis")
+    }
+
+    @MainActor
+    func testUnifiedAnalysisPreservesAudioReportAcrossTabsAndEnablesVideoAfterEncoding() throws {
+        launchApp(generatedFixture: true)
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        XCTAssertTrue(element("analysis.tabs").waitForExistence(timeout: 5))
+        for metric in ["vmaf", "psnr", "xpsnr", "ssimulacra2"] {
+            XCTAssertTrue(element("analysis.metric.\(metric)").exists)
+        }
+        XCTAssertTrue(element("analysis.vmaf.model").exists)
+        XCTAssertFalse(element("analysis.video.run").isEnabled)
+        attachWindowScreenshot(named: "Unified analysis - video settings")
+        app.radioButtons["Audio"].click()
+        let audioRun = element("analysis.audio.run")
+        XCTAssertTrue(audioRun.waitForExistence(timeout: 15))
+        XCTAssertTrue(element("analysis.audio.kind.1").exists)
+        XCTAssertTrue(element("analysis.audio.track.1.0").exists)
+        element("analysis.audio.add").click()
+        XCTAssertTrue(element("analysis.audio.kind.2").waitForExistence(timeout: 5))
+        // The fixture has one audio stream. Adding it twice must be flagged.
+        XCTAssertFalse(audioRun.isEnabled)
+        element("analysis.audio.remove.2").click()
+        XCTAssertFalse(element("analysis.audio.kind.2").exists)
+        XCTAssertTrue(audioRun.isEnabled)
+        attachWindowScreenshot(named: "Audio analysis - editable card")
+        audioRun.click()
+        XCTAssertTrue(element("analysis.audio.report").waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["Export PDF"].exists)
+        attachWindowScreenshot(named: "Unified analysis - audio report")
+        app.radioButtons["Video"].click()
+        XCTAssertTrue(element("analysis.video.run").exists)
+        app.radioButtons["Audio"].click()
+        XCTAssertTrue(element("analysis.audio.report").exists, "Switching tabs must preserve completed loudness reports")
+        app.sheets.firstMatch.buttons["Close"].click()
+        element("toolbar.conversion").click()
+        XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        element("queue.analysis").click()
+        let videoRun = element("analysis.video.run")
+        XCTAssertTrue(videoRun.waitForExistence(timeout: 5))
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: videoRun)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
+        attachWindowScreenshot(named: "Unified analysis - ready after encoding")
+    }
+
+    @MainActor
     func testImportsGeneratedFixtureAndSelectsPreset() throws {
         launchApp(generatedFixture: true)
         defer { terminateAndCleanFixtures() }
