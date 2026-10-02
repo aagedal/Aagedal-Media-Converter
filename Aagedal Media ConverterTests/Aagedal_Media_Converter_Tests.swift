@@ -4482,8 +4482,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             "-nostdin",
             "-i", fixture.encoded.path,
             "-i", fixture.source.path,
-            "-filter_complex", "[1:v][0:v]scale2ref=flags=bicubic[ref][dist];[dist][ref]psnr",
-            "-f", "null", "-"
+            "-filter_complex", "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]psnr=shortest=1",
+            "-an", "-f", "null", "-"
         ])
         XCTAssertEqual(request.timeout, .seconds(12 * 60 * 60))
         XCTAssertEqual(request.standardOutputCaptureLimit, 0)

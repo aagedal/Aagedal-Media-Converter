@@ -70,6 +70,102 @@ final class AnalyticsAttemptTests: XCTestCase {
         XCTAssertEqual(results.first?.overallScore, 39.01)
     }
 
+    func testManualAnalysisRetainsCompletedOutputRangeAfterQueueEdits() {
+        var item = makeItem()
+        item.analyticsSourceRange = AnalyticsSourceRange(start: 2, end: 4)
+        item.trimStart = 7
+        item.trimEnd = 9
+        let output = item.outputURL!
+        let attempt = AnalyticsAttempt(item: &item, encodedURL: output)
+        let followUp = ConversionFollowUp(item: item, ownership: ConversionCallbackOwnership())
+        XCTAssertEqual(attempt.sourceRange, AnalyticsSourceRange(start: 2, end: 4))
+        XCTAssertEqual(followUp.sourceRange, attempt.sourceRange)
+        item.outputURL = URL(fileURLWithPath: "/fixture/replaced.mp4")
+        XCTAssertNil(item.analyticsSourceRange)
+        item.analyticsSourceRange = attempt.sourceRange
+        item.resetConversionState()
+        XCTAssertNil(item.analyticsSourceRange)
+    }
+
+    @MainActor
+    func testAutomaticReportsPreserveExistingFilesAndNumberRepeatedExports() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("output.mp4")
+        let metric = MetricResult(metric: .psnr, overallScore: .infinity, min: .infinity,
+                                  max: .infinity, unit: "dB", channelScores: ["Y": .infinity])
+        let results = AnalyticsResults(sourceFileName: "source.mov", encodedFileName: "output.mp4",
+                                       metrics: [metric], timestamp: Date(), durationSeconds: 2)
+        XCTAssertEqual(metric.formattedScore, "∞ dB")
+        for format in [AnalyticsExportFormat.json, .pdf] {
+            let existing = directory.appendingPathComponent("output_analytics.\(format.fileExtension)")
+            let sentinel = Data("An existing edited report".utf8)
+            try sentinel.write(to: existing)
+            let first = try AnalyticsExporter.autoExport(results: results, encodedFileURL: output, format: format)
+            let second = try AnalyticsExporter.autoExport(results: results, encodedFileURL: output, format: format)
+            XCTAssertEqual(first.lastPathComponent, "output_analytics_1.\(format.fileExtension)")
+            XCTAssertEqual(second.lastPathComponent, "output_analytics_2.\(format.fileExtension)")
+            XCTAssertEqual(try Data(contentsOf: existing), sentinel)
+            XCTAssertFalse(try Data(contentsOf: first).isEmpty)
+            XCTAssertFalse(try Data(contentsOf: second).isEmpty)
+            if format == .json {
+                let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: first)) as? [String: Any])
+                let metrics = try XCTUnwrap(json["metrics"] as? [[String: Any]])
+                XCTAssertEqual(metrics[0]["overallScore"] as? String, "Infinity")
+            }
+        }
+    }
+
+    func testBundledMetricsAlignTrimmedLosslessOutputAndAcceptPerfectScores() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mkv")
+        let output = directory.appendingPathComponent("trimmed.mkv")
+        let runner = SubprocessRunner()
+        for arguments in [
+            ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=4:d=6", "-c:v", "ffv1", source.path],
+            ["-ss", "2", "-t", "2", "-i", source.path, "-c:v", "ffv1", output.path]
+        ] {
+            let generated = try await runner.run(SubprocessRequest(
+                executableURL: URL(fileURLWithPath: ffmpeg), arguments: ["-hide_banner", "-nostdin"] + arguments,
+                timeout: .seconds(30)
+            ))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        }
+        let service = AnalyticsService()
+        let unaligned = try await service.runAnalytics(sourceFile: source, encodedFile: output,
+                                                       enabledMetrics: [.psnr], vmafModel: .vmaf_v0_6_1) { _, _ in }
+        XCTAssertTrue(try XCTUnwrap(unaligned.first).overallScore.isFinite)
+        let aligned = try await service.runAnalytics(sourceFile: source, encodedFile: output,
+                                                     sourceRange: AnalyticsSourceRange(start: 2, end: 4),
+                                                     enabledMetrics: [.psnr, .xpsnr, .vmaf, .ssimulacra2],
+                                                     vmafModel: .vmaf_v0_6_1, ssimulacra2MaxFrames: 2) { _, _ in }
+        XCTAssertEqual(aligned.count, 4)
+        XCTAssertEqual(aligned[0].overallScore, .infinity)
+        XCTAssertEqual(aligned[1].overallScore, .infinity)
+        XCTAssertGreaterThan(aligned[2].overallScore, 99)
+        XCTAssertEqual(aligned[3].overallScore, 100, accuracy: 0.1)
+    }
+
+    func testInvalidSourceIntervalsAreRejected() async throws {
+        let service = AnalyticsService()
+        for range in [AnalyticsSourceRange(start: -1), AnalyticsSourceRange(start: .nan),
+                      AnalyticsSourceRange(start: 2, end: 2), AnalyticsSourceRange(end: .infinity)] {
+            do {
+                _ = try await service.runAnalytics(sourceFile: URL(fileURLWithPath: "/unused/source"),
+                                                    encodedFile: URL(fileURLWithPath: "/unused/output"),
+                                                    sourceRange: range, enabledMetrics: [.psnr],
+                                                    vmafModel: .vmaf_v0_6_1) { _, _ in }
+                XCTFail("Invalid interval was accepted")
+            } catch let error as AnalyticsError {
+                guard case .parsingFailed = error else { return XCTFail("Unexpected error: \(error)") }
+            }
+        }
+    }
+
     private func makeItem() -> VideoItem {
         VideoItem(
             url: URL(fileURLWithPath: "/fixture/source.mov"), name: "source.mov", size: 0,

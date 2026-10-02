@@ -1503,6 +1503,7 @@ struct VideoFileListView: View {
             let results = try await AnalyticsService.shared.runAnalytics(
                 sourceFile: attempt.sourceURL,
                 encodedFile: encodedURL,
+                sourceRange: attempt.sourceRange,
                 enabledMetrics: metrics,
                 vmafModel: settings.vmafModel,
                 ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames,

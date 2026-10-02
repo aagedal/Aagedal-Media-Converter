@@ -757,6 +757,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var outputURL: URL? {
         didSet {
             if outputURL != oldValue {
+                analyticsSourceRange = nil
                 refreshOutputFileCache()
             }
         }
@@ -887,6 +888,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var analyticsOperationID: UUID? = nil
     /// Computed analytics results
     var analyticsResults: AnalyticsResults? = nil
+    /// Captured when the output is produced; nil for an externally selected output.
+    var analyticsSourceRange: AnalyticsSourceRange? = nil
 
     /// Manual override for output filename (base name, no extension)
     var outputFileNameOverride: String? = nil
@@ -939,6 +942,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         conversionError = nil
         outputFileSizeBytes = nil
         analyticsResults = nil
+        analyticsSourceRange = nil
         analyticsStatus = .notQueued
         analyticsProgress = 0.0
         analyticsOperationID = nil

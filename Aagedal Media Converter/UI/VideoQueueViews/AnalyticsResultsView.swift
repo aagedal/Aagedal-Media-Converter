@@ -797,11 +797,6 @@ struct MetricScoreCard: View {
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundColor(ratingColor)
 
-                if result.metric == .psnr || result.metric == .xpsnr {
-                    Text("dB")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                }
             }
 
             // Min/Max range
@@ -810,12 +805,12 @@ struct MetricScoreCard: View {
                     HStack(spacing: 4) {
                         Text("Min:")
                             .foregroundColor(.secondary)
-                        Text(String(format: "%.1f", min))
+                        Text(min == .infinity ? "∞" : String(format: "%.1f", min))
                     }
                     HStack(spacing: 4) {
                         Text("Max:")
                             .foregroundColor(.secondary)
-                        Text(String(format: "%.1f", max))
+                        Text(max == .infinity ? "∞" : String(format: "%.1f", max))
                     }
                 }
                 .font(.caption)
@@ -828,7 +823,7 @@ struct MetricScoreCard: View {
                         HStack(spacing: 4) {
                             Text("\(key):")
                                 .foregroundColor(.secondary)
-                            Text(String(format: "%.2f dB", value))
+                            Text(value == .infinity ? "∞ dB" : String(format: "%.2f dB", value))
                         }
                         .font(.caption)
                     }
