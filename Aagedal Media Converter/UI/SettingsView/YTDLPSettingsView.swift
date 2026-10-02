@@ -545,7 +545,7 @@ struct YTDLPSettingsView: View {
             busySetter: { isDownloading = $0 },
             errorSetter: { downloadError = $0 },
             infoSetter: { downloadInfo = $0 },
-            checkForUpdates: { await YTDLPUpdateService.shared.checkForUpdates() },
+            checkForUpdates: { try await YTDLPUpdateService.shared.checkForUpdates() },
             download: { progress in
                 try await YTDLPUpdateService.shared.downloadUpdate(progress: progress)
             }
@@ -560,7 +560,7 @@ struct YTDLPSettingsView: View {
             busySetter: { isDownloading = $0 },
             errorSetter: { downloadError = $0 },
             infoSetter: { downloadInfo = $0 },
-            checkForUpdates: { await YTDLPUpdateService.shared.checkForUpdates() },
+            checkForUpdates: { try await YTDLPUpdateService.shared.checkForUpdates() },
             download: { progress in
                 try await YTDLPUpdateService.shared.downloadUpdate(progress: progress)
             }
@@ -603,7 +603,7 @@ struct YTDLPSettingsView: View {
         busySetter: @MainActor @escaping (Bool) -> Void,
         errorSetter: @MainActor @escaping (String?) -> Void,
         infoSetter: @MainActor @escaping (String?) -> Void,
-        checkForUpdates: @Sendable @escaping () async -> Bool,
+        checkForUpdates: @Sendable @escaping () async throws -> Bool,
         download: @Sendable @escaping (@escaping @Sendable (Double) -> Void) async throws -> Void
     ) {
         busySetter(true)
@@ -612,7 +612,7 @@ struct YTDLPSettingsView: View {
         infoSetter(nil)
         Task {
             do {
-                let shouldDownload = checkForUpdate ? await checkForUpdates() : true
+                let shouldDownload = checkForUpdate ? try await checkForUpdates() : true
                 if shouldDownload {
                     try await download { progress in
                         Task { @MainActor in progressSetter(progress) }

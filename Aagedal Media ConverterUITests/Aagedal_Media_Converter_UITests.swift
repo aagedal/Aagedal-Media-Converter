@@ -1285,6 +1285,48 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testFailedDownloadOffersAppManagedUpdatesAndOpensExistingSettingsWindow() throws {
+        launchApp(generatedFixture: true, additionalArguments: [
+            "-ytdlpBinarySource", "app", "-ytdlpInstalledVersion", "2026.09.01"
+        ], ytdlpFailure: true)
+        defer { terminateAndCleanFixtures() }
+
+        let updateButton = element("queue.item.ytdlpUpdates")
+        XCTAssertTrue(updateButton.waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.item.errorDetails").click()
+        XCTAssertTrue(element("queue.errorDetails.ytdlpUpdates").waitForExistence(timeout: 5))
+        attachWindowScreenshot(named: "Failed download update suggestion")
+        element("queue.errorDetails.ytdlpUpdates").click()
+        let settings = element("settings.root")
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForValue("ytdlp", of: settings, timeout: 5))
+
+        element("settings.tab.general").click()
+        XCTAssertTrue(waitForValue("general", of: settings, timeout: 5))
+        updateButton.click()
+        XCTAssertTrue(waitForValue("ytdlp", of: settings, timeout: 5))
+    }
+
+    @MainActor
+    func testFailedDownloadDoesNotOfferAppUpdatesForExternalTools() throws {
+        for source in ["homebrew", "custom"] {
+            launchApp(generatedFixture: true, additionalArguments: [
+                "-ytdlpBinarySource", source,
+                "-ytdlpCustomPath", "/usr/bin/true"
+            ], ytdlpFailure: true)
+            XCTAssertTrue(element("queue.item.errorDetails").waitForExistence(timeout: 20))
+            XCTAssertFalse(element("queue.item.ytdlpUpdates").exists)
+            app.activate()
+            element("queue.item.errorDetails").click()
+            XCTAssertTrue(element("queue.errorDetails.text").waitForExistence(timeout: 5))
+            XCTAssertFalse(element("queue.errorDetails.ytdlpUpdates").exists)
+            app.typeKey(.escape, modifierFlags: [])
+            terminateAndCleanFixtures()
+        }
+    }
+
+    @MainActor
     private func launchApp(
         generatedFixture: Bool = false,
         defaultPreset: String = "VideoLoop",
@@ -1300,7 +1342,8 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         cameraCard: Bool = false,
         delayedStitchingLoad: Bool = false,
         missingStitchingSource: Bool = false,
-        resetAgentAccess: Bool = false
+        resetAgentAccess: Bool = false,
+        ytdlpFailure: Bool = false
     ) {
         app = XCUIApplication()
         app.launchArguments += [
@@ -1316,6 +1359,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         ]
         app.launchArguments += additionalArguments
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
+        if ytdlpFailure {
+            app.launchEnvironment["AMC_UI_TEST_YTDLP_FAILURE"] = "1"
+        }
         app.launchEnvironment["AMC_UI_TEST_APPLICATION_JOB_STORE_ID"] = UUID().uuidString
         app.launchEnvironment["AMC_UI_TEST_AGENT_PORT_ID"] = UUID().uuidString
         if resetAgentAccess {

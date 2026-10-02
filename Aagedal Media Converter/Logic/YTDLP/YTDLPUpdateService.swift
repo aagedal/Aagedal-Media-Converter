@@ -1031,20 +1031,21 @@ actor YTDLPUpdateService {
     }
 
     /// Checks if an update is available
-    func checkForUpdates() async -> Bool {
-        do {
-            guard let currentVersion = await getCurrentVersion(),
-                  let (latestVersion, _, _) = try await getLatestReleaseVersion() else {
-                return false
-            }
-
-            let isNewer = latestVersion.compare(currentVersion, options: .numeric) == .orderedDescending
-            logger.info("Current: \(currentVersion), Latest: \(latestVersion), Update available: \(isNewer)")
-            return isNewer
-        } catch {
-            logger.error("Failed to check for updates: \(error.localizedDescription)")
-            return false
+    func checkForUpdates() async throws -> Bool {
+        try Task.checkCancellation()
+        let installedVersion = await getCurrentVersion()
+        try Task.checkCancellation()
+        guard let currentVersion = installedVersion, !currentVersion.isEmpty else {
+            throw YTDLPUpdateError.versionUnavailable
         }
+        guard let (latestVersion, _, _) = try await getLatestReleaseVersion() else {
+            throw YTDLPUpdateError.assetNotFound
+        }
+        try Task.checkCancellation()
+
+        let isNewer = latestVersion.compare(currentVersion, options: .numeric) == .orderedDescending
+        logger.info("Current: \(currentVersion), Latest: \(latestVersion), Update available: \(isNewer)")
+        return isNewer
     }
 
     /// Downloads and installs the latest yt-dlp release (without progress)
@@ -1324,8 +1325,9 @@ actor YTDLPUpdateService {
         }
     }
 
-    /// Performs update check and downloads if available (called on app launch)
+    /// Updates the active app-managed binary at most once per day when requested.
     func performUpdateCheckIfNeeded() async {
+        guard resolveYTDLPPath() == downloadedPath.path else { return }
         // Check if we should check for updates (once per day)
         let lastCheck = UserDefaults.standard.object(forKey: AppConstants.ytdlpLastUpdateCheckKey) as? Date
         let shouldCheck: Bool
@@ -1343,7 +1345,7 @@ actor YTDLPUpdateService {
         logger.info("Checking for yt-dlp updates...")
 
         do {
-            if await checkForUpdates() {
+            if try await checkForUpdates() {
                 try await downloadUpdate()
             } else {
                 // Update last check date even if no update needed
@@ -1418,6 +1420,7 @@ enum YTDLPDownloadKind: Sendable {
 }
 
 enum YTDLPUpdateError: Error, LocalizedError {
+    case versionUnavailable
     case invalidURL
     case networkError
     case parseError
@@ -1432,6 +1435,7 @@ enum YTDLPUpdateError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .versionUnavailable: return String(localized: "Could not read the installed yt-dlp version. Try checking again.")
         case .invalidURL: return "Invalid GitHub API URL"
         case .networkError: return "Network error while checking for updates"
         case .parseError: return "Failed to parse GitHub release info"

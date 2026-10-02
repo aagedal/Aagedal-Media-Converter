@@ -1918,6 +1918,18 @@ struct ContentView: View {
                 queueOrder.append(group.id)
             } else {
                 await handleFileSelection(result: .success([fixtureURL]))
+                if environment["AMC_UI_TEST_YTDLP_FAILURE"] == "1",
+                   let index = droppedFiles.firstIndex(where: { $0.url == fixtureURL }) {
+                    // Keep updater UI tests local and independent of personal tools.
+                    let tools = AppConstants.ytdlpToolsDirectory
+                    try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+                    let tool = tools.appendingPathComponent("yt-dlp")
+                    try "#!/bin/sh\necho 2026.09.01\n".write(to: tool, atomically: true, encoding: .utf8)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
+                    droppedFiles[index].sourceURL = "https://example.test/video"
+                    droppedFiles[index].downloadError = "Download failed: Unable to extract video data"
+                    droppedFiles[index].status = .failed
+                }
             }
             if environment["AMC_UI_TEST_REMOVE_FIXTURE_AFTER_IMPORT"] == "1" {
                 try FileManager.default.removeItem(at: fixtureURL)

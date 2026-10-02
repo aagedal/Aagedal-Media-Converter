@@ -1,6 +1,46 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Could not read the installed yt-dlp version. Try checking again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke lese den installerte yt-dlp-versjonen. Prøv å se etter oppdateringer igjen."
+          }
+        }
+      }
+    },
+    "Websites change frequently. A yt-dlp update may fix this download. Open Downloads settings, check for updates, then retry. Some failures may require authentication or a network fix instead." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nettsider endres ofte. En yt-dlp-oppdatering kan løse problemet med denne nedlastingen. Åpne nedlastingsinnstillingene, se etter oppdateringer, og prøv igjen. Noen feil krever innlogging eller at nettverksproblemer løses."
+          }
+        }
+      }
+    },
+    "A yt-dlp update may fix website download failures. Check for Updates in Downloads settings, then retry." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En yt-dlp-oppdatering kan løse problemer med nedlasting fra nettsider. Se etter oppdateringer i nedlastingsinnstillingene, og prøv igjen."
+          }
+        }
+      }
+    },
+    "Check yt-dlp updates…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se etter yt-dlp-oppdateringer…"
+          }
+        }
+      }
+    },
     "" : {
       "shouldTranslate" : false
     },

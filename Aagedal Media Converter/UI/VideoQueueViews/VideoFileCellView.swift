@@ -133,6 +133,8 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     let outputSizeLabel = NSTextField(labelWithString: "")
     let statusLabel = NSTextField(labelWithString: "")
     private let errorDetailsButton = NSButton()
+    private let ytdlpUpdateSettingsButton = NSButton()
+    private var ytdlpUpdateSuggestionTask: Task<Void, Never>?
     private var errorDetailsPopover: NSPopover?
     private var displayedDiagnosticReport: String?
 
@@ -743,7 +745,15 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         errorDetailsButton.setAccessibilityIdentifier("queue.item.errorDetails")
         errorDetailsButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         errorDetailsButton.isHidden = true
-        statusRow.setViews([statusCapsule, statusLabel, errorDetailsButton, overwriteWarningLabel], in: .leading)
+        ytdlpUpdateSettingsButton.title = String(localized: "Check yt-dlp updates…")
+        ytdlpUpdateSettingsButton.bezelStyle = .inline
+        ytdlpUpdateSettingsButton.target = self
+        ytdlpUpdateSettingsButton.action = #selector(openYTDLPUpdateSettings)
+        ytdlpUpdateSettingsButton.toolTip = String(localized: "A yt-dlp update may fix website download failures. Check for Updates in Downloads settings, then retry.")
+        ytdlpUpdateSettingsButton.setAccessibilityIdentifier("queue.item.ytdlpUpdates")
+        ytdlpUpdateSettingsButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        ytdlpUpdateSettingsButton.isHidden = true
+        statusRow.setViews([statusCapsule, statusLabel, errorDetailsButton, ytdlpUpdateSettingsButton, overwriteWarningLabel], in: .leading)
         statusRow.setViews([downloadedFinderButton, downloadedCopyPathButton, downloadedDragButton], in: .trailing)
 
         contentStack.addArrangedSubview(statusRow)
@@ -951,6 +961,24 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             errorDetailsPopover?.performClose(nil)
             errorDetailsPopover = nil
             displayedDiagnosticReport = nil
+        }
+        if prev?.itemID != config.itemID || prev?.canSuggestYTDLPUpdate != config.canSuggestYTDLPUpdate
+            || prev?.downloadError != config.downloadError {
+            ytdlpUpdateSuggestionTask?.cancel()
+            ytdlpUpdateSettingsButton.isHidden = true
+            if config.canSuggestYTDLPUpdate {
+                // Resolve the actual installation, including legacy source fallback.
+                // Only the app-managed binary has an updater in Downloads settings.
+                ytdlpUpdateSuggestionTask = Task { [weak self] in
+                    let installation = await YTDLPUpdateService.shared.getInstallationStatus()
+                    guard !Task.isCancelled, let self,
+                          self.currentConfig?.itemID == config.itemID,
+                          self.currentConfig?.canSuggestYTDLPUpdate == true else { return }
+                    if case .downloaded = installation {
+                        self.ytdlpUpdateSettingsButton.isHidden = false
+                    }
+                }
+            }
         }
 
         // Skip entirely if config unchanged
@@ -1292,6 +1320,9 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         errorDetailsPopover?.performClose(nil)
         errorDetailsPopover = nil
         displayedDiagnosticReport = nil
+        ytdlpUpdateSuggestionTask?.cancel()
+        ytdlpUpdateSuggestionTask = nil
+        ytdlpUpdateSettingsButton.isHidden = true
         // Invalidate path caches so a reused cell recomputes paths for its new bounds
         lastCardBoundsSize = .zero
         lastThumbBoundsSize = .zero
@@ -1840,6 +1871,18 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         copy.bezelStyle = .rounded
         copy.setAccessibilityIdentifier("queue.errorDetails.copy")
         let stack = NSStackView(views: [title, scroll, copy])
+        let showsUpdateSuggestion = !ytdlpUpdateSettingsButton.isHidden
+        if showsUpdateSuggestion {
+            let suggestion = NSTextField(wrappingLabelWithString: String(localized: "Websites change frequently. A yt-dlp update may fix this download. Open Downloads settings, check for updates, then retry. Some failures may require authentication or a network fix instead."))
+            suggestion.font = .systemFont(ofSize: 12)
+            suggestion.textColor = .secondaryLabelColor
+            suggestion.widthAnchor.constraint(equalToConstant: 480).isActive = true
+            stack.addArrangedSubview(suggestion)
+            let settings = NSButton(title: String(localized: "Open Downloads Settings"), target: self, action: #selector(openYTDLPUpdateSettings))
+            settings.bezelStyle = .rounded
+            settings.setAccessibilityIdentifier("queue.errorDetails.ytdlpUpdates")
+            stack.addArrangedSubview(settings)
+        }
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
@@ -1853,10 +1896,15 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentViewController = controller
-        popover.contentSize = NSSize(width: 512, height: 360)
+        popover.contentSize = NSSize(width: 512, height: showsUpdateSuggestion ? 460 : 360)
         errorDetailsPopover = popover
         popover.show(relativeTo: errorDetailsButton.bounds, of: errorDetailsButton, preferredEdge: .maxY)
         popover.contentViewController?.view.window?.makeFirstResponder(copy)
+    }
+
+    @objc private func openYTDLPUpdateSettings() {
+        errorDetailsPopover?.performClose(nil)
+        actionHandler?(.openSettingsTab("ytdlp"))
     }
 
     @objc private func copyFailureDiagnostics() {

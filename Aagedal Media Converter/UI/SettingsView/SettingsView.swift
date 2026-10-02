@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @State private var selectedTab: SettingsTab = .general
     @State private var sidebarCollapsed = false
+    @AppStorage(AppConstants.settingsTabToOpenKey) private var requestedTab = ""
 
     private enum SettingsTab: String, CaseIterable, Hashable {
         case general
@@ -195,15 +196,17 @@ struct SettingsView: View {
             .opacity(0)
         }
         .onAppear {
-            // Check if we should open to a specific tab (e.g., from Control+K in main window)
-            if let tabToOpen = UserDefaults.standard.string(forKey: AppConstants.settingsTabToOpenKey) {
-                if let tab = SettingsTab(rawValue: tabToOpen) {
-                    selectedTab = tab
-                }
-                // Clear the key so subsequent opens go to the default tab
-                UserDefaults.standard.removeObject(forKey: AppConstants.settingsTabToOpenKey)
-            }
+            openRequestedTab()
         }
+        .onChange(of: requestedTab) { _, _ in openRequestedTab() }
+    }
+
+    private func openRequestedTab() {
+        guard !requestedTab.isEmpty else { return }
+        if let tab = SettingsTab(rawValue: requestedTab) {
+            selectedTab = tab
+        }
+        requestedTab = ""
     }
 }
 

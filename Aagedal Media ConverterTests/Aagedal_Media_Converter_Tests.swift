@@ -110,6 +110,30 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         ))
     }
 
+    func testYTDLPUpdateSuggestionExcludesCancellationAndLocalRecoveryFailures() {
+        func suggestsUpdate(
+            _ error: String?, status: ConversionManager.ConversionStatus = .failed,
+            sourceURL: String? = "https://example.test/video", isDownloading: Bool = false,
+            existingPath: String? = nil
+        ) -> Bool {
+            QueueFailureDiagnostics.canSuggestYTDLPUpdate(
+                status: status, sourceURL: sourceURL, downloadError: error,
+                isDownloading: isDownloading, fileAlreadyExistsPath: existingPath
+            )
+        }
+
+        XCTAssertTrue(suggestsUpdate("Download failed: Unable to extract video data"))
+        XCTAssertFalse(suggestsUpdate(nil))
+        XCTAssertFalse(suggestsUpdate("Cancelled"))
+        XCTAssertFalse(suggestsUpdate("Cancelled", status: .cancelled))
+        XCTAssertFalse(suggestsUpdate("File already exists"))
+        XCTAssertFalse(suggestsUpdate("Stopped - partial file not found"))
+        XCTAssertFalse(suggestsUpdate("Download failed", existingPath: "/tmp/existing.mp4"))
+        XCTAssertFalse(suggestsUpdate("Download failed", isDownloading: true))
+        XCTAssertFalse(suggestsUpdate("Download failed", sourceURL: nil))
+        XCTAssertFalse(suggestsUpdate("Download failed", status: .done))
+    }
+
     func testQueueFailureDiagnosticsKeepsFailuresWithoutTechnicalMessages() throws {
         let details = try XCTUnwrap(QueueFailureDiagnostics.details(
             downloadError: nil, conversionFailed: true, conversionError: nil,
