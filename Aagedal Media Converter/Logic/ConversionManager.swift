@@ -312,7 +312,8 @@ actor ConversionManager: Sendable {
         async let whisper: Void = WhisperService.shared.cancelGeneration(operationID: operationID)
         async let parakeet: Void = ParakeetService.shared.cancelGeneration(operationID: operationID)
         async let ocr: Void = TesseractService.shared.cancelGeneration(operationID: operationID)
-        _ = await (whisper, parakeet, ocr)
+        async let nemotron: Void = NemotronService.shared.cancelGeneration(operationID: operationID)
+        _ = await (whisper, parakeet, nemotron, ocr)
     }
 
     private var batchCompletionContinuation: (
@@ -2224,6 +2225,12 @@ actor ConversionManager: Sendable {
                                     )
                                 }
                             }
+                        case .nemotron:
+                            if let outputURL = droppedFiles.wrappedValue[idx].outputURL {
+                                Task {
+                                    await self.generateNemotronSubtitles(for: fileId, inputURL: outputURL, followUp: followUp, droppedFiles: droppedFiles)
+                                }
+                            }
                         case .parakeet:
                             if let outputURL = droppedFiles.wrappedValue[idx].outputURL {
                                 Task {
@@ -2453,6 +2460,7 @@ actor ConversionManager: Sendable {
                 language: language,
                 operationID: operationID,
                 audioStreamIndex: audioStreamIndex,
+                fasterTranscription: settings.whisperFasterTranscription,
                 publicationIsCurrent: {
                     followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
                 }
@@ -2636,6 +2644,111 @@ actor ConversionManager: Sendable {
                 }
             }
             logger.error("Parakeet subtitle generation failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func generateNemotronSubtitles(
+        for itemID: UUID,
+        inputURL: URL,
+        followUp: ConversionFollowUp,
+        droppedFiles: Binding<[VideoItem]>
+    ) async {
+        logger.info("[subtitle-trigger] post-encode Nemotron for item \(itemID, privacy: .public) inputURL=\(inputURL.lastPathComponent, privacy: .public)")
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = AppConstants.defaultNemotronModel
+        let language = settings.nemotronLanguage
+
+        let operationID = followUp.subtitleOperationID
+        // The completion callback reserved this token before dispatching work.
+        let beganAttempt = await MainActor.run {
+            followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
+        }
+        guard beganAttempt else { return }
+
+        do {
+            let outputDir = inputURL.deletingLastPathComponent()
+
+            let audioStreamIndex = droppedFiles.wrappedValue.first(where: { $0.id == itemID })?.selectedAudioStreamIndex
+            let srtURL = try await NemotronService.shared.generateSubtitles(
+                inputFile: inputURL,
+                outputDirectory: outputDir,
+                model: model,
+                language: language,
+                operationID: operationID,
+                audioStreamIndex: audioStreamIndex,
+                publicationIsCurrent: {
+                    followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
+                }
+            ) { [weak self] nemotronProgress in
+                Task { @MainActor in
+                    guard let _ = self else { return }
+                    if let idx = followUp.index(in: droppedFiles.wrappedValue),
+                       droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                        switch nemotronProgress.stage {
+                        case .extractingAudio:
+                            droppedFiles.wrappedValue[idx].subtitleStatus = .extractingAudio
+                        case .transcribing:
+                            droppedFiles.wrappedValue[idx].subtitleStatus = .generating(progress: nemotronProgress.percentage)
+                        case .complete:
+                            droppedFiles.wrappedValue[idx].subtitleStatus = .completed
+                        case .failed(let error):
+                            droppedFiles.wrappedValue[idx].subtitleStatus = .failed(error)
+                        }
+                        droppedFiles.wrappedValue[idx].subtitleProgress = nemotronProgress.percentage
+                    }
+                }
+            }
+
+            let isCurrentAttempt = await MainActor.run { () -> Bool in
+                if let idx = followUp.index(in: droppedFiles.wrappedValue),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .completed
+                    droppedFiles.wrappedValue[idx].subtitleFilePath = srtURL
+                    droppedFiles.wrappedValue[idx].subtitleProgress = 1.0
+                    return true
+                }
+                return false
+            }
+            guard isCurrentAttempt else { return }
+
+            logger.info("Nemotron subtitles generated: \(srtURL.lastPathComponent, privacy: .public)")
+
+            // Embed SRT into the output file if enabled
+            if settings.embedSubtitles {
+                await embedSubtitles(
+                    srtURL: srtURL,
+                    into: inputURL,
+                    itemID: itemID,
+                    operationID: operationID,
+                    followUp: followUp,
+                    droppedFiles: droppedFiles
+                )
+            }
+
+            await MainActor.run {
+                if let idx = followUp.index(in: droppedFiles.wrappedValue),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
+
+        } catch NemotronServiceError.cancelled {
+            await MainActor.run {
+                if let idx = followUp.index(in: droppedFiles.wrappedValue),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .notQueued
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
+        } catch {
+            await MainActor.run {
+                if let idx = followUp.index(in: droppedFiles.wrappedValue),
+                   droppedFiles.wrappedValue[idx].subtitleOperationID == operationID {
+                    droppedFiles.wrappedValue[idx].subtitleStatus = .failed(error.localizedDescription)
+                    droppedFiles.wrappedValue[idx].subtitleOperationID = nil
+                }
+            }
+            logger.error("Nemotron subtitle generation failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

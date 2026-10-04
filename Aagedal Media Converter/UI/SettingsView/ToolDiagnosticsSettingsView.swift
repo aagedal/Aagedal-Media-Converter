@@ -91,6 +91,7 @@ struct ToolDiagnosticsSettingsView: View {
         guard result.path == nil else { return false }
         let key: String
         switch result.id {
+        case "nemotron": key = AppConstants.nemotronCustomPathKey
         case "parakeet": key = AppConstants.parakeetCustomPathKey
         default: return false
         }
@@ -101,6 +102,9 @@ struct ToolDiagnosticsSettingsView: View {
     private func recoveryInstructions(for id: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             switch id {
+            case "nemotron":
+                Text("NeMo Speech is included with the app. Check any custom runtime path, or reinstall the app if the bundled runtime is missing. Download the base model in Transcription settings.")
+                Button("Open Transcription Settings") { openSettings("whisper") }
             case "parakeet":
                 Text("Parakeet is optional and only needed for Parakeet transcription. Install uv using the linked instructions, then run this command in Terminal:")
                 Link("Install uv", destination: URL(string: "https://docs.astral.sh/uv/getting-started/installation/")!)

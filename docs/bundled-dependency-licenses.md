@@ -89,3 +89,22 @@ writes `build/Release-Footprint.json` after checking the extracted distribution
 bundle. Shared-cache checks use the build host's dyld cache; this does not replace
 clean-machine checks on the minimum supported macOS release. None of these size
 or dependency checks resolve the 99 outstanding license attributions.
+
+## NeMo Speech runtime
+
+The app includes the official NeMo-Speech.cpp 0.2.0 Apple Silicon Metal runtime
+under `Aagedal Media Converter/Binaries/NeMoSpeech`. Its upstream `bin/`, `lib/`,
+and `share/` layout is preserved so dylibs resolve within the app. The build phase
+copies it to `Contents/Resources/NeMoSpeech` and signs each real dylib and the CLI
+before signing the enclosing app. Local ad-hoc (`-`) builds give only the CLI a
+development entitlement to load ad-hoc dylibs without a Team ID; Developer ID
+builds retain library validation. No system installation or Homebrew library is
+required. The downloaded ASR model is cached separately and is not bundled.
+
+The release URL and verified SHA-256 are recorded in
+`docs/provenance/nemo-speech-0.2.0.json`. To restore the same runtime, run
+`python3 scripts/prepare-nemo-runtime.py`, then regenerate the dependency manifest.
+`Licenses/nemo-speech-LICENSE.txt` reproduces the archive's Apache license, NOTICE,
+third-party notices, and supplied dependency licenses; the original notice tree
+is also preserved beside the runtime. The manifest inventories the CLI and each
+real bundled dylib, excluding symlink aliases.

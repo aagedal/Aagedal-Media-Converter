@@ -163,10 +163,10 @@ final class ToolDiagnosticsTests: XCTestCase {
     func testHelperChecksUseOnlyVerifiedVersionFlags() {
         let checks = ToolDiagnostics.helperChecks
         XCTAssertEqual(Set(checks.map(\.id)),
-                       Set(["bmxtranswrap", "mxf2raw", "raw2bmx", "asdcp-wrap", "avmenc", "avmdec", "parakeet"]))
+                       Set(["bmxtranswrap", "mxf2raw", "raw2bmx", "asdcp-wrap", "avmenc", "avmdec", "parakeet", "nemotron"]))
         for check in checks {
             switch check.id {
-            case "bmxtranswrap", "mxf2raw", "raw2bmx": XCTAssertEqual(check.arguments, ["--version"])
+            case "bmxtranswrap", "mxf2raw", "raw2bmx", "nemotron": XCTAssertEqual(check.arguments, ["--version"])
             case "asdcp-wrap": XCTAssertEqual(check.arguments, ["-V"])
             default: XCTAssertNil(check.arguments)
             }

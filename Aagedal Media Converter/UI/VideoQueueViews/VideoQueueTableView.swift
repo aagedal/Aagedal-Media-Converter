@@ -1401,6 +1401,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                                 )
                             }
                         }
+                    case .nemotron:
+                        if let operationID = target.operationID {
+                            Task { await NemotronService.shared.cancelGeneration(operationID: operationID) }
+                        }
                     case .parakeet:
                         if let operationID = target.operationID {
                             Task {
@@ -1447,14 +1451,14 @@ struct VideoQueueTableView: NSViewRepresentable {
             case .toggleTranscription(let optionPressed):
                 if let idx = droppedFilesIndex[itemID] {
                     if optionPressed {
-                        let method: SubtitleConversionMethod = UserDefaults.standard.string(forKey: AppConstants.defaultTranscriptionEngineKey) == "parakeet" ? .parakeet : .whisper
+                        let method: SubtitleConversionMethod = SubtitleConversionMethod.defaultTranscription
                         Task { @MainActor in
                             await parent.transcribeOnly?(itemID, method)
                         }
                     } else {
                         parent.droppedFiles[idx].subtitleEnabled.toggle()
                         if parent.droppedFiles[idx].subtitleEnabled {
-                            let method: SubtitleConversionMethod = UserDefaults.standard.string(forKey: AppConstants.defaultTranscriptionEngineKey) == "parakeet" ? .parakeet : .whisper
+                            let method: SubtitleConversionMethod = SubtitleConversionMethod.defaultTranscription
                             parent.droppedFiles[idx].subtitleMethod = method
                         }
                     }

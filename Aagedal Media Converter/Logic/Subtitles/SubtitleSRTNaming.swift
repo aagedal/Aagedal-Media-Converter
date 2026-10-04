@@ -12,6 +12,7 @@ enum SubtitleSRTMethod: String, CaseIterable, Codable, Sendable {
     case ocr
     case whisper
     case parakeet
+    case nemotron
 }
 
 /// Coordinates all engines and service instances. An existing SRT is reusable only

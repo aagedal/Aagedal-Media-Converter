@@ -713,6 +713,7 @@
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8EA25FED2F82D6B00087B1F1 /* tessdata */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = tessdata; sourceTree = "<group>"; };
+		AB3500000000000000000001 /* Nemotron */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Nemotron; sourceTree = "<group>"; };
 		8EA25FFE2F865E1F0087B1F1 /* Parakeet */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Parakeet; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -922,6 +923,7 @@
 				2E8ED3F06E74CC10398BD3EB /* Metadata */,
 				8EA25FE32F82A75C0087B1F1 /* Subtitles */,
 				8EA25FFE2F865E1F0087B1F1 /* Parakeet */,
+				AB3500000000000000000001 /* Nemotron */,
 			);
 			path = Logic;
 			sourceTree = "<group>";
@@ -1441,6 +1443,7 @@
 			fileSystemSynchronizedGroups = (
 				8EA25FED2F82D6B00087B1F1 /* tessdata */,
 				8EA25FFE2F865E1F0087B1F1 /* Parakeet */,
+				AB3500000000000000000001 /* Nemotron */,
 			);
 			name = "Aagedal Media Converter";
 			productName = "Aagedal VideoLoop Converter";
@@ -1611,6 +1614,9 @@
 			);
 			inputPaths = (
 				"$(SRCROOT)/scripts/copy-sign-media-helpers.sh",
+				"$(SRCROOT)/scripts/nemo-development.entitlements",
+				"$(SRCROOT)/Aagedal Media Converter/Binaries/NeMoSpeech",
+				"$(SRCROOT)/Licenses/nemo-speech-LICENSE.txt",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/ffmpeg",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/rclone",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/tesseract",
@@ -1623,9 +1629,12 @@
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/mxf2raw",
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/ssimulacra2_rs",
 			);
+			inputFileListPaths = ("$(SRCROOT)/scripts/nemo-runtime-inputs.xcfilelist");
 			name = "Copy and Sign Media Helpers";
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NeMoSpeech",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/nemo-speech-LICENSE.txt",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ffmpeg",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/rclone",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/tesseract",

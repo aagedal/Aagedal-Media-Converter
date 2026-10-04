@@ -237,7 +237,10 @@ struct VideoFileListView: View {
                     mergeClipsAvailable: mergeClipsAvailable,
                     showCommentField: showCommentField,
                     showDateTagButton: showDateTagButton,
-                    isTranscriptionAvailable: whisperCapabilityState.isAvailable
+                    isTranscriptionAvailable: SubtitleConversionMethod.defaultTranscription == .nemotron
+                        ? BinaryPathResolver.nemotronPath != nil
+                        : SubtitleConversionMethod.defaultTranscription == .parakeet
+                            ? BinaryPathResolver.parakeetMlxPath != nil : whisperCapabilityState.isAvailable
                         || ParakeetService.shared.getInstallationStatus().isAvailable,
                     onTabCommentField: { forward in
                         handleTabPress(forward: forward)
@@ -1140,6 +1143,8 @@ struct VideoFileListView: View {
             await transcribeOnlyOCR(itemID: itemID)
         case .whisper:
             await transcribeOnlyWhisper(itemID: itemID)
+        case .nemotron:
+            await transcribeOnlyNemotron(itemID: itemID)
         case .parakeet:
             await transcribeOnlyParakeet(itemID: itemID)
         }
@@ -1195,6 +1200,7 @@ struct VideoFileListView: View {
                 language: language,
                 operationID: operationID,
                 audioStreamIndex: audioStreamIndex,
+                fasterTranscription: settings.whisperFasterTranscription,
                 publicationIsCurrent: {
                     droppedFiles.contains {
                         $0.id == itemID && $0.url == inputURL && $0.subtitleOperationID == operationID
@@ -1343,6 +1349,99 @@ struct VideoFileListView: View {
                 }
             }
             Self.logger.error("Parakeet transcribe-only failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func transcribeOnlyNemotron(itemID: UUID) async {
+        guard let index = droppedFiles.firstIndex(where: { $0.id == itemID }) else { return }
+        Self.logger.info("[subtitle-trigger] option-click Nemotron for item \(itemID, privacy: .public) file=\(droppedFiles[index].url.lastPathComponent, privacy: .public)")
+
+        let inputURL = droppedFiles[index].url
+        let audioStreamIndex = droppedFiles[index].selectedAudioStreamIndex
+
+        if presentAudioTrackPickerIfNeeded(
+            itemID: itemID,
+            currentSelection: audioStreamIndex,
+            audioStreams: droppedFiles[index].metadata?.audioStreams ?? [],
+            method: .nemotron
+        ) {
+            return
+        }
+
+        let settings = transcriptionSettings.transcriptionSnapshot()
+        let model = AppConstants.defaultNemotronModel
+        let language = settings.nemotronLanguage
+
+        let operationID = UUID()
+        // Publish the attempt token before dispatching work so an immediate cancel is routable.
+        await MainActor.run {
+            if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }) {
+                droppedFiles[idx].subtitleMethod = .nemotron
+                droppedFiles[idx].subtitleStatus = .pending
+                droppedFiles[idx].subtitleOperationID = operationID
+            }
+        }
+
+        do {
+            let srtURL = try await NemotronService.shared.generateSubtitlesOnly(
+                inputFile: inputURL,
+                model: model,
+                language: language,
+                operationID: operationID,
+                audioStreamIndex: audioStreamIndex,
+                publicationIsCurrent: {
+                    droppedFiles.contains {
+                        $0.id == itemID && $0.url == inputURL && $0.subtitleOperationID == operationID
+                    }
+                }
+            ) { nemotronProgress in
+                Task { @MainActor in
+                    if let idx = self.droppedFiles.firstIndex(where: { $0.id == itemID }),
+                       self.droppedFiles[idx].subtitleStatus.isInProgress,
+                       self.droppedFiles[idx].subtitleOperationID == operationID {
+                        switch nemotronProgress.stage {
+                        case .extractingAudio:
+                            self.droppedFiles[idx].subtitleStatus = .extractingAudio
+                        case .transcribing:
+                            self.droppedFiles[idx].subtitleStatus = .generating(progress: nemotronProgress.percentage)
+                        case .complete:
+                            self.droppedFiles[idx].subtitleStatus = .completed
+                        case .failed(let error):
+                            self.droppedFiles[idx].subtitleStatus = .failed(error)
+                        }
+                        self.droppedFiles[idx].subtitleProgress = nemotronProgress.percentage
+                    }
+                }
+            }
+
+            await MainActor.run {
+                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles[idx].subtitleOperationID == operationID {
+                    droppedFiles[idx].subtitleStatus = .completed
+                    droppedFiles[idx].subtitleFilePath = srtURL
+                    droppedFiles[idx].subtitleProgress = 1.0
+                    droppedFiles[idx].subtitleOperationID = nil
+                }
+            }
+            Self.logger.info("Nemotron transcribe-only completed: \(srtURL.lastPathComponent, privacy: .public)")
+
+        } catch NemotronServiceError.cancelled {
+            await MainActor.run {
+                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles[idx].subtitleOperationID == operationID {
+                    droppedFiles[idx].subtitleStatus = .notQueued
+                    droppedFiles[idx].subtitleOperationID = nil
+                }
+            }
+        } catch {
+            await MainActor.run {
+                if let idx = droppedFiles.firstIndex(where: { $0.id == itemID }),
+                   droppedFiles[idx].subtitleOperationID == operationID {
+                    droppedFiles[idx].subtitleStatus = .failed(error.localizedDescription)
+                    droppedFiles[idx].subtitleOperationID = nil
+                }
+            }
+            Self.logger.error("Nemotron transcribe-only failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

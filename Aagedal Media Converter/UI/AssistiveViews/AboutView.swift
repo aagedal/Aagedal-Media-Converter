@@ -94,7 +94,8 @@ private struct BundledLicensesView: View {
         ("AVM", "avm-LICENSE.txt"),
         ("rclone", "rclone-LICENSE.txt"),
         ("MPVKit", "mpvkit-LICENSE.txt"),
-        ("SSIMULACRA2", "ssimulacra2-LICENSE.txt")
+        ("SSIMULACRA2", "ssimulacra2-LICENSE.txt"),
+        ("NeMo Speech", "nemo-speech-LICENSE.txt")
     ]
 
     private var noticeText: String? {

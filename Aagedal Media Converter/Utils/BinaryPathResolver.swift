@@ -329,6 +329,18 @@ enum BinaryPathResolver {
         return path
     }
 
+    static var nemotronPath: String? {
+        if let custom = UserDefaults.standard.string(forKey: AppConstants.nemotronCustomPathKey), !custom.isEmpty {
+            return FileManager.default.isExecutableFile(atPath: custom) ? custom : nil
+        }
+        if let bundled = Bundle.main.url(forResource: "nemo-speech", withExtension: nil, subdirectory: "NeMoSpeech/bin"),
+           FileManager.default.isExecutableFile(atPath: bundled.path) { return bundled.path }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return ["\(home)/.local/bin/nemo-speech", "\(home)/.local/share/nemo-speech/bin/nemo-speech",
+                "/opt/homebrew/bin/nemo-speech", "/usr/local/bin/nemo-speech"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
     // MARK: - Parakeet-MLX
 
     /// Resolves the path to the parakeet-mlx binary.

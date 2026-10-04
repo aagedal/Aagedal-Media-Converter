@@ -98,6 +98,7 @@ final class PostConversionSettingsTests: XCTestCase {
             let transcription = settings.transcriptionSnapshot()
             XCTAssertEqual(transcription.whisperModel.rawValue, AppConstants.defaultWhisperModel)
             XCTAssertEqual(transcription.whisperLanguage, AppConstants.defaultWhisperLanguage)
+            XCTAssertFalse(transcription.whisperFasterTranscription)
             XCTAssertEqual(transcription.parakeetModel.id, AppConstants.defaultParakeetModel)
             XCTAssertEqual(transcription.parakeetLanguage, AppConstants.defaultParakeetLanguage)
             XCTAssertFalse(transcription.embedSubtitles)
@@ -125,17 +126,21 @@ final class PostConversionSettingsTests: XCTestCase {
     func testSnapshotsRemainStableWhileNextOperationUsesEditedPreferences() {
         withSettings { defaults, settings in
             defaults.set("en", forKey: AppConstants.whisperLanguageKey)
+            defaults.set(true, forKey: AppConstants.whisperFasterTranscriptionKey)
             defaults.set(true, forKey: AppConstants.embedSubtitlesKey)
             defaults.set([QualityMetric.allCases[0].rawValue], forKey: AppConstants.analyticsEnabledMetricsKey)
             let transcription = settings.transcriptionSnapshot()
             let analytics = settings.analyticsSnapshot()
             defaults.set("no", forKey: AppConstants.whisperLanguageKey)
+            defaults.set(false, forKey: AppConstants.whisperFasterTranscriptionKey)
             defaults.set(false, forKey: AppConstants.embedSubtitlesKey)
             defaults.set([], forKey: AppConstants.analyticsEnabledMetricsKey)
             XCTAssertEqual(transcription.whisperLanguage, "en")
+            XCTAssertTrue(transcription.whisperFasterTranscription)
             XCTAssertTrue(transcription.embedSubtitles)
             XCTAssertEqual(analytics.enabledMetrics, [QualityMetric.allCases[0]])
             XCTAssertEqual(settings.transcriptionSnapshot().whisperLanguage, "no")
+            XCTAssertFalse(settings.transcriptionSnapshot().whisperFasterTranscription)
             XCTAssertFalse(settings.transcriptionSnapshot().embedSubtitles)
             XCTAssertTrue(settings.analyticsSnapshot().enabledMetrics.isEmpty)
         }
@@ -275,5 +280,94 @@ private final class ParakeetSettingsRunner: SubprocessRunning, @unchecked Sendab
             terminationStatus: 0, termination: .exited, standardOutput: Data(), standardError: Data(),
             discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero
         )
+    }
+}
+
+final class NemotronIntegrationTests: XCTestCase {
+    func testBundledRuntimeStartsAndListsBaseModelWithoutSystemInstallation() async throws {
+        let executable = try XCTUnwrap(Bundle.main.url(forResource: "nemo-speech", withExtension: nil, subdirectory: "NeMoSpeech/bin"))
+        let request = SubprocessRequest(
+            executableURL: executable, arguments: ["--json", "model", "list"],
+            timeout: .seconds(10), standardOutputCaptureLimit: 128 * 1024,
+            standardErrorCaptureLimit: 64 * 1024
+        )
+        let result = try await SubprocessRunner().run(request)
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any])
+        let defaults = try XCTUnwrap(object["defaults"] as? [String: String])
+        XCTAssertEqual(defaults["asr"], AppConstants.defaultNemotronModel)
+    }
+
+    @MainActor
+    func testBaseModelTranscriptionExtractsSelectedAudioAndPublishesSRT() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let input = directory.appendingPathComponent("Norwegian sample.mov")
+        try Data().write(to: input)
+        let runner = NemotronFixtureRunner()
+        let service = NemotronService(subprocessRunner: runner,
+                                      nemotronPathProvider: { "/fixture/nemo-speech" },
+                                      ffmpegPathProvider: { "/fixture/ffmpeg" })
+        let output = try await service.generateSubtitlesOnly(
+            inputFile: input, model: AppConstants.defaultNemotronModel, language: "nb-NO",
+            operationID: UUID(), audioStreamIndex: 2
+        ) { _ in }
+        XCTAssertTrue(try String(contentsOf: output, encoding: .utf8).contains("Hei Norge"))
+        let requests = await runner.requests
+        XCTAssertEqual(requests.count, 2)
+        let extraction = requests[0].arguments
+        XCTAssertEqual(extraction[try XCTUnwrap(extraction.firstIndex(of: "-map")) + 1], "0:2")
+        let transcription = requests[1].arguments
+        XCTAssertEqual(transcription[try XCTUnwrap(transcription.firstIndex(of: "--model")) + 1], AppConstants.defaultNemotronModel)
+        XCTAssertEqual(transcription[try XCTUnwrap(transcription.firstIndex(of: "--language")) + 1], "nb-NO")
+        XCTAssertEqual(transcription[try XCTUnwrap(transcription.firstIndex(of: "--format")) + 1], "srt")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: requests[0].arguments.last!))
+    }
+
+    @MainActor
+    func testCancelledOperationCannotStartOrPublish() async throws {
+        let runner = NemotronFixtureRunner()
+        let service = NemotronService(subprocessRunner: runner,
+                                      nemotronPathProvider: { "/fixture/nemo-speech" })
+        let operationID = UUID()
+        await service.cancelGeneration(operationID: operationID)
+        do {
+            _ = try await service.generateSubtitlesOnly(
+                inputFile: URL(fileURLWithPath: "/fixture/input.mov"),
+                model: AppConstants.defaultNemotronModel, language: "nb-NO", operationID: operationID
+            ) { _ in }
+            XCTFail("Cancelled operation must fail")
+        } catch NemotronServiceError.cancelled { }
+        let requests = await runner.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testLanguageSnapshotAndEmptyLanguageFallback() throws {
+        let name = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("nb-NO", forKey: AppConstants.nemotronLanguageKey)
+        let snapshot = PostConversionSettings(defaults: defaults).transcriptionSnapshot()
+        defaults.set("en-US", forKey: AppConstants.nemotronLanguageKey)
+        XCTAssertEqual(snapshot.nemotronLanguage, "nb-NO")
+        XCTAssertEqual(NemotronService.normalizedLanguage("  "), "auto")
+    }
+}
+
+private actor NemotronFixtureRunner: SubprocessRunning {
+    var requests: [SubprocessRequest] = []
+
+    func run(_ request: SubprocessRequest, outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?) async throws -> SubprocessResult {
+        requests.append(request)
+        if let outputIndex = request.arguments.firstIndex(of: "--output") {
+            try Data("1\n00:00:00,000 --> 00:00:01,000\nHei Norge\n".utf8)
+                .write(to: URL(fileURLWithPath: request.arguments[outputIndex + 1]))
+        } else {
+            try Data().write(to: URL(fileURLWithPath: try XCTUnwrap(request.arguments.last)))
+        }
+        return SubprocessResult(terminationStatus: 0, termination: .exited,
+                                standardOutput: Data(), standardError: Data(),
+                                discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
     }
 }
