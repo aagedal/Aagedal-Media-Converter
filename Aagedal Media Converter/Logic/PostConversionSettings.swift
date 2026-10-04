@@ -13,6 +13,8 @@ struct TranscriptionSettingsSnapshot: Sendable {
     let parakeetModel: ParakeetModel
     let parakeetLanguage: String
     let embedSubtitles: Bool
+    var nemotronLanguage: String = AppConstants.defaultNemotronLanguage
+    var whisperFasterTranscription: Bool = false
 }
 
 /// Validated once at the start of a Parakeet run. Nonpositive stored values
@@ -128,7 +130,9 @@ final class PostConversionSettings: TranscriptionSettingsProviding, OCRSettingsP
             parakeetModel: ParakeetModel.model(for: parakeetRaw) ?? ParakeetModel.allModels[0],
             parakeetLanguage: defaults.string(forKey: AppConstants.parakeetLanguageKey)
                 ?? AppConstants.defaultParakeetLanguage,
-            embedSubtitles: defaults.bool(forKey: AppConstants.embedSubtitlesKey)
+            embedSubtitles: defaults.bool(forKey: AppConstants.embedSubtitlesKey),
+            nemotronLanguage: defaults.string(forKey: AppConstants.nemotronLanguageKey) ?? AppConstants.defaultNemotronLanguage,
+            whisperFasterTranscription: defaults.bool(forKey: AppConstants.whisperFasterTranscriptionKey)
         )
     }
 

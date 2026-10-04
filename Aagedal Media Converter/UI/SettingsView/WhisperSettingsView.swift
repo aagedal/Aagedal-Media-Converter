@@ -18,6 +18,7 @@ struct WhisperSettingsView: View {
     @AppStorage(AppConstants.whisperModelKey) private var selectedModel = AppConstants.defaultWhisperModel
     @AppStorage(AppConstants.whisperCustomModelPathKey) private var customModelPath = ""
     @AppStorage(AppConstants.whisperLanguageKey) private var selectedLanguage = AppConstants.defaultWhisperLanguage
+    @AppStorage(AppConstants.whisperFasterTranscriptionKey) private var fasterTranscription = false
     @AppStorage(AppConstants.whisperDefaultEnabledKey) private var defaultEnabled = false
     @AppStorage(AppConstants.whisperMaxLineLengthKey) private var maxLineLength = AppConstants.defaultWhisperMaxLineLength
 
@@ -297,6 +298,14 @@ struct WhisperSettingsView: View {
                 }
 
                 Text("Use 'Auto-detect' for mixed-language content. Specifying a language can improve accuracy for single-language audio.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Divider()
+
+                Toggle("Faster transcription (30-second chunks)", isOn: $fasterTranscription)
+
+                Text("May reduce subtitle timing precision. Leave off when timing is the priority.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 

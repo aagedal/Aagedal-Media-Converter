@@ -816,6 +816,7 @@ enum AppConstants {
     // Whisper generation settings
     static let whisperDefaultEnabledKey = "whisperDefaultEnabled"
     static let whisperLanguageKey = "whisperLanguage"
+    static let whisperFasterTranscriptionKey = "whisperFasterTranscription"
     static let defaultWhisperLanguage = "auto"
     static let whisperMaxLineLengthKey = "whisperMaxLineLength"
     static let defaultWhisperMaxLineLength = 42  // Characters per subtitle line
@@ -824,7 +825,11 @@ enum AppConstants {
 
     // Default transcription engine (shared)
     static let defaultTranscriptionEngineKey = "defaultTranscriptionEngine"
-    static let defaultTranscriptionEngine = "whisper" // "whisper" or "parakeet"
+    static let defaultTranscriptionEngine = "whisper"
+    static let nemotronCustomPathKey = "nemotronCustomPath"
+    static let nemotronLanguageKey = "nemotronLanguage"
+    static let defaultNemotronLanguage = "auto"
+    static let defaultNemotronModel = "nvidia/nemotron-3.5-asr-streaming-0.6b"
 
     // MARK: - Parakeet Settings
 

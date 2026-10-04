@@ -35,7 +35,8 @@ struct ToolDiagnostics: Sendable {
             ("asdcp-wrap", "AS-DCP wrap", BinaryPathResolver.asdcpWrapPath, ["-V"]),
             ("avmenc", "AV2 encoder", BinaryPathResolver.avmencPath, nil),
             ("avmdec", "AV2 decoder", BinaryPathResolver.avmdecPath, nil),
-            ("parakeet", "Parakeet MLX", BinaryPathResolver.parakeetMlxPath, nil)
+            ("parakeet", "Parakeet MLX", BinaryPathResolver.parakeetMlxPath, nil),
+            ("nemotron", "NeMo Speech", BinaryPathResolver.nemotronPath, ["--version"])
         ]
     }
 

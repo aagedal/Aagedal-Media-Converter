@@ -36,16 +36,16 @@ extension VideoFileCellView {
 
         // --- Transcription button (yellow) ---
         transcriptionButton.isHidden = false
-        let isTranscriptionEnabled = config.subtitleEnabled && (config.subtitleMethod == .whisper || config.subtitleMethod == .parakeet)
+        let isTranscriptionEnabled = config.subtitleEnabled && config.subtitleMethod.isTranscription
         let isTranscribing = config.subtitleStatus.isInProgress
-            && (config.subtitleMethod == .whisper || config.subtitleMethod == .parakeet)
+            && config.subtitleMethod.isTranscription
         transcriptionButton.image = isTranscriptionEnabled ? VideoFileCellView.Symbol.captionsBubbleFill : VideoFileCellView.Symbol.captionsBubble
         if !config.isTranscriptionAvailable {
             transcriptionButton.contentTintColor = .systemOrange
             transcriptionButton.toolTip = "Transcription engine not installed. Configure in Settings → Transcription."
         } else if isTranscriptionEnabled || isTranscribing {
             transcriptionButton.contentTintColor = .systemYellow
-            let engineName = config.subtitleMethod == .parakeet ? "Parakeet" : "Whisper"
+            let engineName = config.subtitleMethod.displayName
             transcriptionButton.toolTip = "Transcription (\(engineName)) enabled. ⌥-click to generate SRT only."
         } else {
             transcriptionButton.contentTintColor = .secondaryLabelColor
@@ -341,6 +341,7 @@ extension VideoFileCellView {
             switch method {
             case .ocr:      return "Recognizing text"
             case .whisper:  return "Transcribing (Whisper)"
+            case .nemotron: return "Transcribing (Nemotron)"
             case .parakeet: return "Transcribing (Parakeet)"
             }
         case .embedding:

@@ -5989,7 +5989,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             outputFile: output,
             ffmpegPath: "/fixture/ffmpeg",
             language: "nb",
-            audioStreamIndex: 3
+            audioStreamIndex: 3,
+            fasterTranscription: true
         ) { update in
             progressValues.withLock { $0.append(update.percentage) }
         }
@@ -5998,12 +5999,15 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let filter = WhisperFFmpegTranscriber.filter(
             modelPath: model.path,
             outputPath: output.path,
-            language: "nb"
+            language: "nb",
+            fasterTranscription: true
         )
         XCTAssertEqual(request.executableURL.path, "/fixture/ffmpeg")
+        XCTAssertTrue(filter.hasSuffix(":queue=30"))
         XCTAssertEqual(request.arguments, [
             "-nostdin", "-i", input.path,
             "-map", "0:3",
+            "-vn", "-sn", "-dn",
             "-af", filter,
             "-f", "null", "-"
         ])
@@ -6056,6 +6060,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             diagnostic.contains("Setting 'destination' to value '\(destinationPath.path)'"),
             diagnostic
         )
+        XCTAssertTrue(diagnostic.contains("Setting 'queue' to value '3'"), diagnostic)
         XCTAssertFalse(diagnostic.contains("Error parsing filter"), diagnostic)
         XCTAssertFalse(diagnostic.contains("Error parsing filterchain"), diagnostic)
         XCTAssertFalse(diagnostic.contains("No option name near"), diagnostic)

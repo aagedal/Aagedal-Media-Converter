@@ -44,6 +44,7 @@ actor WhisperService {
     ///   - outputDirectory: Directory to save the SRT file
     ///   - model: The whisper model to use
     ///   - language: Language code (or "auto" for auto-detect)
+    ///   - fasterTranscription: Use 30-second chunks instead of the default three seconds
     ///   - maxLineLength: Maximum characters per subtitle line (currently unused by FFmpeg filter)
     ///   - progress: Callback for progress updates
     /// - Returns: URL to the generated .srt file
@@ -54,6 +55,7 @@ actor WhisperService {
         language: String,
         operationID: UUID,
         audioStreamIndex: Int? = nil,
+        fasterTranscription: Bool = false,
         maxLineLength: Int? = nil,
         publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
@@ -112,6 +114,7 @@ actor WhisperService {
                 ffmpegPath: ffmpegPath,
                 language: language,
                 audioStreamIndex: audioStreamIndex,
+                fasterTranscription: fasterTranscription,
                 progress: progress
             )
         }
@@ -172,6 +175,7 @@ actor WhisperService {
         language: String,
         operationID: UUID,
         audioStreamIndex: Int? = nil,
+        fasterTranscription: Bool = false,
         maxLineLength: Int? = nil,
         publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (WhisperProgress) -> Void
@@ -184,6 +188,7 @@ actor WhisperService {
             language: language,
             operationID: operationID,
             audioStreamIndex: audioStreamIndex,
+            fasterTranscription: fasterTranscription,
             maxLineLength: maxLineLength,
             publicationIsCurrent: publicationIsCurrent,
             progress: progress
@@ -280,6 +285,7 @@ struct WhisperFFmpegTranscriber: Sendable {
         ffmpegPath: String,
         language: String,
         audioStreamIndex: Int?,
+        fasterTranscription: Bool = false,
         progress: @escaping @Sendable (WhisperProgress) -> Void
     ) async throws {
         try Task.checkCancellation()
@@ -287,13 +293,16 @@ struct WhisperFFmpegTranscriber: Sendable {
         let filter = Self.filter(
             modelPath: modelPath.path,
             outputPath: outputFile.path,
-            language: language
+            language: language,
+            fasterTranscription: fasterTranscription
         )
         var arguments = ["-nostdin", "-i", inputFile.path]
         if let audioStreamIndex {
             arguments += ["-map", "0:\(audioStreamIndex)"]
         }
-        arguments += ["-af", filter, "-f", "null", "-"]
+        // Subtitle generation only needs audio. Avoid decoding and processing video,
+        // embedded subtitles and data streams while Whisper transcribes the file.
+        arguments += ["-vn", "-sn", "-dn", "-af", filter, "-f", "null", "-"]
 
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
@@ -347,13 +356,18 @@ struct WhisperFFmpegTranscriber: Sendable {
         }
     }
 
-    static func filter(modelPath: String, outputPath: String, language: String) -> String {
+    static func filter(
+        modelPath: String, outputPath: String, language: String,
+        fasterTranscription: Bool = false
+    ) -> String {
         let components = [
             "model=\(escapeFilterOptionValue(modelPath))",
             "language=\(escapeFilterOptionValue(language))",
             "format=srt",
             "destination=\(escapeFilterOptionValue(outputPath))",
-            "use_gpu=true"
+            "use_gpu=true",
+            // Keep short chunks for subtitles unless faster transcription is requested.
+            "queue=\(fasterTranscription ? 30 : 3)"
         ]
         return "whisper=" + components.joined(separator: ":")
     }

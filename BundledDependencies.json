@@ -735,6 +735,37 @@
   ],
   "tools": [
     {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/bin/nemo-speech",
+      "bytes": 1624848,
+      "sha256": "be11c8abb3eb17c891489e7058a61bf764035d471cdb78f6bf413fb181144b73",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/System/Library/Frameworks/AudioToolbox.framework/Versions/A/AudioToolbox",
+        "/System/Library/Frameworks/AudioUnit.framework/Versions/A/AudioUnit",
+        "/System/Library/Frameworks/CFNetwork.framework/Versions/A/CFNetwork",
+        "/System/Library/Frameworks/CoreAudio.framework/Versions/A/CoreAudio",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libnemo_speech_asr.dylib",
+        "@rpath/libnemo_speech_nmt.dylib",
+        "@rpath/libnemo_speech_text_normalization.dylib",
+        "@rpath/libnemo_speech_tts.1.dylib"
+      ],
+      "component": "NVIDIA NeMo-Speech.cpp",
+      "version": "0.2.0",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
       "path": "Aagedal Media Converter/Binaries/asdcp-wrap",
       "bytes": 1338064,
       "sha256": "a68b6142111b3232bc5b7e01eccda103f31d41fc0bb6394caea14df9211a3cea",
@@ -973,7 +1004,256 @@
       "licenseFile": "Licenses/tesseract-LICENSE.txt"
     }
   ],
-  "libraries": [],
+  "libraries": [
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libggml-base.0.25.1.dylib",
+      "bytes": 725152,
+      "sha256": "38c4380d3ddc9faca32b15b91c878b5da89af63270ed2ce2e33fd73ef601cf67",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib"
+      ],
+      "installName": "@rpath/libggml-base.0.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libggml-blas.0.25.1.dylib",
+      "bytes": 72896,
+      "sha256": "8b66e983da6952342e7e4e70062897dafe3e06696545a0910cf775417d6d3384",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib"
+      ],
+      "installName": "@rpath/libggml-blas.0.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libggml-cpu.0.25.1.dylib",
+      "bytes": 967808,
+      "sha256": "84dce88e2cee84c8cec546fb508f536438fc01f73ee83bc423227b2555e8cf63",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/System/Library/Frameworks/Accelerate.framework/Versions/A/Accelerate",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-cpu.0.dylib"
+      ],
+      "installName": "@rpath/libggml-cpu.0.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libggml-metal.0.25.1.dylib",
+      "bytes": 2178560,
+      "sha256": "abf8143d5d986d0263225d5883a0ad00b724bd73cc5ca988b5d49db1f4d0a786",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation",
+        "/System/Library/Frameworks/Metal.framework/Versions/A/Metal",
+        "/System/Library/Frameworks/MetalKit.framework/Versions/A/MetalKit",
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libobjc.A.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-metal.0.dylib"
+      ],
+      "installName": "@rpath/libggml-metal.0.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libggml.0.25.1.dylib",
+      "bytes": 75024,
+      "sha256": "7204eb88974620d3c5ca4b89b4c7d63dc22319ddb7c28a5fcc90a65a0d7d55f6",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml.0.dylib"
+      ],
+      "installName": "@rpath/libggml.0.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libllama.0.5.0.dylib",
+      "bytes": 2686592,
+      "sha256": "4ad06196c0a655ad742a9b697fdeff4118c863ddabafe3d9369166aa57f7e4b2",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libllama.0.dylib"
+      ],
+      "installName": "@rpath/libllama.0.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libnemo_speech_asr.dylib",
+      "bytes": 1496096,
+      "sha256": "19cd54d0c86b5ee65af8b6a3cfa84ef9f77579a330e650798ed7d63898c33ace",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libnemo_speech_asr.dylib",
+        "@rpath/libnemo_speech_text_normalization.dylib"
+      ],
+      "installName": "@rpath/libnemo_speech_asr.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libnemo_speech_asr_c.1.dylib",
+      "bytes": 110944,
+      "sha256": "9616b27281458327b38cbfef2bf04faf631aac6eb136ff2f75bcdc54d909d859",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libnemo_speech_asr.dylib",
+        "@rpath/libnemo_speech_asr_c.1.dylib"
+      ],
+      "installName": "@rpath/libnemo_speech_asr_c.1.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libnemo_speech_nmt.dylib",
+      "bytes": 111488,
+      "sha256": "496f572eb51fac7d99416b19fe2674071aad108eac1268b7f7969c171624ab89",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libllama.0.dylib",
+        "@rpath/libnemo_speech_nmt.dylib"
+      ],
+      "installName": "@rpath/libnemo_speech_nmt.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libnemo_speech_nmt_c.1.dylib",
+      "bytes": 71072,
+      "sha256": "325376cf5989a62fb0229c076e4c5c2a0dbf780b1e8d5e8a34f4bf77df9c5b56",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libnemo_speech_nmt.dylib",
+        "@rpath/libnemo_speech_nmt_c.1.dylib"
+      ],
+      "installName": "@rpath/libnemo_speech_nmt_c.1.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libnemo_speech_text_normalization.dylib",
+      "bytes": 3107872,
+      "sha256": "cdf3b15b94283aabff1ec8c1f68debaff6c5f939c7d19ff2cab454c58e0eb3ba",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libnemo_speech_text_normalization.dylib"
+      ],
+      "installName": "@rpath/libnemo_speech_text_normalization.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/NeMoSpeech/lib/libnemo_speech_tts.1.dylib",
+      "bytes": 819280,
+      "sha256": "3e7602d594dba546a5a1c844c3f235e559fc6ed17c0d3795aae77dccdea28d17",
+      "mode": "0755",
+      "architectures": [
+        "arm64"
+      ],
+      "linkedLibraries": [
+        "/usr/lib/libSystem.B.dylib",
+        "/usr/lib/libc++.1.dylib",
+        "@rpath/libggml-base.0.dylib",
+        "@rpath/libggml-blas.0.dylib",
+        "@rpath/libggml-cpu.0.dylib",
+        "@rpath/libggml-metal.0.dylib",
+        "@rpath/libggml.0.dylib",
+        "@rpath/libnemo_speech_text_normalization.dylib",
+        "@rpath/libnemo_speech_tts.1.dylib"
+      ],
+      "installName": "@rpath/libnemo_speech_tts.1.dylib",
+      "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+      "licenseFile": "Licenses/nemo-speech-LICENSE.txt"
+    }
+  ],
   "licenseFiles": [
     {
       "path": "LICENSE",
@@ -1016,6 +1296,11 @@
       "sha256": "282b19ce88e5e774c154847c25a253a7c3c4bf18b1ea0375dff7539c7adcd573"
     },
     {
+      "path": "Licenses/nemo-speech-LICENSE.txt",
+      "bytes": 72586,
+      "sha256": "ad277bf4a2bf6eb60012edb6b2e5254700d49706318c302f4c05ce779ab0529b"
+    },
+    {
       "path": "Licenses/rclone-LICENSE.txt",
       "bytes": 1182659,
       "sha256": "5cafe245a21a2bd4a3e494784f9eca91efd8d180f95ad7e4115320baf1c7a022"
@@ -1042,9 +1327,9 @@
     }
   ],
   "summary": {
-    "toolCount": 11,
-    "libraryCount": 0,
-    "totalBytes": 139551744,
+    "toolCount": 12,
+    "libraryCount": 12,
+    "totalBytes": 153599376,
     "entriesMissingLocalLicenseFile": []
   }
 }

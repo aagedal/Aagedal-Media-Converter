@@ -107,7 +107,7 @@ final class SubtitleSRTPublicationTests: XCTestCase {
         }
         defer { reservations.forEach { $0.release() } }
 
-        XCTAssertEqual(Set(reservations.map(\.url.lastPathComponent)), ["clip.srt", "clip.whisper.srt", "clip.parakeet.srt"])
+        XCTAssertEqual(Set(reservations.map(\.url.lastPathComponent)), ["clip.srt", "clip.whisper.srt", "clip.parakeet.srt", "clip.nemotron.srt"])
         for (index, reservation) in reservations.enumerated() {
             try "engine \(index)".write(to: fixture.staged, atomically: true, encoding: .utf8)
             try SubtitleSRTPublication().publish(stagedURL: fixture.staged, reservation: reservation, isCurrent: { true })
@@ -374,6 +374,12 @@ final class SubtitleSRTPublicationTests: XCTestCase {
     }
 
     @MainActor
+    func testNemotronRejectsRemovedAndSupersededRows() async throws {
+        try await checkRejectedServicePublication(method: .nemotron, removeRow: true)
+        try await checkRejectedServicePublication(method: .nemotron, removeRow: false)
+    }
+
+    @MainActor
     private func checkRejectedServicePublication(method: SubtitleSRTMethod, removeRow: Bool) async throws {
         let fixture = try PublicationFiles()
         defer { fixture.cleanup() }
@@ -419,12 +425,24 @@ final class SubtitleSRTPublicationTests: XCTestCase {
                     operationID: row.followUp.subtitleOperationID,
                     publicationIsCurrent: { row.isCurrent }
                 ) { _ in }
+            case .nemotron:
+                let service = NemotronService(subprocessRunner: runner,
+                                              nemotronPathProvider: { "/fixture/nemo-speech" },
+                                              ffmpegPathProvider: { "/fixture/ffmpeg" })
+                _ = try await service.generateSubtitlesOnly(
+                    inputFile: fixture.directory.appendingPathComponent("clip.mov"),
+                    model: AppConstants.defaultNemotronModel, language: "nb-NO",
+                    operationID: row.followUp.subtitleOperationID,
+                    publicationIsCurrent: { row.isCurrent }
+                ) { _ in }
             case .ocr:
                 XCTFail("OCR uses the shared publication gate directly")
                 return
             }
             XCTFail("A removed or superseded row must reject publication")
         } catch let error as WhisperServiceError {
+            guard case .cancelled = error else { return XCTFail("Expected cancellation, got \(error)") }
+        } catch let error as NemotronServiceError {
             guard case .cancelled = error else { return XCTFail("Expected cancellation, got \(error)") }
         } catch let error as ParakeetServiceError {
             guard case .cancelled = error else { return XCTFail("Expected cancellation, got \(error)") }
@@ -522,7 +540,11 @@ private struct PublicationOutputRunner: SubprocessRunning {
 
 private func publicationStagedURL(for request: SubprocessRequest) throws -> URL {
     let staged: URL
-    if let index = request.arguments.firstIndex(of: "--output-dir") {
+    if let index = request.arguments.firstIndex(of: "--output") {
+        staged = URL(fileURLWithPath: request.arguments[index + 1])
+    } else if request.arguments.contains("-acodec") {
+        staged = URL(fileURLWithPath: try XCTUnwrap(request.arguments.last))
+    } else if let index = request.arguments.firstIndex(of: "--output-dir") {
         staged = URL(fileURLWithPath: request.arguments[index + 1]).appendingPathComponent("input.srt")
     } else {
         let index = try XCTUnwrap(request.arguments.firstIndex(of: "-af"))

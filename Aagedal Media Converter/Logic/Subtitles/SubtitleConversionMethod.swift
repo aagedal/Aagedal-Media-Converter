@@ -11,5 +11,21 @@ enum SubtitleConversionMethod: String, Sendable, Equatable {
     /// Optical character recognition via Tesseract (bitmap images → text)
     case ocr
     /// AI audio transcription via parakeet-mlx (NeMo ASR on Apple Silicon)
+    case nemotron
     case parakeet
+    var isTranscription: Bool { self != .ocr }
+
+    var displayName: String {
+        switch self {
+        case .whisper: return "Whisper"
+        case .parakeet: return "Parakeet"
+        case .nemotron: return "Nemotron"
+        case .ocr: return "OCR"
+        }
+    }
+
+    static var defaultTranscription: Self {
+        let method = Self(rawValue: UserDefaults.standard.string(forKey: AppConstants.defaultTranscriptionEngineKey) ?? "whisper") ?? .whisper
+        return method.isTranscription ? method : .whisper
+    }
 }

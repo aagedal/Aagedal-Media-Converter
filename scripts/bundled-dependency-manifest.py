@@ -27,6 +27,13 @@ APP_ROOT = REPOSITORY_ROOT / "Aagedal Media Converter"
 MANIFEST_PATH = REPOSITORY_ROOT / "BundledDependencies.json"
 
 TOOL_METADATA: dict[str, dict[str, Any]] = {
+    "nemo-speech": {
+        "component": "NVIDIA NeMo-Speech.cpp",
+        "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+        "licenseFile": "Licenses/nemo-speech-LICENSE.txt",
+        "versionArguments": ["--version"],
+        "versionPattern": r"nemo-speech ([^\s]+)",
+    },
     "asdcp-wrap": {
         "component": "asdcplib",
         "license": "BSD-3-Clause",
@@ -285,7 +292,9 @@ def build_manifest() -> dict[str, Any]:
     license_files = license_inventory()
     known_license_files = {entry["path"] for entry in license_files}
     tools: list[dict[str, Any]] = []
-    for path in sorted((APP_ROOT / "Binaries").iterdir()):
+    binary_paths = [*(APP_ROOT / "Binaries").iterdir(),
+                    APP_ROOT / "Binaries/NeMoSpeech/bin/nemo-speech"]
+    for path in sorted(binary_paths):
         if not path.is_file():
             continue
         metadata = TOOL_METADATA.get(path.name)
@@ -325,6 +334,17 @@ def build_manifest() -> dict[str, Any]:
                 "licenseFile": None,
             }
         )
+        libraries.append(entry)
+
+    for path in sorted((APP_ROOT / "Binaries/NeMoSpeech/lib").glob("*.dylib")):
+        if path.is_symlink():
+            continue
+        entry = common_entry(path)
+        entry.update({
+            "installName": dylib_install_name(path),
+            "license": "Apache-2.0 AND MIT AND BSD-3-Clause AND MIT-0",
+            "licenseFile": "Licenses/nemo-speech-LICENSE.txt",
+        })
         libraries.append(entry)
 
     missing_license_files = sorted(

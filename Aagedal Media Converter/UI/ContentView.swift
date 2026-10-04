@@ -2896,6 +2896,10 @@ struct ContentView: View {
             if let operationID = item.subtitleOperationID {
                 Task { await WhisperService.shared.cancelGeneration(operationID: operationID) }
             }
+        case .nemotron:
+            if let operationID = item.subtitleOperationID {
+                Task { await NemotronService.shared.cancelGeneration(operationID: operationID) }
+            }
         case .parakeet:
             if let operationID = item.subtitleOperationID {
                 Task { await ParakeetService.shared.cancelGeneration(operationID: operationID) }
