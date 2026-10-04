@@ -45,6 +45,22 @@ def prepare(archive: Path, provenance: dict) -> None:
             "\n".join("$(SRCROOT)/" + path.relative_to(ROOT).as_posix()
                       for path in sorted(destination.rglob("*"))) + "\n"
         )
+        write_output_file_list(destination)
+
+
+def write_output_file_list(destination: Path) -> None:
+    # A directory that does not exist when Xcode creates its sandbox profile is
+    # treated as a literal output. Declare every nested path for clean builds.
+    outputs = []
+    for prefix in ["$(DERIVED_FILE_DIR)/SignedMediaHelpers/NeMoSpeech",
+                   "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NeMoSpeech"]:
+        outputs.append(prefix)
+        for path in sorted(destination.rglob("*")):
+            output = prefix + "/" + path.relative_to(destination).as_posix()
+            outputs.append(output)
+            if path.is_file() and not path.is_symlink() and (path.suffix == ".dylib" or path.name == "nemo-speech"):
+                outputs.append(output + ".cstemp")
+    (ROOT / "scripts/nemo-runtime-outputs.xcfilelist").write_text("\n".join(outputs) + "\n")
 
 
 def main() -> None:

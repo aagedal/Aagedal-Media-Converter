@@ -1630,10 +1630,10 @@
 				"$(SRCROOT)/Aagedal Media Converter/Binaries/ssimulacra2_rs",
 			);
 			inputFileListPaths = ("$(SRCROOT)/scripts/nemo-runtime-inputs.xcfilelist");
+			outputFileListPaths = ("$(SRCROOT)/scripts/nemo-runtime-outputs.xcfilelist");
 			name = "Copy and Sign Media Helpers";
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers",
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/NeMoSpeech",
 				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/nemo-speech-LICENSE.txt",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/ffmpeg",
 				"$(DERIVED_FILE_DIR)/SignedMediaHelpers/rclone",
