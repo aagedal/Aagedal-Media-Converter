@@ -25,6 +25,13 @@ extension VideoFileCellView {
         encodeButton.toolTip = isEncoding ? "Encoding in progress" : "Start encoding"
         applyProcessingRing(to: encodeButton, active: isEncoding, color: .systemGreen)
 
+        recursiveEncodingButton.isHidden = config.recursiveEncodingGenerations == nil
+        recursiveEncodingButton.isEnabled = config.status != .converting && config.preset.supportsRecursiveEncoding && !config.mergeClipsEnabled
+        recursiveEncodingButton.setAccessibilityLabel("Recursive encoding settings")
+        recursiveEncodingButton.setAccessibilityValue("\(config.recursiveEncodingGenerations ?? 10) generations")
+        recursiveEncodingButton.contentTintColor = .systemPurple
+        recursiveEncodingButton.toolTip = "Recursive encoding: \(config.recursiveEncodingGenerations ?? 10) generations. Click to configure."
+
         // Auto-encode button (only during download)
         let showAutoEncode = config.isDownloading || config.scheduledDownloadTime != nil
         autoEncodeButton.isHidden = !showAutoEncode
@@ -424,6 +431,13 @@ extension VideoFileCellView {
                      action: #selector(ctxMoveSelectionToNewGroup), keyEquivalent: "").target = self
         menu.addItem(.separator())
 
+        let recursiveItem = menu.addItem(withTitle: "Recursive Encoding", action: #selector(ctxRecursiveEncoding), keyEquivalent: "")
+        recursiveItem.target = self
+        recursiveItem.state = config.recursiveEncodingGenerations == nil ? .off : .on
+        recursiveItem.isEnabled = config.status != .converting && !config.isDownloading
+            && config.applicationJobID == nil
+            && (config.recursiveEncodingGenerations != nil || (config.preset.supportsRecursiveEncoding && !config.mergeClipsEnabled))
+
         let renameItem = menu.addItem(withTitle: "Rename Output", action: #selector(ctxRename), keyEquivalent: "")
         renameItem.target = self
         renameItem.isEnabled = config.status == .waiting
@@ -450,6 +464,7 @@ extension VideoFileCellView {
     @objc private func ctxIMFMetadata() { actionHandler?(.showIMFMetadata) }
     @objc private func ctxAudioRouting() { actionHandler?(.showAudioRouting) }
     @objc private func ctxAttachSubtitle() { actionHandler?(.attachSubtitleFile) }
+    @objc private func ctxRecursiveEncoding() { actionHandler?(.toggleRecursiveEncoding) }
     @objc private func ctxRename() { beginOutputNameEditing() }
     @objc private func ctxReset() { actionHandler?(.reset(optionKeyPressed: false)) }
     @objc private func ctxMoveSelectionToNewGroup() { actionHandler?(.moveSelectionToNewGroup) }

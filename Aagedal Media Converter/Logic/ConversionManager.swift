@@ -1660,6 +1660,7 @@ actor ConversionManager: Sendable {
         conformanceMetadata: [UUID: VideoMetadata]? = nil
     ) async {
         guard !isConverting, pendingCancellationCount == 0 else { return }
+        if await rejectRecursiveMerge(items: items, mergeEnabled: concatEnabled || conformanceMergeEnabled) { return }
         allowedItemIDs = nil
         let batchID = UUID()
         activeBatchID = batchID
@@ -1786,6 +1787,7 @@ actor ConversionManager: Sendable {
         limitToIDs: Set<UUID>? = nil
     ) async {
         guard !self.isConverting, pendingCancellationCount == 0 else { return }
+        if await rejectRecursiveMerge(items: droppedFiles, mergeEnabled: mergeClipsEnabled, allowedIDs: limitToIDs) { return }
         let batchID = UUID()
         activeBatchID = batchID
         callbackOwnership = ConversionCallbackOwnership()
@@ -1831,6 +1833,27 @@ actor ConversionManager: Sendable {
                     batchID: batchID
                 )
             }
+        }
+    }
+
+    /// A merge consumes all sources at once, so a per-clip generation chain cannot be preserved.
+    private func rejectRecursiveMerge(
+        items: Binding<[VideoItem]>, mergeEnabled: Bool, allowedIDs: Set<UUID>? = nil
+    ) async -> Bool {
+        guard mergeEnabled else { return false }
+        return await MainActor.run {
+            let indices = items.wrappedValue.indices.filter {
+                let item = items.wrappedValue[$0]
+                return item.status == .waiting && item.recursiveEncodingGenerations != nil
+                    && (allowedIDs?.contains(item.id) ?? true)
+            }
+            guard !indices.isEmpty else { return false }
+            for index in indices {
+                items.wrappedValue[index].status = .failed
+                items.wrappedValue[index].conversionError = "Recursive encoding cannot merge clips. Disable merging or recursive encoding, then reset this clip."
+            }
+            SoundManager.shared.playError()
+            return true
         }
     }
 
@@ -2018,7 +2041,8 @@ actor ConversionManager: Sendable {
         let resolvedDCPMetadata = resolveDCPMetadata(for: currentItem, preset: preset, inputURL: inputURL, settings: packageMetadataSettings)
         let resolvedIMFMetadata = resolveIMFMetadata(for: currentItem, preset: preset, inputURL: inputURL, settings: packageMetadataSettings)
 
-        let conversionRequest = ConversionRequest(
+        let resolvedSingleOutput = OSAllocatedUnfairLock<URL?>(initialState: nil)
+        var conversionRequest = ConversionRequest(
             inputURL: inputURL,
             outputURL: outputURL,
             preset: preset,
@@ -2043,6 +2067,8 @@ actor ConversionManager: Sendable {
             customInputArguments: customInputArguments
         )
 
+        conversionRequest.outputURLResolved = { url in resolvedSingleOutput.withLock { $0 = url } }
+
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let singleUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
         let outputExtension = av2Settings?.container.fileExtension
@@ -2051,6 +2077,7 @@ actor ConversionManager: Sendable {
             ?? preset.outputExtension(for: inputURL)
         await ffmpegConverter.convert(
             request: conversionRequest,
+            recursiveGenerations: currentItem.recursiveEncodingGenerations,
             av2Settings: av2Settings,
             dcpSettings: dcpSettings,
             imfSettings: imfSettings,
@@ -2107,7 +2134,7 @@ actor ConversionManager: Sendable {
                                 }
                             }
                         } else {
-                            outputFileURL = outputURL.appendingPathExtension(outputExtension)
+                            outputFileURL = resolvedSingleOutput.withLock { $0 } ?? outputURL.appendingPathExtension(outputExtension)
                         }
 
                         // Capture file size - try multiple approaches

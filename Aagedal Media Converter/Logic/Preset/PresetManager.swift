@@ -36,6 +36,7 @@ final class PresetManager {
     private var av2Visible: Bool
     private var tvHEVCVisible: Bool
     private var tvAVCIntraVisible: Bool
+    private var losslessVisible: Bool
     private var proresVisible: Bool
     private var proxyVisible: Bool
     private var streamCopyVisible: Bool
@@ -73,6 +74,7 @@ final class PresetManager {
         av2Visible = defaults.object(forKey: AppConstants.av2VisibleKey) as? Bool ?? true
         tvHEVCVisible = defaults.object(forKey: AppConstants.tvHEVCVisibleKey) as? Bool ?? true
         tvAVCIntraVisible = defaults.object(forKey: AppConstants.tvAVCIntraVisibleKey) as? Bool ?? true
+        losslessVisible = defaults.object(forKey: AppConstants.losslessVisibleKey) as? Bool ?? true
         proresVisible = defaults.object(forKey: AppConstants.proresVisibleKey) as? Bool ?? true
         proxyVisible = defaults.object(forKey: AppConstants.proxyVisibleKey) as? Bool ?? true
         streamCopyVisible = defaults.object(forKey: AppConstants.streamCopyVisibleKey) as? Bool ?? true
@@ -101,6 +103,7 @@ final class PresetManager {
             case .av2: return av2Visible
             case .tvHEVC: return tvHEVCVisible
             case .tvAVCIntra: return tvAVCIntraVisible
+            case .lossless: return losslessVisible
             case .prores: return proresVisible
             case .proxy: return proxyVisible
             case .streamCopy: return streamCopyVisible
@@ -179,6 +182,7 @@ final class PresetManager {
         av2Visible = defaults.object(forKey: AppConstants.av2VisibleKey) as? Bool ?? true
         tvHEVCVisible = defaults.object(forKey: AppConstants.tvHEVCVisibleKey) as? Bool ?? true
         tvAVCIntraVisible = defaults.object(forKey: AppConstants.tvAVCIntraVisibleKey) as? Bool ?? true
+        losslessVisible = defaults.object(forKey: AppConstants.losslessVisibleKey) as? Bool ?? true
         proresVisible = defaults.object(forKey: AppConstants.proresVisibleKey) as? Bool ?? true
         proxyVisible = defaults.object(forKey: AppConstants.proxyVisibleKey) as? Bool ?? true
         streamCopyVisible = defaults.object(forKey: AppConstants.streamCopyVisibleKey) as? Bool ?? true

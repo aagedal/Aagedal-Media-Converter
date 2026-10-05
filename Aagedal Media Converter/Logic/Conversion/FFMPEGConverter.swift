@@ -107,6 +107,8 @@ private final class ConversionOutputReservations: @unchecked Sendable {
 }
 
 actor FFMPEGConverter {
+    private var recursiveOperationID: UUID?
+
     @TaskLocal private static var runningSubprocessID: UUID?
     private var currentSubprocessTask: Task<Void, Never>?
     private var joinableSubprocessID: UUID?
@@ -547,6 +549,7 @@ actor FFMPEGConverter {
     ///   - completion: Callback for completion (success: Bool, errorReason: String?)
     func convert(
         request: ConversionRequest,
+        recursiveGenerations: Int? = nil,
         av2Settings: AV2Settings? = nil,
         dcpSettings: DCPSettings? = nil,
         imfSettings: IMFSettings? = nil,
@@ -558,6 +561,102 @@ actor FFMPEGConverter {
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
+        if let generations = recursiveGenerations {
+            guard request.preset.supportsRecursiveEncoding, (2...100).contains(generations) else {
+                completion(false, "Recursive encoding requires a supported encoding preset and 2–100 generations.")
+                return
+            }
+            let operationID = UUID()
+            recursiveOperationID = operationID
+            defer {
+                if recursiveOperationID == operationID { recursiveOperationID = nil }
+            }
+            // A unique run folder keeps reruns together without overwriting earlier experiments.
+            let folderBase = request.outputURL.deletingLastPathComponent().appendingPathComponent(
+                request.outputURL.lastPathComponent + "_generations", isDirectory: true
+            )
+            var folder = folderBase
+            var run = 1
+            while true {
+                // mkdir reserves a new directory atomically; Foundation also succeeds
+                // for existing directories, which would mix generations from reruns.
+                if mkdir(folder.path, 0o755) == 0 { break }
+                let failure = errno
+                guard failure == EEXIST else {
+                    completion(false, "Cannot create recursive encoding folder: \(String(cString: strerror(failure)))")
+                    return
+                }
+                run += 1
+                folder = folderBase.deletingLastPathComponent().appendingPathComponent(
+                    folderBase.lastPathComponent + "_\(run)", isDirectory: true
+                )
+            }
+            var previousOutput = request.inputURL
+            for generation in 1...generations {
+                guard recursiveOperationID == operationID, !Task.isCancelled else {
+                    completion(false, "Recursive encoding cancelled")
+                    return
+                }
+                var pass = request
+                pass.inputURL = previousOutput
+                pass.outputURL = folder.appendingPathComponent(
+                    request.outputURL.lastPathComponent + String(format: "_gen%03d", generation)
+                )
+                pass.requiredOutputURL = nil
+                let resolvedOutput = OSAllocatedUnfairLock<URL?>(initialState: nil)
+                pass.outputURLResolved = { url in resolvedOutput.withLock { $0 = url } }
+                if generation > 1 {
+                    // Source edits belong to the original timeline, not every generation.
+                    pass.trimStart = nil
+                    pass.trimEnd = nil
+                    pass.cropConfig = nil
+                    pass.audioRoutingConfig = nil
+                    pass.timecodeConfig = nil
+                    pass.sourceMetadata = nil
+                    pass.sourceCameraMetadata = nil
+                    pass.customInputArguments = nil
+                    pass.expectedDuration = nil
+                    pass.waveformRequest = nil
+                    pass.synthesizedVideoRequest = nil
+                    pass.waveformBackgroundImageURL = nil
+                    pass.visualSourceURL = nil
+                    pass.chapterMetadataURL = nil
+                    pass.chapterMetadataTitles = []
+                }
+                let result: (Bool, String?) = await withCheckedContinuation { continuation in
+                    Task {
+                        guard self.recursiveOperationID == operationID else {
+                            continuation.resume(returning: (false, "Recursive encoding cancelled"))
+                            return
+                        }
+                        await self.convert(
+                            request: pass,
+                            av2Settings: av2Settings, dcpSettings: dcpSettings, imfSettings: imfSettings,
+                            audioOnlySettings: audioOnlySettings, imageSequenceSettings: imageSequenceSettings,
+                            codecSettings: codecSettings, subtitleSettings: subtitleSettings, commentSettings: commentSettings,
+                            progressUpdate: { progress, status in
+                                let fraction = min(1, max(0, progress))
+                                progressUpdate((Double(generation - 1) + fraction) / Double(generations),
+                                               "Generation \(generation)/\(generations)" + (status.map { " · " + $0 } ?? ""))
+                            },
+                            completion: { success, error in continuation.resume(returning: (success, error)) }
+                        )
+                    }
+                }
+                guard result.0, let output = resolvedOutput.withLock({ $0 }) else {
+                    completion(false, result.1 ?? "Generation \(generation) failed")
+                    return
+                }
+                previousOutput = output
+            }
+            guard recursiveOperationID == operationID, !Task.isCancelled else {
+                completion(false, "Recursive encoding cancelled")
+                return
+            }
+            request.outputURLResolved?(previousOutput)
+            completion(true, nil)
+            return
+        }
         // Destructure frequently-used fields for readability
         let inputURL = request.inputURL
         let outputURL = request.outputURL
@@ -4400,6 +4499,7 @@ actor FFMPEGConverter {
     }
 
     func cancelConversion() async {
+        recursiveOperationID = nil
         let imageSequenceAudioTask = currentImageSequenceAudioTask
         let imageSequenceAudioID = currentImageSequenceAudioTaskID
         let packageAudioTask = currentPackageAudioTask

@@ -792,6 +792,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     case av2 = "AV2"
     case tvHEVC = "TV (HEVC 10-bit 4:2:2)"
     case tvAVCIntra = "TV (AVC-Intra MXF)"
+    case lossless = "Lossless (FFV1)"
     case prores = "ProRes"
     case proxy = "Proxy"
     case streamCopy = "Stream Copy"
@@ -811,6 +812,15 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     case custom9 = "Custom 9"
     case custom10 = "Custom 10"
     
+    var supportsRecursiveEncoding: Bool {
+        switch self {
+        case .lossless, .h264, .h265, .av1, .prores, .proxy, .tvHEVC, .tvAVCIntra, .audioOnly:
+            return true
+        default:
+            return false
+        }
+    }
+
     var id: String { rawValue }
     
     var fileExtension: String {
@@ -829,6 +839,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .av2:
             // Raw video-only `.ivf`, or `.mkv` when the in-app muxer wraps AV2 + audio.
             return AV2Container.current.fileExtension
+        case .lossless:
+            return "mkv"
         case .prores, .tvHEVC:
             return "mov"
         case .tvAVCIntra:
@@ -920,6 +932,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return NSLocalizedString("PRESET_TV_HEVC_DESCRIPTION", comment: "Description for TV HEVC preset")
         case .tvAVCIntra:
             return NSLocalizedString("PRESET_TV_AVC_INTRA_DESCRIPTION", comment: "Description for TV AVC-Intra preset")
+        case .lossless:
+            return "Lossless FFV1 video and 64-bit floating-point PCM audio in Matroska. Preserves source resolution and frame rate; useful as a generation-loss reference."
         case .prores:
             return NSLocalizedString("PRESET_PRORES_DESCRIPTION", comment: "Description for ProRes preset")
         case .proxy:
@@ -963,6 +977,8 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return "_tv"
         case .tvAVCIntra:
             return "_avcintra"
+        case .lossless:
+            return "_lossless"
         case .prores:
             return "_prores"
         case .proxy:
@@ -1379,6 +1395,16 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             ]
             Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
             return args
+        case .lossless:
+            // Let FFV1 retain the decoded source pixel format rather than forcing
+            // chroma subsampling or reducing bit depth. No scaling/desqueeze filter.
+            var args = commonArgs + [
+                "-c:v", "ffv1", "-level", "3", "-coder", "1", "-context", "1",
+                "-slicecrc", "1", "-c:a", "pcm_f64le",
+                "-map", "0:v:0?", "-map", "0:a?"
+            ]
+            Self.applyMetadataStrategy(to: &args, preserveMetadata: preserveMetadata, defaultMap: "0")
+            return args
         case .prores:
             let profileRaw = defaults.string(forKey: AppConstants.proResProfileKey) ?? ProResProfile.standard.rawValue
             let profile = ProResProfile(rawValue: profileRaw) ?? .standard
@@ -1595,7 +1621,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return codecFFmpegArguments(defaults: .standard)
         case .tvHEVC, .tvAVCIntra, .animatedStill, .proxy:
             return codecFFmpegArguments(defaults: .standard)
-        case .prores:
+        case .prores, .lossless:
             return codecFFmpegArguments(defaults: .standard)
         case .streamCopy:
             return codecFFmpegArguments(defaults: .standard)
@@ -1705,6 +1731,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         case .av2: key = AppConstants.av2VisibleKey
         case .tvHEVC: key = AppConstants.tvHEVCVisibleKey
         case .tvAVCIntra: key = AppConstants.tvAVCIntraVisibleKey
+        case .lossless: key = AppConstants.losslessVisibleKey
         case .prores: key = AppConstants.proresVisibleKey
         case .proxy: key = AppConstants.proxyVisibleKey
         case .streamCopy: key = AppConstants.streamCopyVisibleKey

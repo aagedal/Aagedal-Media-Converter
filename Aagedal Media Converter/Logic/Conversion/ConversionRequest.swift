@@ -13,8 +13,8 @@ import Foundation
 /// Callbacks (progressUpdate, completion) are passed separately.
 struct ConversionRequest: Sendable {
     // MARK: - Input / Output
-    let inputURL: URL
-    let outputURL: URL
+    var inputURL: URL
+    var outputURL: URL
     let preset: ExportPreset
 
     /// Shared jobs must publish to their accepted path rather than choose a new name.

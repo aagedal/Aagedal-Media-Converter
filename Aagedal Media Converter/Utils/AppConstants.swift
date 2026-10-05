@@ -623,6 +623,7 @@ enum AppConstants {
     static let av2VisibleKey = "av2Visible"
     static let tvHEVCVisibleKey = "tvHEVCVisible"
     static let tvAVCIntraVisibleKey = "tvAVCIntraVisible"
+    static let losslessVisibleKey = "losslessVisible"
     static let proresVisibleKey = "proresVisible"
     static let proxyVisibleKey = "proxyVisible"
     static let streamCopyVisibleKey = "streamCopyVisible"

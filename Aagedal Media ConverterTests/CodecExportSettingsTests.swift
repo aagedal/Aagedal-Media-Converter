@@ -4,9 +4,80 @@
 
 import Foundation
 import XCTest
+import os
 @testable import Aagedal_Media_Converter
 
 final class CodecExportSettingsTests: XCTestCase {
+    func testRecursiveLosslessEncodingKeepsEveryGenerationAndAppliesSourceEditsOnce() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("RecursiveEncoding-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let binary = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Aagedal Media Converter/Binaries/ffmpeg")
+        let source = directory.appendingPathComponent("source.mkv")
+        let runner = SubprocessRunner()
+        let generated = try await runner.run(SubprocessRequest(
+            executableURL: binary,
+            arguments: ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                        "testsrc2=size=32x32:rate=4:duration=2", "-f", "lavfi", "-i", "sine=duration=2",
+                        "-c:v", "ffv1", "-c:a", "pcm_f64le", source.path], timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let metadata = try await VideoMetadataService.shared.metadata(for: source)
+        let existingRun = directory.appendingPathComponent("experiment_generations")
+        try FileManager.default.createDirectory(at: existingRun, withIntermediateDirectories: false)
+        let sentinel = existingRun.appendingPathComponent("keep.txt")
+        try Data("Earlier run".utf8).write(to: sentinel)
+        let resolved = OSAllocatedUnfairLock<URL?>(initialState: nil)
+        let finished = expectation(description: "Three generations completed")
+        var request = ConversionRequest(
+            inputURL: source, outputURL: directory.appendingPathComponent("experiment"), preset: .lossless,
+            includeDateTag: false, sourceMetadata: metadata, trimStart: 0.5, trimEnd: 1.5,
+            cropConfig: CropConfig(normalizedRect: CropRect(x: 0, y: 0, width: 0.5, height: 1))
+        )
+        request.outputURLResolved = { url in resolved.withLock { $0 = url } }
+        let converter = FFMPEGConverter(ffmpegPathProvider: { binary.path })
+        await converter.convert(
+            request: request, recursiveGenerations: 3,
+            progressUpdate: { _, _ in },
+            completion: { success, reason in
+                XCTAssertTrue(success, reason ?? "Recursive conversion failed")
+                finished.fulfill()
+            }
+        )
+        await fulfillment(of: [finished], timeout: 60)
+        let final = try XCTUnwrap(resolved.withLock { $0 })
+        XCTAssertEqual(final.lastPathComponent, "experiment_gen003.mkv")
+        XCTAssertEqual(final.deletingLastPathComponent().lastPathComponent, "experiment_generations_2")
+        XCTAssertEqual(try Data(contentsOf: sentinel), Data("Earlier run".utf8))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: existingRun.path), ["keep.txt"])
+        let files = try FileManager.default.contentsOfDirectory(at: final.deletingLastPathComponent(), includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "mkv" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        XCTAssertEqual(files.map(\.lastPathComponent), ["experiment_gen001.mkv", "experiment_gen002.mkv", "experiment_gen003.mkv"])
+        var firstPixels: Data?
+        var firstAudio: Data?
+        for file in files {
+            let pixels = try await runner.run(SubprocessRequest(
+                executableURL: binary,
+                arguments: ["-v", "error", "-i", file.path, "-map", "0:v:0", "-pix_fmt", "yuv420p", "-f", "rawvideo", "pipe:1"],
+                timeout: .seconds(15)
+            ))
+            XCTAssertTrue(pixels.succeeded, pixels.standardErrorText)
+            // Four frames, cropped once to 16 × 32, with 4:2:0 chroma.
+            XCTAssertEqual(pixels.standardOutput.count, 4 * 16 * 32 * 3 / 2)
+            if let firstPixels { XCTAssertEqual(pixels.standardOutput, firstPixels) }
+            else { firstPixels = pixels.standardOutput }
+            let audio = try await runner.run(SubprocessRequest(
+                executableURL: binary,
+                arguments: ["-v", "error", "-i", file.path, "-map", "0:a:0", "-f", "f64le", "pipe:1"], timeout: .seconds(15)
+            ))
+            XCTAssertTrue(audio.succeeded, audio.standardErrorText)
+            if let firstAudio { XCTAssertEqual(audio.standardOutput, firstAudio) }
+            else { firstAudio = audio.standardOutput }
+        }
+    }
+
+
     func testGeneratedVideoSnapshotRetainsAppearanceAndPresetResolutionAfterSettingsChange() throws {
         let suite = "GeneratedVideoSettingsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
