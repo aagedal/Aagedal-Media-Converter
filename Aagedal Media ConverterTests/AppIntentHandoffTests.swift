@@ -352,6 +352,13 @@ final class AppIntentHandoffTests: XCTestCase {
             mergeClipsEnabled: true, defaults: defaults
         ))
 
+        var recursive = ordinary
+        recursive.recursiveEncodingGenerations = 3
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [recursive], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+
         var unsupportedRouting = ordinary
         unsupportedRouting.audioRoutingConfig = AudioRoutingConfig(inputTracks: [])
         XCTAssertNil(ManualApplicationJobBridge.makeRequest(

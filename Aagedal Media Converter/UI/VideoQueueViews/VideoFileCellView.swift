@@ -100,6 +100,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     // Toggle buttons (normal mode — ordered by processing pipeline)
     let encodeButton = NSButton()
     let autoEncodeButton = NSButton()
+    let recursiveEncodingButton = NSButton()
     let uploadButton = NSButton()
     let transcriptionButton = NSButton()
     let ocrButton = NSButton()
@@ -772,6 +773,9 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         setupToggleButton(encodeButton, symbol: "play.fill", action: #selector(encodeButtonClicked))
         setupToggleButton(autoEncodeButton, symbol: "play", action: #selector(autoEncodeButtonClicked))
         autoEncodeButton.isHidden = true
+        setupToggleButton(recursiveEncodingButton, symbol: "arrow.triangle.2.circlepath", action: #selector(recursiveEncodingClicked))
+        recursiveEncodingButton.isHidden = true
+        recursiveEncodingButton.setAccessibilityIdentifier("queue.item.recursiveEncoding")
         setupToggleButton(transcriptionButton, symbol: "captions.bubble", action: #selector(transcriptionButtonClicked))
         setupToggleButton(ocrButton, symbol: "text.viewfinder", action: #selector(ocrButtonClicked))
         ocrButton.isHidden = true
@@ -803,7 +807,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         trailingSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         trailingSpacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        for view in [encodeButton, autoEncodeButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, uploadButton,
+        for view in [encodeButton, autoEncodeButton, recursiveEncodingButton, encodeDivider, transcriptionButton, ocrButton, analyticsButton, uploadButton,
                      metaDivider,
                      dateTagButton, commentToggleButton, metadataToggleButton, waveformButton, waveformBgButton,
                      trailingSpacer,
@@ -1136,6 +1140,9 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
             || prev?.status != config.status
             || prev?.isDownloading != config.isDownloading
             || prev?.scheduledDownloadTime != config.scheduledDownloadTime
+            || prev?.recursiveEncodingGenerations != config.recursiveEncodingGenerations
+            || prev?.preset != config.preset
+            || prev?.mergeClipsEnabled != config.mergeClipsEnabled
             || prev?.autoEncodeAfterDownload != config.autoEncodeAfterDownload
             || prev?.subtitleEnabled != config.subtitleEnabled
             || prev?.subtitleMethod != config.subtitleMethod
@@ -1234,7 +1241,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         }
 
         // Context menu — only rebuild when needed
-        if isFirstConfigure || prev?.status != config.status {
+        if isFirstConfigure || prev?.status != config.status || prev?.recursiveEncodingGenerations != config.recursiveEncodingGenerations || prev?.preset != config.preset || prev?.mergeClipsEnabled != config.mergeClipsEnabled {
             self.menu = buildContextMenu(config: config)
         }
 
@@ -1658,6 +1665,26 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         let opt = NSEvent.modifierFlags.contains(.option)
         actionHandler?(.encodeNow(optionPressed: opt))
     }
+    @objc private func recursiveEncodingClicked() {
+        guard let config = currentConfig, config.status != .converting else { return }
+        let alert = NSAlert()
+        alert.messageText = "Recursive Encoding"
+        alert.informativeText = "Each generation encodes the previous output using the selected preset. All generations are saved in a separate folder. Choose 2–100 total generations."
+        let field = NSTextField(string: String(config.recursiveEncodingGenerations ?? 10))
+        field.frame = NSRect(x: 0, y: 0, width: 220, height: 24)
+        field.setAccessibilityIdentifier("recursiveEncoding.generations")
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        while alert.runModal() == .alertFirstButtonReturn {
+            if let count = Int(field.stringValue), (2...100).contains(count) {
+                actionHandler?(.setRecursiveEncodingGenerations(count))
+                return
+            }
+            alert.informativeText = "Enter a whole number from 2 to 100. Each generation encodes the previous output, and all generations are saved."
+        }
+    }
+
     @objc private func autoEncodeButtonClicked() { actionHandler?(.toggleAutoEncode) }
     @objc func commentToggleClicked() {
         commentPopoverRequested()

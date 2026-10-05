@@ -119,6 +119,7 @@ struct PresetsSettingsView: View {
     @AppStorage(AppConstants.av2VisibleKey) private var av2Visible = true
     @AppStorage(AppConstants.tvHEVCVisibleKey) private var tvHEVCVisible = true
     @AppStorage(AppConstants.tvAVCIntraVisibleKey) private var tvAVCIntraVisible = true
+    @AppStorage(AppConstants.losslessVisibleKey) private var losslessVisible = true
     @AppStorage(AppConstants.proresVisibleKey) private var proresVisible = true
     @AppStorage(AppConstants.proxyVisibleKey) private var proxyVisible = true
     @AppStorage(AppConstants.streamCopyVisibleKey) private var streamCopyVisible = true
@@ -1832,6 +1833,8 @@ struct PresetsSettingsView: View {
             return $tvHEVCVisible
         case .tvAVCIntra:
             return $tvAVCIntraVisible
+        case .lossless:
+            return $losslessVisible
         case .prores:
             return $proresVisible
         case .proxy:

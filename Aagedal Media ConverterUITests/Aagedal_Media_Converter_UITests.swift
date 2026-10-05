@@ -1222,6 +1222,32 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testRecursiveEncodingCanBeEnabledConfiguredAndDisabled() throws {
+        launchApp(generatedFixture: true, defaultPreset: "Lossless (FFV1)")
+        defer { terminateAndCleanFixtures() }
+        let queueItem = element("queue.item")
+        XCTAssertTrue(queueItem.waitForExistence(timeout: 20))
+        XCTAssertFalse(element("queue.item.recursiveEncoding").exists)
+        app.activate()
+        queueItem.rightClick()
+        app.menuItems["Recursive Encoding"].click()
+        let settings = element("queue.item.recursiveEncoding")
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.click()
+        let count = element("recursiveEncoding.generations")
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        count.click()
+        count.typeKey("a", modifierFlags: .command)
+        count.typeText("3")
+        app.dialogs.buttons["Save"].click()
+        XCTAssertTrue(waitForValue("3 generations", of: settings, timeout: 5))
+        attachWindowScreenshot(named: "Recursive encoding enabled with lossless preset")
+        queueItem.rightClick()
+        app.menuItems["Recursive Encoding"].click()
+        XCTAssertFalse(settings.exists)
+    }
+
+    @MainActor
     func testImportsGeneratedFixtureAndSelectsPreset() throws {
         launchApp(generatedFixture: true)
         defer { terminateAndCleanFixtures() }

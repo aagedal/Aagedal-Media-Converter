@@ -770,6 +770,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var timelineMarkers: [StitchTimelineMarker] = []
     var trimStart: Double? = nil
     var trimEnd: Double? = nil
+    /// Nil disables recursive encoding; otherwise this is the total generation count.
+    var recursiveEncodingGenerations: Int? = nil
     var loopPlayback: Bool = false
     var metadata: VideoMetadata?
     var detailsLoaded: Bool = false

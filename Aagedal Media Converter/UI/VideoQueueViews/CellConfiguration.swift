@@ -35,6 +35,7 @@ struct VideoFileCellConfiguration: Equatable {
     let applicationJobOrigin: ApplicationJobOrigin?
     let applicationJobSettingsSummary: String?
     let comment: String
+    let recursiveEncodingGenerations: Int?
     let includeDateTag: Bool
     let outputURL: URL?
     let url: URL
@@ -318,6 +319,8 @@ enum CellAction {
     case toggleOCR(optionPressed: Bool)
     case toggleAnalytics(optionPressed: Bool)
     case toggleAutoEncode
+    case toggleRecursiveEncoding
+    case setRecursiveEncodingGenerations(Int)
     case toggleWaveform
     case toggleDateTag
     case toggleMute

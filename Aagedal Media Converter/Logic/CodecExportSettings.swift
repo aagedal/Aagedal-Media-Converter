@@ -50,6 +50,12 @@ struct CodecExportSettings: Codable, Equatable, Sendable {
         let resolutionKey: String
         let defaultResolution: String
         switch preset {
+        case .lossless:
+            fileExtension = "mkv"
+            container = .mkv
+            resolutionLimit = .unlimited
+            ffmpegArguments = preset.codecFFmpegArguments(defaults: defaults)
+            return
         case .streamCopy:
             fileExtension = streamCopyContainer?.fileExtension ?? "mp4"
             container = streamCopyContainer?.fileExtension.flatMap { CodecContainer(rawValue: $0.uppercased()) }

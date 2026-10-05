@@ -245,6 +245,7 @@ enum ManualApplicationJobBridge {
         let hasActiveCrop = item.cropConfig?.isActive == true
         return item.status == .waiting
             && item.applicationJobID == nil
+            && item.recursiveEncodingGenerations == nil
             && item.isEncodable
             && !item.isImageSequence
             && (item.audioRoutingConfig == nil

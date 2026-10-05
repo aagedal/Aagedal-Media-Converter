@@ -957,6 +957,9 @@ struct VideoQueueTableView: NSViewRepresentable {
         // MARK: - AppKit Cell Configuration Builder
 
         func buildCellConfiguration(item: VideoItem, isGroupItem: Bool) -> VideoFileCellConfiguration {
+            let group = itemToGroupID[item.id].flatMap { groupID in
+                parent.encodingGroups.first { $0.id == groupID }
+            }
             let metadata = item.metadata
             let audioStreams = metadata?.audioStreams ?? []
             let hasBitmapSubs = metadata?.subtitleStreams.contains { Self.bitmapCodecs.contains($0.codec?.lowercased() ?? "") } ?? false
@@ -1029,6 +1032,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                 applicationJobOrigin: item.applicationJobOrigin,
                 applicationJobSettingsSummary: item.applicationJobSettingsSummary,
                 comment: item.comment,
+                recursiveEncodingGenerations: item.recursiveEncodingGenerations,
                 includeDateTag: item.includeDateTag,
                 outputURL: item.outputURL,
                 url: item.url,
@@ -1039,8 +1043,8 @@ struct VideoQueueTableView: NSViewRepresentable {
                 showCommentField: isGroupItem ? false : parent.showCommentField,
                 showDateTagButton: isGroupItem ? false : parent.showDateTagButton,
                 isFocusedComment: parent.focusedCommentID == item.id,
-                preset: item.applicationPresetID?.exportPreset ?? parent.preset,
-                mergeClipsEnabled: isGroupItem ? false : parent.mergeClipsEnabled,
+                preset: item.applicationPresetID?.exportPreset ?? group?.preset ?? parent.preset,
+                mergeClipsEnabled: group.map { $0.concatEnabled || $0.conformanceMergeEnabled } ?? parent.mergeClipsEnabled,
                 mergeClipsAvailable: isGroupItem ? false : parent.mergeClipsAvailable,
                 outputFileExists: item.outputFileExists,
                 outputFileNameOverride: item.outputFileNameOverride,
@@ -1481,6 +1485,21 @@ struct VideoQueueTableView: NSViewRepresentable {
             case .toggleAutoEncode:
                 if let idx = droppedFilesIndex[itemID] {
                     parent.droppedFiles[idx].autoEncodeAfterDownload.toggle()
+                }
+            case .toggleRecursiveEncoding, .setRecursiveEncodingGenerations:
+                guard let item = findItem(by: itemID), item.status != .converting,
+                      item.applicationJobID == nil else { return }
+                let count: Int?
+                if case .setRecursiveEncodingGenerations(let generations) = action {
+                    count = min(100, max(2, generations))
+                } else {
+                    count = item.recursiveEncodingGenerations == nil ? 10 : nil
+                }
+                if let idx = parent.droppedFiles.firstIndex(where: { $0.id == itemID }) {
+                    parent.droppedFiles[idx].recursiveEncodingGenerations = count
+                } else if let gIdx = parent.encodingGroups.firstIndex(where: { $0.items.contains(where: { $0.id == itemID }) }),
+                          let iIdx = parent.encodingGroups[gIdx].items.firstIndex(where: { $0.id == itemID }) {
+                    parent.encodingGroups[gIdx].items[iIdx].recursiveEncodingGenerations = count
                 }
             case .toggleWaveform:
                 if let idx = droppedFilesIndex[itemID] {
