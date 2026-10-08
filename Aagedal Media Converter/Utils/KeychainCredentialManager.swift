@@ -12,11 +12,18 @@ final class KeychainCredentialManager: @unchecked Sendable {
 
     private let serviceName = "com.aagedal.media-converter.upload"
 
+    private let updateItem: @Sendable (CFDictionary, CFDictionary) -> OSStatus
+    private let addItem: @Sendable (CFDictionary) -> OSStatus
+
     private let presenceQuery: @Sendable (CFDictionary) -> OSStatus
 
-    init(presenceQuery: @escaping @Sendable (CFDictionary) -> OSStatus = {
-        SecItemCopyMatching($0, nil)
-    }) {
+    init(
+        updateItem: @escaping @Sendable (CFDictionary, CFDictionary) -> OSStatus = { SecItemUpdate($0, $1) },
+        addItem: @escaping @Sendable (CFDictionary) -> OSStatus = { SecItemAdd($0, nil) },
+        presenceQuery: @escaping @Sendable (CFDictionary) -> OSStatus = { SecItemCopyMatching($0, nil) }
+    ) {
+        self.updateItem = updateItem
+        self.addItem = addItem
         self.presenceQuery = presenceQuery
     }
 
@@ -34,26 +41,7 @@ final class KeychainCredentialManager: @unchecked Sendable {
 
         let account = buildAccountString(server: server, username: username)
 
-        // Delete existing credential first (if any)
-        try? deleteCredential(server: server, username: username)
-
-        guard let passwordData = password.data(using: .utf8) else {
-            throw KeychainError.encodingError
-        }
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: passwordData,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
-        ]
-
-        let status = SecItemAdd(query as CFDictionary, nil)
-
-        guard status == errSecSuccess else {
-            throw KeychainError.saveFailed(status)
-        }
+        try saveSecret(password, account: account)
     }
 
     /// Retrieves a password for the given server and username
@@ -149,26 +137,7 @@ final class KeychainCredentialManager: @unchecked Sendable {
 
         let account = buildS3AccountString(accessKeyID: accessKeyID)
 
-        // Delete existing credential first (if any)
-        try? deleteS3SecretKey(accessKeyID: accessKeyID)
-
-        guard let secretData = secretKey.data(using: .utf8) else {
-            throw KeychainError.encodingError
-        }
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: secretData,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
-        ]
-
-        let status = SecItemAdd(query as CFDictionary, nil)
-
-        guard status == errSecSuccess else {
-            throw KeychainError.saveFailed(status)
-        }
+        try saveSecret(secretKey, account: account)
     }
 
     /// Retrieves an S3 secret access key for the given access key ID
@@ -233,6 +202,28 @@ final class KeychainCredentialManager: @unchecked Sendable {
     }
 
     // MARK: - Private Methods
+
+    private func saveSecret(_ secret: String, account: String) throws {
+        guard let data = secret.data(using: .utf8) else { throw KeychainError.encodingError }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: account
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
+        ]
+        var status = updateItem(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            status = addItem(query.merging(attributes) { _, new in new } as CFDictionary)
+            // Another save may have inserted the same account between update and add.
+            if status == errSecDuplicateItem {
+                status = updateItem(query as CFDictionary, attributes as CFDictionary)
+            }
+        }
+        guard status == errSecSuccess else { throw KeychainError.saveFailed(status) }
+    }
 
     /// A status-only match avoids decrypting password data just to populate settings.
     /// No return type is requested, and authentication must not display UI. Actual

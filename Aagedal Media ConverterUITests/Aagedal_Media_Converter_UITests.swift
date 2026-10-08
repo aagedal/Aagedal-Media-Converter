@@ -266,12 +266,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             settingsButton.click()
             let cleanupError = element("settings.general.cleanupError")
             XCTAssertTrue(cleanupError.waitForExistence(timeout: 10))
+            let description = element("settings.general.cleanupDescription")
+            XCTAssertTrue(description.exists)
+            let descriptionText = description.value as? String ?? description.label
+            XCTAssertTrue(descriptionText.contains(language == "nb" ? "papirkurven" : "Trash"), descriptionText)
             attachWindowScreenshot(named: "Output cleanup error - \(language)")
             // Selectable SwiftUI text exposes its contents as an accessibility value.
             let cleanupText = cleanupError.value as? String ?? cleanupError.label
             XCTAssertTrue(cleanupText.hasPrefix(cleanupPrefix), cleanupText)
             element("settings.general.retryCleanup").click()
-            XCTAssertTrue(cleanupError.exists)
+            XCTAssertTrue(cleanupError.waitForExistence(timeout: 10))
             XCTAssertTrue(app.staticTexts[missingFolder].exists)
             element("settings.general.revealOutput").click()
             let alert = app.sheets.firstMatch

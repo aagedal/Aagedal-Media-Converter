@@ -107166,6 +107166,122 @@
           }
         }
       }
+    },
+    "Automatic cleanup could not inspect or move %lld file(s) to Trash. Check the output folder’s permissions. %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisk opprydding kunne ikke kontrollere eller flytte %lld fil(er) til papirkurven. Kontroller tilgangsrettighetene til utdatamappen. %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die automatische Bereinigung konnte %lld Datei(en) nicht überprüfen oder in den Papierkorb verschieben. Überprüfen Sie die Berechtigungen des Ausgabeordners. %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La limpieza automática no pudo inspeccionar o mover %lld archivo(s) a la papelera. Comprueba los permisos de la carpeta de salida. %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le nettoyage automatique n’a pas pu inspecter ou placer %lld fichier(s) dans la corbeille. Vérifiez les autorisations du dossier de sortie. %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La pulizia automatica non ha potuto controllare o spostare %lld file nel Cestino. Controlla i permessi della cartella di output. %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "自動クリーンアップで %lld 個のファイルを確認またはゴミ箱に移動できませんでした。出力フォルダーのアクセス権を確認してください。%@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "자동 정리가 %lld개 파일을 검사하거나 휴지통으로 이동하지 못했습니다. 출력 폴더의 권한을 확인하세요. %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A limpeza automática não pôde inspecionar ou mover %lld arquivo(s) para o Lixo. Verifique as permissões da pasta de saída. %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "自动清理无法检查 %lld 个文件或将其移到废纸篓。请检查输出文件夹的权限。%@"
+          }
+        }
+      }
+    },
+    "Only completed files created by this app are moved to Trash. Older, unmarked files are kept. Cleanup only applies to the default output folder." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bare ferdige filer opprettet av denne appen flyttes til papirkurven. Eldre filer uten merking beholdes. Opprydding gjelder bare standard utdatamappe."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nur fertiggestellte Dateien, die diese App erstellt hat, werden in den Papierkorb verschoben. Ältere Dateien ohne Kennzeichnung bleiben erhalten. Die Bereinigung gilt nur für den Standardausgabeordner."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo se mueven a la papelera los archivos completados creados por esta app. Se conservan los archivos antiguos sin marcar. La limpieza solo se aplica a la carpeta de salida predeterminada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seuls les fichiers terminés créés par cette app sont placés dans la corbeille. Les anciens fichiers non marqués sont conservés. Le nettoyage concerne uniquement le dossier de sortie par défaut."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo i file completati creati da questa app vengono spostati nel Cestino. I file più vecchi senza contrassegno vengono conservati. La pulizia si applica solo alla cartella di output predefinita."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このアプリで作成された完成済みのファイルのみをゴミ箱に移動します。マークのない古いファイルは保持されます。クリーンアップはデフォルトの出力フォルダーにのみ適用されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 앱이 생성한 완료된 파일만 휴지통으로 이동합니다. 표시가 없는 이전 파일은 보존됩니다. 정리는 기본 출력 폴더에만 적용됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Somente arquivos concluídos criados por este app são movidos para o Lixo. Arquivos antigos sem marcação são mantidos. A limpeza se aplica apenas à pasta de saída padrão."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "仅将此应用创建的已完成文件移到废纸篓。较旧且未标记的文件将保留。清理仅适用于默认输出文件夹。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

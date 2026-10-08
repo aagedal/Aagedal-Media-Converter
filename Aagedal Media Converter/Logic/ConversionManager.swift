@@ -2068,6 +2068,12 @@ actor ConversionManager: Sendable {
         )
 
         conversionRequest.outputURLResolved = { url in resolvedSingleOutput.withLock { $0 = url } }
+        conversionRequest.etaUpdate = { eta in
+            Task { @MainActor in
+                ConversionQueueState.applyETA(eta, for: [currentItem], ownership: callbackOwnership,
+                                              in: &droppedFiles.wrappedValue)
+            }
+        }
 
         // Throttle UI updates to ~4 Hz to avoid SwiftUI re-render storms during encoding
         let singleUIThrottle = OSAllocatedUnfairLock(initialState: Date.distantPast)
@@ -2835,6 +2841,7 @@ actor ConversionManager: Sendable {
                 codec: codec,
                 language: language,
                 engineKind: settings.engine,
+                sourceRange: followUp.sourceRange,
                 publicationIsCurrent: {
                     followUp.canBeginSubtitles(in: droppedFiles.wrappedValue)
                 }

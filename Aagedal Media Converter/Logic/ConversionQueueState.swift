@@ -65,6 +65,18 @@ enum ConversionQueueState {
         }
     }
 
+    static func applyETA(
+        _ eta: String?,
+        for selectedItems: [VideoItem],
+        ownership: ConversionCallbackOwnership,
+        in items: inout [VideoItem]
+    ) {
+        guard ownership.isActive else { return }
+        for index in callbackIndices(for: selectedItems, in: items) {
+            items[index].eta = eta
+        }
+    }
+
     /// Resolve the selected item again after asynchronous metadata preparation.
     /// Queue positions can change while probing; cancelled, removed, or replaced
     /// sources must never receive the delayed result or start encoding.

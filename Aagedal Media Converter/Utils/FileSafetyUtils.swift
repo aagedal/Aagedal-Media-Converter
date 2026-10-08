@@ -3,11 +3,54 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+import Darwin
 import OSLog
 
 /// Utilities for safe file operations to prevent accidental data loss
 enum FileSafetyUtils {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "FileSafety")
+
+    // Stored on the completed file, rather than its path, so replacing a file does
+    // not grant cleanup ownership to unrelated content. Unsupported filesystems
+    // safely retain outputs instead of falling back to filename-based deletion.
+    private static let completedOutputAttribute = "me.aagedal.MediaConverter.completedOutput"
+
+    private struct CompletedOutputMarker: Codable {
+        let completedAt: Date
+        let size: Int
+        let modifiedAt: Date
+    }
+
+    @discardableResult
+    static func markCompletedOutput(_ url: URL, completedAt: Date = Date()) -> Bool {
+        do {
+            let values = try URL(fileURLWithPath: url.path).resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey, .isSymbolicLinkKey])
+            guard values.isRegularFile == true, values.isSymbolicLink != true,
+                  let size = values.fileSize, let modifiedAt = values.contentModificationDate else { return false }
+            let marker = CompletedOutputMarker(completedAt: completedAt, size: size, modifiedAt: modifiedAt)
+            let data = try JSONEncoder().encode(marker)
+            let result = data.withUnsafeBytes { bytes in
+                setxattr(url.path, completedOutputAttribute, bytes.baseAddress, bytes.count, 0, XATTR_NOFOLLOW)
+            }
+            guard result == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            return true
+        } catch {
+            logger.warning("Could not mark completed output for automatic cleanup: \(url.path): \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    static func completedOutputDate(_ url: URL) -> Date? {
+        var bytes = [UInt8](repeating: 0, count: 1024)
+        let count = getxattr(url.path, completedOutputAttribute, &bytes, bytes.count, 0, XATTR_NOFOLLOW)
+        guard count > 0,
+              let marker = try? JSONDecoder().decode(CompletedOutputMarker.self, from: Data(bytes.prefix(count))),
+              marker.completedAt.timeIntervalSince1970.isFinite,
+              let values = try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey, .isSymbolicLinkKey]),
+              values.isRegularFile == true, values.isSymbolicLink != true,
+              values.fileSize == marker.size, values.contentModificationDate == marker.modifiedAt else { return nil }
+        return marker.completedAt
+    }
 
     /// Thread-safe storage for created files
     private final class CreatedFilesStorage: @unchecked Sendable {

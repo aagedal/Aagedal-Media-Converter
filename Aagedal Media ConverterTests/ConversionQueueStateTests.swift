@@ -5,6 +5,48 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class ConversionQueueStateTests: XCTestCase {
+
+    func testRecursiveProgressSeparatesGenerationLabelFromWholeChainETA() {
+        let update = RecursiveEncodingProgress(progress: 0.5, status: "00:00:30", generation: 1, total: 3)
+        XCTAssertEqual(update.fraction, 1.0 / 6, accuracy: 0.000001)
+        XCTAssertEqual(update.message, "Generation 1/3")
+        XCTAssertEqual(update.eta, "00:02:30")
+        let last = RecursiveEncodingProgress(progress: 0.5, status: "00:00:30", generation: 3, total: 3)
+        XCTAssertEqual(last.eta, "00:00:30")
+        let closing = RecursiveEncodingProgress(progress: 1, status: "Closing file...", generation: 1, total: 3)
+        XCTAssertEqual(closing.message, "Generation 1/3 · Closing file...")
+        XCTAssertNil(closing.eta)
+        XCTAssertNil(RecursiveEncodingProgress(progress: 1, status: "00:00:30", generation: 1, total: 3).eta)
+        XCTAssertNil(RecursiveEncodingProgress(progress: 0.001, status: "23:59:59", generation: 1, total: 100).eta)
+    }
+
+    func testRecursiveETAAndGenerationStatusCoexistAndClearDuringFinalization() {
+        let selected = item(status: .converting)
+        var items = [selected]
+        let ownership = ConversionCallbackOwnership()
+        ConversionQueueState.applyProgress(0.25, message: "Generation 1/2", isDuration: false,
+                                           for: [selected], ownership: ownership, in: &items)
+        ConversionQueueState.applyETA("00:02:00", for: [selected], ownership: ownership, in: &items)
+        XCTAssertEqual(items[0].eta, "00:02:00")
+        XCTAssertEqual(items[0].statusMessage, "Generation 1/2")
+        ConversionQueueState.applyETA(nil, for: [selected], ownership: ownership, in: &items)
+        XCTAssertNil(items[0].eta)
+        XCTAssertEqual(items[0].statusMessage, "Generation 1/2")
+    }
+
+    func testRecursiveETAIgnoresCancelledSourcesAndOldOwners() {
+        let selected = item(status: .converting)
+        var cancelled = selected
+        cancelled.status = .cancelled
+        var items = [cancelled]
+        ConversionQueueState.applyETA("00:02:00", for: [selected], ownership: ConversionCallbackOwnership(), in: &items)
+        XCTAssertEqual(items, [cancelled])
+        items = [selected]
+        let oldOwnership = ConversionCallbackOwnership()
+        oldOwnership.invalidate()
+        ConversionQueueState.applyETA("00:02:00", for: [selected], ownership: oldOwnership, in: &items)
+        XCTAssertEqual(items, [selected])
+    }
     @MainActor
     func testTerminatingOldProgressSubscriptionPreservesReplacement() async {
         let manager = ConversionManager()

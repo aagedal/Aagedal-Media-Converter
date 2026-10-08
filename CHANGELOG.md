@@ -1,3 +1,51 @@
+# v.4.5.1
+
+## Encoding and transcription
+
+- Added **Recursive Encoding** for supported presets. Enable it from a queue
+  item’s context menu and choose 2–100 total generations. Each generation encodes
+  the previous output. All generations are kept together in a separate folder
+  for each run. Source trims and other source edits apply only to the first
+  generation.
+- Added a **Lossless** preset with FFV1 video and 64-bit floating-point PCM audio
+  in Matroska, preserving source resolution and frame rate. It can serve as a
+  reference when comparing generation loss.
+- Added Nemotron transcription with the bundled NeMo Speech runtime and model
+  download from transcription settings.
+- Added optional faster Whisper transcription using 30-second chunks. It may
+  reduce subtitle timing precision and is disabled by default.
+
+## Analysis and interface
+
+- Added audio loudness analysis alongside video quality analysis, and bundled
+  SSIMULACRA2 so no separate installation is required.
+- Quality analysis now compares trimmed outputs with the corresponding source
+  range and handles perfect scores and repeated report exports more reliably.
+- Added German, Spanish, French, Italian, Japanese, Korean, Brazilian Portuguese,
+  and Simplified Chinese interface translations, with refreshed queue tips.
+- Failed website downloads now offer guidance for updating the app-managed
+  yt-dlp tools.
+
+## Reliability
+
+- OCR subtitles for trimmed exports are clipped to the retained source interval
+  and shifted to the output timeline, including cues crossing trim boundaries.
+- Disabling cleanup or changing its folder or retention period stops an active
+  pass before further files are moved to Trash.
+- Cancelling a recursive conversion task stops its active generation and prevents
+  later generations from starting. Recursive progress now keeps the generation
+  label separate from the estimated remaining time for the whole chain.
+- Automatic cleanup moves completed app outputs to Trash instead of permanently
+  deleting files. Unrelated files and older outputs without an app ownership
+  marker are preserved. Cleanup age starts when conversion finishes.
+- Output-folder cleanup runs in the background, keeping the interface responsive
+  while scanning large folders or slow volumes. Concurrent cleanup requests share
+  one pass.
+- Switching settings-sync destinations creates a snapshot even when settings
+  have not changed. Sync Now also recreates a missing snapshot.
+- Updating upload passwords and S3 secrets preserves existing Keychain entries
+  if saving the replacement fails.
+
 # v.4.5.0
 
 Local MCP access lets agents inspect media and run conversions through the app's
