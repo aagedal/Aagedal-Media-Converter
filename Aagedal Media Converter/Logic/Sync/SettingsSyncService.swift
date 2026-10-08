@@ -36,7 +36,8 @@ final class SettingsSyncService {
     static let shared = SettingsSyncService()
 
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "SettingsSync")
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+    private let bookmarkManager: SecurityScopedBookmarkManager
 
     // MARK: - Observable state (read by SyncSettingsView)
 
@@ -72,7 +73,9 @@ final class SettingsSyncService {
 
     // MARK: - Init
 
-    private init() {
+    init(defaults: UserDefaults = .standard, bookmarkManager: SecurityScopedBookmarkManager = .shared, observeChanges: Bool = true) {
+        self.defaults = defaults
+        self.bookmarkManager = bookmarkManager
         syncEnabled = defaults.bool(forKey: AppConstants.settingsSyncEnabledKey)
         let modeRaw = defaults.string(forKey: AppConstants.settingsSyncLocationModeKey)
         locationMode = SettingsSyncLocationMode(rawValue: modeRaw ?? "") ?? .iCloudDrive
@@ -82,8 +85,10 @@ final class SettingsSyncService {
             lastSyncDate = stored
         }
 
-        observeLocalChanges()
-        observeAppActivation()
+        if observeChanges {
+            observeLocalChanges()
+            observeAppActivation()
+        }
 
         if syncEnabled {
             startMonitoring()
@@ -118,6 +123,7 @@ final class SettingsSyncService {
         locationMode = mode
         defaults.set(mode.rawValue, forKey: AppConstants.settingsSyncLocationModeKey)
         guard syncEnabled else { return }
+        resetDestinationBaseline()
         // Re-point monitoring and reconcile against the new location.
         stopMonitoring()
         reconcileOnEnable()
@@ -127,13 +133,21 @@ final class SettingsSyncService {
     /// Records the user's chosen custom sync folder and (if sync is on and the
     /// custom mode is active) reconciles against it.
     func setCustomFolder(_ url: URL) {
-        _ = SecurityScopedBookmarkManager.shared.saveWritableBookmark(for: url)
+        _ = bookmarkManager.saveWritableBookmark(for: url)
         customFolderPath = url.path
         defaults.set(url.path, forKey: AppConstants.settingsSyncCustomFolderPathKey)
         guard syncEnabled, locationMode == .customFolder else { return }
+        resetDestinationBaseline()
         stopMonitoring()
         reconcileOnEnable()
         startMonitoring()
+    }
+
+    private func resetDestinationBaseline() {
+        cancelPendingWrite()
+        lastWrittenDefaults = nil
+        lastAppliedModifiedAt = nil
+        protectedUnreadableSnapshotURL = nil
     }
 
     /// Manual push + pull for the "Sync Now" button.
@@ -259,7 +273,8 @@ final class SettingsSyncService {
         // a bug, and a remote copy could otherwise be wiped out.
         guard !snapshot.defaults.isEmpty else { return }
         // Skip if nothing the allowlist cares about actually changed.
-        if let previous = lastWrittenDefaults, previous == snapshot.defaults { return }
+        if let previous = lastWrittenDefaults, previous == snapshot.defaults,
+           FileManager.default.fileExists(atPath: fileURL.path) { return }
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),

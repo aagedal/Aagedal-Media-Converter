@@ -9643,6 +9643,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let uniqueOutputURL = temporaryDirectory.appendingPathComponent("converted_1.mp4")
         XCTAssertTrue(FileManager.default.fileExists(atPath: uniqueOutputURL.path))
+        XCTAssertNotNil(FileSafetyUtils.completedOutputDate(uniqueOutputURL))
+        XCTAssertNil(FileSafetyUtils.completedOutputDate(existingOutputURL))
         let probedStreams = await FFMPEGProbeService.verifyOutputStreams(for: uniqueOutputURL)
         let streams = try XCTUnwrap(probedStreams)
         XCTAssertEqual(streams.videoStreamCount, 1)
@@ -9673,6 +9675,8 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         let safeOutputURL = temporaryDirectory.appendingPathComponent("source_encoded.mp4")
         XCTAssertTrue(FileManager.default.fileExists(atPath: safeOutputURL.path))
+        XCTAssertNotNil(FileSafetyUtils.completedOutputDate(safeOutputURL))
+        XCTAssertNil(FileSafetyUtils.completedOutputDate(fixtureURL))
         let probedStreams = await FFMPEGProbeService.verifyOutputStreams(for: safeOutputURL)
         let streams = try XCTUnwrap(probedStreams)
         XCTAssertEqual(streams.videoStreamCount, 1)
@@ -16756,5 +16760,56 @@ final class BundledSSIMULACRA2Tests: XCTestCase {
         XCTAssertLessThanOrEqual(try XCTUnwrap(measured.min), measured.overallScore)
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(measured.max), measured.overallScore)
         XCTAssertEqual(measured.metric, .ssimulacra2)
+    }
+}
+
+
+@MainActor
+final class SettingsSyncDestinationTests: XCTestCase {
+    private func fixture() throws -> (SettingsSyncService, URL, UserDefaults, String) {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let suite = "SettingsSyncDestinationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.set(SettingsSyncLocationMode.customFolder.rawValue, forKey: AppConstants.settingsSyncLocationModeKey)
+        defaults.set(directory.appendingPathComponent("first").path, forKey: AppConstants.settingsSyncCustomFolderPathKey)
+        defaults.set(true, forKey: AppConstants.fileNameReplaceSpacesKey)
+        let bookmarks = SecurityScopedBookmarkManager(defaults: defaults)
+        let service = SettingsSyncService(defaults: defaults, bookmarkManager: bookmarks, observeChanges: false)
+        service.setSyncEnabled(true)
+        return (service, directory, defaults, suite)
+    }
+
+    func testSwitchingToEmptyFolderWritesUnchangedSettings() throws {
+        let (service, directory, defaults, suite) = try fixture()
+        defer {
+            service.setSyncEnabled(false)
+            try? FileManager.default.removeItem(at: directory)
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let firstURL = try XCTUnwrap(service.snapshotFileURL())
+        let first = try SettingsSyncService.decodeSnapshot(Data(contentsOf: firstURL))
+        let secondFolder = directory.appendingPathComponent("second")
+        try FileManager.default.createDirectory(at: secondFolder, withIntermediateDirectories: false)
+        service.setCustomFolder(secondFolder)
+        let secondURL = try XCTUnwrap(service.snapshotFileURL())
+        let second = try SettingsSyncService.decodeSnapshot(Data(contentsOf: secondURL))
+        XCTAssertNotEqual(firstURL, secondURL)
+        XCTAssertEqual(first.defaults, second.defaults)
+        XCTAssertEqual(second.defaults[AppConstants.fileNameReplaceSpacesKey], .bool(true))
+    }
+
+    func testSyncNowRecreatesMissingSnapshotWithoutSettingsChange() throws {
+        let (service, directory, defaults, suite) = try fixture()
+        defer {
+            service.setSyncEnabled(false)
+            try? FileManager.default.removeItem(at: directory)
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let url = try XCTUnwrap(service.snapshotFileURL())
+        try FileManager.default.removeItem(at: url)
+        service.syncNow()
+        let recreated = try SettingsSyncService.decodeSnapshot(Data(contentsOf: url))
+        XCTAssertEqual(recreated.defaults[AppConstants.fileNameReplaceSpacesKey], .bool(true))
     }
 }

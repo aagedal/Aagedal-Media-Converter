@@ -40,6 +40,11 @@ struct GeneralSettingsView: View {
         } message: {
             Text(outputFolderError ?? "")
         }
+        .onChange(of: autoDeleteOldEncodes) { _, enabled in
+            if !enabled { cleanupService.cancelCleanup() }
+        }
+        .onChange(of: outputFolder) { _, _ in cleanupService.cancelCleanup() }
+        .onChange(of: autoDeleteOldEncodesDays) { _, _ in cleanupService.cancelCleanup() }
         .onChange(of: previewCacheCleanupPolicyRaw) { _, newValue in
             let policy = PreviewCacheCleanupPolicy(rawValue: newValue) ?? .purgeOnLaunch
             Task {
@@ -176,13 +181,15 @@ struct GeneralSettingsView: View {
                                     .fixedSize(horizontal: false, vertical: true)
                                     .accessibilityIdentifier("settings.general.cleanupError")
                                 Button("Retry Cleanup") {
-                                    cleanupService.performCleanupIfNeeded()
+                                    Task { await cleanupService.performCleanupIfNeeded() }
                                 }
+                                .disabled(cleanupService.isCleaning)
                                 .accessibilityIdentifier("settings.general.retryCleanup")
                             }
                         }
 
-                        Text("Only applies to the default output folder. Files in other locations are never deleted.")
+                        Text("Only completed files created by this app are moved to Trash. Older, unmarked files are kept. Cleanup only applies to the default output folder.")
+                            .accessibilityIdentifier("settings.general.cleanupDescription")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

@@ -4,12 +4,29 @@ import XCTest
 
 @MainActor
 final class OutputFolderCleanupServiceTests: XCTestCase {
-    private final class FailingRemovalFileManager: FileManager, @unchecked Sendable {
-        var failingURL: URL?
+    private final class State: @unchecked Sendable {
+        private let lock = NSLock()
+        private var starts: [URL] = []
+        private var stops: [URL] = []
+        private var trashed: [URL] = []
+        private var blockedURL: URL?
+        private let firstScopeFails: Bool
 
-        override func removeItem(at URL: URL) throws {
-            if URL.standardizedFileURL.path == failingURL?.standardizedFileURL.path { throw CocoaError(.fileWriteNoPermission) }
-            try super.removeItem(at: URL)
+        init(firstScopeFails: Bool = false) { self.firstScopeFails = firstScopeFails }
+
+        func start(_ url: URL) -> Bool { lock.withLock { starts.append(url); return !firstScopeFails || starts.count > 1 } }
+        func stop(_ url: URL) { lock.withLock { stops.append(url) } }
+        func block(_ url: URL?) { lock.withLock { blockedURL = url } }
+        func trash(_ url: URL) throws {
+            try lock.withLock {
+                if url == blockedURL { throw CocoaError(.fileWriteNoPermission) }
+                // Never send test fixtures to the user's actual Trash.
+                try FileManager.default.removeItem(at: url)
+                trashed.append(url)
+            }
+        }
+        var snapshot: (starts: [URL], stops: [URL], trashed: [URL]) {
+            lock.withLock { (starts, stops, trashed) }
         }
     }
 
@@ -28,194 +45,89 @@ final class OutputFolderCleanupServiceTests: XCTestCase {
         return (directory, defaults)
     }
 
-    private func writeFile(_ name: String, in directory: URL) throws -> URL {
+    private func writeFile(_ name: String, in directory: URL, completedAt: Date? = Date(timeIntervalSinceNow: -30 * 86_400)) throws -> URL {
         let url = directory.appendingPathComponent(name)
         try Data("encode".utf8).write(to: url)
+        if let completedAt { XCTAssertTrue(FileSafetyUtils.markCompletedOutput(url, completedAt: completedAt)) }
         return url
     }
 
-    private func oldMetadata(for url: URL) throws -> URLResourceValues {
-        var values = try url.resourceValues(forKeys: [.creationDateKey, .isRegularFileKey])
-        values.creationDate = Date(timeIntervalSinceNow: -30 * 86_400)
-        return values
-    }
-
-    func testEnumerationFailureIsVisibleAndReleasesFolderScope() throws {
-        let fixture = try fixture()
-        let file = try writeFile("not-a-folder", in: fixture.directory)
-        fixture.defaults.set(file.path, forKey: "outputFolder")
-        var starts: [URL] = []
-        var stops: [URL] = []
-        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
-            startScope: { starts.append($0); return true },
-            stopScope: { stops.append($0) })
-        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks)
-
-        service.performCleanupIfNeeded()
-
-        XCTAssertNotNil(service.lastError)
-        XCTAssertEqual(starts, [file])
-        XCTAssertEqual(stops, [file])
-        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
-    }
-
-    func testMetadataFailurePreservesUnknownFileAndContinuesOtherDeletions() throws {
-        let fixture = try fixture()
-        let unreadable = try writeFile("unknown-age.mov", in: fixture.directory)
-        let old = try writeFile("old.mov", in: fixture.directory)
-        let service = OutputFolderCleanupService(defaults: fixture.defaults, readResourceValues: { url in
-            if url.standardizedFileURL.path == unreadable.standardizedFileURL.path { throw CocoaError(.fileReadNoPermission) }
-            return try self.oldMetadata(for: url)
-        })
-
-        service.performCleanupIfNeeded()
-
-        XCTAssertTrue(FileManager.default.fileExists(atPath: unreadable.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
-        XCTAssertTrue(try XCTUnwrap(service.lastError).contains(unreadable.lastPathComponent))
-    }
-
-    func testRemovalFailureIsVisibleAndSuccessOnRetryClearsError() throws {
-        let fixture = try fixture()
-        let blocked = try writeFile("blocked.mov", in: fixture.directory)
-        let other = try writeFile("other.mov", in: fixture.directory)
-        let fileManager = FailingRemovalFileManager()
-        fileManager.failingURL = blocked
-        let service = OutputFolderCleanupService(defaults: fixture.defaults, fileManager: fileManager,
-            readResourceValues: { try self.oldMetadata(for: $0) })
-
-        service.performCleanupIfNeeded()
-
-        XCTAssertTrue(FileManager.default.fileExists(atPath: blocked.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: other.path))
-        XCTAssertTrue(try XCTUnwrap(service.lastError).contains(blocked.lastPathComponent))
-        fileManager.failingURL = nil
-        service.performCleanupIfNeeded()
-        XCTAssertNil(service.lastError)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: blocked.path))
-    }
-
-    func testCleanupOnlyDeletesOldRegularVisibleFilesAndBalancesAccess() throws {
+    func testCleanupPreservesUnmarkedRecentHiddenNestedAndSymlinkFiles() async throws {
         let fixture = try fixture()
         let old = try writeFile("old.mov", in: fixture.directory)
-        let recent = try writeFile("recent.mov", in: fixture.directory)
+        let unmarked = try writeFile("unrelated.mov", in: fixture.directory, completedAt: nil)
+        let recent = try writeFile("recent.mov", in: fixture.directory, completedAt: Date())
         let hidden = try writeFile(".hidden.mov", in: fixture.directory)
-        let subdirectory = fixture.directory.appendingPathComponent("nested")
-        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: false)
-        let nested = try writeFile("nested.mov", in: subdirectory)
-        var active = false
-        var scopeStops = 0
-        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
-            startScope: { url in
-                XCTAssertEqual(url, fixture.directory)
-                active = true
-                return true
-            }, stopScope: { _ in active = false; scopeStops += 1 })
-        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks,
-            readResourceValues: { url in
-                XCTAssertTrue(active)
-                if url.standardizedFileURL.path == recent.standardizedFileURL.path {
-                    return try url.resourceValues(forKeys: [.creationDateKey, .isRegularFileKey])
-                }
-                return try self.oldMetadata(for: url)
-            })
+        let nested = fixture.directory.appendingPathComponent("nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
+        let nestedFile = try writeFile("nested.mov", in: nested)
+        let link = fixture.directory.appendingPathComponent("linked.mov")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: nestedFile)
+        let state = State()
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults, startScope: state.start, stopScope: state.stop)
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks, trashItem: state.trash)
 
-        service.performCleanupIfNeeded()
+        await service.performCleanupIfNeeded()
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
-        for url in [recent, hidden, subdirectory, nested] {
+        XCTAssertEqual(state.snapshot.trashed, [old])
+        for url in [unmarked, recent, hidden, nested, nestedFile, link] {
             XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
         }
+        XCTAssertEqual(state.snapshot.starts, [fixture.directory])
+        XCTAssertEqual(state.snapshot.stops, [fixture.directory])
         XCTAssertNil(service.lastError)
-        XCTAssertFalse(active)
-        XCTAssertEqual(scopeStops, 1)
     }
 
-    func testCleanupRestoresSavedBookmarkWhenDirectAccessIsUnavailable() throws {
+    func testMarkerSurvivesRestartButDoesNotAuthorizeReplacementFile() async throws {
+        let fixture = try fixture()
+        let output = try writeFile("old.mov", in: fixture.directory)
+        XCTAssertNotNil(FileSafetyUtils.completedOutputDate(output))
+        let state = State()
+        let replacement = try writeFile("replacement.mov", in: fixture.directory, completedAt: nil)
+        try FileManager.default.removeItem(at: output)
+        try FileManager.default.moveItem(at: replacement, to: output)
+        XCTAssertNil(FileSafetyUtils.completedOutputDate(output))
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, trashItem: state.trash)
+
+        await service.performCleanupIfNeeded()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertTrue(state.snapshot.trashed.isEmpty)
+    }
+
+    func testChangedOutputIsPreservedEvenWhenItsMarkerRemains() async throws {
+        let fixture = try fixture()
+        let output = try writeFile("old.mov", in: fixture.directory)
+        try Data("unrelated replacement content".utf8).write(to: output)
+        XCTAssertNil(FileSafetyUtils.completedOutputDate(output))
+        let state = State()
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, trashItem: state.trash)
+
+        await service.performCleanupIfNeeded()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertTrue(state.snapshot.trashed.isEmpty)
+    }
+
+    func testCleanupRestoresSavedBookmarkWhenDirectAccessIsUnavailable() async throws {
         let fixture = try fixture()
         let old = try writeFile("old.mov", in: fixture.directory)
-        fixture.defaults.set([fixture.directory.absoluteString: Data([1])], forKey: "securityScopedBookmarks")
-        var starts = 0
-        var stops = 0
-        var active = false
+        let directory = fixture.directory
+        fixture.defaults.set([directory.absoluteString: Data([1])], forKey: "securityScopedBookmarks")
+        let state = State(firstScopeFails: true)
         let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
-            resolveData: { _ in (fixture.directory, false) },
-            startScope: { _ in
-                starts += 1
-                active = starts > 1
-                return active
-            }, stopScope: { _ in active = false; stops += 1 })
-        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks,
-            readResourceValues: { url in
-                XCTAssertTrue(active)
-                return try self.oldMetadata(for: url)
-            })
+            resolveData: { _ in (directory, false) }, startScope: state.start, stopScope: state.stop)
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks, trashItem: state.trash)
 
-        service.performCleanupIfNeeded()
+        await service.performCleanupIfNeeded()
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
-        XCTAssertNil(service.lastError)
-        XCTAssertEqual(starts, 2)
-        XCTAssertEqual(stops, 1)
-        XCTAssertFalse(active)
-    }
-
-    func testDisabledCleanupDoesNotAcquireAccessOrRemoveFiles() throws {
-        let fixture = try fixture()
-        let file = try writeFile("old.mov", in: fixture.directory)
-        fixture.defaults.set(false, forKey: AppConstants.autoDeleteOldEncodesKey)
-        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
-            startScope: { _ in XCTFail("Disabled cleanup must not acquire access"); return false })
-        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks,
-            readResourceValues: { try self.oldMetadata(for: $0) })
-
-        service.performCleanupIfNeeded()
-
-        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertEqual(state.snapshot.starts.count, 2)
+        XCTAssertEqual(state.snapshot.stops.count, 1)
+        XCTAssertEqual(state.snapshot.trashed, [old])
         XCTAssertNil(service.lastError)
     }
 
-    func testDirectorySymlinkCleanupPreservesSelectedScopeAndUnrelatedFiles() throws {
-        let fixture = try fixture()
-        let target = fixture.directory.appendingPathComponent("target", isDirectory: true)
-        let link = fixture.directory.appendingPathComponent("linked-output", isDirectory: true)
-        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
-        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
-        let old = try writeFile("old.mov", in: target)
-        let recent = try writeFile("recent.mov", in: target)
-        let hidden = try writeFile(".hidden.mov", in: target)
-        let nested = target.appendingPathComponent("nested", isDirectory: true)
-        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
-        let nestedFile = try writeFile("old.mov", in: nested)
-        fixture.defaults.set(link.path, forKey: "outputFolder")
-        var active = false
-        var stops = 0
-        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
-            startScope: { url in XCTAssertEqual(url.path, link.path); active = true; return true },
-            stopScope: { url in XCTAssertEqual(url.path, link.path); active = false; stops += 1 })
-        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks,
-            readResourceValues: { url in
-                XCTAssertTrue(active)
-                XCTAssertEqual(url.deletingLastPathComponent().path, link.path)
-                if url.lastPathComponent == recent.lastPathComponent {
-                    return try url.resourceValues(forKeys: [.creationDateKey, .isRegularFileKey])
-                }
-                return try self.oldMetadata(for: url)
-            })
-
-        service.performCleanupIfNeeded()
-
-        XCTAssertNil(service.lastError)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
-        for url in [recent, hidden, nested, nestedFile, link] {
-            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
-        }
-        XCTAssertEqual(fixture.defaults.string(forKey: "outputFolder"), link.path)
-        XCTAssertFalse(active)
-        XCTAssertEqual(stops, 1)
-    }
-
-    func testUnavailableFolderPreservesSavedGrantAndRecoversInNewServiceInstance() throws {
+    func testUnavailableFolderPreservesSavedGrantAndRecoversAfterReconnect() async throws {
         let fixture = try fixture()
         let folder = fixture.directory.appendingPathComponent("unavailable-output", isDirectory: true)
         fixture.defaults.set(folder.path, forKey: "outputFolder")
@@ -224,31 +136,185 @@ final class OutputFolderCleanupServiceTests: XCTestCase {
         let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
             resolveData: { _ in throw CocoaError(.fileReadNoSuchFile) }, startScope: { _ in false })
         let unavailableService = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks)
-
-        unavailableService.performCleanupIfNeeded()
-
+        await unavailableService.performCleanupIfNeeded()
         XCTAssertNotNil(unavailableService.lastError)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
-        XCTAssertEqual(fixture.defaults.string(forKey: "outputFolder"), folder.path)
         XCTAssertEqual(fixture.defaults.dictionary(forKey: "securityScopedBookmarks") as? [String: Data], savedBookmarks)
+        XCTAssertEqual(fixture.defaults.string(forKey: "outputFolder"), folder.path)
 
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
         let old = try writeFile("old.mov", in: folder)
-        var starts = 0
-        var stops = 0
+        let state = State(firstScopeFails: true)
         let restoredBookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
-            resolveData: { data in XCTAssertEqual(data, Data([7])); return (folder, false) },
-            startScope: { _ in starts += 1; return starts > 1 }, stopScope: { _ in stops += 1 })
+            resolveData: { _ in (folder, false) }, startScope: state.start, stopScope: state.stop)
         let restartedService = OutputFolderCleanupService(defaults: fixture.defaults,
-            bookmarkManager: restoredBookmarks, readResourceValues: { try self.oldMetadata(for: $0) })
-
-        restartedService.performCleanupIfNeeded()
-
+            bookmarkManager: restoredBookmarks, trashItem: state.trash)
+        await restartedService.performCleanupIfNeeded()
         XCTAssertNil(restartedService.lastError)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
-        XCTAssertEqual(starts, 2)
-        XCTAssertEqual(stops, 1)
-        XCTAssertEqual(fixture.defaults.string(forKey: "outputFolder"), folder.path)
-        XCTAssertEqual(fixture.defaults.dictionary(forKey: "securityScopedBookmarks") as? [String: Data], savedBookmarks)
+        XCTAssertEqual(state.snapshot.trashed, [old])
+        XCTAssertEqual(state.snapshot.starts.count, 2)
+        XCTAssertEqual(state.snapshot.stops.count, 1)
     }
+
+    func testEnumerationFailureIsVisibleAndReleasesFolderScope() async throws {
+        let fixture = try fixture()
+        let file = try writeFile("not-a-folder", in: fixture.directory)
+        fixture.defaults.set(file.path, forKey: "outputFolder")
+        let state = State()
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults, startScope: state.start, stopScope: state.stop)
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks, trashItem: state.trash)
+
+        await service.performCleanupIfNeeded()
+
+        XCTAssertNotNil(service.lastError)
+        XCTAssertEqual(state.snapshot.starts, [file])
+        XCTAssertEqual(state.snapshot.stops, [file])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    func testMetadataFailurePreservesFileAndContinuesCleanup() async throws {
+        let fixture = try fixture()
+        let unreadable = try writeFile("unreadable.mov", in: fixture.directory)
+        let old = try writeFile("old.mov", in: fixture.directory)
+        let state = State()
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, readResourceValues: { url in
+            if url == unreadable { throw CocoaError(.fileReadNoPermission) }
+            return try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        }, trashItem: state.trash)
+
+        await service.performCleanupIfNeeded()
+
+        XCTAssertEqual(state.snapshot.trashed, [old])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unreadable.path))
+        XCTAssertTrue(try XCTUnwrap(service.lastError).contains(unreadable.lastPathComponent))
+    }
+
+    func testTrashFailureIsVisibleAndSuccessfulRetryClearsError() async throws {
+        let fixture = try fixture()
+        let blocked = try writeFile("blocked.mov", in: fixture.directory)
+        let other = try writeFile("other.mov", in: fixture.directory)
+        let state = State()
+        state.block(blocked)
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, trashItem: state.trash)
+
+        await service.performCleanupIfNeeded()
+
+        XCTAssertEqual(state.snapshot.trashed, [other])
+        XCTAssertTrue(try XCTUnwrap(service.lastError).contains(blocked.lastPathComponent))
+        state.block(nil)
+        await service.performCleanupIfNeeded()
+        XCTAssertNil(service.lastError)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: blocked.path))
+    }
+
+    func testDisabledCleanupDoesNotAcquireAccessOrRemoveFiles() async throws {
+        let fixture = try fixture()
+        let old = try writeFile("old.mov", in: fixture.directory)
+        fixture.defaults.set(false, forKey: AppConstants.autoDeleteOldEncodesKey)
+        let state = State()
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults, startScope: state.start, stopScope: state.stop)
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks, trashItem: state.trash)
+
+        await service.performCleanupIfNeeded()
+
+        XCTAssertTrue(state.snapshot.starts.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: old.path))
+    }
+
+    func testDirectorySymlinkCleanupKeepsSelectedFolderScope() async throws {
+        let fixture = try fixture()
+        let target = fixture.directory.appendingPathComponent("target", isDirectory: true)
+        let link = fixture.directory.appendingPathComponent("link", isDirectory: true)
+        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        let old = try writeFile("old.mov", in: target)
+        fixture.defaults.set(link.path, forKey: "outputFolder")
+        let state = State()
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults, startScope: state.start, stopScope: state.stop)
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks, trashItem: state.trash)
+
+        await service.performCleanupIfNeeded()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
+        XCTAssertEqual(state.snapshot.starts.map(\.path), [link.path])
+        XCTAssertEqual(state.snapshot.stops.map(\.path), [link.path])
+        XCTAssertEqual(state.snapshot.trashed.map(\.path), [link.appendingPathComponent("old.mov").path])
+        XCTAssertNil(service.lastError)
+    }
+
+    func testCleanupRunsOffMainThreadAndCoalescesConcurrentRequests() async throws {
+        let fixture = try fixture()
+        _ = try writeFile("old.mov", in: fixture.directory)
+        let entered = expectation(description: "Background worker entered")
+        let gate = DispatchSemaphore(value: 0)
+        let state = State()
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, readResourceValues: { url in
+            XCTAssertFalse(Thread.isMainThread)
+            entered.fulfill()
+            guard gate.wait(timeout: .now() + 10) == .success else { throw CocoaError(.fileReadUnknown) }
+            return try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        }, trashItem: state.trash)
+        let first = Task { await service.performCleanupIfNeeded() }
+        await fulfillment(of: [entered], timeout: 5)
+        XCTAssertTrue(service.isCleaning)
+        let second = Task { await service.performCleanupIfNeeded() }
+        await Task.yield()
+        gate.signal()
+        await first.value
+        await second.value
+        XCTAssertFalse(service.isCleaning)
+        XCTAssertEqual(state.snapshot.trashed.count, 1)
+        XCTAssertNil(service.lastError)
+    }
+    func testDisablingCleanupStopsBeforeTrashingTheInspectedFile() async throws {
+        try await assertInterruptedCleanup(change: .disable)
+    }
+
+    func testChangingOutputFolderStopsTheOldCleanupPass() async throws {
+        try await assertInterruptedCleanup(change: .folder)
+    }
+
+    func testChangingRetentionStopsTheOldCleanupPass() async throws {
+        try await assertInterruptedCleanup(change: .retention)
+    }
+
+    func testCancellingCleanupCallerStopsTheBackgroundWorkerAndReleasesScope() async throws {
+        try await assertInterruptedCleanup(change: .cancel)
+    }
+
+    private enum CleanupChange { case disable, folder, retention, cancel }
+
+    private func assertInterruptedCleanup(change: CleanupChange) async throws {
+        let fixture = try fixture()
+        let old = try writeFile("old.mov", in: fixture.directory)
+        let another = try writeFile("another.mov", in: fixture.directory)
+        let entered = expectation(description: "Worker is inspecting an eligible output")
+        let gate = DispatchSemaphore(value: 0)
+        let state = State()
+        let bookmarks = SecurityScopedBookmarkManager(defaults: fixture.defaults,
+            startScope: state.start, stopScope: state.stop)
+        let service = OutputFolderCleanupService(defaults: fixture.defaults, bookmarkManager: bookmarks,
+            readResourceValues: { url in
+                entered.fulfill()
+                guard gate.wait(timeout: .now() + 10) == .success else { throw CocoaError(.fileReadUnknown) }
+                return try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            }, trashItem: state.trash)
+        let task = Task { await service.performCleanupIfNeeded() }
+        await fulfillment(of: [entered], timeout: 5)
+        switch change {
+        case .disable: fixture.defaults.set(false, forKey: AppConstants.autoDeleteOldEncodesKey)
+        case .folder: fixture.defaults.set(fixture.directory.appendingPathComponent("new-folder").path, forKey: "outputFolder")
+        case .retention: fixture.defaults.set(31, forKey: AppConstants.autoDeleteOldEncodesDaysKey)
+        case .cancel: task.cancel()
+        }
+        gate.signal()
+        await task.value
+        XCTAssertTrue(state.snapshot.trashed.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: old.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: another.path))
+        XCTAssertEqual(state.snapshot.starts.count, 1)
+        XCTAssertEqual(state.snapshot.stops.count, 1)
+        XCTAssertFalse(service.isCleaning)
+        XCTAssertNil(service.lastError)
+    }
+
 }

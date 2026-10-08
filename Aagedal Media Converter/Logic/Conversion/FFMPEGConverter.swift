@@ -562,6 +562,10 @@ actor FFMPEGConverter {
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
         if let generations = recursiveGenerations {
+            guard !Task.isCancelled else {
+                completion(false, "Recursive encoding cancelled")
+                return
+            }
             guard request.preset.supportsRecursiveEncoding, (2...100).contains(generations) else {
                 completion(false, "Recursive encoding requires a supported encoding preset and 2–100 generations.")
                 return
@@ -623,25 +627,30 @@ actor FFMPEGConverter {
                     pass.chapterMetadataURL = nil
                     pass.chapterMetadataTitles = []
                 }
-                let result: (Bool, String?) = await withCheckedContinuation { continuation in
-                    Task {
-                        guard self.recursiveOperationID == operationID else {
-                            continuation.resume(returning: (false, "Recursive encoding cancelled"))
-                            return
+                let result: (Bool, String?) = await withTaskCancellationHandler {
+                    await withCheckedContinuation { continuation in
+                        Task {
+                            guard self.recursiveOperationID == operationID else {
+                                continuation.resume(returning: (false, "Recursive encoding cancelled"))
+                                return
+                            }
+                            await self.convert(
+                                request: pass,
+                                av2Settings: av2Settings, dcpSettings: dcpSettings, imfSettings: imfSettings,
+                                audioOnlySettings: audioOnlySettings, imageSequenceSettings: imageSequenceSettings,
+                                codecSettings: codecSettings, subtitleSettings: subtitleSettings, commentSettings: commentSettings,
+                                progressUpdate: { progress, status in
+                                    let update = RecursiveEncodingProgress(progress: progress, status: status,
+                                                                           generation: generation, total: generations)
+                                    request.etaUpdate?(update.eta)
+                                    progressUpdate(update.fraction, update.message)
+                                },
+                                completion: { success, error in continuation.resume(returning: (success, error)) }
+                            )
                         }
-                        await self.convert(
-                            request: pass,
-                            av2Settings: av2Settings, dcpSettings: dcpSettings, imfSettings: imfSettings,
-                            audioOnlySettings: audioOnlySettings, imageSequenceSettings: imageSequenceSettings,
-                            codecSettings: codecSettings, subtitleSettings: subtitleSettings, commentSettings: commentSettings,
-                            progressUpdate: { progress, status in
-                                let fraction = min(1, max(0, progress))
-                                progressUpdate((Double(generation - 1) + fraction) / Double(generations),
-                                               "Generation \(generation)/\(generations)" + (status.map { " · " + $0 } ?? ""))
-                            },
-                            completion: { success, error in continuation.resume(returning: (success, error)) }
-                        )
                     }
+                } onCancel: {
+                    Task { await self.cancelRecursiveConversion(operationID: operationID) }
                 }
                 guard result.0, let output = resolvedOutput.withLock({ $0 }) else {
                     completion(false, result.1 ?? "Generation \(generation) failed")
@@ -956,6 +965,9 @@ actor FFMPEGConverter {
                     cleanupOutputURL,
                     owner: conversionID
                 )
+                if success && isOrdinaryFileExport && ownsOutput {
+                    FileSafetyUtils.markCompletedOutput(cleanupOutputURL)
+                }
                 if !success && isOrdinaryFileExport && ownsOutput {
                     Self.cleanupFailedOutput(at: cleanupOutputURL)
                 }
@@ -4496,6 +4508,12 @@ actor FFMPEGConverter {
                 await operation()
             }
         }
+    }
+
+    private func cancelRecursiveConversion(operationID: UUID) async {
+        // A late cancellation handler must never stop a replacement operation.
+        guard recursiveOperationID == operationID else { return }
+        await cancelConversion()
     }
 
     func cancelConversion() async {

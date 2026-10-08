@@ -894,3 +894,86 @@ final class SilentSynthesizedVideoTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(streams).isEmpty)
     }
 }
+
+extension CodecExportSettingsTests {
+    func testCancellingRecursiveCallerStopsCurrentGenerationAndAllowsReplacement() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("RecursiveCancellation-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let source = directory.appendingPathComponent("source.mkv")
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=32x32:rate=4:duration=1", "-c:v", "ffv1", source.path],
+            timeout: .seconds(15)
+        ))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let metadata = try await VideoMetadataService.shared.metadata(for: source)
+        let original = try Data(contentsOf: source)
+        let started = expectation(description: "Recursive encoder started")
+        let stopped = expectation(description: "Current generation received cancellation")
+        let finished = expectation(description: "Cancelled recursive caller completed")
+        let runner = RecursiveCancellationRunner(started: started, stopped: stopped)
+        let converter = FFMPEGConverter(subprocessRunner: runner, ffmpegPathProvider: { ffmpeg })
+        let request = ConversionRequest(inputURL: source, outputURL: directory.appendingPathComponent("cancelled"),
+                                        preset: .lossless, sourceMetadata: metadata, expectedDuration: 1)
+        let operation = Task {
+            await converter.convert(request: request, recursiveGenerations: 3, progressUpdate: { _, _ in },
+                completion: { success, reason in
+                    XCTAssertFalse(success)
+                    XCTAssertTrue(reason?.localizedCaseInsensitiveContains("cancel") == true, reason ?? "Missing cancellation reason")
+                    finished.fulfill()
+                })
+        }
+        await fulfillment(of: [started], timeout: 5)
+        operation.cancel()
+        await fulfillment(of: [stopped, finished], timeout: 5)
+        await converter.cancelConversion()
+        await operation.value
+        let requests = await runner.encoderRequests
+        XCTAssertEqual(requests.count, 1, "No later generation may start after cancellation")
+        let partial = try XCTUnwrap(requests.first?.arguments.last)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: partial))
+        XCTAssertEqual(try Data(contentsOf: source), original)
+
+        let replacementFinished = expectation(description: "Replacement recursive run completed")
+        let replacement = ConversionRequest(inputURL: source, outputURL: directory.appendingPathComponent("replacement"),
+                                            preset: .lossless, sourceMetadata: metadata, expectedDuration: 1)
+        await converter.convert(request: replacement, recursiveGenerations: 2, progressUpdate: { _, _ in },
+            completion: { success, reason in
+                XCTAssertTrue(success, reason ?? "Replacement failed")
+                replacementFinished.fulfill()
+            })
+        await fulfillment(of: [replacementFinished], timeout: 5)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("replacement_generations/replacement_gen002.mkv").path))
+    }
+}
+
+private actor RecursiveCancellationRunner: SubprocessRunning {
+    let started: XCTestExpectation
+    let stopped: XCTestExpectation
+    private(set) var encoderRequests: [SubprocessRequest] = []
+
+    init(started: XCTestExpectation, stopped: XCTestExpectation) {
+        self.started = started
+        self.stopped = stopped
+    }
+
+    func run(_ request: SubprocessRequest, outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?) async throws -> SubprocessResult {
+        if request.arguments.contains("-progress") {
+            encoderRequests.append(request)
+            if encoderRequests.count == 1 {
+                if let path = request.arguments.last { try Data("Partial generation".utf8).write(to: URL(fileURLWithPath: path)) }
+                started.fulfill()
+                do {
+                    try await Task.sleep(for: .seconds(30))
+                    XCTFail("Recursive encoder should be cancelled promptly")
+                } catch is CancellationError {
+                    stopped.fulfill()
+                    throw CancellationError()
+                }
+            }
+        }
+        return try await SubprocessRunner().run(request, outputHandler: outputHandler)
+    }
+}

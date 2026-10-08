@@ -160,3 +160,36 @@ enum FFMPEGProgressParser {
         return (newTotalDuration, progressTuple)
     }
 }
+
+/// Separate the generation label from an estimate for all remaining generations.
+struct RecursiveEncodingProgress: Sendable {
+    let fraction: Double
+    let message: String
+    let eta: String?
+
+    init(progress: Double, status: String?, generation: Int, total: Int) {
+        let passFraction = progress.isFinite ? min(1, max(0, progress)) : 0
+        fraction = (Double(generation - 1) + passFraction) / Double(total)
+        let label = "Generation \(generation)/\(total)"
+        if let status, status.range(of: #"^\d{2}:\d{2}:\d{2}$"#, options: .regularExpression) != nil {
+            message = label
+            let parts = status.split(separator: ":").compactMap { Double($0) }
+            guard parts.count == 3 else { eta = nil; return }
+            let remaining = parts[0] * 3600 + parts[1] * 60 + parts[2]
+            // Assuming later passes encode at the current rate, scale this pass's
+            // remaining time by the remaining fraction of the entire chain.
+            let estimate = passFraction < 1
+                ? remaining * (Double(total - generation) + 1 - passFraction) / (1 - passFraction)
+                : .infinity
+            if estimate.isFinite, estimate >= 0, estimate < 86_400 {
+                let seconds = Int(estimate)
+                eta = String(format: "%02d:%02d:%02d", seconds / 3600, (seconds % 3600) / 60, seconds % 60)
+            } else {
+                eta = nil
+            }
+        } else {
+            message = label + (status.map { " · " + $0 } ?? "")
+            eta = nil
+        }
+    }
+}

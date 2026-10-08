@@ -11,6 +11,15 @@ struct SubtitleFrame: Sendable {
     let startTime: TimeInterval
     let endTime: TimeInterval
     let imageData: Data  // PNG bytes
+
+    /// Intersect source timestamps with the exported interval, then rebase to zero.
+    func clipped(to range: AnalyticsSourceRange) -> SubtitleFrame? {
+        guard range.isValid, startTime.isFinite, endTime.isFinite else { return nil }
+        let start = max(startTime, range.start)
+        let end = min(endTime, range.end ?? endTime)
+        guard end > start else { return nil }
+        return SubtitleFrame(startTime: start - range.start, endTime: end - range.start, imageData: imageData)
+    }
 }
 
 /// Parses binary PGS (.sup) files from Blu-ray sources into subtitle frames.

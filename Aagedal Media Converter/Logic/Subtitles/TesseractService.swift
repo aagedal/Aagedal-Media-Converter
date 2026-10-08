@@ -129,9 +129,11 @@ actor TesseractService {
         codec: String,
         language: String,
         engineKind: OCREngineKind = .userPreferred,
+        sourceRange: AnalyticsSourceRange = AnalyticsSourceRange(),
         publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool = { true },
         progress: @escaping @Sendable (TesseractProgress) -> Void
     ) async throws -> URL {
+        guard sourceRange.isValid else { throw TesseractServiceError.parsingFailed("Invalid subtitle source interval") }
         let runID = UUID()
         let publication = registerRun(runID, operationID: operationID)
         defer { finishRun(runID, operationID: operationID) }
@@ -149,6 +151,7 @@ actor TesseractService {
             codec: codec,
             language: language,
             engineKind: engineKind,
+            sourceRange: sourceRange,
             runID: runID,
             publication: publication,
             publicationIsCurrent: publicationIsCurrent,
@@ -222,6 +225,7 @@ actor TesseractService {
         codec: String,
         language: String,
         engineKind: OCREngineKind,
+        sourceRange: AnalyticsSourceRange = AnalyticsSourceRange(),
         runID: UUID,
         publication: SubtitleSRTPublication,
         publicationIsCurrent: @escaping @MainActor @Sendable () -> Bool,
@@ -265,7 +269,7 @@ actor TesseractService {
         logger.info("Extracting subtitle stream \(subtitleStreamIndex) from \(sourceFile.lastPathComponent)")
 
         let isPGS = isBitmapPGS(codec: codec)
-        let frames = try await extractAndParse(
+        let decodedFrames = try await extractAndParse(
             sourceFile: sourceFile,
             streamIndex: subtitleStreamIndex,
             isPGS: isPGS,
@@ -275,11 +279,13 @@ actor TesseractService {
             progress: progress
         )
 
-        guard !frames.isEmpty else {
+        guard !decodedFrames.isEmpty else {
             throw TesseractServiceError.parsingFailed("No subtitle frames found in stream")
         }
 
         guard !cancelledRunIDs.contains(runID) else { throw TesseractServiceError.cancelled }
+
+        let frames = decodedFrames.compactMap { $0.clipped(to: sourceRange) }
 
         // Step 3 — OCR each frame
         let total = frames.count

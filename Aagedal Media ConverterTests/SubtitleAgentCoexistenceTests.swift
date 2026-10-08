@@ -1265,6 +1265,20 @@ final class VOBSUBParserTests: XCTestCase {
         XCTAssertNotEqual(output, existing)
         XCTAssertEqual(try String(contentsOf: output, encoding: .utf8),
                        "1\n00:00:07,512 --> 00:00:08,536\nSelected DVD track\n")
+        let trimmed = try await service.generateSubtitles(
+            sourceFile: source, outputDirectory: directory, operationID: UUID(),
+            subtitleStreamIndex: 1, codec: "dvd_subtitle", language: "eng",
+            sourceRange: AnalyticsSourceRange(start: 7.75, end: 8.25)
+        ) { _ in }
+        XCTAssertEqual(try String(contentsOf: trimmed, encoding: .utf8),
+                       "1\n00:00:00,000 --> 00:00:00,500\nSelected DVD track\n")
+        let noMatchingCues = TesseractService(ocrEngine: UnexpectedDVDPaletteOCREngine())
+        let empty = try await noMatchingCues.generateSubtitles(
+            sourceFile: source, outputDirectory: directory, operationID: UUID(),
+            subtitleStreamIndex: 1, codec: "dvd_subtitle", language: "eng",
+            sourceRange: AnalyticsSourceRange(start: 60, end: 120)
+        ) { _ in }
+        XCTAssertEqual(try String(contentsOf: empty, encoding: .utf8), "")
         XCTAssertEqual(try String(contentsOf: existing, encoding: .utf8), "Preserve existing subtitles")
         XCTAssertEqual(try Data(contentsOf: source), originalSource)
     }
@@ -1358,5 +1372,38 @@ private struct UnexpectedDVDPaletteOCREngine: BitmapSubtitleOCREngine {
     func recognize(pngURL: URL, language: String) async throws -> String {
         XCTFail("Invalid DVD palette must fail before invoking OCR")
         return "Unexpected OCR"
+    }
+}
+
+
+final class SubtitleFrameTimingTests: XCTestCase {
+    func testClipsAndRebasesCuesAtBothTrimBoundaries() throws {
+        let range = AnalyticsSourceRange(start: 60, end: 120)
+        let image = Data([1, 2, 3])
+        let crossingStart = try XCTUnwrap(SubtitleFrame(startTime: 55, endTime: 70, imageData: image).clipped(to: range))
+        XCTAssertEqual(crossingStart.startTime, 0)
+        XCTAssertEqual(crossingStart.endTime, 10)
+        XCTAssertEqual(crossingStart.imageData, image)
+        let crossingEnd = try XCTUnwrap(SubtitleFrame(startTime: 110, endTime: 125, imageData: image).clipped(to: range))
+        XCTAssertEqual(crossingEnd.startTime, 50)
+        XCTAssertEqual(crossingEnd.endTime, 60)
+        let inside = try XCTUnwrap(SubtitleFrame(startTime: 70, endTime: 75, imageData: image).clipped(to: range))
+        XCTAssertEqual(inside.startTime, 10)
+        XCTAssertEqual(inside.endTime, 15)
+        XCTAssertNil(SubtitleFrame(startTime: 50, endTime: 60, imageData: image).clipped(to: range))
+        XCTAssertNil(SubtitleFrame(startTime: 120, endTime: 125, imageData: image).clipped(to: range))
+    }
+
+    func testStartOnlyTrimAndInvalidCueTimes() throws {
+        let frame = SubtitleFrame(startTime: 70, endTime: 75, imageData: Data())
+        let shifted = try XCTUnwrap(frame.clipped(to: AnalyticsSourceRange(start: 60)))
+        XCTAssertEqual(shifted.startTime, 10)
+        XCTAssertEqual(shifted.endTime, 15)
+        let unchanged = try XCTUnwrap(frame.clipped(to: AnalyticsSourceRange()))
+        XCTAssertEqual(unchanged.startTime, frame.startTime)
+        XCTAssertEqual(unchanged.endTime, frame.endTime)
+        XCTAssertNil(frame.clipped(to: AnalyticsSourceRange(start: 90, end: 60)))
+        XCTAssertNil(SubtitleFrame(startTime: .nan, endTime: 75, imageData: Data()).clipped(to: AnalyticsSourceRange()))
+        XCTAssertNil(SubtitleFrame(startTime: 70, endTime: .infinity, imageData: Data()).clipped(to: AnalyticsSourceRange()))
     }
 }
