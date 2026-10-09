@@ -357,7 +357,7 @@ final class PreviewPlayerController: ObservableObject {
         let mpv = MPVPlayer()
         self.mpvPlayer = mpv
         self.useMPV = true
-        self.isPreparing = false
+        self.isPreparing = true
 
         installMPVObservers(
             timePosition: mpv.$timePos.eraseToAnyPublisher(),
@@ -394,7 +394,7 @@ final class PreviewPlayerController: ObservableObject {
     private func setupImageSequencePreview(config: ImageSequenceConfig, startTime: TimeInterval) {
         self.imageSequenceConfig = config
         self.useImageSequence = true
-        self.isPreparing = false
+        self.isPreparing = true
 
         // Acquire security-scoped access to the sequence directory. Track which
         // method won so teardown only releases the one we acquired.
@@ -1379,6 +1379,7 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func teardown(resetAudioSelection: Bool = true) {
+        isScrubbing = false
         isReady = false
         trimPlayback.invalidate()
         removeMPVObservers()
@@ -1505,7 +1506,21 @@ final class PreviewPlayerController: ObservableObject {
         })
     }
     
+    private(set) var isScrubbing = false
+
+    func beginScrubbing() {
+        isScrubbing = true
+    }
+
+    func endScrubbing(at time: Double? = nil) {
+        guard isScrubbing else { return }
+        isScrubbing = false
+        mpvPlayer?.cancelPendingScrubSeeks()
+        seekTo(time ?? currentPlaybackTime)
+    }
+
     func seekTo(_ time: Double) {
+        guard time.isFinite else { return }
         trimPlayback.invalidate()
         // Allow seeking even before player is fully ready - seeks will queue up
         // This enables scrubbing the timeline while player is still loading
@@ -1524,7 +1539,11 @@ final class PreviewPlayerController: ObservableObject {
         }
 
         if useMPV, let mpv = mpvPlayer {
-            mpv.seek(to: time)
+            if isScrubbing {
+                mpv.seekForScrubbing(to: time)
+            } else {
+                mpv.seek(to: time)
+            }
             return
         }
 

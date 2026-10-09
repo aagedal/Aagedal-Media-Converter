@@ -10,7 +10,7 @@ import AVKit
 
 struct PreviewPlayerContent: View {
     @Binding var item: VideoItem
-    let controller: PreviewPlayerController
+    @ObservedObject var controller: PreviewPlayerController
     let showsPlaybackControls: Bool
     let togglePlaybackControls: () -> Void
     let keyHandler: (String, NSEvent.ModifierFlags, NSEvent.SpecialKey?) -> Bool
@@ -195,6 +195,13 @@ struct PreviewPlayerContent: View {
                     .padding()
             } else {
                 loadingView
+            }
+        }
+        .overlay {
+            if controller.useMPV && controller.isPreparing && controller.errorMessage == nil {
+                loadingView
+                    .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
+                    .allowsHitTesting(false)
             }
         }
         .task(id: previewAvailabilityKey) { @MainActor in

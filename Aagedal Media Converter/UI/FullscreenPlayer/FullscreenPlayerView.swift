@@ -179,6 +179,7 @@ struct FullscreenPlayerView: View {
                 // Loading indicator
                 if controller.isPreparing {
                     loadingOverlay
+                        .allowsHitTesting(false)
                 }
                 
                 // Error message
@@ -803,6 +804,7 @@ struct FullscreenPlayerView: View {
                     .onChanged { value in
                         if !isDraggingTimeline {
                             isDraggingTimeline = true
+                            controller.beginScrubbing()
                             precisionWasActive = false
                             let clickFraction = max(0, min(1, value.location.x / width))
                             let target = Double(clickFraction) * duration
@@ -825,7 +827,16 @@ struct FullscreenPlayerView: View {
                         }
                         controller.seekTo(targetFraction * duration)
                     }
-                    .onEnded { _ in
+                    .onEnded { value in
+                        let targetFraction: Double
+                        if precisionWasActive {
+                            let delta = (value.location.x - precisionAnchorX) / width
+                            targetFraction = max(0, min(1, precisionAnchorFraction + Double(delta) / precisionScrubFactor))
+                        } else {
+                            targetFraction = max(0, min(1, Double(value.location.x / width)))
+                        }
+                        controller.seekTo(targetFraction * duration)
+                        controller.endScrubbing()
                         isDraggingTimeline = false
                         precisionWasActive = false
                     }

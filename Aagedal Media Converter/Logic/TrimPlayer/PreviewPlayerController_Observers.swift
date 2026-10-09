@@ -31,6 +31,7 @@ extension PreviewPlayerController {
         timePosition.sink { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self, self.mpvObservationID == observationID else { return }
+                guard !self.isScrubbing else { return }
                 self.currentPlaybackTime = time
             }
         }.store(in: &mpvObservers)
@@ -40,6 +41,7 @@ extension PreviewPlayerController {
                 guard let self, self.mpvObservationID == observationID else { return }
                 self.mpvLoadDeadlineTask?.cancel()
                 self.mpvLoadDeadlineTask = nil
+                self.isPreparing = false
                 self.isReady = true
             }
         }.store(in: &mpvObservers)
@@ -68,8 +70,14 @@ extension PreviewPlayerController {
         }
 
         mpvTrackRefreshTask = Task { @MainActor [weak self] in
-            do { try await Task.sleep(for: refreshDelay) }
-            catch { return }
+            do {
+                try await Task.sleep(for: refreshDelay)
+                // Opening a network source can outlast the initial delay. Property
+                // reads wait on mpv's playback core, so defer them until it is ready.
+                while self?.mpvObservationID == observationID && self?.isReady == false {
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+            } catch { return }
             guard !Task.isCancelled, let self,
                   self.mpvObservationID == observationID else { return }
             self.mpvTrackRefreshTask = nil
@@ -160,7 +168,7 @@ extension PreviewPlayerController {
                       self.mpvObservationID == observationID else { return }
 
                 // Only loop if loopPlayback is enabled
-                guard self.videoItem.loopPlayback else { return }
+                guard self.videoItem.loopPlayback, !self.isScrubbing else { return }
 
                 let currentTime = mpv.timePos
                 let trimStart = self.videoItem.effectiveTrimStart
@@ -201,7 +209,7 @@ extension PreviewPlayerController {
                 let currentTime = time.seconds
 
                 // Only enforce trim boundaries when looping is enabled
-                guard self.videoItem.loopPlayback else { return }
+                guard self.videoItem.loopPlayback, !self.isScrubbing else { return }
 
                 let trimStart = self.videoItem.effectiveTrimStart
                 let trimEnd = self.videoItem.effectiveTrimEnd
