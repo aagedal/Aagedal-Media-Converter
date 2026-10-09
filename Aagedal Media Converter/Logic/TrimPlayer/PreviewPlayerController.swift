@@ -1380,6 +1380,7 @@ final class PreviewPlayerController: ObservableObject {
 
     func teardown(resetAudioSelection: Bool = true) {
         isScrubbing = false
+        scrubTarget = nil
         isReady = false
         trimPlayback.invalidate()
         removeMPVObservers()
@@ -1507,20 +1508,26 @@ final class PreviewPlayerController: ObservableObject {
     }
     
     private(set) var isScrubbing = false
+    private var scrubTarget: Double?
 
     func beginScrubbing() {
+        guard !isScrubbing else { return }
+        scrubTarget = nil
         isScrubbing = true
     }
 
     func endScrubbing(at time: Double? = nil) {
         guard isScrubbing else { return }
+        let target = time ?? scrubTarget ?? currentPlaybackTime
         isScrubbing = false
+        scrubTarget = nil
         mpvPlayer?.cancelPendingScrubSeeks()
-        seekTo(time ?? currentPlaybackTime)
+        seekTo(target)
     }
 
     func seekTo(_ time: Double) {
         guard time.isFinite else { return }
+        if isScrubbing { scrubTarget = time }
         trimPlayback.invalidate()
         // Allow seeking even before player is fully ready - seeks will queue up
         // This enables scrubbing the timeline while player is still loading

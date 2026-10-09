@@ -457,6 +457,23 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testScrubReleaseKeepsLastPointerTargetWhenBackendClockMoves() {
+        let controller = makeController()
+        defer { controller.teardown() }
+        controller.beginScrubbing()
+        controller.seekTo(20.75)
+        // Native playback can still publish a clock position during a drag.
+        controller.currentPlaybackTime = 18
+        controller.beginScrubbing() // Repeated stitching updates keep the target.
+        controller.endScrubbing()
+        XCTAssertEqual(controller.currentPlaybackTime, 20.75)
+        controller.beginScrubbing()
+        controller.seekTo(22)
+        controller.endScrubbing(at: 22.5)
+        XCTAssertEqual(controller.currentPlaybackTime, 22.5)
+    }
+
+    @MainActor
     func testMPVScrubbingKeepsPointerPositionAndResumesClockUpdatesOnRelease() async {
         let controller = makeController()
         defer { controller.teardown() }
