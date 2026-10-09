@@ -862,7 +862,10 @@ struct StitchingEditorView<FileList: View>: View {
                             let labelSpacing = 115.0
                             let step = pow(10, floor(log10(max(1, labelSpacing / scale))))
                             let interval = step * (labelSpacing / scale / step > 5 ? 10 : labelSpacing / scale / step > 2 ? 5 : 2)
-                            for tick in stride(from: 0.0, through: max(total, width / scale), by: interval) {
+                            // Include the preceding label, but skip ticks outside the viewport.
+                            let firstTick = max(0, floor((scrollOffset - 10 - labelSpacing) / scale / interval) * interval)
+                            let lastTick = min(max(total, width / scale), (scrollOffset + geometry.size.width) / scale)
+                            for tick in stride(from: firstTick, through: lastTick, by: interval) {
                                 let x = tick * scale
                                 var path = Path()
                                 path.move(to: CGPoint(x: x, y: 19))

@@ -342,6 +342,10 @@ actor PreviewAssetGenerator {
     /// Returns cached assets if all required files already exist on disk
     func cachedAssetsIfPresent(for url: URL) async -> PreviewAssets? {
         do {
+            let fingerprint = try assetFingerprint(for: url)
+            if let cached = completedAssets.first(where: { $0.fingerprint == fingerprint }) {
+                return cached.assets
+            }
             let assetDirectory = try ensureAssetDirectory(for: url)
 
             // Check for row thumbnail (prefer .png, fallback to legacy .jpg)
@@ -619,7 +623,8 @@ actor PreviewAssetGenerator {
                 channelLayout: channelLayout,
                 duration: duration,
                 width: width,
-                heightPerChannel: height
+                heightPerChannel: height,
+                envelopeCacheDirectory: try? ensureAssetDirectory(for: url)
             )
             let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels, channelEnvelopes: envelopes)
 
@@ -807,7 +812,8 @@ actor PreviewAssetGenerator {
                 duration: duration,
                 width: totalWaveformWidth,
                 height: chunkHeight,
-                channelCount: metadata?.audioStreams.first?.channels ?? 1
+                channelCount: metadata?.audioStreams.first?.channels ?? 1,
+                envelopeCacheURL: assetDirectory.appendingPathComponent("waveform_a0_channels\(metadata?.audioStreams.first?.channels ?? 1)_peaks_v1.bin")
             )
             waveformEnvelope = generated.envelope
             nativeWaveformImage = SendableImage(image: generated.image)
@@ -816,7 +822,8 @@ actor PreviewAssetGenerator {
 
             // Generate per-stream waveforms for files with multiple audio tracks
             if let metadata, metadata.audioStreams.count > 1 {
-                for (index, _) in metadata.audioStreams.enumerated() {
+                if let nativeWaveformImage { nativePerStreamImages[0] = nativeWaveformImage }
+                for index in 1..<metadata.audioStreams.count {
                     try Task.checkCancellation()
                     do {
                         let streamImage = try await NativeWaveformRenderer.generateWaveform(
@@ -898,7 +905,8 @@ actor PreviewAssetGenerator {
                     channelLayout: stream0.channelLayout,
                     duration: duration,
                     width: perChannelWidth,
-                    heightPerChannel: perChannelHeight
+                    heightPerChannel: perChannelHeight,
+                    envelopeCacheDirectory: assetDirectory
                 )
                 let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels, channelEnvelopes: envelopes)
                 nativeChannelWaveform = waveform

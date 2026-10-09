@@ -269,6 +269,80 @@ final class StitchingTimelineTests: XCTestCase {
                                                     contentWidth: 2000, viewportWidth: 600), 1400)
     }
 
+    func testStreamingWaveformHandlesSplitSamplesAndPreservesChannelPeaks() {
+        var samples = [Float](repeating: 0, count: 2048)
+        samples[511] = -0.9
+        samples[512] = 0.7
+        samples[1500] = .nan
+        samples[1501] = 0.00002
+        let data = samples.withUnsafeBytes { Data($0) }
+        let builder = StreamingWaveformEnvelope(channelCount: 2, sampleRate: 48000, duration: 1)
+        // Deliberately split both floats and interleaved channel frames.
+        for start in stride(from: 0, to: data.count, by: 13) {
+            builder.append(data.subdata(in: start..<min(data.count, start + 13)))
+        }
+        let streamed = builder.envelope()
+        let reference = WaveformEnvelope(pcmData: data, channelCount: 2, sampleRate: 48000)
+        XCTAssertEqual(streamed.frameCount, reference.frameCount)
+        XCTAssertEqual(streamed.duration, reference.duration)
+        XCTAssertEqual(streamed.levels, reference.levels)
+    }
+
+    func testStreamingWaveformBoundsMemoryWhenDurationIsUnderestimated() {
+        var samples = [Float](repeating: 0, count: 4097)
+        samples[0] = -0.75
+        samples[4096] = 0.9
+        let builder = StreamingWaveformEnvelope(channelCount: 1, sampleRate: 48000,
+                                                duration: 0, maximumBins: 4)
+        builder.append(samples.withUnsafeBytes { Data($0) })
+        let envelope = builder.envelope()
+        XCTAssertLessThanOrEqual(envelope.levels[0].count, 4)
+        XCTAssertEqual(envelope.frameCount, samples.count)
+        XCTAssertEqual(envelope.peak(from: 0, to: envelope.duration, level: envelope.levels.count - 1),
+                       .init(minimum: -0.75, maximum: 0.9))
+    }
+
+    func testWaveformCacheRoundTripPreservesPeaksAndRejectsDamage() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let samples: [Float] = [0.00001, -0.00002, 0.8, -0.7, 0]
+        let original = WaveformEnvelope(pcmData: samples.withUnsafeBytes { Data($0) },
+                                       channelCount: 1, sampleRate: 48000, minimumFramesPerBin: 1)
+        try WaveformEnvelopeCache.write(original, to: url)
+        let restored = try XCTUnwrap(WaveformEnvelopeCache.read(from: url))
+        XCTAssertEqual(restored.levels, original.levels)
+        XCTAssertEqual(restored.frameCount, original.frameCount)
+        XCTAssertEqual(restored.framesPerBin, original.framesPerBin)
+        XCTAssertEqual(restored.duration, original.duration, accuracy: 0.000000001)
+        let complete = try Data(contentsOf: url)
+        try complete.dropLast().write(to: url)
+        XCTAssertNil(WaveformEnvelopeCache.read(from: url))
+        var invalidVersion = complete
+        invalidVersion[0] = 0
+        try invalidVersion.write(to: url)
+        XCTAssertNil(WaveformEnvelopeCache.read(from: url))
+        var invalidPeak = complete
+        var nan = Float.nan.bitPattern.littleEndian
+        withUnsafeBytes(of: &nan) { invalidPeak.replaceSubrange(40..<44, with: $0) }
+        try invalidPeak.write(to: url)
+        XCTAssertNil(WaveformEnvelopeCache.read(from: url))
+    }
+
+    func testCachedWaveformSkipsDecoderAndRendersAtRequestedSize() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let samples: [Float] = [0.8, -0.7, 0, 0]
+        let envelope = WaveformEnvelope(pcmData: samples.withUnsafeBytes { Data($0) },
+                                       channelCount: 1, sampleRate: 4, minimumFramesPerBin: 1)
+        try WaveformEnvelopeCache.write(envelope, to: url)
+        // An invalid decoder path proves a cache hit doesn't start a subprocess.
+        let cached = try await NativeWaveformRenderer.generateWaveformAssets(
+            url: URL(fileURLWithPath: "/unused.mov"), ffmpegPath: "/unused-ffmpeg", streamIndex: 0,
+            duration: 1, width: 1200, height: 60, envelopeCacheURL: url)
+        XCTAssertEqual(cached.envelope?.levels, envelope.levels)
+        XCTAssertEqual(cached.image.size, NSSize(width: 1200, height: 60))
+    }
+
     func testWaveformLODPreservesQuietPeaksAndTransients() {
         let samples: [Float] = [0, 0.00001, -0.00002, 0, 0.8, -0.7, 0, 0]
         let data = samples.withUnsafeBytes { Data($0) }
@@ -634,7 +708,8 @@ final class SourceAudioMeterTests: XCTestCase {
         // Both waveform paths must keep the same source-time origin as playback and metering.
         let waveform = try await NativeWaveformRenderer.generateWaveformAssets(
             url: url, ffmpegPath: path, streamIndex: 1, duration: 10.5,
-            width: 800, height: 80, channelCount: 8
+            width: 800, height: 80, channelCount: 8,
+            envelopeCacheURL: directory.appendingPathComponent("merged-peaks.bin")
         )
         let envelope = try XCTUnwrap(waveform.envelope)
         XCTAssertEqual(envelope.duration, 10.5, accuracy: 0.01)
@@ -642,8 +717,14 @@ final class SourceAudioMeterTests: XCTestCase {
         XCTAssertEqual(envelope.peak(from: 0.75, to: 0.8, level: 0).maximum, 0.8, accuracy: 0.001)
         let (_, _, channelEnvelopes) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
             url: url, ffmpegPath: path, streamIndex: 1, channelCount: 8,
-            channelLayout: "7.1", duration: 10.5, width: 800, heightPerChannel: 40
+            channelLayout: "7.1", duration: 10.5, width: 800, heightPerChannel: 40,
+            envelopeCacheDirectory: directory
         )
+        let (_, _, cachedChannels) = try await NativeWaveformRenderer.generatePerChannelWaveforms(
+            url: url, ffmpegPath: "/unused-ffmpeg", streamIndex: 1, channelCount: 8,
+            channelLayout: "7.1", duration: 10.5, width: 1200, heightPerChannel: 60,
+            envelopeCacheDirectory: directory)
+        XCTAssertEqual(cachedChannels.map(\.levels), channelEnvelopes.map(\.levels))
         XCTAssertEqual(channelEnvelopes.count, 8)
         for (index, channel) in channelEnvelopes.enumerated() {
             XCTAssertEqual(channel.duration, 10.5, accuracy: 0.01)
