@@ -1623,13 +1623,16 @@ final class PreviewPlayerController: ObservableObject {
                         self.previewAssets = cached
                     }
 
-                    // 2. If we have complete waveform chunks, we're good! Return early.
+                    // Completed native previews can be displayed immediately when
+                    // reopening Trim, without starting another generation task.
                     let expectedChunks = cached.expectedChunkCount
-                    if expectedChunks > 0 && cached.waveformChunks.count >= expectedChunks {
+                    let hasCompletedNativeWaveform = cached.waveformEnvelope != nil
+                    if hasCompletedNativeWaveform || (expectedChunks > 0 && cached.waveformChunks.count >= expectedChunks) {
                         // Only stop loading if still viewing this file
                         if self.previewAssetURL == taskURL {
                             self.isLoadingPreviewAssets = false
                             self.assetRefreshTask?.cancel()
+                            self.previewAssetTask = nil
                         }
                         return
                     }
