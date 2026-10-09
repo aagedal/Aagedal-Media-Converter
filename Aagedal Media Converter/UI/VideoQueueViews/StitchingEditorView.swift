@@ -783,6 +783,7 @@ struct StitchingEditorView<FileList: View>: View {
                 else if let before = trimGestureBefore {
                     editHistory.record(from: before, to: group.items)
                     trimGestureBefore = nil
+                    seek(item.id, to: sourceTime)
                 }
             }
         )
@@ -883,8 +884,8 @@ struct StitchingEditorView<FileList: View>: View {
                                 scrubTask?.cancel()
                                 scrubTask = nil
                                 pendingScrubTime = nil
-                                scrub(value.location.x / scale)
                                 isScrubbingTimeline = false
+                                scrub(value.location.x / scale)
                             })
                         HStack(spacing: 0) {
                             ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
@@ -1027,7 +1028,7 @@ struct StitchingEditorView<FileList: View>: View {
     private func seek(_ id: UUID, to time: Double) {
         selectedID = id
         sourceTime = time
-        seekRequest = StitchingSeek(time: time)
+        seekRequest = StitchingSeek(time: time, scrubbing: isScrubbingTimeline || trimGestureBefore != nil)
     }
     private func scheduleScrub(_ time: Double) {
         isPlaying = false
@@ -1472,6 +1473,7 @@ struct StitchingEditorView<FileList: View>: View {
 private struct StitchingSeek: Equatable {
     let id = UUID()
     let time: Double
+    var scrubbing = false
 }
 
 /// Render amplitude data at the visible pixel density, without enlarging a bitmap.
@@ -1798,6 +1800,7 @@ private struct StitchingSequencePreview: View {
             preparedID = item.id
             controller.playbackDidFinish = finish
             controller.selectedAudioTrackOrderIndex = audioTrack
+            if seekRequest.scrubbing { controller.beginScrubbing() }
             controller.preparePreview(startTime: initialTime, resetAudioSelection: false)
         }
         .onDisappear {
@@ -1815,7 +1818,7 @@ private struct StitchingSequencePreview: View {
             requestedTime = request.time
             guard preparedID == item.id, controller.isReady else { return }
             controller.pause()
-            controller.seekTo(request.time)
+            applySeek(request.time, scrubbing: request.scrubbing)
             // Replay can change seek and playback intent in the same SwiftUI
             // update. Restore intent regardless of which onChange runs first.
             playIfReady()
@@ -1829,7 +1832,7 @@ private struct StitchingSequencePreview: View {
         }
         .onChange(of: controller.isReady) { _, ready in
             if ready, active, preparedID == item.id {
-                controller.seekTo(requestedTime)
+                applySeek(requestedTime, scrubbing: seekRequest.scrubbing)
                 playIfReady()
             }
         }
@@ -1869,6 +1872,17 @@ private struct StitchingSequencePreview: View {
         }
 #endif
         return String(localized: "Preview")
+    }
+
+    private func applySeek(_ time: Double, scrubbing: Bool) {
+        if scrubbing {
+            controller.beginScrubbing()
+            controller.seekTo(time)
+        } else if controller.isScrubbing {
+            controller.endScrubbing(at: time)
+        } else {
+            controller.seekTo(time)
+        }
     }
 
     private func playIfReady() {

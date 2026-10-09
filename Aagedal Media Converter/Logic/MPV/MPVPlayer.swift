@@ -35,6 +35,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var mpv: OpaquePointer?
     private var metalLayer: MPVMetalLayer?
     private let queue = DispatchQueue(label: "com.aagedal.mpv", qos: .userInitiated)
+    private var seekScheduler = MPVSeekScheduler()
     private let eventQueueKey = DispatchSpecificKey<Bool>()
 
     // Published properties for playback state
@@ -68,6 +69,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var pendingURL: URL?
     private var pendingStartTime: Double = 0
     private var pendingAutostart: Bool = false
+    private(set) var loadGeneration: UInt64 = 0
+    private static let loadCommandMask: UInt64 = 1 << 63
 
     // Start time to seek to after file loads (workaround for loadfile start= parsing issue)
     private var pendingSeekAfterLoad: Double = 0
@@ -189,6 +192,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         // Initialize MPV
         checkError(mpv_initialize(mpv))
 
+        // Controls can change before SwiftUI attaches the drawable. Apply their
+        // requested values now, before opening the pending source.
+        setDouble(MPVProperty.speed, Double(playbackRate))
+        setDouble(MPVProperty.volume, volume)
+        setFlag(MPVProperty.mute, isMuted)
+
         // Register property observers
         mpv_observe_property(mpv, 0, MPVProperty.timePos, MPV_FORMAT_DOUBLE)
         mpv_observe_property(mpv, 0, MPVProperty.duration, MPV_FORMAT_DOUBLE)
@@ -220,51 +229,33 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var loadStartTime: CFAbsoluteTime = 0
 
     func load(url: URL, startTime: Double = 0, autostart: Bool = false) {
+        loadGeneration = (loadGeneration &+ 1) & ~Self.loadCommandMask
         error = nil
+        isFileLoaded = false
+        reachedEnd = false
         loadStartTime = CFAbsoluteTimeGetCurrent()
-        logger.info("⏱️ [0.000s] Load starting for: \(url.lastPathComponent)")
+        logger.info("Load starting for: \(url.lastPathComponent)")
 
-        // If MPV not initialized yet, store for later
+        // A SwiftUI drawable may arrive later. Keep only the newest request.
         guard mpv != nil else {
-            logger.info("⏱️ MPV not initialized yet, storing pending load for: \(url.lastPathComponent)")
             pendingURL = url
             pendingStartTime = startTime
             pendingAutostart = autostart
             return
         }
 
-        // Reset file loaded state when loading a new file
-        isFileLoaded = false
-
-        // Reset EOF tracking for the new file
-        reachedEnd = false
-
-        var elapsed = CFAbsoluteTimeGetCurrent() - loadStartTime
-        logger.info("⏱️ [\(String(format: "%.3f", elapsed))s] Preparing loadfile command...")
-
+        queue.sync { seekScheduler.reset() }
         startPaused = !autostart
-        // Store start time to seek after file loads (loadfile start= has parsing issues with floats)
         pendingSeekAfterLoad = startTime
 
-        // Use commandString for simpler execution - escaping the path for the command parser
-        // For local files, use the path; for remote, use the URL
+        // File opening on a sleeping/network disk must not wait on the UI thread.
+        // libmpv copies argv before returning, preserving quotes and backslashes.
+        setFlag(MPVProperty.pause, !autostart)
         let path = url.isFileURL ? url.path : url.absoluteString
-
-        // Build command string with proper escaping (don't use start= option, seek after load instead)
-        let cmd = "loadfile \"\(path.replacingOccurrences(of: "\"", with: "\\\""))\" replace"
-
-        elapsed = CFAbsoluteTimeGetCurrent() - loadStartTime
-        logger.info("⏱️ [\(String(format: "%.3f", elapsed))s] Executing loadfile...")
-        commandString(cmd)
-        elapsed = CFAbsoluteTimeGetCurrent() - loadStartTime
-        logger.info("⏱️ [\(String(format: "%.3f", elapsed))s] Loadfile command returned")
-
-        // If not autostarting, pause immediately after load
-        if !autostart {
-            setFlag(MPVProperty.pause, true)
+        if !commandAsync("loadfile", args: [path, "replace"],
+                         requestID: Self.loadCommandMask | loadGeneration) {
+            error = "mpv rejected the request to load this file."
         }
-        elapsed = CFAbsoluteTimeGetCurrent() - loadStartTime
-        logger.info("⏱️ [\(String(format: "%.3f", elapsed))s] Load function completed (async file loading continues)")
     }
 
     func play() {
@@ -285,33 +276,89 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func stop() {
-        command("stop")
+        loadGeneration = (loadGeneration &+ 1) & ~Self.loadCommandMask
+        pendingURL = nil
+        pendingStartTime = 0
+        pendingAutostart = false
+        pendingSeekAfterLoad = 0
+        queue.sync { seekScheduler.reset() }
+        commandAsync("stop")
         isPlaying = false
         timePos = 0
     }
 
     func seek(to time: TimeInterval) {
-        // Clamp seek time to avoid EOF issues
-        // If seeking near or beyond end, clamp to slightly before end
+        guard time.isFinite else { return }
         var seekTime = time
         if duration > 0 {
-            let maxSeekTime = max(0, duration - 0.05)  // Stay 50ms before end
+            let maxSeekTime = max(0, duration - 0.05)
             seekTime = min(seekTime, maxSeekTime)
         }
-        seekTime = max(0, seekTime)  // Don't seek before start
+        seekTime = max(0, seekTime)
 
-        command("seek", args: [String(seekTime), "absolute"])
+        enqueueSeek(to: seekTime, exact: true)
+    }
+
+    /// Fast, keyframe-aligned seek for interactive timeline scrubbing.
+    /// A precise seek is issued when the gesture ends.
+    func seekForScrubbing(to time: TimeInterval) {
+        guard time.isFinite else { return }
+        var seekTime = time
+        if duration > 0 {
+            let maxSeekTime = max(0, duration - 0.05)
+            seekTime = min(seekTime, maxSeekTime)
+        }
+        seekTime = max(0, seekTime)
+
+        enqueueSeek(to: seekTime, exact: false)
+    }
+
+    /// Discard obsolete drag targets without interrupting a decoder that is
+    /// already working. A final precise seek replaces the pending preview.
+    func cancelPendingScrubSeeks() {
+        queue.async { [weak self] in self?.seekScheduler.cancelPendingPreview() }
+    }
+
+    private func enqueueSeek(to time: Double, exact: Bool) {
+        guard time.isFinite else { return }
+        queue.async { [weak self] in
+            guard let self, self.mpv != nil else { return }
+            if let submission = self.seekScheduler.request(.init(time: time, exact: exact)) {
+                self.submitSeekLocked(submission)
+            }
+        }
+    }
+
+    /// All scheduler state and submissions share the event/teardown queue.
+    private func submitSeekLocked(_ submission: MPVSeekScheduler.Submission) {
+        guard let mpv else { return }
+        let args = ["seek", String(submission.request.time),
+                    submission.request.exact ? "absolute+exact" : "absolute+keyframes"]
+        var cargs = args.map { strdup($0).map { UnsafePointer<CChar>($0) } }
+        cargs.append(nil)
+        defer { for ptr in cargs { if let ptr { free(UnsafeMutablePointer(mutating: ptr)) } } }
+        // libmpv copies argv before returning. Completion arrives separately;
+        // neither accepting the command nor dispatching it blocks the UI.
+        let status = mpv_command_async(mpv, submission.id, &cargs)
+        if status < 0 {
+            logger.warning("Could not enqueue MPV seek: \(String(cString: mpv_error_string(status)))")
+            if let next = seekScheduler.commandReplied(id: submission.id, succeeded: false) {
+                submitSeekLocked(next)
+            }
+        }
     }
 
     func seekRelative(_ time: TimeInterval) {
-        command("seek", args: [String(time), "relative"])
+        commandAsync("seek", args: [String(time), "relative"])
     }
 
+    // Keep the requested rate available immediately without a synchronous
+    // readback that could wait on a network open (or an earlier async setter).
+    private var playbackRate: Float = 1
     var rate: Float {
-        get {
-            Float(getDouble(MPVProperty.speed))
-        }
+        get { playbackRate }
         set {
+            playbackRate = newValue
             setDouble(MPVProperty.speed, Double(newValue))
         }
     }
@@ -319,7 +366,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Audio Tracks
 
     var audioTrackNames: [String] {
-        guard mpv != nil else { return [] }
+        guard mpv != nil, isFileLoaded else { return [] }
 
         var names: [String] = []
         let count = getInt(MPVProperty.trackListCount)
@@ -388,7 +435,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     var audioTrackIndexes: [Int32] {
-        guard mpv != nil else { return [] }
+        guard mpv != nil, isFileLoaded else { return [] }
 
         var indexes: [Int32] = []
         let count = getInt(MPVProperty.trackListCount)
@@ -417,7 +464,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Subtitle Tracks
 
     var subtitleTrackNames: [String] {
-        guard mpv != nil else { return [] }
+        guard mpv != nil, isFileLoaded else { return [] }
 
         var names: [String] = []
         let count = getInt(MPVProperty.trackListCount)
@@ -463,7 +510,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     var subtitleTrackIndexes: [Int32] {
-        guard mpv != nil else { return [] }
+        guard mpv != nil, isFileLoaded else { return [] }
 
         var indexes: [Int32] = []
         let count = getInt(MPVProperty.trackListCount)
@@ -568,7 +615,34 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         }
                     }
 
+                case MPV_EVENT_SEEK:
+                    seekScheduler.seekStarted()
+
+                case MPV_EVENT_PLAYBACK_RESTART:
+                    if let next = seekScheduler.playbackRestarted() {
+                        submitSeekLocked(next)
+                    }
+
+                case MPV_EVENT_COMMAND_REPLY:
+                    if pointee.reply_userdata & Self.loadCommandMask != 0 {
+                        let generation = pointee.reply_userdata & ~Self.loadCommandMask
+                        let status = pointee.error
+                        DispatchQueue.main.async {
+                            self.handleLoadCommandReply(generation: generation, errorCode: status)
+                        }
+                        break
+                    }
+                    if let next = seekScheduler.commandReplied(
+                        id: pointee.reply_userdata, succeeded: pointee.error >= 0
+                    ) {
+                        submitSeekLocked(next)
+                    }
+
+                case MPV_EVENT_SET_PROPERTY_REPLY:
+                    checkError(pointee.error)
+
                 case MPV_EVENT_SHUTDOWN:
+                    seekScheduler.reset()
                     self.logger.info("MPV shutdown event")
                     if self.mpv != nil {
                         mpv_set_wakeup_callback(self.mpv, nil, nil)
@@ -605,6 +679,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     }
 
                 case MPV_EVENT_END_FILE:
+                    seekScheduler.reset()
                     if let dataPtr = OpaquePointer(pointee.data) {
                         let endFile = UnsafePointer<mpv_event_end_file>(dataPtr).pointee
                         DispatchQueue.main.async {
@@ -639,57 +714,29 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         reachedEnd = reason == MPV_END_FILE_REASON_EOF && error == nil
     }
 
-    /// Execute a command using mpv_command_string - simpler than mpv_command
-    private func commandString(_ cmd: String) {
-        guard let mpvCtx = mpv else { return }
-
-        logger.info("Executing command string: \(cmd)")
-        let result = mpv_command_string(mpvCtx, cmd)
-
-        if result < 0 {
-            logger.warning("MPV command failed: \(String(cString: mpv_error_string(result)))")
-        } else {
-            logger.info("MPV command succeeded")
-        }
+    /// Failed requests for a replaced/stopped source must not fail the current preview.
+    @MainActor
+    func handleLoadCommandReply(generation: UInt64, errorCode: Int32) {
+        guard generation == loadGeneration, errorCode < 0 else { return }
+        isFileLoaded = false
+        error = "mpv could not load this file: \(String(cString: mpv_error_string(errorCode)))"
     }
 
-    /// Execute a command with arguments using mpv_command
-    private func command(_ name: String, args: [String] = []) {
-        guard let mpvCtx = mpv else { return }
-
-        // Build args array with command, arguments, and nil terminator
-        var strArgs: [String?] = [name] + args
-        strArgs.append(nil)
-
-        // Convert to C strings - matching the MPVKit demo/IINA approach
-        var cargs = strArgs.map { $0.flatMap { UnsafePointer<CChar>(strdup($0)) } }
-        defer {
-            for ptr in cargs where ptr != nil {
-                free(UnsafeMutablePointer(mutating: ptr!))
-            }
-        }
-
-        logger.info("Executing command: \(name) with \(args.count) args")
-        let result = mpv_command(mpvCtx, &cargs)
-
-        if result < 0 {
-            logger.warning("MPV command '\(name)' failed: \(String(cString: mpv_error_string(result)))")
-        } else {
-            logger.info("MPV command '\(name)' succeeded")
-        }
-    }
-
-    private func getDouble(_ name: String) -> Double {
-        guard mpv != nil else { return 0.0 }
-        var data = Double()
-        mpv_get_property(mpv, name, MPV_FORMAT_DOUBLE, &data)
-        return data
+    @discardableResult
+    private func commandAsync(_ name: String, args: [String] = [], requestID: UInt64 = 0) -> Bool {
+        guard let mpv else { return false }
+        var cargs = ([name] + args).map { strdup($0).map { UnsafePointer<CChar>($0) } }
+        cargs.append(nil)
+        defer { for ptr in cargs { if let ptr { free(UnsafeMutablePointer(mutating: ptr)) } } }
+        let status = mpv_command_async(mpv, requestID, &cargs)
+        checkError(status)
+        return status >= 0
     }
 
     private func setDouble(_ name: String, _ value: Double) {
         guard mpv != nil else { return }
         var data = value
-        mpv_set_property(mpv, name, MPV_FORMAT_DOUBLE, &data)
+        mpv_set_property_async(mpv, 0, name, MPV_FORMAT_DOUBLE, &data)
     }
 
     private func getInt(_ name: String) -> Int {
@@ -702,7 +749,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private func setInt(_ name: String, _ value: Int) {
         guard mpv != nil else { return }
         var data = Int64(value)
-        mpv_set_property(mpv, name, MPV_FORMAT_INT64, &data)
+        mpv_set_property_async(mpv, 0, name, MPV_FORMAT_INT64, &data)
     }
 
     private func getString(_ name: String) -> String? {
@@ -720,7 +767,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         logger.info("setFlag: \(name) = \(flag)")
         // Use Int32 to match C's int type for MPV_FORMAT_FLAG
         var data: Int32 = flag ? 1 : 0
-        let result = mpv_set_property(mpvCtx, name, MPV_FORMAT_FLAG, &data)
+        let result = mpv_set_property_async(mpvCtx, 0, name, MPV_FORMAT_FLAG, &data)
         if result < 0 {
             logger.warning("setFlag failed: \(String(cString: mpv_error_string(result)))")
         }
@@ -732,5 +779,89 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             let errorMsg = String(cString: mpv_error_string(status))
             logger.error("MPV API error: \(errorMsg)")
         }
+    }
+}
+
+// Aagedal Media Converter
+// Copyright © 2026 Truls Aagedal
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+/// Owned by MPVPlayer's event queue. Command acceptance alone does not mean
+/// that the decoder has produced a frame: wait for seek + playback-restart.
+struct MPVSeekScheduler {
+    struct Request: Equatable {
+        let time: Double
+        let exact: Bool
+    }
+
+    struct Submission: Equatable {
+        let id: UInt64
+        let request: Request
+    }
+
+    private(set) var pending: Request?
+    private(set) var inFlight: Submission?
+    private var nextID: UInt64 = 0
+    private var accepted = false
+    private var started = false
+    private var restarted = false
+
+    mutating func request(_ request: Request) -> Submission? {
+        guard request.time.isFinite else { return nil }
+        pending = request
+        return takeNext()
+    }
+
+    mutating func commandReplied(id: UInt64, succeeded: Bool) -> Submission? {
+        guard inFlight?.id == id else { return nil }
+        if !succeeded { return finish() }
+        accepted = true
+        return finishIfReady()
+    }
+
+    mutating func seekStarted() {
+        guard inFlight != nil else { return }
+        started = true
+    }
+
+    mutating func playbackRestarted() -> Submission? {
+        // Ignore startup and other discontinuities preceding our seek event.
+        guard inFlight != nil, started else { return nil }
+        restarted = true
+        return finishIfReady()
+    }
+
+    mutating func cancelPendingPreview() {
+        if pending?.exact == false { pending = nil }
+    }
+
+    mutating func reset() {
+        pending = nil
+        inFlight = nil
+        accepted = false
+        started = false
+        restarted = false
+    }
+
+    private mutating func finishIfReady() -> Submission? {
+        guard accepted, restarted else { return nil }
+        return finish()
+    }
+
+    private mutating func finish() -> Submission? {
+        inFlight = nil
+        return takeNext()
+    }
+
+    private mutating func takeNext() -> Submission? {
+        guard inFlight == nil, let request = pending else { return nil }
+        pending = nil
+        nextID &+= 1
+        let submission = Submission(id: nextID, request: request)
+        inFlight = submission
+        accepted = false
+        started = false
+        restarted = false
+        return submission
     }
 }

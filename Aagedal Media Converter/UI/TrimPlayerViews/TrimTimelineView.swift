@@ -1219,7 +1219,7 @@ private struct TimelineScrubLayer: View {
 
     // Drag-seek throttling: coalesce rapid onChanged events so we don't flood the
     // underlying player (MPV/VLC fallback formats are especially sensitive).
-    // Seeks stay frame-accurate; we just cap the rate.
+    // The controller uses keyframe previews during MPV drags and an exact seek on release.
     @State private var lastSeekFireTime: Date = .distantPast
     @State private var pendingSeekTime: Double?
     @State private var pendingSeekTask: Task<Void, Never>?
@@ -1353,10 +1353,15 @@ private struct TimelineScrubLayer: View {
 
                             if !isScrubbing {
                                 isScrubbing = true
+                                onEditingChanged(true)
                             }
                             throttledSeek(clickTime)
                         }
                         .onEnded { value in
+                            // Include the release location even when the final drag update was throttled.
+                            if isScrubbing || isRangeSelecting || isRangeSliding {
+                                pendingSeekTime = timeForPosition(value.location.x, width: geometry.size.width)
+                            }
                             flushPendingSeek()
 
                             if isRangeSelecting {
@@ -1383,6 +1388,8 @@ private struct TimelineScrubLayer: View {
                                 onEditingChanged(false)
                             }
 
+                            if isScrubbing { onEditingChanged(false) }
+
                             // Always reset all drag states to prevent stuck modes
                             isRangeSelecting = false
                             rangeStartTime = nil
@@ -1393,6 +1400,11 @@ private struct TimelineScrubLayer: View {
                             isScrubbing = false
                         }
                 )
+        }
+        .onDisappear {
+            pendingSeekTask?.cancel()
+            pendingSeekTask = nil
+            pendingSeekTime = nil
         }
     }
 

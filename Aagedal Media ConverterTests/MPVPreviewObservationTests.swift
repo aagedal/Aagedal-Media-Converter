@@ -346,6 +346,161 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testSlowMPVLoadDefersTrackDiscoveryAndKeepsLoadingFeedback() async {
+        let controller = makeController()
+        defer { controller.teardown() }
+        let loaded = PassthroughSubject<Bool, Never>()
+        let refreshed = expectation(description: "Tracks discovered after readiness")
+        var refreshCount = 0
+        controller.isPreparing = true
+        controller.installMPVObservers(
+            timePosition: Empty().eraseToAnyPublisher(),
+            fileLoaded: loaded.eraseToAnyPublisher(),
+            reachedEnd: Empty().eraseToAnyPublisher(), refreshDelay: .zero
+        ) {
+            XCTAssertTrue(controller.isReady)
+            refreshCount += 1
+            refreshed.fulfill()
+        }
+        try? await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(refreshCount, 0)
+        XCTAssertTrue(controller.isPreparing)
+        XCTAssertFalse(controller.isReady)
+        loaded.send(true)
+        await fulfillment(of: [refreshed], timeout: 1)
+        XCTAssertFalse(controller.isPreparing)
+        XCTAssertEqual(refreshCount, 1)
+    }
+
+    @MainActor
+    func testMPVControlsBeforeReadinessDoNotReadThePlaybackCore() {
+        let player = MPVPlayer()
+        player.attachDrawable(MPVMetalLayer())
+        player.rate = 2
+        XCTAssertEqual(player.rate, 2)
+        player.rate *= 2
+        XCTAssertEqual(player.rate, 4)
+        XCTAssertTrue(player.audioTrackNames.isEmpty)
+        XCTAssertTrue(player.audioTrackIndexes.isEmpty)
+        XCTAssertTrue(player.subtitleTrackNames.isEmpty)
+        XCTAssertTrue(player.subtitleTrackIndexes.isEmpty)
+        player.pause()
+        player.volume = 25
+        player.isMuted = true
+    }
+
+    @MainActor
+    func testAsyncMPVLoadRejectsRepliesFromReplacedAndStoppedSources() {
+        let player = MPVPlayer()
+        player.load(url: URL(fileURLWithPath: "/private/first.mkv"))
+        let firstGeneration = player.loadGeneration
+        player.load(url: URL(fileURLWithPath: "/private/replacement.mkv"))
+        let replacementGeneration = player.loadGeneration
+        player.handleLoadCommandReply(generation: firstGeneration, errorCode: -1)
+        XCTAssertNil(player.error)
+        player.handleLoadCommandReply(generation: replacementGeneration, errorCode: 0)
+        XCTAssertNil(player.error)
+        player.handleLoadCommandReply(generation: replacementGeneration, errorCode: -1)
+        XCTAssertNotNil(player.error)
+        player.error = nil
+        player.stop()
+        player.handleLoadCommandReply(generation: replacementGeneration, errorCode: -1)
+        XCTAssertNil(player.error)
+    }
+
+    @MainActor
+    func testStoppingPendingMPVLoadDoesNotOpenItWhenDrawableArrives() async throws {
+        let player = MPVPlayer()
+        player.load(url: URL(fileURLWithPath: "/private/missing-\(UUID().uuidString).mkv"))
+        player.stop()
+        player.attachDrawable(MPVMetalLayer())
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNil(player.error)
+        XCTAssertFalse(player.isFileLoaded)
+    }
+
+    @MainActor
+    func testRealMPVPausedScrubbingSettlesAtExactReleaseTarget() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mpv-scrubbing-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("tone \"quoted\" \\slash.mkv")
+        let generator = Process()
+        generator.executableURL = URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath))
+        generator.arguments = [
+            "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=5",
+            "-c:a", "pcm_s16le", source.path,
+        ]
+        try generator.run()
+        generator.waitUntilExit()
+        XCTAssertEqual(generator.terminationStatus, 0)
+        let player = MPVPlayer()
+        player.attachDrawable(MPVMetalLayer())
+        player.load(url: source, autostart: false)
+        for _ in 0..<250 where !player.isFileLoaded {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(player.isFileLoaded)
+        for index in 1...100 {
+            player.seekForScrubbing(to: Double(index) / 30)
+        }
+        player.cancelPendingScrubSeeks()
+        player.seek(to: 2.75)
+        for _ in 0..<250 where abs(player.timePos - 2.75) > 0.03 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(player.timePos, 2.75, accuracy: 0.03)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertNil(player.error)
+    }
+
+    @MainActor
+    func testScrubReleaseKeepsLastPointerTargetWhenBackendClockMoves() {
+        let controller = makeController()
+        defer { controller.teardown() }
+        controller.beginScrubbing()
+        controller.seekTo(20.75)
+        // Native playback can still publish a clock position during a drag.
+        controller.currentPlaybackTime = 18
+        controller.beginScrubbing() // Repeated stitching updates keep the target.
+        controller.endScrubbing()
+        XCTAssertEqual(controller.currentPlaybackTime, 20.75)
+        controller.beginScrubbing()
+        controller.seekTo(22)
+        controller.endScrubbing(at: 22.5)
+        XCTAssertEqual(controller.currentPlaybackTime, 22.5)
+    }
+
+    @MainActor
+    func testMPVScrubbingKeepsPointerPositionAndResumesClockUpdatesOnRelease() async {
+        let controller = makeController()
+        defer { controller.teardown() }
+        let time = PassthroughSubject<Double, Never>()
+        controller.installMPVObservers(
+            timePosition: time.eraseToAnyPublisher(),
+            fileLoaded: Empty().eraseToAnyPublisher(),
+            reachedEnd: Empty().eraseToAnyPublisher()
+        ) {}
+        controller.beginScrubbing()
+        controller.seekTo(20.75)
+        time.send(18)
+        // Let the queued observation execute during the gesture.
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(controller.currentPlaybackTime, 20.75)
+        controller.endScrubbing()
+        XCTAssertFalse(controller.isScrubbing)
+        XCTAssertEqual(controller.currentPlaybackTime, 20.75)
+        time.send(21)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(controller.currentPlaybackTime, 21)
+        controller.beginScrubbing()
+        controller.teardown()
+        XCTAssertFalse(controller.isScrubbing)
+    }
+
+    @MainActor
     private func makeController() -> PreviewPlayerController {
         PreviewPlayerController(videoItem: VideoItem(
             url: URL(fileURLWithPath: "/private/observation-test.mov"),
@@ -528,5 +683,86 @@ final class MPVWakeupContextTests: XCTestCase {
         XCTAssertNil(weakContext)
         queue.resume()
         wait(for: [invoked], timeout: 1)
+    }
+}
+
+final class MPVSeekSchedulerTests: XCTestCase {
+    func testDragWaitsForDecodedFrameAndKeepsOnlyLatestTarget() throws {
+        var scheduler = MPVSeekScheduler()
+        let first = try XCTUnwrap(scheduler.request(.init(time: 10, exact: false)))
+        for time in 11...100 {
+            XCTAssertNil(scheduler.request(.init(time: Double(time), exact: false)))
+        }
+        XCTAssertNil(scheduler.commandReplied(id: first.id, succeeded: true))
+        // Command acceptance and unrelated startup restart cannot unblock it.
+        XCTAssertNil(scheduler.playbackRestarted())
+        XCTAssertEqual(scheduler.inFlight, first)
+        scheduler.seekStarted()
+        let next = try XCTUnwrap(scheduler.playbackRestarted())
+        XCTAssertEqual(next.request, .init(time: 100, exact: false))
+        XCTAssertNil(scheduler.pending)
+    }
+
+    func testReleaseReplacesPendingPreviewWithPreciseTarget() throws {
+        var scheduler = MPVSeekScheduler()
+        let first = try XCTUnwrap(scheduler.request(.init(time: 10, exact: false)))
+        XCTAssertNil(scheduler.request(.init(time: 20, exact: false)))
+        scheduler.cancelPendingPreview()
+        XCTAssertNil(scheduler.request(.init(time: 20.75, exact: true)))
+        // Cancelling further preview work must preserve the final exact seek.
+        scheduler.cancelPendingPreview()
+        scheduler.seekStarted()
+        XCTAssertNil(scheduler.commandReplied(id: first.id, succeeded: true))
+        let final = try XCTUnwrap(scheduler.playbackRestarted())
+        XCTAssertEqual(final.request, .init(time: 20.75, exact: true))
+        scheduler.seekStarted()
+        XCTAssertNil(scheduler.commandReplied(id: final.id, succeeded: true))
+        XCTAssertNil(scheduler.playbackRestarted())
+        XCTAssertNil(scheduler.inFlight)
+        XCTAssertNil(scheduler.pending)
+    }
+
+    func testRestartBeforeCommandReplyStillFinishesExactlyOnce() throws {
+        var scheduler = MPVSeekScheduler()
+        let first = try XCTUnwrap(scheduler.request(.init(time: 10, exact: false)))
+        XCTAssertNil(scheduler.request(.init(time: 20, exact: false)))
+        scheduler.seekStarted()
+        XCTAssertNil(scheduler.playbackRestarted())
+        let next = try XCTUnwrap(scheduler.commandReplied(id: first.id, succeeded: true))
+        XCTAssertEqual(next.request.time, 20)
+        XCTAssertNil(scheduler.commandReplied(id: first.id, succeeded: true))
+        XCTAssertNil(scheduler.playbackRestarted())
+        XCTAssertEqual(scheduler.inFlight, next)
+    }
+
+    func testFailedCommandAllowsLatestRequestAndResetRejectsOldReplies() throws {
+        var scheduler = MPVSeekScheduler()
+        let first = try XCTUnwrap(scheduler.request(.init(time: 10, exact: false)))
+        XCTAssertNil(scheduler.request(.init(time: 20, exact: true)))
+        let next = try XCTUnwrap(scheduler.commandReplied(id: first.id, succeeded: false))
+        XCTAssertTrue(next.request.exact)
+        scheduler.reset()
+        XCTAssertNil(scheduler.pending)
+        XCTAssertNil(scheduler.inFlight)
+        let replacement = try XCTUnwrap(scheduler.request(.init(time: 30, exact: false)))
+        XCTAssertNotEqual(replacement.id, next.id)
+        XCTAssertNil(scheduler.commandReplied(id: next.id, succeeded: false))
+        XCTAssertNil(scheduler.playbackRestarted())
+        XCTAssertEqual(scheduler.inFlight, replacement)
+    }
+
+    func testCancellationDropsWaitingPreviewAndInvalidTargetsAreIgnored() throws {
+        var scheduler = MPVSeekScheduler()
+        let first = try XCTUnwrap(scheduler.request(.init(time: 10, exact: false)))
+        XCTAssertNil(scheduler.request(.init(time: 20, exact: false)))
+        for time in [Double.nan, .infinity, -.infinity] {
+            XCTAssertNil(scheduler.request(.init(time: time, exact: true)))
+        }
+        XCTAssertEqual(scheduler.pending?.time, 20)
+        scheduler.cancelPendingPreview()
+        scheduler.seekStarted()
+        XCTAssertNil(scheduler.commandReplied(id: first.id, succeeded: true))
+        XCTAssertNil(scheduler.playbackRestarted())
+        XCTAssertNil(scheduler.inFlight)
     }
 }

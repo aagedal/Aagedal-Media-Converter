@@ -357,7 +357,7 @@ final class PreviewPlayerController: ObservableObject {
         let mpv = MPVPlayer()
         self.mpvPlayer = mpv
         self.useMPV = true
-        self.isPreparing = false
+        self.isPreparing = true
 
         installMPVObservers(
             timePosition: mpv.$timePos.eraseToAnyPublisher(),
@@ -394,7 +394,7 @@ final class PreviewPlayerController: ObservableObject {
     private func setupImageSequencePreview(config: ImageSequenceConfig, startTime: TimeInterval) {
         self.imageSequenceConfig = config
         self.useImageSequence = true
-        self.isPreparing = false
+        self.isPreparing = true
 
         // Acquire security-scoped access to the sequence directory. Track which
         // method won so teardown only releases the one we acquired.
@@ -1379,6 +1379,8 @@ final class PreviewPlayerController: ObservableObject {
     }
 
     func teardown(resetAudioSelection: Bool = true) {
+        isScrubbing = false
+        scrubTarget = nil
         isReady = false
         trimPlayback.invalidate()
         removeMPVObservers()
@@ -1505,7 +1507,27 @@ final class PreviewPlayerController: ObservableObject {
         })
     }
     
+    private(set) var isScrubbing = false
+    private var scrubTarget: Double?
+
+    func beginScrubbing() {
+        guard !isScrubbing else { return }
+        scrubTarget = nil
+        isScrubbing = true
+    }
+
+    func endScrubbing(at time: Double? = nil) {
+        guard isScrubbing else { return }
+        let target = time ?? scrubTarget ?? currentPlaybackTime
+        isScrubbing = false
+        scrubTarget = nil
+        mpvPlayer?.cancelPendingScrubSeeks()
+        seekTo(target)
+    }
+
     func seekTo(_ time: Double) {
+        guard time.isFinite else { return }
+        if isScrubbing { scrubTarget = time }
         trimPlayback.invalidate()
         // Allow seeking even before player is fully ready - seeks will queue up
         // This enables scrubbing the timeline while player is still loading
@@ -1524,7 +1546,11 @@ final class PreviewPlayerController: ObservableObject {
         }
 
         if useMPV, let mpv = mpvPlayer {
-            mpv.seek(to: time)
+            if isScrubbing {
+                mpv.seekForScrubbing(to: time)
+            } else {
+                mpv.seek(to: time)
+            }
             return
         }
 

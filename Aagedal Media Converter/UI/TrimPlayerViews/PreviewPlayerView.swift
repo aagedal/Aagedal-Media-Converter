@@ -211,9 +211,10 @@ struct PreviewPlayerView: View {
     private func handleTrimEditingChanged(_ editing: Bool) {
         if editing {
             activeTrimGestures += 1
+            controller.beginScrubbing()
         } else {
             activeTrimGestures = max(activeTrimGestures - 1, 0)
-            // No need to refresh since we're seeking in real-time during drag
+            if activeTrimGestures == 0 { controller.endScrubbing() }
         }
     }
 
