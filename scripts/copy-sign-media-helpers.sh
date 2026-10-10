@@ -45,12 +45,11 @@ if [[ "${CODE_SIGNING_ALLOWED:-YES}" != NO ]]; then
             --options runtime "$timestamp_flag" "$image"
         /usr/bin/codesign --verify --strict "$image"
     done < <(/usr/bin/find "$nemo_staging/lib" -type f -name '*.dylib' -print0)
-    nemo_entitlement_args=()
+    nemo_signing_args=(--force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --options runtime "$timestamp_flag")
     if [[ "$EXPANDED_CODE_SIGN_IDENTITY" == - ]]; then
-        nemo_entitlement_args=(--entitlements "$SRCROOT/scripts/nemo-development.entitlements")
+        nemo_signing_args+=(--entitlements "$SRCROOT/scripts/nemo-development.entitlements")
     fi
-    /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" \
-        --options runtime "$timestamp_flag" "${nemo_entitlement_args[@]}" "$nemo_staging/bin/nemo-speech"
+    /usr/bin/codesign "${nemo_signing_args[@]}" "$nemo_staging/bin/nemo-speech"
     /usr/bin/codesign --verify --strict "$nemo_staging/bin/nemo-speech"
 fi
 /bin/cp -R "$nemo_staging" "$nemo_output"

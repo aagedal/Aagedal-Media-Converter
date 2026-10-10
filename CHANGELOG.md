@@ -1,5 +1,8 @@
 # v.4.5.1
 
+This release adds recursive encoding, a lossless reference preset, and Nemotron
+transcription, with improvements to analysis, waveforms, and preview scrubbing.
+
 ## Encoding and transcription
 
 - Added **Recursive Encoding** for supported presets. Enable it from a queue
@@ -21,10 +24,26 @@
   SSIMULACRA2 so no separate installation is required.
 - Quality analysis now compares trimmed outputs with the corresponding source
   range and handles perfect scores and repeated report exports more reliably.
+- Audio conversion and loudness analysis now discover audio tracks in WAV, AIFF,
+  and other AVFoundation-readable files when the metadata parser cannot read them.
 - Added German, Spanish, French, Italian, Japanese, Korean, Brazilian Portuguese,
   and Simplified Chinese interface translations, with refreshed queue tips.
 - Failed website downloads now offer guidance for updating the app-managed
   yt-dlp tools.
+
+## Waveforms and preview
+
+- Waveform generation streams audio directly into compact peaks, avoiding large
+  temporary PCM files. Saved waveform caches are reused after reopening the app,
+  including per-channel waveforms in Trim and the stitching timeline.
+- Long timelines skip offscreen ruler ticks, and multitrack previews avoid
+  decoding the first audio track twice. Damaged waveform caches are regenerated.
+- MPV previews use keyframe seeks while dragging trim handles or scrubbing in
+  Trim, full-screen playback, and the stitching editor, then seek precisely to
+  the final position on release. Pending seeks keep only the latest target.
+- MPV file loading and property updates run asynchronously, with loading feedback
+  until the source is ready and protection against delayed failures from a
+  replaced or stopped source.
 
 ## Reliability
 

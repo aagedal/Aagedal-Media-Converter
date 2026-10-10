@@ -355,5 +355,105 @@
             ]]></description>
         </item>
 
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.1</title>
+            <pubDate>Sat, 10 Oct 2026 12:44:25 +0200</pubDate>
+            <sparkle:version>597</sparkle:version>
+            <sparkle:shortVersionString>4.5.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.1/Aagedal_Media_Converter_4-5-1.zip"
+                length="120442247"
+                type="application/octet-stream"
+                sparkle:edSignature="KXJaMl+7DRcCRD/s/+qEtkzSLeeJWoZu6NbN9jzJSlcjH/xKioXAkHl99fFRA8xdbwFrptUIEEbaaiyxxJqRBA==" />
+            <description><![CDATA[
+                <p>This release adds recursive encoding, a lossless reference preset, and Nemotron transcription, with improvements to analysis, waveforms, and preview scrubbing.</p>
+                <h2>Encoding and transcription</h2>
+                <ul>
+                <li>Added <strong>Recursive Encoding</strong> for supported presets. Enable it from a queue</li>
+                </ul>
+                <p>item’s context menu and choose 2–100 total generations. Each generation encodes the previous output. All generations are kept together in a separate folder for each run. Source trims and other source edits apply only to the first generation.</p>
+                <ul>
+                <li>Added a <strong>Lossless</strong> preset with FFV1 video and 64-bit floating-point PCM audio</li>
+                </ul>
+                <p>in Matroska, preserving source resolution and frame rate. It can serve as a reference when comparing generation loss.</p>
+                <ul>
+                <li>Added Nemotron transcription with the bundled NeMo Speech runtime and model</li>
+                </ul>
+                <p>download from transcription settings.</p>
+                <ul>
+                <li>Added optional faster Whisper transcription using 30-second chunks. It may</li>
+                </ul>
+                <p>reduce subtitle timing precision and is disabled by default.</p>
+                <h2>Analysis and interface</h2>
+                <ul>
+                <li>Added audio loudness analysis alongside video quality analysis, and bundled</li>
+                </ul>
+                <p>SSIMULACRA2 so no separate installation is required.</p>
+                <ul>
+                <li>Quality analysis now compares trimmed outputs with the corresponding source</li>
+                </ul>
+                <p>range and handles perfect scores and repeated report exports more reliably.</p>
+                <ul>
+                <li>Audio conversion and loudness analysis now discover audio tracks in WAV, AIFF,</li>
+                </ul>
+                <p>and other AVFoundation-readable files when the metadata parser cannot read them.</p>
+                <ul>
+                <li>Added German, Spanish, French, Italian, Japanese, Korean, Brazilian Portuguese,</li>
+                </ul>
+                <p>and Simplified Chinese interface translations, with refreshed queue tips.</p>
+                <ul>
+                <li>Failed website downloads now offer guidance for updating the app-managed</li>
+                </ul>
+                <p>yt-dlp tools.</p>
+                <h2>Waveforms and preview</h2>
+                <ul>
+                <li>Waveform generation streams audio directly into compact peaks, avoiding large</li>
+                </ul>
+                <p>temporary PCM files. Saved waveform caches are reused after reopening the app, including per-channel waveforms in Trim and the stitching timeline.</p>
+                <ul>
+                <li>Long timelines skip offscreen ruler ticks, and multitrack previews avoid</li>
+                </ul>
+                <p>decoding the first audio track twice. Damaged waveform caches are regenerated.</p>
+                <ul>
+                <li>MPV previews use keyframe seeks while dragging trim handles or scrubbing in</li>
+                </ul>
+                <p>Trim, full-screen playback, and the stitching editor, then seek precisely to the final position on release. Pending seeks keep only the latest target.</p>
+                <ul>
+                <li>MPV file loading and property updates run asynchronously, with loading feedback</li>
+                </ul>
+                <p>until the source is ready and protection against delayed failures from a replaced or stopped source.</p>
+                <h2>Reliability</h2>
+                <ul>
+                <li>OCR subtitles for trimmed exports are clipped to the retained source interval</li>
+                </ul>
+                <p>and shifted to the output timeline, including cues crossing trim boundaries.</p>
+                <ul>
+                <li>Disabling cleanup or changing its folder or retention period stops an active</li>
+                </ul>
+                <p>pass before further files are moved to Trash.</p>
+                <ul>
+                <li>Cancelling a recursive conversion task stops its active generation and prevents</li>
+                </ul>
+                <p>later generations from starting. Recursive progress now keeps the generation label separate from the estimated remaining time for the whole chain.</p>
+                <ul>
+                <li>Automatic cleanup moves completed app outputs to Trash instead of permanently</li>
+                </ul>
+                <p>deleting files. Unrelated files and older outputs without an app ownership marker are preserved. Cleanup age starts when conversion finishes.</p>
+                <ul>
+                <li>Output-folder cleanup runs in the background, keeping the interface responsive</li>
+                </ul>
+                <p>while scanning large folders or slow volumes. Concurrent cleanup requests share one pass.</p>
+                <ul>
+                <li>Switching settings-sync destinations creates a snapshot even when settings</li>
+                </ul>
+                <p>have not changed. Sync Now also recreates a missing snapshot.</p>
+                <ul>
+                <li>Updating upload passwords and S3 secrets preserves existing Keychain entries</li>
+                </ul>
+                <p>if saving the replacement fails.</p>
+            ]]></description>
+        </item>
+
     </channel>
 </rss>
