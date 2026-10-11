@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import AVFoundation
 import XCTest
 @testable import Aagedal_Media_Converter
@@ -134,5 +136,26 @@ final class NativePreviewLoadDeadlineTests: XCTestCase {
         let item = AVPlayerItem(url: url)
         controller.player = AVPlayer(playerItem: item)
         return (controller, item)
+    }
+}
+
+final class TrimTimelineLoadingTests: XCTestCase {
+    @MainActor
+    func testAccessibilityConstructionWhileDurationLoads() {
+        // Creating the accessibility representation used to trap inside
+        // SwiftUI's stepped Slider normalization before metadata arrived.
+        for duration in [0.0, Double.nan, Double.infinity, 0.05, 7200] {
+            let timeline = TrimTimelineView(
+                trimStart: .constant(0), trimEnd: .constant(0),
+                duration: duration, playbackTime: 0,
+                thumbnails: nil, waveformURL: nil, isLoading: true,
+                onEditingChanged: { _ in }, onSeek: { _ in }
+            )
+            let host = NSHostingView(rootView: timeline)
+            host.frame = NSRect(x: 0, y: 0, width: 800, height: 138)
+            host.layoutSubtreeIfNeeded()
+            _ = host.accessibilityChildren()
+            XCTAssertEqual(timeline.duration, duration.isFinite ? duration : 0)
+        }
     }
 }

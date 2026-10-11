@@ -167,11 +167,11 @@ final class PreviewPlayerController: ObservableObject {
     /// This allows the timeline to be interactive even before metadata loads
     var effectiveDuration: Double {
         // First try the video item's duration (from metadata)
-        if videoItem.durationSeconds > 0 {
+        if videoItem.durationSeconds.isFinite, videoItem.durationSeconds > 0 {
             return videoItem.durationSeconds
         }
         // Fall back to MPV player's duration if available
-        if let mpvDuration = mpvPlayer?.duration, mpvDuration > 0 {
+        if let mpvDuration = mpvPlayer?.duration, mpvDuration.isFinite, mpvDuration > 0 {
             return mpvDuration
         }
         // Fall back to AVPlayer's duration if available
