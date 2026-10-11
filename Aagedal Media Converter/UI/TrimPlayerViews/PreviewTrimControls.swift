@@ -32,7 +32,7 @@ struct PreviewTrimControls: View {
 
     var body: some View {
         // Use controller's effectiveDuration which falls back to player duration if metadata isn't loaded yet
-        let duration = max(controller.effectiveDuration, item.durationSeconds, 0)
+        let duration = controller.effectiveDuration
         let isCompactMode = isCropControlsExpanded
         return VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {

@@ -118,7 +118,7 @@ struct TrimTimelineView: View {
     ) {
         self._trimStart = trimStart
         self._trimEnd = trimEnd
-        self.duration = duration
+        self.duration = duration.isFinite ? max(0, duration) : 0
         self.playbackTime = playbackTime
         self.thumbnails = thumbnails
         self.quickThumbnailImages = quickThumbnailImages
@@ -144,15 +144,28 @@ struct TrimTimelineView: View {
     // Native sliders expose the custom-drawn timeline to VoiceOver, including
     // standard increment/decrement actions. Keep changes on the same editing
     // callbacks as pointer gestures so playback and trim state stay in sync.
+    @ViewBuilder
     private var accessibleTimelineControls: some View {
-        let timelineDuration = duration.isFinite ? max(0, duration) : 0
-        let increment = step.isFinite && step > 0 ? step : 0.1
-        let minimumGap = min(increment, timelineDuration)
+        // Disabled sliders still normalize their range during construction.
+        // Wait for duration before constructing the accessibility sliders.
+        if duration > 0 {
+            accessibleReadyTimelineControls
+        } else {
+            Text("Timeline unavailable while duration is loading")
+                .accessibilityIdentifier("trim.timeline.loading")
+        }
+    }
+
+    private var accessibleReadyTimelineControls: some View {
+        let timelineDuration = duration
+        let requestedIncrement = step.isFinite && step > 0 ? step : 0.1
+        let increment = min(requestedIncrement, timelineDuration / 2)
+        let minimumGap = increment
         return VStack {
             Slider(value: Binding(
                 get: { min(max(0, playbackTime), timelineDuration) },
                 set: { onSeek(min(max(0, $0), timelineDuration)) }
-            ), in: 0...max(timelineDuration, increment), step: increment) {
+            ), in: 0...timelineDuration, step: increment) {
                 Text("Playback position")
             }
             .accessibilityValue("\(playbackTime, specifier: "%.1f") seconds")
@@ -165,7 +178,7 @@ struct TrimTimelineView: View {
                     trimStart = max(0, min(value, trimEnd - minimumGap))
                     onEditingChanged(false)
                 }
-            ), in: 0...max(timelineDuration, increment), step: increment) {
+            ), in: 0...timelineDuration, step: increment) {
                 Text("Trim start")
             }
             .accessibilityValue("\(trimStart, specifier: "%.1f") seconds")
@@ -178,7 +191,7 @@ struct TrimTimelineView: View {
                     trimEnd = min(timelineDuration, max(value, trimStart + minimumGap))
                     onEditingChanged(false)
                 }
-            ), in: 0...max(timelineDuration, increment), step: increment) {
+            ), in: 0...timelineDuration, step: increment) {
                 Text("Trim end")
             }
             .accessibilityValue("\(trimEnd, specifier: "%.1f") seconds")
@@ -194,7 +207,6 @@ struct TrimTimelineView: View {
                 }
             }
         }
-        .disabled(timelineDuration <= 0)
     }
 
 // MARK: - Interaction Layer
