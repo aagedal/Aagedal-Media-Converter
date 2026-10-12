@@ -17012,6 +17012,56 @@ final class ContainerTextMetadataTests: XCTestCase {
         }
     }
 
+    func testMasterOffRetainsValuesAndDecodesLegacyEditors() throws {
+        var editor = MetadataEditorSettings(comment: "Comment", description: "Description", title: "Title", artist: "Artist", sourceURL: "https://example.com/source")
+        editor.isEnabled = false
+        XCTAssertFalse(editor.writesComment)
+        XCTAssertTrue(editor.outputArguments.isEmpty)
+        let request = ConversionRequest(inputURL: URL(fileURLWithPath: "/tmp/source.webm"), outputURL: URL(fileURLWithPath: "/tmp/output"), preset: .h264, comment: "Old comment", metadataEditorSettings: editor, includeDateTag: true).applyingMetadataEditor(outputExtension: "mp4")
+        XCTAssertEqual(request.comment, "")
+        XCTAssertFalse(request.includeDateTag)
+        XCTAssertNil(request.additionalOutputArguments)
+        XCTAssertEqual(request.metadataEditorSettings?.title.value, "Title")
+        let decoded = try JSONDecoder().decode(MetadataEditorSettings.self, from: JSONEncoder().encode(editor))
+        XCTAssertFalse(decoded.isActive)
+        XCTAssertEqual(decoded, editor)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(editor)) as? [String: Any])
+        legacy.removeValue(forKey: "isEnabled")
+        let older = try JSONDecoder().decode(MetadataEditorSettings.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertTrue(older.isActive)
+        XCTAssertTrue(older.writesComment)
+    }
+
+    func testMasterOffExportsFollowSourcePreservationPolicy() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appendingPathComponent("source.mp4")
+        let runner = SubprocessRunner()
+        let sourceArgs = ["-v", "error", "-f", "lavfi", "-i", "color=size=32x32:duration=0.1", "-c:v", "libx264", "-metadata", "comment=Source comment", "-metadata", "description=Source description", "-metadata", "title=Source title", "-metadata", "artist=Source artist", "-metadata", "purl=https://example.com/original", "-movflags", "+use_metadata_tags", source.path]
+        let generated = try await runner.run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg), arguments: sourceArgs, timeout: .seconds(10)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        var editor = MetadataEditorSettings(comment: "Edited comment", description: "Edited description", title: "Edited title", artist: "Edited artist", sourceURL: "https://example.com/edited")
+        editor.isEnabled = false
+        for preserve in [true, false] {
+            let output = folder.appendingPathComponent("output-\(preserve).mp4")
+            let request = ConversionRequest(inputURL: source, outputURL: output, preset: .h264, comment: editor.comment.value, metadataEditorSettings: editor, includeDateTag: true).applyingMetadataEditor(outputExtension: "mp4")
+            var args = ["-v", "error", "-i", source.path, "-c", "copy"]
+            args += request.additionalOutputArguments ?? []
+            OutputMetadataPlan(source: SourceMetadataPlan(preserveMetadata: preserve, defaultInput: 0), comment: .source, timecode: .unchanged).apply(to: &args, outputArgumentsStart: 4, outputExtension: "mp4")
+            args.append(output.path)
+            let result = try await runner.run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg), arguments: args, timeout: .seconds(10)))
+            XCTAssertTrue(result.succeeded, result.standardErrorText)
+            let text = await ContainerTextMetadata.read(from: output)
+            XCTAssertEqual(text.comment, preserve ? "Source comment" : nil)
+            XCTAssertEqual(text.description, preserve ? "Source description" : nil)
+            XCTAssertEqual(text.title, preserve ? "Source title" : nil)
+            XCTAssertEqual(text.artist, preserve ? "Source artist" : nil)
+            XCTAssertEqual(text.sourceURL, preserve ? "https://example.com/original" : nil)
+        }
+    }
+
     func testDisabledEditorCommentDoesNotGenerateDateTag() {
         var editor = MetadataEditorSettings(comment: "Disabled", description: "", title: "", artist: "")
         editor.comment.isEnabled = false

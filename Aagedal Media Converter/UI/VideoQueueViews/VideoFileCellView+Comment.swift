@@ -68,12 +68,21 @@ extension VideoFileCellView: NSPopoverDelegate {
         commentToggleButton.isHidden = !commentsAvailable
         commentToggleButton.isEnabled = !config.isDownloading && config.scheduledDownloadTime == nil && !config.isLiveStreamRecording && config.downloadError == nil
         if commentsAvailable {
-            let hasComment = config.metadataEditorSettings != nil || !config.comment.isEmpty
-            commentToggleButton.image = hasComment ? VideoFileCellView.Symbol.textBubbleFill : VideoFileCellView.Symbol.textBubble
-            commentToggleButton.contentTintColor = hasComment ? .systemCyan : .secondaryLabelColor
-            commentToggleButton.toolTip = hasComment
-                ? "Edit metadata — stored in the exported file"
-                : "Edit metadata — prefilled from the source file"
+            // The speech bubble reflects Comment's override, rather than the
+            // mere existence of saved settings for any of the editor's fields.
+            let writesComment = config.metadataEditorSettings?.writesComment ?? !config.comment.isEmpty
+            commentToggleButton.image = writesComment ? VideoFileCellView.Symbol.textBubbleFill : VideoFileCellView.Symbol.textBubble
+            commentToggleButton.contentTintColor = writesComment ? .systemCyan : .secondaryLabelColor
+            commentToggleButton.setAccessibilityValue(writesComment ? "Comment override enabled" : "Comment override disabled")
+            if config.metadataEditorSettings?.isActive == false {
+                commentToggleButton.toolTip = "Edit metadata — all editor overrides disabled"
+            } else if config.metadataEditorSettings != nil {
+                commentToggleButton.toolTip = writesComment
+                    ? "Edit metadata — Comment override enabled"
+                    : "Edit metadata — Comment override disabled; other fields keep their own settings"
+            } else {
+                commentToggleButton.toolTip = "Edit metadata — prefilled from the source file"
+            }
         }
 
         // DCP / IMF metadata toggle — visible only when the current preset is a
@@ -102,7 +111,7 @@ extension VideoFileCellView: NSPopoverDelegate {
         let showDateTag = config.showDateTagButton
         dateTagButton.isHidden = !showDateTag
         if showDateTag {
-            let writesComment = config.metadataEditorSettings?.comment.isEnabled != false
+            let writesComment = config.metadataEditorSettings?.writesComment != false
             dateTagButton.isEnabled = writesComment
             dateTagButton.toolTip = writesComment ? "Include the generated date in the comment" : "Enable Comment in the metadata editor to include a date tag"
             let isActive = config.includeDateTag && writesComment
@@ -222,8 +231,14 @@ private struct MetadataEditorPopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Metadata").font(.headline)
-            Text("Enabled fields are written to the exported file. Empty enabled fields remove the existing value.")
+            Toggle("Write edited metadata", isOn: Binding(
+                get: { settings.isActive }, set: { settings.isEnabled = $0 }
+            ))
+            .font(.headline)
+            .accessibilityIdentifier("metadata.editor.enabled")
+            Text(settings.isActive
+                 ? "Enabled fields are written to the exported file. Empty enabled fields remove the existing value."
+                 : "Editor overrides are off. Original metadata follows the preset's preservation setting.")
                 .font(.caption).foregroundStyle(.secondary)
             TabView {
                 field("Comment", value: $settings.comment, multiline: true)
@@ -253,24 +268,28 @@ private struct MetadataEditorPopoverView: View {
             Toggle("Write this field", isOn: value.isEnabled)
                 .help("When off, this field follows the original metadata preservation setting.")
                 .accessibilityIdentifier("metadata.editor.\(label.lowercased()).enabled")
+                .disabled(!settings.isActive)
             if multiline {
                 TextEditor(text: value.value)
+                    // Recreate the native control when editing permission
+                    // changes, keeping its text in the existing binding.
+                    .id(settings.isActive && value.wrappedValue.isEnabled)
                     .font(.body)
                     .scrollContentBackground(.hidden)
                     .padding(6)
                     .background(.background)
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
-                    .disabled(!value.wrappedValue.isEnabled)
+                    .disabled(!settings.isActive || !value.wrappedValue.isEnabled)
                     .accessibilityLabel(label)
                     .accessibilityIdentifier("metadata.editor.\(label.lowercased()).value")
             } else {
                 TextField(label, text: value.value)
                     .textFieldStyle(.roundedBorder)
-                    .disabled(!value.wrappedValue.isEnabled)
+                    .disabled(!settings.isActive || !value.wrappedValue.isEnabled)
                     .accessibilityIdentifier("metadata.editor.\(label.lowercased()).value")
                 Spacer()
             }
-            if label == "Comment", value.wrappedValue.isEnabled {
+            if label == "Comment", settings.isActive, value.wrappedValue.isEnabled {
                 let preview = CommentMetadataPlan(comment: value.wrappedValue.value, includeDateTag: includeDateTag, settings: CommentSettings()).value
                 Text("Output comment").font(.caption).foregroundStyle(.secondary)
                 ScrollView {

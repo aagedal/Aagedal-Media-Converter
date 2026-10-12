@@ -1525,7 +1525,7 @@ struct VideoQueueTableView: NSViewRepresentable {
             case .metadataEditorChanged(let settings):
                 if let idx = droppedFilesIndex[itemID] {
                     parent.droppedFiles[idx].metadataEditorSettings = settings
-                    parent.droppedFiles[idx].comment = settings.comment.isEnabled ? settings.comment.value : ""
+                    parent.droppedFiles[idx].comment = settings.writesComment ? settings.comment.value : ""
                 }
             case .commentFocusChanged(let focused):
                 if focused {

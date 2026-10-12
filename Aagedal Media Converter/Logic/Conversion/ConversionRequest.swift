@@ -71,9 +71,10 @@ struct ConversionRequest: Sendable {
             ?? preset.outputExtension(for: inputURL).lowercased()
         guard ExportPreset.extensionSupportsCommentMetadata(ext) else { return self }
         var request = self
-        request.comment = editor.comment.isEnabled ? editor.comment.value : ""
-        if !editor.comment.isEnabled { request.includeDateTag = false }
+        request.comment = editor.writesComment ? editor.comment.value : ""
+        if !editor.writesComment { request.includeDateTag = false }
         request.metadataEditorWasApplied = true
+        guard editor.isActive else { return request }
         // Native AV2 muxing receives the typed fields directly; arbitrary
         // FFmpeg output options are intentionally unsupported by that pipeline.
         if preset == .av2 { return request }

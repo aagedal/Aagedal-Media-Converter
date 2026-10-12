@@ -937,11 +937,12 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         lines.append(String(localized: "Timecode: \(timecode)", locale: locale,
                             comment: "Accepted conversion settings summary: timecode behavior or value."))
         if sourceExecutionSettings != nil || executionSettings != nil {
-            if let sourceExecutionSettings, !sourceExecutionSettings.comment.isEmpty {
+            if let sourceExecutionSettings, !sourceExecutionSettings.comment.isEmpty,
+               sourceExecutionSettings.metadataEditorSettings?.writesComment != false {
                 lines.append(String(localized: "Comment: \(sourceExecutionSettings.comment)", locale: locale,
                                     comment: "Accepted conversion settings summary: embedded comment."))
             }
-            if let editor = sourceExecutionSettings?.metadataEditorSettings {
+            if let editor = sourceExecutionSettings?.metadataEditorSettings, editor.isActive {
                 for (label, field) in [("Description", editor.description), ("Title", editor.title), ("Artist", editor.artist)] where field.isEnabled {
                     lines.append("\(label): \(field.value)")
                 }

@@ -689,7 +689,7 @@ actor FFMPEGConverter {
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
         let sourceCommentSettings = commentSettings ?? CommentSettings()
-        let capturedCommentSettings = request.metadataEditorSettings?.comment.isEnabled == false
+        let capturedCommentSettings = request.metadataEditorSettings?.writesComment == false
             ? sourceCommentSettings.withoutAffixes : sourceCommentSettings
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
@@ -1050,7 +1050,7 @@ actor FFMPEGConverter {
                 trimStart: request.trimStart,
                 trimEnd: request.trimEnd,
                 comment: request.comment,
-                writeEmptyComment: request.metadataEditorSettings?.comment.isEnabled == true,
+                writeEmptyComment: request.metadataEditorSettings?.writesComment == true,
                 includeDateTag: request.includeDateTag,
                 commentSettings: capturedCommentSettings,
                 isMuted: request.isMuted,
@@ -1244,7 +1244,7 @@ actor FFMPEGConverter {
             commentSettings: capturedCommentSettings,
             subtitleSettings: capturedSubtitleSettings,
             comment: request.comment,
-            writeEmptyComment: request.metadataEditorSettings?.comment.isEnabled == true,
+            writeEmptyComment: request.metadataEditorSettings?.writesComment == true,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
             trimEnd: tempAudioURL != nil ? nil : request.trimEnd,
@@ -3055,13 +3055,14 @@ actor FFMPEGConverter {
         }
         let inheritedText = settings.preserveMetadata == true ? sourceMetadata : nil
         let composedComment = FFMPEGCommandBuilder.commentMetadataValue(comment: comment, includeDateTag: includeDateTag, settings: commentSettings)
+        let editor = metadataEditorSettings.flatMap { $0.isActive ? $0 : nil }
         let metadata = MatroskaMuxer.Metadata(
-            comment: metadataEditorSettings?.comment.isEnabled == true ? composedComment : composedComment ?? inheritedText?.comment,
+            comment: editor?.writesComment == true ? composedComment : composedComment ?? inheritedText?.comment,
             timecode: timecode,
-            description: metadataEditorSettings.flatMap { $0.description.isEnabled ? $0.description.value : nil } ?? inheritedText?.description,
-            title: metadataEditorSettings.flatMap { $0.title.isEnabled ? $0.title.value : nil } ?? inheritedText?.title,
-            artist: metadataEditorSettings.flatMap { $0.artist.isEnabled ? $0.artist.value : nil } ?? inheritedText?.artist,
-            sourceURL: metadataEditorSettings?.sourceURL ?? inheritedText?.sourceURL
+            description: editor.flatMap { $0.description.isEnabled ? $0.description.value : nil } ?? inheritedText?.description,
+            title: editor.flatMap { $0.title.isEnabled ? $0.title.value : nil } ?? inheritedText?.title,
+            artist: editor.flatMap { $0.artist.isEnabled ? $0.artist.value : nil } ?? inheritedText?.artist,
+            sourceURL: editor?.sourceURL ?? inheritedText?.sourceURL
         )
 
         // 5. Write the Matroska file.

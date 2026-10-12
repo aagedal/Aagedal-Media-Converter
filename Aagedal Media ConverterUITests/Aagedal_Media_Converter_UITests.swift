@@ -122,6 +122,66 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testDisablingCommentUpdatesQueueIconAndPersistsAfterReopening() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", additionalArguments: [
+            "-AMC_UI_TEST_TEXT_METADATA", "YES", "-showCommentField", "YES",
+            "-preserveMetadataByDefault", "NO"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.item").waitForExistence(timeout: 20))
+        let openEditor = element("queue.item.metadataEditor")
+        openEditor.click()
+        XCTAssertTrue(element("metadata.editor.comment.value").waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForValue("Comment override enabled", of: openEditor, timeout: 5))
+        let writeComment = app.checkBoxes.matching(identifier: "metadata.editor.comment.enabled").firstMatch
+        XCTAssertTrue(writeComment.waitForExistence(timeout: 5))
+        writeComment.click()
+        XCTAssertTrue(waitForToggle(false, of: writeComment, timeout: 5))
+        XCTAssertTrue(waitForValue("Comment override disabled", of: openEditor, timeout: 5))
+        XCTAssertFalse(element("metadata.editor.comment.value").isEnabled)
+        attachWindowScreenshot(named: "Metadata editor - Comment disabled")
+        app.typeKey(.escape, modifierFlags: [])
+        openEditor.click()
+        XCTAssertTrue(writeComment.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForToggle(false, of: writeComment, timeout: 5))
+        XCTAssertEqual(element("metadata.editor.comment.value").value as? String, "Source comment")
+    }
+
+    @MainActor
+    func testMetadataMasterSwitchDisablesAllOverridesAndRetainsValues() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", additionalArguments: [
+            "-AMC_UI_TEST_TEXT_METADATA", "YES", "-showCommentField", "YES"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.item").waitForExistence(timeout: 20))
+        let openEditor = element("queue.item.metadataEditor")
+        openEditor.click()
+        let master = app.checkBoxes.matching(identifier: "metadata.editor.enabled").firstMatch
+        XCTAssertTrue(master.waitForExistence(timeout: 5))
+        master.click()
+        XCTAssertTrue(waitForToggle(false, of: master, timeout: 5))
+        XCTAssertFalse(element("metadata.editor.comment.value").isEnabled)
+        XCTAssertFalse(app.checkBoxes.matching(identifier: "metadata.editor.comment.enabled").firstMatch.isEnabled)
+        XCTAssertTrue(waitForValue("Comment override disabled", of: openEditor, timeout: 5))
+        attachWindowScreenshot(named: "Metadata editor - All overrides disabled")
+        app.typeKey(.escape, modifierFlags: [])
+        openEditor.click()
+        XCTAssertTrue(master.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForToggle(false, of: master, timeout: 5))
+        master.click()
+        XCTAssertTrue(waitForToggle(true, of: master, timeout: 5))
+        attachWindowScreenshot(named: "Metadata editor - Reenabled after reopening")
+        let comment = element("metadata.editor.comment.value")
+        XCTAssertEqual(comment.value as? String, "Source comment")
+        XCTAssertTrue(app.checkBoxes.matching(identifier: "metadata.editor.comment.enabled").firstMatch.isEnabled)
+        comment.click()
+        comment.typeKey("a", modifierFlags: .command)
+        comment.typeText("Restored comment")
+        XCTAssertTrue(waitForValue("Restored comment", of: comment, timeout: 5))
+        XCTAssertTrue(waitForValue("Comment override enabled", of: openEditor, timeout: 5))
+    }
+
+    @MainActor
     func testEmptyQueueTipsWrapAndRefreshInBothLanguages() throws {
         for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
             launchApp(language: language, locale: locale, tipIndex: 15)
