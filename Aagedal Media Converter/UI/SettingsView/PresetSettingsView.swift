@@ -152,6 +152,10 @@ struct PresetsSettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     presetDetailView
+                    if selectedPreset.supportsOriginalMetadataPreservation {
+                        PresetMetadataPreservationView(preset: selectedPreset)
+                            .id(selectedPreset)
+                    }
                     if selectedPreset.isCustom {
                         customPresetSection
                     }
@@ -219,6 +223,7 @@ struct PresetsSettingsView: View {
             }
         }
         .contentShape(Rectangle())
+        .accessibilityIdentifier("settings.preset.\(preset.rawValue)")
     }
 
     // MARK: - Preset Detail View
@@ -303,8 +308,8 @@ struct PresetsSettingsView: View {
                             Text(profile.rawValue).tag(profile.rawValue)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 200)
                     .labelsHidden()
                     .help("Proxy and LT are lightweight for offline editing. Standard 422 is the most common for post-production. HQ offers higher quality at roughly 50% larger files. 4444 and 4444 XQ add alpha channel support and are suited for compositing and VFX.")
                 }
@@ -1993,4 +1998,37 @@ struct PresetsSettingsView: View {
     }
 
 
+}
+
+/// Each preset has its own stored choice; the old global value supplies the
+/// initial value until the user changes this preset.
+private struct PresetMetadataPreservationView: View {
+    let preset: ExportPreset
+    @AppStorage private var preserveMetadata: Bool
+
+    init(preset: ExportPreset) {
+        self.preset = preset
+        _preserveMetadata = AppStorage(wrappedValue: preset.preservesOriginalMetadata(),
+                                      AppConstants.preserveMetadataPreferenceKey(for: preset))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Preserve all original metadata", isOn: $preserveMetadata)
+                .toggleStyle(.switch)
+                .accessibilityIdentifier("preset.metadata.preserve")
+            Text("Keep source metadata when exporting with this preset. Available fields depend on the output format.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Enabled fields in the per-file metadata editor are written even when this setting is off.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+        .cornerRadius(10)
+    }
 }

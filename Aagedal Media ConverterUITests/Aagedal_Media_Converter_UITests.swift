@@ -308,6 +308,30 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testPresetMetadataPreservationDisplaysIndependentChoices() throws {
+        launchApp(defaultPreset: "VideoLoop", additionalArguments: [
+            "-preserveMetadata.VideoLoop", "NO",
+            "-preserveMetadata.ProRes", "YES"
+        ])
+        defer { app.terminate() }
+        XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+        element("toolbar.settings").click()
+        XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+        element("settings.tab.presets").click()
+        let toggle = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == %@ AND (elementType == %d OR elementType == %d)",
+            "preset.metadata.preserve", XCUIElement.ElementType.checkBox.rawValue,
+            XCUIElement.ElementType.switch.rawValue)).firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForToggle(false, of: toggle, timeout: 5))
+        element("settings.preset.ProRes").click()
+        XCTAssertTrue(waitForToggle(true, of: toggle, timeout: 5))
+        attachWindowScreenshot(named: "ProRes metadata preservation")
+        element("settings.preset.VideoLoop").click()
+        XCTAssertTrue(waitForToggle(false, of: toggle, timeout: 5))
+    }
+
+    @MainActor
     func testOpensSettingsAndMovesBetweenPanes() throws {
         launchApp()
         defer { app.terminate() }
@@ -1695,6 +1719,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     @MainActor
     private func waitForSelection(of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func waitForToggle(_ enabled: Bool, of element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate { _, _ in
+            if let value = element.value as? NSNumber { return value.boolValue == enabled }
+            return element.value as? String == (enabled ? "1" : "0")
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 

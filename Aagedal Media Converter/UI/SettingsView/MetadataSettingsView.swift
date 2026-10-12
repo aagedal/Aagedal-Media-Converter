@@ -7,7 +7,6 @@ import UniformTypeIdentifiers
 
 struct MetadataSettingsView: View {
     @AppStorage(AppConstants.includeDateTagPreferenceKey) private var includeDateTagByDefault = false
-    @AppStorage(AppConstants.preserveMetadataPreferenceKey) private var preserveMetadataByDefault = false
     @AppStorage(AppConstants.defaultTimecodeModeKey) private var defaultTimecodeModeRaw = AppConstants.defaultTimecodeModeRaw
     @AppStorage(AppConstants.defaultTimecodeValueKey) private var defaultTimecodeValue = AppConstants.defaultTimecodeValue
     @AppStorage(AppConstants.commentPrefixKey) private var commentPrefix = ""
@@ -97,20 +96,7 @@ struct MetadataSettingsView: View {
     private var metadataPreservationSection: some View {
         Section(header: Text("Metadata Preservation")) {
             VStack(alignment: .leading, spacing: 12) {
-                // Preserve metadata toggle
-                Toggle(isOn: $preserveMetadataByDefault) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Preserve all original metadata")
-                            .font(.subheadline.weight(.medium))
-                        Text("Keep title, timecode, and encoder tags from the source file")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .toggleStyle(SwitchToggleStyle())
-                .help("When enabled, the original file's metadata is kept intact during conversion")
-                
-                Text("By default, metadata such as title, timecode, and encoder tags are stripped to keep output files clean. Color-related metadata (including HDR) is always preserved for accurate viewing.")
+                Text("Original metadata preservation is configured separately for each preset in Settings → Presets.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -132,25 +118,12 @@ struct MetadataSettingsView: View {
                     }
                 }
                 .toggleStyle(SwitchToggleStyle())
-                .disabled(preserveMetadataByDefault)
                 .help("Controls whether newly added files include the \"Date generated\" metadata tag by default")
                 
-                if preserveMetadataByDefault {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                        Text("Date tag is unavailable when preserving original metadata")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                } else {
-                    Text("The date tag precedes any custom comment you enter on the video card.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("The date tag precedes any custom comment you enter on the video card.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(8)
         }

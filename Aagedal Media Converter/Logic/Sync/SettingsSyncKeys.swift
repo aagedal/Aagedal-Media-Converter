@@ -26,6 +26,7 @@ enum SettingsSyncKeys {
         var keys = Set<String>()
         keys.formUnion(customPresetKeys)
         keys.formUnion(staticKeys)
+        keys.formUnion(ExportPreset.allCases.map { AppConstants.preserveMetadataPreferenceKey(for: $0) })
         return keys
     }()
 

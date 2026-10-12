@@ -465,7 +465,7 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
     init(presetID: ApplicationPresetID, defaults: UserDefaults = .standard) {
         let preset = presetID.exportPreset
         self.presetID = presetID
-        preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+        preserveMetadata = preset.preservesOriginalMetadata(defaults: defaults)
         keepSubtitles = preset != .streamCopy
             && preset != .audioOnly
             && defaults.bool(forKey: AppConstants.keepSubtitlesKey)

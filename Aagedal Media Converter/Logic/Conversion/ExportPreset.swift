@@ -1117,7 +1117,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
         capturedResolution: CodecResolutionLimit? = nil
     ) -> [String] {
         let commonArgs = ["-hide_banner"]
-        let preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+        let preserveMetadata = preservesOriginalMetadata(defaults: defaults)
         switch self {
         case .h264:
             // Get encoder setting
@@ -1601,6 +1601,20 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return commonArgs + Self.parseCustomCommand(Self.customCommandString(for: slot, defaults: defaults))
         default:
             return []
+        }
+    }
+
+    /// Unconfigured presets inherit the previous global choice for compatibility.
+    func preservesOriginalMetadata(defaults: UserDefaults = .standard) -> Bool {
+        let key = AppConstants.preserveMetadataPreferenceKey(for: self)
+        if let value = defaults.object(forKey: key) as? Bool { return value }
+        return defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+    }
+
+    var supportsOriginalMetadataPreservation: Bool {
+        switch self {
+        case .imageSequence, .dcp, .imfJ2K, .imfProRes: return false
+        default: return !isCustom
         }
     }
 

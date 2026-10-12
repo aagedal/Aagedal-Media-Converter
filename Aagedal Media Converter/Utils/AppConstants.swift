@@ -197,6 +197,10 @@ enum AppConstants {
     static let maxThumbnailSize = CGSize(width: 320, height: 320)
     static let includeDateTagPreferenceKey = "includeDateTagByDefault"
     static let preserveMetadataPreferenceKey = "preserveMetadataByDefault"
+    static func preserveMetadataPreferenceKey(for preset: ExportPreset) -> String {
+        "preserveMetadata.\(preset.rawValue)"
+    }
+
     static let commentPrefixKey = "commentPrefix"
     static let commentSuffixKey = "commentSuffix"
     static let commentSeparatorKey = "commentSeparator"

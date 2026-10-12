@@ -25,7 +25,7 @@ struct AV2Settings: Codable, Equatable, Sendable {
     let parallelChunks: Int
 
     init(defaults: UserDefaults = .standard) {
-        preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+        preserveMetadata = ExportPreset.av2.preservesOriginalMetadata(defaults: defaults)
         container = AV2Container(rawValue: defaults.string(forKey: AppConstants.av2ContainerKey)
             ?? AppConstants.defaultAV2Container) ?? .ivf
         audioCodec = AV2AudioCodec(rawValue: defaults.string(forKey: AppConstants.av2AudioCodecKey)

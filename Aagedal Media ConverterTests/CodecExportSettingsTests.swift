@@ -8,6 +8,52 @@ import os
 @testable import Aagedal_Media_Converter
 
 final class CodecExportSettingsTests: XCTestCase {
+    func testPerPresetMetadataPreservationRetainsLegacyChoiceAndIndependentOverrides() throws {
+        let suite = "PresetMetadataTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertFalse(ExportPreset.prores.preservesOriginalMetadata(defaults: defaults))
+        defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
+        for preset in ExportPreset.allCases where preset.supportsOriginalMetadataPreservation {
+            XCTAssertTrue(preset.preservesOriginalMetadata(defaults: defaults))
+            XCTAssertTrue(SettingsSyncKeys.all.contains(AppConstants.preserveMetadataPreferenceKey(for: preset)))
+        }
+        defaults.set(false, forKey: AppConstants.preserveMetadataPreferenceKey(for: .videoLoop))
+        XCTAssertFalse(ExportPreset.videoLoop.preservesOriginalMetadata(defaults: defaults))
+        XCTAssertTrue(ExportPreset.videoLoopWithSound.preservesOriginalMetadata(defaults: defaults))
+        XCTAssertTrue(ExportPreset.prores.preservesOriginalMetadata(defaults: defaults))
+        XCTAssertEqual(try XCTUnwrap(CodecExportSettings(preset: .videoLoop, defaults: defaults)).sourceMetadataPlan, .strip)
+        XCTAssertEqual(try XCTUnwrap(CodecExportSettings(preset: .prores, defaults: defaults)).sourceMetadataPlan, .preserve(input: 0))
+        defaults.set(false, forKey: AppConstants.preserveMetadataPreferenceKey)
+        defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey(for: .prores))
+        XCTAssertTrue(ExportPreset.prores.preservesOriginalMetadata(defaults: defaults))
+        XCTAssertFalse(ExportPreset.h264.preservesOriginalMetadata(defaults: defaults))
+    }
+
+    func testPresetMetadataPolicyIsCapturedForCodecAudioAV2AndApplicationJobs() throws {
+        let suite = "PresetMetadataCaptureTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for preset in [ExportPreset.prores, .audioOnly, .av2] {
+            defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey(for: preset))
+        }
+        let codec = try XCTUnwrap(CodecExportSettings(preset: .prores, defaults: defaults))
+        let audio = AudioOnlySettings(defaults: defaults)
+        let av2 = AV2Settings(defaults: defaults)
+        let job = ApplicationPresetSettings(presetID: .proRes, defaults: defaults)
+        let audioJob = ApplicationPresetSettings(presetID: .audioOnly, defaults: defaults)
+        let av2Job = ApplicationPresetSettings(presetID: .av2, defaults: defaults)
+        defaults.removePersistentDomain(forName: suite)
+        XCTAssertEqual(codec.sourceMetadataPlan, .preserve(input: 0))
+        XCTAssertTrue(audio.preserveMetadata)
+        XCTAssertEqual(av2.preserveMetadata, true)
+        XCTAssertTrue(job.preserveMetadata)
+        XCTAssertTrue(audioJob.preserveMetadata)
+        XCTAssertTrue(av2Job.preserveMetadata)
+        XCTAssertFalse(ExportPreset.prores.preservesOriginalMetadata(defaults: defaults))
+        XCTAssertEqual(codec.ffmpegArguments, job.capturedCodec?.ffmpegArguments)
+    }
+
     func testRecursiveLosslessEncodingKeepsEveryGenerationAndAppliesSourceEditsOnce() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("RecursiveEncoding-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
