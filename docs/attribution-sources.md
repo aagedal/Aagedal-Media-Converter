@@ -77,3 +77,13 @@ new releases remain drafts until both source and binary uploads succeed. Source
 filenames include version, build and manifest hash, preserving source material
 for older builds. Manual releases must attach the source companion as well as
 the application ZIP. No public release is performed by the attribution checks.
+
+After publishing the GitHub release, `release.sh` opens an appcast-only PR using
+an isolated temporary checkout. Merge the printed PR and confirm that the
+**Publish website appcast** workflow succeeds: publishing the release alone does
+not deploy the app's live update feed. The helper preserves entries from `main`
+and reuses an open PR when retried. If this step fails, the script exits with an
+error and prints a `publish-release-appcast.py` command to retry using the
+verified artifacts, without rebuilding or uploading the release again. When
+GitHub CLI is unavailable or unauthenticated, the script prints the manual
+release and appcast deployment steps instead.

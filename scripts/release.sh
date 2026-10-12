@@ -5,7 +5,8 @@
 #
 # Build, sign, notarize, and publish a new release. After completing the build
 # pipeline this script signs the resulting .zip with Sparkle's EdDSA key and
-# appends a new <item> to appcast.xml so existing installs auto-update.
+# appends a new <item> to appcast.xml and opens an appcast-only pull request.
+# Merge that PR to deploy the website feed and enable existing installs to update.
 #
 # Prerequisites (one-time setup):
 #   1. Sparkle SDK installed (via SPM, see plan file).
@@ -263,6 +264,7 @@ xcrun stapler validate "$VERIFY_DIR/$SCHEME.app"
 # GitHub release
 # -----------------------------------------------------------------------------
 
+RELEASE_PUBLISHED=false
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     if gh release view "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
         echo "==> Using existing GitHub release $MARKETING_VERSION"
@@ -283,6 +285,7 @@ if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     # A new (or resumed) draft is made public only after all uploads succeeded.
     echo "==> Both assets uploaded. Publishing GitHub release $MARKETING_VERSION"
     gh release edit "$MARKETING_VERSION" --repo "$GITHUB_OWNER/$GITHUB_REPO" --draft=false
+    RELEASE_PUBLISHED=true
 else
     echo "==> GitHub CLI is unavailable or unauthenticated — skipping upload."
     echo "    1. Create release $MARKETING_VERSION at https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/new"
@@ -291,9 +294,22 @@ fi
 
 cp "$APPCAST_CANDIDATE" "$APPCAST"
 
-echo "==> Appended appcast entry. Review and commit:"
-echo "    git diff $APPCAST"
-echo "    Commit $APPCAST on a release branch and open a pull request against main."
+if [[ "$RELEASE_PUBLISHED" == true ]]; then
+    echo "==> Opening appcast deployment pull request"
+    if ! python3 scripts/publish-release-appcast.py \
+        --repo "$GITHUB_OWNER/$GITHUB_REPO" --item "$APPCAST_ITEM" \
+        --archive "$RELEASE_ZIP" --info-plist "$APP_PATH/Contents/Info.plist"; then
+        echo "ERROR: Release is public, but the appcast PR step failed. The live feed may still advertise the previous release." >&2
+        echo "Retry without rebuilding or uploading the release:" >&2
+        printf '    python3 scripts/publish-release-appcast.py --repo %q --item %q --archive %q --info-plist %q\n' \
+            "$GITHUB_OWNER/$GITHUB_REPO" "$APPCAST_ITEM" "$RELEASE_ZIP" "$APP_PATH/Contents/Info.plist" >&2
+        exit 1
+    fi
+else
+    echo "==> Appcast prepared locally; the live update feed has NOT been deployed."
+    echo "    Publish both release assets, then commit $APPCAST and open a pull request against main."
+    echo "    Merge that PR and confirm the Publish website appcast workflow succeeds."
+fi
 
 # -----------------------------------------------------------------------------
 # Update the Homebrew tap cask
