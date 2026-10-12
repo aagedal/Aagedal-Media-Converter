@@ -455,5 +455,35 @@
             ]]></description>
         </item>
 
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.2</title>
+            <pubDate>Mon, 12 Oct 2026 18:07:59 +0200</pubDate>
+            <sparkle:version>598</sparkle:version>
+            <sparkle:shortVersionString>4.5.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.2/Aagedal_Media_Converter_4-5-2.zip"
+                length="120476115"
+                type="application/octet-stream"
+                sparkle:edSignature="97xCMPkCcs00JFxbpnIAQXQVsrO8ZAZjzHrW1+A7Rp/1sa8mpwT2ZPxfXeO51Y8hWmPP7WiPxqiY2+9DB4vcBQ==" />
+            <description><![CDATA[
+                <ul>
+                <li>Added a video picker for Instagram carousel and Twitter/X post links. Choose</li>
+                </ul>
+                <p>one, several, or all videos using thumbnails and original Instagram slide numbers.</p>
+                <ul>
+                <li>Fixed Instagram downloads failing on photo slides, ignoring the selected slide,</li>
+                </ul>
+                <p>or processing multiple videos as one download. Videos with shared titles now have distinct filenames.</p>
+                <ul>
+                <li>Video selections are preserved for retries and scheduled downloads. Links to</li>
+                </ul>
+                <p>a specific Instagram slide or Twitter/X video still download directly.</p>
+                <ul>
+                <li>Fixed a trim timeline crash while network files are loading.</li>
+                </ul>
+            ]]></description>
+        </item>
+
     </channel>
 </rss>
