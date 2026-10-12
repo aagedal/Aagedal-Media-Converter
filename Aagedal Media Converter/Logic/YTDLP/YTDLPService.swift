@@ -195,6 +195,187 @@ enum YTDLPFilenameRestrictionMode: String, CaseIterable, Identifiable {
     }
 }
 
+struct PostDownloadVideo: Identifiable, Sendable {
+    let slideIndex: Int
+    let url: String
+    let title: String
+    let thumbnailURL: URL?
+    var id: Int { slideIndex }
+}
+
+/// Instagram's extractor ignores img_index and may return either all carousel
+/// slides (including photos without formats), or only videos titled "Video N".
+struct InstagramCarouselSelection {
+    let metadata: [String: Any]
+    let playlistIndex: Int?
+
+    static func isPostURL(_ url: String) -> Bool {
+        guard let components = URLComponents(string: url),
+              ["http", "https"].contains(components.scheme?.lowercased() ?? ""),
+              ["instagram.com", "www.instagram.com"].contains(components.host?.lowercased() ?? "") else {
+            return false
+        }
+        let path = components.path.split(separator: "/")
+        return path.count == 2 && path[0] == "p"
+    }
+
+    static func select(from json: [String: Any], url: String) throws -> Self {
+        let indexValue = URLComponents(string: url)?.queryItems?.first { $0.name == "img_index" }?.value
+        let requestedIndex: Int?
+        if let indexValue {
+            guard let index = Int(indexValue), index > 0 else {
+                throw YTDLPError.metadataFetchFailed("Instagram slide index must be a positive number.")
+            }
+            requestedIndex = index
+        } else {
+            requestedIndex = nil
+        }
+        guard let entries = json["entries"] as? [Any] else {
+            guard requestedIndex == nil || requestedIndex == 1 else {
+                throw YTDLPError.metadataFetchFailed("The selected Instagram slide was not found.")
+            }
+            return Self(metadata: json, playlistIndex: nil)
+        }
+
+        for (offset, value) in entries.enumerated() {
+            guard let entry = value as? [String: Any] else { continue }
+            if let requestedIndex {
+                guard originalIndex(entry, offset: offset) == requestedIndex else { continue }
+                guard hasVideo(entry) else {
+                    throw YTDLPError.metadataFetchFailed("Instagram slide \(requestedIndex) is a photo, not a video.")
+                }
+            } else if !hasVideo(entry) {
+                continue
+            }
+            return Self(metadata: entry, playlistIndex: (entry["playlist_index"] as? Int) ?? offset + 1)
+        }
+        throw YTDLPError.metadataFetchFailed(
+            requestedIndex == nil
+                ? "This Instagram post contains no downloadable videos."
+                : "The selected Instagram slide was not found or is not a video."
+        )
+    }
+
+    private static func originalIndex(_ entry: [String: Any], offset: Int) -> Int {
+        // The GraphQL extractor skips photos but retains their position in
+        // the title. playlist_index then counts videos, not original slides.
+        if let title = entry["title"] as? String, title.hasPrefix("Video "),
+           let index = Int(title.dropFirst(6)), index > 0 {
+            return index
+        }
+        return (entry["playlist_index"] as? Int) ?? offset + 1
+    }
+
+    static func hasVideo(_ entry: [String: Any]) -> Bool {
+        if let formats = entry["formats"] as? [[String: Any]] {
+            return !formats.isEmpty
+        }
+        // Flat URL entries will be resolved by yt-dlp during download.
+        return entry["url"] as? String != nil
+    }
+
+    static func videos(from json: [String: Any], url: String) -> [PostDownloadVideo] {
+        let entries = (json["entries"] as? [Any]) ?? [json]
+        return entries.enumerated().compactMap { offset, value in
+            guard let entry = value as? [String: Any], hasVideo(entry),
+                  var components = URLComponents(string: url) else { return nil }
+            let index = originalIndex(entry, offset: offset)
+            var queryItems = components.queryItems ?? []
+            queryItems.removeAll { $0.name == "img_index" }
+            queryItems.append(URLQueryItem(name: "img_index", value: String(index)))
+            components.queryItems = queryItems
+            guard let entryURL = components.string else { return nil }
+            let thumbnail = (entry["thumbnail"] as? String)
+                ?? ((entry["thumbnails"] as? [[String: Any]])?.last?["url"] as? String)
+            return PostDownloadVideo(slideIndex: index, url: entryURL,
+                                          title: entry["title"] as? String ?? "Video",
+                                          thumbnailURL: thumbnail.flatMap { URL(string: $0) })
+        }
+    }
+}
+
+/// The picker selects the extracted video ordinal, which differs from Twitter's
+/// /video/N attachment number when photos precede videos. Keep this selection in
+/// the saved URL so retries and scheduled downloads retain the user's choice.
+struct TwitterPostSelection {
+    static let indexQueryName = "amc_video_index"
+
+    static func isPostURL(_ url: String) -> Bool {
+        guard let components = URLComponents(string: url),
+              ["http", "https"].contains(components.scheme?.lowercased() ?? "") else { return false }
+        let hosts = ["twitter.com", "www.twitter.com", "m.twitter.com", "mobile.twitter.com",
+                     "x.com", "www.x.com", "m.x.com", "mobile.x.com"]
+        guard hosts.contains(components.host?.lowercased() ?? "") else { return false }
+        let parts = components.path.split(separator: "/").map(String.init)
+        let idPosition: Int
+        if parts.count >= 4, parts[0] == "i", parts[1] == "web", parts[2] == "status" {
+            idPosition = 3
+        } else if parts.count >= 3, parts[1] == "status" {
+            idPosition = 2
+        } else if parts.count >= 2, parts[0] == "statuses" {
+            idPosition = 1
+        } else { return false }
+        guard !parts[idPosition].isEmpty, parts[idPosition].allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
+        let suffix = Array(parts.dropFirst(idPosition + 1))
+        return suffix.isEmpty || (suffix.count == 2 && ["video", "photo"].contains(suffix[0])
+                                 && Int(suffix[1]).map { $0 > 0 } == true)
+    }
+
+    static func needsPicker(_ url: String) -> Bool {
+        isPostURL(url) && !hasAttachmentIndex(url)
+            && URLComponents(string: url)?.queryItems?.contains { $0.name == indexQueryName } != true
+    }
+
+    static func hasAttachmentIndex(_ url: String) -> Bool {
+        let parts = URLComponents(string: url)?.path.split(separator: "/") ?? []
+        return parts.count >= 2 && ["video", "photo"].contains(String(parts[parts.count - 2]))
+    }
+
+    static func selectedIndex(_ url: String) throws -> Int {
+        guard let item = URLComponents(string: url)?.queryItems?.first(where: { $0.name == indexQueryName }) else { return 1 }
+        guard let value = item.value, let index = Int(value), index > 0 else {
+            throw YTDLPError.metadataFetchFailed("The selected Twitter/X video number is invalid.")
+        }
+        return index
+    }
+
+    static func sourceURL(_ url: String) -> String {
+        guard var components = URLComponents(string: url) else { return url }
+        components.queryItems = components.queryItems?.filter { $0.name != indexQueryName }
+        if components.queryItems?.isEmpty == true { components.queryItems = nil }
+        return components.string ?? url
+    }
+
+    static func videos(from json: [String: Any], url: String) -> [PostDownloadVideo] {
+        let entries = (json["entries"] as? [Any]) ?? [json]
+        return entries.enumerated().compactMap { offset, value in
+            guard let entry = value as? [String: Any],
+                  InstagramCarouselSelection.hasVideo(entry),
+                  var components = URLComponents(string: sourceURL(url)) else { return nil }
+            let index = entry["playlist_index"] as? Int ?? offset + 1
+            var items = components.queryItems ?? []
+            items.append(URLQueryItem(name: indexQueryName, value: String(index)))
+            components.queryItems = items
+            guard let entryURL = components.string else { return nil }
+            let thumbnail = entry["thumbnail"] as? String
+                ?? ((entry["thumbnails"] as? [[String: Any]])?.last?["url"] as? String)
+            return PostDownloadVideo(slideIndex: index, url: entryURL,
+                                     title: entry["title"] as? String ?? "Video",
+                                     thumbnailURL: thumbnail.flatMap { URL(string: $0) })
+        }
+    }
+
+    static func metadata(from json: [String: Any], index: Int) throws -> [String: Any] {
+        guard let entries = json["entries"] as? [Any] else { return json }
+        for (offset, value) in entries.enumerated() {
+            guard let entry = value as? [String: Any],
+                  (entry["playlist_index"] as? Int ?? offset + 1) == index else { continue }
+            return entry
+        }
+        throw YTDLPError.metadataFetchFailed("The selected Twitter/X video was not found.")
+    }
+}
+
 /// Service for executing yt-dlp downloads
 actor YTDLPService {
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "YTDLPService")
@@ -286,7 +467,7 @@ actor YTDLPService {
         BinaryPathResolver.ffmpegPath
     }
 
-    private func runProbe(ytdlpPath: String, arguments: [String]) async throws -> ProbeResult {
+    private func runProbe(ytdlpPath: String, arguments: [String], control: YTDLPDownloadControl? = nil) async throws -> ProbeResult {
         let configuration = HomebrewPythonExecutor.ytDLPExecutionConfiguration(
             scriptPath: ytdlpPath,
             arguments: arguments
@@ -302,12 +483,31 @@ actor YTDLPService {
             sensitiveArgumentNames: ["--cookies", "--cookies-from-browser"]
         )
 
+        let executionID = UUID()
+        let task = Task { [subprocessRunner] in
+            try await subprocessRunner.run(request)
+        }
+        control?.install(id: executionID) { task.cancel() }
+        defer { _ = control?.finish(id: executionID) }
+
         do {
-            let result = try await subprocessRunner.run(request)
+            let result = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            if control?.reason(id: executionID) != nil {
+                throw YTDLPError.cancelled
+            }
             return ProbeResult(
                 subprocess: result,
                 safeStandardError: request.redactedDiagnostic(result.standardErrorText)
             )
+        } catch is CancellationError {
+            if control?.reason(id: executionID) != nil {
+                throw YTDLPError.cancelled
+            }
+            throw CancellationError()
         } catch let error as SubprocessRunnerError {
             switch error {
             case .timedOut:
@@ -316,6 +516,47 @@ actor YTDLPService {
                 throw YTDLPError.metadataFetchFailed(error.localizedDescription)
             }
         }
+    }
+
+    private func probePostJSON(url: String, ytdlpPath: String, arguments: [String], control: YTDLPDownloadControl? = nil) async throws -> [String: Any] {
+        let probe = try await runProbe(
+            ytdlpPath: ytdlpPath,
+            arguments: arguments + ["--flat-playlist", "--ignore-no-formats-error", "-J", "--no-warnings", "--", url],
+            control: control
+        )
+        guard probe.subprocess.succeeded else {
+            throw YTDLPError.metadataFetchFailed(probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError)
+        }
+        guard probe.subprocess.discardedStandardOutputBytes == 0 else {
+            throw YTDLPError.metadataFetchFailed("yt-dlp metadata response exceeded the 16 MB safety limit")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: probe.subprocess.standardOutput) as? [String: Any] else {
+            throw YTDLPError.metadataFetchFailed("Failed to parse post metadata")
+        }
+        return json
+    }
+
+    private func probeInstagramPost(url: String, ytdlpPath: String, arguments: [String], control: YTDLPDownloadControl? = nil) async throws -> InstagramCarouselSelection {
+        let json = try await probePostJSON(url: url, ytdlpPath: ytdlpPath, arguments: arguments, control: control)
+        return try InstagramCarouselSelection.select(from: json, url: url)
+    }
+
+    func fetchPostVideos(url: String) async throws -> [PostDownloadVideo] {
+        guard InstagramCarouselSelection.isPostURL(url) || TwitterPostSelection.isPostURL(url) else {
+            throw YTDLPError.metadataFetchFailed("Enter an Instagram or Twitter/X post URL.")
+        }
+        guard let path = await updateService.resolveYTDLPPath() else { throw YTDLPError.binaryNotFound }
+        var arguments = ["--ignore-config", "--remote-components", "ejs:github",
+                         "--cache-dir", AppConstants.ytdlpCacheDirectory.path]
+        if let denoPath = await updateService.ensureDenoInstalled() {
+            arguments.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
+        }
+        let browser = UserDefaults.standard.string(forKey: AppConstants.ytdlpCookiesBrowserKey) ?? ""
+        if !browser.isEmpty { arguments.append(contentsOf: ["--cookies-from-browser", browser]) }
+        let json = try await probePostJSON(url: url, ytdlpPath: path, arguments: arguments)
+        return TwitterPostSelection.isPostURL(url)
+            ? TwitterPostSelection.videos(from: json, url: url)
+            : InstagramCarouselSelection.videos(from: json, url: url)
     }
 
     /// Fetches video metadata without downloading
@@ -345,26 +586,41 @@ actor YTDLPService {
         if !cookiesBrowser.isEmpty {
             arguments.append(contentsOf: ["--cookies-from-browser", cookiesBrowser])
         }
-        arguments.append(contentsOf: ["-j", "--no-download", "--no-warnings", "--", url])
+        let json: [String: Any]
+        if InstagramCarouselSelection.isPostURL(url) {
+            json = try await probeInstagramPost(url: url, ytdlpPath: ytdlpPath, arguments: arguments).metadata
+        } else if TwitterPostSelection.isPostURL(url) {
+            let index = try TwitterPostSelection.selectedIndex(url)
+            var probeArguments = arguments + ["--no-playlist"]
+            if !TwitterPostSelection.hasAttachmentIndex(url) {
+                probeArguments += ["--playlist-items", String(index)]
+            }
+            let post = try await probePostJSON(url: TwitterPostSelection.sourceURL(url), ytdlpPath: ytdlpPath, arguments: probeArguments)
+            json = try TwitterPostSelection.metadata(from: post, index: index)
+        } else {
+            arguments.append(contentsOf: ["-j", "--no-download", "--no-warnings", "--", url])
 
-        let probe = try await runProbe(ytdlpPath: ytdlpPath, arguments: arguments)
-        let result = probe.subprocess
+            let probe = try await runProbe(ytdlpPath: ytdlpPath, arguments: arguments)
+            let result = probe.subprocess
 
-        let processElapsed = Date().timeIntervalSince(processStartTime)
-        logger.info("[TIMING] yt-dlp metadata process completed in \(String(format: "%.2f", processElapsed))s, exit status: \(result.terminationStatus)")
+            let processElapsed = Date().timeIntervalSince(processStartTime)
+            logger.info("[TIMING] yt-dlp metadata process completed in \(String(format: "%.2f", processElapsed))s, exit status: \(result.terminationStatus)")
 
-        guard result.succeeded else {
-            let errorMessage = probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError
-            logger.error("yt-dlp metadata fetch failed: \(errorMessage)")
-            throw YTDLPError.metadataFetchFailed(errorMessage)
-        }
+            guard result.succeeded else {
+                let errorMessage = probe.safeStandardError.isEmpty ? "Unknown error" : probe.safeStandardError
+                logger.error("yt-dlp metadata fetch failed: \(errorMessage)")
+                throw YTDLPError.metadataFetchFailed(errorMessage)
+            }
 
-        guard result.discardedStandardOutputBytes == 0 else {
-            throw YTDLPError.metadataFetchFailed("yt-dlp metadata response exceeded the 16 MB safety limit")
-        }
+            guard result.discardedStandardOutputBytes == 0 else {
+                throw YTDLPError.metadataFetchFailed("yt-dlp metadata response exceeded the 16 MB safety limit")
+            }
 
-        guard let json = try? JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any] else {
-            throw YTDLPError.metadataFetchFailed("Failed to parse JSON response")
+            guard let parsedJSON = try? JSONSerialization.jsonObject(with: result.standardOutput) as? [String: Any] else {
+                throw YTDLPError.metadataFetchFailed("Failed to parse JSON response")
+            }
+
+            json = parsedJSON
         }
 
         let title = json["title"] as? String ?? "Unknown Title"
@@ -526,6 +782,21 @@ actor YTDLPService {
             logger.info("[YTDLPService] Using cookies from browser: \(cookiesBrowser)")
         }
 
+        var outputTemplate = "%(title)s.%(ext)s"
+        if InstagramCarouselSelection.isPostURL(url) {
+            let selection = try await probeInstagramPost(url: url, ytdlpPath: ytdlpPath, arguments: args, control: control)
+            if let index = selection.playlistIndex {
+                args.append(contentsOf: ["--playlist-items", String(index)])
+                // Carousel videos often share a title; keep each slide's file distinct.
+                outputTemplate = "%(title)s [%(id)s].%(ext)s"
+            }
+        } else if TwitterPostSelection.isPostURL(url) {
+            if !TwitterPostSelection.hasAttachmentIndex(url) {
+                args.append(contentsOf: ["--playlist-items", String(try TwitterPostSelection.selectedIndex(url))])
+            }
+            outputTemplate = "%(title)s [%(id)s].%(ext)s"
+        }
+
         if liveFromStart {
             args.append(contentsOf: ["--live-from-start", "--no-part"])
             logger.info("[YTDLPService] Downloading live stream from start (no-part)")
@@ -562,11 +833,11 @@ actor YTDLPService {
             forceOverwrite ? "--force-overwrites" : "--no-overwrites",
             "--print", "before_dl:\(YTDLPProgressParser.liveStatusPrefix)%(live_status)s",
             "--print", "after_move:filepath",
-            "-o", "%(title)s.%(ext)s",
+            "-o", outputTemplate,
             // "--" ends flag parsing so a URL that somehow starts with "-" can't be
             // interpreted as an option.
             "--",
-            url
+            TwitterPostSelection.isPostURL(url) ? TwitterPostSelection.sourceURL(url) : url
         ])
 
         let configuration = HomebrewPythonExecutor.ytDLPExecutionConfiguration(

@@ -1869,6 +1869,25 @@ struct ContentView: View {
             if FileManager.default.fileExists(atPath: directory.path) {
                 try FileManager.default.removeItem(at: directory)
             }
+            if environment["AMC_UI_TEST_INSTAGRAM_PICKER"] == "1" || environment["AMC_UI_TEST_TWITTER_PICKER"] == "1" {
+                let tools = AppConstants.ytdlpToolsDirectory
+                try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+                let isTwitter = environment["AMC_UI_TEST_TWITTER_PICKER"] == "1"
+                let entries: [[String: Any]] = (1...(isTwitter ? 2 : 12)).map { index in
+                    ["title": "Carousel video", "playlist_index": index,
+                     "formats": (isTwitter || [4, 6, 8, 10, 11].contains(index)) ? [["url": "https://example.test/video.mp4"]] : []]
+                }
+                let data = try JSONSerialization.data(withJSONObject: ["entries": entries])
+                let json = String(decoding: data, as: UTF8.self)
+                let script = "#!/bin/sh\ncase \"$*\" in\n*-J*) cat <<'JSON'\n\(json)\nJSON\n;;\n*) echo 2026.09.01;;\nesac\n"
+                for (name, contents) in [("yt-dlp", script), ("deno", "#!/bin/sh\necho 'deno 2.5.0'\n")] {
+                    let tool = tools.appendingPathComponent(name)
+                    try contents.write(to: tool, atomically: true, encoding: .utf8)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
+                }
+                showURLInputOverlay = true
+                return
+            }
             guard environment["AMC_UI_TEST_GENERATED_FIXTURE"] == "1" else { return }
 
             currentOutputFolder = directory

@@ -14,6 +14,26 @@ struct URLInputOverlay: View {
     var onSchedule: ((String, Date, Bool, Bool, Bool) -> Void)?
 
     @State private var urlText = ""
+    @State private var postVideos: [PostDownloadVideo] = []
+    @State private var selectedPostVideos: Set<Int> = []
+    @State private var postLoadedURL: String?
+    @State private var postIsLoading = false
+    @State private var postError: String?
+    @State private var postRetry = 0
+    private let postService = YTDLPService()
+
+    private var sanitizedURL: String { DownloadManager.sanitizeURLInput(urlText) }
+
+    private var needsPostPicker: Bool {
+        (InstagramCarouselSelection.isPostURL(sanitizedURL)
+            && URLComponents(string: sanitizedURL)?.queryItems?.contains { $0.name == "img_index" } != true)
+            || TwitterPostSelection.needsPicker(sanitizedURL)
+    }
+
+    private var downloadDisabled: Bool {
+        !DownloadManager.isValidURL(sanitizedURL)
+            || (needsPostPicker && (postLoadedURL != sanitizedURL || selectedPostVideos.isEmpty))
+    }
     @State private var history: [DownloadHistoryEntry] = []
     @State private var hasUnreadableHistory = false
     @State private var showHistoryResetConfirmation = false
@@ -107,6 +127,9 @@ struct URLInputOverlay: View {
             // Input panel
             inputPanel
         }
+        .task(id: "\(sanitizedURL)|\(postRetry)") {
+            await loadPostVideos()
+        }
         .onAppear {
             // Pre-warm yt-dlp binary in background (helps with PyInstaller startup)
             YTDLPUpdateService.shared.warmUp()
@@ -149,6 +172,7 @@ struct URLInputOverlay: View {
             urlInputSection
             clipboardIndicator
             invalidURLWarning
+            postPicker
             actionSection
             automationToggles
             historySection
@@ -191,6 +215,7 @@ struct URLInputOverlay: View {
 
     private var urlInputSection: some View {
         TextField("Paste video URL (YouTube, Vimeo, etc.)...", text: $urlText)
+            .accessibilityIdentifier("downloadURLField")
             .textFieldStyle(.roundedBorder)
             .font(.system(.body, design: .monospaced))
             .focused($isTextFieldFocused)
@@ -249,6 +274,112 @@ struct URLInputOverlay: View {
         }
     }
 
+    private var downloadButtonTitle: String {
+        needsPostPicker ? "Download Selected (\(selectedPostVideos.count))" : "Download"
+    }
+
+    @ViewBuilder
+    private var postPicker: some View {
+        if needsPostPicker {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Choose videos from this post")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    if !postVideos.isEmpty {
+                        Button(selectedPostVideos.count == postVideos.count ? "Deselect All" : "Select All") {
+                            selectedPostVideos = selectedPostVideos.count == postVideos.count
+                                ? [] : Set(postVideos.map(\.slideIndex))
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("postVideoSelectAll")
+                    }
+                }
+                if postIsLoading {
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Finding videos…").foregroundStyle(.secondary)
+                    }
+                } else if let postError {
+                    Text(postError).font(.caption).foregroundStyle(.orange)
+                    Button("Retry") { postRetry += 1 }
+                } else if postLoadedURL == sanitizedURL {
+                    if postVideos.isEmpty {
+                        Text("This post contains no downloadable videos.").foregroundStyle(.secondary)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 6) {
+                                ForEach(postVideos) { video in
+                                    postVideoRow(video)
+                                }
+                            }
+                        }
+                        .frame(height: min(CGFloat(postVideos.count) * 66, 240))
+                        Text("Photo slides are omitted. Choose one or more videos.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private func postVideoRow(_ video: PostDownloadVideo) -> some View {
+        Toggle(isOn: Binding(
+            get: { selectedPostVideos.contains(video.slideIndex) },
+            set: { selected in
+                if selected { selectedPostVideos.insert(video.slideIndex) }
+                else { selectedPostVideos.remove(video.slideIndex) }
+            }
+        )) {
+            HStack(spacing: 10) {
+                AsyncImage(url: video.thumbnailURL) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Image(systemName: "video.fill").foregroundStyle(.secondary)
+                }
+                .frame(width: 64, height: 48)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(TwitterPostSelection.isPostURL(sanitizedURL) ? "Video \(video.slideIndex)" : "Slide \(video.slideIndex)").font(.callout.weight(.medium))
+                    Text(video.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+            }
+        }
+        .toggleStyle(.checkbox)
+        .padding(6)
+        .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityIdentifier(TwitterPostSelection.isPostURL(sanitizedURL) ? "twitterVideo\(video.slideIndex)" : "instagramSlide\(video.slideIndex)")
+    }
+
+    @MainActor
+    private func loadPostVideos() async {
+        let url = sanitizedURL
+        postVideos = []
+        selectedPostVideos = []
+        postLoadedURL = nil
+        postError = nil
+        postIsLoading = false
+        guard needsPostPicker, DownloadManager.isValidURL(url) else { return }
+        postIsLoading = true
+        do {
+            let videos = try await postService.fetchPostVideos(url: url)
+            try Task.checkCancellation()
+            guard sanitizedURL == url else { return }
+            postVideos = videos
+            postLoadedURL = url
+            // A single-video post requires no further choice.
+            if videos.count == 1 { selectedPostVideos = Set(videos.map(\.slideIndex)) }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, sanitizedURL == url else { return }
+            postError = error.localizedDescription
+        }
+        postIsLoading = false
+    }
+
     @ViewBuilder
     private var actionSection: some View {
         if onSchedule != nil {
@@ -282,11 +413,12 @@ struct URLInputOverlay: View {
 
             Spacer()
 
-            Button(isScheduled ? "Schedule" : "Download") {
+            Button(isScheduled ? "Schedule" : downloadButtonTitle) {
                 submit()
             }
+            .accessibilityIdentifier("downloadSubmitButton")
             .keyboardShortcut(.return, modifiers: [])
-            .disabled(urlText.isEmpty || !DownloadManager.isValidURL(urlText))
+            .disabled(downloadDisabled)
             .buttonStyle(.borderedProminent)
         }
         .padding(.vertical, 4)
@@ -295,11 +427,12 @@ struct URLInputOverlay: View {
     private var simpleDownloadSection: some View {
         HStack {
             Spacer()
-            Button("Download") {
+            Button(downloadButtonTitle) {
                 submit()
             }
+            .accessibilityIdentifier("downloadSubmitButton")
             .keyboardShortcut(.return, modifiers: [])
-            .disabled(urlText.isEmpty || !DownloadManager.isValidURL(urlText))
+            .disabled(downloadDisabled)
             .buttonStyle(.borderedProminent)
         }
     }
@@ -452,7 +585,7 @@ struct URLInputOverlay: View {
                     }
                 }
             }
-            .frame(maxHeight: 220)
+            .frame(maxHeight: needsPostPicker ? 100 : 220)
             .onChange(of: historyIndex) { _, newValue in
                 // Keep the arrow-key selection inside the visible scroll area.
                 guard newValue >= 0 else { return }
@@ -536,6 +669,15 @@ struct URLInputOverlay: View {
         let sanitized = DownloadManager.sanitizeURLInput(urlText)
         guard !sanitized.isEmpty, DownloadManager.isValidURL(sanitized) else { return }
         let trimmed = sanitized
+        guard !downloadDisabled else { return }
+        if needsPostPicker {
+            let urls = postVideos.filter { selectedPostVideos.contains($0.slideIndex) }.map(\.url)
+            for url in urls {
+                submitURL(url, isPlaylist: false)
+            }
+            isPresented = false
+            return
+        }
 
         // Only honour the stored "whole playlist" preference when the URL actually
         // looks like a playlist or channel — the toggle is hidden in that case
@@ -543,16 +685,20 @@ struct URLInputOverlay: View {
         // Scheduling and whole-playlist don't compose yet (single-item persistence
         // model), so playlist always submits immediately.
         let isPlaylist = downloadWholePlaylist && Self.looksLikePlaylistURL(trimmed)
+        submitURL(trimmed, isPlaylist: isPlaylist)
+        isPresented = false
+    }
+
+    private func submitURL(_ url: String, isPlaylist: Bool) {
         if isScheduled, !isPlaylist, let onSchedule = onSchedule {
             // Round to the start of the minute (remove seconds)
             let calendar = Calendar.current
             let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: scheduledDate)
             let roundedDate = calendar.date(from: components) ?? scheduledDate
-            onSchedule(trimmed, roundedDate, downloadLiveFromStart, downloadAudioOnly, isPlaylist)
+            onSchedule(url, roundedDate, downloadLiveFromStart, downloadAudioOnly, isPlaylist)
         } else {
-            onSubmit(trimmed, downloadLiveFromStart, downloadAudioOnly, isPlaylist)
+            onSubmit(url, downloadLiveFromStart, downloadAudioOnly, isPlaylist)
         }
-        isPresented = false
     }
 }
 

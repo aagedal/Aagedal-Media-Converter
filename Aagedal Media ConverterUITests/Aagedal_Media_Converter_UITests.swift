@@ -16,6 +16,63 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testInstagramCarouselPickerAllowsMultipleVideoSelection() throws {
+        launchApp(additionalArguments: ["-ytdlpBinarySource", "app", "-denoBinarySource", "app"], instagramPicker: true)
+        defer { terminateAndCleanFixtures() }
+        let field = element("downloadURLField")
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.click()
+        field.typeKey("a", modifierFlags: .command)
+        field.typeText("https://www.instagram.com/p/DeKeT1to6s3/")
+        XCTAssertTrue(element("instagramSlide10").waitForExistence(timeout: 15))
+        XCTAssertFalse(element("instagramSlide1").exists)
+        let download = element("downloadSubmitButton")
+        XCTAssertFalse(download.isEnabled)
+        element("instagramSlide4").click()
+        element("instagramSlide10").click()
+        XCTAssertTrue(download.isEnabled)
+        XCTAssertEqual(download.label, "Download Selected (2)")
+        attachWindowScreenshot(named: "Instagram carousel video selection")
+        element("postVideoSelectAll").click()
+        XCTAssertEqual(download.label, "Download Selected (5)")
+        element("postVideoSelectAll").click()
+        XCTAssertFalse(download.isEnabled)
+        // Editing the post clears the previous choices.
+        element("instagramSlide10").click()
+        field.click()
+        field.typeKey("a", modifierFlags: .command)
+        field.typeText("https://www.instagram.com/p/DeKeT1to6s3/?utm_source=test")
+        XCTAssertTrue(element("instagramSlide10").waitForExistence(timeout: 15))
+        XCTAssertFalse(download.isEnabled)
+    }
+
+    @MainActor
+    func testTwitterPostPickerAllowsMultipleVideoSelection() throws {
+        launchApp(additionalArguments: ["-ytdlpBinarySource", "app", "-denoBinarySource", "app"], twitterPicker: true)
+        defer { terminateAndCleanFixtures() }
+        let field = element("downloadURLField")
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.click()
+        field.typeKey("a", modifierFlags: .command)
+        field.typeText("https://x.com/example/status/1600649710662213632")
+        XCTAssertTrue(element("twitterVideo2").waitForExistence(timeout: 15))
+        let download = element("downloadSubmitButton")
+        XCTAssertFalse(download.isEnabled)
+        element("twitterVideo1").click()
+        element("twitterVideo2").click()
+        XCTAssertEqual(download.label, "Download Selected (2)")
+        attachWindowScreenshot(named: "Twitter X post video selection")
+        element("postVideoSelectAll").click()
+        XCTAssertFalse(download.isEnabled)
+        field.click()
+        field.typeKey("a", modifierFlags: .command)
+        field.typeText("https://twitter.com/example/status/1600649710662213632/video/2")
+        XCTAssertTrue(download.isEnabled)
+        XCTAssertEqual(download.label, "Download")
+        XCTAssertFalse(element("twitterVideo2").exists)
+    }
+
+    @MainActor
     func testLaunchesWithEmptyQueue() throws {
         launchApp()
         defer { app.terminate() }
@@ -1514,6 +1571,8 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         missingStitchingSource: Bool = false,
         resetAgentAccess: Bool = false,
         ytdlpFailure: Bool = false,
+        instagramPicker: Bool = false,
+        twitterPicker: Bool = false,
         tipIndex: Int? = nil
     ) {
         app = XCUIApplication()
@@ -1532,6 +1591,12 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         app.launchEnvironment["AMC_UI_TEST_SESSION"] = "1"
         if let tipIndex {
             app.launchEnvironment["AMC_UI_TEST_TIP_INDEX"] = String(tipIndex)
+        }
+        if twitterPicker {
+            app.launchEnvironment["AMC_UI_TEST_TWITTER_PICKER"] = "1"
+        }
+        if instagramPicker {
+            app.launchEnvironment["AMC_UI_TEST_INSTAGRAM_PICKER"] = "1"
         }
         if ytdlpFailure {
             app.launchEnvironment["AMC_UI_TEST_YTDLP_FAILURE"] = "1"
