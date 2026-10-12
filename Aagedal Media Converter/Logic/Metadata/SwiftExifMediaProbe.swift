@@ -17,7 +17,7 @@ enum SwiftExifMediaProbe {
     /// Kept in sync with `SwiftMediaMetadata.FormatDetector.detectVideoFromExtension` /
     /// `detectAudioFromExtension`.
     static let swiftExifVideoExtensions: Set<String> = [
-        "mp4", "mov", "m4v",
+        "mp4", "mov", "m4v", "m4a",
         "mxf",
         "mkv", "webm",
         "avi",

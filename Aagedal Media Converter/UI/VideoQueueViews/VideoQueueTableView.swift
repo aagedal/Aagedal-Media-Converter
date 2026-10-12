@@ -1032,6 +1032,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                 applicationJobOrigin: item.applicationJobOrigin,
                 applicationJobSettingsSummary: item.applicationJobSettingsSummary,
                 comment: item.comment,
+                metadataEditorSettings: item.metadataEditorSettings,
+                sourceTextMetadata: ContainerTextMetadata(description: metadata?.description, comment: metadata?.comment, sourceURL: metadata?.sourceURL),
+                sourceTitle: metadata?.title,
+                sourceArtist: metadata?.artist,
                 recursiveEncodingGenerations: item.recursiveEncodingGenerations,
                 includeDateTag: item.includeDateTag,
                 outputURL: item.outputURL,
@@ -1516,6 +1520,12 @@ struct VideoQueueTableView: NSViewRepresentable {
             case .commentChanged(let text):
                 if let idx = droppedFilesIndex[itemID] {
                     parent.droppedFiles[idx].comment = text
+                    parent.droppedFiles[idx].metadataEditorSettings?.comment.value = text
+                }
+            case .metadataEditorChanged(let settings):
+                if let idx = droppedFilesIndex[itemID] {
+                    parent.droppedFiles[idx].metadataEditorSettings = settings
+                    parent.droppedFiles[idx].comment = settings.comment.isEnabled ? settings.comment.value : ""
                 }
             case .commentFocusChanged(let focused):
                 if focused {

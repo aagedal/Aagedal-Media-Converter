@@ -1816,7 +1816,7 @@ extension ExportPreset {
         }
     }
 
-    private static func extensionSupportsCommentMetadata(_ ext: String) -> Bool {
+    static func extensionSupportsCommentMetadata(_ ext: String) -> Bool {
         switch ext.lowercased() {
         case "mp4", "m4v", "m4a", "mov", "mkv", "webm",
              "wav", "flac", "ogg", "opus", "mp3":

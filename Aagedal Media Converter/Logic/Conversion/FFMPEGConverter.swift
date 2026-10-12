@@ -561,6 +561,9 @@ actor FFMPEGConverter {
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
+        let request = request.applyingMetadataEditor(
+            outputExtension: av2Settings?.container.fileExtension ?? audioOnlySettings?.format.fileExtension ?? codecSettings?.outputExtension(for: request.inputURL)
+        )
         if let generations = recursiveGenerations {
             guard !Task.isCancelled else {
                 completion(false, "Recursive encoding cancelled")
@@ -685,7 +688,9 @@ actor FFMPEGConverter {
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
-        let capturedCommentSettings = commentSettings ?? CommentSettings()
+        let sourceCommentSettings = commentSettings ?? CommentSettings()
+        let capturedCommentSettings = request.metadataEditorSettings?.comment.isEnabled == false
+            ? sourceCommentSettings.withoutAffixes : sourceCommentSettings
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -1045,6 +1050,7 @@ actor FFMPEGConverter {
                 trimStart: request.trimStart,
                 trimEnd: request.trimEnd,
                 comment: request.comment,
+                writeEmptyComment: request.metadataEditorSettings?.comment.isEnabled == true,
                 includeDateTag: request.includeDateTag,
                 commentSettings: capturedCommentSettings,
                 isMuted: request.isMuted,
@@ -1160,6 +1166,7 @@ actor FFMPEGConverter {
                     isMuted: request.isMuted,
                     audioRoutingConfig: request.audioRoutingConfig,
                     comment: request.comment,
+                    metadataEditorSettings: request.metadataEditorSettings,
                     includeDateTag: request.includeDateTag,
                     commentSettings: capturedCommentSettings,
                     timecodeConfig: request.timecodeConfig,
@@ -1237,6 +1244,7 @@ actor FFMPEGConverter {
             commentSettings: capturedCommentSettings,
             subtitleSettings: capturedSubtitleSettings,
             comment: request.comment,
+            writeEmptyComment: request.metadataEditorSettings?.comment.isEnabled == true,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
             trimEnd: tempAudioURL != nil ? nil : request.trimEnd,
@@ -2940,6 +2948,7 @@ actor FFMPEGConverter {
         isMuted: Bool,
         audioRoutingConfig: AudioRoutingConfig?,
         comment: String,
+        metadataEditorSettings: MetadataEditorSettings?,
         includeDateTag: Bool,
         commentSettings: CommentSettings,
         timecodeConfig: TimecodeConfig?,
@@ -3029,7 +3038,7 @@ actor FFMPEGConverter {
         // the Matroska path keeps the same comment/date and timecode policy as
         // ordinary FFmpeg-backed exports.
         let sourceMetadata: VideoMetadata?
-        if case .preserveSource? = timecodeConfig?.mode, knownSourceMetadata == nil {
+        if knownSourceMetadata == nil, timecodeConfig?.mode == .preserveSource || settings.preserveMetadata == true {
             sourceMetadata = try? await BoundedVideoMetadataProbe.metadata(for: sourceURL)
         } else {
             sourceMetadata = knownSourceMetadata
@@ -3044,13 +3053,15 @@ actor FFMPEGConverter {
                 trimStart: timecodeTrimStart ?? trimStart
             )
         }
+        let inheritedText = settings.preserveMetadata == true ? sourceMetadata : nil
+        let composedComment = FFMPEGCommandBuilder.commentMetadataValue(comment: comment, includeDateTag: includeDateTag, settings: commentSettings)
         let metadata = MatroskaMuxer.Metadata(
-            comment: FFMPEGCommandBuilder.commentMetadataValue(
-                comment: comment,
-                includeDateTag: includeDateTag,
-                settings: commentSettings
-            ),
-            timecode: timecode
+            comment: metadataEditorSettings?.comment.isEnabled == true ? composedComment : composedComment ?? inheritedText?.comment,
+            timecode: timecode,
+            description: metadataEditorSettings.flatMap { $0.description.isEnabled ? $0.description.value : nil } ?? inheritedText?.description,
+            title: metadataEditorSettings.flatMap { $0.title.isEnabled ? $0.title.value : nil } ?? inheritedText?.title,
+            artist: metadataEditorSettings.flatMap { $0.artist.isEnabled ? $0.artist.value : nil } ?? inheritedText?.artist,
+            sourceURL: metadataEditorSettings?.sourceURL ?? inheritedText?.sourceURL
         )
 
         // 5. Write the Matroska file.
@@ -3594,6 +3605,7 @@ actor FFMPEGConverter {
         trimStart: Double?,
         trimEnd: Double?,
         comment: String,
+        writeEmptyComment: Bool,
         includeDateTag: Bool,
         commentSettings: CommentSettings,
         isMuted: Bool,
@@ -3716,6 +3728,7 @@ actor FFMPEGConverter {
             trimEnd: trimEnd,
             isMuted: isMuted,
             comment: comment,
+            writeEmptyComment: writeEmptyComment,
             includeDateTag: includeDateTag,
             additionalOutputArguments: additionalOutputArguments
         )

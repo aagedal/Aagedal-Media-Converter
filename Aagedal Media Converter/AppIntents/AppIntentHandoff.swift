@@ -209,6 +209,7 @@ enum ManualApplicationJobBridge {
                 sourceURL: item.url,
                 destinationFolderURL: destinationFolder,
                 comment: item.comment,
+                metadataEditorSettings: item.metadataEditorSettings,
                 includeDateTag: item.includeDateTag,
                 timecodeConfig: item.timecodeConfig,
                 trimStart: item.trimStart,

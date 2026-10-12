@@ -70,9 +70,9 @@ struct MetadataSettingsView: View {
 
                 Toggle(isOn: $showCommentField) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Show comment field")
+                        Text("Show metadata editor")
                             .font(.subheadline.weight(.medium))
-                        Text("Display the comment text field for adding metadata comments to each file")
+                        Text("Show the editor for comment, description, title, and artist on each file")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -111,6 +111,10 @@ struct MetadataSettingsView: View {
                 .help("When enabled, the original file's metadata is kept intact during conversion")
                 
                 Text("By default, metadata such as title, timecode, and encoder tags are stripped to keep output files clean. Color-related metadata (including HDR) is always preserved for accurate viewing.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Enabled fields in the per-file metadata editor are written even when original metadata preservation is off.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

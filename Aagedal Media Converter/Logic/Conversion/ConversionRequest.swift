@@ -28,6 +28,8 @@ struct ConversionRequest: Sendable {
 
     // MARK: - Metadata
     var comment: String = ""
+    var metadataEditorSettings: MetadataEditorSettings? = nil
+    var metadataEditorWasApplied = false
     var includeDateTag: Bool = true
     var sourceMetadata: VideoMetadata? = nil
     var sourceCameraMetadata: CameraMetadata? = nil
@@ -61,6 +63,29 @@ struct ConversionRequest: Sendable {
     // MARK: - FFMPEG Argument Overrides
     var customInputArguments: [String]? = nil
     var additionalOutputArguments: [String]? = nil
+
+    func applyingMetadataEditor(outputExtension: String? = nil) -> Self {
+        guard let editor = metadataEditorSettings, !metadataEditorWasApplied else { return self }
+        let ext = requiredOutputURL?.pathExtension.lowercased()
+            ?? outputExtension?.lowercased()
+            ?? preset.outputExtension(for: inputURL).lowercased()
+        guard ExportPreset.extensionSupportsCommentMetadata(ext) else { return self }
+        var request = self
+        request.comment = editor.comment.isEnabled ? editor.comment.value : ""
+        if !editor.comment.isEnabled { request.includeDateTag = false }
+        request.metadataEditorWasApplied = true
+        // Native AV2 muxing receives the typed fields directly; arbitrary
+        // FFmpeg output options are intentionally unsupported by that pipeline.
+        if preset == .av2 { return request }
+        var arguments = request.additionalOutputArguments ?? []
+        arguments += editor.outputArguments
+        if ["mp4", "mov", "m4a", "m4v"].contains(ext) {
+            arguments += ["-movflags", "+use_metadata_tags"]
+        }
+        request.additionalOutputArguments = arguments
+        // Prevent adding the same options again in recursive passes.
+        return request
+    }
 }
 
 /// Owns the input boundaries of the app's generated sources. Unknown argument forms

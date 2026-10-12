@@ -85,6 +85,43 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testMetadataEditorPrefillsFieldsAndKeepsEditsAcrossTabs() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", additionalArguments: [
+            "-AMC_UI_TEST_TEXT_METADATA", "YES", "-showCommentField", "YES",
+            "-preserveMetadataByDefault", "NO"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.item").waitForExistence(timeout: 20))
+        app.activate()
+        let openEditor = element("queue.item.metadataEditor")
+        XCTAssertTrue(openEditor.waitForExistence(timeout: 10))
+        openEditor.click()
+        let comment = element("metadata.editor.comment.value")
+        XCTAssertTrue(comment.waitForExistence(timeout: 5))
+        XCTAssertEqual(comment.value as? String, "Source comment")
+        attachWindowScreenshot(named: "Metadata editor - source comment")
+
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Description")).firstMatch.click()
+        let description = element("metadata.editor.description.value")
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertEqual(description.value as? String, "Source description\nSecond line 日本語 🎬")
+        attachWindowScreenshot(named: "Metadata editor - source description")
+
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Title")).firstMatch.click()
+        let title = element("metadata.editor.title.value")
+        XCTAssertEqual(title.value as? String, "Source title")
+        title.click()
+        title.typeKey("a", modifierFlags: .command)
+        title.typeText("Edited title")
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Artist")).firstMatch.click()
+        XCTAssertEqual(element("metadata.editor.artist.value").value as? String, "Source artist")
+        app.typeKey(.escape, modifierFlags: [])
+        openEditor.click()
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Title")).firstMatch.click()
+        XCTAssertEqual(element("metadata.editor.title.value").value as? String, "Edited title")
+    }
+
+    @MainActor
     func testEmptyQueueTipsWrapAndRefreshInBothLanguages() throws {
         for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
             launchApp(language: language, locale: locale, tipIndex: 15)

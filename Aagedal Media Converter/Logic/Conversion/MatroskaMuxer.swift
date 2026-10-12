@@ -49,6 +49,10 @@ enum MatroskaMuxer {
     struct Metadata: Sendable, Equatable {
         var comment: String? = nil
         var timecode: String? = nil
+        var description: String? = nil
+        var title: String? = nil
+        var artist: String? = nil
+        var sourceURL: String? = nil
     }
 
     /// A decoded video frame ready to mux: the raw bitstream payload + whether it is a key frame.
@@ -345,7 +349,11 @@ enum MatroskaMuxer {
 
         let values: [(name: String, value: String?)] = [
             ("COMMENT", metadata.comment),
-            ("TIMECODE", metadata.timecode)
+            ("TIMECODE", metadata.timecode),
+            ("DESCRIPTION", metadata.description),
+            ("TITLE", metadata.title),
+            ("ARTIST", metadata.artist),
+            ("PURL", metadata.sourceURL)
         ]
         let populated = values.compactMap { pair -> (String, String)? in
             guard let value = pair.value?.trimmingCharacters(in: .whitespacesAndNewlines),

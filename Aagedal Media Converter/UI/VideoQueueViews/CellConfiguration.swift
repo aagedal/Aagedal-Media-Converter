@@ -35,6 +35,10 @@ struct VideoFileCellConfiguration: Equatable {
     let applicationJobOrigin: ApplicationJobOrigin?
     let applicationJobSettingsSummary: String?
     let comment: String
+    var metadataEditorSettings: MetadataEditorSettings? = nil
+    var sourceTextMetadata: ContainerTextMetadata = ContainerTextMetadata()
+    var sourceTitle: String? = nil
+    var sourceArtist: String? = nil
     let recursiveEncodingGenerations: Int?
     let includeDateTag: Bool
     let outputURL: URL?
@@ -328,6 +332,7 @@ enum CellAction {
 
     // Comment
     case commentChanged(String)
+    case metadataEditorChanged(MetadataEditorSettings)
     case commentFocusChanged(Bool)
     /// Raised when the user presses Tab / Shift-Tab inside the comment popover
     /// so the coordinator can move focus to the next/previous row's comment.
