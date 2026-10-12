@@ -1,3 +1,7 @@
+# v.4.5.3
+
+- New website downloads embed the available post text or video description and the source page link in the file's metadata, including audio-only downloads. Metadata support and visibility depend on the source website, file format, and player. Existing downloads are not updated automatically.
+
 # v.4.5.2
 
 - Added a video picker for Instagram carousel and Twitter/X post links. Choose
