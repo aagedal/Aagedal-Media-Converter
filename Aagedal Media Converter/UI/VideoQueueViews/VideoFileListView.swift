@@ -549,8 +549,7 @@ struct VideoFileListView: View {
             }
         }
 
-        // Save the bookmark for future access
-        _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+        // Persist below, off the main actor: bookmark IPC can wait on a volume.
 
         // Get the output folder from UserDefaults or use default
         let outputFolder = UserDefaults.standard.string(forKey: "outputFolder")
@@ -578,7 +577,9 @@ struct VideoFileListView: View {
         Task(priority: .utility) {
             defer { releaseSecurityAccess() }
 
-            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+            _ = try? await NonJoiningTaskDeadline.run(timeout: .seconds(5)) {
+                SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+            }
 
             let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset, counter: placeholder.customCounterValue, namingSettings: naming)
             await MainActor.run {
