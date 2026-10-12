@@ -1969,6 +1969,13 @@ struct ContentView: View {
         let fixtureDuration = ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1"
             ? 15
             : (ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] != nil ? 6 : 2)
+        var metadataArguments: [String] = []
+        if UserDefaults.standard.bool(forKey: "AMC_UI_TEST_TEXT_METADATA") {
+            metadataArguments = ["-metadata", "title=Source title", "-metadata", "artist=Source artist",
+                                 "-metadata", "description=Source description\nSecond line 日本語 🎬",
+                                 "-metadata", "comment=Source comment", "-metadata", "purl=https://example.com/source"]
+            if container == "mp4" { metadataArguments += ["-movflags", "use_metadata_tags"] }
+        }
 
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
@@ -1978,8 +1985,8 @@ struct ContentView: View {
                 "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)",
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-c:v", "mpeg4", "-q:v", "5", "-g", "12", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-shortest", fixtureURL.path,
-            ],
+                "-c:a", "aac", "-shortest",
+            ] + metadataArguments + [fixtureURL.path],
             timeout: .seconds(30),
             standardOutputCaptureLimit: 0,
             standardErrorCaptureLimit: 8 * 1024,

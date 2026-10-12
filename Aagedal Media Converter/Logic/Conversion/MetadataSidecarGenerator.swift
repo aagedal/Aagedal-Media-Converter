@@ -289,6 +289,8 @@ struct MetadataSidecarGenerator {
         if let v = metadata.timecode { rows.append(("Timecode", v)) }
         if let v = metadata.frameCount { rows.append(("Frame Count", "\(v)")) }
         if let v = metadata.comment { rows.append(("Comment", v)) }
+        if let v = metadata.description { rows.append(("Description", v)) }
+        if let v = metadata.sourceURL { rows.append(("Source URL", v)) }
         return rows
     }
 
@@ -302,6 +304,8 @@ struct MetadataSidecarGenerator {
         if let v = metadata.timecode { dict["timecode"] = v }
         if let v = metadata.frameCount { dict["frameCount"] = v }
         if let v = metadata.comment { dict["comment"] = v }
+        if let v = metadata.description { dict["description"] = v }
+        if let v = metadata.sourceURL { dict["sourceURL"] = v }
         return dict
     }
 

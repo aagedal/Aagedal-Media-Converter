@@ -195,6 +195,9 @@ struct ComparisonMetadataView: View {
             comparisonRow("Artist") { item in
                 item.metadata?.artist
             }
+            comparisonRow("Source URL") { item in
+                item.metadata?.sourceURL
+            }
             comparisonRow("Date Created") { item in
                 formattedCreationDate(for: item)
             }
@@ -226,6 +229,9 @@ struct ComparisonMetadataView: View {
                         item.metadata?.timecodes.first { $0.source == source }?.value
                     }
                 }
+            }
+            comparisonRow("Description") { item in
+                item.metadata?.description
             }
             comparisonRow("Comment") { item in
                 item.metadataComment
@@ -879,6 +885,7 @@ struct ComparisonMetadataView: View {
                     let displayValue = itemValue ?? "—"
 
                     Text(displayValue)
+                        .textSelection(.enabled)
                         .font(.system(.subheadline, design: .monospaced))
                         .foregroundColor(itemValue == nil ? .secondary : .primary)
                         .fixedSize(horizontal: false, vertical: true)

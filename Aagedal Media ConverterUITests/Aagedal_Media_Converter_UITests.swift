@@ -85,6 +85,103 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testMetadataEditorPrefillsFieldsAndKeepsEditsAcrossTabs() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", additionalArguments: [
+            "-AMC_UI_TEST_TEXT_METADATA", "YES", "-showCommentField", "YES",
+            "-preserveMetadataByDefault", "NO"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.item").waitForExistence(timeout: 20))
+        app.activate()
+        let openEditor = element("queue.item.metadataEditor")
+        XCTAssertTrue(openEditor.waitForExistence(timeout: 10))
+        openEditor.click()
+        let comment = element("metadata.editor.comment.value")
+        XCTAssertTrue(comment.waitForExistence(timeout: 5))
+        XCTAssertEqual(comment.value as? String, "Source comment")
+        attachWindowScreenshot(named: "Metadata editor - source comment")
+
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Description")).firstMatch.click()
+        let description = element("metadata.editor.description.value")
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertEqual(description.value as? String, "Source description\nSecond line 日本語 🎬")
+        attachWindowScreenshot(named: "Metadata editor - source description")
+
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Title")).firstMatch.click()
+        let title = element("metadata.editor.title.value")
+        XCTAssertEqual(title.value as? String, "Source title")
+        title.click()
+        title.typeKey("a", modifierFlags: .command)
+        title.typeText("Edited title")
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Artist")).firstMatch.click()
+        XCTAssertEqual(element("metadata.editor.artist.value").value as? String, "Source artist")
+        app.typeKey(.escape, modifierFlags: [])
+        openEditor.click()
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Title")).firstMatch.click()
+        XCTAssertEqual(element("metadata.editor.title.value").value as? String, "Edited title")
+    }
+
+    @MainActor
+    func testDisablingCommentUpdatesQueueIconAndPersistsAfterReopening() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", additionalArguments: [
+            "-AMC_UI_TEST_TEXT_METADATA", "YES", "-showCommentField", "YES",
+            "-preserveMetadataByDefault", "NO"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.item").waitForExistence(timeout: 20))
+        let openEditor = element("queue.item.metadataEditor")
+        openEditor.click()
+        XCTAssertTrue(element("metadata.editor.comment.value").waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForValue("Comment override enabled", of: openEditor, timeout: 5))
+        let writeComment = app.checkBoxes.matching(identifier: "metadata.editor.comment.enabled").firstMatch
+        XCTAssertTrue(writeComment.waitForExistence(timeout: 5))
+        writeComment.click()
+        XCTAssertTrue(waitForToggle(false, of: writeComment, timeout: 5))
+        XCTAssertTrue(waitForValue("Comment override disabled", of: openEditor, timeout: 5))
+        XCTAssertFalse(element("metadata.editor.comment.value").isEnabled)
+        attachWindowScreenshot(named: "Metadata editor - Comment disabled")
+        app.typeKey(.escape, modifierFlags: [])
+        openEditor.click()
+        XCTAssertTrue(writeComment.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForToggle(false, of: writeComment, timeout: 5))
+        XCTAssertEqual(element("metadata.editor.comment.value").value as? String, "Source comment")
+    }
+
+    @MainActor
+    func testMetadataMasterSwitchDisablesAllOverridesAndRetainsValues() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", additionalArguments: [
+            "-AMC_UI_TEST_TEXT_METADATA", "YES", "-showCommentField", "YES"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.item").waitForExistence(timeout: 20))
+        let openEditor = element("queue.item.metadataEditor")
+        openEditor.click()
+        let master = app.checkBoxes.matching(identifier: "metadata.editor.enabled").firstMatch
+        XCTAssertTrue(master.waitForExistence(timeout: 5))
+        master.click()
+        XCTAssertTrue(waitForToggle(false, of: master, timeout: 5))
+        XCTAssertFalse(element("metadata.editor.comment.value").isEnabled)
+        XCTAssertFalse(app.checkBoxes.matching(identifier: "metadata.editor.comment.enabled").firstMatch.isEnabled)
+        XCTAssertTrue(waitForValue("Comment override disabled", of: openEditor, timeout: 5))
+        attachWindowScreenshot(named: "Metadata editor - All overrides disabled")
+        app.typeKey(.escape, modifierFlags: [])
+        openEditor.click()
+        XCTAssertTrue(master.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForToggle(false, of: master, timeout: 5))
+        master.click()
+        XCTAssertTrue(waitForToggle(true, of: master, timeout: 5))
+        attachWindowScreenshot(named: "Metadata editor - Reenabled after reopening")
+        let comment = element("metadata.editor.comment.value")
+        XCTAssertEqual(comment.value as? String, "Source comment")
+        XCTAssertTrue(app.checkBoxes.matching(identifier: "metadata.editor.comment.enabled").firstMatch.isEnabled)
+        comment.click()
+        comment.typeKey("a", modifierFlags: .command)
+        comment.typeText("Restored comment")
+        XCTAssertTrue(waitForValue("Restored comment", of: comment, timeout: 5))
+        XCTAssertTrue(waitForValue("Comment override enabled", of: openEditor, timeout: 5))
+    }
+
+    @MainActor
     func testEmptyQueueTipsWrapAndRefreshInBothLanguages() throws {
         for (language, locale) in [("en", "en_US"), ("nb", "nb_NO")] {
             launchApp(language: language, locale: locale, tipIndex: 15)
@@ -268,6 +365,30 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             }
             app.terminate()
         }
+    }
+
+    @MainActor
+    func testPresetMetadataPreservationDisplaysIndependentChoices() throws {
+        launchApp(defaultPreset: "VideoLoop", additionalArguments: [
+            "-preserveMetadata.VideoLoop", "NO",
+            "-preserveMetadata.ProRes", "YES"
+        ])
+        defer { app.terminate() }
+        XCTAssertTrue(element("toolbar.settings").waitForExistence(timeout: 10))
+        element("toolbar.settings").click()
+        XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+        element("settings.tab.presets").click()
+        let toggle = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == %@ AND (elementType == %d OR elementType == %d)",
+            "preset.metadata.preserve", XCUIElement.ElementType.checkBox.rawValue,
+            XCUIElement.ElementType.switch.rawValue)).firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForToggle(false, of: toggle, timeout: 5))
+        element("settings.preset.ProRes").click()
+        XCTAssertTrue(waitForToggle(true, of: toggle, timeout: 5))
+        attachWindowScreenshot(named: "ProRes metadata preservation")
+        element("settings.preset.VideoLoop").click()
+        XCTAssertTrue(waitForToggle(false, of: toggle, timeout: 5))
     }
 
     @MainActor
@@ -1658,6 +1779,16 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     @MainActor
     private func waitForSelection(of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func waitForToggle(_ enabled: Bool, of element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate { _, _ in
+            if let value = element.value as? NSNumber { return value.boolValue == enabled }
+            return element.value as? String == (enabled ? "1" : "0")
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 

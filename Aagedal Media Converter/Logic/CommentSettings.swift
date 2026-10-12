@@ -12,6 +12,10 @@ struct CommentSettings: Sendable {
     let dateFormat: String
     let dateTagPrefix: String
 
+    var withoutAffixes: Self {
+        Self(prefix: "", suffix: "", separator: separator, dateFormat: dateFormat, dateTagPrefix: dateTagPrefix)
+    }
+
     init(
         prefix: String,
         suffix: String,

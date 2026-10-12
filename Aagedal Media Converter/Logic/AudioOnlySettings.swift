@@ -24,7 +24,7 @@ struct AudioOnlySettings: Sendable {
             ?? AppConstants.defaultAudioOnlyMP4Codec) ?? .aac
         mp4Bitrate = AudioBitrate(rawValue: defaults.string(forKey: AppConstants.audioOnlyMP4BitrateKey)
             ?? AppConstants.defaultAudioOnlyMP4Bitrate) ?? .k192
-        preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+        preserveMetadata = ExportPreset.audioOnly.preservesOriginalMetadata(defaults: defaults)
     }
 
     var sourceMetadataPlan: SourceMetadataPlan {

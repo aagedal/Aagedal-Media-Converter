@@ -347,6 +347,7 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
     let sourceURL: URL
     let destinationFolderURL: URL?
     let comment: String
+    let metadataEditorSettings: MetadataEditorSettings?
     let includeDateTag: Bool
     let timecodeMode: ApplicationTimecodeModeID
     let manualTimecode: String?
@@ -361,6 +362,7 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
         sourceURL: URL,
         destinationFolderURL: URL? = nil,
         comment: String = "",
+        metadataEditorSettings: MetadataEditorSettings? = nil,
         includeDateTag: Bool,
         timecodeConfig: TimecodeConfig?,
         trimStart: Double? = nil,
@@ -373,6 +375,7 @@ struct ApplicationSourceExecutionSettings: Codable, Equatable, Sendable {
         self.sourceURL = sourceURL
         self.destinationFolderURL = destinationFolderURL
         self.comment = comment
+        self.metadataEditorSettings = metadataEditorSettings
         self.includeDateTag = includeDateTag
         switch timecodeConfig?.mode {
         case .preserveSource?:
@@ -462,7 +465,7 @@ struct ApplicationPresetSettings: Codable, Equatable, Sendable {
     init(presetID: ApplicationPresetID, defaults: UserDefaults = .standard) {
         let preset = presetID.exportPreset
         self.presetID = presetID
-        preserveMetadata = defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey)
+        preserveMetadata = preset.preservesOriginalMetadata(defaults: defaults)
         keepSubtitles = preset != .streamCopy
             && preset != .audioOnly
             && defaults.bool(forKey: AppConstants.keepSubtitlesKey)
@@ -934,9 +937,16 @@ struct ApplicationConversionRequest: Codable, Equatable, Sendable {
         lines.append(String(localized: "Timecode: \(timecode)", locale: locale,
                             comment: "Accepted conversion settings summary: timecode behavior or value."))
         if sourceExecutionSettings != nil || executionSettings != nil {
-            if let sourceExecutionSettings, !sourceExecutionSettings.comment.isEmpty {
+            if let sourceExecutionSettings, !sourceExecutionSettings.comment.isEmpty,
+               sourceExecutionSettings.metadataEditorSettings?.writesComment != false {
                 lines.append(String(localized: "Comment: \(sourceExecutionSettings.comment)", locale: locale,
                                     comment: "Accepted conversion settings summary: embedded comment."))
+            }
+            if let editor = sourceExecutionSettings?.metadataEditorSettings, editor.isActive {
+                for (label, field) in [("Description", editor.description), ("Title", editor.title), ("Artist", editor.artist)] where field.isEnabled {
+                    lines.append("\(label): \(field.value)")
+                }
+                if let sourceURL = editor.sourceURL { lines.append("Source URL: \(sourceURL)") }
             }
             if let trimStart = sourceExecutionSettings?.trimStart {
                 let value = trimStart.formatted(.number.locale(locale))
@@ -2066,6 +2076,7 @@ actor ApplicationFFmpegJobExecutor {
             preset: plan.request.presetID.exportPreset,
             requiredOutputURL: output.outputURL,
             comment: sourceSettings?.comment ?? "",
+            metadataEditorSettings: sourceSettings?.metadataEditorSettings,
             includeDateTag: sourceSettings?.includeDateTag
                 ?? executionSettings?.includeDateTag
                 ?? false,

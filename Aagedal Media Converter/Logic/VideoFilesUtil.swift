@@ -766,6 +766,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var cachedOutputFileExists: Bool = false
     var cachedOutputFileSize: Int64? = nil
     var comment: String = ""
+    var metadataEditorSettings: MetadataEditorSettings? = nil
     var includeDateTag: Bool = true
     var timelineMarkers: [StitchTimelineMarker] = []
     var trimStart: Double? = nil
@@ -990,6 +991,7 @@ struct VideoItem: Identifiable, Equatable, Sendable {
         trimEnd = nil
         isMuted = false
         comment = ""
+        metadataEditorSettings = nil
         includeDateTag = settings.includeDateTag
         if resetNameOverride {
             outputFileNameOverride = nil

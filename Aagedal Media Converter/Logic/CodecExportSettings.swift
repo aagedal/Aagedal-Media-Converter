@@ -25,7 +25,7 @@ struct CodecExportSettings: Codable, Equatable, Sendable {
             sourceMetadataPlan = .unchanged
         } else {
             sourceMetadataPlan = SourceMetadataPlan(
-                preserveMetadata: defaults.bool(forKey: AppConstants.preserveMetadataPreferenceKey),
+                preserveMetadata: preset.preservesOriginalMetadata(defaults: defaults),
                 defaultInput: [.videoLoop, .animatedStill].contains(preset) ? nil : 0
             )
         }

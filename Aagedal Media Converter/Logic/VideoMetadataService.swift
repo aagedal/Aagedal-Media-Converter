@@ -176,6 +176,8 @@ struct VideoMetadata: Equatable, Sendable {
     let sizeBytes: Int64?
     let bitRate: Int64?
     let comment: String?
+    var description: String? = nil
+    var sourceURL: String? = nil
     let timecode: String?
     let timecodes: [TimecodeEntry]
     let frameCount: Int?
@@ -568,7 +570,8 @@ actor VideoMetadataService {
             throw VideoMetadataError.readFailed(error.localizedDescription)
         }
 
-        let metadata = buildMetadata(from: rawMeta, url: url)
+        let textMetadata = await ContainerTextMetadata.read(from: url)
+        let metadata = buildMetadata(from: rawMeta, url: url, textMetadata: textMetadata)
         cache.setObject(CachedMetadata(metadata: metadata), forKey: url as NSURL)
 
         // Seed the secondary caches so later callers don't re-probe.
@@ -615,7 +618,11 @@ actor VideoMetadataService {
 
     // MARK: - Mapping
 
-    private nonisolated func buildMetadata(from meta: SwiftMediaMetadata.VideoMetadata, url: URL) -> VideoMetadata {
+    private nonisolated func buildMetadata(
+        from meta: SwiftMediaMetadata.VideoMetadata,
+        url: URL,
+        textMetadata: ContainerTextMetadata = ContainerTextMetadata()
+    ) -> VideoMetadata {
         let timedVideo = meta.videoStreams.filter { $0.isAttachedPic != true }
         let primary = timedVideo.first
 
@@ -643,20 +650,20 @@ actor VideoMetadataService {
             )
         }
 
-        return VideoMetadata(
+        var result = VideoMetadata(
             duration: meta.duration,
             formatName: meta.format.rawValue,
             containerLongName: meta.formatLongName,
             sizeBytes: meta.fileSize,
             bitRate: meta.bitRate.map { Int64($0) },
-            comment: meta.comment,
+            comment: textMetadata.comment ?? (textMetadata.description?.trimmingCharacters(in: .whitespacesAndNewlines) == meta.comment?.trimmingCharacters(in: .whitespacesAndNewlines) ? nil : meta.comment),
             timecode: meta.timecode ?? primary?.timecode,
             timecodes: timecodes,
             frameCount: frameCount,
             containerCreationDate: meta.creationDate,
             containerModificationDate: meta.modificationDate,
-            title: meta.title,
-            artist: meta.artist,
+            title: textMetadata.title ?? meta.title,
+            artist: textMetadata.artist ?? meta.artist,
             gpsLatitude: meta.gpsLatitude,
             gpsLongitude: meta.gpsLongitude,
             gpsAltitude: meta.gpsAltitude,
@@ -665,6 +672,9 @@ actor VideoMetadataService {
             audioStreams: audio,
             subtitleStreams: subtitles
         )
+        result.description = textMetadata.description
+        result.sourceURL = textMetadata.sourceURL ?? ContainerTextMetadata.webURL(result.comment)
+        return result
     }
 
     private static func mapTimecodeSource(_ source: SwiftMediaMetadata.TimecodeSource) -> TimecodeSource {

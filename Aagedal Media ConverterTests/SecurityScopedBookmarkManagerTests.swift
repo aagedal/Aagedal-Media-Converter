@@ -48,6 +48,55 @@ final class SecurityScopedBookmarkManagerTests: XCTestCase {
         }
     }
 
+    func testBlockedResolutionDoesNotBlockSavingAnotherSelection() throws {
+        let defaults = try isolatedDefaults()
+        let old = URL(fileURLWithPath: "/offline/source.mov")
+        let selected = URL(fileURLWithPath: "/selected/source.mov")
+        defaults.set([old.absoluteString: Data([1])], forKey: "securityScopedBookmarks")
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let resolved = expectation(description: "Resolution completed")
+        let saved = expectation(description: "Independent selection saved")
+        let manager = SecurityScopedBookmarkManager(defaults: defaults,
+            createBookmark: { _, _ in Data([2]) }, resolveData: { _ in
+                entered.signal()
+                _ = release.wait(timeout: .now() + 5)
+                return (old, false)
+            }, startScope: { _ in true }, stopScope: { _ in })
+        DispatchQueue.global().async {
+            _ = manager.resolveBookmark(for: old)
+            resolved.fulfill()
+        }
+        XCTAssertEqual(entered.wait(timeout: .now() + 2), .success)
+        DispatchQueue.global().async {
+            XCTAssertTrue(manager.saveBookmark(for: selected))
+            saved.fulfill()
+        }
+        // Release even after a failed assertion so the regression never hangs tests.
+        wait(for: [saved], timeout: 2)
+        release.signal()
+        wait(for: [resolved], timeout: 2)
+    }
+
+    func testStoredAccessDoesNotResolveUnrelatedVolumeBookmarks() throws {
+        let defaults = try isolatedDefaults()
+        let folder = URL(fileURLWithPath: "/Users/test/Movies", isDirectory: true)
+        let offline = URL(fileURLWithPath: "/Volumes/OfflineShare", isDirectory: true)
+        defaults.set([folder.absoluteString: Data([1]), offline.absoluteString: Data([2])],
+                     forKey: "securityScopedBookmarks")
+        let manager = SecurityScopedBookmarkManager(defaults: defaults, resolveData: { data in
+            XCTAssertEqual(data, Data([1]), "Unrelated network grants must not be resolved")
+            return (folder, false)
+        }, startScope: { _ in true }, stopScope: { _ in })
+        let access = manager.startAccessingStoredBookmark(
+            containing: folder.appendingPathComponent("clip.mov"), requiresWriteAccess: false)
+        guard case .bookmark(let granted) = access else {
+            return XCTFail("Expected matching folder access")
+        }
+        XCTAssertEqual(granted, folder)
+        manager.stopAccessing(access)
+    }
+
     private func isolatedDefaults() throws -> UserDefaults {
         let name = "SecurityScopedBookmarkManagerTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))

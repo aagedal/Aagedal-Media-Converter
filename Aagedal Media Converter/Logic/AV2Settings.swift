@@ -8,6 +8,8 @@ import Foundation
 /// Passing the same snapshot to multiple builders keeps geometry, bit depth and
 /// chunking, container and audio consistent even if Settings changes during conversion.
 struct AV2Settings: Codable, Equatable, Sendable {
+    /// Optional for snapshots saved before text-tag preservation was supported.
+    let preserveMetadata: Bool?
     let container: AV2Container
     let audioCodec: AV2AudioCodec
     let audioBitrate: AudioBitrate
@@ -23,6 +25,7 @@ struct AV2Settings: Codable, Equatable, Sendable {
     let parallelChunks: Int
 
     init(defaults: UserDefaults = .standard) {
+        preserveMetadata = ExportPreset.av2.preservesOriginalMetadata(defaults: defaults)
         container = AV2Container(rawValue: defaults.string(forKey: AppConstants.av2ContainerKey)
             ?? AppConstants.defaultAV2Container) ?? .ivf
         audioCodec = AV2AudioCodec(rawValue: defaults.string(forKey: AppConstants.av2AudioCodecKey)

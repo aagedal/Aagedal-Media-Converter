@@ -309,6 +309,7 @@
 		SE01XIF00PRB000000000001 /* SwiftExifMediaProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE01XIF00PRB000000000002 /* SwiftExifMediaProbe.swift */; };
 		SE01XIF00SVC000000000001 /* SwiftExifMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE01XIF00SVC000000000002 /* SwiftExifMetadataService.swift */; };
 		SE01XIF00TYP000000000001 /* MetadataTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE01XIF00TYP000000000002 /* MetadataTypes.swift */; };
+		C7EAC10A0000000000000001 /* ContainerTextMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7EAC10A0000000000000002 /* ContainerTextMetadata.swift */; };
 		SMPTEPKGUTL00000001 /* SMPTEPackageUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMPTEPKGUTL00000002 /* SMPTEPackageUtils.swift */; };
 		SNAPSHOTSYNC000001 /* SettingsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = SNAPSHOTSYNC000002 /* SettingsSnapshot.swift */; };
 		SYNCKEYS00000001 /* SettingsSyncKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SYNCKEYS00000002 /* SettingsSyncKeys.swift */; };
@@ -698,6 +699,7 @@
 		SE01XIF00PRB000000000002 /* SwiftExifMediaProbe.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftExifMediaProbe.swift; sourceTree = "<group>"; };
 		SE01XIF00SVC000000000002 /* SwiftExifMetadataService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftExifMetadataService.swift; sourceTree = "<group>"; };
 		SE01XIF00TYP000000000002 /* MetadataTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetadataTypes.swift; sourceTree = "<group>"; };
+		C7EAC10A0000000000000002 /* ContainerTextMetadata.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContainerTextMetadata.swift; sourceTree = "<group>"; };
 		SMPTEPKGUTL00000002 /* SMPTEPackageUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMPTEPackageUtils.swift; sourceTree = "<group>"; };
 		SNAPSHOTSYNC000002 /* SettingsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSnapshot.swift; sourceTree = "<group>"; };
 		SYNCKEYS00000002 /* SettingsSyncKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSyncKeys.swift; sourceTree = "<group>"; };
@@ -769,6 +771,7 @@
 			isa = PBXGroup;
 			children = (
 				SE01XIF00TYP000000000002 /* MetadataTypes.swift */,
+				C7EAC10A0000000000000002 /* ContainerTextMetadata.swift */,
 				SE01XIF00SVC000000000002 /* SwiftExifMetadataService.swift */,
 				SE01XIF00PRB000000000002 /* SwiftExifMediaProbe.swift */,
 				METAEXPORT000000000002 /* MetadataExporter.swift */,
@@ -1880,6 +1883,7 @@
 				SE01XIF00SVC000000000001 /* SwiftExifMetadataService.swift in Sources */,
 				SE01XIF00PRB000000000001 /* SwiftExifMediaProbe.swift in Sources */,
 				SE01XIF00TYP000000000001 /* MetadataTypes.swift in Sources */,
+				C7EAC10A0000000000000001 /* ContainerTextMetadata.swift in Sources */,
 				METAEXPORT000000000001 /* MetadataExporter.swift in Sources */,
 				METAEXPVIEW000000000001 /* MetadataExportView.swift in Sources */,
 				PRESET01MGR000000001 /* PresetManager.swift in Sources */,
