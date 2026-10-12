@@ -687,7 +687,7 @@ enum AppConstants {
 #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         if environment["AMC_UI_TEST_SESSION"] == "1",
-           environment["AMC_UI_TEST_YTDLP_FAILURE"] == "1" {
+           (environment["AMC_UI_TEST_YTDLP_FAILURE"] == "1" || environment["AMC_UI_TEST_INSTAGRAM_PICKER"] == "1" || environment["AMC_UI_TEST_TWITTER_PICKER"] == "1") {
             return UITestFixtureConfiguration.directory.appendingPathComponent("tools", isDirectory: true)
         }
 #endif

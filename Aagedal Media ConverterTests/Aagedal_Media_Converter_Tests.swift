@@ -16813,3 +16813,198 @@ final class SettingsSyncDestinationTests: XCTestCase {
         XCTAssertEqual(recreated.defaults[AppConstants.fileNameReplaceSpacesKey], .bool(true))
     }
 }
+
+final class InstagramCarouselSelectionTests: XCTestCase {
+    private let postURL = "https://www.instagram.com/p/DeKeT1to6s3/"
+
+    private func carouselData() throws -> Data {
+        let entries: [[String: Any]] = (1...12).map { index in
+            ["title": "Slide \(index)", "playlist_index": index,
+             "formats": [4, 6, 8, 10, 11].contains(index) ? [["url": "https://example.com/\(index).mp4"]] : [],
+             "thumbnail": "https://example.com/\(index).jpg"]
+        }
+        return try JSONSerialization.data(withJSONObject: ["_type": "playlist", "entries": entries])
+    }
+
+    func testSelectedSlidePreservesPhotoPositions() throws {
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: carouselData()) as? [String: Any])
+        let selection = try InstagramCarouselSelection.select(from: json, url: postURL + "?img_index=10")
+        XCTAssertEqual(selection.playlistIndex, 10)
+        XCTAssertEqual(selection.metadata["title"] as? String, "Slide 10")
+        XCTAssertEqual(try InstagramCarouselSelection.select(from: json, url: postURL).playlistIndex, 4)
+        for index in ["1", "12", "13", "0", "-1", "invalid"] {
+            XCTAssertThrowsError(try InstagramCarouselSelection.select(from: json, url: postURL + "?img_index=" + index))
+        }
+    }
+
+    func testVideoOnlyExtractorUsesOriginalSlideTitles() throws {
+        let entries: [[String: Any]] = [4, 10, 11].enumerated().map { offset, slide in
+            ["title": "Video \(slide)", "playlist_index": offset + 1, "url": "https://example.com/\(slide).mp4"]
+        }
+        let json: [String: Any] = ["entries": entries]
+        XCTAssertEqual(try InstagramCarouselSelection.select(from: json, url: postURL + "?img_index=10").playlistIndex, 2)
+        XCTAssertThrowsError(try InstagramCarouselSelection.select(from: json, url: postURL + "?img_index=2"))
+    }
+
+    func testSingleVideoAndURLScope() throws {
+        let selection = try InstagramCarouselSelection.select(from: ["title": "Clip"], url: postURL)
+        XCTAssertNil(selection.playlistIndex)
+        XCTAssertEqual(selection.metadata["title"] as? String, "Clip")
+        XCTAssertTrue(InstagramCarouselSelection.isPostURL(postURL + "?img_index=10"))
+        XCTAssertFalse(InstagramCarouselSelection.isPostURL("https://instagram.com.example.com/p/clip/"))
+        XCTAssertFalse(InstagramCarouselSelection.isPostURL("https://www.instagram.com/reel/clip/"))
+    }
+
+    func testPickerListsOnlyVideosAndPreservesSlideURLs() throws {
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: carouselData()) as? [String: Any])
+        let videos = InstagramCarouselSelection.videos(from: json, url: postURL + "?utm_source=test&img_index=1")
+        XCTAssertEqual(videos.map(\.slideIndex), [4, 6, 8, 10, 11])
+        XCTAssertEqual(videos[3].thumbnailURL?.absoluteString, "https://example.com/10.jpg")
+        for video in videos {
+            let query = try XCTUnwrap(URLComponents(string: video.url)?.queryItems)
+            XCTAssertEqual(query.filter { $0.name == "img_index" }.map(\.value), [String(video.slideIndex)])
+            XCTAssertTrue(query.contains(URLQueryItem(name: "utm_source", value: "test")))
+            XCTAssertEqual(try InstagramCarouselSelection.select(from: json, url: video.url).playlistIndex, video.slideIndex)
+        }
+        XCTAssertTrue(InstagramCarouselSelection.videos(from: ["entries": [["formats": []]]], url: postURL).isEmpty)
+    }
+
+    func testPickerHandlesVideoOnlyEntriesAndThumbnailVariants() {
+        let json: [String: Any] = ["entries": [
+            ["title": "Video 10", "playlist_index": 1, "url": "https://example.com/video.mp4",
+             "thumbnails": [["url": "https://example.com/thumb.jpg"]]]
+        ]]
+        let videos = InstagramCarouselSelection.videos(from: json, url: postURL)
+        XCTAssertEqual(videos.first?.slideIndex, 10)
+        XCTAssertEqual(videos.first?.thumbnailURL?.absoluteString, "https://example.com/thumb.jpg")
+    }
+
+    func testPickerFetchUsesPhotoTolerantProbe() async throws {
+        let data = try carouselData()
+        let runner = RecordingSubprocessRunner { request, _ in
+            XCTAssertTrue(request.arguments.contains("--ignore-no-formats-error"))
+            XCTAssertTrue(request.arguments.contains("-J"))
+            return SubprocessResult(terminationStatus: 0, termination: .exited,
+                                    standardOutput: data, standardError: Data(),
+                                    discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
+        }
+        let service = YTDLPService(updateService: StubYTDLPUpdateService(path: "/bin/sh"), subprocessRunner: runner)
+        let videos = try await service.fetchPostVideos(url: postURL)
+        XCTAssertEqual(videos.map(\.slideIndex), [4, 6, 8, 10, 11])
+    }
+
+    func testCancelDuringCarouselProbeStopsDownload() async throws {
+        let runner = BlockingSubprocessRunner()
+        let service = YTDLPService(updateService: StubYTDLPUpdateService(path: "/bin/sh"), subprocessRunner: runner)
+        let control = YTDLPDownloadControl()
+        let url = postURL + "?img_index=10"
+        let task = Task {
+            try await service.download(url: url, outputFolder: FileManager.default.temporaryDirectory,
+                                       control: control, progress: { _, _, _ in })
+        }
+        await runner.waitUntilStarted()
+        XCTAssertTrue(control.cancel())
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation during the carousel probe")
+        } catch let error as YTDLPError {
+            guard case .cancelled = error else { return XCTFail("Unexpected error: \(error)") }
+        }
+    }
+
+    func testMetadataAndDownloadSelectSameSlide() async throws {
+        let data = try carouselData()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let outputURL = folder.appendingPathComponent("Slide 10.mp4")
+        let runner = RecordingSubprocessRunner { request, outputHandler in
+            if !request.arguments.contains("-J") {
+                XCTAssertTrue(request.arguments.containsAdjacent("--playlist-items", "10"))
+                XCTAssertTrue(request.arguments.containsAdjacent("-o", "%(title)s [%(id)s].%(ext)s"))
+                XCTAssertFalse(request.arguments.contains("--ignore-no-formats-error"))
+                try Data("fixture".utf8).write(to: outputURL)
+                outputHandler?(SubprocessOutputChunk(stream: .standardOutput, data: Data((outputURL.path + "\n").utf8)))
+            } else {
+                XCTAssertTrue(request.arguments.contains("--ignore-no-formats-error"))
+            }
+            return SubprocessResult(terminationStatus: 0, termination: .exited,
+                                    standardOutput: data, standardError: Data(),
+                                    discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
+        }
+        let service = YTDLPService(updateService: StubYTDLPUpdateService(path: "/bin/sh"), subprocessRunner: runner)
+        let url = postURL + "?img_index=10"
+        let metadata = try await service.fetchMetadata(url: url)
+        XCTAssertEqual(metadata.title, "Slide 10")
+        XCTAssertEqual(metadata.thumbnailURL?.absoluteString, "https://example.com/10.jpg")
+        let result = try await service.download(url: url, outputFolder: folder, progress: { _, _, _ in })
+        XCTAssertEqual(result.outputURL, outputURL)
+    }
+}
+
+final class TwitterPostSelectionTests: XCTestCase {
+    private let url = "https://x.com/example/status/1600649710662213632"
+
+    func testRecognizesTwitterAndXPostLinks() {
+        for host in ["twitter.com", "x.com", "www.x.com", "mobile.twitter.com"] {
+            XCTAssertTrue(TwitterPostSelection.needsPicker("https://\(host)/example/status/123"))
+            XCTAssertTrue(TwitterPostSelection.isPostURL("https://\(host)/i/web/status/123"))
+            XCTAssertFalse(TwitterPostSelection.needsPicker("https://\(host)/example/status/123/video/2"))
+        }
+        XCTAssertFalse(TwitterPostSelection.isPostURL("https://x.com.example.org/example/status/123"))
+        XCTAssertFalse(TwitterPostSelection.isPostURL("https://x.com/example"))
+        XCTAssertFalse(TwitterPostSelection.isPostURL("https://x.com/example/status/abc"))
+        XCTAssertFalse(TwitterPostSelection.isPostURL("https://x.com/example/status/123/unrelated"))
+    }
+
+    func testVideoOrdinalIsIndependentOfAttachmentNumber() throws {
+        // Twitter filters out photo attachments before assigning playlist_index.
+        let json: [String: Any] = ["entries": [
+            ["title": "Post #1", "playlist_index": 1, "formats": [["url": "https://example.com/a.mp4"]]],
+            ["title": "Post #2", "playlist_index": 2, "formats": [["url": "https://example.com/b.mp4"]],
+             "thumbnails": [["url": "https://example.com/b.jpg"]]]
+        ]]
+        let videos = TwitterPostSelection.videos(from: json, url: url + "?s=20")
+        XCTAssertEqual(videos.map(\.slideIndex), [1, 2])
+        let second = try XCTUnwrap(videos.last)
+        XCTAssertEqual(try TwitterPostSelection.selectedIndex(second.url), 2)
+        XCTAssertFalse(TwitterPostSelection.needsPicker(second.url))
+        XCTAssertEqual(TwitterPostSelection.sourceURL(second.url), url + "?s=20")
+        XCTAssertEqual(second.thumbnailURL?.absoluteString, "https://example.com/b.jpg")
+        XCTAssertEqual(try TwitterPostSelection.metadata(from: json, index: 2)["title"] as? String, "Post #2")
+        XCTAssertThrowsError(try TwitterPostSelection.selectedIndex(url + "?amc_video_index=0"))
+        XCTAssertThrowsError(try TwitterPostSelection.metadata(from: json, index: 3))
+    }
+
+    func testSingleVideoAndPhotoOnlyPosts() {
+        XCTAssertEqual(TwitterPostSelection.videos(from: ["title": "Clip", "formats": [["url": "https://example.com/clip.mp4"]]], url: url).count, 1)
+        XCTAssertTrue(TwitterPostSelection.videos(from: ["formats": []], url: url).isEmpty)
+    }
+
+    func testSelectedVideoIsUsedForMetadataAndDownload() async throws {
+        let data = Data(#"{"entries":[{"title":"Second video","playlist_index":2,"formats":[{"url":"https://example.com/video.mp4"}]}]}"#.utf8)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let output = folder.appendingPathComponent("Second video.mp4")
+        let source = url
+        let runner = RecordingSubprocessRunner { request, handler in
+            XCTAssertTrue(request.arguments.containsAdjacent("--playlist-items", "2"))
+            XCTAssertTrue(request.arguments.containsAdjacent("--", source))
+            if !request.arguments.contains("-J") {
+                XCTAssertTrue(request.arguments.containsAdjacent("-o", "%(title)s [%(id)s].%(ext)s"))
+                try Data("fixture".utf8).write(to: output)
+                handler?(SubprocessOutputChunk(stream: .standardOutput, data: Data((output.path + "\n").utf8)))
+            }
+            return SubprocessResult(terminationStatus: 0, termination: .exited,
+                                    standardOutput: data, standardError: Data(),
+                                    discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
+        }
+        let service = YTDLPService(updateService: StubYTDLPUpdateService(path: "/bin/sh"), subprocessRunner: runner)
+        let selected = url + "?amc_video_index=2"
+        let metadata = try await service.fetchMetadata(url: selected)
+        XCTAssertEqual(metadata.title, "Second video")
+        let result = try await service.download(url: selected, outputFolder: folder, progress: { _, _, _ in })
+        XCTAssertEqual(result.outputURL, output)
+    }
+}

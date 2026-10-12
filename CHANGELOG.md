@@ -1,3 +1,14 @@
+# v.4.5.2
+
+- Added a video picker for Instagram carousel and Twitter/X post links. Choose
+  one, several, or all videos using thumbnails and original Instagram slide numbers.
+- Fixed Instagram downloads failing on photo slides, ignoring the selected slide,
+  or processing multiple videos as one download. Videos with shared titles now
+  have distinct filenames.
+- Video selections are preserved for retries and scheduled downloads. Links to
+  a specific Instagram slide or Twitter/X video still download directly.
+- Fixed a trim timeline crash while network files are loading.
+
 # v.4.5.1
 
 This release adds recursive encoding, a lossless reference preset, and Nemotron
