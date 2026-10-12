@@ -824,6 +824,15 @@ actor YTDLPService {
             logger.info("[YTDLPService] Audio-only download requested")
         }
 
+        // yt-dlp maps the post text/video description to description and synopsis,
+        // and the canonical source page URL to comment and purl. Its metadata
+        // postprocessor copies the media streams without re-encoding them.
+        args.append(contentsOf: [
+            "--embed-metadata",
+            "--no-embed-info-json",
+            "--no-embed-chapters"
+        ])
+
         args.append(contentsOf: [
             "--no-playlist",
             "--trim-filenames", "200",
