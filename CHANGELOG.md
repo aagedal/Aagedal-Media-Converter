@@ -7,6 +7,7 @@
 - Added Settings search for section and setting names, with Command-F access, and made the Settings window resizable.
 - Localized the conversion button’s accessibility labels and tooltips in all supported languages.
 - Improved Agent Access connection diagnostics with shared subprocess timeout, cancellation, and output handling.
+- Fixed a recursive encoding crash in optimized Release builds by preserving converter actor isolation through cancellation handling.
 
 # v.4.5.3
 

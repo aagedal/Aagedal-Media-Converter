@@ -630,7 +630,7 @@ actor FFMPEGConverter {
                     pass.chapterMetadataURL = nil
                     pass.chapterMetadataTitles = []
                 }
-                let result: (Bool, String?) = await withTaskCancellationHandler {
+                let result: (Bool, String?) = await withTaskCancellationHandler(operation: {
                     await withCheckedContinuation { continuation in
                         Task {
                             guard self.recursiveOperationID == operationID else {
@@ -652,9 +652,9 @@ actor FFMPEGConverter {
                             )
                         }
                     }
-                } onCancel: {
+                }, onCancel: {
                     Task { await self.cancelRecursiveConversion(operationID: operationID) }
-                }
+                }, isolation: self)
                 guard result.0, let output = resolvedOutput.withLock({ $0 }) else {
                     completion(false, result.1 ?? "Generation \(generation) failed")
                     return
