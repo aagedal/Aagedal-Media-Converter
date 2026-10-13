@@ -1,3 +1,8 @@
+# v.4.5.6
+
+- Added VMAF v1.0.16 models for standard, phone, and 4K viewing, including 50/60 fps variants. New installations use the standard v1 model by default; saved model selections are preserved, and v0 models remain available for comparison with earlier scores.
+- VMAF v1 analysis processes both inputs at 10-bit precision for banding and chroma assessment. Uses the models already included in the bundled FFmpeg; no bundled binaries or licenses changed.
+
 # v.4.5.5
 
 - Added source-prefilled metadata editing, with a master metadata switch and per-preset preservation settings. Improved access to files on offline volumes so unavailable bookmarks do not freeze imports.

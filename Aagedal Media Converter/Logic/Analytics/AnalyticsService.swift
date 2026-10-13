@@ -8,9 +8,23 @@ import OSLog
 protocol AnalyticsMediaInfoProviding: Sendable {
     func duration(for file: URL) async -> Double?
     func resolution(for file: URL) async -> (width: Int, height: Int)?
+    func bitDepth(for file: URL) async -> Int?
+}
+
+extension AnalyticsMediaInfoProviding {
+    func bitDepth(for file: URL) async -> Int? { nil }
 }
 
 private struct DefaultAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
+    func bitDepth(for file: URL) async -> Int? {
+        guard SwiftExifMediaProbe.canReadVideo(file),
+              let meta = try? await SwiftExifMediaProbe.readVideo(file),
+              let primary = meta.videoStreams.first(where: { $0.isAttachedPic != true }) else {
+            return nil
+        }
+        return VideoMetadataService.mapVideoStream(primary).bitDepth
+    }
+
     func duration(for file: URL) async -> Double? {
         await SwiftExifMediaProbe.duration(for: file)
     }
@@ -218,12 +232,29 @@ actor AnalyticsService {
             let tempDir = FileManager.default.temporaryDirectory
             let logFile = tempDir.appendingPathComponent("vmaf_\(UUID().uuidString).json")
             vmafLogURL = logFile
+            let encodedBitDepth: Int?
+            if vmafModel.usesV1Features {
+                let provider = mediaInfoProvider
+                do {
+                    encodedBitDepth = try await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {
+                        await provider.bitDepth(for: encodedFile)
+                    }
+                } catch is CancellationError {
+                    throw AnalyticsError.cancelled
+                } catch {
+                    // Metadata is optional; CAMBI can infer depth from its input.
+                    encodedBitDepth = nil
+                }
+            } else {
+                encodedBitDepth = nil
+            }
             arguments = buildVMAFArguments(
                 encodedFile: encodedFile,
                 sourceFile: sourceFile,
                 sourceRange: sourceRange,
                 model: vmafModel,
-                logPath: logFile
+                logPath: logFile,
+                encodedBitDepth: encodedBitDepth
             )
         case .psnr:
             arguments = buildPSNRArguments(
@@ -326,17 +357,29 @@ actor AnalyticsService {
 
     // MARK: - FFmpeg Command Construction
 
-    private func buildVMAFArguments(
+    func buildVMAFArguments(
         encodedFile: URL,
         sourceFile: URL,
         sourceRange: AnalyticsSourceRange,
         model: VMAFModel,
-        logPath: URL
+        logPath: URL,
+        encodedBitDepth: Int? = nil
     ) -> [String] {
         let escapedLogPath = logPath.path.replacingOccurrences(of: ":", with: "\\:")
-        let vmafOpts = "libvmaf=model=version=\(model.rawValue):log_path=\(escapedLogPath):log_fmt=json"
-        // scale2ref scales source (input 1) to match encoded (input 0) dimensions
-        let filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]\(vmafOpts):shortest=1"
+        var modelOptions = "version=\(model.rawValue)"
+        if model.usesV1Features, let encodedBitDepth, (8...16).contains(encodedBitDepth) {
+            // Escape the model option separator through the outer filter parser.
+            modelOptions += "\\\\:cambi.enc_bitdepth=\(encodedBitDepth)"
+        }
+        let vmafOpts = "libvmaf=model=\(modelOptions):log_path=\(escapedLogPath):log_fmt=json"
+        let filter: String
+        if model.usesV1Features {
+            // Promote both inputs before scaling to preserve banding information.
+            filter = "[1:v]setpts=PTS-STARTPTS,format=yuv420p10le[src];[0:v]setpts=PTS-STARTPTS,format=yuv420p10le[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]\(vmafOpts):shortest=1"
+        } else {
+            // Preserve the legacy preprocessing for comparisons with earlier scores.
+            filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]\(vmafOpts):shortest=1"
+        }
         return [
             "-i", encodedFile.path
         ] + sourceRange.inputArguments + [

@@ -1385,6 +1385,35 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testVMAFV1RunsFromAnalysisOverlay() throws {
+        launchApp(generatedFixture: true, additionalArguments: [
+            "-analyticsEnabledMetrics", "(vmaf)", "-analyticsVMAFModel", "vmaf_v1.0.16_3d0h"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        element("toolbar.conversion").click()
+        XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        element("queue.analysis").click()
+        let model = element("analysis.vmaf.model")
+        XCTAssertTrue(model.waitForExistence(timeout: 5))
+        model.click()
+        for label in [
+            "VMAF v1.0.16 (Default)", "VMAF v1.0.16 (Phone)", "VMAF v1.0.16 (4K)",
+            "VMAF v1.0.16 (50/60 fps)", "VMAF v1.0.16 (Phone, 50/60 fps)",
+            "VMAF v1.0.16 (4K, 50/60 fps)", "VMAF v0.6.1 (Legacy)"
+        ] {
+            XCTAssertTrue(app.menuItems[label].exists, "Missing model: \(label)")
+        }
+        attachWindowScreenshot(named: "VMAF v1 - available models")
+        app.menuItems["VMAF v1.0.16 (Default)"].click()
+        XCTAssertTrue(element("analysis.video.run").isEnabled)
+        element("analysis.video.run").click()
+        XCTAssertTrue(element("analysis.result.vmaf").waitForExistence(timeout: 45),
+                      "The bundled VMAF v1 model must produce a report in the sandbox")
+        attachWindowScreenshot(named: "VMAF v1 - completed analysis")
+    }
+
+    @MainActor
     func testBundledSSIMULACRA2RunsFromAnalysisOverlay() throws {
         launchApp(generatedFixture: true, additionalArguments: [
             "-analyticsEnabledMetrics", "(ssimulacra2)", "-ssimulacra2MaxFrames", "5"

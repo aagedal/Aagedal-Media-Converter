@@ -291,15 +291,36 @@ struct AnalyticsResults: Codable, Equatable, Sendable {
     }
 }
 
-/// VMAF model variants
+/// VMAF model variants built into the bundled libvmaf.
 enum VMAFModel: String, CaseIterable, Codable, Sendable {
+    case vmaf_v1_0_16 = "vmaf_v1.0.16_3d0h"
+    case vmaf_v1_0_16_phone = "vmaf_v1.0.16_5d0h"
+    case vmaf_v1_0_16_4k = "vmaf_v1.0.16_1d5h_2160"
+    case vmaf_v1_0_16_hfr = "vmaf_v1.0.16_hfr_3d0h"
+    case vmaf_v1_0_16_phone_hfr = "vmaf_v1.0.16_hfr_5d0h"
+    case vmaf_v1_0_16_4k_hfr = "vmaf_v1.0.16_hfr_1d5h_2160"
     case vmaf_v0_6_1 = "vmaf_v0.6.1"
     case vmaf_v0_6_1neg = "vmaf_v0.6.1neg"
     case vmaf_4k_v0_6_1 = "vmaf_4k_v0.6.1"
 
+    static let defaultModel: VMAFModel = .vmaf_v1_0_16
+
+    var usesV1Features: Bool {
+        switch self {
+        case .vmaf_v0_6_1, .vmaf_v0_6_1neg, .vmaf_4k_v0_6_1: return false
+        default: return true
+        }
+    }
+
     var displayName: String {
         switch self {
-        case .vmaf_v0_6_1: return "VMAF v0.6.1 (Default)"
+        case .vmaf_v1_0_16: return "VMAF v1.0.16 (Default)"
+        case .vmaf_v1_0_16_phone: return "VMAF v1.0.16 (Phone)"
+        case .vmaf_v1_0_16_4k: return "VMAF v1.0.16 (4K)"
+        case .vmaf_v1_0_16_hfr: return "VMAF v1.0.16 (50/60 fps)"
+        case .vmaf_v1_0_16_phone_hfr: return "VMAF v1.0.16 (Phone, 50/60 fps)"
+        case .vmaf_v1_0_16_4k_hfr: return "VMAF v1.0.16 (4K, 50/60 fps)"
+        case .vmaf_v0_6_1: return "VMAF v0.6.1 (Legacy)"
         case .vmaf_v0_6_1neg: return "VMAF v0.6.1neg (No Enhancement Gain)"
         case .vmaf_4k_v0_6_1: return "VMAF 4K v0.6.1 (4K content)"
         }
@@ -307,8 +328,14 @@ enum VMAFModel: String, CaseIterable, Codable, Sendable {
 
     var description: String {
         switch self {
+        case .vmaf_v1_0_16, .vmaf_v1_0_16_hfr:
+            return "VMAF v1 for 1080p viewing at three screen heights. Includes banding and chroma assessment. Choose the 50/60 fps variant for high-frame-rate video."
+        case .vmaf_v1_0_16_phone, .vmaf_v1_0_16_phone_hfr:
+            return "VMAF v1 for phone viewing at five screen heights. Choose the 50/60 fps variant for high-frame-rate video."
+        case .vmaf_v1_0_16_4k, .vmaf_v1_0_16_4k_hfr:
+            return "VMAF v1 for 4K viewing at 1.5 screen heights, with scores from 0 to 100. Choose the 50/60 fps variant for high-frame-rate video."
         case .vmaf_v0_6_1:
-            return "Standard VMAF model. Recommended for most content."
+            return "Previous-generation VMAF model. Retained for comparison with earlier scores."
         case .vmaf_v0_6_1neg:
             return "Penalizes enhancement artifacts. Use when encoder may sharpen or upscale."
         case .vmaf_4k_v0_6_1:

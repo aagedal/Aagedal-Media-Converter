@@ -1,6 +1,722 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "VMAF v1.0.16 (Default)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Default)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Standard)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Standard)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Predeterminado)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Par défaut)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Predefinito)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (デフォルト)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (기본값)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Padrão)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (默认)"
+          }
+        }
+      }
+    },
+    "VMAF v1.0.16 (Phone)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Phone)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Telefon)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Smartphone)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Teléfono)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Téléphone)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Telefono)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (スマートフォン)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (휴대전화)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Celular)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (手机)"
+          }
+        }
+      }
+    },
+    "VMAF v1.0.16 (4K)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K)"
+          }
+        }
+      }
+    },
+    "VMAF v1.0.16 (50/60 fps)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (50/60 fps)"
+          }
+        }
+      }
+    },
+    "VMAF v1.0.16 (Phone, 50/60 fps)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Phone, 50/60 fps)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Telefon, 50/60 fps)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Smartphone, 50/60 fps)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Teléfono, 50/60 fps)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Téléphone, 50/60 fps)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Telefono, 50/60 fps)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (スマートフォン, 50/60 fps)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (휴대전화, 50/60 fps)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (Celular, 50/60 fps)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (手机, 50/60 fps)"
+          }
+        }
+      }
+    },
+    "VMAF v1.0.16 (4K, 50/60 fps)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1.0.16 (4K, 50/60 fps)"
+          }
+        }
+      }
+    },
+    "VMAF v0.6.1 (Legacy)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (Legacy)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (Eldre modell)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (Älteres Modell)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (Modelo anterior)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (Ancien modèle)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (Modello precedente)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (旧モデル)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (이전 모델)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (Modelo anterior)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v0.6.1 (旧版)"
+          }
+        }
+      }
+    },
+    "VMAF v1 for 1080p viewing at three screen heights. Includes banding and chroma assessment. Choose the 50/60 fps variant for high-frame-rate video." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 for 1080p viewing at three screen heights. Includes banding and chroma assessment. Choose the 50/60 fps variant for high-frame-rate video."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 for 1080p-visning fra tre skjermhøyder. Vurderer fargebånd og farger. Velg varianten for 50/60 fps for video med høy bildefrekvens."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 für 1080p bei drei Bildschirmhöhen Abstand. Bewertet Banding und Farbinformationen. Für hohe Bildraten die Variante mit 50/60 fps wählen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 para 1080p a tres alturas de pantalla. Evalúa las bandas de color y la crominancia. Elija la variante de 50/60 fps para vídeo de alta frecuencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 pour le 1080p à trois hauteurs d’écran. Évalue les bandes de couleur et la chrominance. Choisissez la variante 50/60 fps pour les vidéos à fréquence élevée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 per 1080p a tre altezze dello schermo. Valuta banding e crominanza. Scegli la variante 50/60 fps per video ad alta frequenza."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画面の高さの3倍の距離で視聴する1080p向けVMAF v1。バンディングと色差を評価します。高フレームレート動画には50/60 fps版を選択してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "화면 높이의 3배 거리에서 시청하는 1080p용 VMAF v1입니다. 밴딩과 색차를 평가합니다. 고프레임률 영상에는 50/60 fps 버전을 선택하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 para 1080p a três alturas de tela. Avalia faixas de cor e crominância. Escolha a variante de 50/60 fps para vídeos com alta taxa de quadros."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "适用于在三倍屏幕高度距离观看的1080p视频的VMAF v1。包含色带和色度评估。高帧率视频请选择50/60 fps版本。"
+          }
+        }
+      }
+    },
+    "VMAF v1 for phone viewing at five screen heights. Choose the 50/60 fps variant for high-frame-rate video." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 for phone viewing at five screen heights. Choose the 50/60 fps variant for high-frame-rate video."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 for telefonvisning fra fem skjermhøyder. Velg varianten for 50/60 fps for video med høy bildefrekvens."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 für Smartphones bei fünf Bildschirmhöhen Abstand. Für hohe Bildraten die Variante mit 50/60 fps wählen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 para teléfonos a cinco alturas de pantalla. Elija la variante de 50/60 fps para vídeo de alta frecuencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 pour téléphone à cinq hauteurs d’écran. Choisissez la variante 50/60 fps pour les vidéos à fréquence élevée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 per telefoni a cinque altezze dello schermo. Scegli la variante 50/60 fps per video ad alta frequenza."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画面の高さの5倍の距離で視聴するスマートフォン向けVMAF v1。高フレームレート動画には50/60 fps版を選択してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "화면 높이의 5배 거리에서 시청하는 휴대전화용 VMAF v1입니다. 고프레임률 영상에는 50/60 fps 버전을 선택하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 para celulares a cinco alturas de tela. Escolha a variante de 50/60 fps para vídeos com alta taxa de quadros."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "适用于在五倍屏幕高度距离观看的手机视频的VMAF v1。高帧率视频请选择50/60 fps版本。"
+          }
+        }
+      }
+    },
+    "VMAF v1 for 4K viewing at 1.5 screen heights, with scores from 0 to 100. Choose the 50/60 fps variant for high-frame-rate video." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 for 4K viewing at 1.5 screen heights, with scores from 0 to 100. Choose the 50/60 fps variant for high-frame-rate video."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 for 4K-visning fra 1,5 skjermhøyder, med poeng fra 0 til 100. Velg varianten for 50/60 fps for video med høy bildefrekvens."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 für 4K bei 1,5 Bildschirmhöhen Abstand, mit Werten von 0 bis 100. Für hohe Bildraten die Variante mit 50/60 fps wählen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 para 4K a 1,5 alturas de pantalla, con puntuaciones de 0 a 100. Elija la variante de 50/60 fps para vídeo de alta frecuencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 pour la 4K à 1,5 hauteur d’écran, avec des scores de 0 à 100. Choisissez la variante 50/60 fps pour les vidéos à fréquence élevée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 per 4K a 1,5 altezze dello schermo, con punteggi da 0 a 100. Scegli la variante 50/60 fps per video ad alta frequenza."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画面の高さの1.5倍の距離で視聴する4K向けVMAF v1。スコアは0〜100です。高フレームレート動画には50/60 fps版を選択してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "화면 높이의 1.5배 거리에서 시청하는 4K용 VMAF v1이며 점수 범위는 0~100입니다. 고프레임률 영상에는 50/60 fps 버전을 선택하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF v1 para 4K a 1,5 altura de tela, com pontuações de 0 a 100. Escolha a variante de 50/60 fps para vídeos com alta taxa de quadros."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "适用于在1.5倍屏幕高度距离观看的4K视频的VMAF v1，评分范围为0至100。高帧率视频请选择50/60 fps版本。"
+          }
+        }
+      }
+    },
+    "Previous-generation VMAF model. Retained for comparison with earlier scores." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous-generation VMAF model. Retained for comparison with earlier scores."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forrige generasjon VMAF-modell. Beholdt for sammenligning med tidligere poeng."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VMAF-Modell der vorherigen Generation. Für den Vergleich mit früheren Werten beibehalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelo VMAF de la generación anterior. Conservado para comparar con puntuaciones anteriores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modèle VMAF de génération précédente. Conservé pour comparer les scores antérieurs."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modello VMAF della generazione precedente. Mantenuto per confrontare i punteggi precedenti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前世代のVMAFモデル。以前のスコアとの比較用に保持されています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이전 세대 VMAF 모델입니다. 이전 점수와 비교할 수 있도록 유지됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelo VMAF da geração anterior. Mantido para comparação com pontuações anteriores."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一代VMAF模型。保留用于与以往评分比较。"
+          }
+        }
+      }
+    }
+,
     "Start Conversion" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -108,6 +108,41 @@ final class PostConversionSettingsTests: XCTestCase {
         }
     }
 
+    func testSavedVMAFSelectionsArePreservedAndFreshSettingsUseV1() {
+        withSettings { defaults, settings in
+            XCTAssertEqual(settings.analyticsSnapshot().vmafModel, .vmaf_v1_0_16)
+            for model in VMAFModel.allCases {
+                defaults.set(model.rawValue, forKey: AppConstants.analyticsVMAFModelKey)
+                XCTAssertEqual(settings.analyticsSnapshot().vmafModel, model)
+            }
+        }
+    }
+
+    func testV1PreprocessingPreservesEncodeDepthAndLegacyFilter() async throws {
+        let service = AnalyticsService()
+        let source = URL(fileURLWithPath: "/fixture/source.mov")
+        let encoded = URL(fileURLWithPath: "/fixture/encoded.mov")
+        let log = URL(fileURLWithPath: "/fixture/vmaf.json")
+        for model in VMAFModel.allCases {
+            let arguments = await service.buildVMAFArguments(
+                encodedFile: encoded, sourceFile: source,
+                sourceRange: AnalyticsSourceRange(start: 2, end: 5),
+                model: model, logPath: log, encodedBitDepth: 8
+            )
+            let filterIndex = try XCTUnwrap(arguments.firstIndex(of: "-filter_complex"))
+            let filter = arguments[filterIndex + 1]
+            XCTAssertTrue(filter.contains("version=\(model.rawValue)"))
+            XCTAssertTrue(filter.contains("[dist][ref]libvmaf="))
+            if model.usesV1Features {
+                XCTAssertEqual(filter.components(separatedBy: "format=yuv420p10le").count - 1, 2)
+                XCTAssertTrue(filter.contains("\\\\:cambi.enc_bitdepth=8"))
+            } else {
+                XCTAssertFalse(filter.contains("format="))
+                XCTAssertFalse(filter.contains("cambi."))
+            }
+        }
+    }
+
     func testInvalidModelsFallBackAndUnknownMetricsAreIgnored() {
         withSettings { defaults, settings in
             defaults.set("removed-model", forKey: AppConstants.whisperModelKey)
@@ -116,7 +151,7 @@ final class PostConversionSettingsTests: XCTestCase {
             defaults.set(["unknown", QualityMetric.allCases[0].rawValue], forKey: AppConstants.analyticsEnabledMetricsKey)
             XCTAssertEqual(settings.transcriptionSnapshot().whisperModel, .base)
             XCTAssertEqual(settings.transcriptionSnapshot().parakeetModel, ParakeetModel.allModels[0])
-            XCTAssertEqual(settings.analyticsSnapshot().vmafModel, .vmaf_v0_6_1)
+            XCTAssertEqual(settings.analyticsSnapshot().vmafModel, .defaultModel)
             XCTAssertEqual(settings.analyticsSnapshot().enabledMetrics, [QualityMetric.allCases[0]])
             defaults.set([], forKey: AppConstants.analyticsEnabledMetricsKey)
             XCTAssertTrue(settings.analyticsSnapshot().enabledMetrics.isEmpty)
