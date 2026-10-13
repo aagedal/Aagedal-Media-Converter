@@ -113,6 +113,8 @@ struct Aagedal_Media_Converter_App: App {
         Settings {
             SettingsView().keyboardShortcut(",",modifiers: .command)
         }
+        .defaultSize(width: 900, height: 600)
+        .windowResizability(.contentMinSize)
         Window("About Aagedal Media Converter", id: "about") {
             AboutView()
         }

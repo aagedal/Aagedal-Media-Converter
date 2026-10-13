@@ -28,6 +28,7 @@
 		24CB417957434AF98E564C83 /* UploadLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */; };
 		26F5C2D4170D479CA5B52180 /* PostConversionSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFDA902947BA4C97BAD3B996 /* PostConversionSettingsTests.swift */; };
 		2746B3C583424D6AAF97362A /* WatchFolderPollingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 924448BC707A4A8BBE774393 /* WatchFolderPollingTests.swift */; };
+		AF129A6A3D374C449DE8B303 /* AppImprovementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF129A6A3D374C449DE8B304 /* AppImprovementTests.swift */; };
 		280D65D8BFBC4D9D9BEDA2AC /* MCALabelCancellationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E224DF5E7934DB7BE4B5BB4 /* MCALabelCancellationTests.swift */; };
 		306C6161F506493D979C6420 /* WatchFolderSelectionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D34ECA0E63C471788FE1831 /* WatchFolderSelectionServiceTests.swift */; };
 		3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */; };
@@ -555,6 +556,7 @@
 		8EFBDA8F2EA56F8E005ADDCF /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
 		8EFBDA932EA58975005ADDCF /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		924448BC707A4A8BBE774393 /* WatchFolderPollingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderPollingTests.swift; sourceTree = "<group>"; };
+		AF129A6A3D374C449DE8B304 /* AppImprovementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppImprovementTests.swift; sourceTree = "<group>"; };
 		9315E73973904E2E92CE7C22 /* AV2TrimPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2TrimPlan.swift; sourceTree = "<group>"; };
 		94F96374D9F9450B93232C46 /* IMFSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMFSettings.swift; sourceTree = "<group>"; };
 		9609862A8EC6964A0A45885F /* WaveformPCMDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformPCMDecoder.swift; sourceTree = "<group>"; };
@@ -1149,6 +1151,7 @@
 				A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */,
 				E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */,
 				924448BC707A4A8BBE774393 /* WatchFolderPollingTests.swift */,
+				AF129A6A3D374C449DE8B304 /* AppImprovementTests.swift */,
 				2CEDDD06B78842E6A7446610 /* ConversionQueueStateTests.swift */,
 				DAEE8F6BC37E461AA2DBC4AC /* ConversionUploadFollowUpTests.swift */,
 				2535309175E14070B4849816 /* AppIntentHandoffTests.swift */,
@@ -1974,6 +1977,7 @@
 				35D23935EC554B1B97085056 /* AV2ScratchDirectoryTests.swift in Sources */,
 				042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */,
 				2746B3C583424D6AAF97362A /* WatchFolderPollingTests.swift in Sources */,
+				AF129A6A3D374C449DE8B303 /* AppImprovementTests.swift in Sources */,
 				68DB0573FE4F499AA72EF9AF /* ConversionQueueStateTests.swift in Sources */,
 				3559AE0D84F84065A06C6888 /* ConversionUploadFollowUpTests.swift in Sources */,
 				7D163C3579E64EFABCEBCF29 /* AppIntentHandoffTests.swift in Sources */,
@@ -2187,7 +2191,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 599;
+				CURRENT_PROJECT_VERSION = 600;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
@@ -2217,7 +2221,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 4.5.3;
+				MARKETING_VERSION = 4.5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2244,7 +2248,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 599;
+				CURRENT_PROJECT_VERSION = 600;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
@@ -2274,7 +2278,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 4.5.3;
+				MARKETING_VERSION = 4.5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

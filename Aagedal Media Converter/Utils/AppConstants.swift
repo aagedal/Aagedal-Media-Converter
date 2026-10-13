@@ -273,6 +273,9 @@ enum AppConstants {
     static let watchFolderIgnoreDurationUnitKey = "watchFolderIgnoreDurationUnit"
     static let watchFolderDeleteDurationValueKey = "watchFolderDeleteDurationValue"
     static let watchFolderDeleteDurationUnitKey = "watchFolderDeleteDurationUnit"
+    static let watchFolderSettlingSecondsKey = "watchFolderSettlingSeconds"
+    static let defaultWatchFolderSettlingSeconds: TimeInterval = 10
+    static let watchFolderSettlingSecondsValues = [5, 10, 15, 30, 60]
     static let watchFolderKeepAwakeKey = "watchFolderKeepAwake"
     static let defaultWatchFolderKeepAwake = false
     static let previewCacheCleanupPolicyKey = "previewCacheCleanupPolicy"

@@ -17,6 +17,8 @@ struct WatchFolderSettingsView: View {
     @AppStorage(AppConstants.watchFolderDeleteDurationUnitKey) private var watchFolderDeleteDurationUnitRaw = AppConstants.defaultWatchFolderDeleteDurationUnitRaw
     @AppStorage(AppConstants.watchFolderKeepAwakeKey) private var watchFolderKeepAwake = AppConstants.defaultWatchFolderKeepAwake
 
+    @AppStorage(AppConstants.watchFolderSettlingSecondsKey) private var settlingSeconds = AppConstants.defaultWatchFolderSettlingSeconds
+
     var body: some View {
         Form {
             watchFolderSection
@@ -86,6 +88,19 @@ struct WatchFolderSettingsView: View {
             Text("When Watch Folder Mode is enabled in the toolbar, the app will automatically scan this folder every 5 seconds for new video files and add them to the conversion queue.")
                 .font(.caption)
                 .foregroundColor(.secondary)
+
+            Picker("File settling time", selection: Binding(
+                get: { WatchFolderObservation.settlingInterval(defaults: .standard) },
+                set: { settlingSeconds = $0 }
+            )) {
+                ForEach(AppConstants.watchFolderSettlingSecondsValues, id: \.self) { seconds in
+                    Text("\(seconds) seconds").tag(Double(seconds))
+                }
+            }
+            .accessibilityIdentifier("settings.watchFolder.settlingTime")
+            Text("Wait until file size and modification time remain unchanged before importing or cleaning up. Files in the queue are never cleaned up.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Toggle("Activate Watch Folder on app launch", isOn: $watchFolderAutoActivateOnLaunch)
                 .toggleStyle(SwitchToggleStyle())

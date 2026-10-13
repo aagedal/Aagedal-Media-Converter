@@ -136,16 +136,22 @@
       "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
     },
     {
-      "component": "FFmpeg 9.0.1 build",
-      "path": "build/attribution/ffmpeg-9.0.1-source.tar.gz",
-      "bytes": 176572218,
-      "sha256": "23587fed102cfe66910db1d4ae66b50565387a1750e039fb10fde6fbfd027e71"
+      "component": "FFmpeg 9.0.2 build",
+      "path": "build/attribution/ffmpeg-9.0.2-source.tar.gz",
+      "bytes": 184520633,
+      "sha256": "822c0658ec5dc937ed521db0baf8ef3a1c107680a53de8fbbdc2e038f8065c72"
     },
     {
       "component": "FFmpeg generated inputs",
-      "path": "build/attribution/ffmpeg-9.0.1-generated-inputs.tar.gz",
-      "bytes": 93452,
-      "sha256": "0e18c9471ded3960d40ce59d7b2a37963423a9e1002449982ab65271a7b55869"
+      "path": "build/attribution/ffmpeg-9.0.2-generated-inputs.tar.gz",
+      "bytes": 204314,
+      "sha256": "1a7e46f3691bd78478fab71dcd29a1896b109f8f0d29de7d9a1ad1abbea86ce0"
+    },
+    {
+      "component": "FFmpeg 9.0.2 Metal correction",
+      "path": "build/attribution/ffmpeg-9.0.2-metal-source.tar.gz",
+      "bytes": 18015006,
+      "sha256": "883bc2cd83b5f8af0f5fff03396b0caae943210db616554209a434987a2c9bc8"
     },
     {
       "component": "MPVKit: gnutls",
@@ -864,8 +870,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/ffmpeg",
-      "bytes": 54661504,
-      "sha256": "25ee9d7ecd96c81b18cf5970e58201f4c94c4b1f5b4dea51c765aa28c639afd2",
+      "bytes": 60144480,
+      "sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -891,18 +897,20 @@
         "/usr/lib/libSystem.B.dylib",
         "/usr/lib/libbz2.1.0.dylib",
         "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libhvf.dylib",
         "/usr/lib/libiconv.2.dylib",
         "/usr/lib/libobjc.A.dylib",
         "/usr/lib/libz.1.dylib"
       ],
       "component": "FFmpeg",
-      "version": "9.0.1",
+      "version": "9.0.2",
       "license": "GPL-3.0-or-later",
       "licenseFile": "Licenses/ffmpeg-LICENSE.txt",
       "reportedLicense": "GPL-3.0-or-later",
       "requiredSourceComponents": [
-        "FFmpeg 9.0.1 build",
-        "FFmpeg generated inputs"
+        "FFmpeg 9.0.2 build",
+        "FFmpeg generated inputs",
+        "FFmpeg 9.0.2 Metal correction"
       ]
     },
     {
@@ -1277,8 +1285,8 @@
     },
     {
       "path": "Licenses/ffmpeg-LICENSE.txt",
-      "bytes": 545307,
-      "sha256": "c1aad14a3809aae5604ed40a2d0a611a02beaf24483d4470641f4863cc8ea4e8"
+      "bytes": 628643,
+      "sha256": "94a9c212cebe14b11126cf458e87c6bb259e27bab0d05754c535fccc509b51cf"
     },
     {
       "path": "Licenses/geonames-LICENSE.txt",
@@ -1329,7 +1337,7 @@
   "summary": {
     "toolCount": 12,
     "libraryCount": 12,
-    "totalBytes": 153599376,
+    "totalBytes": 159082352,
     "entriesMissingLocalLicenseFile": []
   }
 }

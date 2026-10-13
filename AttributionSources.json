@@ -20,16 +20,22 @@
       "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
     },
     {
-      "component": "FFmpeg 9.0.1 build",
-      "path": "build/attribution/ffmpeg-9.0.1-source.tar.gz",
-      "bytes": 176572218,
-      "sha256": "23587fed102cfe66910db1d4ae66b50565387a1750e039fb10fde6fbfd027e71"
+      "component": "FFmpeg 9.0.2 build",
+      "path": "build/attribution/ffmpeg-9.0.2-source.tar.gz",
+      "bytes": 184520633,
+      "sha256": "822c0658ec5dc937ed521db0baf8ef3a1c107680a53de8fbbdc2e038f8065c72"
     },
     {
       "component": "FFmpeg generated inputs",
-      "path": "build/attribution/ffmpeg-9.0.1-generated-inputs.tar.gz",
-      "bytes": 93452,
-      "sha256": "0e18c9471ded3960d40ce59d7b2a37963423a9e1002449982ab65271a7b55869"
+      "path": "build/attribution/ffmpeg-9.0.2-generated-inputs.tar.gz",
+      "bytes": 204314,
+      "sha256": "1a7e46f3691bd78478fab71dcd29a1896b109f8f0d29de7d9a1ad1abbea86ce0"
+    },
+    {
+      "component": "FFmpeg 9.0.2 Metal correction",
+      "path": "build/attribution/ffmpeg-9.0.2-metal-source.tar.gz",
+      "bytes": 18015006,
+      "sha256": "883bc2cd83b5f8af0f5fff03396b0caae943210db616554209a434987a2c9bc8"
     },
     {
       "component": "MPVKit: gnutls",

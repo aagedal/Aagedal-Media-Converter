@@ -221,15 +221,15 @@ private struct ConversionPlayButtonNSViewWrapper: NSViewRepresentable {
 
         // Update icon and color based on state
         if isConverting {
-            let image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: "Cancel Conversion")
+            let image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: String(localized: "Cancel Conversion"))
             button.image = image?.withSymbolConfiguration(config)
             button.contentTintColor = .systemRed
-            button.setAccessibilityLabel("Cancel Conversion")
+            button.setAccessibilityLabel(String(localized: "Cancel Conversion"))
         } else {
-            let image = NSImage(systemSymbolName: "play.circle", accessibilityDescription: "Start Conversion")
+            let image = NSImage(systemSymbolName: "play.circle", accessibilityDescription: String(localized: "Start Conversion"))
             button.image = image?.withSymbolConfiguration(config)
             button.contentTintColor = (!hasFiles || !canStartConversion) ? .systemGray : .systemGreen
-            button.setAccessibilityLabel("Start Conversion")
+            button.setAccessibilityLabel(String(localized: "Start Conversion"))
         }
 
         // Update enabled state
@@ -237,13 +237,13 @@ private struct ConversionPlayButtonNSViewWrapper: NSViewRepresentable {
 
         // Update tooltip
         if !hasFiles {
-            button.toolTip = "Add files to begin conversion"
+            button.toolTip = String(localized: "Add files to begin conversion")
         } else if isConverting {
-            button.toolTip = "Cancel all conversions"
+            button.toolTip = String(localized: "Cancel all conversions")
         } else if canStartConversion {
-            button.toolTip = "Start converting all files. Hold Option to select output folder first."
+            button.toolTip = String(localized: "Start converting all files. Hold Option to select output folder first.")
         } else {
-            button.toolTip = "No files ready to convert"
+            button.toolTip = String(localized: "No files ready to convert")
         }
     }
 

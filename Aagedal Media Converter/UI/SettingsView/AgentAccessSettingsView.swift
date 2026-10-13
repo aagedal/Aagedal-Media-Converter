@@ -63,6 +63,7 @@ struct AgentAccessSettingsView: View {
     @State private var selectedClient: ApplicationAgentMCPClient = .claudeDesktop
     @State private var connectionStatus = String(localized: "Not tested")
     @State private var isTesting = false
+    @State private var diagnosticTask: Task<Void, Never>?
     @State private var isUpdatingAccess = false
     @State private var approvedSourceFolders: [URL] = []
     @State private var folderAccessError: String?
@@ -203,6 +204,7 @@ struct AgentAccessSettingsView: View {
         } message: {
             Text(folderAccessError ?? "")
         }
+        .onDisappear { diagnosticTask?.cancel() }
         .onAppear {
             reloadApprovedSourceFolders()
             if accessEnabled {
@@ -262,6 +264,7 @@ struct AgentAccessSettingsView: View {
                 }
             }
         } else {
+            diagnosticTask?.cancel()
             isUpdatingAccess = true
             connectionStatus = String(localized: "Disabled")
             Task {
@@ -275,15 +278,18 @@ struct AgentAccessSettingsView: View {
         isTesting = true
         connectionStatus = String(localized: "Testing…")
         let helperURL = helperURL
-        Task {
+        diagnosticTask?.cancel()
+        diagnosticTask = Task {
             defer { isTesting = false }
             do {
-                let succeeded = try await Task.detached {
-                    try ApplicationAgentMCPConnectionDiagnostic.test(helperURL: helperURL)
-                }.value
+                let succeeded = try await ApplicationAgentMCPConnectionDiagnostic.test(helperURL: helperURL)
+                try Task.checkCancellation()
                 connectionStatus = succeeded
                     ? String(localized: "Ready")
                     : String(localized: "Request failed")
+            } catch is CancellationError {
+                // Leaving the pane or disabling access cancels the helper without
+                // replacing the current connection state with a failure message.
             } catch {
                 connectionStatus = String(localized: "Not connected")
                     + ": " + error.localizedDescription
@@ -294,19 +300,9 @@ struct AgentAccessSettingsView: View {
 
 /// Checks the same stdio-to-app path that an MCP client uses, rather than a
 /// same-process message-port request that cannot detect helper launch failures.
-private enum ApplicationAgentMCPConnectionDiagnostic {
-    static func test(helperURL: URL) throws -> Bool {
+enum ApplicationAgentMCPConnectionDiagnostic {
+    static func test(helperURL: URL, runner: any SubprocessRunning = SubprocessRunner()) async throws -> Bool {
         guard FileManager.default.isExecutableFile(atPath: helperURL.path) else { return false }
-
-        let process = Process()
-        process.executableURL = helperURL
-        let input = Pipe()
-        let output = Pipe()
-        let finished = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in finished.signal() }
-        process.standardInput = input
-        process.standardOutput = output
-        try process.run()
 
         let messages: [[String: Any]] = [
             ["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": [
@@ -321,20 +317,18 @@ private enum ApplicationAgentMCPConnectionDiagnostic {
         let lines = try messages.map {
             try JSONSerialization.data(withJSONObject: $0) + Data([0x0A])
         }
-        input.fileHandleForWriting.write(lines.reduce(Data(), +))
-        try input.fileHandleForWriting.close()
-        guard finished.wait(timeout: .now() + 15) == .success else {
-            process.terminate()
-            return false
-        }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return false }
+        let response = try await runner.run(SubprocessRequest(
+            executableURL: helperURL,
+            standardInput: lines.reduce(Data(), +),
+            timeout: .seconds(15)
+        ))
+        guard response.succeeded, response.discardedStandardOutputBytes == 0 else { return false }
 
-        let responses = try output.fileHandleForReading.readDataToEndOfFile()
+        let responses = try response.standardOutput
             .split(separator: 0x0A)
             .map { try JSONSerialization.jsonObject(with: Data($0)) as? [String: Any] }
-        guard responses.count == 2,
-              let result = responses[1]?["result"] as? [String: Any],
+        guard let reply = responses.compactMap({ $0 }).first(where: { ($0["id"] as? Int) == 2 }),
+              let result = reply["result"] as? [String: Any],
               result["isError"] as? Bool == false,
               let structured = result["structuredContent"] as? [String: Any],
               let presets = structured["presets"] as? [[String: Any]] else {

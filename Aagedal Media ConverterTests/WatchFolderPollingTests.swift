@@ -25,7 +25,7 @@ final class WatchFolderPollingTests: XCTestCase {
         let errors = OSAllocatedUnfairLock(initialState: [String]())
         let imported = OSAllocatedUnfairLock(initialState: [URL]())
         let trashed = OSAllocatedUnfairLock(initialState: [URL]())
-        let manager = WatchFolderManager(defaults: try XCTUnwrap(UserDefaults(suiteName: name)), trashItem: { url in
+        let manager = WatchFolderManager(defaults: try XCTUnwrap(UserDefaults(suiteName: name)), settlingInterval: 0, readinessProbe: { _ in true }, trashItem: { url in
             trashed.withLock { $0.append(url) }
             try FileManager.default.removeItem(at: url)
         }, pollingWait: {
@@ -62,7 +62,7 @@ final class WatchFolderPollingTests: XCTestCase {
         let completed = expectation(description: "Missing, repeated, recovered, and missing scans completed")
         let scanCount = OSAllocatedUnfairLock(initialState: 0)
         let errors = OSAllocatedUnfairLock(initialState: [String]())
-        let manager = WatchFolderManager(pollingWait: {
+        let manager = WatchFolderManager(settlingInterval: 0, readinessProbe: { _ in true }, pollingWait: {
             let count = scanCount.withLock { value in
                 value += 1
                 return value
@@ -104,7 +104,7 @@ final class WatchFolderPollingTests: XCTestCase {
         let scan = OSAllocatedUnfairLock(initialState: 1)
         let imports = OSAllocatedUnfairLock(initialState: [(Int, [URL])]())
         let errors = OSAllocatedUnfairLock(initialState: [String]())
-        let manager = WatchFolderManager(pollingWait: {
+        let manager = WatchFolderManager(settlingInterval: 0, readinessProbe: { _ in true }, pollingWait: {
             let count = scan.withLock { value in
                 defer { value += 1 }
                 return value
@@ -148,7 +148,7 @@ final class WatchFolderPollingTests: XCTestCase {
         let scan = OSAllocatedUnfairLock(initialState: 1)
         let errors = OSAllocatedUnfairLock(initialState: [String]())
         let imports = OSAllocatedUnfairLock(initialState: [(Int, [URL])]())
-        let manager = WatchFolderManager(pollingWait: {
+        let manager = WatchFolderManager(settlingInterval: 0, readinessProbe: { _ in true }, pollingWait: {
             let count = scan.withLock { value in
                 defer { value += 1 }
                 return value
@@ -190,7 +190,7 @@ final class WatchFolderPollingTests: XCTestCase {
         let completed = expectation(description: "Incomplete metadata retried")
         let scans = OSAllocatedUnfairLock(initialState: 0)
         let errors = OSAllocatedUnfairLock(initialState: [String]())
-        let manager = WatchFolderManager(pollingWait: {
+        let manager = WatchFolderManager(settlingInterval: 0, readinessProbe: { _ in true }, pollingWait: {
             let count = scans.withLock { value in value += 1; return value }
             if count == 2 {
                 completed.fulfill()
@@ -254,7 +254,7 @@ final class WatchFolderPollingTests: XCTestCase {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         let scanned = expectation(description: "Initial watch session scanned")
-        let manager = WatchFolderManager(pollingWait: {
+        let manager = WatchFolderManager(settlingInterval: 0, readinessProbe: { _ in true }, pollingWait: {
             scanned.fulfill()
             try await Task.sleep(for: .seconds(30))
         })
@@ -300,7 +300,7 @@ final class WatchFolderPollingTests: XCTestCase {
     }
 
     func testSupersededManagerCommandsCannotRestartOrStopReplacement() async {
-        let manager = WatchFolderManager()
+        let manager = WatchFolderManager(settlingInterval: 0, readinessProbe: { _ in true })
         await manager.stopMonitoring(generation: 2)
         await manager.startMonitoring(folderPath: "/missing", generation: 1, onNewFiles: { _ in })
         let stopped = await manager.isCurrentlyMonitoring()
