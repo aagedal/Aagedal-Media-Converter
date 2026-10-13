@@ -15,18 +15,29 @@ actor WatchFolderManager {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "WatchFolder")
 
     private var monitorTask: Task<Void, Never>?
-    private var trackedFiles: [URL: Int64] = [:] // URL -> file size
+    private var trackedFiles: [URL: WatchFolderObservation] = [:]
     private var isMonitoring = false
     private var monitoringGeneration: UInt64 = 0
     private var reportedFailures = WatchFolderFailureTracker()
     private let defaults: UserDefaults
     private let trashItem: @Sendable (URL) throws -> Void
+    private let settlingInterval: TimeInterval?
+    private let readinessProbe: @Sendable (URL) async -> Bool
+    private let now: @Sendable () -> Date
     private let pollingWait: @Sendable () async throws -> Void
 
     private let readResourceValues: @Sendable (URL) throws -> URLResourceValues
 
     init(
         defaults: UserDefaults = .standard,
+        settlingInterval: TimeInterval? = nil,
+        now: @escaping @Sendable () -> Date = { Date() },
+        readinessProbe: @escaping @Sendable (URL) async -> Bool = { url in
+            switch await VideoFileUtils.fetchVideoMetadataWithFallback(for: url) {
+            case .full, .essentialOnly: return true
+            case .failed, .cancelled: return false
+            }
+        },
         trashItem: @escaping @Sendable (URL) throws -> Void = { try FileSafetyUtils.trashWatchFolderItem($0) },
         pollingWait: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(5)) },
         readResourceValues: @escaping @Sendable (URL) throws -> URLResourceValues = {
@@ -34,6 +45,9 @@ actor WatchFolderManager {
         }
     ) {
         self.defaults = defaults
+        self.settlingInterval = settlingInterval
+        self.now = now
+        self.readinessProbe = readinessProbe
         self.trashItem = trashItem
         self.pollingWait = pollingWait
         self.readResourceValues = readResourceValues
@@ -44,6 +58,7 @@ actor WatchFolderManager {
         folderPath: String,
         generation: UInt64,
         onNewFiles: @escaping @Sendable ([URL]) -> Void,
+        protectedFiles: @escaping @MainActor @Sendable () -> Set<URL> = { [] },
         onError: @escaping @Sendable (String) -> Void = { _ in }
     ) {
         guard generation >= monitoringGeneration, !Task.isCancelled else { return }
@@ -55,7 +70,7 @@ actor WatchFolderManager {
         monitorTask = Task { [weak self, pollingWait] in
             await WatchFolderPollingLoop.run(wait: pollingWait) { [weak self] in
                 guard let self else { return false }
-                return await self.scanIfMonitoring(folderPath: folderPath, onNewFiles: onNewFiles, onError: onError)
+                return await self.scanIfMonitoring(folderPath: folderPath, protectedFiles: protectedFiles, onNewFiles: onNewFiles, onError: onError)
             }
         }
     }
@@ -73,19 +88,21 @@ actor WatchFolderManager {
     }
     
     /// Scan the folder and detect stable files (not growing)
-    private func scanIfMonitoring(folderPath: String, onNewFiles: @escaping @Sendable ([URL]) -> Void, onError: @escaping @Sendable (String) -> Void) -> Bool {
+    private func scanIfMonitoring(folderPath: String, protectedFiles: @escaping @MainActor @Sendable () -> Set<URL>, onNewFiles: @escaping @Sendable ([URL]) -> Void, onError: @escaping @Sendable (String) -> Void) async -> Bool {
         // Check on the manager actor, after the polling task's actor hop: Stop
         // may have cancelled an older task and started a replacement meanwhile.
         guard isMonitoring, !Task.isCancelled else { return false }
-        scanFolder(folderPath: folderPath, onNewFiles: onNewFiles, onError: onError)
+        await scanFolder(folderPath: folderPath, protectedFiles: protectedFiles, onNewFiles: onNewFiles, onError: onError)
         return true
     }
 
     private func scanFolder(
         folderPath: String,
+        protectedFiles: @escaping @MainActor @Sendable () -> Set<URL>,
         onNewFiles: @escaping @Sendable ([URL]) -> Void,
         onError: @escaping @Sendable (String) -> Void
-    ) {
+    ) async {
+        let generation = monitoringGeneration
         let folderURL = URL(fileURLWithPath: folderPath)
 
         // Restore the selected folder grant before enumeration. Report access
@@ -136,8 +153,9 @@ actor WatchFolderManager {
         } else {
             reportedFailures.cleanupAccessSucceeded()
         }
-        let now = Date()
-        var currentFiles: [URL: Int64] = [:]
+        let now = now()
+        let interval = settlingInterval ?? WatchFolderObservation.settlingInterval(defaults: defaults)
+        var currentFiles: [URL: WatchFolderObservation] = [:]
         var stableFiles: [URL] = []
         
         for fileURL in fileURLs {
@@ -173,14 +191,37 @@ actor WatchFolderManager {
                 continue
             }
 
+            let observation = WatchFolderObservation(
+                size: Int64(fileSize), modifiedAt: resourceValues.contentModificationDate,
+                observedAt: now, previous: trackedFiles[fileURL]
+            )
+            currentFiles[fileURL] = observation
+            let isStable = observation.isStable(at: now, interval: interval)
             let relevantDate = resourceValues.addedToDirectoryDate ?? resourceValues.creationDate ?? resourceValues.contentModificationDate ?? now
             let fileAge = now.timeIntervalSince(relevantDate)
             
             if settings.deleteEnabled, let deleteThreshold = settings.deleteThreshold, fileAge > deleteThreshold {
-                guard !cleanupNeedsRenewal else { continue }
+                guard !cleanupNeedsRenewal, isStable else { continue }
                 do {
-                    // Use trash instead of permanent delete for safety (recoverable)
-                    try trashItem(fileURL)
+                    let trashItem = trashItem
+                    let readResourceValues = readResourceValues
+                    // Queue protection and the move share one main-actor turn, so
+                    // a newly queued source cannot race the cleanup decision.
+                    let trashed = try await MainActor.run {
+                        guard !Task.isCancelled else { return false }
+                        let protectedPaths = Set(protectedFiles().map {
+                            $0.resolvingSymlinksInPath().standardizedFileURL
+                        })
+                        guard !protectedPaths.contains(fileURL.resolvingSymlinksInPath().standardizedFileURL) else { return false }
+                        let latest = try readResourceValues(fileURL)
+                        guard latest.isRegularFile == true, latest.fileSize == fileSize,
+                              latest.contentModificationDate == resourceValues.contentModificationDate else { return false }
+                        try trashItem(fileURL)
+                        return true
+                    }
+                    guard monitoringGeneration == generation, !Task.isCancelled else { return }
+                    guard trashed else { continue }
+                    currentFiles.removeValue(forKey: fileURL)
                     reportedFailures.cleanupSucceeded(for: fileURL)
                     if let description = settings.deleteDescription {
                         Self.logger.info("Trashed watch folder file older than \(description, privacy: .public): \(fileURL.lastPathComponent, privacy: .public)")
@@ -193,7 +234,7 @@ actor WatchFolderManager {
                         cleanupFailures.append("\(fileURL.lastPathComponent): \(error.localizedDescription)")
                     }
                 }
-                trackedFiles.removeValue(forKey: fileURL)
+                currentFiles.removeValue(forKey: fileURL)
                 continue
             }
 
@@ -203,35 +244,56 @@ actor WatchFolderManager {
                 } else {
                     Self.logger.info("Ignoring watch folder file exceeding ignore threshold: \(fileURL.lastPathComponent, privacy: .public)")
                 }
-                trackedFiles.removeValue(forKey: fileURL)
+                currentFiles.removeValue(forKey: fileURL)
                 continue
             }
             
-            currentFiles[fileURL] = Int64(fileSize)
-            
-            if let previousSize = trackedFiles[fileURL] {
-                if fileSize == previousSize && fileSize > 0 {
-                    stableFiles.append(fileURL)
-                    Self.logger.info("File stable and ready: \(fileURL.lastPathComponent, privacy: .public) (\(fileSize) bytes)")
-                } else if fileSize > previousSize {
-                    Self.logger.info("File still growing: \(fileURL.lastPathComponent, privacy: .public) (\(previousSize) -> \(fileSize) bytes)")
-                }
-            } else {
-                Self.logger.info("New file detected (tracking): \(fileURL.lastPathComponent, privacy: .public) (\(fileSize) bytes)")
-            }
+            if isStable { stableFiles.append(fileURL) }
         }
         
         // Update tracked files
         trackedFiles = currentFiles
         
-        // Report stable files
-        if !stableFiles.isEmpty {
-            Self.logger.info("Reporting \(stableFiles.count) stable file(s)")
-            onNewFiles(stableFiles)
-            
-            // Remove reported files from tracking
-            for fileURL in stableFiles {
-                trackedFiles.removeValue(forKey: fileURL)
+        guard !stableFiles.isEmpty else { return }
+        let protected = await protectedFiles()
+        guard monitoringGeneration == generation, !Task.isCancelled else { return }
+        let protectedPaths = Set(protected.map { $0.resolvingSymlinksInPath().standardizedFileURL })
+        let candidates = stableFiles.filter {
+            !protectedPaths.contains($0.resolvingSymlinksInPath().standardizedFileURL)
+        }
+        let readinessProbe = readinessProbe
+        // Probe a bounded number concurrently and publish healthy files as soon
+        // as they are ready; one stalled parser must not delay every import.
+        await withTaskGroup(of: (URL, Bool).self) { group in
+            var remaining = candidates.makeIterator()
+            for _ in 0..<4 {
+                guard let url = remaining.next() else { break }
+                group.addTask { (url, await readinessProbe(url)) }
+            }
+            while let (url, readable) = await group.next() {
+                guard monitoringGeneration == generation, !Task.isCancelled else {
+                    group.cancelAll()
+                    return
+                }
+                if readable {
+                    reportedFailures.readinessSucceeded(for: url)
+                    let latest = try? readResourceValues(url)
+                    if let observation = trackedFiles[url],
+                       latest?.isRegularFile == true,
+                       latest?.fileSize.map(Int64.init) == observation.size,
+                       latest?.contentModificationDate == observation.modifiedAt {
+                        trackedFiles.removeValue(forKey: url)
+                        onNewFiles([url])
+                    } else {
+                        // A probe may take time; restart settling if the source changed.
+                        trackedFiles.removeValue(forKey: url)
+                    }
+                } else if reportedFailures.shouldReportReadinessFailure(for: url) {
+                    onError(String(localized: "A watch-folder file could not be read yet. It will be retried automatically: \(url.lastPathComponent)"))
+                }
+                if let next = remaining.next() {
+                    group.addTask { (next, await readinessProbe(next)) }
+                }
             }
         }
     }
@@ -330,6 +392,15 @@ struct WatchFolderFailureTracker {
     private var cleanupAccessFailed = false
     private var cleanupFailures: Set<URL> = []
     private var metadataFailures: Set<URL> = []
+    private var readinessFailures: Set<URL> = []
+
+    mutating func shouldReportReadinessFailure(for url: URL) -> Bool {
+        readinessFailures.insert(url).inserted
+    }
+
+    mutating func readinessSucceeded(for url: URL) {
+        readinessFailures.remove(url)
+    }
 
     mutating func shouldReportCleanupAccessFailure() -> Bool {
         defer { cleanupAccessFailed = true }
@@ -349,6 +420,7 @@ struct WatchFolderFailureTracker {
         scanFailed = false
         cleanupFailures.formIntersection(currentFiles)
         metadataFailures.formIntersection(currentFiles)
+        readinessFailures.formIntersection(currentFiles)
     }
 
     mutating func shouldReportMetadataFailure(for url: URL) -> Bool {
@@ -365,5 +437,32 @@ struct WatchFolderFailureTracker {
 
     mutating func cleanupSucceeded(for url: URL) {
         cleanupFailures.remove(url)
+    }
+}
+
+/// A quiet interval must include unchanged size and modification time, with at
+/// least two successful observations. Failed scans discard the previous observation.
+struct WatchFolderObservation {
+    let size: Int64
+    let modifiedAt: Date?
+    let unchangedSince: Date
+    let hasPreviousObservation: Bool
+
+    init(size: Int64, modifiedAt: Date?, observedAt: Date, previous: Self?) {
+        self.size = size
+        self.modifiedAt = modifiedAt
+        let unchanged = previous?.size == size && previous?.modifiedAt == modifiedAt
+        unchangedSince = unchanged ? (previous?.unchangedSince ?? observedAt) : observedAt
+        hasPreviousObservation = unchanged
+    }
+
+    func isStable(at date: Date, interval: TimeInterval) -> Bool {
+        size > 0 && hasPreviousObservation && date.timeIntervalSince(unchangedSince) >= interval
+    }
+
+    static func settlingInterval(defaults: UserDefaults) -> TimeInterval {
+        let value = defaults.double(forKey: AppConstants.watchFolderSettlingSecondsKey)
+        return AppConstants.watchFolderSettlingSecondsValues.map(Double.init).contains(value)
+            ? value : AppConstants.defaultWatchFolderSettlingSeconds
     }
 }

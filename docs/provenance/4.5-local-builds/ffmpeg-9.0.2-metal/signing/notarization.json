@@ -1,0 +1,25 @@
+{
+  "logFormatVersion": 1,
+  "jobId": "d801a829-9a76-492e-9712-bad727ef8358",
+  "status": "Accepted",
+  "statusSummary": "Ready for distribution",
+  "statusCode": 0,
+  "archiveFilename": "ffmpeg-9.0.2-full-signed.zip",
+  "uploadDate": "2026-10-13T11:08:22.476Z",
+  "sha256": "107f644424d290612de9e4206ab756a689d18da0113854e3ca2bb6a010c56766",
+  "ticketContents": [
+    {
+      "path": "ffmpeg-9.0.2-full-signed.zip/full/ffmpeg",
+      "digestAlgorithm": "SHA-256",
+      "cdhash": "e57dfafe46e4a3cece0514eb1d3a903e63e9fa73",
+      "arch": "arm64"
+    },
+    {
+      "path": "ffmpeg-9.0.2-full-signed.zip/full/ffprobe",
+      "digestAlgorithm": "SHA-256",
+      "cdhash": "c322ed41cf2f53b99cc57706352393eb2573930e",
+      "arch": "arm64"
+    }
+  ],
+  "issues": null
+}

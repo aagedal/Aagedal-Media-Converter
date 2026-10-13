@@ -121,6 +121,7 @@ struct ContentView: View {
     @State private var applicationJobVisibilityStart = Date().addingTimeInterval(-60)
     @State private var pendingManualApplicationJobItems: [UUID: [UUID]] = [:]
     @State private var activeApplicationJobIDs = Set<ApplicationJobID>()
+    @State private var activeApplicationJobSourceURLs = Set<URL>()
 
     @StateObject private var updateChecker = UpdateChecker.shared
     @State private var showUpdateNotification = false
@@ -2038,6 +2039,7 @@ struct ContentView: View {
     @MainActor
     private func synchronizeApplicationJobs(_ records: [ApplicationJobRecord]) async {
         activeApplicationJobIDs = Set(records.lazy.filter { !$0.state.isTerminal }.map(\.id))
+        activeApplicationJobSourceURLs = Set(records.filter { !$0.state.isTerminal }.flatMap { $0.request.sourceURLs })
         let visibleRecords = records.filter { record in
             guard !dismissedApplicationJobIDs.contains(record.id) else { return false }
             return !record.state.isTerminal || record.updatedAt >= applicationJobVisibilityStart
@@ -3013,7 +3015,12 @@ struct ContentView: View {
                             watchFolderPath = newPath
                         }
                     },
-                    onNewFiles: { urls in await addFilesFromWatchFolder(urls) }
+                    onNewFiles: { urls in await addFilesFromWatchFolder(urls) },
+                    protectedFiles: {
+                        Set(allConversionItems.map(\.url))
+                            .union(allConversionItems.compactMap { $0.imageSequenceConfig?.associatedAudioURL })
+                            .union(activeApplicationJobSourceURLs)
+                    }
                 )
 
                 if watchFolderToggleID == toggleID, !success {

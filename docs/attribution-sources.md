@@ -12,15 +12,17 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
 
 ## Source material
 
-- **FFmpeg 9.0.1:** a new build from retained dependency sources, with the original
-  invoked scripts, source identities and an adjusted `rebuild.sh` that rebuilds
-  existing source trees. Install Xcode with its Metal compiler, CMake, Meson,
-  Ninja and pkg-config, extract into a writable directory, then run the script.
-  Edit dependency sources before rebuilding to relink modified libraries. The
-  companion preserves the actual source trees; duplicate downloads, generated
-  binaries/build directories and libjxl test media are omitted. A separate
-  generated-input archive preserves 28 compiler-referenced generated source
-  files for audit; the replay recipe regenerates them from the source tree.
+- **FFmpeg 9.0.2:** the corrected full build includes the Metal YADIF teardown
+  correction. The original dependency-source and generated-input archives retain
+  the codec libraries reused by this build; a third correction archive preserves
+  the patched full FFmpeg tree, exact modified recipes, patch authorship/license,
+  and actual full-tree configuration. Extract the dependency archive first, then
+  overlay the correction archive and follow its `README-metal-source.md` to rebuild.
+  All three archives remain required in the source companion. Install Xcode with
+  its Metal compiler, CMake, Meson, Ninja, pkg-config, Python 3, and the usual build
+  utilities. Current evidence is in
+  `docs/provenance/4.5-local-builds/ffmpeg-9.0.2-metal/`; the earlier capture and its
+  explicitly scoped generated dependency inputs remain in `ffmpeg-9.0.2/`.
 - **rclone:** the reviewed minimal source revision with only the unused `serve s3`
   command removed; its S3 storage backend remains. The archive includes the
   exact source patch, Go toolchain/module inputs, notices and `rebuild.py`, plus

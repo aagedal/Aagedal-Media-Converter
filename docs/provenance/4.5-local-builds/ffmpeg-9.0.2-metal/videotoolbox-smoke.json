@@ -1,0 +1,26 @@
+{
+  "softwareFallbackAllowed": true,
+  "cases": [
+    {
+      "encoder": "h264_videotoolbox",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 16106,
+      "diagnostic": ""
+    },
+    {
+      "encoder": "hevc_videotoolbox",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 10004,
+      "diagnostic": ""
+    },
+    {
+      "encoder": "prores_videotoolbox",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 168153,
+      "diagnostic": ""
+    }
+  ]
+}

@@ -392,6 +392,52 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testSettingsSearchFindsSettingNamesAndCanBeCleared() throws {
+        launchApp()
+        defer { app.terminate() }
+        app.activate()
+        let settingsButton = element("toolbar.settings")
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 10))
+        settingsButton.click()
+        let root = element("settings.root")
+        if !root.waitForExistence(timeout: 3) {
+            // Other desktop UI work can take focus while a click is dispatched.
+            app.activate()
+            settingsButton.click()
+        }
+        XCTAssertTrue(root.waitForExistence(timeout: 10))
+        let search = element("settings.search")
+        XCTAssertTrue(search.exists)
+        search.click()
+        search.typeText("settling")
+        XCTAssertTrue(element("settings.tab.watchFolder").waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForValue("watchFolder", of: root, timeout: 5))
+        XCTAssertFalse(element("settings.tab.general").exists)
+        app.activate()
+        attachWindowScreenshot(named: "Settings search - file settling time")
+        element("settings.search.clear").click()
+        XCTAssertTrue(element("settings.tab.general").waitForExistence(timeout: 5))
+        search.click()
+        search.typeText("zzzzzzzz")
+        XCTAssertTrue(element("settings.search.empty").waitForExistence(timeout: 5))
+        element("settings.search.clear").click()
+        XCTAssertTrue(element("settings.tab.presets").waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testConversionButtonIsLocalizedInBothLanguages() throws {
+        for (language, locale, label) in [
+            ("en", "en_US", "Start Conversion"),
+            ("nb", "nb_NO", "Start konvertering")
+        ] {
+            launchApp(language: language, locale: locale)
+            XCTAssertTrue(element("toolbar.conversion").waitForExistence(timeout: 10))
+            XCTAssertEqual(element("toolbar.conversion").label, label)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testOpensSettingsAndMovesBetweenPanes() throws {
         launchApp()
         defer { app.terminate() }

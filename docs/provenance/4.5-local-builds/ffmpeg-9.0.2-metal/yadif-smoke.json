@@ -1,0 +1,42 @@
+{
+  "version": "9.0.2",
+  "cases": [
+    {
+      "pixelFormat": "nv12",
+      "mode": "send_frame",
+      "exitCode": 0,
+      "expectedFrames": 4,
+      "actualFrames": 4,
+      "metalDeviceReported": true,
+      "passed": true
+    },
+    {
+      "pixelFormat": "nv12",
+      "mode": "send_field",
+      "exitCode": 0,
+      "expectedFrames": 8,
+      "actualFrames": 8,
+      "metalDeviceReported": true,
+      "passed": true
+    },
+    {
+      "pixelFormat": "p010le",
+      "mode": "send_frame",
+      "exitCode": 0,
+      "expectedFrames": 4,
+      "actualFrames": 4,
+      "metalDeviceReported": true,
+      "passed": true
+    },
+    {
+      "pixelFormat": "p010le",
+      "mode": "send_field",
+      "exitCode": 0,
+      "expectedFrames": 8,
+      "actualFrames": 8,
+      "metalDeviceReported": true,
+      "passed": true
+    }
+  ],
+  "passed": true
+}

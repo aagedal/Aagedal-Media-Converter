@@ -1,0 +1,18 @@
+{
+  "previousSHA256": "04ad42326ff2dee1b5fb6d545f6206f9c4a409674295306b9287fef0f0e5339a",
+  "sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6",
+  "bytes": 60144480,
+  "mode": "0755",
+  "architecture": "arm64",
+  "minimumMacOS": "11.0",
+  "sourceVersion": "9.0.2",
+  "buildSystemRevision": "f30ebf3a77ba0539265afbf08f2af47f559177bb",
+  "workingTreeModified": true,
+  "dependencyReuse": "/Users/truls.aagedal/.t3/worktrees/ffmpeg-apple-silicon/t3-118d2ca2/compiled",
+  "sourceNote": "Signed artifact of the already preserved corrected full source build. Corresponding-source archives remain unchanged.",
+  "signature": "Developer ID Application: Truls Aagedal (3R5QGG9DW6); hardened runtime; secure timestamp",
+  "preSigningSHA256": "04ad42326ff2dee1b5fb6d545f6206f9c4a409674295306b9287fef0f0e5339a",
+  "cdhash": "e57dfafe46e4a3cece0514eb1d3a903e63e9fa73",
+  "notarizationStatus": "Accepted",
+  "signingEvidence": "signing/artifact.json"
+}

@@ -6,6 +6,63 @@ This is the prioritized improvement roadmap. `TODO.md` remains a small historica
 feature checklist; new improvement work should be tracked here with an owner or
 issue link when it starts.
 
+## 4.5.5 PR validation — 2026-10-13
+
+Owner: Codex. Updated the app’s Debug and Release marketing version to 4.5.5
+and build number to 600, and promoted the new changelog entries to that release.
+Before PR submission, the full unit-only suite passed all 1,291 tests with no
+failures, and all 117 Python release/validation-script tests passed. Localization,
+bundled-manifest freshness, changelog extraction, and diff whitespace checks pass.
+Earlier targeted UI checks and signed FFmpeg/Metal/Release packaging evidence
+remain recorded below. No public app release is part of this PR workflow.
+
+## FFmpeg 9.0.2 bundle continuation — 2026-10-13
+
+Owner: Codex. Replaced bundled FFmpeg with the supplied full ARM64 9.0.2 build,
+installed its signed/notarized artifact, refreshed active manifests, and preserved
+matching source archives/build evidence without overwriting the historical 4.4 records. The Release
+build and bundle audit pass, along with twelve encode/decode smoke cases, six
+app conversion regressions, and 26 dependency/source-packaging script tests.
+The corrected full build restores `yadif_videotoolbox`, with passing NV12/P010
+frame/field checks through EOF and Metal teardown. The original dependency
+source archives remain required alongside the new patched full-source archive.
+See [the validation record](docs/ffmpeg-9.0.2-validation-2026-10-13.md)
+for the source-capture scope, archive retention, and unperformed release checks.
+
+## Watch-folder safety and Settings usability — 2026-10-13
+
+Owner: Codex. Implemented the five improvements from the app review:
+
+- Watch-folder cleanup requires unchanged file size and modification time over
+  a quiet interval. The final inspection, queue-protection check, and move to Trash
+  share a main-actor turn. Queued files, active-job sources, and associated
+  image-sequence audio are protected, including sources accessed through symlinks.
+- File settling time is configurable at 5, 10, 15, 30, or 60 seconds, defaults to
+  10 seconds, and participates in settings sync. Readiness probes retry failures,
+  suppress repeated alerts, and run with bounded concurrency so healthy imports
+  can arrive while another probe is still pending. Changed files settle again.
+- Agent Access diagnostics use the shared subprocess runner with a 15-second
+  timeout, bounded output, and cancellation when leaving the pane or disabling
+  access. Preset responses are matched by JSON-RPC request ID.
+- Conversion-button accessibility labels and tooltips are localized in every
+  supported language. New translations outside English/Norwegian are marked for
+  language review, consistent with the existing catalog.
+- Settings supports search across pane names, setting labels, descriptions, and
+  transcription-engine options, with Command-F access and a clear/no-results
+  flow. The window can resize above its minimum dimensions.
+
+Validation: Debug app and test targets compiled with Xcode 27.0. All 41 selected
+unit tests and three UI tests passed together, covering cleanup safety, settling,
+probe retries/concurrency, diagnostics, sandbox-access lifecycle, subprocess
+output/timeout/cancellation, search, pane navigation, and English/Norwegian
+conversion labels. All 14 localization/MCP script tests and the localization
+catalog audit passed. The final Settings search screenshot was visually checked.
+The unsigned UI runner initially failed before bootstrapping; ad hoc signing
+resolved that. Concurrent desktop work interfered with a later screenshot run;
+explicit app activation and a focus retry produced a passing search run and the
+correct screenshot. The full unit suite, Release packaging, and live watch-folder
+copy/conversion scenarios were not run in this batch.
+
 ## Release split and completion rule
 
 4.4.0 is stable. **4.5 is in release documentation preparation**, with local

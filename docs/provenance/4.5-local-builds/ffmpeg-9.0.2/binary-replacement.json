@@ -1,0 +1,11 @@
+{
+  "previousSHA256": "25ee9d7ecd96c81b18cf5970e58201f4c94c4b1f5b4dea51c765aa28c639afd2",
+  "sha256": "9efa9e08558472806b57cd3ad846c5bfdb8d18efd6dc3fb9fa5cebf8a97f990f",
+  "bytes": 60126976,
+  "architecture": "arm64",
+  "minimumMacOS": "11.0",
+  "sourceVersion": "9.0.2",
+  "buildSystemRevision": "83c3c9a53fa7337f1378df0324e1ed927853e2ad",
+  "signature": "Build-provided signature; app packaging re-signs the helper",
+  "generatedConfigurationNote": "The source workspace was subsequently configured for the photo variant. The full binary configure flags are preserved in buildconf.txt; the replay recipe regenerates the full variant configuration."
+}

@@ -1,3 +1,12 @@
+# v.4.5.5
+
+- Updated bundled FFmpeg to the signed and notarized corrected full 9.0.2 build, restoring Metal-backed `yadif_videotoolbox` deinterlacing with the teardown fix. Refreshed dependency notices and corresponding-source records.
+
+- Watch-folder imports and cleanup now wait for unchanged file size and modification time. Choose a settling time of 5–60 seconds in Settings; the default is 10 seconds. Unreadable files are retried automatically, and queued sources are protected from cleanup.
+- Added Settings search for section and setting names, with Command-F access, and made the Settings window resizable.
+- Localized the conversion button’s accessibility labels and tooltips in all supported languages.
+- Improved Agent Access connection diagnostics with shared subprocess timeout, cancellation, and output handling.
+
 # v.4.5.3
 
 - New website downloads embed the available post text or video description and the source page link in the file's metadata, including audio-only downloads. Metadata support and visibility depend on the source website, file format, and player. Existing downloads are not updated automatically.

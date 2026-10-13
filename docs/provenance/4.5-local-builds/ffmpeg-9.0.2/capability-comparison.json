@@ -1,0 +1,34 @@
+{
+  "encoders": {
+    "removed": [],
+    "added": [],
+    "previousCount": 200,
+    "currentCount": 200
+  },
+  "decoders": {
+    "removed": [],
+    "added": [],
+    "previousCount": 531,
+    "currentCount": 531
+  },
+  "filters": {
+    "removed": [
+      "yadif_videotoolbox"
+    ],
+    "added": [],
+    "previousCount": 485,
+    "currentCount": 484
+  },
+  "muxers": {
+    "removed": [],
+    "added": [],
+    "previousCount": 183,
+    "currentCount": 183
+  },
+  "demuxers": {
+    "removed": [],
+    "added": [],
+    "previousCount": 361,
+    "currentCount": 361
+  }
+}

@@ -254,6 +254,7 @@ enum SettingsSyncKeys {
         AppConstants.watchFolderDeleteDurationValueKey,
         AppConstants.watchFolderDeleteDurationUnitKey,
         AppConstants.watchFolderKeepAwakeKey,
+        AppConstants.watchFolderSettlingSecondsKey,
         AppConstants.previewCacheCleanupPolicyKey,
 
         // Output handling (modes/names only — not absolute folder paths)
