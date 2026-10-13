@@ -899,7 +899,7 @@ enum AppConstants {
     static let analyticsExportFormatKey = "analyticsExportFormat"
     static let analyticsAutoRunKey = "analyticsAutoRunAfterConversion"
     static let defaultAnalyticsEnabledMetrics: [String] = ["vmaf"]
-    static let defaultAnalyticsVMAFModel = "vmaf_v0.6.1"
+    static let defaultAnalyticsVMAFModel = VMAFModel.defaultModel.rawValue
     static let defaultAnalyticsExportFormat = "json"
 
     static let analyticsAutoExportKey = "analyticsAutoExport"

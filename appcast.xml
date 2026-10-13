@@ -528,5 +528,24 @@
         </item>
 
 
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.6</title>
+            <pubDate>Tue, 13 Oct 2026 16:38:02 +0200</pubDate>
+            <sparkle:version>601</sparkle:version>
+            <sparkle:shortVersionString>4.5.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.6/Aagedal_Media_Converter_4-5-6.zip"
+                length="121815244"
+                type="application/octet-stream"
+                sparkle:edSignature="EiJDUonaK4EAPPzL0O2k4a7qq4tYqTx5dME+N3TLrk7V4MWZHWiP09IdcMMas7qmpI1LRjBwYQ2nOCDT8+XgBw==" />
+            <description><![CDATA[
+                <ul>
+                <li>Added VMAF v1.0.16 models for standard, phone, and 4K viewing, including 50/60 fps variants. New installations use the standard v1 model by default; saved model selections are preserved, and v0 models remain available for comparison with earlier scores.</li>
+                <li>VMAF v1 analysis processes both inputs at 10-bit precision for banding and chroma assessment. Uses the models already included in the bundled FFmpeg; no bundled binaries or licenses changed.</li>
+                </ul>
+            ]]></description>
+        </item>
+
     </channel>
 </rss>
