@@ -503,5 +503,30 @@
             ]]></description>
         </item>
 
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.5</title>
+            <pubDate>Tue, 13 Oct 2026 14:23:57 +0200</pubDate>
+            <sparkle:version>600</sparkle:version>
+            <sparkle:shortVersionString>4.5.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.5/Aagedal_Media_Converter_4-5-5.zip"
+                length="121808460"
+                type="application/octet-stream"
+                sparkle:edSignature="Rg4q8rmvAz8GyzpH+neqgeBpK6yUsvVH9Iio6bitdzdK+5Le6e0VpWWCxLjFigVSjw/JfvIeP0eR+rHnCTi6CA==" />
+            <description><![CDATA[
+                <ul>
+                <li>Added source-prefilled metadata editing, with a master metadata switch and per-preset preservation settings. Improved access to files on offline volumes so unavailable bookmarks do not freeze imports.</li>
+                <li>Updated bundled FFmpeg to the signed and notarized corrected full 9.0.2 build, restoring Metal-backed <code>yadif_videotoolbox</code> deinterlacing with the teardown fix. Refreshed dependency notices and corresponding-source records.</li>
+                <li>Watch-folder imports and cleanup now wait for unchanged file size and modification time. Choose a settling time of 5–60 seconds in Settings; the default is 10 seconds. Unreadable files are retried automatically, and queued sources are protected from cleanup.</li>
+                <li>Added Settings search for section and setting names, with Command-F access, and made the Settings window resizable.</li>
+                <li>Localized the conversion button’s accessibility labels and tooltips in all supported languages.</li>
+                <li>Improved Agent Access connection diagnostics with shared subprocess timeout, cancellation, and output handling.</li>
+                <li>Fixed a recursive encoding crash in optimized Release builds by preserving converter actor isolation through cancellation handling.</li>
+                </ul>
+            ]]></description>
+        </item>
+
+
     </channel>
 </rss>

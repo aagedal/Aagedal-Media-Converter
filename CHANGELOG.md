@@ -1,11 +1,13 @@
 # v.4.5.5
 
+- Added source-prefilled metadata editing, with a master metadata switch and per-preset preservation settings. Improved access to files on offline volumes so unavailable bookmarks do not freeze imports.
 - Updated bundled FFmpeg to the signed and notarized corrected full 9.0.2 build, restoring Metal-backed `yadif_videotoolbox` deinterlacing with the teardown fix. Refreshed dependency notices and corresponding-source records.
 
 - Watch-folder imports and cleanup now wait for unchanged file size and modification time. Choose a settling time of 5–60 seconds in Settings; the default is 10 seconds. Unreadable files are retried automatically, and queued sources are protected from cleanup.
 - Added Settings search for section and setting names, with Command-F access, and made the Settings window resizable.
 - Localized the conversion button’s accessibility labels and tooltips in all supported languages.
 - Improved Agent Access connection diagnostics with shared subprocess timeout, cancellation, and output handling.
+- Fixed a recursive encoding crash in optimized Release builds by preserving converter actor isolation through cancellation handling.
 
 # v.4.5.3
 

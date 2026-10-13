@@ -7664,11 +7664,36 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
 
         await runner.waitUntilStarted()
-        XCTAssertTrue(control.cancel())
+        // The runner can start before the service installs its cancellation action.
+        // A queued cancellation is valid too; verify the download result below.
+        _ = control.cancel()
 
         do {
             _ = try await downloadTask.value
             XCTFail("Expected user cancellation")
+        } catch let error as YTDLPError {
+            guard case .cancelled = error else {
+                return XCTFail("Expected cancelled, got \(error)")
+            }
+        }
+    }
+
+    func testYTDLPDownloadControlMapsCancellationRequestedBeforeStartup() async throws {
+        let service = YTDLPService(
+            updateService: StubYTDLPUpdateService(path: "/bin/sh"),
+            subprocessRunner: BlockingSubprocessRunner()
+        )
+        let control = YTDLPDownloadControl()
+        XCTAssertFalse(control.cancel())
+
+        do {
+            _ = try await service.download(
+                url: "https://example.com/watch?v=private",
+                outputFolder: FileManager.default.temporaryDirectory,
+                control: control,
+                progress: { _, _, _ in }
+            )
+            XCTFail("Expected queued user cancellation")
         } catch let error as YTDLPError {
             guard case .cancelled = error else {
                 return XCTFail("Expected cancelled, got \(error)")
@@ -7758,7 +7783,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
 
         await runner.waitUntilStarted()
-        XCTAssertTrue(control.stopLiveRecording())
+        _ = control.stopLiveRecording()
 
         do {
             _ = try await downloadTask.value
