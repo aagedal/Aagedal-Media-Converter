@@ -1,5 +1,9 @@
 # Keyboard Shortcuts
 
+In **Settings → Shortcuts**, click a binding under **Customize keyboard shortcuts** to record a new combination for nine main-window actions. Use Command, Control, or Option with a letter, number, or Return. Conflicting app commands are reserved; Escape cancels recording. Use **Use Default** for one action or **Restore Defaults** for all nine. Bindings apply immediately, persist on this Mac, and follow physical key positions shown with U.S. key labels.
+
+The list below shows the default bindings. Player, editor, and navigation shortcuts currently remain fixed.
+
 
 ## Main Window
 

@@ -8,10 +8,20 @@
 // (at your option) any later version.
 
 import SwiftUI
+import AppKit
 
 struct ShortcutsSettingsView: View {
+    @AppStorage(KeyboardShortcutSettings.storageKey) private var storedBindings = Data()
+    @State private var editingAction: MainWindowShortcut?
     @State private var searchText = ""
     @FocusState private var searchFocused: Bool
+
+    private var matchingActions: [MainWindowShortcut] {
+        MainWindowShortcut.allCases.filter {
+            searchText.isEmpty || String(localized: String.LocalizationValue($0.title)).localizedStandardContains(searchText)
+                || KeyboardShortcutSettings().binding(for: $0).display.localizedStandardContains(searchText)
+        }
+    }
 
     private var filteredGroups: [ShortcutGroup] {
         guard !searchText.isEmpty else { return [] }
@@ -19,60 +29,78 @@ struct ShortcutsSettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+        Form {
+            Section {
                 TextField("Filter shortcuts…", text: $searchText)
-                    .textFieldStyle(.plain)
+                    .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
                     .focused($searchFocused)
-                if !searchText.isEmpty {
-                    Button { searchText = "" } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+                    .accessibilityIdentifier("settings.shortcuts.search")
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color(NSColor.textBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 0.5)
-            )
-            .contentShape(Rectangle())
-            .onTapGesture { searchFocused = true }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
 
-            Form {
-                if !searchText.isEmpty && filteredGroups.isEmpty {
-                    Section {
-                        Text("No shortcuts match \"\(searchText)\"")
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
+            Section("Customize keyboard shortcuts") {
+                Text("Customize main-window actions. Click a shortcut, then press a new key combination. Player, editor, and navigation shortcuts are listed below.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                ForEach(matchingActions) { action in
+                    HStack {
+                        Text(LocalizedStringKey(action.title))
+                        Spacer()
+                        Button { editingAction = action } label: {
+                            KeyboardShortcutBadge(keys: KeyboardShortcutSettings().binding(for: action).display)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Change shortcut for \(String(localized: String.LocalizationValue(action.title)))")
+                        .accessibilityIdentifier("settings.shortcuts.\(action.rawValue)")
+                        .accessibilityValue(KeyboardShortcutSettings().binding(for: action).display)
                     }
-                } else {
-                    ForEach(groupsToDisplay, id: \.title) { group in
-                        Section(header: Text(LocalizedStringKey(group.title))) {
-                            VStack(spacing: 8) {
-                                ForEach(group.shortcuts) { shortcut in
-                                    ShortcutRow(shortcut: shortcut)
-                                }
-                            }
-                            .padding(8)
+                }
+                Text("Shortcuts follow physical key positions, shown with U.S. key labels. Changes are saved on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Restore Defaults") { KeyboardShortcutSettings().reset() }
+                    .disabled(storedBindings.isEmpty)
+            }
+
+            if !searchText.isEmpty && filteredGroups.isEmpty && matchingActions.isEmpty {
+                Section {
+                    Text("No shortcuts match \"\(searchText)\"")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 20)
+                }
+            } else {
+                ForEach(groupsToDisplay, id: \.title) { group in
+                    Section(header: Text(LocalizedStringKey(group.title))) {
+                        ForEach(group.shortcuts) { shortcut in
+                            ShortcutRow(shortcut: shortcut)
                         }
                     }
                 }
             }
-            .formStyle(.grouped)
         }
+        .formStyle(.grouped)
+        .sheet(item: $editingAction) { action in
+            ShortcutRecorderSheet(action: action, reserved: Self.reservedShortcuts)
+        }
+    }
+
+    private static func normalized(_ keys: String) -> String {
+        keys.lowercased().components(separatedBy: " + ").sorted().joined(separator: "+")
+    }
+
+    private static var reservedShortcuts: Set<String> {
+        let customizable = Set(MainWindowShortcut.allCases.map { normalized($0.defaultBinding.display) })
+        var keys = allGroups.flatMap(\.shortcuts).map { normalized($0.keys) }
+            .filter { !customizable.contains($0) }
+        // Standard macOS editing and window commands, plus shortcuts expressed as ranges in the reference.
+        keys += ["Cmd + Q", "Cmd + W", "Cmd + H", "Cmd + M", "Cmd + Z", "Cmd + Shift + Z",
+                 "Cmd + X", "Cmd + C", "Cmd + V", "Cmd + A", "Cmd + Shift + A"].map(normalized)
+        for number in 0...9 {
+            keys.append(normalized("Cmd + \(number)"))
+            keys.append(normalized("Cmd + Option + \(number)"))
+        }
+        return Set(keys)
     }
 
     private var groupsToDisplay: [ShortcutGroup] {
@@ -86,14 +114,8 @@ struct ShortcutsSettingsView: View {
             ShortcutItem(keys: "Cmd + N", description: "New encoding group"),
             ShortcutItem(keys: "Cmd + I", description: "Open import dialogue"),
             ShortcutItem(keys: "Cmd + Shift + I", description: "Import camera card"),
-            ShortcutItem(keys: "Cmd + D", description: "Show URL input overlay (for downloading)"),
-            ShortcutItem(keys: "Cmd + P", description: "Open preset quick-select overlay"),
-            ShortcutItem(keys: "Option + F", description: "Select output folder"),
-            ShortcutItem(keys: "Option + W", description: "Toggle watch folder"),
         ]),
         ShortcutGroup(title: "Conversion", shortcuts: [
-            ShortcutItem(keys: "Cmd + Return", description: "Start/Stop encoding"),
-            ShortcutItem(keys: "Option + M", description: "Toggle merging of clips"),
             ShortcutItem(keys: "Cmd + 1-9, 0", description: "Instantly select preset (0 = 10th)"),
         ]),
         ShortcutGroup(title: "Queue Navigation", shortcuts: [
@@ -109,7 +131,6 @@ struct ShortcutsSettingsView: View {
         ShortcutGroup(title: "Item Management", shortcuts: [
             ShortcutItem(keys: "Cmd + Backspace", description: "Remove selected items from queue"),
             ShortcutItem(keys: "Cmd + R", description: "Reset conversion status of selected items"),
-            ShortcutItem(keys: "Cmd + Shift + R", description: "Reset conversion status of all items"),
             ShortcutItem(keys: "Ctrl + D", description: "Toggle metadata date tag on selected items"),
             ShortcutItem(keys: "Ctrl + M", description: "Toggle mute on selected items"),
             ShortcutItem(keys: "Cmd + U", description: "Toggle upload on selected items"),
@@ -118,9 +139,7 @@ struct ShortcutsSettingsView: View {
         ]),
         ShortcutGroup(title: "Main Window – Other", shortcuts: [
             ShortcutItem(keys: "Cmd + ,", description: "Open Settings"),
-            ShortcutItem(keys: "Cmd + Shift + C", description: "Open Capture Mode"),
             ShortcutItem(keys: "Ctrl + R", description: "Show new random tip"),
-            ShortcutItem(keys: "Ctrl + K", description: "Open Shortcuts help"),
         ]),
         ShortcutGroup(title: "Single Item Selected in Main Window", shortcuts: [
             ShortcutItem(keys: "Cmd + T", description: "Open trim view"),
@@ -215,7 +234,7 @@ struct ShortcutsSettingsView: View {
             ShortcutItem(keys: "Ctrl + 9", description: "Transcription"),
             ShortcutItem(keys: "Ctrl + 0", description: "Analytics"),
             ShortcutItem(keys: "Ctrl + A", description: "Updates"),
-            ShortcutItem(keys: "Ctrl + K", description: "Shortcuts (also works from main window)"),
+            ShortcutItem(keys: "Ctrl + K", description: "Shortcuts"),
         ]),
         ShortcutGroup(title: "Any Overlay View", shortcuts: [
             ShortcutItem(keys: "Escape", description: "Close the overlay (settings automatically saved)"),
@@ -283,14 +302,12 @@ private struct ShortcutRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            KeyboardShortcutBadge(keys: shortcut.keys)
-                .frame(width: 180, alignment: .leading)
-
             Text(LocalizedStringKey(shortcut.description))
                 .font(.body)
                 .foregroundColor(.secondary)
 
-            Spacer()
+            Spacer(minLength: 12)
+            KeyboardShortcutBadge(keys: shortcut.keys)
         }
     }
 }
@@ -370,4 +387,90 @@ private struct KeyCap: View {
 #Preview {
     ShortcutsSettingsView()
         .frame(width: 550, height: 600)
+}
+
+/// Captures only while its sheet is key, and consumes commands before menus can execute them.
+private struct ShortcutRecorderSheet: View {
+    let action: MainWindowShortcut
+    let reserved: Set<String>
+    @Environment(\.dismiss) private var dismiss
+    @State private var message = String(localized: "Press a letter, number, or Return with Command, Control, or Option. Escape cancels.")
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Change Keyboard Shortcut").font(.headline)
+            Text(LocalizedStringKey(action.title))
+            KeyboardShortcutBadge(keys: KeyboardShortcutSettings().binding(for: action).display)
+            Text(message).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Use Default") {
+                    KeyboardShortcutSettings().set(action.defaultBinding, for: action)
+                    dismiss()
+                }
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+            }
+        }
+        .padding(24)
+        .frame(width: 440)
+        .background(ShortcutEventRecorder { event in
+            if event.keyCode == 53 { dismiss(); return }
+            let binding = ShortcutBinding(keyCode: event.keyCode, modifiers: event.modifierFlags)
+            guard binding.isValid else {
+                message = String(localized: "Use a letter, number, or Return with Command, Control, or Option.")
+                return
+            }
+            let normalized = binding.display.lowercased().components(separatedBy: " + ").sorted().joined(separator: "+")
+            guard !reserved.contains(normalized) else {
+                message = String(localized: "This combination is reserved for another app or system command. Choose another shortcut.")
+                return
+            }
+            let settings = KeyboardShortcutSettings()
+            if let conflict = settings.conflict(for: binding, action: action) {
+                message = String(localized: "This combination is reserved for “\(String(localized: String.LocalizationValue(conflict.title)))”. Choose another shortcut.")
+                return
+            }
+            settings.set(binding, for: action)
+            dismiss()
+        })
+    }
+}
+
+private struct ShortcutEventRecorder: NSViewRepresentable {
+    var onKey: (NSEvent) -> Void
+
+    func makeNSView(context: Context) -> RecorderView {
+        let view = RecorderView()
+        view.onKey = onKey
+        return view
+    }
+
+    func updateNSView(_ view: RecorderView, context: Context) { view.onKey = onKey }
+    static func dismantleNSView(_ view: RecorderView, coordinator: ()) { view.stop() }
+
+    final class RecorderView: NSView {
+        var onKey: ((NSEvent) -> Void)?
+        private var monitor: Any?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            stop()
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, let window = self.window, window.isKeyWindow,
+                      event.window === window else { return event }
+                // Keep Tab and Space available for keyboard navigation and button activation.
+                if event.keyCode == 48 || (event.keyCode == 49 && event.modifierFlags.intersection(ShortcutBinding.supportedModifiers).isEmpty) {
+                    return event
+                }
+                if !event.isARepeat { self.onKey?(event) }
+                return nil
+            }
+        }
+
+        func stop() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
+    }
 }

@@ -194,8 +194,6 @@ struct AgentAccessSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Local Agent Access")
-        .padding(.horizontal, 12)
         .alert("Could not save folder access", isPresented: Binding(
             get: { folderAccessError != nil },
             set: { if !$0 { folderAccessError = nil } }
