@@ -8,10 +8,10 @@
       "sha256": "1a020a15b0054bf684cb64f90bc8342281e38f4c731a9ef69a2afe849c6e89f0"
     },
     {
-      "component": "AVM 2026-10-12",
-      "path": "build/attribution/avm-2026-10-12-source.tar.gz",
-      "bytes": 179361605,
-      "sha256": "91528e03132ef0054f9a8b9dbf4a78bbd577e2515544c665b4e10c158731144c"
+      "component": "AVM av2-enc + main 2026-10-14",
+      "path": "build/attribution/avm-2026-10-14-integrated-source.tar.gz",
+      "bytes": 179598688,
+      "sha256": "21bfed7e825222d29eb98eb778431b4f53df007794e4af19b16744f24387e908"
     },
     {
       "component": "SwiftMediaMetadata 3.0.1",

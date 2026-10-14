@@ -124,10 +124,10 @@
       "sha256": "1a020a15b0054bf684cb64f90bc8342281e38f4c731a9ef69a2afe849c6e89f0"
     },
     {
-      "component": "AVM 2026-10-12",
-      "path": "build/attribution/avm-2026-10-12-source.tar.gz",
-      "bytes": 179361605,
-      "sha256": "91528e03132ef0054f9a8b9dbf4a78bbd577e2515544c665b4e10c158731144c"
+      "component": "AVM av2-enc + main 2026-10-14",
+      "path": "build/attribution/avm-2026-10-14-integrated-source.tar.gz",
+      "bytes": 179598688,
+      "sha256": "21bfed7e825222d29eb98eb778431b4f53df007794e4af19b16744f24387e908"
     },
     {
       "component": "SwiftMediaMetadata 3.0.1",
@@ -796,8 +796,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/avmdec",
-      "bytes": 12739760,
-      "sha256": "ac9efc8811b011ec11eb975127f6e1ff695e5d0a812ea660a80a99173b3a8e69",
+      "bytes": 12954080,
+      "sha256": "a4523761a3647e384d5112257c9df7683a8fb50143e0310a62e60dd6715e052a",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -808,18 +808,18 @@
         "/usr/lib/libc++.1.dylib"
       ],
       "component": "Alliance for Open Media reference tools",
-      "version": "1.0.0-175-g0da4c3647",
+      "version": "1.0.0-445-g14342caad",
       "license": "BSD-3-Clause-Clear",
       "licenseFile": "Licenses/avm-LICENSE.txt",
       "requiredSourceComponents": [
         "AVM Eigen",
-        "AVM 2026-10-12"
+        "AVM av2-enc + main 2026-10-14"
       ]
     },
     {
       "path": "Aagedal Media Converter/Binaries/avmenc",
-      "bytes": 12773984,
-      "sha256": "94e9f52004aa02eec98382c61aaf77ab005da9af641b13b88480967b89d54944",
+      "bytes": 12988304,
+      "sha256": "8d7d4a0994a1421c9cd74cb492b963cf7821a643b46527aebd2f0fcd9d309a6e",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -830,12 +830,12 @@
         "/usr/lib/libc++.1.dylib"
       ],
       "component": "Alliance for Open Media reference tools",
-      "version": "1.0.0-175-g0da4c3647",
+      "version": "1.0.0-445-g14342caad",
       "license": "BSD-3-Clause-Clear",
       "licenseFile": "Licenses/avm-LICENSE.txt",
       "requiredSourceComponents": [
         "AVM Eigen",
-        "AVM 2026-10-12"
+        "AVM av2-enc + main 2026-10-14"
       ]
     },
     {
@@ -1284,7 +1284,7 @@
     {
       "path": "Licenses/avm-LICENSE.txt",
       "bytes": 527561,
-      "sha256": "e6feed386c35d47c6a7f3fffaa522e59b64ec9671dc1a5b9986bb9f3b216a0b5"
+      "sha256": "934b783f691744b0a16e1c07d1b70853fa3597b937f4dd2678105057a29b7c11"
     },
     {
       "path": "Licenses/bmx-LICENSE.txt",
@@ -1345,7 +1345,7 @@
   "summary": {
     "toolCount": 12,
     "libraryCount": 12,
-    "totalBytes": 159455440,
+    "totalBytes": 159884080,
     "entriesMissingLocalLicenseFile": []
   }
 }

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Rebuild the pinned AV2 reference tools; signing and installation are separate.
+# Rebuild the pinned AVM encoder/main integration; installation and signing are separate.
 set -euo pipefail
 
-avm_revision=0da4c36474f8d1952bbc54e3ccf833d5f0d2280c
+avm_revision=14342caad234d23f717dfd058fc17bcfb502a244
 if [[ $# != 2 ]]; then
     echo "Usage: $0 AVM_SOURCE_DIR BUILD_DIR" >&2
     exit 2

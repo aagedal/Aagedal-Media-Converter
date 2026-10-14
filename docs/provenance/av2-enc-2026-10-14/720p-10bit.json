@@ -1,0 +1,236 @@
+{
+  "status": "complete",
+  "host": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "settings": {
+    "baseline_dir": "Aagedal Media Converter/Binaries",
+    "candidate_dir": "/private/tmp/amc-avm-encoder/build_arm64",
+    "output_dir": "/private/tmp/amc-av2-enc-720-10bit-evaluation-restart",
+    "input": null,
+    "width": 1280,
+    "height": 720,
+    "frames": 4,
+    "fps": 24,
+    "depth": 10,
+    "qp": [
+      160
+    ],
+    "speed": 9,
+    "threads": 2,
+    "repeats": 1,
+    "timeout": 900,
+    "variants": [
+      "good",
+      "low-complexity",
+      "realtime"
+    ]
+  },
+  "tools": {
+    "baseline": {
+      "avmenc": {
+        "path": "/Users/truls.aagedal/.t3/worktrees/Aagedal-Media-Converter/t3-99da9bde/Aagedal Media Converter/Binaries/avmenc",
+        "sha256": "94e9f52004aa02eec98382c61aaf77ab005da9af641b13b88480967b89d54944",
+        "version": [
+          "AOMedia Project AV2 Encoder 1.0.0-175-g0da4c3647 (default)"
+        ]
+      },
+      "avmdec": {
+        "path": "/Users/truls.aagedal/.t3/worktrees/Aagedal-Media-Converter/t3-99da9bde/Aagedal Media Converter/Binaries/avmdec",
+        "sha256": "ac9efc8811b011ec11eb975127f6e1ff695e5d0a812ea660a80a99173b3a8e69",
+        "version": [
+          "AOMedia Project AV2 Decoder 1.0.0-175-g0da4c3647"
+        ]
+      }
+    },
+    "candidate": {
+      "avmenc": {
+        "path": "/private/tmp/amc-avm-encoder/build_arm64/avmenc",
+        "sha256": "b6743b45f0c7e51cbc282e34ee9f5deff4d4977da9a8597e69e6957d3af4fe3a",
+        "version": [
+          "AOMedia Project AV2 Encoder 1.0.0-430-gb38429d1e (default)"
+        ]
+      },
+      "avmdec": {
+        "path": "/private/tmp/amc-avm-encoder/build_arm64/avmdec",
+        "sha256": "df33e884711a0c95c20fd5d4d0ea0f8bec2e47cba6b91ba686992e62927ec686",
+        "version": [
+          "AOMedia Project AV2 Decoder 1.0.0-430-gb38429d1e"
+        ]
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "main-qp160-run1",
+      "variant": "main",
+      "qp": 160,
+      "command": [
+        "/Users/truls.aagedal/.t3/worktrees/Aagedal-Media-Converter/t3-99da9bde/Aagedal Media Converter/Binaries/avmenc",
+        "--ivf",
+        "-w",
+        "1280",
+        "-h",
+        "720",
+        "-b",
+        "10",
+        "--input-bit-depth=10",
+        "--i420",
+        "--fps=24/1",
+        "--end-usage=q",
+        "--qp=160",
+        "--cpu-used=9",
+        "-t",
+        "2",
+        "--lag-in-frames=0",
+        "--limit=4",
+        "-o",
+        "/private/tmp/amc-av2-enc-720-10bit-evaluation-restart/main-qp160-run1.ivf",
+        "-"
+      ],
+      "encodeSeconds": 114.34,
+      "fps": 0.035,
+      "ivfBytes": 19161,
+      "kbpsIncludingIVF": 919.728,
+      "decodeSeconds": {
+        "main": 0.167,
+        "candidate": 0.148
+      },
+      "decoderReconstructionsIdentical": true,
+      "decodedSHA256": "1795a5f730b6de87def181b6df3afaa13a7d9b0ba20b60eb3f72103e23217a50",
+      "psnr": 41.44164,
+      "ssim": 0.991924
+    },
+    {
+      "name": "av2-enc-good-qp160-run1",
+      "variant": "av2-enc-good",
+      "qp": 160,
+      "command": [
+        "/private/tmp/amc-avm-encoder/build_arm64/avmenc",
+        "--ivf",
+        "-w",
+        "1280",
+        "-h",
+        "720",
+        "-b",
+        "10",
+        "--input-bit-depth=10",
+        "--i420",
+        "--fps=24/1",
+        "--end-usage=q",
+        "--qp=160",
+        "--cpu-used=9",
+        "-t",
+        "2",
+        "--lag-in-frames=0",
+        "--limit=4",
+        "-o",
+        "/private/tmp/amc-av2-enc-720-10bit-evaluation-restart/av2-enc-good-qp160-run1.ivf",
+        "-"
+      ],
+      "encodeSeconds": 27.424,
+      "fps": 0.146,
+      "ivfBytes": 19198,
+      "kbpsIncludingIVF": 921.504,
+      "decodeSeconds": {
+        "main": 0.183,
+        "candidate": 0.212
+      },
+      "decoderReconstructionsIdentical": true,
+      "decodedSHA256": "627e34aa321b1e5c71b5f1a7b4f76b7e805abf40b794af8cd43b9bfa03dcd20a",
+      "psnr": 41.261133,
+      "ssim": 0.991473
+    },
+    {
+      "name": "av2-enc-low-complexity-qp160-run1",
+      "variant": "av2-enc-low-complexity",
+      "qp": 160,
+      "command": [
+        "/private/tmp/amc-avm-encoder/build_arm64/avmenc",
+        "--ivf",
+        "-w",
+        "1280",
+        "-h",
+        "720",
+        "-b",
+        "10",
+        "--input-bit-depth=10",
+        "--i420",
+        "--fps=24/1",
+        "--end-usage=q",
+        "--qp=160",
+        "--cpu-used=9",
+        "-t",
+        "2",
+        "--lag-in-frames=0",
+        "--limit=4",
+        "--enable-low-complexity-decode=2",
+        "-o",
+        "/private/tmp/amc-av2-enc-720-10bit-evaluation-restart/av2-enc-low-complexity-qp160-run1.ivf",
+        "-"
+      ],
+      "encodeSeconds": 26.934,
+      "fps": 0.149,
+      "ivfBytes": 21290,
+      "kbpsIncludingIVF": 1021.92,
+      "decodeSeconds": {
+        "main": 0.094,
+        "candidate": 0.085
+      },
+      "decoderReconstructionsIdentical": true,
+      "decodedSHA256": "c21318061adb6e571fd8a5b9bf890877fe0d0debd21c18d2ea8d19f0a3c5e1ac",
+      "psnr": 41.080087,
+      "ssim": 0.991474
+    },
+    {
+      "name": "av2-enc-realtime-qp160-run1",
+      "variant": "av2-enc-realtime",
+      "qp": 160,
+      "command": [
+        "/private/tmp/amc-avm-encoder/build_arm64/avmenc",
+        "--ivf",
+        "-w",
+        "1280",
+        "-h",
+        "720",
+        "-b",
+        "10",
+        "--input-bit-depth=10",
+        "--i420",
+        "--fps=24/1",
+        "--end-usage=q",
+        "--qp=160",
+        "--cpu-used=9",
+        "-t",
+        "2",
+        "--lag-in-frames=0",
+        "--limit=4",
+        "--rt",
+        "-o",
+        "/private/tmp/amc-av2-enc-720-10bit-evaluation-restart/av2-enc-realtime-qp160-run1.ivf",
+        "-"
+      ],
+      "encodeSeconds": 0.619,
+      "fps": 6.462,
+      "ivfBytes": 64034,
+      "kbpsIncludingIVF": 3073.632,
+      "decodeSeconds": {
+        "main": 0.117,
+        "candidate": 0.085
+      },
+      "decoderReconstructionsIdentical": true,
+      "decodedSHA256": "45f9464d47e6c3821110b00c416865b96c8f50db50804a699c603c2302ebeeee",
+      "psnr": 45.193426,
+      "ssim": 0.995843
+    }
+  ],
+  "reference": {
+    "nb_read_frames": 4,
+    "width": 1280,
+    "height": 720,
+    "pix_fmt": "yuv420p10le",
+    "sha256": "786f5167e901a43803568135d6fafd0aac6e0661bb707dbb4bda5b713d437d13"
+  },
+  "sourceRevisions": {
+    "baseline": "0da4c36474f8d1952bbc54e3ccf833d5f0d2280c",
+    "candidate": "b38429d1ea69a3d0e17d4b8ae2495ff0b30b40a0"
+  }
+}

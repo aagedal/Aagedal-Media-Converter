@@ -1,0 +1,16 @@
+{
+  "sourceArchive": "build/attribution/avm-2026-10-14-integrated-source.tar.gz",
+  "buildSucceeded": true,
+  "tools": {
+    "avmenc": {
+      "sha256": "ccd5338fe1babcf2074f5bd1d084217e207417b8f11116ff39400abe705298b7",
+      "version": "1.0.0-445-g14342caad"
+    },
+    "avmdec": {
+      "sha256": "fa1ba52906d63ddf8071c3866dc5e15ed1fb4942fd7e60727becba838344eb37",
+      "version": "1.0.0-445-g14342caad"
+    }
+  },
+  "decoded10BitIdentical": true,
+  "offlineEncoderSmokePassed": true
+}

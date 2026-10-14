@@ -1,0 +1,99 @@
+{
+  "filter": "*Txfm*:*Tcq*:*NoAssertion*:-*Speed*",
+  "tests": 10391,
+  "failures": 0,
+  "disabled": 0,
+  "xmlSHA256": "50e6a09c5c76f964defc8878560f705fe102bd789304312cf25de64f005aee80",
+  "suites": [
+    {
+      "name": "InvTxfmVariantExtreme",
+      "tests": "2",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.",
+      "timestamp": "2026-10-14T16:32:02.939"
+    },
+    {
+      "name": "NoAssertionFailure",
+      "tests": "1",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.006",
+      "timestamp": "2026-10-14T16:32:02.939"
+    },
+    {
+      "name": "FwdTxfmVariantExtreme",
+      "tests": "3",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.",
+      "timestamp": "2026-10-14T16:32:02.945"
+    },
+    {
+      "name": "NEON/AV2InvSecTxfmTest",
+      "tests": "1",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.",
+      "timestamp": "2026-10-14T16:32:02.946"
+    },
+    {
+      "name": "Variants/InvTxfmVariantTest",
+      "tests": "2580",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.041",
+      "timestamp": "2026-10-14T16:32:02.946"
+    },
+    {
+      "name": "Variants/FwdTxfmVariantTest",
+      "tests": "7800",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.103",
+      "timestamp": "2026-10-14T16:32:02.988"
+    },
+    {
+      "name": "NEON/TcqUpdateNbrDiagonalTest",
+      "tests": "2",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.137",
+      "timestamp": "2026-10-14T16:32:03.092"
+    },
+    {
+      "name": "NEON/TcqLoopDiagonalSt8Test",
+      "tests": "1",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.469",
+      "timestamp": "2026-10-14T16:32:03.229"
+    },
+    {
+      "name": "NEON/AV2FwdSecTxfmTest",
+      "tests": "1",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.",
+      "timestamp": "2026-10-14T16:32:03.699"
+    }
+  ]
+}
