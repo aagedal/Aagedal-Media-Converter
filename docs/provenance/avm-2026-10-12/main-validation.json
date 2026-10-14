@@ -1,0 +1,41 @@
+{
+  "encoder": "/private/tmp/amc-avm-update/build_arm64/avmenc",
+  "cases": [
+    {
+      "name": "new-8-q",
+      "seconds": 10.035,
+      "bytes": 3878
+    },
+    {
+      "name": "new-8-vbr",
+      "seconds": 10.712,
+      "bytes": 5533
+    },
+    {
+      "name": "old-8",
+      "seconds": 10.325,
+      "backwardDecodeIdentical": true
+    },
+    {
+      "name": "new-10-q",
+      "seconds": 10.709,
+      "bytes": 4292
+    },
+    {
+      "name": "new-10-vbr",
+      "seconds": 10.502,
+      "bytes": 5543
+    },
+    {
+      "name": "old-10",
+      "seconds": 10.588,
+      "backwardDecodeIdentical": true
+    }
+  ],
+  "containerChecks": [
+    "chunk concatenation",
+    "CodecPrivate probe",
+    "Matroska video decode",
+    "AAC audio decode"
+  ]
+}

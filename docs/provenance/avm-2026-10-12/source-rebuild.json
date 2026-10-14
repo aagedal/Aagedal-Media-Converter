@@ -1,0 +1,21 @@
+{
+  "sourceArchive": {
+    "component": "AVM 2026-10-12",
+    "path": "build/attribution/avm-2026-10-12-source.tar.gz",
+    "bytes": 179361605,
+    "sha256": "91528e03132ef0054f9a8b9dbf4a78bbd577e2515544c665b4e10c158731144c"
+  },
+  "buildSucceeded": true,
+  "version": "1.0.0-175-g0da4c3647",
+  "byteForByteReproductionClaimed": false,
+  "tools": [
+    {
+      "tool": "avmenc",
+      "sha256": "e3d7f88ad3ca89d893c3fa342eb1b291574120ff0b7f436fa0570bac59a4374f"
+    },
+    {
+      "tool": "avmdec",
+      "sha256": "f38a1de47f46c34ba21e4b10d2190f0e481cbb5ef81e2426f0174abfce6be5ae"
+    }
+  ]
+}

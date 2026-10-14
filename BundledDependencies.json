@@ -124,6 +124,12 @@
       "sha256": "1a020a15b0054bf684cb64f90bc8342281e38f4c731a9ef69a2afe849c6e89f0"
     },
     {
+      "component": "AVM 2026-10-12",
+      "path": "build/attribution/avm-2026-10-12-source.tar.gz",
+      "bytes": 179361605,
+      "sha256": "91528e03132ef0054f9a8b9dbf4a78bbd577e2515544c665b4e10c158731144c"
+    },
+    {
       "component": "SwiftMediaMetadata 3.0.1",
       "path": "build/attribution/swiftmediametadata-3.0.1-source.tar.gz",
       "bytes": 1487639,
@@ -790,8 +796,8 @@
     },
     {
       "path": "Aagedal Media Converter/Binaries/avmdec",
-      "bytes": 12553200,
-      "sha256": "6cfb8d7daa3a5909730a7bc540ee8513241269290aff10ab6f10499d7caff694",
+      "bytes": 12739760,
+      "sha256": "ac9efc8811b011ec11eb975127f6e1ff695e5d0a812ea660a80a99173b3a8e69",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -802,17 +808,18 @@
         "/usr/lib/libc++.1.dylib"
       ],
       "component": "Alliance for Open Media reference tools",
-      "version": null,
+      "version": "1.0.0-175-g0da4c3647",
       "license": "BSD-3-Clause-Clear",
       "licenseFile": "Licenses/avm-LICENSE.txt",
       "requiredSourceComponents": [
-        "AVM Eigen"
+        "AVM Eigen",
+        "AVM 2026-10-12"
       ]
     },
     {
       "path": "Aagedal Media Converter/Binaries/avmenc",
-      "bytes": 12587456,
-      "sha256": "443d0e97b4f36af6ff674300e7f483ba72b20d84c0cba1bddb6233f0e658af89",
+      "bytes": 12773984,
+      "sha256": "94e9f52004aa02eec98382c61aaf77ab005da9af641b13b88480967b89d54944",
       "mode": "0755",
       "architectures": [
         "arm64"
@@ -823,11 +830,12 @@
         "/usr/lib/libc++.1.dylib"
       ],
       "component": "Alliance for Open Media reference tools",
-      "version": null,
+      "version": "1.0.0-175-g0da4c3647",
       "license": "BSD-3-Clause-Clear",
       "licenseFile": "Licenses/avm-LICENSE.txt",
       "requiredSourceComponents": [
-        "AVM Eigen"
+        "AVM Eigen",
+        "AVM 2026-10-12"
       ]
     },
     {
@@ -1276,7 +1284,7 @@
     {
       "path": "Licenses/avm-LICENSE.txt",
       "bytes": 527561,
-      "sha256": "5cfa9300f0d60155236c9ebf1f926ac068bd3c0ea595e7566b872ffd6f54052a"
+      "sha256": "e6feed386c35d47c6a7f3fffaa522e59b64ec9671dc1a5b9986bb9f3b216a0b5"
     },
     {
       "path": "Licenses/bmx-LICENSE.txt",
@@ -1337,7 +1345,7 @@
   "summary": {
     "toolCount": 12,
     "libraryCount": 12,
-    "totalBytes": 159082352,
+    "totalBytes": 159455440,
     "entriesMissingLocalLicenseFile": []
   }
 }

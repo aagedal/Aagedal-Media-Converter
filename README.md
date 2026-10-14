@@ -160,7 +160,9 @@ Next-generation SVT-AV1 encoding with 10-bit support. High compression efficienc
 #### AV2 (experimental)
 Experimental AV2 encoding using the bundled AOM AVM reference encoder (`avmenc`), introduced in a preview release. Supports 8/10-bit output, constant-quality or variable-bitrate encoding, and configurable speed and resolution. Parallel chunked encoding uses multiple CPU cores in constant-quality mode.
 
-Choose video-only IVF (`.ivf`) or Matroska (`.mkv`) with AAC or Opus audio. Reference encoding is very slow, and the evolving bitstream requires an AV2-capable decoder. The app can decode AV2 files for conversion and thumbnails, but interactive playback is not available yet. Treat AV2 as a format for experimentation rather than delivery.
+The bundled encoder and decoder use AVM `1.0.0-175-g0da4c3647` (October 12, 2026). The tools remain experimental; see [build and compatibility validation](docs/av2-update-2026-10-14.md) for the pinned source, rebuild instructions, and checks.
+
+Choose video-only IVF (`.ivf`) or Matroska (`.mkv`) with AAC or Opus audio. Reference encoding is very slow, and playback requires an AV2-capable decoder. The app can decode AV2 files for conversion and thumbnails, but interactive playback is not available yet. Treat AV2 as a format for experimentation rather than delivery.
 
 #### TV (HEVC 10-bit 4:2:2)
 Broadcast delivery format with hardware HEVC 10-bit 4:2:2, configurable resolution/framerate, automatic bitrate scaling, and preservation of all audio channels as 24-bit PCM.

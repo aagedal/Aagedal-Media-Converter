@@ -1,0 +1,36 @@
+{
+  "sourceURL": "https://github.com/AOMediaCodec/avm",
+  "sourceRevision": "0da4c36474f8d1952bbc54e3ccf833d5f0d2280c",
+  "sourceDate": "2026-10-12",
+  "version": "1.0.0-175-g0da4c3647",
+  "previousRevision": "000682c868c9c265fe0bd5b552a8d10ec49ac9a4",
+  "buildCommand": [
+    "bash",
+    "scripts/build-avm-tools.sh",
+    "AVM_SOURCE_DIR",
+    "BUILD_DIR"
+  ],
+  "cmakeOptions": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_OSX_ARCHITECTURES": "arm64",
+    "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0",
+    "ENABLE_TESTS": "OFF",
+    "ENABLE_DOCS": "OFF"
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "signing": "Ad-hoc with hardened runtime; the existing Xcode copy/sign phase applies the release identity.",
+  "tools": [
+    {
+      "path": "Aagedal Media Converter/Binaries/avmenc",
+      "bytes": 12773984,
+      "sha256": "94e9f52004aa02eec98382c61aaf77ab005da9af641b13b88480967b89d54944",
+      "localBuildSHA256": "0edb1c9e00d2095b97923d37d9f156e7479a76ecb16699f628ec9a2263eaf445"
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/avmdec",
+      "bytes": 12739760,
+      "sha256": "ac9efc8811b011ec11eb975127f6e1ff695e5d0a812ea660a80a99173b3a8e69",
+      "localBuildSHA256": "0568a2950b58edf797bd744850ec9211f7ceca85d3f962d7866cff89fad9df22"
+    }
+  ]
+}
