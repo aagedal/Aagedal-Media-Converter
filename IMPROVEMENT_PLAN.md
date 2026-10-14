@@ -1,10 +1,60 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-26
+Last reviewed: 2026-10-14
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
 issue link when it starts.
+
+## Stability and performance continuation — 2026-10-14
+
+Owner: Codex. First implementation batch from the app review (items 1–4):
+
+- Per-channel waveform storage uses source fingerprints, LRU eviction, a 64 MiB
+  estimated decoded-data budget, and a four-source cap. Completed preview bundles
+  also have a 64 MiB channel-waveform budget. These bound retained cache data,
+  not memory held by an open preview or an active renderer. Cache cleanup clears
+  memory, cancels full-preview generation, and rejects late cache publication.
+  Fingerprints include file identity as well as path, size, and modification time.
+- The MCP helper runs up to four job waits independently of the input reader,
+  serializes stdout framing, and accepts request-cancellation notifications.
+  Cancelling a wait or disconnecting does not cancel an accepted conversion.
+- Queue synchronization resolves immutable output plans once, indexes both
+  ordinary and grouped rows, and skips unchanged records. Progress does not
+  reformat accepted settings or restat already-completed output files. Removing
+  one source no longer dismisses all sibling rows from a shared batch.
+- Manual shared execution expands from six to 13 presets and supports eligible
+  separate-file groups, including captured sequential names. Mixed queues retain
+  batch ordering. Pending admissions remain visibly active and carry cancellation
+  through acceptance. Grouped rows use authoritative job IDs for cancellation
+  and are excluded from duplicate legacy MCP summaries. Resetting terminal rows
+  releases their UI ownership without altering durable history; existing-output
+  repeats retain the established collision-safe unique-name executor.
+
+This is an incremental migration, not closure of the entire architecture roadmap.
+Merged/conformed groups, package and image-sequence exports, generated video,
+custom/recursive presets, and upload/subtitle/analytics follow-ups keep the
+established executor until their settings and lifetimes have typed ownership.
+MCP editing controls and toolbar/UI redesign are outside this batch.
+
+Validation: the Debug app and test targets build with Xcode 27.0. The full unit
+suite passes all 1,304 tests with no failures or skips. All 121 script tests pass,
+including 11 standalone MCP framing/concurrency/lifecycle checks. Five UI smoke
+flows pass across targeted runs: ordinary successful export, cancellation,
+keyboard reset/retry including an existing output, separate-file group
+cancellation/reset without duplicate rows, and legacy stitched export. The final
+combined smoke run passes six affected unit tests and three UI tests. Localization
+(1,841 entries) and diff whitespace checks pass.
+
+Validation caught concurrent CFMessagePort polling replies crossing between
+waiters; individual round trips now serialize while the waits remain independent.
+The packaged-helper test keeps stdin open until its wait response arrives, matching
+a connected client; a separate disconnect test verifies prompt shutdown. New group
+UI assertions use the summary card/editor hierarchy and state identifiers because
+SwiftUI group accessibility values are empty on this host. Initial reuse of an old
+build directory encountered an unwritable UI-runner binary; the final runs use an
+isolated temporary build directory and ad hoc signing. Release packaging,
+long-session memory profiling, and representative large-queue timing were not run.
 
 ## 4.5.5 PR validation — 2026-10-13
 

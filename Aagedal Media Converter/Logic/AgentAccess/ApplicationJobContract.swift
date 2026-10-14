@@ -34,6 +34,15 @@ enum ApplicationPresetID: String, CaseIterable, Codable, Sendable {
         }
     }
 
+    /// These presets already have fully captured settings in the executor.
+    /// Package metadata and generated-source requests still need typed capture.
+    var supportsManualSharedExecution: Bool {
+        switch self {
+        case .dcp, .imfJ2K, .imfProRes, .imageSequence: false
+        default: true
+        }
+    }
+
     var exportPreset: ExportPreset {
         switch self {
         case .videoLoop: .videoLoop
@@ -1111,9 +1120,11 @@ final class ApplicationVisibleQueueRegistry {
                     preset: file.status == .waiting ? selectedPreset.rawValue : nil,
                     kind: "manual_file"
                 ))
-            } else if let group = groupsByID[id], !group.items.isEmpty {
+            } else if let group = groupsByID[id] {
+                let legacyItems = group.items.filter { $0.applicationJobID == nil }
+                guard !legacyItems.isEmpty else { continue }
                 result.append(Self.summary(
-                    id: id, name: group.name, items: group.items,
+                    id: id, name: group.name, items: legacyItems,
                     preset: group.status == .waiting
                         ? (group.preset ?? selectedPreset).rawValue
                         : group.preset?.rawValue,

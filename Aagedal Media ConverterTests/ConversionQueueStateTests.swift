@@ -922,3 +922,81 @@ private actor QueueAnalyticsCompletionRunner: SubprocessRunning {
         continuation = nil
     }
 }
+
+final class ApplicationJobRowProjectionTests: XCTestCase {
+    func testProgressPreservesSettingsAndDoesNotRestatCompletedOutputs() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appendingPathComponent("source.mov")
+        let output = folder.appendingPathComponent("output.mp4")
+        try Data([1, 2, 3]).write(to: output)
+        let request = ApplicationConversionRequest(origin: .manual, requesterID: "projection-tests",
+                                                 sourceURLs: [source], destinationFolderURL: folder, presetID: .h264)
+        let registry = ApplicationJobRegistry()
+        var record = try await registry.accept(request).record
+        record.state = .running
+        var item = VideoItem(url: source, name: "Source", size: 0, duration: "00:00:01",
+                             status: .waiting, progress: 0, eta: nil)
+        ApplicationJobRowProjection.apply(record, sourceIndex: 0, outputURL: output, to: &item)
+        XCTAssertNotNil(item.applicationJobSettingsSummary)
+        item.applicationJobSettingsSummary = "Retained immutable summary"
+        record.outputURLs = [output]
+        ApplicationJobRowProjection.apply(record, sourceIndex: 0, outputURL: output, to: &item)
+        XCTAssertEqual(item.status, .done)
+        XCTAssertTrue(item.cachedOutputFileExists)
+        XCTAssertEqual(item.cachedOutputFileSize, 3)
+        try FileManager.default.removeItem(at: output)
+        record.progress = 0.75
+        ApplicationJobRowProjection.apply(record, sourceIndex: 0, outputURL: output, to: &item)
+        XCTAssertEqual(item.applicationJobSettingsSummary, "Retained immutable summary")
+        XCTAssertTrue(item.cachedOutputFileExists, "Progress snapshots must not repeat filesystem work")
+        XCTAssertEqual(item.status, .done, "A completed source stays done while the batch continues")
+        XCTAssertEqual(item.progress, 1)
+        let replacement = folder.appendingPathComponent("replacement.mp4")
+        try Data([4]).write(to: replacement)
+        record.outputURLs = [replacement]
+        ApplicationJobRowProjection.apply(record, sourceIndex: 0, outputURL: replacement, to: &item)
+        XCTAssertEqual(item.cachedOutputFileSize, 1)
+    }
+
+    func testRetryDetachesTerminalOwnershipAndPreservesClipSettings() {
+        let source = URL(fileURLWithPath: "/source/retry.mov")
+        var item = VideoItem(url: source, name: "Retry", size: 0, duration: "00:00:01",
+                             status: .converting, progress: 0.5, eta: nil)
+        let jobID = ApplicationJobID()
+        item.applicationJobID = jobID
+        item.applicationJobSourceIndex = 2
+        item.applicationJobOrigin = .manual
+        item.applicationJobSettingsSummary = "Accepted settings"
+        item.trimStart = 0.25
+        item.outputFileNameOverride = "Keep this name"
+        XCTAssertNil(ApplicationJobRowProjection.releaseTerminalOwnership(of: &item))
+        XCTAssertEqual(item.applicationJobID, jobID)
+        item.status = .cancelled
+        XCTAssertEqual(ApplicationJobRowProjection.releaseTerminalOwnership(of: &item),
+                       ApplicationJobSourceID(jobID: jobID, sourceIndex: 2))
+        item.resetConversionState()
+        XCTAssertNil(item.applicationJobID)
+        XCTAssertNil(item.applicationJobSettingsSummary)
+        XCTAssertEqual(item.status, .waiting)
+        XCTAssertEqual(item.trimStart, 0.25)
+        XCTAssertEqual(item.outputFileNameOverride, "Keep this name")
+    }
+
+    @MainActor
+    func testSharedGroupRowsAreListedOnlyByAuthoritativeServiceJobs() {
+        let registry = ApplicationVisibleQueueRegistry()
+        var service = VideoItem(url: URL(fileURLWithPath: "/source/shared.mov"), name: "Shared", size: 0,
+                                duration: "00:00:01", status: .converting, progress: 0.5, eta: nil)
+        service.applicationJobID = ApplicationJobID()
+        let legacy = VideoItem(url: URL(fileURLWithPath: "/source/legacy.mov"), name: "Legacy", size: 0,
+                               duration: "00:00:01", status: .waiting, progress: 0, eta: nil)
+        let sharedGroup = EncodingGroup(name: "Shared", items: [service], concatEnabled: false)
+        let mixedGroup = EncodingGroup(name: "Mixed", items: [service, legacy], concatEnabled: false)
+        registry.replace(files: [], groups: [sharedGroup, mixedGroup], order: [sharedGroup.id, mixedGroup.id], selectedPreset: .h264)
+        XCTAssertEqual(registry.jobs.count, 1)
+        XCTAssertEqual(registry.jobs.first?.sourceNames, ["legacy.mov"])
+        XCTAssertEqual(registry.jobs.first?.state, .queued)
+    }
+}

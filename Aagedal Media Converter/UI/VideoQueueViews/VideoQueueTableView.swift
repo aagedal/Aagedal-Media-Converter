@@ -145,6 +145,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     var onDelete: (IndexSet) -> Void
     var onReset: (Int, Bool) -> Void
     var onCancelApplicationJob: ((ApplicationJobID) -> Void)? = nil
+    var onDismissApplicationJobSource: ((ApplicationJobID, Int) -> Void)? = nil
     var onOpenTrim: ((UUID) -> Void)?
     var onOpenTrimWithCrop: ((UUID) -> Void)?
     var onOpenTimecode: ((UUID) -> Void)?
@@ -1344,6 +1345,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                     } else if let gIdx = parent.encodingGroups.firstIndex(where: {
                         $0.items.contains(where: { $0.id == itemID })
                     }), let iIdx = parent.encodingGroups[gIdx].items.firstIndex(where: { $0.id == itemID }) {
+                        let removed = parent.encodingGroups[gIdx].items[iIdx]
+                        if let jobID = removed.applicationJobID, let source = removed.applicationJobSourceIndex {
+                            parent.onDismissApplicationJobSource?(jobID, source)
+                        }
                         if let operationID = parent.encodingGroups[gIdx].items[iIdx].analyticsOperationID {
                             Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
                         }
@@ -1361,7 +1366,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                     }
                 }
             case .cancel:
-                if let item = parent.droppedFiles.first(where: { $0.id == itemID }),
+                if let item = findItem(by: itemID),
                    let jobID = item.applicationJobID {
                     parent.onCancelApplicationJob?(jobID)
                 } else {
