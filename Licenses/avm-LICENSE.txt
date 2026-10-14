@@ -1,7 +1,7 @@
 AVM encoder and decoder — third-party notices
 
-AVM upstream: https://gitlab.com/AOMediaCodec/avm
-Retained AVM revision: 000682c868c9c265fe0bd5b552a8d10ec49ac9a4
+AVM upstream: https://github.com/AOMediaCodec/avm
+Retained AVM revision: 0da4c36474f8d1952bbc54e3ccf833d5f0d2280c
 
 These notices cover AVM and all 17 dependency groups appearing in the retained build compiler records, including conditional code and headers. Inclusion does not imply every component is used in every operation.
 

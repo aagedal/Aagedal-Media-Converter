@@ -31,7 +31,11 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
 - **AVM/Eigen:** the retained Eigen source and applicable licenses, including
   every compiler-referenced Eigen file. Other AVM component notices and patent
   statements are included in `avm-LICENSE.txt`; their permissive licenses do not
-  all require a separate source distribution.
+  all require a separate source distribution. The October 12, 2026 AVM update
+  additionally retains the complete pinned upstream source tree (including its
+  dependency archives) in `avm-2026-10-12-source.tar.gz`. Rebuild instructions and
+  dependency-byte verification are in `docs/av2-update-2026-10-14.md` and
+  `docs/provenance/avm-2026-10-12/`.
 - **MPVKit:** pinned wrapper and upstream dependency sources, the retained patched
   mpv and FFmpeg sources, build configurations/recipes and their transitive source
   inputs. The package review distinguishes direct archive/payload matches from
