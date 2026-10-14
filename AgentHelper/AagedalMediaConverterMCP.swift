@@ -26,7 +26,37 @@ private struct AagedalMediaConverterMCP {
     }
 }
 
-private final class MCPStdioServer {
+private final class MCPWaitCancellation: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var cancelled = false
+
+    func cancel() {
+        condition.lock()
+        cancelled = true
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func check() throws {
+        condition.lock()
+        defer { condition.unlock() }
+        if cancelled { throw CancellationError() }
+    }
+
+    func pause(_ seconds: TimeInterval) throws {
+        condition.lock()
+        defer { condition.unlock() }
+        if !cancelled { _ = condition.wait(until: Date().addingTimeInterval(seconds)) }
+        if cancelled { throw CancellationError() }
+    }
+}
+
+private final class MCPStdioServer: @unchecked Sendable {
+    // Input/session state is confined to run(); workers own only wait calls.
+    private let outputLock = NSLock()
+    private let waitLock = NSLock()
+    private var waits: [String: MCPWaitCancellation] = [:]
+    private let waitWorkers = DispatchGroup()
     private var clientName = "local-mcp-client"
 
     func run() {
@@ -36,6 +66,11 @@ private final class MCPStdioServer {
                 handle(line: line)
             }
         }
+        waitLock.lock()
+        let pending = Array(waits.values)
+        waitLock.unlock()
+        for cancellation in pending { cancellation.cancel() }
+        waitWorkers.wait()
     }
 
     private func handle(line: String) {
@@ -48,6 +83,17 @@ private final class MCPStdioServer {
               message["jsonrpc"] as? String == "2.0",
               let method = message["method"] as? String else {
             writeError(id: nil, code: -32600, message: "Invalid JSON-RPC request.")
+            return
+        }
+
+        if method == "notifications/cancelled", message["id"] == nil,
+           let params = message["params"] as? [String: Any],
+           let requestID = params["requestId"], Self.isValidRequestID(requestID) {
+            let key = Self.requestKey(requestID)
+            waitLock.lock()
+            let cancellation = waits[key]
+            waitLock.unlock()
+            cancellation?.cancel()
             return
         }
 
@@ -70,9 +116,45 @@ private final class MCPStdioServer {
         case "tools/list":
             writeResult(id: id, result: ["tools": Self.toolDefinitions])
         case "tools/call":
-            callTool(message: message, id: id)
+            if let params = message["params"] as? [String: Any], params["name"] as? String == "wait_for_job" {
+                startWait(line: line, id: id)
+            } else {
+                callTool(message: message, id: id)
+            }
         default:
             writeError(id: id, code: -32601, message: "Method not found: \(method)")
+        }
+    }
+
+    private static func requestKey(_ id: Any) -> String {
+        if let string = id as? String { return "string:" + string }
+        return "number:" + String(describing: id)
+    }
+
+    private func startWait(line: String, id: Any) {
+        let key = Self.requestKey(id)
+        let cancellation = MCPWaitCancellation()
+        waitLock.lock()
+        guard waits.count < 4, waits[key] == nil else {
+            waitLock.unlock()
+            writeError(id: id, code: -32600, message: "Too many pending waits or a duplicate request ID.")
+            return
+        }
+        waits[key] = cancellation
+        waitLock.unlock()
+        waitWorkers.enter()
+        DispatchQueue.global(qos: .utility).async { [self] in
+            defer {
+                waitLock.lock()
+                waits.removeValue(forKey: key)
+                waitLock.unlock()
+                waitWorkers.leave()
+            }
+            autoreleasepool {
+                guard let data = line.data(using: .utf8),
+                      let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+                callTool(message: message, id: message["id"], cancellation: cancellation)
+            }
         }
     }
 
@@ -106,7 +188,7 @@ private final class MCPStdioServer {
         ])
     }
 
-    private func callTool(message: [String: Any], id: Any?) {
+    private func callTool(message: [String: Any], id: Any?, cancellation: MCPWaitCancellation? = nil) {
         guard let params = message["params"] as? [String: Any],
               let name = params["name"] as? String,
               Self.toolNames.contains(name) else {
@@ -131,7 +213,7 @@ private final class MCPStdioServer {
         ]
 
         do {
-            let response = try AppIPCClient().send(request)
+            let response = try AppIPCClient(cancellation: cancellation).send(request)
             guard let responseID = response["requestID"] as? String,
                   responseID.caseInsensitiveCompare(requestID.uuidString) == .orderedSame,
                   response["schemaVersion"] as? Int == ipcSchemaVersion,
@@ -166,6 +248,8 @@ private final class MCPStdioServer {
                 "structuredContent": structuredResult,
                 "isError": false
             ])
+        } catch is CancellationError {
+            writeError(id: id, code: -32800, message: "Request cancelled.")
         } catch {
             let message: String
             if let helperError = error as? HelperError {
@@ -200,8 +284,9 @@ private final class MCPStdioServer {
             withJSONObject: message,
             options: [.sortedKeys, .withoutEscapingSlashes]
         ) else { return }
-        FileHandle.standardOutput.write(data)
-        FileHandle.standardOutput.write(Data([0x0A]))
+        outputLock.lock()
+        defer { outputLock.unlock() }
+        FileHandle.standardOutput.write(data + Data([0x0A]))
     }
 
     private static func requesterID(from name: String) -> String {
@@ -355,6 +440,11 @@ private final class MCPStdioServer {
 }
 
 private struct AppIPCClient {
+    // CFMessagePort remote instances can be shared internally across callers.
+    // Serialize individual round trips, never the long-poll sleep, so replies
+    // cannot be consumed by another waiter using the same port/message ID.
+    private static let transportLock = NSLock()
+    var cancellation: MCPWaitCancellation? = nil
     func send(_ request: [String: Any]) throws -> [String: Any] {
         if request["tool"] as? String == "wait_for_job",
            let arguments = request["arguments"] as? [String: Any],
@@ -430,15 +520,25 @@ private struct AppIPCClient {
                     ]
                 ]
             }
-            Thread.sleep(forTimeInterval: min(0.25, max(0, remaining)))
+            try cancellation?.check()
+            if let cancellation {
+                try cancellation.pause(min(0.25, max(0, remaining)))
+            } else {
+                Thread.sleep(forTimeInterval: min(0.25, max(0, remaining)))
+            }
         }
     }
 
     private func sendSingle(_ request: [String: Any]) throws -> [String: Any] {
+        try cancellation?.check()
+        Self.transportLock.lock()
+        defer { Self.transportLock.unlock() }
+        try cancellation?.check()
         let requestData = try JSONSerialization.data(withJSONObject: request, options: [.sortedKeys])
         var launchResult: LockedLaunchResult?
         let startedAt = ProcessInfo.processInfo.systemUptime
         while true {
+            try cancellation?.check()
             if let remote = CFMessagePortCreateRemote(nil, ipcPortName as CFString) {
                 var responseData: Unmanaged<CFData>?
                 let status = CFMessagePortSendRequest(
@@ -446,7 +546,7 @@ private struct AppIPCClient {
                     0,
                     requestData as CFData,
                     5,
-                    300,
+                    cancellation == nil ? 300 : 5,
                     CFRunLoopMode.defaultMode.rawValue,
                     &responseData
                 )
@@ -458,6 +558,7 @@ private struct AppIPCClient {
                 guard let response = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                     throw HelperError.invalidResponse
                 }
+                try cancellation?.check()
                 return response
             }
 

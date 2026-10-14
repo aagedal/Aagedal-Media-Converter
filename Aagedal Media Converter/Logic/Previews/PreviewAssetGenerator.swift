@@ -126,6 +126,69 @@ private final class NativePreviewCancellation: @unchecked Sendable {
     }
 }
 
+/// Actor-confined LRU storage. Oversized results remain usable by the caller but
+/// are not retained by the singleton after the preview closes.
+struct PreviewWaveformCache {
+    private struct Entry {
+        let fingerprint: String
+        var streams: [Int: SendableChannelWaveform]
+    }
+    private var entries: [URL: Entry] = [:]
+    private var order: [URL] = []
+    let byteLimit: Int
+    private(set) var retainedBytes = 0
+
+    init(byteLimit: Int = 64 * 1024 * 1024) { self.byteLimit = max(0, byteLimit) }
+
+    mutating func waveforms(for url: URL, fingerprint: String) -> [Int: SendableChannelWaveform] {
+        guard let entry = entries[url] else { return [:] }
+        guard entry.fingerprint == fingerprint else {
+            remove(url)
+            return [:]
+        }
+        order.removeAll { $0 == url }
+        order.append(url)
+        return entry.streams
+    }
+
+    mutating func insert(_ waveform: SendableChannelWaveform, for url: URL, fingerprint: String, stream: Int) {
+        var streams = waveforms(for: url, fingerprint: fingerprint)
+        streams[stream] = waveform
+        remove(url)
+        let cost = streams.values.reduce(0) { $0 + Self.cost($1) }
+        guard cost <= byteLimit else { return }
+        while retainedBytes + cost > byteLimit || order.count >= 4 {
+            guard let oldest = order.first else { break }
+            remove(oldest)
+        }
+        entries[url] = Entry(fingerprint: fingerprint, streams: streams)
+        order.append(url)
+        retainedBytes += cost
+    }
+
+    mutating func remove(_ url: URL) {
+        if let entry = entries.removeValue(forKey: url) {
+            retainedBytes -= entry.streams.values.reduce(0) { $0 + Self.cost($1) }
+        }
+        order.removeAll { $0 == url }
+    }
+
+    mutating func removeAll() {
+        entries.removeAll()
+        order.removeAll()
+        retainedBytes = 0
+    }
+
+    static func cost(_ waveform: SendableChannelWaveform) -> Int {
+        let imageBytes = waveform.channelImages.reduce(0) { total, image in
+            total + image.representations.reduce(0) { $0 + max(0, $1.pixelsWide) * max(0, $1.pixelsHigh) * 4 }
+        }
+        return imageBytes + waveform.channelEnvelopes.reduce(0) { total, envelope in
+            total + envelope.levels.reduce(0) { $0 + $1.count * MemoryLayout<WaveformEnvelope.Peak>.stride }
+        }
+    }
+}
+
 actor PreviewAssetGenerator {
     static let shared = PreviewAssetGenerator()
 
@@ -170,7 +233,7 @@ actor PreviewAssetGenerator {
 
     /// In-memory cache for per-channel waveforms (keyed by URL, then stream index)
     /// Survives across trim view open/close cycles since PreviewAssetGenerator is a singleton actor
-    private var channelWaveformCache: [URL: [Int: SendableChannelWaveform]] = [:]
+    private var channelWaveformCache = PreviewWaveformCache()
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
@@ -271,7 +334,10 @@ actor PreviewAssetGenerator {
 
     /// Clears the entire preview cache directory.
     func cleanupAllCache() async {
+        terminateAllProcesses()
+        inProgressGenerations.removeAll()
         completedAssets.removeAll()
+        channelWaveformCache.removeAll()
         cacheEpoch += 1
         let baseDirectory = AppConstants.previewCacheDirectory
         guard fileManager.fileExists(atPath: baseDirectory.path) else {
@@ -445,7 +511,7 @@ actor PreviewAssetGenerator {
             let estimatedDuration = waveformChunks.isEmpty ? 0 : Double(waveformChunks.count) * chunkDurationSeconds
 
             // Merge in-memory channel waveform cache
-            let cachedChannelWaveforms = channelWaveformCache[url] ?? [:]
+            let cachedChannelWaveforms = channelWaveformCache.waveforms(for: url, fingerprint: fingerprint)
             let channelWaveform = cachedChannelWaveforms[0]
             let perStreamChannelWaveforms = cachedChannelWaveforms.filter { $0.key != 0 || channelWaveform == nil }
 
@@ -474,6 +540,10 @@ actor PreviewAssetGenerator {
     
     /// Cleans up all cached assets for a given video URL
     func cleanupAssets(for url: URL) {
+        cancelGeneration(for: url)
+        channelWaveformCache.remove(url)
+        completedAssets.removeAll()
+        cacheEpoch += 1
         do {
             let directory = try ensureAssetDirectory(for: url)
             if fileManager.fileExists(atPath: directory.path) {
@@ -573,10 +643,12 @@ actor PreviewAssetGenerator {
 
         do {
             let result = try await generationTask.value
-            if let fingerprint, cacheEpoch == epoch {
+            if let fingerprint, cacheEpoch == epoch, (try? assetFingerprint(for: url)) == fingerprint {
                 completedAssets.removeAll { $0.fingerprint == fingerprint }
                 completedAssets.append((fingerprint, result))
-                if completedAssets.count > 4 { completedAssets.removeFirst() }
+                while completedAssets.count > 4 || completedAssets.reduce(0, { $0 + Self.waveformCost($1.assets) }) > 64 * 1024 * 1024 {
+                    completedAssets.removeFirst()
+                }
             }
             if inProgressGenerations[url]?.id == generationID {
                 inProgressGenerations.removeValue(forKey: url)
@@ -590,6 +662,12 @@ actor PreviewAssetGenerator {
         }
     }
 
+    private static func waveformCost(_ assets: PreviewAssets) -> Int {
+        let channelCost = assets.nativePerStreamChannelWaveforms.values.reduce(0) { $0 + PreviewWaveformCache.cost($1) }
+        let defaultCost = assets.nativeChannelWaveform.map(PreviewWaveformCache.cost) ?? 0
+        return channelCost + defaultCost
+    }
+
     /// Generates per-channel waveform for a specific audio stream on demand.
     /// Called when the user switches to an audio track that hasn't been generated yet.
     /// Returns nil if generation fails (non-fatal).
@@ -600,15 +678,14 @@ actor PreviewAssetGenerator {
         channelLayout: String?,
         duration: Double
     ) async -> SendableChannelWaveform? {
-        // Check cache first
-        if let cached = channelWaveformCache[url]?[streamIndex] {
-            return cached
-        }
-
-        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else { return nil }
-
         let access = startAccessingSecurityScope(for: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        guard let fingerprint = try? assetFingerprint(for: url) else { return nil }
+        let epoch = cacheEpoch
+        if let cached = channelWaveformCache.waveforms(for: url, fingerprint: fingerprint)[streamIndex] {
+            return cached
+        }
+        guard let ffmpegPath = BinaryPathResolver.ffmpegPath else { return nil }
 
         let width = max(800, min(12000, Int(duration * 8.0)))
         let height = 160
@@ -629,9 +706,9 @@ actor PreviewAssetGenerator {
             let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels, channelEnvelopes: envelopes)
 
             // Cache the result
-            var urlCache = channelWaveformCache[url] ?? [:]
-            urlCache[streamIndex] = waveform
-            channelWaveformCache[url] = urlCache
+            try Task.checkCancellation()
+            guard epoch == cacheEpoch, (try? assetFingerprint(for: url)) == fingerprint else { return nil }
+            channelWaveformCache.insert(waveform, for: url, fingerprint: fingerprint, stream: streamIndex)
 
             let t1 = CFAbsoluteTimeGetCurrent()
             logger.info("On-demand per-channel waveform for stream \(streamIndex) generated in \(String(format: "%.2f", t1 - t0))s (\(channelCount) channels) for \(url.lastPathComponent, privacy: .public)")
@@ -644,6 +721,7 @@ actor PreviewAssetGenerator {
 
     /// Internal implementation of asset generation, called only once per URL
     private func performAssetGeneration(for url: URL) async throws -> PreviewAssets {
+        try Task.checkCancellation()
         let access = startAccessingSecurityScope(for: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
 
@@ -652,6 +730,8 @@ actor PreviewAssetGenerator {
             throw PreviewAssetError.ffmpegBinaryMissing
         }
 
+        let fingerprint = try assetFingerprint(for: url)
+        let epoch = cacheEpoch
         let assetDirectory = try ensureAssetDirectory(for: url)
         logger.info("Asset directory: \(assetDirectory.path, privacy: .public)")
         let rowThumbnailURL = assetDirectory.appendingPathComponent("row_thumb.png", isDirectory: false)
@@ -911,9 +991,10 @@ actor PreviewAssetGenerator {
                 let waveform = SendableChannelWaveform(channelImages: images, channelLabels: labels, channelEnvelopes: envelopes)
                 nativeChannelWaveform = waveform
                 // Cache for persistence across trim view open/close cycles
-                var urlCache = channelWaveformCache[url] ?? [:]
-                urlCache[0] = waveform
-                channelWaveformCache[url] = urlCache
+                try Task.checkCancellation()
+                if epoch == cacheEpoch, (try? assetFingerprint(for: url)) == fingerprint {
+                    channelWaveformCache.insert(waveform, for: url, fingerprint: fingerprint, stream: 0)
+                }
                 let t1 = CFAbsoluteTimeGetCurrent()
                 logger.info("Per-channel waveform generated in \(String(format: "%.2f", t1 - t0))s (\(channels0) channels) for \(url.lastPathComponent, privacy: .public)")
             } catch is CancellationError {
@@ -1282,7 +1363,9 @@ actor PreviewAssetGenerator {
         let attributes = try fileManager.attributesOfItem(atPath: url.path)
         let size = (attributes[.size] as? NSNumber)?.int64Value ?? 0
         let modification = (attributes[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        let fingerprintSource = "\(url.path)::\(size)::\(modification)"
+        let fileNumber = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
+        let creation = (attributes[.creationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        let fingerprintSource = "\(url.path)::\(fileNumber)::\(creation)::\(size)::\(modification)"
         let digest = SHA256.hash(data: Data(fingerprintSource.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
     }

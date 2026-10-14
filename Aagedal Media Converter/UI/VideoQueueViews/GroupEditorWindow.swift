@@ -36,7 +36,8 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
         onAddFiles: @escaping (UUID) -> Void,
         onOpenTrim: @escaping (UUID) -> Void,
         onPlayFullscreen: @escaping (UUID) -> Void,
-        onOpenMetadata: @escaping ([UUID]) -> Void
+        onOpenMetadata: @escaping ([UUID]) -> Void,
+        onDismissApplicationJobSource: ((ApplicationJobID, Int) -> Void)? = nil
     ) {
         let titleUpdater: (String) -> Void = { [weak self] name in
             self?.applyTitle(groupName: name)
@@ -52,7 +53,8 @@ final class GroupEditorWindowController: NSObject, NSWindowDelegate {
             onPlayFullscreen: onPlayFullscreen,
             onOpenMetadata: onOpenMetadata,
             onClose: { [weak self] in self?.close() },
-            onTitleChange: titleUpdater
+            onTitleChange: titleUpdater,
+            onDismissApplicationJobSource: onDismissApplicationJobSource
         )
 
         if let existing = currentWindow {
@@ -223,6 +225,7 @@ struct GroupEditorWindowContent: View {
     var onOpenMetadata: ([UUID]) -> Void
     var onClose: () -> Void
     var onTitleChange: (String) -> Void
+    var onDismissApplicationJobSource: ((ApplicationJobID, Int) -> Void)? = nil
 
     var body: some View {
         if let index = groups.firstIndex(where: { $0.id == groupID }) {
@@ -236,7 +239,8 @@ struct GroupEditorWindowContent: View {
                 onPlayFullscreen: onPlayFullscreen,
                 onOpenMetadata: onOpenMetadata,
                 onClose: onClose,
-                onTitleChange: onTitleChange
+                onTitleChange: onTitleChange,
+                onDismissApplicationJobSource: onDismissApplicationJobSource
             )
         } else {
             // The group was deleted while the editor was open — dismiss so the
@@ -259,6 +263,7 @@ struct GroupEditorView: View {
     var onOpenMetadata: ([UUID]) -> Void
     var onClose: () -> Void
     var onTitleChange: (String) -> Void
+    var onDismissApplicationJobSource: ((ApplicationJobID, Int) -> Void)? = nil
 
     @State private var selectedClipIDs: Set<UUID> = []
 
@@ -408,6 +413,10 @@ struct GroupEditorView: View {
 
     private func removeItem(id: UUID) {
         guard let idx = group.items.firstIndex(where: { $0.id == id }) else { return }
+        let item = group.items[idx]
+        if let jobID = item.applicationJobID, let sourceIndex = item.applicationJobSourceIndex {
+            onDismissApplicationJobSource?(jobID, sourceIndex)
+        }
         group.items.remove(at: idx)
         if group.sequentialNamingEnabled {
             group.normalizeSequentialNaming()
@@ -565,6 +574,8 @@ private struct GroupEditorRow: View {
             .help("Remove from queue")
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("group.item.\(String(describing: item.status))")
         .task(id: item.id) { await loadThumbnail() }
     }
 

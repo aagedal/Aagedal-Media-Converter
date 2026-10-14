@@ -62,8 +62,21 @@ versions plus counts of manual, service, active, and terminal jobs.
 `wait_for_job` waits up to 30 seconds for a state change or terminal state and
 returns the current job plus `changed`, `timedOut`, and `isTerminal` flags. Pass
 `known_state` from a previous result to catch changes between calls. It also
-works for manual queue IDs while their rows remain visible. Accepted jobs
-continue after a client disconnects. Their status and results remain available
+works for manual queue IDs while their rows remain visible. A helper connection
+supports up to four pending waits; ping, other tool calls, and job cancellation
+remain available while those waits are pending. An MCP request-cancellation
+notification interrupts the wait without cancelling the conversion. Use
+`cancel_job` to stop the actual job.
+
+Ordinary manual conversions and separate-file groups use durable shared jobs for
+13 built-in presets. Package/image-sequence exports, merged groups, generated
+video, custom presets, recursive exports, and jobs with upload, transcription, or
+analytics follow-ups retain their existing execution paths. Repeat exports with
+existing output files also retain the existing executor's unique-name policy. Resetting a terminal shared row starts fresh UI work and keeps
+the old durable record. Legacy manual IDs remain session-only and cannot be
+passed to `cancel_job`.
+
+Accepted jobs continue after a client disconnects. Their status and results remain available
 for 30 days; unfinished work becomes interrupted after an app restart and is not
 automatically restarted. Turning Agent Access off rejects new connections while
 already accepted jobs continue.

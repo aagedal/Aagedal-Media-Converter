@@ -339,12 +339,82 @@ final class AppIntentHandoffTests: XCTestCase {
         }
     }
 
+    func testManualBridgeSupportsEveryFullyRepresentablePreset() throws {
+        let defaults = try makeIsolatedDefaults()
+        let supported = ApplicationPresetID.allCases.filter(\.supportsManualSharedExecution)
+        XCTAssertEqual(supported.count, 13)
+        for preset in supported {
+            let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
+                items: [makeItem(url: first)], destinationFolderURL: folder,
+                preset: preset.exportPreset, mergeClipsEnabled: false, defaults: defaults
+            ), preset.rawValue)
+            XCTAssertEqual(request.presetID, preset)
+            XCTAssertEqual(request.sourceSettings?.first?.sourceURL, first)
+            XCTAssertEqual(try JSONDecoder().decode(ApplicationConversionRequest.self,
+                                                    from: JSONEncoder().encode(request)), request)
+        }
+        for preset in [ExportPreset.dcp, .imfJ2K, .imfProRes, .imageSequence] {
+            XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+                items: [makeItem(url: first)], destinationFolderURL: folder,
+                preset: preset, mergeClipsEnabled: false, defaults: defaults
+            ))
+        }
+    }
+
+    func testManualBridgeKeepsSynthesizedAudioVideoOnExistingExecutor() throws {
+        let defaults = try makeIsolatedDefaults()
+        var audio = makeItem(url: first)
+        audio.hasVideoStream = false
+        audio.waveformVideoEnabled = false
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [audio], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+        XCTAssertNotNil(ManualApplicationJobBridge.makeRequest(
+            items: [audio], destinationFolderURL: folder, preset: .audioOnly,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+    }
+
+    func testManualRepeatExportKeepsCollisionSafeLegacyNaming() throws {
+        let defaults = try makeIsolatedDefaults()
+        var item = makeItem(url: first)
+        item.cachedOutputFileExists = true
+        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
+            items: [item], destinationFolderURL: folder, preset: .h264,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+    }
+
+    func testSharedGroupPreparationPreservesOrderAndSequentialNames() throws {
+        let defaults = try makeIsolatedDefaults()
+        var finished = makeItem(url: URL(fileURLWithPath: "/sources/finished.mov"))
+        finished.status = .done
+        let group = EncodingGroup(name: "Camera", items: [makeItem(url: second), finished, makeItem(url: first)],
+                                  preset: .av1, concatEnabled: false, sequentialNamingEnabled: true)
+        let items = try XCTUnwrap(ManualApplicationJobBridge.representableGroupItems(group))
+        XCTAssertEqual(items.map(\.url), [second, first])
+        XCTAssertEqual(items.map(\.outputFileNameOverride), ["Camera_001", "Camera_003"])
+        XCTAssertNil(group.items[0].outputFileNameOverride)
+        let request = try XCTUnwrap(ManualApplicationJobBridge.makeRequest(
+            items: items, destinationFolderURL: folder, preset: .av1,
+            mergeClipsEnabled: false, defaults: defaults
+        ))
+        XCTAssertEqual(request.sourceSettings?.map(\.outputBaseNameOverride), ["Camera_001", "Camera_003"])
+        for keyPath in [\EncodingGroup.concatEnabled, \.conformanceMergeEnabled,
+                        \.transcriptionEnabled, \.uploadEnabled, \.analyticsEnabled] {
+            var unsupported = group
+            unsupported[keyPath: keyPath] = true
+            XCTAssertNil(ManualApplicationJobBridge.representableGroupItems(unsupported))
+        }
+    }
+
     func testManualBridgeFallsBackWhenBehaviorCannotBeRepresented() throws {
         let defaults = try makeIsolatedDefaults()
         let ordinary = makeItem(url: first)
 
         XCTAssertNil(ManualApplicationJobBridge.makeRequest(
-            items: [ordinary], destinationFolderURL: folder, preset: .videoLoop,
+            items: [ordinary], destinationFolderURL: folder, preset: .custom1,
             mergeClipsEnabled: false, defaults: defaults
         ))
         XCTAssertNil(ManualApplicationJobBridge.makeRequest(

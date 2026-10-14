@@ -1595,6 +1595,42 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testIndependentGroupUsesSharedJobsAndCancelsWithoutDuplicateRows() throws {
+        launchApp(generatedFixture: true, defaultPreset: "H.264 / AVC", realtimeInput: true,
+                  stitching: true, sharedGroup: true)
+        defer { terminateAndCleanFixtures() }
+        let edit = element("group.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 20))
+        let conversion = element("toolbar.conversion")
+        conversion.click()
+        let status = element("group.status")
+        XCTAssertTrue(waitForValue("ENCODING", of: status, timeout: 10))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "queue.item").count, 0,
+                       "Service updates must claim group items rather than create ordinary queue rows")
+        XCTAssertTrue(waitForLabel("Cancel Conversion", of: conversion, timeout: 5))
+        conversion.click()
+        XCTAssertTrue(waitForValue("CANCELLED", of: status, timeout: 10))
+        XCTAssertTrue(waitForLabel("Start Conversion", of: conversion, timeout: 5))
+        edit.click()
+        let rows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "group.item."))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(rows.count, 2)
+        let states = rows.allElementsBoundByIndex.map { $0.identifier.replacingOccurrences(of: "group.item.", with: "") }
+        XCTAssertTrue(states.allSatisfy { ["done", "cancelled"].contains($0) }, String(describing: states))
+        XCTAssertTrue(states.contains("cancelled"), String(describing: states))
+        element("group.done").click()
+        app.activate()
+        app.typeKey("r", modifierFlags: [.command, .shift])
+        XCTAssertTrue(waitForValue("WAITING", of: status, timeout: 5))
+        conversion.click()
+        XCTAssertTrue(waitForValue("ENCODING", of: status, timeout: 10))
+        conversion.click()
+        XCTAssertTrue(waitForValue("CANCELLED", of: status, timeout: 10))
+
+
+    }
+
+    @MainActor
     func testCancelledConversionCanRetryAndConvertAgainUsingKeyboard() throws {
         launchApp(
             generatedFixture: true,
@@ -1762,6 +1798,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         damagedHistory: Bool = false,
         previewContainer: String? = nil,
         stitching: Bool = false,
+        sharedGroup: Bool = false,
         cameraCard: Bool = false,
         delayedStitchingLoad: Bool = false,
         missingStitchingSource: Bool = false,
@@ -1806,6 +1843,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             app.launchEnvironment["AMC_UI_TEST_STITCHING"] = "1"
             app.launchEnvironment["AMC_UI_TEST_STITCHING_PRESET"] = defaultPreset
         }
+        if sharedGroup { app.launchEnvironment["AMC_UI_TEST_SHARED_GROUP"] = "1" }
         if cameraCard {
             app.launchEnvironment["AMC_UI_TEST_CAMERA_CARD"] = "1"
         }

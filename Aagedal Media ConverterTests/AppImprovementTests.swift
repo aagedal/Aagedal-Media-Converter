@@ -180,3 +180,54 @@ private actor ReadinessProbeGate {
         continuation = nil
     }
 }
+
+final class PreviewWaveformCacheTests: XCTestCase {
+    private func waveform(_ value: Float = 0.5) -> SendableChannelWaveform {
+        SendableChannelWaveform(channelImages: [], channelLabels: ["L"], channelEnvelopes: [
+            WaveformEnvelope(peaks: [.init(minimum: -value, maximum: value)],
+                             frameCount: 256, framesPerBin: 256, sampleRate: 48_000)
+        ])
+    }
+
+    func testWaveformCacheEvictsLeastRecentlyUsedSourceWithinBudget() {
+        let value = waveform()
+        let cost = PreviewWaveformCache.cost(value)
+        var cache = PreviewWaveformCache(byteLimit: cost * 2)
+        let urls = (0..<3).map { URL(fileURLWithPath: "/cache/\($0).wav") }
+        cache.insert(value, for: urls[0], fingerprint: "a", stream: 0)
+        cache.insert(value, for: urls[1], fingerprint: "b", stream: 0)
+        XCTAssertEqual(cache.waveforms(for: urls[0], fingerprint: "a").count, 1)
+        cache.insert(value, for: urls[2], fingerprint: "c", stream: 0)
+        XCTAssertTrue(cache.waveforms(for: urls[1], fingerprint: "b").isEmpty)
+        XCTAssertEqual(cache.waveforms(for: urls[0], fingerprint: "a").count, 1)
+        XCTAssertEqual(cache.retainedBytes, cost * 2)
+    }
+
+    func testChangedSourceAndExplicitCleanupReleaseWaveforms() {
+        var cache = PreviewWaveformCache()
+        let url = URL(fileURLWithPath: "/cache/replaced.wav")
+        cache.insert(waveform(), for: url, fingerprint: "original", stream: 0)
+        XCTAssertTrue(cache.waveforms(for: url, fingerprint: "replacement").isEmpty)
+        XCTAssertEqual(cache.retainedBytes, 0)
+        cache.insert(waveform(), for: url, fingerprint: "replacement", stream: 1)
+        cache.remove(url)
+        XCTAssertTrue(cache.waveforms(for: url, fingerprint: "replacement").isEmpty)
+        cache.insert(waveform(), for: url, fingerprint: "replacement", stream: 1)
+        cache.removeAll()
+        XCTAssertEqual(cache.retainedBytes, 0)
+        XCTAssertTrue(cache.waveforms(for: url, fingerprint: "replacement").isEmpty)
+    }
+
+    func testOversizedWaveformsAreNotRetainedAndReplacementUpdatesCost() {
+        let value = waveform()
+        let cost = PreviewWaveformCache.cost(value)
+        var cache = PreviewWaveformCache(byteLimit: cost)
+        let url = URL(fileURLWithPath: "/cache/multitrack.wav")
+        cache.insert(value, for: url, fingerprint: "a", stream: 0)
+        cache.insert(value, for: url, fingerprint: "a", stream: 0)
+        XCTAssertEqual(cache.retainedBytes, cost)
+        cache.insert(value, for: url, fingerprint: "a", stream: 1)
+        XCTAssertEqual(cache.retainedBytes, 0)
+        XCTAssertTrue(cache.waveforms(for: url, fingerprint: "a").isEmpty)
+    }
+}

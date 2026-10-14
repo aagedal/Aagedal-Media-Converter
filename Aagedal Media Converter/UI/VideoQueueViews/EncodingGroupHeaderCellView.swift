@@ -1199,6 +1199,7 @@ final class EncodingGroupHeaderCellView: NSTableCellView, NSTextFieldDelegate {
             }
         }()
 
+        capsuleLabel.setAccessibilityIdentifier("group.status")
         capsuleLabel.stringValue = text
         capsuleLabel.textColor = color
         capsuleIcon.image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)
