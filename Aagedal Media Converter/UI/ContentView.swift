@@ -3167,6 +3167,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
         context.coordinator.install()
         let view = NSView(frame: .zero)
         view.isHidden = true
+        context.coordinator.hostView = view
         return view
     }
     
@@ -3198,6 +3199,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
         var onShowPresetQuickSelect: () -> Void
         var onSelectPresetByIndex: (Int) -> Bool
         var onShowShortcuts: () -> Void
+        weak var hostView: NSView?
         private var monitor: Any?
 
         init(
@@ -3234,57 +3236,24 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
                 let hasShift = event.modifierFlags.contains(.shift)
                 let hasControl = event.modifierFlags.contains(.control)
                 
-                // Option+W: Toggle Watch Folder
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_W {
-                    self.onToggleWatchFolder()
-                    return nil
-                }
-                
-                // Option+F: Select Output Folder
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_F {
-                    self.onSelectOutputFolder()
-                    return nil
-                }
-                
-                // Option+M: Toggle Merge
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_M {
-                    self.onToggleMerge()
-                    return nil
-                }
-                
-                // Cmd+Shift+R: Reset All
-                if hasCommand && hasShift && !hasOption && !hasControl && event.keyCode == kVK_ANSI_R {
-                    self.onResetAll()
-                    return nil
-                }
+                // Do not route main-window commands into Settings, players, or sheets.
+                guard let window = self.hostView?.window, event.window === window,
+                      window.isKeyWindow, window.attachedSheet == nil else { return event }
 
-                // Cmd+Return: Start/Stop Conversion
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_Return {
-                    self.onToggleConversion(false)
-                    return nil
-                }
-
-                // Cmd+D: Show URL Input Overlay (D for Download)
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_D {
-                    self.onShowURLInput()
-                    return nil
-                }
-
-                // Cmd+Shift+C: Open Capture Mode
-                if hasCommand && hasShift && !hasOption && !hasControl && event.keyCode == kVK_ANSI_C {
-                    self.onShowCapture()
-                    return nil
-                }
-
-                // Cmd+P: Show Preset Quick Select
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_P {
-                    self.onShowPresetQuickSelect()
-                    return nil
-                }
-
-                // Control+K: Show Shortcuts (opens Settings to Shortcuts tab)
-                if hasControl && !hasCommand && !hasOption && !hasShift && event.keyCode == kVK_ANSI_K {
-                    self.onShowShortcuts()
+                let settings = KeyboardShortcutSettings()
+                if let action = MainWindowShortcut.allCases.first(where: { settings.binding(for: $0).matches(event) }) {
+                    guard !event.isARepeat else { return nil }
+                    switch action {
+                    case .watchFolder: self.onToggleWatchFolder()
+                    case .outputFolder: self.onSelectOutputFolder()
+                    case .merge: self.onToggleMerge()
+                    case .resetAll: self.onResetAll()
+                    case .conversion: self.onToggleConversion(false)
+                    case .download: self.onShowURLInput()
+                    case .capture: self.onShowCapture()
+                    case .presets: self.onShowPresetQuickSelect()
+                    case .shortcuts: self.onShowShortcuts()
+                    }
                     return nil
                 }
 

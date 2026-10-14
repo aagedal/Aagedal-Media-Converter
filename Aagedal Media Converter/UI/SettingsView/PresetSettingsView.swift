@@ -229,67 +229,67 @@ struct PresetsSettingsView: View {
     // MARK: - Preset Detail View
 
     private var presetDetailView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header with preset name and default button
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(selectedPreset.displayName)
-                            .font(.title2.bold())
-                        if selectedPreset.isExperimental {
-                            Text("EXPERIMENTAL")
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.orange)
-                                .clipShape(Capsule())
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                // Keep the description with the preset identity, separated from its controls.
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(selectedPreset.displayName)
+                                .font(.title2.bold())
+                            if selectedPreset.isExperimental {
+                                Text("EXPERIMENTAL")
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.orange.opacity(0.2))
+                                    .foregroundColor(.orange)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            Text(selectedPreset.fileSuffix)
+                            Text(".\(selectedPreset.fileExtension)")
+                        }
+                        .font(.subheadline)
+                        .monospaced()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.15))
+                        .foregroundColor(.accentColor)
+                        .clipShape(Capsule())
+                    }
+
+                    Spacer()
+
+                    Button(action: setSelectedPresetAsDefault) {
+                        if isSelectedPresetDefault {
+                            Label("Default", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                        } else {
+                            Text("Set as Default")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
                         }
                     }
-                    HStack(spacing: 8) {
-                        Text(selectedPreset.fileSuffix)
-                        Text(".\(selectedPreset.fileExtension)")
-                    }
-                    .font(.subheadline)
-                    .monospaced()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.15))
-                    .foregroundColor(.accentColor)
-                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                    .disabled(isSelectedPresetDefault)
+                    .help(isSelectedPresetDefault ? "Current default preset" : "Set this preset as the default for new files")
                 }
 
-                Spacer()
+                Divider()
 
-                Button(action: setSelectedPresetAsDefault) {
-                    if isSelectedPresetDefault {
-                        Label("Default", systemImage: "checkmark.circle.fill")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.green)
-                    } else {
-                        Text("Set as Default")
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(isSelectedPresetDefault)
-                .help(isSelectedPresetDefault ? "Current default preset" : "Set this preset as the default for new files")
+                Text(selectedPreset.description)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding()
+            .padding(14)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-            .cornerRadius(10)
-
-            // Description
-            Text(selectedPreset.description)
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
-                .cornerRadius(10)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             // Preset-specific settings
             presetSpecificSettings
@@ -753,16 +753,18 @@ struct PresetsSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Encoder")
+                            .fixedSize(horizontal: true, vertical: false)
                         Spacer()
                         Picker("", selection: $h264Encoder) {
                             ForEach(H264Encoder.allCases) { encoder in
-                                Text(encoder.rawValue).tag(encoder.rawValue)
+                                Text(encoder == .hardware ? String(localized: "Hardware") : String(localized: "Software"))
+                                    .tag(encoder.rawValue)
                             }
                         }
                         .pickerStyle(.segmented)
                         .fixedSize()
                         .labelsHidden()
-                        .help("Hardware uses VideoToolbox for fast encoding. Software (libx264) offers better compression with CRF quality control.")
+                        .help("Hardware (VideoToolbox) encodes much faster, but usually produces lower quality at the same bitrate. Software (libx264) usually gives slightly better quality and compression, but can take much longer to encode.")
                     }
 
                     if H264Encoder(rawValue: h264Encoder) == .software {
@@ -878,16 +880,18 @@ struct PresetsSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Encoder")
+                            .fixedSize(horizontal: true, vertical: false)
                         Spacer()
                         Picker("", selection: $h265Encoder) {
                             ForEach(H265Encoder.allCases) { encoder in
-                                Text(encoder.rawValue).tag(encoder.rawValue)
+                                Text(encoder == .hardware ? String(localized: "Hardware") : String(localized: "Software"))
+                                    .tag(encoder.rawValue)
                             }
                         }
                         .pickerStyle(.segmented)
                         .fixedSize()
                         .labelsHidden()
-                        .help("Hardware uses VideoToolbox for fast encoding. Software (libx265) offers better compression with CRF quality control.")
+                        .help("Hardware (VideoToolbox) encodes much faster, but usually produces lower quality at the same bitrate. Software (libx265) usually gives slightly better quality and compression, but can take much longer to encode.")
                     }
 
                     if H265Encoder(rawValue: h265Encoder) == .software {

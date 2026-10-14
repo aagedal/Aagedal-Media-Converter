@@ -438,6 +438,37 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testShortcutRecorderRejectsReservedCommandsAndCancelsWithoutChanges() throws {
+        func recorderText(containing text: String) -> XCUIElement {
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
+        }
+        launchApp()
+        defer { terminateAndCleanFixtures() }
+        let settingsButton = element("toolbar.settings")
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 10))
+        settingsButton.click()
+        XCTAssertTrue(element("settings.root").waitForExistence(timeout: 10))
+        element("settings.search").click()
+        element("settings.search").typeText("Customize keyboard shortcuts")
+        element("settings.tab.shortcuts").click()
+        let shortcut = element("settings.shortcuts.download")
+        XCTAssertTrue(shortcut.waitForExistence(timeout: 5))
+        let originalValue = shortcut.value as? String
+        attachWindowScreenshot(named: "Settings - customizable shortcuts")
+        shortcut.click()
+        XCTAssertTrue(recorderText(containing: "Change Keyboard Shortcut").waitForExistence(timeout: 5))
+        app.typeKey("q", modifierFlags: .command)
+        XCTAssertTrue(recorderText(containing: "This combination is reserved for another app or system command. Choose another shortcut.").waitForExistence(timeout: 5))
+        app.typeKey("g", modifierFlags: [])
+        XCTAssertTrue(recorderText(containing: "Use a letter, number, or Return with Command, Control, or Option.").waitForExistence(timeout: 5))
+        attachWindowScreenshot(named: "Settings - shortcut recorder validation")
+        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
+        XCTAssertTrue(shortcut.waitForExistence(timeout: 5))
+        XCTAssertEqual(shortcut.value as? String, originalValue)
+        XCTAssertFalse(recorderText(containing: "Change Keyboard Shortcut").exists)
+    }
+
+    @MainActor
     func testOpensSettingsAndMovesBetweenPanes() throws {
         launchApp()
         defer { app.terminate() }

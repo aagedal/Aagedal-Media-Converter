@@ -541,7 +541,8 @@ struct SettingsView: View {
                 ]
             case .shortcuts:
                 return [
-
+                    String(localized: "Customize keyboard shortcuts"),
+                    String(localized: "Restore Defaults")
                 ]
             case .agentAccess:
                 return [
@@ -605,7 +606,7 @@ struct SettingsView: View {
             case .sync: return "arrow.clockwise.icloud"
             case .updates: return "arrow.triangle.2.circlepath"
             case .tools: return "stethoscope"
-            case .shortcuts: return "command"
+            case .shortcuts: return "keyboard"
             }
         }
     }
@@ -744,8 +745,24 @@ struct SettingsView: View {
 
             Divider()
 
-            contentView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: selectedTab.icon)
+                        .foregroundStyle(.secondary)
+                    Text(selectedTab.label)
+                        .font(.title2.weight(.semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+
+                Divider()
+
+                contentView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .background(Color(NSColor.windowBackgroundColor))
         }
         .frame(minWidth: 780, idealWidth: 900, maxWidth: .infinity, minHeight: 540, idealHeight: 600, maxHeight: .infinity)
         .navigationTitle("Settings – Aagedal Media Converter")
