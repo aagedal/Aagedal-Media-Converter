@@ -1,0 +1,50 @@
+{
+  "encoder": "/private/tmp/amc-avm-integrated/build_arm64/avmenc",
+  "cases": [
+    {
+      "name": "new-8-q",
+      "seconds": 4.768,
+      "bytes": 3875
+    },
+    {
+      "name": "new-8-vbr",
+      "seconds": 5.055,
+      "bytes": 5532
+    },
+    {
+      "name": "old-8",
+      "seconds": 16.486,
+      "backwardDecodeIdentical": true
+    },
+    {
+      "name": "new-10-q",
+      "seconds": 4.213,
+      "bytes": 4338
+    },
+    {
+      "name": "new-10-vbr",
+      "seconds": 5.36,
+      "bytes": 5575
+    },
+    {
+      "name": "old-10",
+      "seconds": 17.229,
+      "backwardDecodeIdentical": true
+    }
+  ],
+  "containerChecks": [
+    "lagged IVF decode",
+    "chunk concatenation",
+    "CodecPrivate probe",
+    "Matroska video decode",
+    "AAC audio decode",
+    "native 10-bit decoder stdout pipe"
+  ],
+  "sourceRevision": "14342caad234d23f717dfd058fc17bcfb502a244",
+  "nativeDecoderPipe": {
+    "nb_read_frames": 12,
+    "width": 128,
+    "height": 96,
+    "pix_fmt": "yuv420p10le"
+  }
+}

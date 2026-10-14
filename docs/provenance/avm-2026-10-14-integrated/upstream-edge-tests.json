@@ -1,0 +1,39 @@
+{
+  "filter": "EncodeSmallWidthHeight.*:EncodeAPI.*:DecodeAPI.*",
+  "tests": 13,
+  "failures": 0,
+  "disabled": 0,
+  "xmlSHA256": "4a53de735381992649f222c3a1a4f05bfa0e981b29ae07aa5a3797aac1c1ea11",
+  "suites": [
+    {
+      "name": "DecodeAPI",
+      "tests": "1",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.",
+      "timestamp": "2026-10-14T16:36:02.041"
+    },
+    {
+      "name": "EncodeAPI",
+      "tests": "7",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "0.296",
+      "timestamp": "2026-10-14T16:36:02.041"
+    },
+    {
+      "name": "EncodeSmallWidthHeight",
+      "tests": "5",
+      "failures": "0",
+      "disabled": "0",
+      "skipped": "0",
+      "errors": "0",
+      "time": "2.646",
+      "timestamp": "2026-10-14T16:36:02.337"
+    }
+  ]
+}

@@ -43,6 +43,30 @@ def frame_count(path):
                 "pix_fmt": "yuv420p10le" if depth == 10 else "yuv420p"}
 
 
+def decoder_pipe(decoder, ffmpeg, source, output):
+    """Exercise the app's native-depth avmdec stdout → FFmpeg input contract."""
+    with (output / "decoder-pipe.log").open("wb") as decoder_log, \
+            (output / "decoder-pipe-ffmpeg.log").open("wb") as ffmpeg_log:
+        process = subprocess.Popen([str(decoder), "-o", "-", str(source)],
+                                   stdout=subprocess.PIPE, stderr=decoder_log)
+        try:
+            subprocess.run([str(ffmpeg), "-y", "-v", "error", "-f", "yuv4mpegpipe", "-i", "pipe:0",
+                            "-f", "yuv4mpegpipe", "-strict", "-1",
+                            str(output / "decoder-pipe.y4m")],
+                           stdin=process.stdout, stdout=ffmpeg_log,
+                           stderr=subprocess.STDOUT, check=True, timeout=300)
+            process.stdout.close()
+            status = process.wait(timeout=300)
+            if status != 0:
+                raise subprocess.CalledProcessError(status, [str(decoder)])
+        finally:
+            process.stdout.close()
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+    return frame_count(output / "decoder-pipe.y4m")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tools-dir", type=Path, required=True)
@@ -135,7 +159,10 @@ def main():
     decode("joined-mkv", output / "joined.mkv", 8)
     run([ffmpeg, "-v", "error", "-i", output / "joined.mkv", "-map", "0:a:0",
          "-f", "null", "-"], output / "mkv-audio-decode.log")
-    report["containerChecks"] = ["lagged IVF decode", "chunk concatenation", "CodecPrivate probe", "Matroska video decode", "AAC audio decode"]
+    pipe_info = decoder_pipe(decoder, ffmpeg, output / "new-10-q.ivf", output)
+    assert pipe_info == {"nb_read_frames": 12, "width": 128, "height": 96,
+                         "pix_fmt": "yuv420p10le"}, pipe_info
+    report["containerChecks"] = ["lagged IVF decode", "chunk concatenation", "CodecPrivate probe", "Matroska video decode", "AAC audio decode", "native 10-bit decoder stdout pipe"]
     (output / "results.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2), flush=True)
 

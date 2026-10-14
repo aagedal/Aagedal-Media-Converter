@@ -31,11 +31,12 @@ pins. Apple SDKs, system libraries and general build tools are not redistributed
 - **AVM/Eigen:** the retained Eigen source and applicable licenses, including
   every compiler-referenced Eigen file. Other AVM component notices and patent
   statements are included in `avm-LICENSE.txt`; their permissive licenses do not
-  all require a separate source distribution. The October 12, 2026 AVM update
-  additionally retains the complete pinned upstream source tree (including its
-  dependency archives) in `avm-2026-10-12-source.tar.gz`. Rebuild instructions and
-  dependency-byte verification are in `docs/av2-update-2026-10-14.md` and
-  `docs/provenance/avm-2026-10-12/`.
+  all require a separate source distribution. The integrated encoder/main build
+  retains the complete pinned merged tree, dependency archives, resolved patch
+  and build recipe in `avm-2026-10-14-integrated-source.tar.gz`. Rebuild instructions
+  and dependency-byte verification are in `docs/av2-integrated-encoder-2026-10-14.md`
+  and `docs/provenance/avm-2026-10-14-integrated/`. Historical reference-build
+  evidence is retained separately.
 - **MPVKit:** pinned wrapper and upstream dependency sources, the retained patched
   mpv and FFmpeg sources, build configurations/recipes and their transitive source
   inputs. The package review distinguishes direct archive/payload matches from
@@ -66,6 +67,15 @@ Required local archives are listed in the repository's `AttributionSources.json`
 and stored under ignored `build/attribution/`. They are deliberately separate
 from `build/release/`, which holds replaceable release outputs. Keep a durable
 copy of the generated source companion with the release artifacts.
+
+For the October 14 integrated AVM build, all 91 reviewed archives are available
+locally and both strict attribution checks pass. Missing worktree inputs were
+restored by matching existing reviewed archives against the unchanged manifest;
+no source requirement or hash was relaxed. The generated companion and check
+results are recorded in
+`docs/provenance/avm-2026-10-14-integrated/release-attribution.json`. These source
+archives are ignored by Git, so a new worktree must still restore them from
+retained source material before running the release checks.
 
 ```sh
 python3 scripts/package-attribution-sources.py --check

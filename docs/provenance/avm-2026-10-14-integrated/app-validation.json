@@ -1,0 +1,34 @@
+{
+  "releaseBuildSucceeded": true,
+  "packageHelpers": {
+    "avmenc": {
+      "path": "Contents/Resources/avmenc",
+      "sha256": "8d7d4a0994a1421c9cd74cb492b963cf7821a643b46527aebd2f0fcd9d309a6e",
+      "signatureVerified": true
+    },
+    "avmdec": {
+      "path": "Contents/Resources/avmdec",
+      "sha256": "a4523761a3647e384d5112257c9df7683a8fb50143e0310a62e60dd6715e052a",
+      "signatureVerified": true
+    }
+  },
+  "unitTests": {
+    "result": "Passed",
+    "totalTestCount": 1304,
+    "passedTests": 1304,
+    "failedTests": 0,
+    "skippedTests": 0,
+    "startTime": 1791989214.897,
+    "finishTime": 1791989379.359
+  },
+  "manualChecks": {
+    "releaseAppLaunched": true,
+    "av2MatroskaImported": true,
+    "queueDimensions": "128x96",
+    "queueFrameRate": 24,
+    "previewVideoSupported": false,
+    "previewObservation": "Blank video surface with audio waveform and trim timeline; AV2 playback is unsupported.",
+    "conversionCompleted": false,
+    "blocker": "Computer-use automation timed out while confirming the temporary output folder; subsequent dialog cleanup also timed out."
+  }
+}

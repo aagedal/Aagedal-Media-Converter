@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-14",
+  "sourceManifestSHA256": "74ce72a5f1d4fc2be620084640ba7c57202b430a0d1a44890ceed701cf5d723a",
+  "reviewedArchiveCount": 91,
+  "restoredArchiveCount": 89,
+  "restoration": "Restored from existing reviewed local checkout archives; every copied file matched the unchanged manifest size and SHA-256.",
+  "checks": [
+    {
+      "command": "python3 scripts/package-attribution-sources.py --check",
+      "exitCode": 0,
+      "result": "Verified 91 attribution source archives"
+    },
+    {
+      "command": "python3 scripts/bundled-dependency-manifest.py --check --require-complete-licenses",
+      "exitCode": 0,
+      "result": "Bundled dependency manifest is current."
+    }
+  ],
+  "sourceCompanion": {
+    "path": "build/release/Aagedal_Media_Converter_4.5.6_601_Sources_74ce72a5f1d4.tar",
+    "bytes": 859924480,
+    "sha256": "3c39d48d5e27395112ddd4536466abd64594649bc56de6f85641c54805137b13",
+    "copiedArchiveBytesVerified": true
+  },
+  "published": false
+}
