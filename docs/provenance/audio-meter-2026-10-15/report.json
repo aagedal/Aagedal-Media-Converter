@@ -1,0 +1,502 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "configuration": "Debug, ad hoc signed; serial muted MPV playback",
+  "rounds": 2,
+  "timing": "Observed level-change playhead minus known source edge; negative means readings lead playback. Includes 100 ms measurement and polling granularity.",
+  "cpu": "Host plus reaped FFmpeg child user/system CPU; 100 percent means one core. Includes cold meter setup and source lookahead, excludes fixture generation and file load.",
+  "limitations": [
+    "No physical device latency or thermal measurement",
+    "No SwiftUI view rendering cost",
+    "Short generated local clips; filesystem/decoder caches may be warm",
+    "Source uses fresh analysis cache each run; sourceWindows counts window changes, not subprocesses"
+  ],
+  "runs": [
+    {
+      "mode": "off",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.37817899999999993,
+      "audioOutput": "avfoundation",
+      "fixture": "stereo-aac-video",
+      "round": 1,
+      "wallSeconds": 17.02943995827809,
+      "cpuPercentOfOneCore": 2.220736565186722,
+      "readingCount": 0,
+      "transitions": [],
+      "medianTransitionDelaySeconds": null
+    },
+    {
+      "mode": "source",
+      "childCPUSeconds": 0.16603299999999988,
+      "sourceWindows": 3,
+      "hostCPUSeconds": 0.4050809999999998,
+      "audioOutput": "avfoundation",
+      "fixture": "stereo-aac-video",
+      "round": 1,
+      "wallSeconds": 17.034745750017464,
+      "cpuPercentOfOneCore": 3.3526417616148696,
+      "readingCount": 161,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.167,
+          "delaySeconds": 0.16699999999999982
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.167,
+          "delaySeconds": 0.16699999999999982
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.125,
+          "delaySeconds": 0.125
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.208,
+          "delaySeconds": 0.20800000000000018
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.208,
+          "delaySeconds": 0.20800000000000018
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.208,
+          "delaySeconds": 0.2079999999999984
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.2079999999999993
+    },
+    {
+      "mode": "playback",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.416963,
+      "audioOutput": "avfoundation",
+      "fixture": "stereo-aac-video",
+      "round": 1,
+      "wallSeconds": 17.05253979167901,
+      "cpuPercentOfOneCore": 2.445166556382774,
+      "readingCount": 162,
+      "transitions": [
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 0.5419999999999999,
+          "delaySeconds": -3.458
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 2.625,
+          "delaySeconds": -3.375
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 4.625,
+          "delaySeconds": -3.375
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 6.582999999999999,
+          "delaySeconds": -3.4170000000000007
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 8.542,
+          "delaySeconds": -3.458
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 10.542,
+          "delaySeconds": -3.458
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 12.583,
+          "delaySeconds": -3.417
+        }
+      ],
+      "medianTransitionDelaySeconds": -3.4170000000000007
+    },
+    {
+      "mode": "source",
+      "childCPUSeconds": 0.17369400000000024,
+      "sourceWindows": 3,
+      "hostCPUSeconds": 0.3880140000000001,
+      "audioOutput": "avfoundation",
+      "fixture": "stereo-aac-video",
+      "round": 2,
+      "wallSeconds": 17.077739874948747,
+      "cpuPercentOfOneCore": 3.2891237605976595,
+      "readingCount": 162,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.2079999999999997,
+          "delaySeconds": 0.20799999999999974
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.167,
+          "delaySeconds": 0.16699999999999982
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.167,
+          "delaySeconds": 0.16699999999999982
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.292,
+          "delaySeconds": 0.2919999999999998
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.292,
+          "delaySeconds": 0.2919999999999998
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.25,
+          "delaySeconds": 0.25
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.25
+    },
+    {
+      "mode": "playback",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.4333710000000002,
+      "audioOutput": "avfoundation",
+      "fixture": "stereo-aac-video",
+      "round": 2,
+      "wallSeconds": 17.019177000038326,
+      "cpuPercentOfOneCore": 2.546368722759181,
+      "readingCount": 162,
+      "transitions": [
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 0.5419999999999999,
+          "delaySeconds": -3.458
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 2.5829999999999997,
+          "delaySeconds": -3.4170000000000003
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 4.583,
+          "delaySeconds": -3.417
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 6.542,
+          "delaySeconds": -3.458
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 8.625,
+          "delaySeconds": -3.375
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 10.583,
+          "delaySeconds": -3.417
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 12.583,
+          "delaySeconds": -3.417
+        }
+      ],
+      "medianTransitionDelaySeconds": -3.417
+    },
+    {
+      "mode": "off",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.34172000000000047,
+      "audioOutput": "avfoundation",
+      "fixture": "stereo-aac-video",
+      "round": 2,
+      "wallSeconds": 17.001417333376594,
+      "cpuPercentOfOneCore": 2.009950072392774,
+      "readingCount": 0,
+      "transitions": [],
+      "medianTransitionDelaySeconds": null
+    },
+    {
+      "mode": "off",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.24721500000000018,
+      "audioOutput": "coreaudio",
+      "fixture": "surround-flac-audio",
+      "round": 1,
+      "wallSeconds": 17.038443708326668,
+      "cpuPercentOfOneCore": 1.450924768904724,
+      "readingCount": 0,
+      "transitions": [],
+      "medianTransitionDelaySeconds": null
+    },
+    {
+      "mode": "source",
+      "childCPUSeconds": 0.4462869999999999,
+      "sourceWindows": 3,
+      "hostCPUSeconds": 0.27464500000000003,
+      "audioOutput": "coreaudio",
+      "fixture": "surround-flac-audio",
+      "round": 1,
+      "wallSeconds": 17.05644795834087,
+      "cpuPercentOfOneCore": 4.22674170941584,
+      "readingCount": 160,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.1404971683333347,
+          "delaySeconds": 0.1404971683333347
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.135478376666664,
+          "delaySeconds": 0.13547837666666407
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.119540042666693,
+          "delaySeconds": 0.11954004266669305
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.167487125666705,
+          "delaySeconds": 0.16748712566670498
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.13021683533332,
+          "delaySeconds": 0.13021683533331974
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.156810459999932,
+          "delaySeconds": 0.1568104599999316
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.226148876333209,
+          "delaySeconds": 0.2261488763332089
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.124813250999853,
+          "delaySeconds": 0.12481325099985341
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.13798777249999938
+    },
+    {
+      "mode": "playback",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.3836080000000006,
+      "audioOutput": "coreaudio",
+      "fixture": "surround-flac-audio",
+      "round": 1,
+      "wallSeconds": 17.06007612508256,
+      "cpuPercentOfOneCore": 2.248571443570532,
+      "readingCount": 162,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 1.9274852926666668,
+          "delaySeconds": -0.0725147073333332
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 3.876642334999999,
+          "delaySeconds": -0.12335766500000078
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 5.8314741686666665,
+          "delaySeconds": -0.16852583133333354
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 7.8252060436666655,
+          "delaySeconds": -0.1747939563333345
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 9.895463417666663,
+          "delaySeconds": -0.10453658233333663
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 11.86182879333333,
+          "delaySeconds": -0.13817120666666938
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 13.874162960333331,
+          "delaySeconds": -0.12583703966666882
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 15.826142918333332,
+          "delaySeconds": -0.17385708166666802
+        }
+      ],
+      "medianTransitionDelaySeconds": -0.1320041231666691
+    },
+    {
+      "mode": "source",
+      "childCPUSeconds": 0.4787509999999999,
+      "sourceWindows": 3,
+      "hostCPUSeconds": 0.31238299999999963,
+      "audioOutput": "coreaudio",
+      "fixture": "surround-flac-audio",
+      "round": 2,
+      "wallSeconds": 17.07527337502688,
+      "cpuPercentOfOneCore": 4.633214254461411,
+      "readingCount": 161,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.1301470013333352,
+          "delaySeconds": 0.13014700133333523
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.185539417333331,
+          "delaySeconds": 0.1855394173333309
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.162137668333361,
+          "delaySeconds": 0.16213766833336063
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.13400533500004,
+          "delaySeconds": 0.1340053350000403
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.194151293333318,
+          "delaySeconds": 0.19415129333331826
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.156813417999931,
+          "delaySeconds": 0.1568134179999312
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.140844375999878,
+          "delaySeconds": 0.14084437599987787
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.188803041999858,
+          "delaySeconds": 0.18880304199985787
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.15947554316664592
+    },
+    {
+      "mode": "playback",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.4370609999999999,
+      "audioOutput": "coreaudio",
+      "fixture": "surround-flac-audio",
+      "round": 2,
+      "wallSeconds": 17.050333500024863,
+      "cpuPercentOfOneCore": 2.563357485056598,
+      "readingCount": 162,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 1.9606100006666667,
+          "delaySeconds": -0.039389999333333314
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 3.9114860016666664,
+          "delaySeconds": -0.08851399833333362
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.012803502,
+          "delaySeconds": 0.012803501999999689
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 7.961837251333331,
+          "delaySeconds": -0.03816274866666891
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 9.960094875666664,
+          "delaySeconds": -0.039905124333335706
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 11.964833958999998,
+          "delaySeconds": -0.03516604100000187
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 13.957999751999997,
+          "delaySeconds": -0.04200024800000257
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 15.911531876666666,
+          "delaySeconds": -0.08846812333333354
+        }
+      ],
+      "medianTransitionDelaySeconds": -0.03964756183333451
+    },
+    {
+      "mode": "off",
+      "childCPUSeconds": 0,
+      "sourceWindows": 0,
+      "hostCPUSeconds": 0.27852299999999985,
+      "audioOutput": "coreaudio",
+      "fixture": "surround-flac-audio",
+      "round": 2,
+      "wallSeconds": 17.081805624999106,
+      "cpuPercentOfOneCore": 1.6305243492080448,
+      "readingCount": 0,
+      "transitions": [],
+      "medianTransitionDelaySeconds": null
+    }
+  ]
+}
