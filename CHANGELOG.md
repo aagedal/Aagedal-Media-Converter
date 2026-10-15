@@ -1,5 +1,6 @@
 # v.4.5.6
 
+- Added silence detection to Audio Analysis, with configurable sample thresholds and minimum durations, timeline markers, and paused preview navigation for each interval.
 - Accelerated experimental AV2 encoding with the AVM encoder branch combined with all fixes from the October 12 reference build, including Apple Silicon optimizations and correctness fixes. The paired encoder and decoder retain existing AV2 settings and container/audio support.
 - Added VMAF v1.0.16 models for standard, phone, and 4K viewing, including 50/60 fps variants. New installations use the standard v1 model by default; saved model selections are preserved, and v0 models remain available for comparison with earlier scores.
 - VMAF v1 analysis processes both inputs at 10-bit precision for banding and chroma assessment. Uses the models already included in the bundled FFmpeg; no bundled binaries or licenses changed.

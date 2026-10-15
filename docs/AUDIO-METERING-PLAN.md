@@ -56,16 +56,61 @@ remain required before considering it as the default meter.
 - [x] Enable `astats` and `ebur128` in the MPVKit fork; preserve the CoreAudio initialization and failed-unit cleanup patches. Produce versioned, checksummed artifacts and update provenance, notices and the exact package pin together.
 - [x] Probe actual filter availability in the packaged libavfilter and prototype `af-metadata/<label>` polling for MPV playback. Account for decoder/output buffering, channel conversion, pause, seeking, track changes and stale metadata before adopting it.
 - [x] Add a repeatable software CPU and signal-transition comparison against the windowed FFmpeg path, including source lookahead and child-process CPU. See [method and evidence](audio-meter-comparison-2026-10-15.md). Native-player metering and stitching source-channel inspection remain available.
-- [ ] Investigate timestamped decoder measurements and buffering before claiming playhead alignment for Playback; the generated AAC/video benchmark observed readings about 3.4 seconds ahead. Do not infer measurement time from the current playhead or apply one fixed correction across outputs.
+- [ ] Investigate timestamped decoder measurements and buffering before claiming playhead alignment for Playback; the generated AAC/video benchmark observed readings about 3.4 seconds ahead. Do not infer measurement time from the current playhead or apply one fixed correction across outputs. [Source/API investigation](audio-playback-timing-2026-10-16.md) identifies the missing timestamp/history transport and the dependency instrumentation needed next; alignment remains unqualified.
 - [ ] Qualify Release CPU/thermal behavior and physical-device synchronization on longer representative media before considering Playback as the default.
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
-- [ ] Silence detection with navigable timeline markers and configurable thresholds/durations.
+- [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. This first UI supports one track at a time; multi-mono presentation scanning is covered in the service tests but is not exposed as grouped audition.
 - [ ] Sample-peak/true-peak threshold markers and per-channel imbalance checks. Distinguish source sample peaks from intersample true peaks.
 - [ ] Stereo phase/correlation analysis, with mono compatibility checks and a phase display.
 - [ ] Expand channel-specific analysis/report exports while retaining EBU R128 channel weighting and LFE exclusion.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Silence detection — 2026-10-16
+
+The new Audio Analysis action uses bundled FFmpeg `silencedetect` on complete
+selected-track PCM, independently of preview volume/mute and conversion trims.
+It streams interval events beyond the diagnostic-tail limit and requires a
+successful decoder exit, final progress, decoded audio and paired interval
+boundaries. Cancelled/failed/truncated scans never publish partial intervals.
+The scanner holds its own security-scoped lease; preview holds a separate lease
+until dismissal. Closing the panel cancels the scan and stops playback.
+
+Generated-media checks cover all-channel silence in asymmetric multi-mono
+stereo, delayed-track file timestamps, exact silence through EOF and configurable
+threshold/minimum duration. Parser checks cover chunk boundaries, malformed and
+nonfinite events, ordering, empty output and incomplete reports. A cancellation
+test verifies that analysis waits for runner cleanup.
+
+Preview navigation seeks and pauses on the file timeline. MPV retains its
+existing 50 ms guard at the final playable position; the measured EOF interval
+boundary/duration stays exact in the report. This is sample-threshold silence,
+not a perceptual loudness gate or a true-peak measurement. Track gaps before the
+first decoded audio sample are not synthesized as silence. Grouped audition,
+silence-report export, physical-device tests and distribution signing are not
+part of this continuation. No dependencies, bundled binaries or licenses changed.
+
+Validation: the ad-hoc-signed Debug app built successfully. The complete unit
+suite executed 1,349 tests with no failures and one intentional opt-in benchmark
+skip. All 124 Python script tests passed, and the 1,857-entry localization audit
+and whitespace check passed. The complete-suite result is
+`/private/tmp/amc-silence-final.xcresult`. The standalone English navigation UI
+test also passed in `/private/tmp/amc-silence-ui-serial.xcresult`; its exported
+screenshot was visually checked for clipping, readable controls and marker/preview
+agreement. Tests navigate both interval boundaries, invalidate changed settings,
+then rescan with a longer minimum duration and verify no intervals remain.
+The final rebuilt scanner regressions (10 tests) and English/Norwegian UI checks
+(two tests) pass in `/private/tmp/amc-silence-bilingual-final.xcresult` after the
+source-capture, accessibility and EOF navigation refinements.
+Exported final screenshots are in
+`/private/tmp/amc-silence-bilingual-screenshots/`.
+
+Initial sandboxed runs could not write Xcode package caches or create local MCP
+test endpoints; the permitted reruns passed. The first UI assertion read the
+empty macOS static-text label instead of its value, and was corrected. An
+overlapping broad test attempt interrupted UI setup and was discarded; the
+complete-suite run and subsequent UI validation use serial execution.
 
 Use generated asymmetric stereo tones to check independent peak/RMS levels,
 silence/nonfinite metadata to check empty readings, window-boundary and seek
