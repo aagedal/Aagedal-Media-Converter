@@ -55,7 +55,9 @@ remain required before considering it as the default meter.
 
 - [x] Enable `astats` and `ebur128` in the MPVKit fork; preserve the CoreAudio initialization and failed-unit cleanup patches. Produce versioned, checksummed artifacts and update provenance, notices and the exact package pin together.
 - [x] Probe actual filter availability in the packaged libavfilter and prototype `af-metadata/<label>` polling for MPV playback. Account for decoder/output buffering, channel conversion, pause, seeking, track changes and stale metadata before adopting it.
-- [ ] Compare CPU use and synchronization against the windowed FFmpeg path. Keep a native-player metering path, and retain separate source-channel inspection in the stitching editor.
+- [x] Add a repeatable software CPU and signal-transition comparison against the windowed FFmpeg path, including source lookahead and child-process CPU. See [method and evidence](audio-meter-comparison-2026-10-15.md). Native-player metering and stitching source-channel inspection remain available.
+- [ ] Investigate timestamped decoder measurements and buffering before claiming playhead alignment for Playback; the generated AAC/video benchmark observed readings about 3.4 seconds ahead. Do not infer measurement time from the current playhead or apply one fixed correction across outputs.
+- [ ] Qualify Release CPU/thermal behavior and physical-device synchronization on longer representative media before considering Playback as the default.
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
 - [ ] Silence detection with navigable timeline markers and configurable thresholds/durations.
 - [ ] Sample-peak/true-peak threshold markers and per-channel imbalance checks. Distinguish source sample peaks from intersample true peaks.
@@ -117,3 +119,14 @@ hiding/closing the meter, EOF, sandbox access and unsupported inputs manually.
   retained in the linked dependency validation document. This continuation was
   validated in Debug; physical-device latency, CPU/thermal comparison, physical
   Intel hardware and a new distribution-signed build remain unverified.
+
+### Software comparison — 2026-10-15
+
+The new opt-in benchmark passed 12 serial, 17-second runs across stereo AAC
+video and 5.1 FLAC audio, with two rounds per mode. Playback used less CPU than
+Source in this instrumented Debug sample, but AAC/AVFoundation readings led the
+playhead by about 3.4 seconds; FLAC/CoreAudio timing was much closer. The test
+does not isolate output from codec/video/layout effects. Source stays the default.
+[Method, results and raw evidence](audio-meter-comparison-2026-10-15.md) record
+the limits and remaining qualification. All 51 focused regressions and three
+report tests passed; the benchmark skips intentionally outside an opted-in run.

@@ -11,9 +11,13 @@ issue link when it starts.
 Owner: Codex. Independent source-channel peak/RMS and momentary/short-term LUFS
 are implemented for preview playback using bounded analysis windows from bundled
 FFmpeg. The pinned MPVKit CoreAudio fixes are preserved. The implementation,
-measurement semantics, and deferred MPVKit filter integration, silence/threshold
+measurement semantics, opt-in MPV filter integration, and remaining silence/threshold
 markers, channel imbalance, phase/correlation analysis, and playback-format
 improvements are tracked in [the audio metering plan](docs/AUDIO-METERING-PLAN.md).
+A serial packaged-player CPU and signal-transition benchmark now compares Off,
+Source and Playback modes, including source lookahead and FFmpeg child CPU.
+See [the comparison method and evidence](docs/audio-meter-comparison-2026-10-15.md).
+Release CPU/thermal and physical-device synchronization qualification remain open.
 
 ## Stability and performance continuation — 2026-10-14
 

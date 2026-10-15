@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */; };
 		3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */; };
 		3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */; };
 		00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */; };
@@ -385,6 +386,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMeterBenchmarkTests.swift; sourceTree = "<group>"; };
 		64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettingsTests.swift; sourceTree = "<group>"; };
 		E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettings.swift; sourceTree = "<group>"; };
 		02B1DCFCB3DC44408B8C4598 /* MergeCompatibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicy.swift; sourceTree = "<group>"; };
@@ -1125,6 +1127,7 @@
 				3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */,
 				FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */,
 				3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */,
+				F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */,
 				A45919000000000000000003 /* StitchingTimelineTests.swift */,
 				A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */,
 				A4591900000000000000000E /* StitchMarkerExportTests.swift */,
@@ -1958,6 +1961,7 @@
 				6A8F1890F8004362BBE6461C /* SubtitleExportSettingsTests.swift in Sources */,
 				C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */,
 				7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */,
+				F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */,
 				A45919000000000000000004 /* StitchingTimelineTests.swift in Sources */,
 				A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */,
 				A4591900000000000000000F /* StitchMarkerExportTests.swift in Sources */,
