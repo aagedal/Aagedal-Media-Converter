@@ -595,7 +595,7 @@ enum AppConstants {
     static let defaultAV2Speed = 9                             // AVM is extremely slow; default to the fastest
     static let av2BitDepthKey = "av2BitDepth"                   // AV2BitDepthOption raw value
     static let defaultAV2BitDepth = "Auto"
-    static let av2ThreadsKey = "av2Threads"                     // avmenc -t (0 = auto / all cores)
+    static let av2ThreadsKey = "av2Threads"                     // shared encoder thread budget (0 = available cores)
     static let defaultAV2Threads = 0
     static let av2TileColumnsKey = "av2TileColumns"             // avmenc --tile-columns log2 (0 = auto)
     static let defaultAV2TileColumns = 0
@@ -603,8 +603,8 @@ enum AppConstants {
     static let defaultAV2TileRows = 0
     static let av2ResolutionLimitKey = "av2ResolutionLimit"     // CodecResolutionLimit raw value
     static let defaultAV2ResolutionLimit = "Unlimited"
-    static let av2ParallelChunksKey = "av2ParallelChunks"       // 0 = auto (all cores), 1 = single-process, N = explicit
-    static let defaultAV2ParallelChunks = 0                     // auto-on: split into one chunk per core
+    static let av2ParallelChunksKey = "av2ParallelChunks"       // 0 = auto, 1 = single-process, N = requested chunks within thread budget
+    static let defaultAV2ParallelChunks = 0                     // auto: length-aware chunks within encoder thread budget
     static let av2ContainerKey = "av2Container"                 // AV2Container raw value (ivf video-only / mkv with audio)
     static let defaultAV2Container = "IVF (video only)"
     static let av2AudioCodecKey = "av2AudioCodec"               // AV2AudioCodec raw value (used by the .mkv muxer)

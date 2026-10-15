@@ -1344,10 +1344,10 @@ struct PresetsSettingsView: View {
                     DisclosureGroup("Advanced") {
                         VStack(alignment: .leading, spacing: 10) {
                             Stepper("Parallel Chunks: \(av2ParallelChunks == 0 ? "Auto" : (av2ParallelChunks == 1 ? "Off (single process)" : "\(av2ParallelChunks)"))", value: $av2ParallelChunks, in: 0...64)
-                                .help("Splits the clip into independent ranges and encodes them simultaneously, one avmenc per CPU core — the biggest speed-up for AV2. 0 = Auto (one chunk per core). 1 = off (a single encoder using tiles). Higher values force a specific chunk count. Constant-Quality only; tiling below is disabled while chunking is active because chunks already use every core (and untiled chunks compress slightly better).")
+                                .help("Encodes independent ranges simultaneously within the Threads budget. 0 = Auto, keeping at least two seconds and 48 frames per chunk. 1 = off (a single encoder using tiles). Higher values request a chunk count, limited by Threads and a 24-frame minimum per chunk. Constant-Quality only; tile settings are ignored while chunking is active.")
                             Divider()
                             Stepper("Threads: \(av2Threads == 0 ? "Auto" : "\(av2Threads)")", value: $av2Threads, in: 0...64)
-                                .help("avmenc -t for the single-process path. 0 lets the app use all available cores.")
+                                .help("Total encoder thread budget, shared across parallel chunks. 0 uses the available CPU core count. FFmpeg decoding and filtering use additional threads.")
                             Stepper("Tile Columns (log2): \(av2TileColumns == 0 ? "Auto" : "\(av2TileColumns)")", value: $av2TileColumns, in: 0...6)
                                 .help("avmenc --tile-columns (log2: 1 = 2 columns, 2 = 4, …) for the single-process path. 0 = Auto, which picks a tile count from the resolution. Ignored when Parallel Chunks is active.")
                             Stepper("Tile Rows (log2): \(av2TileRows == 0 ? "Auto" : "\(av2TileRows)")", value: $av2TileRows, in: 0...6)

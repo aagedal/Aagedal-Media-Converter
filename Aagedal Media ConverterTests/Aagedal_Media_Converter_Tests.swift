@@ -12055,21 +12055,118 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
     func testAV2ChunkPlanningRespectsRateControlAndMinimumChunkSize() {
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .targetBitrate),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .targetBitrate, threadBudget: 8),
             1
         )
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 47, hint: 8, rateMode: .constantQuality),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 47, hint: 8, rateMode: .constantQuality, threadBudget: 8),
             1
         )
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 48, hint: 8, rateMode: .constantQuality),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 48, hint: 8, rateMode: .constantQuality, threadBudget: 8),
             2
         )
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .constantQuality),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .constantQuality, threadBudget: 8),
             8
         )
+    }
+
+    func testAV2AutomaticChunksKeepTwoSecondsAndAtLeast48Frames() {
+        for (frames, fps, expected) in [(95, 24.0, 1), (96, 24.0, 2),
+                                         (239, 60.0, 1), (240, 60.0, 2),
+                                         (95, 12.0, 1), (96, 12.0, 2),
+                                         (119, 29.97, 1), (120, 29.97, 2)] {
+            XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                totalFrames: frames, hint: 0, rateMode: .constantQuality,
+                threadBudget: 8, frameRate: fps
+            ), expected, "\(frames) frames at \(fps) fps")
+        }
+        let unknownFrameRates: [Double?] = [nil, 0, -1, .nan, .infinity]
+        for fps in unknownFrameRates {
+            XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                totalFrames: 96, hint: 0, rateMode: .constantQuality,
+                threadBudget: 8, frameRate: fps
+            ), 2)
+        }
+    }
+
+    func testAV2ChunksRespectEncoderBudgetAndSingleProcessModes() {
+        for hint in [0, 3, 64] {
+            for budget in [1, 2, 8] {
+                let chunks = AV2CommandBuilder.resolvedChunkCount(
+                    totalFrames: 1_440, hint: hint, rateMode: .constantQuality,
+                    threadBudget: budget, frameRate: 24
+                )
+                XCTAssertEqual(chunks, min(hint == 0 ? budget : hint, budget))
+                XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                    totalFrames: 1_440, hint: hint, rateMode: .targetBitrate,
+                    threadBudget: budget, frameRate: 24
+                ), 1)
+            }
+        }
+        for frames in [0, -1, 1_440] {
+            XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                totalFrames: frames, hint: 1, rateMode: .constantQuality, threadBudget: 8
+            ), 1)
+        }
+        XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+            totalFrames: 1_440, hint: 8, rateMode: .constantQuality, threadBudget: 0
+        ), 1)
+        XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+            totalFrames: Int.max, hint: 0, rateMode: .constantQuality,
+            threadBudget: 8, frameRate: .greatestFiniteMagnitude
+        ), 1)
+    }
+
+    func testAV2SegmentCommandsShareCapturedThreadBudgetAndCoverEveryFrame() async throws {
+        let suite = "AV2ThreadBudgetTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(3, forKey: AppConstants.av2ParallelChunksKey)
+        defaults.set(AV2RateControlMode.constantQuality.rawValue, forKey: AppConstants.av2RateControlModeKey)
+        let metadata = videoMetadata(timecode: nil, frameRate: 24)
+        let inputURL = URL(fileURLWithPath: "/private/nonexistent-av2-budget.mov")
+
+        for (budget, expectedChunks) in [(7, 3), (2, 2), (1, 1)] {
+            defaults.set(budget, forKey: AppConstants.av2ThreadsKey)
+            let settings = AV2Settings(defaults: defaults)
+            // Later preference changes must not alter a queued conversion's budget.
+            defaults.set(64, forKey: AppConstants.av2ThreadsKey)
+            let plan = await AV2CommandBuilder.buildSegments(
+                inputURL: inputURL, trimStart: nil, trimEnd: nil, cropConfig: nil,
+                expectedDuration: 241.0 / 24, metadataSource: .resolved(metadata), settings: settings
+            )
+            if expectedChunks == 1 {
+                XCTAssertNil(plan)
+                let command = await AV2CommandBuilder.build(
+                    inputURL: inputURL, outputURL: inputURL.appendingPathExtension("ivf"),
+                    trimStart: nil, trimEnd: nil, cropConfig: nil,
+                    expectedDuration: 241.0 / 24, metadataSource: .resolved(metadata), settings: settings
+                )
+                XCTAssertTrue(try XCTUnwrap(command).avmencArguments.containsAdjacent("-t", "1"))
+                continue
+            }
+            let unwrapped = try XCTUnwrap(plan)
+            XCTAssertEqual(unwrapped.segments.count, expectedChunks)
+            XCTAssertEqual(unwrapped.totalFrames, 241)
+            XCTAssertEqual(unwrapped.segments.reduce(0) { $0 + $1.frameCount }, 241)
+            var startFrame = 0
+            for segment in unwrapped.segments {
+                XCTAssertTrue(segment.avmencArguments.containsAdjacent("-t", "\(budget / expectedChunks)"))
+                XCTAssertTrue(segment.avmencArguments.contains("--limit=\(segment.frameCount)"))
+                XCTAssertTrue(segment.ffmpegArguments.containsAdjacent("-frames:v", "\(segment.frameCount)"))
+                if startFrame > 0 {
+                    XCTAssertTrue(segment.ffmpegArguments.containsAdjacent(
+                        "-ss", String(format: "%.6f", Double(startFrame) / 24)
+                    ))
+                } else {
+                    XCTAssertFalse(segment.ffmpegArguments.contains("-ss"))
+                }
+                startFrame += segment.frameCount
+            }
+            XCTAssertLessThanOrEqual(expectedChunks * (budget / expectedChunks), budget)
+        }
     }
 
     func testAV2EffectiveDurationHandlesEveryTrimShape() {
