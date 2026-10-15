@@ -1,0 +1,71 @@
+{
+  "products": "/private/tmp/amc-mpvkit-n9-products",
+  "libmpv": "/private/tmp/amc-mpvkit-n9-products/Libmpv.framework/Libmpv",
+  "libmpv_sha256": "9855abc54747df89df16e604f316e7ca17bd7e7c5ba72458d6f89a1c9d139301",
+  "probe_source_sha256": "0f77f551d8023b1f7b5488ac9396265cd5f73e9b771290f86618f704c282d954",
+  "system": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+  "results": [
+    {
+      "mode": "normal",
+      "exit_code": 0,
+      "observations": {
+        "mode": "normal",
+        "created": 4,
+        "disposed": 4,
+        "injected": 0,
+        "invalid_calls": 0,
+        "listeners_remaining": 0,
+        "notifications": 0,
+        "playback_cycles": 4,
+        "failure_cycles": 0
+      }
+    },
+    {
+      "mode": "notify",
+      "exit_code": 0,
+      "observations": {
+        "mode": "notify",
+        "created": 4,
+        "disposed": 4,
+        "injected": 0,
+        "invalid_calls": 0,
+        "listeners_remaining": 0,
+        "notifications": 4,
+        "playback_cycles": 4,
+        "failure_cycles": 0
+      }
+    },
+    {
+      "mode": "fail-init",
+      "exit_code": 0,
+      "observations": {
+        "mode": "fail-init",
+        "created": 4,
+        "disposed": 4,
+        "injected": 4,
+        "invalid_calls": 0,
+        "listeners_remaining": 0,
+        "notifications": 0,
+        "playback_cycles": 0,
+        "failure_cycles": 4
+      }
+    },
+    {
+      "mode": "fail-format",
+      "exit_code": 0,
+      "observations": {
+        "mode": "fail-format",
+        "created": 4,
+        "disposed": 4,
+        "injected": 4,
+        "invalid_calls": 0,
+        "listeners_remaining": 0,
+        "notifications": 0,
+        "playback_cycles": 0,
+        "failure_cycles": 4
+      }
+    }
+  ],
+  "passed": true,
+  "scope": "Isolated binary probe; injected failures, no physical device change or app signing validation"
+}

@@ -93,3 +93,23 @@ new releases remain drafts until both source and binary uploads succeed. Source
 filenames include version, build and manifest hash, preserving source material
 for older builds. Manual releases must attach the source companion as well as
 the application ZIP. No public release is performed by the attribution checks.
+
+## MPVKit 1.1.0 / FFmpeg 9.0.2 — 2026-10-15
+
+The current package pin is `68c8989362a0daedabcc1540b2b5f0e1fea4be1f`.
+Its eight custom macOS GPL libraries are rebuilt together against FFmpeg n9.0.2,
+retaining mpv 0.41.0, CoreAudio fixes and opt-in audio-analysis filters. The
+`mpvkit-n9.0.2-sources.tar.gz` archive replaces the previous local mpv/FFmpeg and
+CoreAudio configuration archives. It includes the exact staged sources, patches,
+library-only Swift recipe and per-architecture compiler configurations. The
+separate `MPVKit-1.1.0-pinned-source.tar.gz` records the exact wrapper commit.
+Unchanged auxiliary source inputs and their original build recipes remain
+required. Both archives are recorded with their byte counts and SHA-256 in
+`AttributionSources.json`; the custom source archive is also a release asset.
+
+The offline MPVKit notice includes the retained original collections plus current
+FFmpeg n9.0.2 license and source permission notices. The additional notice
+collection has a checked SHA-256 and source index under
+`docs/provenance/4.5-local-builds/mpvkit-n9.0.2/`. Original 4.4/4.5 CoreAudio
+records above remain historical. Current evidence and validation scope are in
+[the update report](mpvkit-1.1.0-update-2026-10-15.md).
