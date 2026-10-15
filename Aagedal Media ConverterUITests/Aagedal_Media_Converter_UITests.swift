@@ -1585,6 +1585,78 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testSilenceAnalysisNavigatesIntervalsAndInvalidatesChangedSettings() throws {
+        launchApp(generatedFixture: true, additionalArguments: ["-AMC_UI_TEST_SILENCE", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Audio"].click()
+        let open = element("analysis.audio.silence")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.silence.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertTrue(element("analysis.silence.track").exists)
+        XCTAssertTrue(element("analysis.silence.threshold").exists)
+        run.click()
+        XCTAssertTrue(element("analysis.silence.summary").waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Detected intervals: 1", of: element("analysis.silence.summary"), timeout: 5))
+        let start = element("analysis.silence.start.0")
+        let end = element("analysis.silence.end.0")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        let time = element("analysis.silence.time")
+        let atStart = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 2) < 0.1
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atStart, object: time)], timeout: 5), .completed)
+        end.click()
+        let atEnd = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 4) < 0.1
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atEnd, object: time)], timeout: 5), .completed)
+        attachWindowScreenshot(named: "Silence intervals and paused preview")
+        let duration = element("analysis.silence.duration")
+        duration.click()
+        app.menuItems["5.00 s"].click()
+        XCTAssertFalse(element("analysis.silence.summary").exists, "Edited settings must invalidate the old intervals")
+        run.click()
+        XCTAssertTrue(element("analysis.silence.summary").waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Detected intervals: 0", of: element("analysis.silence.summary"), timeout: 5))
+        XCTAssertFalse(element("analysis.silence.start.0").exists)
+        element("analysis.silence.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testSilenceAnalysisNorwegianControlsAndReport() throws {
+        launchApp(generatedFixture: true, language: "nb", locale: "nb_NO",
+                  additionalArguments: ["-AMC_UI_TEST_SILENCE", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Lyd"].click()
+        let open = element("analysis.audio.silence")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        XCTAssertEqual(open.label, "Finn stillhet")
+        open.click()
+        let run = element("analysis.silence.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertEqual(run.label, "Analyser lyd")
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Oppdagede intervaller: 1", of: element("analysis.silence.summary"), timeout: 20))
+        XCTAssertTrue(element("analysis.silence.start.0").exists)
+        attachWindowScreenshot(named: "Stillhetsanalyse på norsk")
+        element("analysis.silence.close").click()
+    }
+
+    @MainActor
     func testUnifiedAnalysisPreservesAudioReportAcrossTabsAndEnablesVideoAfterEncoding() throws {
         launchApp(generatedFixture: true)
         defer { terminateAndCleanFixtures() }

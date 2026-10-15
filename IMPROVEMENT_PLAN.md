@@ -1,6 +1,25 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-10-15
+Last reviewed: 2026-10-16
+
+## Audio silence detection continuation — 2026-10-16
+
+Owner: Codex. Audio Analysis now offers complete-track silence detection with
+configurable dBFS/duration thresholds, interval markers and paused MPV navigation.
+Detection requires every selected channel to remain quiet, preserves delayed
+audio offsets on the file timeline, drains cancellation through the shared
+subprocess runner and rejects incomplete reports. New controls are localized in
+all supported languages; translations outside English/Norwegian await review.
+The [audio roadmap](docs/AUDIO-METERING-PLAN.md) tracks validation and remaining
+peak/phase/report work. A separate [Playback timing investigation](docs/audio-playback-timing-2026-10-16.md)
+identifies missing frame timestamps/history in the current MPV metadata API;
+dependency instrumentation remains necessary before claiming alignment.
+
+Validation: the Debug build, full unit suite (1,349 executed, one intentional
+benchmark skip, no failures), final 10 scanner regressions, two English/Norwegian
+UI checks, all 124 script tests, localization audit and whitespace check pass.
+The preview/interval screenshots were visually reviewed. Release packaging and
+physical-device qualification remain outside this continuation.
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
@@ -11,8 +30,8 @@ issue link when it starts.
 Owner: Codex. Independent source-channel peak/RMS and momentary/short-term LUFS
 are implemented for preview playback using bounded analysis windows from bundled
 FFmpeg. The pinned MPVKit CoreAudio fixes are preserved. The implementation,
-measurement semantics, opt-in MPV filter integration, and remaining silence/threshold
-markers, channel imbalance, phase/correlation analysis, and playback-format
+measurement semantics, opt-in MPV filter integration, silence detection, and
+remaining peak-threshold markers, channel imbalance, phase/correlation analysis and playback-format
 improvements are tracked in [the audio metering plan](docs/AUDIO-METERING-PLAN.md).
 A serial packaged-player CPU and signal-transition benchmark now compares Off,
 Source and Playback modes, including source lookahead and FFmpeg child CPU.

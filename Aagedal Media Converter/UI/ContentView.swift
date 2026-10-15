@@ -2013,12 +2013,15 @@ struct ContentView: View {
             if container == "mp4" { metadataArguments += ["-movflags", "use_metadata_tags"] }
         }
 
+        let fixtureAudio = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_SILENCE")
+            ? "aevalsrc=if(between(t\\,2\\,4)\\,0\\,0.1*sin(2*PI*440*t)):s=48000:d=\(fixtureDuration)"
+            : "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)"
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
             arguments: [
                 "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
                 "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)",
-                "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)",
+                "-f", "lavfi", "-i", fixtureAudio,
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-c:v", "mpeg4", "-q:v", "5", "-g", "12", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-shortest",
