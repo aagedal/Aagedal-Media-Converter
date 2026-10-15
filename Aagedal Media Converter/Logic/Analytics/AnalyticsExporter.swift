@@ -202,6 +202,12 @@ private struct AnalyticsPDFReportView: View {
             // Metrics
             ForEach(results.metrics, id: \.metric) { metric in
                 VStack(alignment: .leading, spacing: 8) {
+                    if let comparison = metric.comparison {
+                        Text(comparison.summary).font(.caption).foregroundStyle(.secondary)
+                        ForEach(comparison.warnings, id: \.self) { warning in
+                            Text(warning).font(.caption).foregroundStyle(.orange)
+                        }
+                    }
                     Text(metric.metric.displayName)
                         .font(.title2)
                         .fontWeight(.semibold)

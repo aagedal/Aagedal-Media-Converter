@@ -72,6 +72,7 @@ enum AV2CommandBuilder {
         let totalFrames: Int
         let effectiveDuration: Double?
         let frameRate: Double?
+        var recoverySourceURL: URL? = nil
     }
 
     /// Settings + geometry shared by the single-process and chunked builders. Computing this once
@@ -280,7 +281,8 @@ enum AV2CommandBuilder {
             bitDepth: r.bitDepth,
             totalFrames: totalFrames,
             effectiveDuration: r.effectiveDuration,
-            frameRate: r.frameRate
+            frameRate: r.frameRate,
+            recoverySourceURL: inputURL
         )
     }
 

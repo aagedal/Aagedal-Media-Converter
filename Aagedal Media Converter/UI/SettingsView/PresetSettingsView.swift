@@ -1344,7 +1344,10 @@ struct PresetsSettingsView: View {
                     DisclosureGroup("Advanced") {
                         VStack(alignment: .leading, spacing: 10) {
                             Stepper("Parallel Chunks: \(av2ParallelChunks == 0 ? "Auto" : (av2ParallelChunks == 1 ? "Off (single process)" : "\(av2ParallelChunks)"))", value: $av2ParallelChunks, in: 0...64)
-                                .help("Encodes independent ranges simultaneously within the Threads budget. 0 = Auto, keeping at least two seconds and 48 frames per chunk. 1 = off (a single encoder using tiles). Higher values request a chunk count, limited by Threads and a 24-frame minimum per chunk. Constant-Quality only; tile settings are ignored while chunking is active.")
+                                .help("Encodes independent ranges simultaneously within the Threads budget. 0 = Auto, keeping at least two seconds and 48 frames per chunk. 1 = off (a single encoder using tiles). Higher values request a chunk count, limited by Threads and a 24-frame minimum per chunk. Concurrent workers also respect available memory and memory pressure. Constant-Quality only; tile settings are ignored while chunking is active.")
+                            Text("Completed chunks are saved for retry with the same source and encoding settings. Up to 20 GiB is saved per job. Idle recovery data is pruned to 20 GiB total and expires after seven days; active jobs are kept.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             Divider()
                             Stepper("Threads: \(av2Threads == 0 ? "Auto" : "\(av2Threads)")", value: $av2Threads, in: 0...64)
                                 .help("Total encoder thread budget, shared across parallel chunks. 0 uses the available CPU core count. FFmpeg decoding and filtering use additional threads.")

@@ -10,6 +10,21 @@ final class PostConversionSettingsTests: XCTestCase {
         try body(defaults, PostConversionSettings(defaults: defaults))
     }
 
+    func testComparisonResolutionDefaultsFallbackAndCapturedPreference() {
+        let name = "AnalyticsComparisonSettings-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = PostConversionSettings(defaults: defaults)
+        XCTAssertEqual(settings.analyticsSnapshot().comparisonResolution, .encoded)
+        defaults.set("invalid", forKey: AppConstants.analyticsComparisonResolutionKey)
+        XCTAssertEqual(settings.analyticsSnapshot().comparisonResolution, .encoded)
+        defaults.set("source", forKey: AppConstants.analyticsComparisonResolutionKey)
+        let captured = settings.analyticsSnapshot()
+        defaults.set("encoded", forKey: AppConstants.analyticsComparisonResolutionKey)
+        XCTAssertEqual(captured.comparisonResolution, .source)
+        XCTAssertEqual(settings.analyticsSnapshot().comparisonResolution, .encoded)
+    }
+
     func testParakeetDefaultsAndMalformedDurationsUseCLIDefaults() {
         withSettings { defaults, _ in
             XCTAssertEqual(ParakeetSettingsSnapshot(defaults: defaults).arguments, [])

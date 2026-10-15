@@ -3186,6 +3186,7 @@ actor ConversionManager: Sendable {
                 enabledMetrics: enabledMetrics,
                 vmafModel: vmafModel,
                 ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames,
+                comparisonResolution: settings.comparisonResolution,
                 operationID: followUp.analyticsOperationID
             ) { metric, progressValue in
                 Task { @MainActor in

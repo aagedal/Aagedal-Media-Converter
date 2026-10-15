@@ -908,6 +908,7 @@ enum AppConstants {
 
     // MARK: - SSIMULACRA2 Settings
     static let ssimulacra2CustomPathKey = "ssimulacra2CustomPath"
+    static let analyticsComparisonResolutionKey = "analyticsComparisonResolution"
     static let ssimulacra2MaxFramesKey = "ssimulacra2MaxFrames"
     static let defaultSSIMULACRA2MaxFrames: Int = 50
 

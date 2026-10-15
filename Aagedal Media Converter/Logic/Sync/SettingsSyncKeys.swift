@@ -300,6 +300,7 @@ enum SettingsSyncKeys {
         AppConstants.analyticsAutoExportKey,
         AppConstants.analyticsAutoExportFormatKey,
         AppConstants.ssimulacra2MaxFramesKey,
+        AppConstants.analyticsComparisonResolutionKey,
 
         // Content authenticity
         AppConstants.c2paCheckEnabledKey,
