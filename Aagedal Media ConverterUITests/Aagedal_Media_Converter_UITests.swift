@@ -1353,6 +1353,47 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testSourcePeakRMSAndLUFSMeterInNativeAndMPVPreview() throws {
+        for (container, backend) in [("mp4", "AVPlayer"), ("mkv", "MPV")] {
+            launchApp(generatedFixture: true, previewContainer: container)
+            defer { terminateAndCleanFixtures() }
+            let queueItem = element("queue.item")
+            XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+            app.activate()
+            queueItem.rightClick()
+            app.menuItems["Preview / Trim"].click()
+            XCTAssertTrue(waitForValue("\(backend) ready", of: element("preview.media"), timeout: 30))
+            element("trim.timecode").click()
+            let input = element("trim.timecodeInput")
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.click()
+            input.typeKey("a", modifierFlags: .command)
+            input.typeText("00:00:04:00")
+            input.typeKey(.return, modifierFlags: [])
+            XCTAssertTrue(waitForValue("00:00:04:00", of: element("trim.timecode"), timeout: 10))
+            element("trim.audioMeter").click()
+            let momentary = element("preview.audioMeter.momentary")
+            let shortTerm = element("preview.audioMeter.shortTerm")
+            XCTAssertTrue(momentary.waitForExistence(timeout: 15))
+            let measured = XCTNSPredicateExpectation(
+                predicate: NSPredicate { _, _ in
+                    Double((momentary.value as? String) ?? momentary.label) != nil
+                        && Double((shortTerm.value as? String) ?? shortTerm.label) != nil
+                }, object: nil
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [measured], timeout: 20), .completed,
+                           "Source LUFS must be available without starting system-audio capture")
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = "\(backend) source peak RMS and LUFS meter"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            element("trim.audioMeter").click()
+            XCTAssertTrue(momentary.waitForNonExistence(timeout: 5))
+            element("preview.close").click()
+        }
+    }
+
+    @MainActor
     private func exercisePreview(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, previewContainer: container)
         defer { terminateAndCleanFixtures() }

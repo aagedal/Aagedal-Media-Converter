@@ -238,7 +238,7 @@ struct PreviewPlayerContent: View {
                 HStack {
                     Spacer()
                     if controller.isAudioMeterEnabled {
-                        AudioMeterView(levels: controller.audioLevels ?? .silence)
+                        PlaybackAudioMeterPanel(controller: controller)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
                 }
