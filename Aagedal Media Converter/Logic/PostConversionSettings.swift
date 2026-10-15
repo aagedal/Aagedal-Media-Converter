@@ -88,6 +88,7 @@ struct AnalyticsSettingsSnapshot: Sendable {
     let vmafModel: VMAFModel
     let ssimulacra2MaxFrames: Int
     let autoExport: AnalyticsAutoExportSettingsSnapshot
+    var comparisonResolution: AnalyticsComparisonResolution = .encoded
 }
 
 struct AnalyticsAutoExportSettingsSnapshot: Sendable {
@@ -170,7 +171,9 @@ final class PostConversionSettings: TranscriptionSettingsProviding, OCRSettingsP
                     defaults.string(forKey: AppConstants.analyticsAutoExportFormatKey)
                         ?? AppConstants.defaultAnalyticsAutoExportFormat
                 ) ?? .json
-            )
+            ),
+            comparisonResolution: AnalyticsComparisonResolution(rawValue:
+                defaults.string(forKey: AppConstants.analyticsComparisonResolutionKey) ?? "encoded") ?? .encoded
         )
     }
 }

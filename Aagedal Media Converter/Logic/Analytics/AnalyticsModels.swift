@@ -122,7 +122,7 @@ struct LoudnessResults: Equatable, Sendable {
 }
 
 /// The source interval used to produce an output, retained independently of queue edits.
-struct AnalyticsSourceRange: Equatable, Sendable {
+struct AnalyticsSourceRange: Codable, Equatable, Sendable {
     let start: Double
     let end: Double?
 
@@ -206,6 +206,139 @@ enum AnalyticsStatus: Equatable, Sendable {
     }
 }
 
+/// All metrics use the same spatial comparison policy.
+enum AnalyticsComparisonResolution: String, Codable, CaseIterable, Sendable {
+    case encoded
+    case source
+
+    var displayName: String { self == .encoded ? "Encoded resolution" : "Source resolution" }
+}
+
+struct AnalyticsTiming: Codable, Equatable, Sendable {
+    let duration: Double?
+    let frameRate: Double?
+    /// Frame count reported by the metadata reader, when available.
+    var frameCount: Int? = nil
+}
+
+struct AnalyticsComparison: Codable, Equatable, Sendable {
+    let resolution: AnalyticsComparisonResolution
+    let width: Int?
+    let height: Int?
+    let scaling: String
+    let sourceRange: AnalyticsSourceRange
+    let vmafModel: VMAFModel?
+    var sampleCount: Int? = nil
+    /// Planned extraction timestamps, relative to the encoded output.
+    var sampleTimestamps: [Double]? = nil
+    var pixelProcessing: String? = nil
+    let sourceTiming: AnalyticsTiming?
+    let encodedTiming: AnalyticsTiming?
+    let warnings: [String]
+
+    var summary: String {
+        var text = resolution.displayName
+        if let width, let height { text += " (\(width) × \(height))" }
+        text += " • \(scaling) • source start \(sourceRange.start)s"
+        if let end = sourceRange.end { text += ", end \(end)s" }
+        if let vmafModel { text += " • \(vmafModel.rawValue)" }
+        if let sampleCount { text += " • \(sampleCount) sampled frames" }
+        if let pixelProcessing { text += " • \(pixelProcessing)" }
+        return text
+    }
+
+    static func timingWarnings(source: AnalyticsTiming?, encoded: AnalyticsTiming?, range: AnalyticsSourceRange) -> [String] {
+        var warnings: [String] = []
+        let sourceDuration = source?.duration.map { max(0, $0 - range.start) }
+        let expectedDuration = range.duration ?? sourceDuration
+        let rate = encoded?.frameRate.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? 24
+        let tolerance = max(0.05, 1 / rate)
+        if let expectedDuration, let actual = encoded?.duration, abs(expectedDuration - actual) > tolerance {
+            warnings.append("Source interval and encoded duration differ; only overlapping video is compared.")
+        }
+        if let a = source?.frameRate, let b = encoded?.frameRate, abs(a - b) > 0.01 {
+            warnings.append("Frame rates differ; timestamp matching may repeat or drop frames.")
+        }
+        if range.start == 0, range.end == nil, let a = source?.frameCount, let b = encoded?.frameCount, a != b {
+            warnings.append("Source and encoded frame counts differ (\(a) versus \(b)).")
+        }
+        if source?.duration == nil || encoded?.duration == nil || source?.frameRate == nil || encoded?.frameRate == nil {
+            warnings.append("Timing metadata is incomplete; frame alignment could not be fully checked.")
+        }
+        return warnings
+    }
+}
+
+/// One measured frame at an output-relative timestamp. Infinite PSNR is a valid perfect match.
+struct QualitySample: Codable, Equatable, Sendable, Identifiable {
+    let frame: Int
+    let seconds: Double
+    let score: Double
+    var id: Int { frame }
+}
+
+/// Prepared once per report/metric, keeping playback updates independent of sorting large logs.
+struct QualityTimeline: Sendable {
+    let metric: QualityMetric
+    let samples: [QualitySample]
+    let graphSamples: [QualitySample]
+    let fifthPercentile: Double?
+    let worstSamples: [QualitySample]
+    let duration: Double
+    let sourceStart: Double
+
+    init(result: MetricResult, fallbackDuration: Double = 0, maxBuckets: Int = 500) {
+        metric = result.metric
+        let valid = (result.samples ?? []).filter {
+            $0.seconds.isFinite && $0.seconds >= 0 && !$0.score.isNaN && $0.score != -.infinity
+        }.sorted { $0.seconds == $1.seconds ? $0.frame < $1.frame : $0.seconds < $1.seconds }
+        samples = valid
+        let scores = valid.map(\.score).sorted()
+        fifthPercentile = scores.isEmpty ? nil : scores[max(0, Int(ceil(Double(scores.count) * 0.05)) - 1)]
+        var worst: [QualitySample] = []
+        for sample in valid.filter({ $0.score.isFinite }).sorted(by: {
+            $0.score == $1.score ? $0.seconds < $1.seconds : $0.score < $1.score
+        }) {
+            if worst.allSatisfy({ abs($0.seconds - sample.seconds) >= 1 }) { worst.append(sample) }
+            if worst.count == 5 { break }
+        }
+        worstSamples = worst
+        sourceStart = result.comparison?.sourceRange.start ?? 0
+        let reported = result.comparison?.encodedTiming?.duration ?? result.comparison?.sourceRange.duration ?? fallbackDuration
+        duration = max(0.001, reported.isFinite ? reported : 0, valid.last?.seconds ?? 0)
+        // Keep each bucket's extremes, so short quality drops survive graph decimation.
+        let bucketSize = max(1, (valid.count + max(1, maxBuckets) - 1) / max(1, maxBuckets))
+        var graph: [QualitySample] = []
+        for start in stride(from: 0, to: valid.count, by: bucketSize) {
+            let end = min(start + bucketSize, valid.count)
+            let indices = start..<end
+            var keep = Set([start, end - 1])
+            if let low = indices.min(by: { valid[$0].score < valid[$1].score }) { keep.insert(low) }
+            if let high = indices.max(by: { valid[$0].score < valid[$1].score }) { keep.insert(high) }
+            graph.append(contentsOf: keep.sorted().map { valid[$0] })
+        }
+        graphSamples = graph
+    }
+
+    func sample(nearest seconds: Double) -> QualitySample? {
+        guard !samples.isEmpty, seconds.isFinite else { return nil }
+        var low = 0
+        var high = samples.count
+        while low < high {
+            let middle = (low + high) / 2
+            if samples[middle].seconds < seconds { low = middle + 1 } else { high = middle }
+        }
+        if low == 0 { return samples[0] }
+        if low == samples.count { return samples[low - 1] }
+        return seconds - samples[low - 1].seconds <= samples[low].seconds - seconds ? samples[low - 1] : samples[low]
+    }
+
+    func playbackTime(for seconds: Double, source: Bool) -> Double {
+        let relative = seconds.isFinite ? max(0, min(seconds, duration)) : 0
+        return relative + (source ? sourceStart : 0)
+    }
+}
+
 /// Result for a single quality metric
 struct MetricResult: Codable, Equatable, Sendable {
     let metric: QualityMetric
@@ -216,6 +349,9 @@ struct MetricResult: Codable, Equatable, Sendable {
 
     /// Individual channel scores (PSNR y/u/v)
     let channelScores: [String: Double]?
+
+    var comparison: AnalyticsComparison? = nil
+    var samples: [QualitySample]? = nil
 
     var formattedScore: String {
         if overallScore == .infinity { return "∞ \(unit)" }

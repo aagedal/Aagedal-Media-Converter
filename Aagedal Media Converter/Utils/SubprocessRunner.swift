@@ -309,12 +309,15 @@ extension SubprocessRunning {
     /// Runs a backpressured producer-to-consumer pipeline. The consumer is launched first, then
     /// every producer stdout chunk is written directly to its stdin while both stderr streams are
     /// drained by their respective runner invocations. Consumer cancellation or timeout cancels
-    /// the producer through the streaming-input task without joining an uncooperative producer.
+    /// the producer through the streaming-input task. By default it does not join an
+    /// uncooperative producer. Set `drainProducer` when input ownership must extend
+    /// until the producer exits, including during cancellation.
     func runPipeline(
         producer producerRequest: SubprocessRequest,
         consumer consumerRequest: SubprocessRequest,
         producerOutputHandler: (@Sendable (SubprocessOutputChunk) -> Void)? = nil,
-        consumerOutputHandler: (@Sendable (SubprocessOutputChunk) -> Void)? = nil
+        consumerOutputHandler: (@Sendable (SubprocessOutputChunk) -> Void)? = nil,
+        drainProducer: Bool = false
     ) async throws -> SubprocessPipelineResult {
         precondition(
             consumerRequest.standardInput == nil,
@@ -322,59 +325,68 @@ extension SubprocessRunning {
         )
 
         let producerState = SubprocessPipelineProducerState()
-        let consumerResult = try await runWithStreamingStandardInput(
-            consumerRequest,
-            inputProducer: { standardInput in
-                let producerTask = Task {
-                    try await self.run(producerRequest) { chunk in
-                        if case .standardOutput = chunk.stream {
-                            do {
-                                try standardInput.write(chunk.data)
-                            } catch {
-                                producerState.recordConnectionFailureAndCancelProducer(
-                                    producerRequest.redactedDiagnostic(error.localizedDescription)
-                                )
+        let consumerResult: SubprocessResult
+        do {
+            consumerResult = try await runWithStreamingStandardInput(
+                consumerRequest,
+                inputProducer: { standardInput in
+                    guard let producerTask = producerState.startProducerTask(operation: {
+                        try await self.run(producerRequest) { chunk in
+                            if case .standardOutput = chunk.stream {
+                                do {
+                                    try standardInput.write(chunk.data)
+                                } catch {
+                                    producerState.recordConnectionFailureAndCancelProducer(
+                                        producerRequest.redactedDiagnostic(error.localizedDescription)
+                                    )
+                                }
                             }
+                            producerOutputHandler?(chunk)
                         }
-                        producerOutputHandler?(chunk)
+                    }) else {
+                        standardInput.finish()
+                        return
                     }
-                }
-                producerState.installProducerTask(producerTask)
-                defer { producerState.clearProducerTask() }
-                do {
-                    let result = try await withTaskCancellationHandler {
-                        try await producerTask.value
-                    } onCancel: {
-                        producerState.cancelProducer()
-                    }
-                    producerState.finish(with: .completed(result))
-                } catch is CancellationError {
-                    producerState.finish(with: .failed(.cancelled))
-                } catch SubprocessRunnerError.timedOut(_, let result) {
-                    producerState.finish(with: .failed(.timedOut(result: result)))
-                } catch SubprocessRunnerError.failedToStart(_, let underlying) {
-                    producerState.finish(
-                        with: .failed(
-                            .failedToStart(
-                                reason: producerRequest.redactedDiagnostic(underlying)
-                            )
-                        )
-                    )
-                } catch {
-                    producerState.finish(
-                        with: .failed(
-                            .failed(
-                                reason: producerRequest.redactedDiagnostic(
-                                    error.localizedDescription
+                    defer { producerState.clearProducerTask() }
+                    do {
+                        let result = try await withTaskCancellationHandler {
+                            try await producerTask.value
+                        } onCancel: {
+                            producerState.cancelProducer()
+                        }
+                        producerState.finish(with: .completed(result))
+                    } catch is CancellationError {
+                        producerState.finish(with: .failed(.cancelled))
+                    } catch SubprocessRunnerError.timedOut(_, let result) {
+                        producerState.finish(with: .failed(.timedOut(result: result)))
+                    } catch SubprocessRunnerError.failedToStart(_, let underlying) {
+                        producerState.finish(
+                            with: .failed(
+                                .failedToStart(
+                                    reason: producerRequest.redactedDiagnostic(underlying)
                                 )
                             )
                         )
-                    )
-                }
-                standardInput.finish()
-            },
-            outputHandler: consumerOutputHandler
-        )
+                    } catch {
+                        producerState.finish(
+                            with: .failed(
+                                .failed(
+                                    reason: producerRequest.redactedDiagnostic(
+                                        error.localizedDescription
+                                    )
+                                )
+                            )
+                        )
+                    }
+                    standardInput.finish()
+                },
+                outputHandler: consumerOutputHandler
+            )
+        } catch {
+            if drainProducer { await producerState.closeAndDrain() }
+            throw error
+        }
+        if drainProducer { await producerState.closeAndDrain() }
 
         return SubprocessPipelineResult(
             producer: producerState.snapshot(),
@@ -1064,13 +1076,32 @@ private final class SubprocessPipelineProducerState: @unchecked Sendable {
     private var producerTask: Task<SubprocessResult, Error>?
     private var producerCancellationRequested = false
 
-    func installProducerTask(_ task: Task<SubprocessResult, Error>) {
-        let shouldCancel = lock.withLock { () -> Bool in
+    private var closed = false
+
+    /// Starting and closing share the lock: a late streaming callback cannot launch
+    /// a decoder after the owning analysis has drained and released its inputs.
+    func startProducerTask(operation: @escaping @Sendable () async throws -> SubprocessResult) -> Task<SubprocessResult, Error>? {
+        lock.withLock {
+            guard !closed else { return nil }
+            let task = Task { try await operation() }
             producerTask = task
-            return producerCancellationRequested
+            if producerCancellationRequested { task.cancel() }
+            return task
         }
-        if shouldCancel {
+    }
+
+    func closeAndDrain() async {
+        let task = lock.withLock {
+            closed = true
+            producerCancellationRequested = true
+            return producerTask
+        }
+        if let task {
             task.cancel()
+            if case .success(let result) = await task.result {
+                // The streaming callback may not have resumed to publish this yet.
+                finish(with: .completed(result))
+            }
         }
     }
 

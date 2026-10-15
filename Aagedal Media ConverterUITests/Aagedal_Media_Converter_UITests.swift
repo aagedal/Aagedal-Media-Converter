@@ -1445,6 +1445,56 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testQualityTimelineSeeksPlayerAndSwitchesSource() throws {
+        launchApp(generatedFixture: true, additionalArguments: [
+            "-analyticsEnabledMetrics", "(vmaf)", "-analyticsVMAFModel", "vmaf_v0.6.1"
+        ])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        element("toolbar.conversion").click()
+        XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        element("queue.analysis").click()
+        XCTAssertTrue(element("analysis.video.run").waitForExistence(timeout: 5))
+        element("analysis.video.run").click()
+        XCTAssertTrue(element("analysis.result.vmaf").waitForExistence(timeout: 45))
+        element("analysis.video.inspect").click()
+        XCTAssertTrue(element("analysis.inspection.metric").waitForExistence(timeout: 10))
+        let play = element("analysis.inspection.play")
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: play)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 20), .completed)
+        let slider = app.sliders["analysis.inspection.position"]
+        XCTAssertTrue(slider.exists)
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        let time = element("analysis.inspection.time")
+        XCTAssertTrue(time.waitForExistence(timeout: 5))
+        let advanced = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value != %@", "0.00 s"), object: time)
+        XCTAssertEqual(XCTWaiter.wait(for: [advanced], timeout: 5), .completed)
+        let previousTime = try XCTUnwrap(time.value as? String)
+        let chart = element("analysis.inspection.chart")
+        chart.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.4)).click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value != %@", previousTime), object: time)], timeout: 5), .completed)
+        XCTAssertEqual(play.label, "Play", "Seeking on the graph must pause playback")
+        let low = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "analysis.inspection.low.")).firstMatch
+        XCTAssertTrue(low.isHittable)
+        low.click()
+        let chosenTime = try XCTUnwrap(time.value as? String)
+        app.radioButtons["Source"].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: play)], timeout: 20), .completed)
+        XCTAssertEqual(time.value as? String, chosenTime, "Source switching must preserve encoded-relative position")
+        XCTAssertTrue(element("analysis.inspection.metric").isHittable)
+        XCTAssertTrue(element("analysis.inspection.percentile").isHittable)
+        XCTAssertTrue(element("analysis.inspection.nearest").isHittable)
+        XCTAssertTrue(play.isHittable, "Playback controls must fit inside the window")
+        XCTAssertTrue(element("analysis.inspection.close").isHittable)
+        let chartFrame = element("analysis.inspection.chart").frame
+        let windowFrame = app.windows.firstMatch.frame
+        XCTAssertGreaterThanOrEqual(chartFrame.minX, windowFrame.minX)
+        XCTAssertLessThanOrEqual(chartFrame.maxX, windowFrame.maxX)
+        attachWindowScreenshot(named: "Quality timeline beside source playback")
+    }
+
+    @MainActor
     func testBundledSSIMULACRA2RunsFromAnalysisOverlay() throws {
         launchApp(generatedFixture: true, additionalArguments: [
             "-analyticsEnabledMetrics", "(ssimulacra2)", "-ssimulacra2MaxFrames", "5"

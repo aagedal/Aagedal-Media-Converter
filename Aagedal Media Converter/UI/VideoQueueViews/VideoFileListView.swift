@@ -1609,6 +1609,7 @@ struct VideoFileListView: View {
                 enabledMetrics: metrics,
                 vmafModel: settings.vmafModel,
                 ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames,
+                comparisonResolution: settings.comparisonResolution,
                 operationID: attempt.operationID
             ) { metric, progressValue in
                 Task { @MainActor in

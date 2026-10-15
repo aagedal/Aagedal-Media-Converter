@@ -9,13 +9,57 @@ protocol AnalyticsMediaInfoProviding: Sendable {
     func duration(for file: URL) async -> Double?
     func resolution(for file: URL) async -> (width: Int, height: Int)?
     func bitDepth(for file: URL) async -> Int?
+    func timing(for file: URL) async -> AnalyticsTiming?
+    func pixelFormat(for file: URL, ffmpegPath: String) async -> String?
 }
 
 extension AnalyticsMediaInfoProviding {
     func bitDepth(for file: URL) async -> Int? { nil }
+    func timing(for file: URL) async -> AnalyticsTiming? { nil }
+    func pixelFormat(for file: URL, ffmpegPath: String) async -> String? { nil }
 }
 
 private struct DefaultAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
+    let subprocessRunner: any SubprocessRunning
+
+    func timing(for file: URL) async -> AnalyticsTiming? {
+        if file.pathExtension.lowercased() == "ivf", let header = IVFHeaderParser.parse(url: file) {
+            return AnalyticsTiming(duration: header.durationSeconds,
+                frameRate: header.fpsNumerator > 0 && header.fpsDenominator > 0
+                    ? Double(header.fpsNumerator) / Double(header.fpsDenominator) : nil,
+                frameCount: header.frameCount > 0 ? header.frameCount : nil)
+        }
+        guard let meta = try? await SwiftExifMediaProbe.readVideo(file),
+              let stream = meta.videoStreams.first(where: { $0.isAttachedPic != true }) else { return nil }
+        let video = VideoMetadataService.mapVideoStream(stream)
+        let duration: Double?
+        if let streamDuration = video.duration { duration = streamDuration }
+        else { duration = await SwiftExifMediaProbe.duration(for: file) }
+        return AnalyticsTiming(duration: duration, frameRate: video.frameRate?.value, frameCount: stream.frameCount)
+    }
+
+    func pixelFormat(for file: URL, ffmpegPath: String) async -> String? {
+        let metadataFormat = try? await NonJoiningTaskDeadline.run(timeout: .seconds(15)) {
+            guard let meta = try? await SwiftExifMediaProbe.readVideo(file),
+                  let stream = meta.videoStreams.first(where: { $0.isAttachedPic != true }) else { return nil as String? }
+            return VideoMetadataService.mapVideoStream(stream).pixelFormat
+        }
+        if let metadataFormat { return metadataFormat }
+        guard !Task.isCancelled else { return nil }
+        // Container metadata may omit FFV1's pixel layout. Decode one frame with
+        // the captured FFmpeg and read its stream description instead of guessing.
+        let request = SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: ["-nostdin", "-hide_banner", "-i", file.path, "-map", "0:v:0",
+                        "-frames:v", "1", "-an", "-f", "null", "-"],
+            timeout: .seconds(15), standardOutputCaptureLimit: 0, standardErrorCaptureLimit: 32 * 1024,
+            sensitiveValues: [ffmpegPath, file.path])
+        guard let result = try? await subprocessRunner.run(request), result.succeeded,
+              let regex = try? NSRegularExpression(pattern: "Video:[^\\n]*?,\\s*([a-z][a-z0-9_]+)(?:\\(|,|\\s)"),
+              let match = regex.firstMatch(in: result.standardErrorText, range: NSRange(result.standardErrorText.startIndex..., in: result.standardErrorText)),
+              let range = Range(match.range(at: 1), in: result.standardErrorText) else { return nil }
+        return String(result.standardErrorText[range])
+    }
+
     func bitDepth(for file: URL) async -> Int? {
         guard SwiftExifMediaProbe.canReadVideo(file),
               let meta = try? await SwiftExifMediaProbe.readVideo(file),
@@ -41,6 +85,27 @@ private struct DefaultAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
     }
 }
 
+/// Owns scoped input access and any lossless inspection intermediate.
+/// Views retain the lease for the whole playback session, including source/encoded switches.
+final class AnalyticsPreviewAsset: Sendable {
+    let url: URL
+    let originalURL: URL
+    private let access: SecurityScopedAccess
+    private let scratch: URL
+
+    init(url: URL, originalURL: URL, access: SecurityScopedAccess, scratch: URL) {
+        self.url = url
+        self.originalURL = originalURL
+        self.access = access
+        self.scratch = scratch
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: scratch)
+        SecurityScopedBookmarkManager.shared.stopAccessing(access)
+    }
+}
+
 /// Service for running video quality analytics using FFmpeg (VMAF, PSNR, SSIMULACRA2)
 actor AnalyticsService {
     static let shared = AnalyticsService()
@@ -54,25 +119,28 @@ actor AnalyticsService {
     private let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "AnalyticsService")
     private let subprocessRunner: any SubprocessRunning
     private let ffmpegPathProvider: @Sendable () -> String?
+    private let avmdecPathProvider: @Sendable () -> String?
     private let ssimulacra2PathProvider: @Sendable () -> String?
     private let mediaInfoProvider: any AnalyticsMediaInfoProviding
     private let mediaInfoTimeout: Duration
     private var activeAnalysisID: UUID?
     private var activeAnalysisRunID: UUID?
-    private var metricTasks: [UUID: (operationID: UUID, task: Task<MetricResult, Error>)] = [:]
+    private var analysisTasks: [UUID: (operationID: UUID, task: Task<[MetricResult], Error>)] = [:]
     @TaskLocal private static var runningAnalysisRunID: UUID?
 
     init(
         subprocessRunner: any SubprocessRunning = SubprocessRunner(),
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         ssimulacra2PathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ssimulacra2Path },
-        mediaInfoProvider: any AnalyticsMediaInfoProviding = DefaultAnalyticsMediaInfoProvider(),
+        avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath },
+        mediaInfoProvider: (any AnalyticsMediaInfoProviding)? = nil,
         mediaInfoTimeout: Duration = AnalyticsService.mediaInfoTimeout
     ) {
+        self.avmdecPathProvider = avmdecPathProvider
         self.subprocessRunner = subprocessRunner
         self.ffmpegPathProvider = ffmpegPathProvider
         self.ssimulacra2PathProvider = ssimulacra2PathProvider
-        self.mediaInfoProvider = mediaInfoProvider
+        self.mediaInfoProvider = mediaInfoProvider ?? DefaultAnalyticsMediaInfoProvider(subprocessRunner: subprocessRunner)
         self.mediaInfoTimeout = mediaInfoTimeout
     }
 
@@ -92,19 +160,20 @@ actor AnalyticsService {
         enabledMetrics: [QualityMetric],
         vmafModel: VMAFModel,
         ssimulacra2MaxFrames: Int = AppConstants.defaultSSIMULACRA2MaxFrames,
+        comparisonResolution: AnalyticsComparisonResolution = .encoded,
         operationID: UUID = UUID(),
         progress: @escaping @Sendable (QualityMetric, Double) -> Void
     ) async throws -> [MetricResult] {
         guard !Task.isCancelled else { throw AnalyticsError.cancelled }
         guard sourceRange.isValid else { throw AnalyticsError.parsingFailed("Invalid source interval for quality analysis") }
 
-        for metricTask in metricTasks.values { metricTask.task.cancel() }
+        for metricTask in analysisTasks.values { metricTask.task.cancel() }
         let analysisID = operationID
         let runID = UUID()
         activeAnalysisID = analysisID
         activeAnalysisRunID = runID
         defer {
-            metricTasks.removeValue(forKey: runID)
+            analysisTasks.removeValue(forKey: runID)
             if activeAnalysisRunID == runID {
                 activeAnalysisID = nil
                 activeAnalysisRunID = nil
@@ -127,61 +196,153 @@ actor AnalyticsService {
             throw AnalyticsError.encodedFileNotFound
         }
 
-        var results: [MetricResult] = []
-
-        for metric in enabledMetrics {
-            guard activeAnalysisRunID == runID, !Task.isCancelled else {
-                throw AnalyticsError.cancelled
-            }
-
-            let metricTask = Task {
-                try await Self.$runningAnalysisRunID.withValue(runID) {
-                    try await self.runMetric(
-                        metric,
-                        ffmpegPath: ffmpegPath,
-                        sourceFile: sourceFile,
-                        encodedFile: encodedFile,
-                        sourceRange: sourceRange,
-                        vmafModel: vmafModel,
-                        ssimulacra2MaxFrames: ssimulacra2MaxFrames
-                    ) { metricProgress in
-                        progress(metric, metricProgress)
-                    }
-                }
-            }
-            metricTasks[runID] = (analysisID, metricTask)
-
-            do {
-                let result = try await withTaskCancellationHandler {
-                    try await metricTask.value
-                } onCancel: {
-                    metricTask.cancel()
-                }
-                guard activeAnalysisRunID == runID, !Task.isCancelled else {
-                    throw AnalyticsError.cancelled
-                }
-                metricTasks.removeValue(forKey: runID)
-                results.append(result)
-            } catch is CancellationError {
-                throw AnalyticsError.cancelled
-            } catch let error as AnalyticsError {
-                if case .cancelled = error {
-                    throw AnalyticsError.cancelled
-                }
-                logger.error("\(metric.displayName, privacy: .public) failed: \(error.localizedDescription, privacy: .private(mask: .hash))")
-                throw error
-            } catch {
-                logger.error("\(metric.displayName, privacy: .public) failed: \(error.localizedDescription, privacy: .private(mask: .hash))")
-                throw AnalyticsError.metricFailed(metric, error.localizedDescription)
+        let task = Task {
+            try await Self.$runningAnalysisRunID.withValue(runID) {
+                try await self.executeAnalysis(
+                    sourceFile: sourceFile, encodedFile: encodedFile, sourceRange: sourceRange,
+                    enabledMetrics: enabledMetrics, vmafModel: vmafModel,
+                    maxFrames: ssimulacra2MaxFrames, resolution: comparisonResolution,
+                    ffmpegPath: ffmpegPath, progress: progress
+                )
             }
         }
+        analysisTasks[runID] = (analysisID, task)
+        do {
+            let results = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: { task.cancel() }
+            guard activeAnalysisRunID == runID, !Task.isCancelled else { throw AnalyticsError.cancelled }
+            return results
+        } catch is CancellationError {
+            throw AnalyticsError.cancelled
+        }
+    }
 
+    /// Preparation and cleanup live inside the registered task, so cancellation drains
+    /// decoder work and removes intermediates before returning to callers.
+    private func executeAnalysis(
+        sourceFile: URL, encodedFile: URL, sourceRange: AnalyticsSourceRange,
+        enabledMetrics: [QualityMetric], vmafModel: VMAFModel, maxFrames: Int,
+        resolution: AnalyticsComparisonResolution, ffmpegPath: String,
+        progress: @escaping @Sendable (QualityMetric, Double) -> Void
+    ) async throws -> [MetricResult] {
+        guard !enabledMetrics.isEmpty else { return [] }
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("analytics_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let source = try await prepareInput(sourceFile, output: scratch.appendingPathComponent("source.mkv"), ffmpegPath: ffmpegPath)
+        let encoded = sourceFile == encodedFile ? source : try await prepareInput(encodedFile, output: scratch.appendingPathComponent("encoded.mkv"), ffmpegPath: ffmpegPath)
+        let provider = mediaInfoProvider
+        let timings = try? await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {
+            let sourceTiming = await provider.timing(for: sourceFile)
+            let encodedTiming = await provider.timing(for: encodedFile)
+            return (sourceTiming, encodedTiming)
+        }
+        try Task.checkCancellation()
+        let dimensions: (width: Int, height: Int)?
+        do {
+            dimensions = try await getVideoResolution(for: resolution == .source ? source : encoded)
+        } catch {
+            try Task.checkCancellation()
+            // FFmpeg can resolve dimensions itself; frame extraction needs known geometry.
+            if enabledMetrics.contains(.ssimulacra2) { throw error }
+            dimensions = nil
+        }
+        var warnings = AnalyticsComparison.timingWarnings(source: timings?.0, encoded: timings?.1, range: sourceRange)
+        if source != sourceFile || encoded != encodedFile {
+            warnings.append("AV2 analysis reconstructs timestamps at the decoder’s reported frame rate.")
+        }
+        let comparison = AnalyticsComparison(
+            resolution: resolution, width: dimensions?.width, height: dimensions?.height,
+            scaling: "bicubic", sourceRange: sourceRange, vmafModel: nil,
+            sourceTiming: timings?.0, encodedTiming: timings?.1,
+            warnings: warnings
+        )
+        var results: [MetricResult] = []
+        for metric in enabledMetrics {
+            try Task.checkCancellation()
+            var result = try await runMetric(metric, ffmpegPath: ffmpegPath, sourceFile: source, encodedFile: encoded,
+                                             sourceRange: sourceRange, vmafModel: vmafModel,
+                                             ssimulacra2MaxFrames: maxFrames, comparisonResolution: resolution, comparisonDimensions: dimensions) {
+                progress(metric, $0)
+            }
+            try Task.checkCancellation()
+            let sampling = result.comparison
+            result.comparison = AnalyticsComparison(
+                resolution: comparison.resolution, width: comparison.width ?? sampling?.width, height: comparison.height ?? sampling?.height,
+                scaling: comparison.scaling, sourceRange: sourceRange,
+                vmafModel: metric == .vmaf ? vmafModel : nil,
+                sampleCount: sampling?.sampleCount, sampleTimestamps: sampling?.sampleTimestamps,
+                pixelProcessing: sampling?.pixelProcessing ?? (metric == .vmaf && vmafModel.usesV1Features
+                    ? "YUV 4:2:0 10-bit before scaling" : "Native pixel format"),
+                sourceTiming: comparison.sourceTiming, encodedTiming: comparison.encodedTiming,
+                warnings: comparison.warnings + (sampling?.warnings ?? [])
+            )
+            results.append(result)
+        }
         return results
+    }
+
+    /// Independent of analysis ownership: opening/closing an inspector never cancels a metric run.
+    func prepareQualityPreview(_ input: URL) async throws -> AnalyticsPreviewAsset {
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: input)
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("quality_preview_\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+            guard let ffmpeg = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
+            let url = try await prepareInput(input, output: scratch.appendingPathComponent("preview.mkv"), ffmpegPath: ffmpeg)
+            try Task.checkCancellation()
+            return AnalyticsPreviewAsset(url: url, originalURL: input, access: access, scratch: scratch)
+        } catch {
+            try? FileManager.default.removeItem(at: scratch)
+            SecurityScopedBookmarkManager.shared.stopAccessing(access)
+            throw error
+        }
+    }
+
+    private func prepareInput(_ input: URL, output: URL, ffmpegPath: String) async throws -> URL {
+        try Task.checkCancellation()
+        let ext = input.pathExtension.lowercased()
+        let isAV2 = (ext == "ivf" && (IVFHeaderParser.parse(url: input)?.isAV2 ?? false))
+            || (["mkv", "webm"].contains(ext) && FFMPEGConverter.matroskaContainsAV2(url: input))
+        guard isAV2 else { return input }
+        guard let decoder = avmdecPathProvider() else {
+            throw AnalyticsError.parsingFailed("The bundled AV2 decoder is missing. Reinstall the app to restore it.")
+        }
+        let sensitive: Set<String> = [input.path, output.path, decoder, ffmpegPath]
+        let producer = SubprocessRequest(executableURL: URL(fileURLWithPath: decoder),
+            arguments: [input.path, "-o", "-"], timeout: Self.metricTimeout,
+            standardOutputCaptureLimit: 0, standardErrorCaptureLimit: Self.diagnosticCaptureLimit,
+            sensitiveValues: sensitive)
+        // FFV1 preserves native Y4M bit depth/chroma, while avoiding an uncompressed
+        // whole-video scratch file. Decode once, reuse for every metric and sample.
+        let consumer = SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpegPath),
+            arguments: ["-y", "-nostdin", "-hide_banner", "-f", "yuv4mpegpipe", "-i", "pipe:0",
+                        "-map", "0:v:0", "-an", "-c:v", "ffv1", "-level", "3", "-fps_mode", "passthrough", output.path],
+            timeout: Self.metricTimeout, standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: Self.diagnosticCaptureLimit, sensitiveValues: sensitive)
+        let result: SubprocessPipelineResult
+        do {
+            result = try await subprocessRunner.runPipeline(producer: producer, consumer: consumer, drainProducer: true)
+        } catch is CancellationError {
+            throw AnalyticsError.cancelled
+        } catch {
+            throw AnalyticsError.parsingFailed("AV2 decoding failed. " + consumer.redactedDiagnostic(error.localizedDescription, limit: 500))
+        }
+        try Task.checkCancellation()
+        guard case .completed(let decoded) = result.producer, decoded.succeeded, result.consumer.succeeded else {
+            let detail: String
+            if case .completed(let decoded) = result.producer, !decoded.succeeded {
+                detail = producer.redactedDiagnostic(decoded.standardErrorText, limit: 500)
+            } else { detail = consumer.redactedDiagnostic(result.consumer.standardErrorText, limit: 500) }
+            throw AnalyticsError.parsingFailed("AV2 decoding failed. \(detail)")
+        }
+        return output
     }
 
     /// Cancels the captured analyses and waits for their helpers and scratch cleanup to drain.
     func cancelAnalysis(operationID: UUID? = nil) async {
-        let tasks = metricTasks.filter { operationID == nil || $0.value.operationID == operationID }
+        let tasks = analysisTasks.filter { operationID == nil || $0.value.operationID == operationID }
         if operationID == nil || activeAnalysisID == operationID {
             activeAnalysisID = nil
             activeAnalysisRunID = nil
@@ -207,6 +368,8 @@ actor AnalyticsService {
         sourceRange: AnalyticsSourceRange,
         vmafModel: VMAFModel,
         ssimulacra2MaxFrames: Int,
+        comparisonResolution: AnalyticsComparisonResolution,
+        comparisonDimensions: (width: Int, height: Int)?,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
         logger.info("Starting \(metric.displayName, privacy: .public) analysis")
@@ -219,12 +382,15 @@ actor AnalyticsService {
                 encodedFile: encodedFile,
                 sourceRange: sourceRange,
                 maxFrames: ssimulacra2MaxFrames,
+                comparisonResolution: comparisonResolution,
+                comparisonDimensions: comparisonDimensions,
                 progress: progress
             )
         }
 
         // Build arguments based on metric type
         var vmafLogURL: URL? = nil
+        var frameLogURL: URL? = nil
         var arguments: [String]
 
         switch metric {
@@ -254,32 +420,40 @@ actor AnalyticsService {
                 sourceRange: sourceRange,
                 model: vmafModel,
                 logPath: logFile,
-                encodedBitDepth: encodedBitDepth
+                encodedBitDepth: encodedBitDepth,
+                comparisonResolution: comparisonResolution
             )
         case .psnr:
+            frameLogURL = FileManager.default.temporaryDirectory.appendingPathComponent("psnr_\(UUID().uuidString).log")
             arguments = buildPSNRArguments(
                 encodedFile: encodedFile,
                 sourceFile: sourceFile,
-                sourceRange: sourceRange
+                sourceRange: sourceRange,
+                comparisonResolution: comparisonResolution,
+                statsURL: frameLogURL
             )
         case .xpsnr:
+            frameLogURL = FileManager.default.temporaryDirectory.appendingPathComponent("xpsnr_\(UUID().uuidString).log")
             arguments = buildXPSNRArguments(
                 encodedFile: encodedFile,
                 sourceFile: sourceFile,
-                sourceRange: sourceRange
+                sourceRange: sourceRange,
+                comparisonResolution: comparisonResolution,
+                statsURL: frameLogURL
             )
         case .ssimulacra2:
             throw AnalyticsError.metricFailed(.ssimulacra2, "SSIMULACRA2 uses a dedicated binary and should not reach the FFmpeg path")
         }
+        if let filterIndex = arguments.firstIndex(where: { $0 == "-filter_complex" || $0 == "-lavfi" }), filterIndex + 1 < arguments.count {
+            arguments[filterIndex + 1] += ",showinfo=checksum=0"
+        }
         arguments.insert("-nostdin", at: 0)
         defer {
-            if let vmafLogURL {
-                try? FileManager.default.removeItem(at: vmafLogURL)
-            }
+            for file in [vmafLogURL, frameLogURL].compactMap({ $0 }) { try? FileManager.default.removeItem(at: file) }
         }
 
         let sensitiveValues = Set(
-            [ffmpegPath, sourceFile.path, encodedFile.path, vmafLogURL?.path]
+            [ffmpegPath, sourceFile.path, encodedFile.path, vmafLogURL?.path, frameLogURL?.path]
                 .compactMap { $0 }
         )
         let request = SubprocessRequest(
@@ -334,13 +508,13 @@ actor AnalyticsService {
         }
 
         // Parse results
-        let result: MetricResult
+        var result: MetricResult
         switch metric {
         case .vmaf:
             guard let logURL = vmafLogURL else {
                 throw AnalyticsError.parsingFailed("VMAF log file not created")
             }
-            result = try parseVMAFResults(from: logURL)
+            result = try parseVMAFResults(from: logURL, timestamps: progressParser.frameTimestamps)
         case .psnr:
             result = try parsePSNRResults(from: stderrOutput)
         case .xpsnr:
@@ -349,6 +523,9 @@ actor AnalyticsService {
             throw AnalyticsError.parsingFailed("SSIMULACRA2 uses a dedicated binary and should not reach the FFmpeg parsing path")
         }
 
+        if let frameLogURL, let log = try? String(contentsOf: frameLogURL, encoding: .utf8) {
+            result.samples = Self.parseFrameScores(log, metric: metric, timestamps: progressParser.frameTimestamps)
+        }
         progress(1.0)
         logger.info("\(metric.displayName, privacy: .public) complete: \(result.formattedScore, privacy: .public) (\(result.qualityRating, privacy: .public))")
 
@@ -357,13 +534,20 @@ actor AnalyticsService {
 
     // MARK: - FFmpeg Command Construction
 
+    static func scalingFilter(_ resolution: AnalyticsComparisonResolution) -> String {
+        resolution == .encoded
+            ? "[src][enc]scale2ref=flags=bicubic[ref][dist]"
+            : "[enc][src]scale2ref=flags=bicubic[dist][ref]"
+    }
+
     func buildVMAFArguments(
         encodedFile: URL,
         sourceFile: URL,
         sourceRange: AnalyticsSourceRange,
         model: VMAFModel,
         logPath: URL,
-        encodedBitDepth: Int? = nil
+        encodedBitDepth: Int? = nil,
+        comparisonResolution: AnalyticsComparisonResolution = .encoded
     ) -> [String] {
         let escapedLogPath = logPath.path.replacingOccurrences(of: ":", with: "\\:")
         var modelOptions = "version=\(model.rawValue)"
@@ -375,10 +559,10 @@ actor AnalyticsService {
         let filter: String
         if model.usesV1Features {
             // Promote both inputs before scaling to preserve banding information.
-            filter = "[1:v]setpts=PTS-STARTPTS,format=yuv420p10le[src];[0:v]setpts=PTS-STARTPTS,format=yuv420p10le[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]\(vmafOpts):shortest=1"
+            filter = "[1:v]setpts=PTS-STARTPTS,format=yuv420p10le[src];[0:v]setpts=PTS-STARTPTS,format=yuv420p10le[enc];\(Self.scalingFilter(comparisonResolution));[dist][ref]\(vmafOpts):shortest=1"
         } else {
             // Preserve the legacy preprocessing for comparisons with earlier scores.
-            filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]\(vmafOpts):shortest=1"
+            filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];\(Self.scalingFilter(comparisonResolution));[dist][ref]\(vmafOpts):shortest=1"
         }
         return [
             "-i", encodedFile.path
@@ -393,9 +577,12 @@ actor AnalyticsService {
     private func buildPSNRArguments(
         encodedFile: URL,
         sourceFile: URL,
-        sourceRange: AnalyticsSourceRange
+        sourceRange: AnalyticsSourceRange,
+        comparisonResolution: AnalyticsComparisonResolution,
+        statsURL: URL? = nil
     ) -> [String] {
-        let filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]psnr=shortest=1"
+        let stats = statsURL.map { "stats_file=\($0.path.replacingOccurrences(of: ":", with: "\\:")):" } ?? ""
+        let filter = "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];\(Self.scalingFilter(comparisonResolution));[dist][ref]psnr=\(stats)shortest=1"
         return [
             "-i", encodedFile.path
         ] + sourceRange.inputArguments + [
@@ -409,11 +596,14 @@ actor AnalyticsService {
     private func buildXPSNRArguments(
         encodedFile: URL,
         sourceFile: URL,
-        sourceRange: AnalyticsSourceRange
+        sourceRange: AnalyticsSourceRange,
+        comparisonResolution: AnalyticsComparisonResolution,
+        statsURL: URL? = nil
     ) -> [String] {
         // XPSNR expects reference first, distorted second
         // scale2ref scales source (input 0) to match encoded (input 1) dimensions
-        let filter = "[0:v]setpts=PTS-STARTPTS[src];[1:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[ref][dist]xpsnr=shortest=1"
+        let stats = statsURL.map { "stats_file=\($0.path.replacingOccurrences(of: ":", with: "\\:")):" } ?? ""
+        let filter = "[0:v]setpts=PTS-STARTPTS[src];[1:v]setpts=PTS-STARTPTS[enc];\(Self.scalingFilter(comparisonResolution));[ref][dist]xpsnr=\(stats)shortest=1"
         return sourceRange.inputArguments + [
             "-i", sourceFile.path,
             "-i", encodedFile.path,
@@ -432,6 +622,8 @@ actor AnalyticsService {
         encodedFile: URL,
         sourceRange: AnalyticsSourceRange,
         maxFrames: Int,
+        comparisonResolution: AnalyticsComparisonResolution,
+        comparisonDimensions: (width: Int, height: Int)?,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
         guard let ssimulacra2Path = ssimulacra2PathProvider() else {
@@ -439,9 +631,24 @@ actor AnalyticsService {
         }
 
         let encodedDuration = try await getVideoDuration(for: encodedFile)
-        let duration = min(encodedDuration, sourceRange.duration ?? encodedDuration)
-        let resolution = try await getVideoResolution(for: sourceFile)
+        let sourceDuration = try await getVideoDuration(for: sourceFile)
+        let duration = min(encodedDuration, sourceRange.duration ?? encodedDuration, max(0, sourceDuration - sourceRange.start))
+        guard duration.isFinite, duration > 0 else {
+            throw AnalyticsError.parsingFailed("Source interval and encoded video have no overlapping duration")
+        }
+        let resolution: (width: Int, height: Int)
+        if let comparisonDimensions { resolution = comparisonDimensions }
+        else { resolution = try await getVideoResolution(for: comparisonResolution == .source ? sourceFile : encodedFile) }
 
+        let provider = mediaInfoProvider
+        // Pixel discovery may launch a bounded helper; join it on cancellation before
+        // releasing scratch files, just like metric extraction and AV2 decoding.
+        let sourceFormat = await provider.pixelFormat(for: sourceFile, ffmpegPath: ffmpegPath)
+        try Task.checkCancellation()
+        let encodedFormat = await provider.pixelFormat(for: encodedFile, ffmpegPath: ffmpegPath)
+        try Task.checkCancellation()
+        let sourceScale = Self.frameScaleFilter(width: resolution.width, height: resolution.height, pixelFormat: sourceFormat)
+        let encodedScale = Self.frameScaleFilter(width: resolution.width, height: resolution.height, pixelFormat: encodedFormat)
         let frameCount = max(1, maxFrames > 0 ? maxFrames : AppConstants.defaultSSIMULACRA2MaxFrames)
         let actualFrameCount = min(frameCount, max(1, Int(duration)))
         let interval = duration / Double(actualFrameCount)
@@ -463,8 +670,8 @@ actor AnalyticsService {
             let encodedFrame = tempDir.appendingPathComponent("encoded_\(String(format: "%04d", i)).png")
 
             // Extract frames from both videos
-            try await extractFrame(ffmpegPath: ffmpegPath, input: sourceFile, timestamp: timestamp + sourceRange.start, output: sourceFrame, scaleFilter: nil)
-            try await extractFrame(ffmpegPath: ffmpegPath, input: encodedFile, timestamp: timestamp, output: encodedFrame, scaleFilter: "scale=\(resolution.width):\(resolution.height)")
+            try await extractFrame(ffmpegPath: ffmpegPath, input: sourceFile, timestamp: timestamp + sourceRange.start, output: sourceFrame, scaleFilter: sourceScale)
+            try await extractFrame(ffmpegPath: ffmpegPath, input: encodedFile, timestamp: timestamp, output: encodedFrame, scaleFilter: encodedScale)
 
             // Compare with ssimulacra2_rs
             let score = try await compareFrames(ssimulacra2Path: ssimulacra2Path, source: sourceFrame, encoded: encodedFrame)
@@ -494,8 +701,29 @@ actor AnalyticsService {
             min: scores.min(),
             max: scores.max(),
             unit: "score",
-            channelScores: nil
+            channelScores: nil,
+            comparison: AnalyticsComparison(
+                resolution: comparisonResolution, width: resolution.width, height: resolution.height,
+                scaling: "bicubic", sourceRange: sourceRange, vmafModel: nil,
+                sampleCount: scores.count, sampleTimestamps: (0..<scores.count).map { Double($0) * interval },
+                pixelProcessing: "Resize before 16-bit RGB conversion (source: \(sourceFormat ?? "auto"), encoded: \(encodedFormat ?? "auto"))",
+                sourceTiming: nil, encodedTiming: nil,
+                warnings: sourceFormat == nil || encodedFormat == nil
+                    ? ["Native pixel format could not be verified; FFmpeg selected the resize/conversion format."] : []
+            ),
+            samples: scores.enumerated().map { QualitySample(frame: $0.offset, seconds: Double($0.offset) * interval, score: $0.element) }
         )
+    }
+
+    /// Keep resizing in the native pixel format. Otherwise filter negotiation can
+    /// combine YUV resizing with RGB conversion and use different chroma resampling.
+    private static func frameScaleFilter(width: Int, height: Int, pixelFormat: String?) -> String {
+        var filter = "scale=\(width):\(height):flags=bicubic"
+        if let pixelFormat, !pixelFormat.isEmpty,
+           pixelFormat.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }) {
+            filter += ",format=\(pixelFormat)"
+        }
+        return filter
     }
 
     /// Extracts a single frame from a video at the given timestamp
@@ -510,6 +738,7 @@ actor AnalyticsService {
         }
         args += [
             "-frames:v", "1",
+            "-pix_fmt", "rgb48be",
             "-update", "1",
             "-y",
             output.path
@@ -649,7 +878,7 @@ actor AnalyticsService {
 
     // MARK: - Result Parsing
 
-    private func parseVMAFResults(from jsonURL: URL) throws -> MetricResult {
+    private func parseVMAFResults(from jsonURL: URL, timestamps: [Int: Double] = [:]) throws -> MetricResult {
         guard FileManager.default.fileExists(atPath: jsonURL.path) else {
             throw AnalyticsError.parsingFailed("VMAF log file not found")
         }
@@ -675,8 +904,36 @@ actor AnalyticsService {
             min: min,
             max: max,
             unit: "score",
-            channelScores: nil
+            channelScores: nil,
+            samples: (json["frames"] as? [[String: Any]] ?? []).compactMap { frame in
+                guard let index = frame["frameNum"] as? Int, let seconds = timestamps[index],
+                      let metrics = frame["metrics"] as? [String: Any], let score = metrics["vmaf"] as? Double,
+                      score.isFinite else { return nil }
+                return QualitySample(frame: index, seconds: seconds, score: score)
+            }
         )
+    }
+
+    /// The PSNR/XPSNR stats index is one-based; showinfo's output frame index is zero-based.
+    static func parseFrameScores(_ log: String, metric: QualityMetric, timestamps: [Int: Double]) -> [QualitySample] {
+        let pattern = metric == .psnr
+            ? #"n:\s*(\d+).*?psnr_avg:([^\s]+)"#
+            : #"n:\s*(\d+).*?XPSNR y:\s*([^\s]+).*?XPSNR u:\s*([^\s]+).*?XPSNR v:\s*([^\s]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        return log.split(whereSeparator: \.isNewline).compactMap { line in
+            let text = String(line)
+            guard let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
+            func field(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
+            guard let index = field(1).flatMap(Int.init).map({ $0 - 1 }), let seconds = timestamps[index],
+                  let y = field(2).flatMap(Double.init) else { return nil }
+            let score: Double
+            if metric == .xpsnr {
+                guard let u = field(3).flatMap(Double.init), let v = field(4).flatMap(Double.init) else { return nil }
+                score = (6 * y + u + v) / 8
+            } else { score = y }
+            guard !score.isNaN, score != -.infinity else { return nil }
+            return QualitySample(frame: index, seconds: seconds, score: score)
+        }
     }
 
     private func parsePSNRResults(from stderrOutput: String) throws -> MetricResult {
@@ -966,6 +1223,9 @@ private final class AnalyticsFFmpegProgressParser: @unchecked Sendable {
     private var duration: Double?
     private var lastReportedProgress = 0.0
     private var pendingText = ""
+    private var timestamps: [Int: Double] = [:]
+    private static let timestampRegex = try! NSRegularExpression(pattern: #"\bn:\s*(\d+).*?\bpts_time:([\d.eE+\-]+)"#)
+    var frameTimestamps: [Int: Double] { lock.withLock { timestamps } }
 
     init(progress: @escaping @Sendable (Double) -> Void) {
         self.progress = progress
@@ -996,6 +1256,12 @@ private final class AnalyticsFFmpegProgressParser: @unchecked Sendable {
     }
 
     private func parse(_ text: String) {
+        if text.contains("showinfo"),
+           let match = Self.timestampRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+           let frameRange = Range(match.range(at: 1), in: text), let timeRange = Range(match.range(at: 2), in: text),
+           let frame = Int(text[frameRange]), let seconds = Double(text[timeRange]), seconds.isFinite, seconds >= 0 {
+            timestamps[frame] = seconds
+        }
         if duration == nil {
             duration = ParsingUtils.parseDuration(from: text)
         }

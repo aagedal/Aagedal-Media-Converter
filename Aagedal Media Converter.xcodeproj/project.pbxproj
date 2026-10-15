@@ -322,6 +322,9 @@
 		VDISPMGR00001000BUILD /* VirtualDisplayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */; };
 		VIDITEMIDX00000001 /* VideoItemIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIDITEMIDX00000002 /* VideoItemIndex.swift */; };
 		A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */; };
+		46B0B00A2A6A498898911DEF /* AV2ResourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */; };
+		A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */; };
+		FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -717,6 +720,9 @@
 		VIDITEMIDX00000002 /* VideoItemIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItemIndex.swift; sourceTree = "<group>"; };
 		A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "ssimulacra2-LICENSE.txt"; sourceTree = "<group>"; };
 		A906AA120000000000000202 /* ssimulacra2_rs */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ssimulacra2_rs; sourceTree = "<group>"; };
+		20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ResourcePolicy.swift; sourceTree = "<group>"; };
+		B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2RecoveryStore.swift; sourceTree = "<group>"; };
+		FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ResourceRecoveryTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1154,6 +1160,7 @@
 				AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */,
 				CD4320100000000000000002 /* CaptureFrameRateTests.swift */,
 				A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */,
+				FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */,
 				E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */,
 				924448BC707A4A8BBE774393 /* WatchFolderPollingTests.swift */,
 				AF129A6A3D374C449DE8B304 /* AppImprovementTests.swift */,
@@ -1185,6 +1192,8 @@
 				A4591900000000000000000C /* StitchMarkerExport.swift */,
 				A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */,
 				AF22AF22AF22AF22AF22AF22 /* AV2CommandBuilder.swift */,
+				B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */,
+				20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */,
 				9315E73973904E2E92CE7C22 /* AV2TrimPlan.swift */,
 				AF26AF26AF26AF26AF26AF26 /* IVFHeaderParser.swift */,
 				AF28AF28AF28AF28AF28AF28 /* IVFConcatenator.swift */,
@@ -1824,6 +1833,8 @@
 				A4591900000000000000000D /* StitchMarkerExport.swift in Sources */,
 				A4591900000000000000000B /* StitchMarkerTimecodeRate.swift in Sources */,
 				AF23AF23AF23AF23AF23AF23 /* AV2CommandBuilder.swift in Sources */,
+				A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */,
+				46B0B00A2A6A498898911DEF /* AV2ResourcePolicy.swift in Sources */,
 				94BB782C3556462DA5325475 /* AV2TrimPlan.swift in Sources */,
 				AF27AF27AF27AF27AF27AF27 /* IVFHeaderParser.swift in Sources */,
 				AF29AF29AF29AF29AF29AF29 /* IVFConcatenator.swift in Sources */,
@@ -1982,6 +1993,7 @@
 				AAD060010000000000000001 /* KeychainCredentialManagerTests.swift in Sources */,
 				CD4320100000000000000001 /* CaptureFrameRateTests.swift in Sources */,
 				35D23935EC554B1B97085056 /* AV2ScratchDirectoryTests.swift in Sources */,
+				FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */,
 				042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */,
 				2746B3C583424D6AAF97362A /* WatchFolderPollingTests.swift in Sources */,
 				AF129A6A3D374C449DE8B303 /* AppImprovementTests.swift in Sources */,

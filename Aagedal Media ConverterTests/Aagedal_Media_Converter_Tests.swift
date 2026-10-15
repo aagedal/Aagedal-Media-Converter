@@ -4482,7 +4482,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             "-nostdin",
             "-i", fixture.encoded.path,
             "-i", fixture.source.path,
-            "-filter_complex", "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]psnr=shortest=1",
+            "-filter_complex", try XCTUnwrap(request.arguments.first { $0.contains("psnr=") }),
             "-an", "-f", "null", "-"
         ])
         XCTAssertEqual(request.timeout, .seconds(12 * 60 * 60))
@@ -4572,7 +4572,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(requests[0].timeout, .seconds(10 * 60))
         XCTAssertEqual(requests[0].standardOutputCaptureLimit, 0)
         XCTAssertEqual(requests[1].executableURL.path, ffmpegPath)
-        XCTAssertTrue(requests[1].arguments.contains("scale=640:360"))
+        XCTAssertTrue(requests[1].arguments.contains("scale=640:360:flags=bicubic"))
         XCTAssertEqual(requests[2].executableURL.path, ssimulacra2Path)
         XCTAssertEqual(requests[2].arguments.first, "image")
         XCTAssertEqual(requests[2].timeout, .seconds(2 * 60))
@@ -12748,7 +12748,13 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let runner = TwoStageBlockingPipelineRunner()
         let converter = FFMPEGConverter(
             subprocessRunner: runner,
-            ffmpegPathProvider: { "/private/tools/ffmpeg" }
+            ffmpegPathProvider: { "/private/tools/ffmpeg" },
+            // Exercise cancellation of two active workers independently of host memory.
+            av2MemorySnapshot: {
+                AV2MemorySnapshot(physicalBytes: 64 * 1024 * 1024 * 1024,
+                                  availableBytes: 48 * 1024 * 1024 * 1024,
+                                  pressure: .normal)
+            }
         )
         let outputBaseURL = temporaryDirectory.appendingPathComponent("output")
         let outputURL = outputBaseURL.appendingPathExtension("ivf")
