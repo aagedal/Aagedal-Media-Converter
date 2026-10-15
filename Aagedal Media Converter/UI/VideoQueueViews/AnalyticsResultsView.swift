@@ -973,7 +973,7 @@ private struct QualityInspectionView: View {
                         .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                         .accessibilityIdentifier("analysis.inspection.play")
                         .disabled(preparing || !player.isFileLoaded)
-                        Slider(value: Binding(get: { position }, set: seek), in: 0...timeline.duration)
+                        Slider(value: Binding(get: { position }, set: { seconds in seek(seconds) }), in: 0...timeline.duration)
                             .accessibilityLabel("Inspection playback position")
                             .accessibilityIdentifier("analysis.inspection.position")
                             .disabled(preparing || !player.isFileLoaded)
@@ -1009,7 +1009,7 @@ private struct QualityInspectionView: View {
                             ContentUnavailableView("No timeline data", systemImage: "chart.xyaxis.line",
                                 description: Text("Run this metric again to collect timestamped quality scores."))
                         } else {
-                            QualityTimelineChart(timeline: timeline, position: position, onSeek: seek)
+                            QualityTimelineChart(timeline: timeline, position: position, onSeek: { seconds in seek(seconds) })
                                 .frame(height: 235)
                             HStack {
                                 Text(verbatim: "5th percentile: \(score(timeline.fifthPercentile))")
