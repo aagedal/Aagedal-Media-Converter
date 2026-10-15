@@ -24,11 +24,11 @@ import OSLog
 /// Two modes:
 /// - ``build(inputURL:outputURL:trimStart:trimEnd:cropConfig:visualSourceURL:customInputArguments:expectedDuration:videoFrameRate:)`` —
 ///   the single-process encode (tile threading only), including virtual FFmpeg inputs.
-/// - ``buildSegments(inputURL:trimStart:trimEnd:cropConfig:visualSourceURL:customInputArguments:expectedDuration:videoFrameRate:)`` — splits the source into one
-///   frame-range chunk per CPU core and emits an independent ffmpeg│avmenc command per chunk,
+/// - ``buildSegments(inputURL:trimStart:trimEnd:cropConfig:visualSourceURL:customInputArguments:expectedDuration:videoFrameRate:)`` — splits the source into
+///   frame-range chunks within the encoder thread budget and emits an independent ffmpeg│avmenc command per chunk,
 ///   to be encoded in parallel and joined with ``IVFConcatenator``. This is the dominant speed
-///   lever: AVM's intra-frame (tile/row) threading scales poorly, whereas independent chunks
-///   scale near-linearly with core count *and* compress better (no tile boundaries).
+///   lever: independent chunks provide parallelism without tile boundaries, at the cost of
+///   additional key frames and independent prediction histories.
 enum AV2CommandBuilder {
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "AV2CommandBuilder")
@@ -213,13 +213,15 @@ enum AV2CommandBuilder {
         let totalFrames = max(1, Int(frameCount))
 
         let hint = settings.parallelChunks
-        let chunkCount = resolvedChunkCount(totalFrames: totalFrames, hint: hint, rateMode: r.rateMode)
+        let chunkCount = resolvedChunkCount(
+            totalFrames: totalFrames, hint: hint, rateMode: r.rateMode,
+            threadBudget: r.threads, frameRate: frameRate
+        )
         guard chunkCount > 1 else { return nil }
 
-        let cores = ProcessInfo.processInfo.activeProcessorCount
-        // When there are fewer chunks than cores, let each worker use the leftover cores via avmenc's
-        // row-based multithreading (--row-mt is on by default) so the machine stays saturated.
-        let threadsPerWorker = max(1, cores / chunkCount)
+        // Share the captured encoder budget across workers. FFmpeg decoding/filtering has its
+        // own threads, so this is an encoder-thread limit rather than a total process CPU limit.
+        let threadsPerWorker = max(1, r.threads / chunkCount)
 
         let base = totalFrames / chunkCount
         let remainder = totalFrames % chunkCount
@@ -308,17 +310,28 @@ enum AV2CommandBuilder {
         )?.bitDepth
     }
 
-    /// Resolves how many parallel chunks to use. `hint` is the user setting (0 = auto = one per
-    /// core, 1 = single-process, N = explicit). VBR is forced to a single chunk because independent
-    /// VBR encoders can't share a bitrate budget across boundaries.
-    static func resolvedChunkCount(totalFrames: Int, hint: Int, rateMode: AV2RateControlMode) -> Int {
-        if rateMode == .targetBitrate { return 1 }
-        let cores = ProcessInfo.processInfo.activeProcessorCount
-        let requested = hint <= 0 ? cores : hint
-        // Don't fragment into pathologically tiny chunks (each adds a key frame → size/efficiency cost).
-        let minFramesPerChunk = 24
-        let maxByFrames = max(1, totalFrames / minFramesPerChunk)
-        return max(1, min(requested, maxByFrames, totalFrames))
+    /// Auto keeps at least two seconds and 48 frames per chunk to limit extra key frames.
+    /// Explicit counts retain the 24-frame minimum. Both respect the shared encoder thread budget.
+    /// VBR stays single-process because independent encoders cannot share a bitrate budget.
+    static func resolvedChunkCount(
+        totalFrames: Int,
+        hint: Int,
+        rateMode: AV2RateControlMode,
+        threadBudget: Int = ProcessInfo.processInfo.activeProcessorCount,
+        frameRate: Double? = nil
+    ) -> Int {
+        guard rateMode == .constantQuality, totalFrames > 0 else { return 1 }
+        let budget = max(1, threadBudget)
+        let automatic = hint <= 0
+        let requested = automatic ? budget : hint
+        let minFramesPerChunk: Double
+        if automatic, let frameRate, frameRate.isFinite, frameRate > 0 {
+            minFramesPerChunk = max(48, (frameRate * 2).rounded(.up))
+        } else {
+            minFramesPerChunk = automatic ? 48 : 24
+        }
+        let maxByFrames = max(1, Int((Double(totalFrames) / minFramesPerChunk).rounded(.down)))
+        return max(1, min(requested, budget, maxByFrames))
     }
 
     // MARK: - Shared avmenc prefix
