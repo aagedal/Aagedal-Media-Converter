@@ -1355,7 +1355,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     @MainActor
     func testSourcePeakRMSAndLUFSMeterInNativeAndMPVPreview() throws {
         for (container, backend) in [("mp4", "AVPlayer"), ("mkv", "MPV")] {
-            launchApp(generatedFixture: true, previewContainer: container)
+            launchApp(generatedFixture: true, realtimeInput: true, previewContainer: container)
             defer { terminateAndCleanFixtures() }
             let queueItem = element("queue.item")
             XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
@@ -1387,6 +1387,36 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             attachment.name = "\(backend) source peak RMS and LUFS meter"
             attachment.lifetime = .keepAlways
             add(attachment)
+            if backend == "MPV" {
+                // Restart to establish fresh playback loudness history. The
+                // longer fixture keeps the decoder away from final AAC padding.
+                element("trim.jumpToStart").click()
+                let mode = element("preview.audioMeter.mode")
+                XCTAssertTrue(mode.waitForExistence(timeout: 5))
+                mode.radioButtons["Playback"].click()
+                app.typeKey("l", modifierFlags: [])
+                let channelReading = element("preview.audioMeter.channel.0")
+                let playbackMeasured = XCTNSPredicateExpectation(
+                    predicate: NSPredicate { _, _ in
+                        let channel = channelReading.label
+                        return Double((momentary.value as? String) ?? momentary.label) != nil
+                            && Double((shortTerm.value as? String) ?? shortTerm.label) != nil
+                            && channel.contains("dBFS") && !channel.contains("−∞")
+                    }, object: nil)
+                let playbackResult = XCTWaiter.wait(for: [playbackMeasured], timeout: 15)
+                let liveAttachment = XCTAttachment(screenshot: app.screenshot())
+                liveAttachment.name = "MPV decoded playback peak RMS and LUFS meter"
+                liveAttachment.lifetime = .keepAlways
+                add(liveAttachment)
+                XCTAssertEqual(playbackResult, .completed,
+                               "Channel: \(channelReading.label); momentary: \(momentary.label); short-term: \(shortTerm.label)")
+                app.typeKey("k", modifierFlags: [])
+                let cleared = XCTNSPredicateExpectation(
+                    predicate: NSPredicate { _, _ in
+                        ((momentary.value as? String) ?? momentary.label) == "—"
+                    }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 5), .completed)
+            }
             element("trim.audioMeter").click()
             XCTAssertTrue(momentary.waitForNonExistence(timeout: 5))
             element("preview.close").click()

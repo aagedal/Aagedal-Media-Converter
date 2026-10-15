@@ -1,0 +1,17 @@
+{
+  "source_revisions": {
+    "FFmpeg": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+    "libmpv": "41f6a645068483470267271e1d09966ca3b9f413"
+  },
+  "cache": "/private/tmp/amc-mpvkit-n9-cache/dist",
+  "output": "/private/tmp/amc-mpvkit-n9-build-20261015",
+  "platform": "macos",
+  "architectures": [
+    "arm64",
+    "x86_64"
+  ],
+  "gpl": true,
+  "standalone_programs": false,
+  "native_scopes": false,
+  "build_exit_code": 0
+}

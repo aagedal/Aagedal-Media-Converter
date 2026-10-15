@@ -7,7 +7,8 @@
 - [x] Selected-track metering, up to eight displayed channels; loudness uses the full track's original channel layout.
 - [x] Bounded eight-second analysis windows, three-second pre-roll, neighboring-window cache, cancellation and security-scoped access.
 
-The app's pinned MPVKit CoreAudio `.2` build omits `astats` and `ebur128`.
+The first implementation used the MPVKit CoreAudio `.2` build, which omitted
+`astats` and `ebur128`.
 This implementation uses the already bundled FFmpeg, independently of the
 playback engine. It decodes small windows ahead and displays timestamped source
 measurements at the playhead. These are source measurements, unaffected by output
@@ -19,10 +20,41 @@ Whole-program integrated LUFS, loudness range and true peak remain in Audio
 Analysis. Window-local integrated values are deliberately not presented as
 program measurements. This change does not update packaged binaries or licenses.
 
+## Opt-in MPV playback metering — 2026-10-15
+
+The app now pins MPVKit `68c8989362a0daedabcc1540b2b5f0e1fea4be1f`
+(mpv 0.41.0 / FFmpeg n9.0.2), with versioned, checksummed universal macOS GPL
+artifacts and the existing CoreAudio fixes. See
+[dependency validation and provenance](mpvkit-1.1.0-update-2026-10-15.md).
+
+MPV previews offer **Source / Playback** in the meter panel. Source remains the
+default, works with both preview engines, and retains playhead-aligned source
+inspection. Playback inserts only the application's uniquely labelled lavfi
+filter, after checking actual `astats`/`ebur128` registration in the linked
+libavfilter. It decodes the active track in MPV, with no additional FFmpeg
+process or capture permission. Closing/hiding the panel or selecting Source
+removes that filter and cancels polling.
+
+Playback polls at 10 Hz with at most one asynchronous metadata request pending.
+It copies event-owned maps before consuming another event, rejects obsolete
+responses, displays up to eight decoded channels and measures loudness on the
+filter's full layout. Decoded channel numbers deliberately do not reuse source
+layout labels: MPV may negotiate a different layout. Volume and mute are applied
+later. Pause, seek, track changes, source replacement, stop and EOF clear the
+readings and reset loudness history; momentary and short-term LUFS require 0.4 s
+and 3 s of fresh continuous media history. Integrated session loudness is not
+exposed.
+
+This is an opt-in decoder meter. Metadata can lead audible output because of
+buffering, and polling can miss intermediate frames/brief transients. The panel
+and help explain these limits. No claim of device-signal measurement or exact
+audible synchronization is made. CPU/thermal and physical-device comparisons
+remain required before considering it as the default meter.
+
 ## Deferred improvements
 
-- [ ] Enable `astats` and `ebur128` in the MPVKit fork; preserve the CoreAudio initialization and failed-unit cleanup patches. Produce versioned, checksummed artifacts and update provenance, notices and the exact package pin together.
-- [ ] Probe actual filter availability in the packaged libavfilter and prototype `af-metadata/<label>` polling for MPV playback. Account for decoder/output buffering, channel conversion, pause, seeking, track changes and stale metadata before adopting it.
+- [x] Enable `astats` and `ebur128` in the MPVKit fork; preserve the CoreAudio initialization and failed-unit cleanup patches. Produce versioned, checksummed artifacts and update provenance, notices and the exact package pin together.
+- [x] Probe actual filter availability in the packaged libavfilter and prototype `af-metadata/<label>` polling for MPV playback. Account for decoder/output buffering, channel conversion, pause, seeking, track changes and stale metadata before adopting it.
 - [ ] Compare CPU use and synchronization against the windowed FFmpeg path. Keep a native-player metering path, and retain separate source-channel inspection in the stitching editor.
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
 - [ ] Silence detection with navigable timeline markers and configurable thresholds/durations.
@@ -54,3 +86,34 @@ hiding/closing the meter, EOF, sandbox access and unsupported inputs manually.
   signing; the unsigned runner could not bootstrap on this machine.
 - Exported native and MPV screenshots were inspected. Physical audio-device
   testing and a distribution-signed build were not performed for this change.
+
+### MPV playback validation — 2026-10-15
+
+- Signed Debug build and all 51 focused unit tests passed (zero skipped), across
+  `PlaybackAudioMeterTests`, `SourceAudioMeterTests`, `AudioRoutingPlanTests` and
+  `MPVPreviewObservationTests`. Clean final result:
+  `/private/tmp/amc-playback-meter-unit-verified.xcresult`.
+- The real packaged-MPV test uses asymmetric stereo FLAC with two different
+  tracks. Peak/RMS match known amplitudes and LUFS agrees with independent
+  windowed source analysis. It checks mute/volume independence, pause, seek,
+  track replacement, disabling/re-enabling, source reload, stop and EOF. Reload
+  coverage also exposed and fixed a stale playing flag; paused scrubbing passes.
+- A packaged-player AAC/mono video test verifies finite, calibrated peak/RMS and
+  momentary/short-term LUFS. Parser coverage rejects nonfinite values and missing
+  history. Actual filter registration is checked in the linked libavfilter.
+- The native/MPV UI check passed against the final built app. It checks Source
+  mode, selecting Playback, finite spoken peak/RMS plus numeric momentary and
+  short-term LUFS, pause clearing, hiding and closing. Result:
+  `/private/tmp/amc-playback-meter-channel-ui.xcresult`. Exported native/MPV
+  screenshots under `/private/tmp/amc-playback-meter-final-screenshots/` were
+  visually inspected. Channel readings are explicit view data so stable labels
+  refresh with new samples; the spoken label carries measurements because macOS
+  group elements do not expose a separate accessibility value.
+- All eight resolved Debug framework payloads match the previously qualified
+  release hashes. The 26 attribution/manifest tests and offline notice-generation
+  check pass. No standalone bundled binary was replaced; the MPVKit package,
+  corresponding-source references, notices and exact pin were updated together.
+- The earlier dependency update's Release/signing and architecture evidence is
+  retained in the linked dependency validation document. This continuation was
+  validated in Debug; physical-device latency, CPU/thermal comparison, physical
+  Intel hardware and a new distribution-signed build remain unverified.

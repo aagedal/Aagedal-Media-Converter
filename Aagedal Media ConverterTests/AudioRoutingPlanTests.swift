@@ -433,6 +433,27 @@ private actor CancellingLoudnessBatchRunner: SubprocessRunning {
 }
 
 final class PlaybackAudioMeterTests: XCTestCase {
+    func testMPVMetadataKeepsChannelsIndependentAndRequiresFreshHistory() throws {
+        let values = ["lavfi.astats.1.Peak_level": "-6.0206", "lavfi.astats.1.RMS_level": "-9.0309",
+                      "lavfi.astats.2.Peak_level": "-inf", "lavfi.astats.2.RMS_level": "nan",
+                      "lavfi.r128.M": "-18.0", "lavfi.r128.S": "-19.0", "lavfi.r128.I": "-20.0"]
+        let startup = try XCTUnwrap(MPVAudioMeterMetadata.sample(values, seconds: 10, history: 0))
+        XCTAssertEqual(startup.peaks[0], -6.0206)
+        XCTAssertEqual(startup.rms[0], -9.0309)
+        XCTAssertNil(startup.peaks[1])
+        XCTAssertNil(startup.rms[1])
+        XCTAssertNil(startup.momentaryLUFS)
+        XCTAssertNil(startup.shortTermLUFS)
+        let momentary = try XCTUnwrap(MPVAudioMeterMetadata.sample(values, seconds: 10.4, history: 0.4))
+        XCTAssertEqual(momentary.momentaryLUFS, -18)
+        XCTAssertNil(momentary.shortTermLUFS)
+        let warmed = try XCTUnwrap(MPVAudioMeterMetadata.sample(values, seconds: 13, history: 3))
+        XCTAssertEqual(warmed.shortTermLUFS, -19)
+        XCTAssertNil(MPVAudioMeterMetadata.sample([:], seconds: 0, history: 3))
+        XCTAssertNil(MPVAudioMeterMetadata.sample(values, seconds: .nan, history: 3))
+        XCTAssertNil(MPVAudioMeterMetadata.sample(values, seconds: 0, history: -.infinity))
+    }
+
     func testFrameTimingSilenceAndUnavailableHistory() throws {
         let request = SourceAudioMeterRequest(url: URL(fileURLWithPath: "/tmp/meter.wav"), track: 0, channels: 2, window: 0)
         let chunk = PlaybackAudioMeterChunk(request: request, metadata: """

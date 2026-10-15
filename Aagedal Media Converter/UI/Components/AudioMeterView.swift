@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import SwiftUI
+import Combine
 
 /// Real-time audio level meter visualization
 struct AudioMeterView: View {
@@ -407,6 +408,10 @@ struct PlaybackAudioMeterPanel: View {
     @State private var chunk: PlaybackAudioMeterChunk?
     @State private var cache = PlaybackAudioMeterCache()
     @State private var failed = false
+    @State private var playbackMode = false
+    @State private var liveSample: PlaybackAudioMeterSample?
+    @State private var liveChannelCount = 0
+    @State private var liveUnavailable = false
 
     private var streams: [VideoMetadata.AudioStream] {
         (controller.useImageSequence ? metadata : (controller.videoItem.metadata ?? metadata))?.audioStreams ?? []
@@ -422,7 +427,7 @@ struct PlaybackAudioMeterPanel: View {
 
     private var request: SourceAudioMeterRequest? {
         let time = controller.currentPlaybackTime
-        guard let url = controller.audioMeterSourceURL, let track, streams.indices.contains(track),
+        guard !playbackMode, let url = controller.audioMeterSourceURL, let track, streams.indices.contains(track),
               let channels = streams[track].channels, channels > 0,
               time.isFinite, time >= 0 else { return nil }
         return SourceAudioMeterRequest(url: url, track: track,
@@ -431,48 +436,79 @@ struct PlaybackAudioMeterPanel: View {
     }
 
     private var sample: PlaybackAudioMeterSample? {
+        if playbackMode {
+            guard controller.isPlaying, let liveSample,
+                  abs(controller.currentPlaybackTime - liveSample.seconds) < 0.5 else { return nil }
+            return liveSample
+        }
         guard chunk?.request == request else { return nil }
         return chunk?.sample(at: controller.currentPlaybackTime)
     }
 
     private var labels: [String] {
+        if playbackMode {
+            return (0..<liveChannelCount).map { "Ch \($0 + 1)" }
+        }
         guard let track, streams.indices.contains(track), let channels = streams[track].channels else { return [] }
         return Array(NativeWaveformRenderer.channelNames(count: channels, layout: streams[track].channelLayout).prefix(8))
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            Text("Source peak / RMS").font(.caption)
+        let currentSample = sample
+        // Include measurements in ForEach's data. Stable labels alone let
+        // SwiftUI reuse channel content containing obsolete captured readings.
+        let channels = labels.enumerated().map { index, label in
+            PlaybackMeterChannel(
+                id: index, label: label, decoded: playbackMode,
+                peak: reading(currentSample?.peaks, at: index), rms: reading(currentSample?.rms, at: index),
+                peakLevel: level(currentSample?.peaks, at: index), rmsLevel: level(currentSample?.rms, at: index))
+        }
+        return VStack(spacing: 6) {
+            if controller.useMPV {
+                Picker("Meter", selection: $playbackMode) {
+                    Text("Source").tag(false)
+                    Text("Playback").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("preview.audioMeter.mode")
+            }
+            Text(playbackMode ? "Decoded peak / RMS" : "Source peak / RMS").font(.caption)
             HStack(alignment: .top, spacing: 5) {
-                ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+                ForEach(channels) { channel in
                     VStack(spacing: 3) {
                         ZStack(alignment: .bottom) {
-                            LevelBar(level: level(sample?.rms, at: index), range: -60...0, height: 100)
+                            LevelBar(level: channel.rmsLevel, range: -60...0, height: 100)
                             // White line shows the independent 100 ms sample peak;
                             // the filled bar shows RMS over the same interval.
                             GeometryReader { geometry in
                                 Rectangle().fill(.white)
                                     .frame(height: 2)
-                                    .offset(y: geometry.size.height * (1 - CGFloat((max(-60, min(0, level(sample?.peaks, at: index))) + 60) / 60)))
+                                    .offset(y: geometry.size.height * (1 - CGFloat((max(-60, min(0, channel.peakLevel)) + 60) / 60)))
                             }
                         }
                         .frame(width: 14, height: 100)
-                        Text(label).font(.system(size: 8, design: .monospaced)).lineLimit(1)
-                        Text(reading(sample?.peaks, at: index)).font(.system(size: 8, design: .monospaced))
-                        Text(reading(sample?.rms, at: index)).font(.system(size: 8, design: .monospaced))
+                        Text(channel.label).font(.system(size: 8, design: .monospaced)).lineLimit(1)
+                        Text(channel.peak).font(.system(size: 8, design: .monospaced))
+                        Text(channel.rms).font(.system(size: 8, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(label) source audio")
-                    .accessibilityValue("Peak \(reading(sample?.peaks, at: index)) dBFS, RMS \(reading(sample?.rms, at: index)) dBFS")
+                    .accessibilityIdentifier("preview.audioMeter.channel.\(channel.id)")
+                    // macOS group elements do not expose a separate AXValue.
+                    .accessibilityLabel(channel.decoded
+                        ? Text("\(channel.label) decoded audio. Peak \(channel.peak) dBFS, RMS \(channel.rms) dBFS")
+                        : Text("\(channel.label) source audio. Peak \(channel.peak) dBFS, RMS \(channel.rms) dBFS"))
                 }
             }
             Text("dBFS · peak above RMS").font(.system(size: 9)).foregroundStyle(.secondary)
             Divider()
-            loudnessRow("Momentary", value: sample?.momentaryLUFS, identifier: "preview.audioMeter.momentary")
-            loudnessRow("Short-term", value: sample?.shortTermLUFS, identifier: "preview.audioMeter.shortTerm")
+            loudnessRow("Momentary", value: currentSample?.momentaryLUFS, identifier: "preview.audioMeter.momentary")
+            loudnessRow("Short-term", value: currentSample?.shortTermLUFS, identifier: "preview.audioMeter.shortTerm")
             Text("LUFS · 0.4 s / 3 s").font(.system(size: 9)).foregroundStyle(.secondary)
-            if failed {
+            if playbackMode {
+                Text(liveUnavailable ? "Playback meter unavailable" : "Decoded active track; may lead sound")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else if failed {
                 Text("Meter unavailable").font(.caption2)
             } else if request != nil && chunk?.request != request {
                 ProgressView().controlSize(.small)
@@ -498,9 +534,30 @@ struct PlaybackAudioMeterPanel: View {
         .padding(8)
         .frame(width: max(164, CGFloat(labels.count) * 30))
         .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
-        .help("Source levels before playback volume, mute and speaker downmixing. White marks show sample peaks; filled bars show RMS. LUFS measures the selected track over the preceding 0.4 and 3 seconds of source audio. Use Audio Analysis for whole-program integrated loudness and true peak.")
+        .help(playbackMode ? "Decoded active-track levels before playback volume and mute. Channel layout may differ from the source. Readings may lead audible playback, and polling can miss brief peaks. Loudness history resets after pause, seek or track changes. Use Source for playhead-aligned inspection and Audio Analysis for whole-program loudness." : "Source levels before playback volume, mute and speaker downmixing. White marks show sample peaks; filled bars show RMS. LUFS measures the selected track over the preceding 0.4 and 3 seconds of source audio. Use Audio Analysis for whole-program integrated loudness and true peak.")
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("preview.audioMeter")
+        .onChange(of: playbackMode) { _, enabled in
+            liveSample = nil
+            controller.mpvPlayer?.setPlaybackMeterEnabled(enabled)
+        }
+        .onChange(of: controller.mpvPlayer) { old, new in
+            old?.setPlaybackMeterEnabled(false)
+            liveSample = nil
+            liveChannelCount = 0
+            new?.setPlaybackMeterEnabled(playbackMode)
+        }
+        .onChange(of: controller.useMPV) { _, useMPV in
+            if !useMPV { playbackMode = false }
+        }
+        .onDisappear { controller.mpvPlayer?.setPlaybackMeterEnabled(false) }
+        .onReceive(controller.mpvPlayer?.$playbackMeterSample.eraseToAnyPublisher()
+                   ?? Just(nil).eraseToAnyPublisher()) { value in
+            liveSample = value
+            if let value { liveChannelCount = value.peaks.count }
+        }
+        .onReceive(controller.mpvPlayer?.$playbackMeterUnavailable.eraseToAnyPublisher()
+                   ?? Just(false).eraseToAnyPublisher()) { liveUnavailable = $0 }
         .task(id: controller.audioMeterSourceURL) {
             metadata = nil
             if let url = controller.audioMeterSourceURL, controller.useImageSequence || controller.videoItem.metadata == nil {
@@ -548,4 +605,15 @@ struct PlaybackAudioMeterPanel: View {
         }
         .font(.caption2)
     }
+}
+
+
+private struct PlaybackMeterChannel: Identifiable, Equatable {
+    let id: Int
+    let label: String
+    let decoded: Bool
+    let peak: String
+    let rms: String
+    let peakLevel: Float
+    let rmsLevel: Float
 }
