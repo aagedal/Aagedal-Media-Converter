@@ -93,7 +93,7 @@ struct SilenceAnalysisView: View {
                         }
                         .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
                         .disabled(!player.isFileLoaded)
-                        Slider(value: Binding(get: { position }, set: seek), in: 0...timelineDuration)
+                        Slider(value: Binding(get: { position }, set: { seconds in seek(seconds) }), in: 0...timelineDuration)
                             .accessibilityLabel("Inspection playback position")
                             .disabled(!player.isFileLoaded)
                         Text(verbatim: time(position))
