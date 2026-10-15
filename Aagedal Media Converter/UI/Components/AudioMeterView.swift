@@ -399,3 +399,153 @@ struct SourceAudioMeterPanel: View {
         }
     }
 }
+
+/// Source measurements at the playhead, shared by native and MPV preview playback.
+struct PlaybackAudioMeterPanel: View {
+    @ObservedObject var controller: PreviewPlayerController
+    @State private var metadata: VideoMetadata?
+    @State private var chunk: PlaybackAudioMeterChunk?
+    @State private var cache = PlaybackAudioMeterCache()
+    @State private var failed = false
+
+    private var streams: [VideoMetadata.AudioStream] {
+        (controller.useImageSequence ? metadata : (controller.videoItem.metadata ?? metadata))?.audioStreams ?? []
+    }
+
+    private var track: Int? {
+        let position = controller.selectedAudioTrackOrderIndex
+        if controller.audioTrackOptions.indices.contains(position) {
+            return controller.audioTrackOptions[position].streamIndex
+        }
+        return streams.indices.contains(position) ? position : nil
+    }
+
+    private var request: SourceAudioMeterRequest? {
+        let time = controller.currentPlaybackTime
+        guard let url = controller.audioMeterSourceURL, let track, streams.indices.contains(track),
+              let channels = streams[track].channels, channels > 0,
+              time.isFinite, time >= 0 else { return nil }
+        return SourceAudioMeterRequest(url: url, track: track,
+                                       channels: channels,
+                                       window: Int(time / SourceAudioMeterRequest.windowDuration))
+    }
+
+    private var sample: PlaybackAudioMeterSample? {
+        guard chunk?.request == request else { return nil }
+        return chunk?.sample(at: controller.currentPlaybackTime)
+    }
+
+    private var labels: [String] {
+        guard let track, streams.indices.contains(track), let channels = streams[track].channels else { return [] }
+        return Array(NativeWaveformRenderer.channelNames(count: channels, layout: streams[track].channelLayout).prefix(8))
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text("Source peak / RMS").font(.caption)
+            HStack(alignment: .top, spacing: 5) {
+                ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
+                    VStack(spacing: 3) {
+                        ZStack(alignment: .bottom) {
+                            LevelBar(level: level(sample?.rms, at: index), range: -60...0, height: 100)
+                            // White line shows the independent 100 ms sample peak;
+                            // the filled bar shows RMS over the same interval.
+                            GeometryReader { geometry in
+                                Rectangle().fill(.white)
+                                    .frame(height: 2)
+                                    .offset(y: geometry.size.height * (1 - CGFloat((max(-60, min(0, level(sample?.peaks, at: index))) + 60) / 60)))
+                            }
+                        }
+                        .frame(width: 14, height: 100)
+                        Text(label).font(.system(size: 8, design: .monospaced)).lineLimit(1)
+                        Text(reading(sample?.peaks, at: index)).font(.system(size: 8, design: .monospaced))
+                        Text(reading(sample?.rms, at: index)).font(.system(size: 8, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(label) source audio")
+                    .accessibilityValue("Peak \(reading(sample?.peaks, at: index)) dBFS, RMS \(reading(sample?.rms, at: index)) dBFS")
+                }
+            }
+            Text("dBFS · peak above RMS").font(.system(size: 9)).foregroundStyle(.secondary)
+            Divider()
+            loudnessRow("Momentary", value: sample?.momentaryLUFS, identifier: "preview.audioMeter.momentary")
+            loudnessRow("Short-term", value: sample?.shortTermLUFS, identifier: "preview.audioMeter.shortTerm")
+            Text("LUFS · 0.4 s / 3 s").font(.system(size: 9)).foregroundStyle(.secondary)
+            if failed {
+                Text("Meter unavailable").font(.caption2)
+            } else if request != nil && chunk?.request != request {
+                ProgressView().controlSize(.small)
+            } else if labels.isEmpty {
+                Text("No audio channels").font(.caption2)
+            }
+            if (request?.channels ?? 0) > 8 {
+                Text("Channels 1–8; LUFS includes the full track").font(.caption2)
+            }
+            if controller.audioTrackOptions.count > 1 {
+                Picker("Audio track", selection: Binding(
+                    get: { controller.selectedAudioTrackOrderIndex },
+                    set: { controller.selectAudioTrack(at: $0) }
+                )) {
+                    ForEach(controller.audioTrackOptions) { option in
+                        Text(option.title).tag(option.position)
+                    }
+                }
+                .labelsHidden().pickerStyle(.menu)
+                .accessibilityLabel("Meter and preview audio track")
+            }
+        }
+        .padding(8)
+        .frame(width: max(164, CGFloat(labels.count) * 30))
+        .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 6))
+        .help("Source levels before playback volume, mute and speaker downmixing. White marks show sample peaks; filled bars show RMS. LUFS measures the selected track over the preceding 0.4 and 3 seconds of source audio. Use Audio Analysis for whole-program integrated loudness and true peak.")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("preview.audioMeter")
+        .task(id: controller.audioMeterSourceURL) {
+            metadata = nil
+            if let url = controller.audioMeterSourceURL, controller.useImageSequence || controller.videoItem.metadata == nil {
+                let result = try? await BoundedVideoMetadataProbe.metadata(for: url)
+                guard !Task.isCancelled else { return }
+                metadata = result
+            }
+        }
+        .task(id: request) {
+            chunk = nil
+            failed = false
+            guard let request else { return }
+            do {
+                let loaded = try await cache.load(request)
+                guard !Task.isCancelled else { return }
+                chunk = loaded
+                // Decode just one neighboring window ahead of playback.
+                if request.start + SourceAudioMeterRequest.windowDuration < controller.effectiveDuration {
+                    _ = try? await cache.load(request.adjacent(1))
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                failed = true
+            }
+        }
+    }
+
+    private func level(_ values: [Double?]?, at index: Int) -> Float {
+        guard controller.isPlaying, let values, values.indices.contains(index), let value = values[index] else { return -60 }
+        return Float(value)
+    }
+
+    private func reading(_ values: [Double?]?, at index: Int) -> String {
+        guard let values, values.indices.contains(index), let value = values[index] else { return "−∞" }
+        return String(format: "%.1f", value)
+    }
+
+    private func loudnessRow(_ title: LocalizedStringKey, value: Double?, identifier: String) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value.map { $0 < -70 ? "< −70" : String(format: "%.1f", $0) } ?? "—")
+                .monospacedDigit()
+                .accessibilityIdentifier(identifier)
+        }
+        .font(.caption2)
+    }
+}

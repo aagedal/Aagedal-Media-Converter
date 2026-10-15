@@ -1,10 +1,19 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-15
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
 issue link when it starts.
+
+## Preview audio metering — 2026-10-15
+
+Owner: Codex. Independent source-channel peak/RMS and momentary/short-term LUFS
+are implemented for preview playback using bounded analysis windows from bundled
+FFmpeg. The pinned MPVKit CoreAudio fixes are preserved. The implementation,
+measurement semantics, and deferred MPVKit filter integration, silence/threshold
+markers, channel imbalance, phase/correlation analysis, and playback-format
+improvements are tracked in [the audio metering plan](docs/AUDIO-METERING-PLAN.md).
 
 ## Stability and performance continuation — 2026-10-14
 
