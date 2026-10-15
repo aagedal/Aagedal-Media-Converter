@@ -12748,7 +12748,13 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let runner = TwoStageBlockingPipelineRunner()
         let converter = FFMPEGConverter(
             subprocessRunner: runner,
-            ffmpegPathProvider: { "/private/tools/ffmpeg" }
+            ffmpegPathProvider: { "/private/tools/ffmpeg" },
+            // Exercise cancellation of two active workers independently of host memory.
+            av2MemorySnapshot: {
+                AV2MemorySnapshot(physicalBytes: 64 * 1024 * 1024 * 1024,
+                                  availableBytes: 48 * 1024 * 1024 * 1024,
+                                  pressure: .normal)
+            }
         )
         let outputBaseURL = temporaryDirectory.appendingPathComponent("output")
         let outputURL = outputBaseURL.appendingPathExtension("ivf")
