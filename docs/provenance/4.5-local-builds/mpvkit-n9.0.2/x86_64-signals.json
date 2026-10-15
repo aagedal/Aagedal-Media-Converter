@@ -1,0 +1,130 @@
+{
+  "passed": true,
+  "results": [
+    {
+      "signal": "mono",
+      "analysis": "peaks",
+      "position": 1.132068,
+      "metadata": {
+        "lavfi.astats.1.Peak_level": "-12.040935",
+        "lavfi.astats.1.RMS_level": "-15.051448",
+        "lavfi.astats.Overall.Peak_level": "-12.040935",
+        "lavfi.astats.Overall.RMS_level": "-15.051448"
+      }
+    },
+    {
+      "signal": "mono",
+      "analysis": "loudness",
+      "position": 1.120572,
+      "metadata": {
+        "lavfi.r128.M": "-15.045",
+        "lavfi.r128.S": "-120.691",
+        "lavfi.r128.I": "-15.050",
+        "lavfi.r128.LRA": "0.000",
+        "lavfi.r128.LRA.low": "0.000",
+        "lavfi.r128.LRA.high": "0.000",
+        "lavfi.r128.true_peaks_ch0": "0.250",
+        "lavfi.r128.true_peak": "0.250"
+      }
+    },
+    {
+      "signal": "stereo",
+      "analysis": "peaks",
+      "position": 1.132133,
+      "metadata": {
+        "lavfi.astats.1.Peak_level": "-12.040935",
+        "lavfi.astats.1.RMS_level": "-15.051448",
+        "lavfi.astats.2.Peak_level": "-6.020335",
+        "lavfi.astats.2.RMS_level": "-9.030882",
+        "lavfi.astats.Overall.Peak_level": "-6.020335",
+        "lavfi.astats.Overall.RMS_level": "-11.072075"
+      }
+    },
+    {
+      "signal": "stereo",
+      "analysis": "loudness",
+      "position": 1.128043,
+      "metadata": {
+        "lavfi.r128.M": "-8.055",
+        "lavfi.r128.S": "-120.691",
+        "lavfi.r128.I": "-8.060",
+        "lavfi.r128.LRA": "0.000",
+        "lavfi.r128.LRA.low": "0.000",
+        "lavfi.r128.LRA.high": "0.000",
+        "lavfi.r128.true_peaks_ch0": "0.250",
+        "lavfi.r128.true_peaks_ch1": "0.500",
+        "lavfi.r128.true_peak": "0.500"
+      }
+    },
+    {
+      "signal": "surround",
+      "analysis": "peaks",
+      "position": 1.124559,
+      "metadata": {
+        "lavfi.astats.1.Peak_level": "-18.061535",
+        "lavfi.astats.1.RMS_level": "-21.072511",
+        "lavfi.astats.2.Peak_level": "-12.040935",
+        "lavfi.astats.2.RMS_level": "-15.051448",
+        "lavfi.astats.3.Peak_level": "-8.519110",
+        "lavfi.astats.3.RMS_level": "-11.529694",
+        "lavfi.astats.4.Peak_level": "-6.020335",
+        "lavfi.astats.4.RMS_level": "-9.030882",
+        "lavfi.astats.5.Peak_level": "-4.082559",
+        "lavfi.astats.5.RMS_level": "-7.092735",
+        "lavfi.astats.6.Peak_level": "-2.498863",
+        "lavfi.astats.6.RMS_level": "-5.509034",
+        "lavfi.astats.Overall.Peak_level": "-2.498863",
+        "lavfi.astats.Overall.RMS_level": "-9.263193"
+      }
+    },
+    {
+      "signal": "surround",
+      "analysis": "loudness",
+      "position": 1.132757,
+      "metadata": {
+        "lavfi.r128.M": "-1.065",
+        "lavfi.r128.S": "-120.691",
+        "lavfi.r128.I": "-1.070",
+        "lavfi.r128.LRA": "0.000",
+        "lavfi.r128.LRA.low": "0.000",
+        "lavfi.r128.LRA.high": "0.000",
+        "lavfi.r128.true_peaks_ch0": "0.125",
+        "lavfi.r128.true_peaks_ch1": "0.250",
+        "lavfi.r128.true_peaks_ch2": "0.375",
+        "lavfi.r128.true_peaks_ch3": "0.500",
+        "lavfi.r128.true_peaks_ch4": "0.625",
+        "lavfi.r128.true_peaks_ch5": "0.750",
+        "lavfi.r128.true_peak": "0.750"
+      }
+    },
+    {
+      "signal": "silence",
+      "analysis": "peaks",
+      "position": 1.110991,
+      "metadata": {
+        "lavfi.astats.1.Peak_level": "-inf",
+        "lavfi.astats.1.RMS_level": "-inf",
+        "lavfi.astats.2.Peak_level": "-inf",
+        "lavfi.astats.2.RMS_level": "-inf",
+        "lavfi.astats.Overall.Peak_level": "-inf",
+        "lavfi.astats.Overall.RMS_level": "-inf"
+      }
+    },
+    {
+      "signal": "silence",
+      "analysis": "loudness",
+      "position": 1.130401,
+      "metadata": {
+        "lavfi.r128.M": "-163.524",
+        "lavfi.r128.S": "-120.691",
+        "lavfi.r128.I": "-70.000",
+        "lavfi.r128.LRA": "0.000",
+        "lavfi.r128.LRA.low": "0.000",
+        "lavfi.r128.LRA.high": "0.000",
+        "lavfi.r128.true_peaks_ch0": "0.000",
+        "lavfi.r128.true_peaks_ch1": "0.000",
+        "lavfi.r128.true_peak": "0.000"
+      }
+    }
+  ]
+}

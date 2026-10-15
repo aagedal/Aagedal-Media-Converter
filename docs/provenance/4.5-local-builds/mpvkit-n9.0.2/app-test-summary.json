@@ -1,0 +1,14 @@
+{
+  "result": "Passed",
+  "totalTestCount": 22,
+  "passedTests": 22,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "expectedFailures": 0,
+  "testFailures": [],
+  "configuration": "Debug",
+  "suite": "MPVPreviewObservationTests",
+  "system": "macOS 27.0.1 (26A434)",
+  "architecture": "arm64",
+  "resultBundle": "/private/tmp/amc-mpvkit-n9-tests.xcresult"
+}

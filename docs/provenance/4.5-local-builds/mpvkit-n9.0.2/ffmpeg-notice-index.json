@@ -1,0 +1,856 @@
+{
+  "revision": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+  "notices": [
+    {
+      "sources": [
+        "COPYING.GPLv2"
+      ],
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+    },
+    {
+      "sources": [
+        "COPYING.GPLv3"
+      ],
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    {
+      "sources": [
+        "COPYING.LGPLv2.1"
+      ],
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    {
+      "sources": [
+        "COPYING.LGPLv3"
+      ],
+      "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+    },
+    {
+      "sources": [
+        "LICENSE.md"
+      ],
+      "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af"
+    },
+    {
+      "sources": [
+        "compat/getopt.c:19"
+      ],
+      "sha256": "a7dc59a36efb2600ce7aeae2d5186f3ef3b5f57d8d33cb64a4336ec8b505b87d"
+    },
+    {
+      "sources": [
+        "doc/authors.texi"
+      ],
+      "sha256": "fb5fac6dd8f7474033e933814491a8297d8723c52be4dcbcc82eef9c4f008dd2"
+    },
+    {
+      "sources": [
+        "doc/examples/avio_http_serve_files.c:1"
+      ],
+      "sha256": "a200672cdfe074bafaa77e20bc5d2fbebe4e0ddb1fb7cc987d58321e4b4219b6"
+    },
+    {
+      "sources": [
+        "doc/examples/avio_list_dir.c:1"
+      ],
+      "sha256": "898e1dfc3a97bbfce6ea8972c68a09b41c99ac5f7f8bd2a264a69c2675613763"
+    },
+    {
+      "sources": [
+        "doc/examples/avio_read_callback.c:1"
+      ],
+      "sha256": "9a81922844ae10f3c2cbea1bad29525425963752f8ac53ab3d832129b50220d4"
+    },
+    {
+      "sources": [
+        "doc/examples/decode_audio.c:1",
+        "doc/examples/decode_video.c:1",
+        "doc/examples/encode_audio.c:1",
+        "doc/examples/encode_video.c:1",
+        "tests/api/api-h264-slice-test.c:1"
+      ],
+      "sha256": "b3179dc9e750daa389b129c35796d46683fb493b8f2145c3930a5c96b972e78c"
+    },
+    {
+      "sources": [
+        "doc/examples/decode_filter_audio.c:1"
+      ],
+      "sha256": "a5cdebbc297b02ce7523989c12907d189bf73dd21adf7653fa89237f95ee6212"
+    },
+    {
+      "sources": [
+        "doc/examples/decode_filter_video.c:1"
+      ],
+      "sha256": "b392091aff334b9322ca1b701de9817c25b9156e469c5c051efc6587de46f1e4"
+    },
+    {
+      "sources": [
+        "doc/examples/demux_decode.c:1",
+        "doc/examples/resample_audio.c:1",
+        "doc/examples/scale_video.c:1"
+      ],
+      "sha256": "dd7349e67193f7a4b0dceec2376df9cb7639d8331f407cbf871ff893d6eec660"
+    },
+    {
+      "sources": [
+        "doc/examples/extract_mvs.c:1"
+      ],
+      "sha256": "830f00f41587578bb5378776b0dc68472a84432119aec46dfb5e8c4b8ad10c9b"
+    },
+    {
+      "sources": [
+        "doc/examples/hw_decode.c:1"
+      ],
+      "sha256": "f80436771af261c6284617c6fbee572dac16ddff67af1e0f0a9a46056ae38b3a"
+    },
+    {
+      "sources": [
+        "doc/examples/mux.c:1"
+      ],
+      "sha256": "e64a1ab9439caf806d8b00a7a16adf4b34a57fec773f7d179881a6de093a2255"
+    },
+    {
+      "sources": [
+        "doc/examples/qsv_decode.c:1"
+      ],
+      "sha256": "ca6c5bdafdc72fc4c368d4b2ade77a2dcee192236aa4afe855f2c346743615ae"
+    },
+    {
+      "sources": [
+        "doc/examples/qsv_transcode.c:1",
+        "doc/examples/vaapi_encode.c:1",
+        "doc/examples/vaapi_transcode.c:1",
+        "tests/api/api-threadmessage-test.c:1"
+      ],
+      "sha256": "6142c6351d85d48f4fa94258706ba7ea9e8b8768c8d58ec804c0da138b618bd0"
+    },
+    {
+      "sources": [
+        "doc/examples/remux.c:1"
+      ],
+      "sha256": "d75eed0f79e8c87684fddecd1bc02f963e4a8f1cae827fcab88f9243f4cbc06e"
+    },
+    {
+      "sources": [
+        "doc/examples/show_metadata.c:1"
+      ],
+      "sha256": "247275315e5ac6d9699d73d24f5ea77b397a492fc87c58364e6460f15dd09788"
+    },
+    {
+      "sources": [
+        "doc/examples/transcode.c:1"
+      ],
+      "sha256": "18ee91e97ea1bdfb0691244c9d19548fbcd39b76fbce99801d9487c17b66e195"
+    },
+    {
+      "sources": [
+        "ffbuild/bin2c.c:1",
+        "libavfilter/vf_scale_cuda.h:1"
+      ],
+      "sha256": "642c31cf16cf567a9dc87be9694afdbb7f326c77b323dbf0b058f85024588c9e"
+    },
+    {
+      "sources": [
+        "libavcodec/aacsbr_fixed.c:1"
+      ],
+      "sha256": "7e85eea3d1cd405864fb7eab2c417d0ec9c1cb905720eec36c12fce7871d943a"
+    },
+    {
+      "sources": [
+        "libavcodec/aarch64/fdctdsp_neon.S:1"
+      ],
+      "sha256": "75de6f65fc95ee88e4691518e659ec2255a100e4f3cc7a27461154809e08e95a"
+    },
+    {
+      "sources": [
+        "libavcodec/ac3dec_fixed.c:1"
+      ],
+      "sha256": "9ae563ce3098f5c28983628fa3e1a67e99262564815b68982254171f8c3cb51c"
+    },
+    {
+      "sources": [
+        "libavcodec/aom_film_grain_template.c:22"
+      ],
+      "sha256": "320538726d08bfd874b3487e32bc2f866abece6f6829270d8c0974b3a88292cf"
+    },
+    {
+      "sources": [
+        "libavcodec/arm/jrevdct_arm.S:1"
+      ],
+      "sha256": "ce91a124e2dc46279d268af7ed058f214e5caaeb2d25759ac3cc576489aa6d52"
+    },
+    {
+      "sources": [
+        "libavcodec/arm/vp8dsp_armv6.S:1"
+      ],
+      "sha256": "c92e40095a213fbbe7c59d907badc145ad20522635fafd72e269b8c9681680ad"
+    },
+    {
+      "sources": [
+        "libavcodec/bsf/mjpeg2jpeg.c:22"
+      ],
+      "sha256": "a4b7c4a8c35b855327e5e3a2c3e57f76d2775e79aebd9748ed9fa39a8960fe62"
+    },
+    {
+      "sources": [
+        "libavcodec/cinepakenc.c:1"
+      ],
+      "sha256": "b01e7d85e6116a4bd9c5f5754a2912ba49e1af48f45e514be06e14ac53027827"
+    },
+    {
+      "sources": [
+        "libavcodec/faandct.c:1"
+      ],
+      "sha256": "dd371a21c2ac540fe714095080af3cb094f0ea5254dd0fc1379dcb6242d2d036"
+    },
+    {
+      "sources": [
+        "libavcodec/ilbcdata.h:1",
+        "libavcodec/ilbcdec.c:1"
+      ],
+      "sha256": "e09aba3a27561ce819c3223d8980047a69c9a52261325c51433a2ee5177e3b48"
+    },
+    {
+      "sources": [
+        "libavcodec/interplayacm.c:1"
+      ],
+      "sha256": "1932db426c2feb1850abe8c77b823b613b89babeee5a6e5f3b6b28c5b908a8d9"
+    },
+    {
+      "sources": [
+        "libavcodec/j2kenc.c:1"
+      ],
+      "sha256": "33a5b81a3c40d9ad5ebc344901f0f25ce13eca3bb1eb1b92d2e831f6335e947d"
+    },
+    {
+      "sources": [
+        "libavcodec/jfdctfst.c:1"
+      ],
+      "sha256": "f831f4602bd8c0446d5e26a4b14ddfa4581b95e4b61bb7cbb4697f22558e2e0f"
+    },
+    {
+      "sources": [
+        "libavcodec/jfdctint_template.c:1"
+      ],
+      "sha256": "90da7eecd5d9e83cb5061af38fb56c4b99b975204f98d224249770c31812275a"
+    },
+    {
+      "sources": [
+        "libavcodec/jpeg2000htdec.c:21"
+      ],
+      "sha256": "4971af77cc1e304e7dde170b037493f46502fdbd66eca10075bcb499f620be41"
+    },
+    {
+      "sources": [
+        "libavcodec/jrevdct.c:1"
+      ],
+      "sha256": "ee552ade15c696e8e75e9c1aa91193c8299ea3961e3510ab7667f9b3eea17123"
+    },
+    {
+      "sources": [
+        "libavcodec/libfdk-aacdec.c:1"
+      ],
+      "sha256": "6316a6f4f644d30aaa3877be59d53e7f19228bc740174fb50be95c2666539b4d"
+    },
+    {
+      "sources": [
+        "libavcodec/libfdk-aacenc.c:1"
+      ],
+      "sha256": "da4e2fbe036d37b7f97d07027e3a63712d31d75f675cb250621c49089d0601f7"
+    },
+    {
+      "sources": [
+        "libavcodec/liblc3dec.c:1"
+      ],
+      "sha256": "4a22177003aa021dbbb6a916f504144a37ce08704daadb61ce50137eb8ce4623"
+    },
+    {
+      "sources": [
+        "libavcodec/liblc3enc.c:1"
+      ],
+      "sha256": "1b60b5f323429c7106ff1aeea45018e04bf2ef8bb1605c4c171ed6dc780f632c"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/ac3dsp_mips.c:1"
+      ],
+      "sha256": "024e174326077d0e1bac59213b0a609e31029bfd485e03709cf3d126956474fc"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/acelp_filters_mips.c:1"
+      ],
+      "sha256": "a020a5f58fe308055eb9bcdf37ba0100e27bf632705ec636cd918067502bc89d"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/acelp_vectors_mips.c:1"
+      ],
+      "sha256": "f1d6995867eb7d929dbc538ce0f1b05f6ba70dcfabcbc2a8d1aca0428cc18374"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/amrwbdec_mips.c:1",
+        "libavcodec/mips/amrwbdec_mips.h:1",
+        "libavutil/fixed_dsp.h:1",
+        "libavutil/mips/libm_mips.h:1"
+      ],
+      "sha256": "f13027ec8462a884aa829edc835434520cf0aab4699827557bf8178213936bb0"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/celp_filters_mips.c:1"
+      ],
+      "sha256": "071ec4e583b53419c8eed492ab135291c517deb92b70d9222b3fb7660af4e14c"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/celp_math_mips.c:1"
+      ],
+      "sha256": "0252310e096653cd019b3b8d04e0f62b6f49cbb6f5c6c3a72ded3fae83ca1e5a"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/compute_antialias_fixed.h:1"
+      ],
+      "sha256": "e7788244211032fe18e0cee1fcb33d1930a13f1066d3ac99be901220421d8199"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/compute_antialias_float.h:1"
+      ],
+      "sha256": "f6c5ea018f8c627b23be9ad4191687aab926a2bf2a43bac3a0c26bf7de7c864e"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/fmtconvert_mips.c:1"
+      ],
+      "sha256": "ad923b44808fc64bd968fe914aa425a0ce0f4bbb25226d1568ddfb4f86c6a415"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/lsp_mips.h:1"
+      ],
+      "sha256": "73c5691539b365f5bbc35e56fbac69597e4fa812b4e60e59bd57091c3c5fcbb0"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/mpegaudiodsp_mips_fixed.c:1"
+      ],
+      "sha256": "0c677827c70dbbc1474d64c27d1244ec5d25761be316f0fa0d2fb7e8b267f5de"
+    },
+    {
+      "sources": [
+        "libavcodec/mips/mpegaudiodsp_mips_float.c:1"
+      ],
+      "sha256": "22c99de37b840a3fe715a697b4faea810aa403ef403863719f7dfe5e2f288ae4"
+    },
+    {
+      "sources": [
+        "libavcodec/nellymoser.c:1",
+        "libavcodec/nellymoser.h:1"
+      ],
+      "sha256": "d6acc63c7b7cc4f970d6e89d0794b3a3dc1e27a0bf6000cc0b9f5afba42e0a5b"
+    },
+    {
+      "sources": [
+        "libavcodec/nellymoserdec.c:1"
+      ],
+      "sha256": "509b276ad8b78d701b2695c5325483097dc44b052006957483b3ea912215a18a"
+    },
+    {
+      "sources": [
+        "libavcodec/ppc/idctdsp.c:21"
+      ],
+      "sha256": "e1b78556bc5f63068ccbe3b1003748b0a8a2241ddc61f09683f194d8db81f12d"
+    },
+    {
+      "sources": [
+        "libavcodec/ra144dec.c:1"
+      ],
+      "sha256": "6054ccf42a48675c01709b2d1398adb9ffa02374f15b99340c21994c897e6b49"
+    },
+    {
+      "sources": [
+        "libavcodec/riscv/h264addpx_rvv.S:1",
+        "libavcodec/riscv/startcode_rvb.S:1",
+        "libavcodec/riscv/startcode_rvv.S:1"
+      ],
+      "sha256": "0c1a11ad5755d086d493c8c440850079e8e5332df10d0e33727f50c82d8927b9"
+    },
+    {
+      "sources": [
+        "libavcodec/riscv/h264dsp_rvv.S:1"
+      ],
+      "sha256": "edaf541af3b11cc6e3db42682836cd5479b1a06505cbf879055decf37a85e345"
+    },
+    {
+      "sources": [
+        "libavcodec/riscv/h264idct_dequant_rvv.S:1"
+      ],
+      "sha256": "87a25224bc6a43291f661b44f412872ab6b1b52e96fd08beda307135cc08442d"
+    },
+    {
+      "sources": [
+        "libavcodec/riscv/h264idct_rvv.S:1"
+      ],
+      "sha256": "8c5a34aa7e89fa8b17c462a8192fa775dba9e46b260d67eb481014d5dc826a74"
+    },
+    {
+      "sources": [
+        "libavcodec/riscv/h264qpel_rvv.S:1"
+      ],
+      "sha256": "5b96a9244c7e1e69d8003631a36d45735e9e547ace48e65531eb9c991b878327"
+    },
+    {
+      "sources": [
+        "libavcodec/speexdata.h:1",
+        "libavcodec/speexdec.c:1"
+      ],
+      "sha256": "577a618d928f36cb55cc172d201b5db1ce0f0a82c8d9c76e8c10a2d23e0a96aa"
+    },
+    {
+      "sources": [
+        "libavcodec/texturedsp.c:1"
+      ],
+      "sha256": "5d5cfb93793c53be9d46211e3c85de4e2ab5b9e0c79ab616e691f204a709a0d8"
+    },
+    {
+      "sources": [
+        "libavcodec/texturedspenc.c:1"
+      ],
+      "sha256": "0156d7068b17e83ce89af8a68061bbed4558434a54d578c82cf1326c2637127b"
+    },
+    {
+      "sources": [
+        "libavcodec/vvc/itx_1d.c:23"
+      ],
+      "sha256": "a5ce96819fb7a108e3db0c35383faed357e5c5b7369bbde3188a99551ff8ee2c"
+    },
+    {
+      "sources": [
+        "libavcodec/x86/vc1dsp_init.c:1",
+        "libavcodec/x86/vc1dsp_mmx.c:1"
+      ],
+      "sha256": "0a597d4f3e244e62e8687fffc799b2c090f3f703452093418fab984e734cd23e"
+    },
+    {
+      "sources": [
+        "libavcodec/zerocodec.c:1"
+      ],
+      "sha256": "506e2b7c804d9f2f1be2324fb8183ae91eb5e9dca128a5f0c9a7c5afbc515973"
+    },
+    {
+      "sources": [
+        "libavdevice/openal-dec.c:1"
+      ],
+      "sha256": "49d847f537657db5e1535fc66ed8e77cdeba6b7d5b505e8f7cfd0bacd06107a4"
+    },
+    {
+      "sources": [
+        "libavfilter/af_arnndn.c:1"
+      ],
+      "sha256": "14a52853208526dc00f61a1d48282bc8a98edeb489f361fbab7403b1c1cf84c2"
+    },
+    {
+      "sources": [
+        "libavfilter/af_deesser.c:1"
+      ],
+      "sha256": "ac61a2b1fa742335b60199dbc402faf1f4ddcfbd33b6f1e634129651477f9090"
+    },
+    {
+      "sources": [
+        "libavfilter/af_hdcd.c:1"
+      ],
+      "sha256": "5d1bcd441313cbdf8b1b0d010c3e08505def0f9c3ddfc83d9a39cb065cf3e3b5"
+    },
+    {
+      "sources": [
+        "libavfilter/audio.h:40"
+      ],
+      "sha256": "9d9703e547fb2d2794069d031f2107f59f5b92e296731bf46c7f9daa85b561bf"
+    },
+    {
+      "sources": [
+        "libavfilter/ebur128.c:1"
+      ],
+      "sha256": "f9265c51ccad84c6fe2f35f41d0e182bdf16f20fff50a6f41860a50040447b4c"
+    },
+    {
+      "sources": [
+        "libavfilter/edge_template.c:1"
+      ],
+      "sha256": "593de4b2b56cfdf5f230a42ddd7f0df7247ef184ef167ef42abbee3d09d92946"
+    },
+    {
+      "sources": [
+        "libavfilter/gblur.h:1",
+        "libavfilter/vf_gblur.c:1",
+        "libavfilter/vf_gblur_init.h:1"
+      ],
+      "sha256": "4bba242ad0440ec19fe9cc5e8db8c26140c8260d4e7ee74c76634701870b37be"
+    },
+    {
+      "sources": [
+        "libavfilter/median.h:1",
+        "libavfilter/median_template.c:1",
+        "libavfilter/vf_median.c:1"
+      ],
+      "sha256": "f54dbdef08b3be7b45047bb16313f061bbd35d79d1a49eb8ede2e7927752b5f1"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_avgblur.c:1"
+      ],
+      "sha256": "042d7207cc36d61f4f3cb92e9bd5b718232595889d473e1745761cd924e79107"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_bilateral.c:1"
+      ],
+      "sha256": "1687ad9d1f8793d3f29fa61ce3465b2316fdc99225671cccba9cca35c6efabdc"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_bm3d.c:1"
+      ],
+      "sha256": "638f43f150d82259450a0fa334ec2e3ea49ec99b9324e6b9b7ac59bab419b750"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_colorspace_cuda.c:1"
+      ],
+      "sha256": "ef479fc5503df09876bbef621edf7ba2dcce3e769e9075d99d0cee13cb392a86"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_deband.c:1"
+      ],
+      "sha256": "f6598926d1789148991d705c891edb61b133190c31d3d52cd6ca63be46095907"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_deshake_opencl.c:1"
+      ],
+      "sha256": "a72d314c4d8834e3a9dad6589699bbb96339d68e4014ebe406ffad39a0b15d55"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_hqx.c:1"
+      ],
+      "sha256": "6455c67ad9f2a75d04fa1bc8278f1784687d744ce3c7f66eba0803357f2fb6ef"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_morpho.c:1"
+      ],
+      "sha256": "b2b386cb81d49908d76189eb42f0be3e117d85494ab2e44cb3336781c607c497"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_scale_cuda.c:1",
+        "libavfilter/vf_thumbnail_cuda.c:1"
+      ],
+      "sha256": "7d160fb59921dfda7bb90a5a4a35587008e14e6ea93ac1ca0a263a20f4f8ee1e"
+    },
+    {
+      "sources": [
+        "libavfilter/vf_unsharp.c:1"
+      ],
+      "sha256": "2217369f157fa64966dc8317b2540a98cc6aaea9b7d2b26f8e77e4dcc8ea4cc5"
+    },
+    {
+      "sources": [
+        "libavfilter/video.h:37"
+      ],
+      "sha256": "264597cee5a867a74361bf14d6fc311063b398cc745f6a792ce3cbe2e0868ff9"
+    },
+    {
+      "sources": [
+        "libavformat/aadec.c:1"
+      ],
+      "sha256": "0ff06d48ba9c9e9417543c05f6fe989564006567da81f2820bb5d0f61dd3b069"
+    },
+    {
+      "sources": [
+        "libavformat/avio.h:318"
+      ],
+      "sha256": "27b5b344ecc34ed53b99120b52ed0c9856f33e1e67f602752bc6e81e97545769"
+    },
+    {
+      "sources": [
+        "libavformat/imf.h:19",
+        "libavformat/imf_cpl.c:19",
+        "libavformat/imfdec.c:19",
+        "libavformat/tests/imf.c:19"
+      ],
+      "sha256": "2ed1ae5368ecf33903b256b4e6fd8c8f736ee30fc376ff25c83c4b3c1a04411a"
+    },
+    {
+      "sources": [
+        "libavformat/oggdec.c:7"
+      ],
+      "sha256": "53a4f6a800476042ab770119f814ed2b61ad8514511596cac909c6d8fd439498"
+    },
+    {
+      "sources": [
+        "libavformat/oggdec.h:1",
+        "libavformat/oggparseogm.c:1"
+      ],
+      "sha256": "e295c460b16c6cbb1e3c489cbc61f6b8d92b79a5a528c048359d866c7095cc66"
+    },
+    {
+      "sources": [
+        "libavformat/oggparsespeex.c:1"
+      ],
+      "sha256": "0f538dea40be8e4d18be2d0133a68b9dfc1dad2658b1fd35b6b1efc5cd56a959"
+    },
+    {
+      "sources": [
+        "libavformat/oggparsetheora.c:1"
+      ],
+      "sha256": "2c4050d92d3100df1dd2b59ca914786dc634794b7f1d5483809945fe75324687"
+    },
+    {
+      "sources": [
+        "libavformat/oggparsevorbis.c:1"
+      ],
+      "sha256": "c046630054068b5599168d9cd2df911cf4f8ece0b6afbf5dd6e8e6ac7a1ddf8b"
+    },
+    {
+      "sources": [
+        "libavutil/adler32.c:1"
+      ],
+      "sha256": "67c94260bf4abcf8842f1c8c568b3be834e3a8004e802f3c54d2594975d44703"
+    },
+    {
+      "sources": [
+        "libavutil/avsscanf.c:1"
+      ],
+      "sha256": "5ca3ab7d31f4c7d517a5ea4fc8a792f6df3aa1fe69c8181e309d56d704326440"
+    },
+    {
+      "sources": [
+        "libavutil/fixed_dsp.c:1"
+      ],
+      "sha256": "eeb57a1e217733d0e5c87ab6d71bf1dab9d5dd7f4ed2dd819f0c30fc50c293c4"
+    },
+    {
+      "sources": [
+        "libavutil/libm.h:94"
+      ],
+      "sha256": "63a8f4cb44aaa3ce67ff5a99ee4d473cae9e490e3c295e009e41f3c0befd04bb"
+    },
+    {
+      "sources": [
+        "libavutil/mathematics.c:227"
+      ],
+      "sha256": "fff0bec35528cfae34d6cd56af645a2424664fbbfedf65c34416ebf42837d613"
+    },
+    {
+      "sources": [
+        "libavutil/mips/float_dsp_mips.c:1"
+      ],
+      "sha256": "102a863819ee3fc9c3f191d541efa5aa6c15ca7ed94cac03dc61a1c11809eb56"
+    },
+    {
+      "sources": [
+        "libavutil/sha.c:1"
+      ],
+      "sha256": "acdf27295272140550ca61f7c4bda21a78fe351178a698ec7a498b94ab887647"
+    },
+    {
+      "sources": [
+        "libavutil/softfloat_tables.h:1"
+      ],
+      "sha256": "5a2b6a7e314b0f69febf023e77f10efa0daf727741acd2bf1a0db99ee2732b00"
+    },
+    {
+      "sources": [
+        "libavutil/uuid.c:22"
+      ],
+      "sha256": "92aac580b3b46d6c2a830c6f63064dc016f24f99a84b10fbd79bba4c71651b44"
+    },
+    {
+      "sources": [
+        "tests/api/api-band-test.c:1",
+        "tests/api/api-h264-test.c:1",
+        "tests/api/api-seek-test.c:1"
+      ],
+      "sha256": "ddf3f4f806665b4b7ad9a9a7d9fec73c7752ae78f5b3ac599408bd588ffcbb0d"
+    },
+    {
+      "sources": [
+        "tests/api/api-dump-stream-meta-test.c:1"
+      ],
+      "sha256": "b82d8fde7e1393d95a12f6df2a4419ed32f3efbdf57a8a7b11e5bdcae351102f"
+    },
+    {
+      "sources": [
+        "tests/api/api-enc-parser-test.c:1"
+      ],
+      "sha256": "456711364841dbef791c28054c401e46bdfb55737b8fd4aed39885a476ac6f5c"
+    },
+    {
+      "sources": [
+        "tests/api/api-flac-test.c:1"
+      ],
+      "sha256": "6626a76054b0c4c26acb04d8338e31fd8f1657cbcd210d69ad7a54a789955078"
+    },
+    {
+      "sources": [
+        "tests/checkasm/checkasm.c:1"
+      ],
+      "sha256": "d382f52f39bf448cf7b6c78f22ed3c0b4c24db9e00e48bf216213b7abd7d0ab1"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/LICENSE"
+      ],
+      "sha256": "a2dc8194271e5989c0622531c645a7b41af5da92eeb2531e4f2a3ec31023bc52"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/include/checkasm/attributes.h:1",
+        "tests/checkasm/ext/include/checkasm/checkasm.h:1",
+        "tests/checkasm/ext/include/checkasm/header_config.h:1",
+        "tests/checkasm/ext/include/checkasm/perf/aarch64.h:1",
+        "tests/checkasm/ext/include/checkasm/perf/arm.h:1",
+        "tests/checkasm/ext/include/checkasm/perf/loongarch32.h:1",
+        "tests/checkasm/ext/include/checkasm/perf/loongarch64.h:1",
+        "tests/checkasm/ext/include/checkasm/perf/ppc64le.h:1",
+        "tests/checkasm/ext/include/checkasm/perf/x86.h:1",
+        "tests/checkasm/ext/include/checkasm/perf.h:1",
+        "tests/checkasm/ext/include/checkasm/platform/aarch64.h:1",
+        "tests/checkasm/ext/include/checkasm/platform/arm.h:1",
+        "tests/checkasm/ext/include/checkasm/platform/loongarch.h:1",
+        "tests/checkasm/ext/include/checkasm/platform/ppc64le.h:1",
+        "tests/checkasm/ext/include/checkasm/platform/riscv.h:1",
+        "tests/checkasm/ext/include/checkasm/platform/x86_32.h:1",
+        "tests/checkasm/ext/include/checkasm/platform/x86_64.h:1",
+        "tests/checkasm/ext/include/checkasm/platform.h:1",
+        "tests/checkasm/ext/include/checkasm/test.h:1",
+        "tests/checkasm/ext/include/checkasm/utils.h:1",
+        "tests/checkasm/ext/src/function.h:1",
+        "tests/checkasm/ext/src/perf/arm.c:1",
+        "tests/checkasm/ext/src/perf/linux.c:1",
+        "tests/checkasm/ext/src/perf/macos_kperf.c:1",
+        "tests/checkasm/ext/src/perf.c:1",
+        "tests/checkasm/ext/src/signal.c:1",
+        "tests/checkasm/ext/src/utils.c:1",
+        "tests/checkasm/ext/src/x86/cpu.c:1"
+      ],
+      "sha256": "74d1fce74e40f620eb73e07aba681fb10352e8d31a86ae74e631298814035462"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/arm/asm.S:1"
+      ],
+      "sha256": "bcfc6d65201cf149722575581613e5a8fdc7d2f8d333d2ee782970491e2d5b9e"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/arm/checkasm_32.S:1",
+        "tests/checkasm/ext/src/arm/checkasm_64.S:1"
+      ],
+      "sha256": "7fc99779bddbc42191bc22e563846cbfe9878f49f7d510f3ff62709de0f9116b"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/arm/cpu.c:1"
+      ],
+      "sha256": "118aad51f069615a4799efbe0a8e3ff4fa769da4f3fcaf3afa339d3b6c5d1285"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/checkasm.c:1",
+        "tests/checkasm/ext/src/function.c:1",
+        "tests/checkasm/ext/src/internal.h:1",
+        "tests/checkasm/ext/src/longjmp.h:1"
+      ],
+      "sha256": "3790b1cf2edcd27f69fa14f3395f29f0bee0faba43755e618b6d8f26c2281f29"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/checkasm_config.h:1"
+      ],
+      "sha256": "02861eb31ef8f5b015dbff4584928486048b91c0f6c2c9379fd147abd22434c5"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/cpu.c:1"
+      ],
+      "sha256": "9bf2ff64aeed78c00b03245bfe7790a034fdfd2d93ec431b04ef1448aca24b7d"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/cpu.h:1",
+        "tests/checkasm/ext/src/perf_internal.h:1"
+      ],
+      "sha256": "4160861c67d88e9392d718e69623e18f49bce30c2288d8412a89713f2e575658"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/html_data/LICENSE"
+      ],
+      "sha256": "0fd2c601fb2ead2add56807b7e32664da8d973b9835a422464f210bfea997a52"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/html_data.h:1",
+        "tests/checkasm/ext/src/stats.c:1",
+        "tests/checkasm/ext/src/stats.h:1"
+      ],
+      "sha256": "bb6d013792c097c4aa7d937580a2a3ed66e962c01f7b91ca45f23e876c9e2448"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/loongarch/checkasm.S:1"
+      ],
+      "sha256": "7c76d3c65611b5217c50f55fb1733d7b5b896a4bf0e8534c233aa1e7b5c9e7e2"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/loongarch/loongson_asm.S:1"
+      ],
+      "sha256": "309c9245f1be227bf31dc5a90450c38403bffc38b28faae187572b8d545d2791"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/riscv/asm.S:1"
+      ],
+      "sha256": "18f03486b64c96e05dfcba0fe1f65890502eb9d032c98ab1659269d3de309bba"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/riscv/callcheck.S:1"
+      ],
+      "sha256": "9a0bba93730115a716b318acbf407c62731c86402ae3bae0b7227324bad6211a"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/riscv/cpu.c:1"
+      ],
+      "sha256": "d30f6aeb6ff663c7c2d71a9151ac606476de2b3c012547eb70628beb8fccab02"
+    },
+    {
+      "sources": [
+        "tests/checkasm/ext/src/stackguard.c:1"
+      ],
+      "sha256": "b21db090063fac2387bab01b38c1e5743520c6380a11e9d18bd86431d9668013"
+    },
+    {
+      "sources": [
+        "tools/cws2fws.c:1"
+      ],
+      "sha256": "b3f88d6a0e4ace5cd6dc2126d30d3f609fa27431e2e57ad0aa0bf678361274f1"
+    },
+    {
+      "sources": [
+        "tools/qt-faststart.c:1"
+      ],
+      "sha256": "fc5f15ed7cd2f83f690047801d6d1a120a9b997f805b5bd2909b7c581cf3a210"
+    }
+  ],
+  "containerSHA256": "4cb49386d317bd783e48f1c5eeb6f01ca243f5ad004314ae824373018a131603"
+}

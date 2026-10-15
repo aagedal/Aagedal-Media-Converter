@@ -1,0 +1,19 @@
+{
+  "result": "Passed",
+  "totalTestCount": 2,
+  "passedTests": 2,
+  "failedTests": 0,
+  "configuration": "Debug",
+  "architecture": "arm64",
+  "tests": [
+    {
+      "name": "testMPVPreviewSeekScreenshotAndReopen",
+      "durationSeconds": 45.897
+    },
+    {
+      "name": "testMPVStitchingSequencePlaybackAndReplay",
+      "durationSeconds": 75.833
+    }
+  ],
+  "resultBundle": "/private/tmp/amc-mpvkit-n9-ui-tests.xcresult"
+}

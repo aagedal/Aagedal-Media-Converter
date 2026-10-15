@@ -1,0 +1,38 @@
+{
+  "verified": true,
+  "configuration": "Debug",
+  "products": [
+    {
+      "target": "Libmpv",
+      "sha256": "9855abc54747df89df16e604f316e7ca17bd7e7c5ba72458d6f89a1c9d139301"
+    },
+    {
+      "target": "Libavcodec",
+      "sha256": "e17358f57c87bccad7f5edec6be06c8630a4fcd0987f373bade6099054a11173"
+    },
+    {
+      "target": "Libavdevice",
+      "sha256": "c3f9ebe972147a74c1ae0ec37619b168270a85db499787d3836aa29d3c216cd2"
+    },
+    {
+      "target": "Libavfilter",
+      "sha256": "55159f5b84c567e0534ac9d2404464896053c2eefe540d59175c9a216ea86b86"
+    },
+    {
+      "target": "Libavformat",
+      "sha256": "3d96bcaa13a4f8e0891fd039b26ba1cca228e82bd42462fe075c22c08da550f9"
+    },
+    {
+      "target": "Libavutil",
+      "sha256": "a1bff13f964af52ce4691fea6b35276e37895b84fdc1870431efcd4663fd241a"
+    },
+    {
+      "target": "Libswresample",
+      "sha256": "6afc7bc2b666e16568e1e9830b54598e2fba807d7a7bbf595ff22845871591c0"
+    },
+    {
+      "target": "Libswscale",
+      "sha256": "107a11925e345b90e802a27ddf1954f32e1c37a7f295db8d95b6b1ccf3938d47"
+    }
+  ]
+}

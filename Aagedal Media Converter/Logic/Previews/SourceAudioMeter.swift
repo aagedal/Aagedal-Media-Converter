@@ -247,3 +247,24 @@ actor PlaybackAudioMeterCache {
         return chunk
     }
 }
+
+/// Decode only finite string metadata. A live filter has no source pre-roll;
+/// loudness stays unavailable until enough continuous playback history exists.
+enum MPVAudioMeterMetadata {
+    static func sample(_ values: [String: String], seconds: Double, history: Double) -> PlaybackAudioMeterSample? {
+        guard seconds.isFinite, history.isFinite, history >= 0 else { return nil }
+        func finite(_ key: String) -> Double? {
+            guard let text = values[key], let value = Double(text), value.isFinite else { return nil }
+            return value
+        }
+        let count = (1...8).last { values["lavfi.astats.\($0).Peak_level"] != nil } ?? 0
+        guard count > 0 else { return nil }
+        return PlaybackAudioMeterSample(
+            seconds: seconds,
+            peaks: (1...count).map { finite("lavfi.astats.\($0).Peak_level") },
+            rms: (1...count).map { finite("lavfi.astats.\($0).RMS_level") },
+            momentaryLUFS: history >= 0.4 ? finite("lavfi.r128.M") : nil,
+            shortTermLUFS: history >= 3 ? finite("lavfi.r128.S") : nil
+        )
+    }
+}
