@@ -2,6 +2,80 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class AudioPeakAnalysisTests: XCTestCase {
+    func testJSONReportPreservesEveryIntervalAndMeasurementContext() throws {
+        let intervals = (0..<1_005).map { index in
+            AudioPeakInterval(start: Double(index) + 2, end: Double(index) + 2.1, channel: 2, peakDBFS: -0.5)
+        }
+        let result = AudioPeakAnalysisResult(settings: .init(thresholdDBFS: -1, imbalanceThresholdDB: 3),
+                                             intervals: intervals,
+                                             channels: [.init(channel: 1, peakDBFS: -10, rmsDBFS: -20),
+                                                        .init(channel: 2, peakDBFS: -0.5, rmsDBFS: -10)],
+                                             duration: 1006.1, imbalanceDB: 10)
+        let source = URL(fileURLWithPath: "/private/source folder/quoted\"音声.mkv")
+        let date = Date(timeIntervalSince1970: 1_792_152_000)
+        let data = try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, trackIndex: 3, timestamp: date)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(report["sourceFileName"] as? String, source.lastPathComponent)
+        XCTAssertEqual(report["audioRelativeTrackIndex"] as? Int, 3)
+        XCTAssertEqual(report["timestamp"] as? String, ISO8601DateFormatter().string(from: date))
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("source folder"))
+        let semantics = try XCTUnwrap(report["semantics"] as? [String: Any])
+        XCTAssertEqual(semantics["peakUnit"] as? String, "dBFS")
+        XCTAssertEqual(semantics["windowSamples"] as? Int, 4800)
+        XCTAssertEqual(semantics["timeline"] as? String, "file_relative_including_initial_audio_offset")
+        let payload = try XCTUnwrap(report["result"] as? [String: Any])
+        XCTAssertEqual((payload["intervals"] as? [Any])?.count, 1_005, "Export must include intervals omitted from the chart")
+        let decoder = JSONDecoder()
+        XCTAssertEqual(try decoder.decode(AudioPeakAnalysisResult.self, from: JSONSerialization.data(withJSONObject: payload)), result)
+    }
+
+    func testJSONReportDistinguishesSilenceInfiniteDifferenceAndUnavailableComparison() throws {
+        for levels in [[-Double.infinity, -Double.infinity], [-6, -Double.infinity], [-6]] {
+            let collector = AudioPeakLogCollector(settings: .init())
+            consume(frame(0, pts: 96000, samples: 4800, peaks: levels, rms: levels), collector)
+            complete(collector)
+            let result = try collector.finish()
+            let data = try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: URL(fileURLWithPath: "/tmp/audio.wav"),
+                                                           trackIndex: 0, timestamp: Date())
+            let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let payload = try XCTUnwrap(report["result"] as? [String: Any])
+            if result.imbalanceDB == .infinity { XCTAssertEqual(payload["imbalanceDB"] as? String, "Infinity") }
+            else { XCTAssertNil(payload["imbalanceDB"]) }
+            let decoder = JSONDecoder()
+            decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "Infinity", negativeInfinity: "-Infinity", nan: "NaN")
+            XCTAssertEqual(try decoder.decode(AudioPeakAnalysisResult.self, from: JSONSerialization.data(withJSONObject: payload)), result)
+            XCTAssertEqual(result.duration, 2.1)
+        }
+    }
+
+    func testJSONReportWritesCanBeRepeatedAndSurfaceDestinationErrors() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let result = AudioPeakAnalysisResult(settings: .init(), intervals: [],
+                                             channels: [.init(channel: 1, peakDBFS: -10, rmsDBFS: -20)], duration: 1, imbalanceDB: nil)
+        let file = directory.appendingPathComponent("report.json")
+        for track in [0, 2] {
+            try AnalyticsExporter.exportAudioPeakJSON(result: result, sourceFile: directory.appendingPathComponent("source.wav"),
+                                                       trackIndex: track, timestamp: Date(), to: file)
+            let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+            XCTAssertEqual(report["audioRelativeTrackIndex"] as? Int, track)
+        }
+        XCTAssertThrowsError(try AnalyticsExporter.exportAudioPeakJSON(result: result, sourceFile: file, trackIndex: 0,
+                                                                        timestamp: Date(), to: directory))
+    }
+
+    func testJSONReportRejectsInvalidMeasurementsInsteadOfPublishingNaN() {
+        for value in [Double.nan, .infinity] {
+            let result = AudioPeakAnalysisResult(settings: .init(), intervals: [],
+                                                 channels: [.init(channel: 1, peakDBFS: value, rmsDBFS: -20)],
+                                                 duration: 1, imbalanceDB: nil)
+            XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: URL(fileURLWithPath: "/tmp/audio.wav"),
+                                                                     trackIndex: 0, timestamp: Date()))
+        }
+    }
+
     func testChunkedParserMergesChannelsAndWeightsRMSByActualSamples() throws {
         let collector = AudioPeakLogCollector(settings: .init(thresholdDBFS: -10))
         let log = frame(0, pts: 0, samples: 4800, peaks: [0, -20], rms: [0, -20])

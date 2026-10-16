@@ -4,6 +4,7 @@
 
 import SwiftUI
 import Charts
+import UniformTypeIdentifiers
 
 struct AudioPeakAnalysisRequest: Identifiable {
     let id = UUID()
@@ -21,6 +22,7 @@ struct AudioPeakAnalysisView: View {
     @State private var threshold = -1.0
     @State private var imbalanceThreshold = 6.0
     @State private var result: AudioPeakAnalysisResult?
+    @State private var analysisTimestamp: Date?
     @State private var analysisTask: Task<Void, Never>?
     @State private var analysisID: UUID?
     @State private var errorMessage: String?
@@ -61,6 +63,9 @@ struct AudioPeakAnalysisView: View {
                             Button("Cancel") { analysisTask?.cancel() }
                                 .accessibilityIdentifier("analysis.peaks.cancel")
                         }
+                        Button("Export JSON") { exportJSON() }
+                            .disabled(isAnalyzing || result == nil)
+                            .accessibilityIdentifier("analysis.peaks.export")
                     }
                     Text("Scans the complete selected track in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -273,7 +278,26 @@ struct AudioPeakAnalysisView: View {
 
     private func clearResult() {
         result = nil
+        analysisTimestamp = nil
         errorMessage = nil
+    }
+
+    private func exportJSON() {
+        guard let result, let timestamp = analysisTimestamp, !isAnalyzing else { return }
+        let trackIndex = selectedTrack
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_audio_peaks.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        do {
+            try AnalyticsExporter.exportAudioPeakJSON(result: result, sourceFile: file,
+                                                       trackIndex: trackIndex, timestamp: timestamp, to: url)
+            errorMessage = nil
+        } catch {
+            errorMessage = String(localized: "Export Failed") + ": " + error.localizedDescription
+        }
     }
 
     private func analyze() {
@@ -287,7 +311,10 @@ struct AudioPeakAnalysisView: View {
             do {
                 let measured = try await AudioPeakAnalysisService.shared.analyze(file: file, trackIndex: trackIndex, settings: settings)
                 try Task.checkCancellation()
-                if analysisID == id { result = measured }
+                if analysisID == id {
+                    result = measured
+                    analysisTimestamp = Date()
+                }
             } catch is CancellationError {
                 // Cancelled scans do not publish incomplete measurements.
             } catch {

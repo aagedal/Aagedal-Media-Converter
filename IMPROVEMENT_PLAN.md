@@ -2,6 +2,32 @@
 
 Last reviewed: 2026-10-16
 
+## Audio channel-report export continuation — 2026-10-16
+
+Owner: Codex. Peaks and Channel Balance now exports complete source reports as
+versioned JSON through the macOS save panel. Reports preserve selected-track
+identity, scan completion time, thresholds, all channel levels and every peak
+interval, including those beyond the chart's display limit. Explicit semantics
+distinguish dBFS sample peaks, unweighted RMS, file-timeline offsets, digital
+silence, infinite channel difference and unavailable comparisons. Export excludes
+the source's absolute path and retains security-scoped access through atomic
+writes. Track/settings changes invalidate export; cancelled saves preserve the
+scan, and save errors allow retry.
+
+Validation: the ad-hoc-signed Debug app builds and all 1,363 unit tests pass with
+one intentional opt-in benchmark skip and no failures. English/Norwegian UI
+checks pass, including save cancellation and a real exported report readback;
+both screenshots were visually inspected. Seven localization script tests, the
+1,876-entry catalog audit and whitespace check pass. Release/device qualification
+and translations outside English/Norwegian remain unverified. Both project
+configurations currently disable App Sandbox, so the save-panel checks do not
+qualify sandbox enforcement.
+
+The [audio roadmap](docs/AUDIO-METERING-PLAN.md) records verification and remaining
+true-peak, phase/correlation, playback-alignment and report work. The
+[report format](docs/audio-peak-report-format.md) documents the version 1 schema.
+No dependencies, bundled binaries or licenses changed.
+
 ## Audio peaks and channel balance continuation — 2026-10-16
 
 Owner: Codex. Audio Analysis now offers complete-track source sample-peak
