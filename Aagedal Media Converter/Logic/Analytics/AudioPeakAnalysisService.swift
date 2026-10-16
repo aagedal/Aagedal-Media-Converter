@@ -40,6 +40,7 @@ struct AudioPeakAnalysisResult: Codable, Equatable, Sendable {
     let duration: Double
     /// Unweighted whole-track RMS range. Nil for mono or entirely silent audio.
     let imbalanceDB: Double?
+    var presentation: LoudnessPresentation? = nil
 }
 
 /// Measures source sample peaks (not reconstructed true peaks). Markers cover
@@ -56,16 +57,46 @@ actor AudioPeakAnalysisService {
     }
 
     func analyze(file: URL, trackIndex: Int, settings: AudioPeakSettings = .init()) async throws -> AudioPeakAnalysisResult {
+        try await analyze(file: file, presentation: .track(trackIndex), settings: settings)
+    }
+
+    /// Validate the complete presentation before grouped audition or analysis.
+    func validateGroupedTracks(file: URL, presentation: LoudnessPresentation) async throws {
         try Task.checkCancellation()
-        try settings.validate()
-        guard trackIndex >= 0 else { throw AnalyticsError.parsingFailed("Select a valid audio track.") }
+        try Self.validateSelection(presentation)
+        if case .track = presentation { return }
         guard let path = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        _ = try await validateCompleteGroupedTiming(file: file, indices: presentation.streamIndices, path: path)
+    }
+
+    private static func validateSelection(_ presentation: LoudnessPresentation) throws {
+        let indices = presentation.streamIndices
+        guard !indices.isEmpty, indices.allSatisfy({ $0 >= 0 }), Set(indices).count == indices.count else {
+            throw AnalyticsError.parsingFailed("Select distinct, valid audio tracks.")
+        }
+        if case .surround51 = presentation, indices.count != 6 {
+            throw AnalyticsError.parsingFailed("A 5.1 grouping requires exactly six mono tracks.")
+        }
+    }
+
+    func analyze(file: URL, presentation: LoudnessPresentation,
+                 settings: AudioPeakSettings = .init()) async throws -> AudioPeakAnalysisResult {
+        try Task.checkCancellation()
+        try settings.validate()
+        try Self.validateSelection(presentation)
+        let indices = presentation.streamIndices
+        guard let path = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        let timing: GroupedPeakTimingCollector.Summary?
+        if case .track = presentation { timing = nil }
+        else { timing = try await validateCompleteGroupedTiming(file: file, indices: indices, path: path) }
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: path),
             arguments: ["-hide_banner", "-nostdin", "-nostats", "-xerror", "-progress", "pipe:1", "-i", file.path,
-                        "-map", "0:a:\(trackIndex)", "-af", Self.filterGraph, "-f", "null", "-"],
+                        "-filter_complex", Self.filterGraph(for: presentation), "-map", "[peaks]", "-f", "null", "-"],
             timeout: .seconds(12 * 60 * 60), standardOutputCaptureLimit: 0,
             standardErrorCaptureLimit: 64 * 1024, sensitiveValues: [path, file.path])
         let collector = AudioPeakLogCollector(settings: settings)
@@ -74,7 +105,52 @@ actor AudioPeakAnalysisService {
         guard result.succeeded else {
             throw AnalyticsError.parsingFailed("Audio peak analysis failed. " + request.redactedDiagnostic(result.standardErrorText, limit: 500))
         }
+        var report = try collector.finish(expectedSamples: timing?.samples)
+        if let timing {
+            guard report.channels.count == indices.count,
+                  abs(report.duration - timing.end) < 0.5 / Double(timing.rate) else {
+                throw AnalyticsError.parsingFailed("Grouped peak analysis did not preserve every source sample.")
+            }
+        }
+        report.presentation = presentation
+        return report
+    }
+
+    private func validateCompleteGroupedTiming(file: URL, indices: [Int], path: String) async throws -> GroupedPeakTimingCollector.Summary {
+        let graph = indices.enumerated().map { offset, index in
+            "[0:a:\(index)]asettb=1/sr,ashowinfo@amc_peak_timing_\(offset)[timing_\(offset)]"
+        }.joined(separator: ";")
+        let maps = indices.indices.flatMap { ["-map", "[timing_\($0)]"] }
+        let request = SubprocessRequest(executableURL: URL(fileURLWithPath: path),
+            arguments: ["-hide_banner", "-nostdin", "-nostats", "-xerror", "-progress", "pipe:1", "-i", file.path,
+                        "-filter_complex", graph] + maps + ["-f", "null", "-"],
+            timeout: .seconds(12 * 60 * 60), standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 64 * 1024, sensitiveValues: [path, file.path])
+        let collector = GroupedPeakTimingCollector(trackCount: indices.count)
+        let result = try await runner.run(request) { collector.consume($0) }
+        try Task.checkCancellation()
+        guard result.succeeded else {
+            throw AnalyticsError.parsingFailed("Could not verify complete grouped audio timing. " + request.redactedDiagnostic(result.standardErrorText, limit: 500))
+        }
         return try collector.finish()
+    }
+
+    static func filterGraph(for presentation: LoudnessPresentation) -> String {
+        if case .track(let index) = presentation { return "[0:a:\(index)]\(filterGraph)[peaks]" }
+        // Normalize mono labels so amerge concatenates input order, then assign roles
+        // explicitly. join can intermittently drop its final full window at EOF.
+        // Equal, unpadded framing preserves source samples with different codecs.
+        let preparation = presentation.streamIndices.enumerated().map { offset, index in
+            "[0:a:\(index)]channelmap=map=0-FC:channel_layout=mono,asetnsamples=n=4800:p=0[group_\(offset)];"
+        }.joined()
+        let inputs = presentation.streamIndices.indices.map { "[group_\($0)]" }.joined()
+        let merge: String
+        switch presentation {
+        case .track: merge = ""
+        case .stereo: merge = "amerge=inputs=2,channelmap=map=0-FL|1-FR:channel_layout=stereo,"
+        case .surround51: merge = "amerge=inputs=6,channelmap=map=0-FL|1-FR|2-FC|3-LFE|4-SL|5-SR:channel_layout=5.1(side),"
+        }
+        return "\(preparation)\(inputs)\(merge)\(filterGraph)[peaks]"
     }
 
     static let filterGraph = "asettb=1/sr,asetnsamples=n=4800:p=0,ashowinfo,"
@@ -133,12 +209,13 @@ final class AudioPeakLogCollector: @unchecked Sendable {
         if chunk.stream == .standardError { stderrPending = pending } else { stdoutPending = pending }
     }
 
-    func finish() throws -> AudioPeakAnalysisResult {
+    func finish(expectedSamples: Int64? = nil) throws -> AudioPeakAnalysisResult {
         lock.lock()
         defer { lock.unlock() }
         if !invalid { flushFrame() }
         guard !invalid, completed, frameCount > 0, totalSamples > 0,
-              stderrPending.isEmpty, stdoutPending.isEmpty else {
+              stderrPending.isEmpty, stdoutPending.isEmpty,
+              expectedSamples == nil || Double(expectedSamples!) == totalSamples else {
             throw AnalyticsError.parsingFailed("Audio peak analysis did not produce a complete report, or exceeded the 100,000-marker limit. Retry with a readable audio track or a higher peak threshold.")
         }
         intervals.append(contentsOf: active.values)
@@ -237,6 +314,85 @@ final class AudioPeakLogCollector: @unchecked Sendable {
         totalSamples += Double(current.samples)
         end = frameEnd
         frameCount += 1
+    }
+
+    private func token(_ key: String, _ line: String) -> String? {
+        guard let range = line.range(of: key) else { return nil }
+        return line[range.upperBound...].split(whereSeparator: \.isWhitespace).first.map(String.init)
+    }
+}
+
+/// Streaming, constant-memory validation before merging can conceal missing samples.
+/// Matroska timestamps commonly round to milliseconds; tolerate that clock
+/// quantization, but never a changed sample rate, sample total, or start time.
+/// Sub-millisecond discontinuities cannot be distinguished from that rounding.
+final class GroupedPeakTimingCollector: @unchecked Sendable {
+    struct Summary {
+        let start: Int64
+        let samples: Int64
+        let rate: Int
+        var end: Double { (Double(start) + Double(samples)) / Double(rate) }
+    }
+    private struct Track {
+        var frames = 0
+        var start: Int64 = 0
+        var samples: Int64 = 0
+        var rate = 0
+    }
+    private let lock = NSLock()
+    private var tracks: [Track]
+    private var stderrPending = ""
+    private var stdoutPending = ""
+    private var invalid = false
+    private var completed = false
+
+    init(trackCount: Int) { tracks = Array(repeating: Track(), count: trackCount) }
+
+    func consume(_ chunk: SubprocessOutputChunk) {
+        lock.lock()
+        defer { lock.unlock() }
+        var pending = chunk.stream == .standardError ? stderrPending : stdoutPending
+        pending += String(decoding: chunk.data, as: UTF8.self)
+        while let newline = pending.firstIndex(of: "\n") {
+            let line = String(pending[..<newline])
+            pending.removeSubrange(...newline)
+            if chunk.stream == .standardOutput {
+                if line == "progress=end" { completed = true }
+            } else if !invalid { parse(line) }
+        }
+        if pending.utf8.count > 64 * 1024 { invalid = true; pending = "" }
+        if chunk.stream == .standardError { stderrPending = pending } else { stdoutPending = pending }
+    }
+
+    func finish() throws -> Summary {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !invalid, completed, stderrPending.isEmpty, stdoutPending.isEmpty,
+              let first = tracks.first, first.frames > 0,
+              tracks.allSatisfy({ $0.frames > 0 && $0.rate == first.rate && $0.start == first.start && $0.samples == first.samples }) else {
+            throw AnalyticsError.parsingFailed(String(localized: "Grouped peak analysis requires mono tracks with matching sample rates, start times, and decoded lengths, without timestamp discontinuities (within 1 ms container timestamp precision)."))
+        }
+        return Summary(start: first.start, samples: first.samples, rate: first.rate)
+    }
+
+    private func parse(_ line: String) {
+        guard let marker = line.range(of: "ashowinfo@amc_peak_timing_"), line.contains(" n:") else { return }
+        let suffix = line[marker.upperBound...]
+        guard let index = Int(suffix.prefix(while: \.isNumber)), tracks.indices.contains(index),
+              let frame = token("n:", line).flatMap(Int.init), frame == tracks[index].frames,
+              let pts = token("pts:", line).flatMap(Int64.init), pts >= 0,
+              token("channels:", line) == "1",
+              let rate = token("rate:", line).flatMap(Int.init), rate > 0,
+              let count = token("nb_samples:", line).flatMap(Int64.init), count > 0 else { invalid = true; return }
+        var track = tracks[index]
+        if track.frames == 0 { track.start = pts; track.rate = rate }
+        let expected = track.start.addingReportingOverflow(track.samples)
+        let total = track.samples.addingReportingOverflow(count)
+        guard !expected.overflow, !total.overflow, rate == track.rate,
+              abs(Double(pts) - Double(expected.partialValue)) <= max(1, Double(rate) / 1000) else { invalid = true; return }
+        track.frames += 1
+        track.samples = total.partialValue
+        tracks[index] = track
     }
 
     private func token(_ key: String, _ line: String) -> String? {

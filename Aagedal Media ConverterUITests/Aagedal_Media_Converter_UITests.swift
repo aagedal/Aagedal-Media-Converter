@@ -1687,6 +1687,144 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testGroupedPeakSelectionPreviewAndExport() throws {
+        try checkGroupedPeaks(language: "en", locale: "en_US")
+    }
+
+    @MainActor
+    func testGroupedPeakNorwegianSelectionAndPreview() throws {
+        try checkGroupedPeaks(language: "nb", locale: "nb_NO")
+    }
+
+    @MainActor
+    private func checkGroupedPeaks(language: String, locale: String) throws {
+        let norwegian = language == "nb"
+        launchApp(generatedFixture: true, language: language, locale: locale,
+                  additionalArguments: ["-AMC_UI_TEST_GROUPED_PEAKS", "YES"], previewContainer: "mkv")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons[norwegian ? "Lyd" : "Audio"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.peaks.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        let export = element("analysis.peaks.export")
+        XCTAssertFalse(export.isEnabled)
+        let kind = element("analysis.peaks.kind")
+        kind.click()
+        app.menuItems[norwegian ? "Monopar" : "Mono pair"].click()
+        XCTAssertTrue(element("analysis.peaks.channel.0").exists)
+        XCTAssertTrue(element("analysis.peaks.channel.1").exists)
+        element("analysis.peaks.threshold").click()
+        app.menuItems["-6 dBFS"].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        let summary = element("analysis.peaks.summary")
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Toppintervaller: 1" : "Peak intervals: 1", of: summary, timeout: 20))
+        let start = element("analysis.peaks.start.0")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        let time = element("analysis.peaks.time")
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "1,00 s" : "1.00 s", of: time, timeout: 5))
+        element("analysis.peaks.end.0").click()
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "2,00 s" : "2.00 s", of: time, timeout: 5))
+        XCTAssertFalse(element("analysis.peaks.preview.error").exists)
+        attachWindowScreenshot(named: "Grouped stereo peaks \(language)")
+        XCTAssertTrue(export.isEnabled)
+        if !norwegian {
+            try checkGroupedPeakExport(indices: [0, 1], layout: "stereo", order: ["FL", "FR"])
+        }
+
+        kind.click()
+        app.menuItems[norwegian ? "5.1 flerkanals mono" : "5.1 multi-mono"].click()
+        XCTAssertFalse(summary.exists, "Changing presentation must invalidate the report")
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertTrue(element("analysis.peaks.channel.5").exists)
+        let first = element("analysis.peaks.channel.0")
+        let last = element("analysis.peaks.channel.5")
+        let firstTitle = try XCTUnwrap(first.value as? String)
+        let lastTitle = try XCTUnwrap(last.value as? String)
+        last.click()
+        app.menuItems[firstTitle].click()
+        XCTAssertFalse(run.isEnabled, "Duplicate channel assignments must block analysis")
+        XCTAssertFalse(export.isEnabled)
+        last.click()
+        app.menuItems[lastTitle].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        XCTAssertTrue(waitForEnabled(true, of: export, timeout: 20))
+        attachWindowScreenshot(named: "Grouped 5.1 channel levels \(language)")
+        // Six channel rows can place the summary and lazy buttons below the viewport.
+        app.scrollViews["analysis.peaks.results"].scroll(byDeltaX: 0, deltaY: -250)
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Toppintervaller: 1" : "Peak intervals: 1", of: summary, timeout: 5))
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "1,00 s" : "1.00 s", of: time, timeout: 5))
+        XCTAssertFalse(element("analysis.peaks.preview.error").exists)
+        attachWindowScreenshot(named: "Grouped 5.1 peaks \(language)")
+        if !norwegian {
+            try checkGroupedPeakExport(indices: [0, 1, 2, 3, 4, 5], layout: "5.1(side)", order: ["FL", "FR", "FC", "LFE", "SL", "SR"])
+        }
+
+        // A role edit must discard measurements even when the presentation kind stays the same.
+        last.click()
+        app.menuItems[firstTitle].click()
+        XCTAssertFalse(summary.exists)
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertFalse(run.isEnabled)
+        last.click()
+        app.menuItems[lastTitle].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        XCTAssertTrue(waitForEnabled(true, of: export, timeout: 20))
+        kind.click()
+        app.menuItems[norwegian ? "Lydspor" : "Audio track"].click()
+        XCTAssertFalse(summary.exists)
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertTrue(element("analysis.peaks.track").exists)
+        element("analysis.peaks.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func checkGroupedPeakExport(indices: [Int], layout: String, order: [String]) throws {
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-grouped-peaks-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        element("analysis.peaks.export").click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 2)
+        XCTAssertNil(report["audioRelativeTrackIndex"], "Grouped reports must describe all contributing tracks")
+        let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+        XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], indices)
+        XCTAssertEqual(context["channelLayout"] as? String, layout)
+        XCTAssertEqual(context["channelOrder"] as? [String], order)
+        let result = try XCTUnwrap(report["result"] as? [String: Any])
+        let intervals = try XCTUnwrap(result["intervals"] as? [[String: Any]])
+        XCTAssertEqual(intervals.count, 1, "Only the loud mono source exceeds -6 dBFS")
+        XCTAssertEqual(intervals.first?["channel"] as? Int, 1)
+        XCTAssertEqual((result["channels"] as? [Any])?.count, indices.count)
+        XCTAssertEqual((result["settings"] as? [String: Any])?["thresholdDBFS"] as? Double, -6)
+    }
+
+    @MainActor
     func testGroupedSilenceSelectionPreviewAndExport() throws {
         try checkGroupedSilence(language: "en", locale: "en_US")
     }
