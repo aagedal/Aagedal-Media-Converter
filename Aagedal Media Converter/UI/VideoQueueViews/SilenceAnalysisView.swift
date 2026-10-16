@@ -4,6 +4,7 @@
 
 import SwiftUI
 import Charts
+import UniformTypeIdentifiers
 
 struct SilenceAnalysisRequest: Identifiable {
     let id = UUID()
@@ -21,6 +22,7 @@ struct SilenceAnalysisView: View {
     @State private var threshold = -50.0
     @State private var minimumDuration = 1.0
     @State private var result: SilenceAnalysisResult?
+    @State private var analysisTimestamp: Date?
     @State private var analysisTask: Task<Void, Never>?
     @State private var analysisID: UUID?
     @State private var errorMessage: String?
@@ -61,6 +63,9 @@ struct SilenceAnalysisView: View {
                             Button("Cancel") { analysisTask?.cancel() }
                                 .accessibilityIdentifier("analysis.silence.cancel")
                         }
+                        Button("Export JSON") { exportJSON() }
+                            .disabled(isAnalyzing || result == nil)
+                            .accessibilityIdentifier("analysis.silence.export")
                     }
                     Text("Scans the complete selected source track. Silence requires every channel to stay below the sample threshold for the minimum duration. Volume and mute do not affect detection.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -70,7 +75,7 @@ struct SilenceAnalysisView: View {
                     if let result { intervalList(result) }
                     Spacer(minLength: 0)
                 }
-                .frame(width: 310)
+                .frame(width: 340)
                 VStack(alignment: .leading, spacing: 12) {
                     ZStack {
                         MPVVideoView(player: player, keyHandler: { key, _, _ in
@@ -234,7 +239,24 @@ struct SilenceAnalysisView: View {
 
     private func clearResult() {
         result = nil
+        analysisTimestamp = nil
         errorMessage = nil
+    }
+
+    private func exportJSON() {
+        guard let result, let timestamp = analysisTimestamp, !isAnalyzing else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_audio_silence.json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        do {
+            try AnalyticsExporter.exportSilenceJSON(result: result, sourceFile: file, timestamp: timestamp, to: url)
+            errorMessage = nil
+        } catch {
+            errorMessage = String(localized: "Export Failed") + ": " + error.localizedDescription
+        }
     }
 
     private func analyze() {
@@ -248,7 +270,10 @@ struct SilenceAnalysisView: View {
             do {
                 let measured = try await SilenceAnalysisService.shared.analyze(file: file, presentation: presentation, settings: settings)
                 try Task.checkCancellation()
-                if analysisID == id { result = measured }
+                if analysisID == id {
+                    result = measured
+                    analysisTimestamp = Date()
+                }
             } catch is CancellationError {
                 // Cancelled scans do not publish incomplete intervals.
             } catch {

@@ -2,6 +2,96 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class SilenceAnalysisTests: XCTestCase {
+    func testJSONReportPreservesEveryIntervalAndMeasurementContext() throws {
+        let intervals = (0..<1_005).map { SilenceInterval(start: Double($0) + 2, end: Double($0) + 2.25) }
+        let presentation = LoudnessPresentation.surround51([0, 1, 2, 5, 3, 4])
+        let result = SilenceAnalysisResult(presentation: presentation,
+                                           settings: .init(thresholdDBFS: -45, minimumDuration: 0.2), intervals: intervals)
+        let source = URL(fileURLWithPath: "/private/source folder/quoted\"音声.mkv")
+        let timestamp = Date(timeIntervalSince1970: 1_792_152_000)
+        let data = try AnalyticsExporter.silenceJSON(result: result, sourceFile: source, timestamp: timestamp)
+        XCTAssertEqual(data, try AnalyticsExporter.silenceJSON(result: result, sourceFile: source, timestamp: timestamp))
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(report["analysis"] as? String, "source_sample_silence")
+        XCTAssertEqual(report["sourceFileName"] as? String, source.lastPathComponent)
+        XCTAssertEqual(report["timestamp"] as? String, ISO8601DateFormatter().string(from: timestamp))
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("source folder"))
+        let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+        XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], [0, 1, 2, 5, 3, 4])
+        XCTAssertEqual(context["channelLayout"] as? String, "5.1(side)")
+        XCTAssertEqual(context["channelOrder"] as? [String], ["FL", "FR", "FC", "LFE", "SL", "SR"])
+        let semantics = try XCTUnwrap(report["semantics"] as? [String: Any])
+        XCTAssertEqual(semantics["thresholdUnit"] as? String, "dBFS")
+        XCTAssertEqual(semantics["thresholdComparison"] as? String, "strictly_less_than")
+        XCTAssertEqual(semantics["timeline"] as? String, "file_relative_including_initial_audio_offset")
+        XCTAssertEqual(semantics["channelAggregation"] as? String, "all_selected_channels_below_threshold_together")
+        let payload = try XCTUnwrap(report["result"] as? [String: Any])
+        let encodedIntervals = try XCTUnwrap(payload["intervals"] as? [[String: Any]])
+        XCTAssertEqual(encodedIntervals.count, intervals.count, "Export must retain every detected event")
+        XCTAssertEqual(encodedIntervals.last?["duration"] as? Double, 0.25)
+        XCTAssertEqual(try JSONDecoder().decode(SilenceAnalysisResult.self,
+                                               from: JSONSerialization.data(withJSONObject: payload)), result)
+    }
+
+    func testJSONReportSupportsTrackStereoAndNoSilence() throws {
+        for presentation in [LoudnessPresentation.track(3), .stereo(left: 3, right: 1)] {
+            let result = SilenceAnalysisResult(presentation: presentation, settings: .init(), intervals: [])
+            let data = try AnalyticsExporter.silenceJSON(result: result, sourceFile: URL(fileURLWithPath: "/tmp/audio.wav"),
+                                                        timestamp: Date(timeIntervalSince1970: 0))
+            let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+            XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], presentation.streamIndices)
+            XCTAssertEqual(context["channelLayout"] as? String,
+                           presentation == .track(3) ? "source_track_layout" : "stereo")
+            let payload = try XCTUnwrap(report["result"] as? [String: Any])
+            XCTAssertEqual((payload["intervals"] as? [Any])?.count, 0)
+        }
+    }
+
+    func testJSONReportWritesCanBeRepeatedAndSurfaceDestinationErrors() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("report.json")
+        for presentation in [LoudnessPresentation.track(0), .stereo(left: 2, right: 1)] {
+            let result = SilenceAnalysisResult(presentation: presentation, settings: .init(), intervals: [])
+            let timestamp = Date(timeIntervalSince1970: 0)
+            try AnalyticsExporter.exportSilenceJSON(result: result, sourceFile: file, timestamp: timestamp, to: file)
+            XCTAssertEqual(try Data(contentsOf: file),
+                           try AnalyticsExporter.silenceJSON(result: result, sourceFile: file, timestamp: timestamp))
+            XCTAssertThrowsError(try AnalyticsExporter.exportSilenceJSON(result: result, sourceFile: file,
+                                                                          timestamp: timestamp, to: directory))
+        }
+    }
+
+    func testJSONReportRejectsInvalidPresentationSettingsIntervalsAndTimestamp() {
+        let file = URL(fileURLWithPath: "/tmp/audio.wav")
+        func rejects(_ result: SilenceAnalysisResult, timestamp: Date = Date(timeIntervalSince1970: 0)) {
+            XCTAssertThrowsError(try AnalyticsExporter.silenceJSON(result: result, sourceFile: file, timestamp: timestamp))
+        }
+        for presentation in [LoudnessPresentation.track(-1), .stereo(left: 1, right: 1),
+                             .surround51([]), .surround51([0, 1, 2]), .surround51([0, 1, 2, 3, 4, -1])] {
+            rejects(.init(presentation: presentation, settings: .init(), intervals: []))
+        }
+        for value in [Double.nan, .infinity, -.infinity] {
+            rejects(.init(presentation: .track(0), settings: .init(thresholdDBFS: value), intervals: []))
+            rejects(.init(presentation: .track(0), settings: .init(minimumDuration: value), intervals: []))
+            rejects(.init(presentation: .track(0), settings: .init(), intervals: [.init(start: value, end: 2)]))
+            rejects(.init(presentation: .track(0), settings: .init(), intervals: [.init(start: 0, end: value)]))
+            rejects(.init(presentation: .track(0), settings: .init(), intervals: []),
+                    timestamp: Date(timeIntervalSince1970: value))
+        }
+        for intervals: [SilenceInterval] in [[.init(start: -1, end: 1)], [.init(start: 2, end: 2)],
+                                            [.init(start: 2, end: 1)],
+                                            [.init(start: 1, end: 3), .init(start: 2, end: 4)],
+                                            [.init(start: 3, end: 4), .init(start: 1, end: 2)]] {
+            rejects(.init(presentation: .track(0), settings: .init(), intervals: intervals))
+        }
+        rejects(.init(presentation: .track(0), settings: .init(thresholdDBFS: 1), intervals: []))
+        rejects(.init(presentation: .track(0), settings: .init(minimumDuration: 0), intervals: []))
+    }
+
     func testParserHandlesChunkBoundariesAndExactEOFSilenceEnd() throws {
         let log = """
         [silencedetect @ 0x1] silence_start: 0

@@ -6,7 +6,7 @@ import Foundation
 
 /// A playout program is one file, measured through one selected audio presentation.
 /// Stream indices are audio-relative (`0:a:N`), not absolute container indices.
-enum LoudnessPresentation: Equatable, Sendable, Identifiable {
+enum LoudnessPresentation: Codable, Equatable, Sendable, Identifiable {
     case track(Int)
     case stereo(left: Int, right: Int)
     /// Order: L, R, C, LFE, Ls, Rs (SMPTE/5.1 side).

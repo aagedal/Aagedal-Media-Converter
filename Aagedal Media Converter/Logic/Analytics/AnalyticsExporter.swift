@@ -77,6 +77,88 @@ enum AnalyticsExporter {
         try data.write(to: url, options: .atomic)
     }
 
+    /// Complete source silence report, independent of UI presentation.
+    private struct SilenceReport: Encodable {
+        let schemaVersion = 1
+        let analysis = "source_sample_silence"
+        let sourceFileName: String
+        let timestamp: Date
+        let presentation: PresentationContext
+        let semantics = Semantics()
+        let result: SilenceAnalysisResult
+
+        struct PresentationContext: Encodable {
+            let type: String
+            let audioRelativeTrackIndices: [Int]
+            let channelLayout: String
+            let channelOrder: [String]
+
+            init(_ presentation: LoudnessPresentation) {
+                audioRelativeTrackIndices = presentation.streamIndices
+                switch presentation {
+                case .track:
+                    type = "track"
+                    channelLayout = "source_track_layout"
+                    channelOrder = ["all_source_track_channels_in_decoded_order"]
+                case .stereo:
+                    type = "stereo"
+                    channelLayout = "stereo"
+                    channelOrder = ["FL", "FR"]
+                case .surround51:
+                    type = "surround51"
+                    channelLayout = "5.1(side)"
+                    channelOrder = ["FL", "FR", "FC", "LFE", "SL", "SR"]
+                }
+            }
+        }
+
+        struct Semantics: Encodable {
+            let trackIndexing = "zero_based_audio_relative_matching_0:a:index"
+            let timeUnit = "seconds"
+            let timeline = "file_relative_including_initial_audio_offset"
+            let thresholdUnit = "dBFS"
+            let measurement = "absolute_decoded_source_sample_amplitude_not_rms_loudness_or_true_peak"
+            let thresholdComparison = "strictly_less_than"
+            let channelAggregation = "all_selected_channels_below_threshold_together"
+            let minimumDuration = "continuous_silence_required_before_reporting_interval"
+            let intervalBoundaries = "detected_silence_start_and_end_including_filter_reported_end_of_audio"
+            let intervalDuration = "end_minus_start_seconds"
+            let absentAudio = "initial_audio_offset_is_not_synthesized_silence"
+            let emptyIntervals = "complete_analysis_found_no_qualifying_silence"
+            let scope = "complete_selected_source_presentation_independent_of_volume_mute_and_conversion_trims"
+        }
+    }
+
+    static func silenceJSON(result: SilenceAnalysisResult, sourceFile: URL, timestamp: Date) throws -> Data {
+        try result.settings.validate()
+        let indices = result.presentation.streamIndices
+        var previousEnd = 0.0
+        let validIntervals = result.intervals.allSatisfy { interval in
+            defer { previousEnd = interval.end }
+            return interval.start.isFinite && interval.end.isFinite && interval.duration.isFinite &&
+                interval.start >= previousEnd && interval.end > interval.start
+        }
+        let validLayout: Bool
+        if case .surround51 = result.presentation { validLayout = indices.count == 6 }
+        else { validLayout = true }
+        guard timestamp.timeIntervalSince1970.isFinite,
+              !indices.isEmpty, indices.allSatisfy({ $0 >= 0 }), Set(indices).count == indices.count,
+              validLayout, validIntervals else {
+            throw EncodingError.invalidValue(result, .init(codingPath: [], debugDescription: "Invalid silence report."))
+        }
+        let report = SilenceReport(sourceFileName: sourceFile.lastPathComponent, timestamp: timestamp,
+                                   presentation: .init(result.presentation), result: result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(report)
+    }
+
+    static func exportSilenceJSON(result: SilenceAnalysisResult, sourceFile: URL,
+                                  timestamp: Date, to url: URL) throws {
+        try silenceJSON(result: result, sourceFile: sourceFile, timestamp: timestamp).write(to: url, options: .atomic)
+    }
+
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "AnalyticsExporter")
 
     /// Automatically exports analytics results next to the encoded file if auto-export is enabled in settings

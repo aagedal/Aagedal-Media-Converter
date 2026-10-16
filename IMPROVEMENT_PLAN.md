@@ -2,6 +2,36 @@
 
 Last reviewed: 2026-10-16
 
+## Audio silence-report export continuation — 2026-10-16
+
+Owner: Codex. Detect Silence now exports complete source reports as versioned JSON
+through the macOS save panel. Exports retain the analysis completion time,
+selected presentation, dBFS threshold, minimum duration and every file-relative
+interval, including empty completed reports. Explicit semantics distinguish
+source sample amplitude from RMS/LUFS/true peak and require every selected
+channel, including LFE, to remain quiet together. Grouped service reports retain
+track order/layout; grouped UI selection remains open. Separate EBU R128
+loudness behavior is unchanged.
+
+Cancelling a save preserves the report, failed saves can be retried, and changed
+tracks/settings or a new scan invalidate the previous result. Atomic writes
+retain security-scoped destination access and omit the source's absolute path.
+See the [report format](docs/audio-silence-report-format.md) and
+[audio roadmap](docs/AUDIO-METERING-PLAN.md). No dependencies, bundled binaries
+or licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds, and the full unit suite executes
+1,367 tests with no failures and one intentional opt-in benchmark skip. All 14
+silence scanner/report tests pass, including complete interval retention, track
+and grouped layout context, empty results, invalid-data rejection, repeated writes
+and destination errors. English/Norwegian UI checks pass: export is disabled
+before analysis and after changed settings, save cancellation preserves the
+report, and a real exported JSON file retains the selected track, threshold and
+2–4 second interval. Both captured screens were visually inspected. Seven
+localization script tests, the 1,876-entry catalog audit and whitespace check
+pass. Release/device qualification remains open. The current Debug and Release
+configurations disable App Sandbox; these checks do not qualify sandbox enforcement.
+
 ## Audio channel-report export continuation — 2026-10-16
 
 Owner: Codex. Peaks and Channel Balance now exports complete source reports as
