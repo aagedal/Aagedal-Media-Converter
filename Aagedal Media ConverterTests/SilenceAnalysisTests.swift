@@ -151,7 +151,9 @@ final class SilenceAnalysisTests: XCTestCase {
 
     func testGraphRetainsFileTimelineAndCombinedChannelSemantics() {
         let graph = SilenceAnalysisService.filterGraph(for: .stereo(left: 3, right: 1), settings: .init())
-        XCTAssertEqual(graph, "[0:a:3][0:a:1]join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR,"
+        XCTAssertEqual(graph, "[0:a:3]asetnsamples=n=4800:p=0[group_input_0];"
+                       + "[0:a:1]asetnsamples=n=4800:p=0[group_input_1];"
+                       + "[group_input_0][group_input_1]join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR,"
                        + "asetpts=PTS,silencedetect=noise=-50.0dB:duration=1.0:mono=0[silence]")
         XCTAssertTrue(SilenceAnalysisService.filterGraph(for: .surround51([0, 1, 2, 5, 3, 4]), settings: .init())
             .contains("map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR"))
@@ -203,6 +205,71 @@ final class SilenceAnalysisTests: XCTestCase {
         let longer = try await service.analyze(file: file, presentation: .stereo(left: 0, right: 1),
                                                settings: .init(minimumDuration: 2.5))
         XCTAssertTrue(longer.intervals.isEmpty)
+    }
+
+    func testGroupedAnalysisRejectsUnequalTrackStartsAndSampleRates() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("offset-group-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        for (offset, rate) in [(1, 48000), (0, 44100)] {
+            try await generate(ffmpeg, arguments: [
+                "-f", "lavfi", "-i", "aevalsrc=0:s=48000:d=3",
+                "-itsoffset", "\(offset)", "-f", "lavfi", "-i", "aevalsrc=0:s=\(rate):d=2",
+                "-map", "0:a", "-map", "1:a", "-c:a", "flac", file.path
+            ])
+            do {
+                _ = try await SilenceAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+                    file: file, presentation: .stereo(left: 0, right: 1))
+                XCTFail("Incompatible mono tracks must not silently shift grouped channels")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("matching sample rates and start times"))
+            }
+        }
+    }
+
+    func testGroupedMatchingDelayedStartsRetainFileTimeline() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("delayed-group-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try await generate(ffmpeg, arguments: [
+            "-f", "lavfi", "-i", "color=c=black:s=16x16:r=1:d=4",
+            "-itsoffset", "2", "-f", "lavfi", "-i", "aevalsrc=0:s=48000:d=2",
+            "-itsoffset", "2", "-f", "lavfi", "-i", "aevalsrc=0:s=48000:d=2",
+            "-map", "0:v", "-map", "1:a", "-map", "2:a", "-c:v", "ffv1", "-c:a", "flac", file.path
+        ])
+        let measured = try await SilenceAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+            file: file, presentation: .stereo(left: 1, right: 0), settings: .init(minimumDuration: 0.5))
+        XCTAssertEqual(measured.intervals.count, 1)
+        let interval = try XCTUnwrap(measured.intervals.first)
+        XCTAssertEqual(interval.start, 2, accuracy: 0.001)
+        XCTAssertEqual(interval.end, 4, accuracy: 0.001)
+    }
+
+    func testGroupedSurroundSilenceIncludesAssignedLFEAndReportOrder() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("surround-silence-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        var arguments: [String] = []
+        for index in 0..<6 {
+            // Alternative source order: LFE is the final mono track.
+            let signal = index == 5 ? "if(lt(t\\,1)\\,0.5\\,0)" : "0"
+            arguments += ["-f", "lavfi", "-i", "aevalsrc=\(signal):s=48000:d=3"]
+        }
+        for index in 0..<6 { arguments += ["-map", "\(index):a"] }
+        arguments += ["-af", "atrim=end_sample=96001", "-c:a", "flac", file.path]
+        try await generate(ffmpeg, arguments: arguments)
+        let presentation = LoudnessPresentation.surround51([0, 1, 2, 5, 3, 4])
+        let measured = try await SilenceAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+            file: file, presentation: presentation, settings: .init(minimumDuration: 0.5))
+        XCTAssertEqual(measured.presentation, presentation)
+        XCTAssertEqual(measured.intervals.count, 1)
+        let interval = try XCTUnwrap(measured.intervals.first)
+        XCTAssertEqual(interval.start, 1, accuracy: 0.001)
+        XCTAssertEqual(interval.end, Double(96_001) / 48_000, accuracy: 0.000001)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: AnalyticsExporter.silenceJSON(
+            result: measured, sourceFile: file, timestamp: Date())) as? [String: Any])
+        let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+        XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], [0, 1, 2, 5, 3, 4])
     }
 
     func testBundledFFmpegThresholdChangesDetectionAndRetainsExactWholeFileEOF() async throws {

@@ -1,5 +1,7 @@
 # v.4.5.6
 
+- Added custom mono-pair and 5.1 multi-mono selections to silence analysis, with grouped preview routing and complete JSON reports. Duplicate channels and unequal track start times are rejected.
+
 - Added JSON export for complete source silence reports, including selected track, detection settings and every interval on the file timeline.
 
 - Added JSON export for complete source peak/channel-balance reports, including every interval, per-channel levels, selected track and measurement settings.

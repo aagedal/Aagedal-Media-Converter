@@ -2,6 +2,29 @@
 
 Last reviewed: 2026-10-16
 
+## Grouped silence analysis continuation — 2026-10-16
+
+Owner: Codex. Detect Silence now supports custom mono pairs and 5.1 multi-mono
+channel assignments, grouped MPV audition and full JSON export. Roles use distinct
+mono tracks; changing them clears prior results. Explicit channel routing preserves
+source gains before device conversion, and single-track/reload cleanup restores
+normal preview selection. A cancellable first-frame preflight rejects differing
+sample rates or unequal/unknown decoded starts before scanning or grouped playback. Continuous synchronized
+tracks are the supported grouping case; unequal durations and discontinuities remain
+unqualified. Separate loudness analysis and its EBU R128 weighting remain unchanged.
+See the [audio roadmap](docs/AUDIO-METERING-PLAN.md). No dependencies, binaries or
+licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds; all 1,372 unit tests pass with
+one intentional opt-in benchmark skip and zero failures. All 43 focused
+scanner/player checks and three fresh-build UI checks pass, including bilingual
+group selection/navigation, duplicate rejection, JSON save/readback and existing
+single-track export/settings behavior. Four bilingual screenshots were visually
+inspected. Seven localization script tests, the 1,887-entry catalog audit and
+whitespace check pass. Fresh build products resolved cached UI launch timeouts.
+Release/device and sandbox qualification remain open; translations outside
+English/Norwegian await review.
+
 ## Audio silence-report export continuation — 2026-10-16
 
 Owner: Codex. Detect Silence now exports complete source reports as versioned JSON

@@ -2019,15 +2019,29 @@ struct ContentView: View {
         if UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PEAKS") {
             fixtureAudio = "aevalsrc=if(between(t\\,1\\,2)\\,0.8\\,0.01)*sin(2*PI*440*t)|if(between(t\\,1\\,2)\\,0.08\\,0.001)*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
         }
+        let groupedSilence = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_SILENCE")
+        var extraAudioInputs: [String] = []
+        var extraAudioMaps: [String] = []
+        if groupedSilence {
+            for index in 1..<6 {
+                let start = index == 1 ? 3 : 2
+                let end = index == 1 ? 5 : 4
+                extraAudioInputs += ["-f", "lavfi", "-i",
+                    "aevalsrc=if(between(t\\,\(start)\\,\(end))\\,0\\,0.1*sin(2*PI*\(440 + index * 100)*t)):s=48000:d=\(fixtureDuration)"]
+                extraAudioMaps += ["-map", "\(index + 1):a:0"]
+            }
+        }
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
             arguments: [
                 "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
                 "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)",
                 "-f", "lavfi", "-i", fixtureAudio,
+            ] + extraAudioInputs + [
                 "-map", "0:v:0", "-map", "1:a:0",
+            ] + extraAudioMaps + [
                 "-c:v", "mpeg4", "-q:v", "5", "-g", "12", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-shortest",
+                "-c:a", groupedSilence ? "flac" : "aac", "-shortest",
             ] + metadataArguments + [fixtureURL.path],
             timeout: .seconds(30),
             standardOutputCaptureLimit: 0,

@@ -30,10 +30,13 @@ audio offset is not synthesized as silence. `duration` is `end - start` for each
 interval; the report does not infer whole-file duration from the last silence
 interval. A trailing interval can end at the filter-reported end of audio.
 
-The current UI selects one audio track and preserves its source layout. The
-exporter also supports service-level grouped mono presentations: stereo maps to
-FL/FR and 5.1(side) maps to FL/FR/FC/LFE/SL/SR in the stated track order. Grouped
-selection/audition is not yet exposed by this panel. A track report does not claim
+The UI selects one audio track with its source layout, a custom mono pair, or
+six mono tracks assigned to 5.1 roles. Stereo maps to FL/FR and 5.1(side) maps to
+FL/FR/FC/LFE/SL/SR in the stated track order. Selection, grouped preview and export
+retain that order. Grouped scans require matching sample rates and decoded start
+times; unequal/unknown starts fail before scanning. Groups target continuous,
+synchronized recordings. The join ends at the shortest input; unequal durations
+and midstream discontinuities remain unqualified. A track report does not claim
 a measured channel count or layout name that the silence detector does not return.
 
 The exporter rejects invalid settings, track topology, non-finite timestamps and
