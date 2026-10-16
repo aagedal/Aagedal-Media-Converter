@@ -64,10 +64,41 @@ remain required before considering it as the default meter.
 - [ ] Intersample true-peak threshold markers. Keep dBTP distinct from the new dBFS sample-peak intervals; whole-program maximum true peak remains available in the loudness report.
 - [ ] Stereo phase/correlation analysis, with mono compatibility checks and a phase display.
 - [x] Export complete source sample-peak/channel-balance reports as versioned JSON, including selected audio track, thresholds, every interval and whole-track per-channel levels. See [report format](audio-peak-report-format.md).
-- [ ] Expand remaining channel-specific analysis/report exports (including silence and grouped multi-mono reports) while retaining EBU R128 channel weighting and LFE exclusion in loudness analysis.
+- [x] Export complete source silence reports as versioned JSON, with selected presentation, thresholds and every file-relative interval. See [report format](audio-silence-report-format.md).
+- [ ] Expose grouped multi-mono analysis/report selection and audition in the UI. Service-level silence exports preserve grouping context; separate loudness reports retain EBU R128 channel weighting and LFE exclusion.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Silence report export — 2026-10-16
+
+Detect Silence now offers Export JSON with immutable analysis completion time,
+selected presentation, captured thresholds and every interval. The save panel
+retains completed results on cancellation or failure; changed settings/tracks and
+new scans invalidate them. Reports explicitly identify source sample amplitude,
+all-channel silence detection and file-relative timestamps, including initial
+audio offsets. The exporter retains service-level stereo/5.1 grouping context;
+the UI continues to select one track. See [schema](audio-silence-report-format.md).
+
+Validation: the ad-hoc-signed Debug app builds, and the full unit suite executes
+1,367 tests with no failures and one intentional opt-in benchmark skip. All 14
+silence scanner/report tests pass, including complete interval retention, track
+and grouped layout context, empty results, invalid-data rejection, repeated writes
+and destination errors. English/Norwegian UI checks pass: export is disabled
+before analysis and after changed settings, save cancellation preserves the
+report, and a real exported JSON file retains the selected track, threshold and
+2–4 second interval. Both captured screens were visually inspected. Seven
+localization script tests, the 1,876-entry catalog audit and whitespace check
+pass. Release/device qualification remains open. The current Debug and Release
+configurations disable App Sandbox; these checks do not qualify sandbox enforcement.
+
+Results: `/private/tmp/amc-silence-export-full-unit.xcresult` and
+`/private/tmp/amc-silence-export-ui.xcresult`. The
+[English](images/audio-silence-export-en.png) and
+[Norwegian](images/audio-silence-export-nb.png) captures show readable controls,
+intervals and preview/timeline without clipping. Existing localized labels are
+reused; no dependencies, packaged binaries or licenses changed.
+
 
 ### Peak/channel report export — 2026-10-16
 

@@ -4,7 +4,7 @@
 
 import Foundation
 
-struct SilenceDetectionSettings: Equatable, Sendable {
+struct SilenceDetectionSettings: Codable, Equatable, Sendable {
     var thresholdDBFS: Double = -50
     var minimumDuration: Double = 1
 
@@ -18,14 +18,40 @@ struct SilenceDetectionSettings: Equatable, Sendable {
     }
 }
 
-struct SilenceInterval: Equatable, Sendable, Identifiable {
+struct SilenceInterval: Codable, Equatable, Sendable, Identifiable {
     let start: Double
     let end: Double
     var duration: Double { end - start }
     var id: Double { start }
+
+    private enum CodingKeys: String, CodingKey { case start, end, duration }
+
+    init(start: Double, end: Double) {
+        self.start = start
+        self.end = end
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        start = try values.decode(Double.self, forKey: .start)
+        end = try values.decode(Double.self, forKey: .end)
+        let reportedDuration = try values.decode(Double.self, forKey: .duration)
+        guard start.isFinite, end.isFinite, start >= 0, end > start,
+              reportedDuration.isFinite, reportedDuration == duration else {
+            throw DecodingError.dataCorruptedError(forKey: .duration, in: values,
+                                                   debugDescription: "Invalid silence interval or duration.")
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(start, forKey: .start)
+        try values.encode(end, forKey: .end)
+        try values.encode(duration, forKey: .duration)
+    }
 }
 
-struct SilenceAnalysisResult: Equatable, Sendable {
+struct SilenceAnalysisResult: Codable, Equatable, Sendable {
     let presentation: LoudnessPresentation
     let settings: SilenceDetectionSettings
     let intervals: [SilenceInterval]
