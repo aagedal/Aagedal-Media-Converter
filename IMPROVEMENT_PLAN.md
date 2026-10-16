@@ -2,6 +2,25 @@
 
 Last reviewed: 2026-10-16
 
+## Audio peaks and channel balance continuation — 2026-10-16
+
+Owner: Codex. Audio Analysis now offers complete-track source sample-peak
+intervals, per-channel maximum sample peaks and unweighted whole-track RMS,
+configurable peak/channel-difference thresholds, and paused MPV navigation.
+Analysis preserves source-rate samples, delayed timestamps and unpadded EOF.
+Channel differences are advisory, including potentially intentional surround/LFE
+differences. The [audio roadmap](docs/AUDIO-METERING-PLAN.md) records semantics,
+validation and the remaining true-peak interval, phase and export work.
+
+Validation: Debug build passed, with 1,359 unit tests executed, one intentional
+benchmark skip and no failures. Final English/Norwegian UI checks pass and their
+screenshots were visually inspected after correcting sheet clipping. Seven
+localization script tests, the 1,875-entry localization audit and whitespace check
+pass. The audio roadmap records the combined-run accessibility failure and clean
+separate UI rerun. Release/device qualification remains unperformed; translations
+outside English/Norwegian await review. No dependencies, binaries or licenses
+changed.
+
 ## Audio silence detection continuation — 2026-10-16
 
 Owner: Codex. Audio Analysis now offers complete-track silence detection with
