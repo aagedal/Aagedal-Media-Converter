@@ -4,7 +4,7 @@
 
 import Foundation
 
-struct AudioPeakSettings: Equatable, Sendable {
+struct AudioPeakSettings: Codable, Equatable, Sendable {
     var thresholdDBFS: Double = -1
     var imbalanceThresholdDB: Double = 6
 
@@ -16,7 +16,7 @@ struct AudioPeakSettings: Equatable, Sendable {
     }
 }
 
-struct AudioPeakInterval: Equatable, Sendable, Identifiable {
+struct AudioPeakInterval: Codable, Equatable, Sendable, Identifiable {
     let start: Double
     let end: Double
     let channel: Int
@@ -25,14 +25,14 @@ struct AudioPeakInterval: Equatable, Sendable, Identifiable {
     var duration: Double { end - start }
 }
 
-struct AudioChannelLevel: Equatable, Sendable, Identifiable {
+struct AudioChannelLevel: Codable, Equatable, Sendable, Identifiable {
     let channel: Int
     let peakDBFS: Double
     let rmsDBFS: Double
     var id: Int { channel }
 }
 
-struct AudioPeakAnalysisResult: Equatable, Sendable {
+struct AudioPeakAnalysisResult: Codable, Equatable, Sendable {
     let settings: AudioPeakSettings
     let intervals: [AudioPeakInterval]
     let channels: [AudioChannelLevel]

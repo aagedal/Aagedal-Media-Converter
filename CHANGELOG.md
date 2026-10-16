@@ -1,5 +1,6 @@
 # v.4.5.6
 
+- Added JSON export for complete source peak/channel-balance reports, including every interval, per-channel levels, selected track and measurement settings.
 - Added navigable source sample-peak intervals and per-channel RMS balance checks to Audio Analysis, with configurable thresholds and complete-track channel levels.
 
 - Added silence detection to Audio Analysis, with configurable sample thresholds and minimum durations, timeline markers, and paused preview navigation for each interval.

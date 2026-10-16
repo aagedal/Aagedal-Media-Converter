@@ -10,6 +10,73 @@ import OSLog
 /// Exports analytics results to JSON or PDF
 enum AnalyticsExporter {
 
+    /// A versioned source report. Channel numbers are one-based decoded order;
+    /// the track index is audio-relative, matching the scanner's 0:a:index map.
+    /// Keep the schema independent of UI language and never export the source path.
+    private struct AudioPeakReport: Encodable {
+        let schemaVersion = 1
+        let analysis = "source_sample_peaks_and_channel_balance"
+        let sourceFileName: String
+        let audioRelativeTrackIndex: Int
+        let timestamp: Date
+        let semantics = Semantics()
+        let result: AudioPeakAnalysisResult
+
+        struct Semantics: Encodable {
+            let channelNumbering = "one_based_decoded_order"
+            let timeUnit = "seconds"
+            let timeline = "file_relative_including_initial_audio_offset"
+            let duration = "end_of_decoded_audio_on_file_timeline"
+            let peakUnit = "dBFS"
+            let peakMeasurement = "source_sample_peak_not_intersample_true_peak"
+            let windowSamples = 4_800
+            let intervalBoundaries = "analysis_windows_merged_per_channel_when_adjacent"
+            let thresholdComparison = "greater_than_or_equal"
+            let rmsMeasurement = "unweighted_whole_track_sample_weighted_energy"
+            let imbalanceUnit = "dB"
+            let imbalanceMeasurement = "maximum_minus_minimum_channel_rms"
+            let unavailableImbalance = "omitted_for_mono_or_entirely_silent_audio"
+            let negativeInfinity = "-Infinity_means_digital_silence"
+            let positiveInfinity = "Infinity_means_silent_and_active_channels"
+            let scope = "complete_selected_source_track_independent_of_volume_mute_and_conversion_trims"
+        }
+    }
+
+    static func audioPeakJSON(result: AudioPeakAnalysisResult, sourceFile: URL,
+                              trackIndex: Int, timestamp: Date) throws -> Data {
+        try result.settings.validate()
+        guard trackIndex >= 0, timestamp.timeIntervalSince1970.isFinite,
+              result.duration.isFinite, result.duration > 0,
+              !result.channels.isEmpty,
+              result.channels.allSatisfy({
+                  ($0.peakDBFS.isFinite || $0.peakDBFS == -.infinity) &&
+                  ($0.rmsDBFS.isFinite || $0.rmsDBFS == -.infinity)
+              }),
+              result.intervals.allSatisfy({
+                  $0.start.isFinite && $0.end.isFinite && $0.peakDBFS.isFinite &&
+                  $0.start >= 0 && $0.end > $0.start && $0.end <= result.duration
+              }),
+              result.imbalanceDB.map({ ($0.isFinite && $0 >= 0) || $0 == .infinity }) ?? true else {
+            throw EncodingError.invalidValue(result, .init(codingPath: [], debugDescription: "Invalid audio peak report."))
+        }
+        let report = AudioPeakReport(sourceFileName: sourceFile.lastPathComponent,
+                                     audioRelativeTrackIndex: trackIndex, timestamp: timestamp, result: result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        // JSON has no infinity literal. Preserve silence and infinite channel
+        // difference explicitly rather than conflating either with missing data.
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: "Infinity", negativeInfinity: "-Infinity", nan: "NaN")
+        return try encoder.encode(report)
+    }
+
+    static func exportAudioPeakJSON(result: AudioPeakAnalysisResult, sourceFile: URL,
+                                    trackIndex: Int, timestamp: Date, to url: URL) throws {
+        let data = try audioPeakJSON(result: result, sourceFile: sourceFile, trackIndex: trackIndex, timestamp: timestamp)
+        try data.write(to: url, options: .atomic)
+    }
+
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "AnalyticsExporter")
 
     /// Automatically exports analytics results next to the encoded file if auto-export is enabled in settings

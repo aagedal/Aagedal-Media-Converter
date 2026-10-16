@@ -63,10 +63,57 @@ remain required before considering it as the default meter.
 - [x] Source sample-peak threshold intervals and per-channel imbalance checks, with paused preview navigation and whole-track unweighted RMS levels.
 - [ ] Intersample true-peak threshold markers. Keep dBTP distinct from the new dBFS sample-peak intervals; whole-program maximum true peak remains available in the loudness report.
 - [ ] Stereo phase/correlation analysis, with mono compatibility checks and a phase display.
-- [ ] Expand channel-specific analysis/report exports while retaining EBU R128 channel weighting and LFE exclusion.
+- [x] Export complete source sample-peak/channel-balance reports as versioned JSON, including selected audio track, thresholds, every interval and whole-track per-channel levels. See [report format](audio-peak-report-format.md).
+- [ ] Expand remaining channel-specific analysis/report exports (including silence and grouped multi-mono reports) while retaining EBU R128 channel weighting and LFE exclusion in loudness analysis.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Peak/channel report export — 2026-10-16
+
+Audio Analysis → Peaks and Channel Balance now offers Export JSON after a
+successful scan. The save panel selects an explicit destination; writes are
+atomic and retain security-scoped access through completion. A failed save leaves
+the completed report available for retry, a successful save clears earlier export
+errors, and cancelling the panel preserves the scan. Changed tracks/settings and
+new scans invalidate export. Repeated saves retain the analysis completion time.
+
+The versioned, locale-independent report includes the source basename rather
+than its absolute path, audio-relative selected-track index, thresholds, all
+channels and every interval, including those outside the chart's display limit.
+It distinguishes digital silence, infinite channel difference and unavailable
+comparison. Its semantics explicitly identify dBFS sample peaks, source-sample
+windows, file-relative timestamps and unweighted whole-track RMS. It does not
+change the separate EBU R128 loudness analysis. NaN measurements and invalid time
+values fail export. See [the schema and measurement semantics](audio-peak-report-format.md).
+
+The ad-hoc-signed Debug app builds. The complete unit suite executes 1,363 tests
+with no failures and one intentional opt-in benchmark skip in
+`/private/tmp/amc-channel-export-full-unit.xcresult`.
+The 14 focused scanner/report tests also pass, including full interval retention,
+locale-independent JSON with quoted/non-ASCII filenames, delayed file timelines,
+digital silence, infinite/unavailable channel differences, repeat writes,
+destination errors and invalid measurements. English/Norwegian UI checks pass
+in `/private/tmp/amc-channel-export-ui-confirmed.xcresult`. The English flow checks
+export disabled before analysis and after threshold changes, save cancellation,
+then writes through the native save panel and reads back the expected track,
+threshold and interval. Both [English](images/audio-peaks-export-en.png) and
+[Norwegian](images/audio-peaks-export-nb.png) screenshots were visually inspected
+for control fit and readability. Seven localization script tests, the 1,876-entry
+catalog audit and whitespace check pass. The new failure label's translations
+outside English/Norwegian await review.
+
+Initial UI attempts selected a Touch Bar Cancel button, assumed a combo-box
+folder field, and hit an existing threshold-menu focus race. Escape cancellation,
+the captured save-panel/PathTextField identifiers, and explicit activation/menu
+waiting resolve these in the final rebuilt run. Xcode initially needed a permitted
+rerun to write package caches. The project currently disables App Sandbox in both
+configurations; these checks establish the save-panel workflow, not sandbox
+enforcement. Release signing, packaging and physical-device tests were not run.
+
+True-peak markers, phase/correlation, silence report export, grouped multi-mono
+reports and playback alignment remain open. No dependencies, bundled binaries or
+licenses changed.
 
 ### Sample peaks and channel balance — 2026-10-16
 
