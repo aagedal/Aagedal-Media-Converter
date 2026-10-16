@@ -117,6 +117,9 @@ panel; the separate final rebuilt UI run passes both tests. Seven localization
 script tests, the 1,875-entry localization audit and whitespace check pass.
 Translations outside English/Norwegian await review.
 
+Verified UI screenshots: [English](images/audio-peaks-en.png) and
+[Norwegian](images/audio-peaks-nb.png).
+
 True-peak interval markers, grouped multi-mono analysis, phase/correlation and
 report export remain outside this increment. Release packaging and physical-device
 qualification were not performed. No dependencies, bundled binaries or licenses
