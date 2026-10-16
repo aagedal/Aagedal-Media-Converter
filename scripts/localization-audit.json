@@ -215,7 +215,18 @@
       "Zoom",
       "Zoom the timeline (⌘+ / ⌘−)",
       "PRESET_IMF_J2K_DESCRIPTION",
-      "PRESET_IMF_PRORES_DESCRIPTION"
+      "PRESET_IMF_PRORES_DESCRIPTION",
+      "Analyze",
+      "Mono pair",
+      "5.1 multi-mono",
+      "Left",
+      "Right",
+      "LFE",
+      "Left surround",
+      "Right surround",
+      "Choose a different mono track for each channel.",
+      "Scans the complete selected source presentation. Silence requires every channel to stay below the sample threshold for the minimum duration. Volume and mute do not affect detection.",
+      "Grouped analysis requires mono tracks with matching sample rates and start times."
     ],
     "translated-app-intent": [
       "Animated Still",

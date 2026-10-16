@@ -359,7 +359,11 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             return
         }
 
-        queue.sync { seekScheduler.reset(); resetPlaybackMeterLocked() }
+        queue.sync {
+            seekScheduler.reset()
+            resetPlaybackMeterLocked()
+            resetAudioPresentationLocked()
+        }
         startPaused = !autostart
         pendingSeekAfterLoad = startTime
 
@@ -398,7 +402,11 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         pendingStartTime = 0
         pendingAutostart = false
         pendingSeekAfterLoad = 0
-        queue.sync { seekScheduler.reset(); resetPlaybackMeterLocked() }
+        queue.sync {
+            seekScheduler.reset()
+            resetPlaybackMeterLocked()
+            resetAudioPresentationLocked()
+        }
         commandAsync("stop")
         isPlaying = false
         timePos = 0
@@ -578,6 +586,103 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             playbackMeterSample = nil
             queue.async { [weak self] in self?.resetPlaybackMeterLocked() }
             setInt(MPVProperty.aid, Int(newValue))
+        }
+    }
+
+    /// Inspect source programs using actual MPV IDs, preserving each mono input's gain.
+    /// Pan assigns disjoint output channels before amix; the pinned library has no join filter.
+    static var supportsGroupedAudioPresentation: Bool {
+        ["pan", "amix"].allSatisfy { name in
+            name.withCString { avfilter_get_by_name($0) != nil }
+        }
+    }
+
+    private var audioPresentationOwnsSelection = false // Event queue only.
+
+    private func resetAudioPresentationLocked() {
+        guard audioPresentationOwnsSelection, let mpv else { return }
+        _ = mpv_set_property_string(mpv, "lavfi-complex", "")
+        _ = mpv_set_property_string(mpv, "aid", "auto")
+        audioPresentationOwnsSelection = false
+    }
+
+    var audioPresentationFilterGraph: String? { getString("lavfi-complex") }
+
+    static func audioPresentationGraph(_ presentation: LoudnessPresentation, trackIDs: [Int32]) -> String? {
+        let indices = presentation.streamIndices
+        guard !indices.isEmpty, Set(indices).count == indices.count,
+              indices.allSatisfy({ trackIDs.indices.contains($0) && trackIDs[$0] > 0 }) else { return nil }
+        let roles: [String]
+        let layout: String
+        switch presentation {
+        case .track: return ""
+        case .stereo: roles = ["FL", "FR"]; layout = "stereo"
+        case .surround51:
+            guard indices.count == 6 else { return nil }
+            roles = ["FL", "FR", "FC", "LFE", "SL", "SR"]; layout = "5.1(side)"
+        }
+        let inputs = indices.enumerated().map { offset, index in
+            let mapping = roles.map { "\($0)=\($0 == roles[offset] ? "c0" : "0*c0")" }.joined(separator: "|")
+            return "[aid\(trackIDs[index])]pan=\(layout)|\(mapping)[amc_group_\(offset)]"
+        }
+        let pads = indices.indices.map { "[amc_group_\($0)]" }.joined()
+        return inputs.joined(separator: ";") + ";" + pads
+            + "amix=inputs=\(indices.count):duration=longest:dropout_transition=0:normalize=0[ao]"
+    }
+
+    /// Queue all changes together: older requests finish before newer requests, so
+    /// a suspended caller can never apply its old selection after a newer one.
+    @MainActor
+    func selectAudioPresentation(_ presentation: LoudnessPresentation) async -> Bool {
+        guard isFileLoaded else { return false }
+        let trackIDs = audioTrackIndexes
+        let graph = Self.audioPresentationGraph(presentation, trackIDs: trackIDs)
+        let generation = loadGeneration
+        playbackMeterSample = nil
+        return await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self, let mpv = self.mpv, generation == self.loadGeneration else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                self.resetPlaybackMeterLocked()
+                self.audioPresentationOwnsSelection = true
+                var paused: Int32 = 1
+                _ = mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused)
+                // Clear the previous source before validation, so failed grouping
+                // cannot leave an unrelated track audible when playback resumes.
+                _ = mpv_set_property_string(mpv, "lavfi-complex", "")
+                _ = mpv_set_property_string(mpv, "aid", "no")
+                guard let graph,
+                      graph.isEmpty || Self.supportsGroupedAudioPresentation else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                if !graph.isEmpty {
+                    let selectedIDs = Set(presentation.streamIndices.map { trackIDs[$0] })
+                    let count = self.getInt(MPVProperty.trackListCount)
+                    let monoIDs = (0..<count).compactMap { index -> Int32? in
+                        guard self.getString("track-list/\(index)/type") == "audio",
+                              self.getInt("track-list/\(index)/demux-channel-count") == 1 else { return nil }
+                        return Int32(self.getInt("track-list/\(index)/id"))
+                    }
+                    guard selectedIDs.isSubset(of: Set(monoIDs)) else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                }
+                let status: Int32
+                if case .track(let index) = presentation {
+                    status = mpv_set_property_string(mpv, "aid", String(trackIDs[index]))
+                } else {
+                    status = mpv_set_property_string(mpv, "lavfi-complex", graph)
+                }
+                if status < 0 {
+                    _ = mpv_set_property_string(mpv, "lavfi-complex", "")
+                    _ = mpv_set_property_string(mpv, "aid", "no")
+                }
+                continuation.resume(returning: status >= 0)
+            }
         }
     }
 

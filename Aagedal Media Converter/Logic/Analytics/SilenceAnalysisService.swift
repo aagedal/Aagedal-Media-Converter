@@ -73,6 +73,58 @@ actor SilenceAnalysisService {
         self.ffmpegPathProvider = ffmpegPathProvider
     }
 
+    /// join/amix combine sample positions, not independent stream timestamps.
+    /// Reject unequal starts instead of reporting or auditioning shifted channels.
+    func validateGroupedTracks(file: URL, presentation: LoudnessPresentation) async throws {
+        try Task.checkCancellation()
+        let indices = presentation.streamIndices
+        let expectedCount: Int
+        switch presentation {
+        case .track: return
+        case .stereo: expectedCount = 2
+        case .surround51: expectedCount = 6
+        }
+        guard indices.count == expectedCount, Set(indices).count == indices.count,
+              indices.allSatisfy({ $0 >= 0 }) else {
+            throw AnalyticsError.parsingFailed("Invalid grouped audio selection.")
+        }
+        guard let path = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
+        let graph = indices.enumerated().map { offset, index in
+            "[0:a:\(index)]asettb=1/1000000000,ashowinfo@amc_group_\(offset)[group_\(offset)]"
+        }.joined(separator: ";")
+        let maps = indices.indices.flatMap { ["-map", "[group_\($0)]"] }
+        let request = SubprocessRequest(executableURL: URL(fileURLWithPath: path),
+            arguments: ["-nostdin", "-hide_banner", "-nostats", "-xerror", "-i", file.path,
+                        "-filter_complex", graph] + maps + ["-frames:a", "1", "-f", "null", "-"],
+            timeout: .seconds(30), standardOutputCaptureLimit: 0, standardErrorCaptureLimit: 64 * 1024,
+            sensitiveValues: [path, file.path])
+        let measured = try await runner.run(request)
+        try Task.checkCancellation()
+        guard measured.succeeded else { throw AnalyticsError.parsingFailed("Could not verify grouped audio timing.") }
+        let expression = try NSRegularExpression(pattern:
+            #"ashowinfo@amc_group_(\d+).*?n:0\s+pts:([-+0-9]+)\s+pts_time:\S+.*?channels:(\d+).*?rate:(\d+)"#)
+        let log = measured.standardErrorText
+        var starts: [Int: Int64] = [:]
+        var rates: [Int] = []
+        for match in expression.matches(in: log, range: NSRange(log.startIndex..., in: log)) {
+            func field(_ index: Int) -> String { Range(match.range(at: index), in: log).map { String(log[$0]) } ?? "" }
+            guard let index = Int(field(1)), let start = Int64(field(2)),
+                  field(3) == "1", let rate = Int(field(4)), rate > 0 else { continue }
+            starts[index] = start
+            rates.append(rate)
+        }
+        guard starts.count == indices.count, rates.count == indices.count, Set(rates).count == 1,
+              let first = starts[0], let rate = rates.max(),
+              starts.values.allSatisfy({ value in
+                  let delta = value.subtractingReportingOverflow(first)
+                  return !delta.overflow && abs(Double(delta.partialValue)) < 500_000_000 / Double(rate)
+              }) else {
+            throw AnalyticsError.parsingFailed(String(localized: "Grouped analysis requires mono tracks with matching sample rates and start times."))
+        }
+    }
+
     func analyze(
         file: URL,
         presentation: LoudnessPresentation,
@@ -87,6 +139,7 @@ actor SilenceAnalysisService {
         if case .surround51 = presentation, indices.count != 6 {
             throw AnalyticsError.parsingFailed("A 5.1 grouping requires exactly six mono tracks.")
         }
+        try await validateGroupedTracks(file: file, presentation: presentation)
         guard let path = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
@@ -112,7 +165,20 @@ actor SilenceAnalysisService {
     }
 
     static func filterGraph(for presentation: LoudnessPresentation, settings: SilenceDetectionSettings) -> String {
-        let inputs = presentation.streamIndices.map { "[0:a:\($0)]" }.joined()
+        let indices = presentation.streamIndices
+        let inputs: String
+        let preparation: String
+        if case .track = presentation {
+            inputs = "[0:a:\(indices[0])]"
+            preparation = ""
+        } else {
+            // Equal-size frames prevent join dropping a shorter final frame when
+            // mono codecs choose different packet sizes. Never pad source samples.
+            preparation = indices.enumerated().map { offset, index in
+                "[0:a:\(index)]asetnsamples=n=4800:p=0[group_input_\(offset)];"
+            }.joined()
+            inputs = indices.indices.map { "[group_input_\($0)]" }.joined()
+        }
         let join: String
         switch presentation {
         case .track: join = ""
@@ -122,7 +188,7 @@ actor SilenceAnalysisService {
         }
         // FFmpeg normalizes the container start timestamp by default. Preserve
         // stream offsets within that file timeline (including delayed audio).
-        return "\(inputs)\(join)asetpts=PTS,"
+        return "\(preparation)\(inputs)\(join)asetpts=PTS,"
             + "silencedetect=noise=\(settings.thresholdDBFS)dB:duration=\(settings.minimumDuration):mono=0[silence]"
     }
 }

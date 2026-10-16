@@ -4,6 +4,65 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class MPVPreviewObservationTests: XCTestCase {
+    func testGroupedAudioGraphPreservesIDsRolesAndGain() throws {
+        let stereo = try XCTUnwrap(MPVPlayer.audioPresentationGraph(.stereo(left: 1, right: 0), trackIDs: [4, 9]))
+        XCTAssertTrue(stereo.contains("[aid9]pan=stereo|FL=c0|FR=0*c0"))
+        XCTAssertTrue(stereo.contains("[aid4]pan=stereo|FL=0*c0|FR=c0"))
+        XCTAssertTrue(stereo.hasSuffix("amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[ao]"))
+        let surround = try XCTUnwrap(MPVPlayer.audioPresentationGraph(.surround51([5, 4, 3, 2, 1, 0]), trackIDs: [1, 2, 3, 4, 5, 6]))
+        XCTAssertTrue(surround.contains("[aid3]pan=5.1(side)|FL=0*c0|FR=0*c0|FC=0*c0|LFE=c0|SL=0*c0|SR=0*c0"))
+        XCTAssertEqual(MPVPlayer.audioPresentationGraph(.track(0), trackIDs: [4]), "")
+        XCTAssertNil(MPVPlayer.audioPresentationGraph(.stereo(left: 0, right: 0), trackIDs: [4]))
+        XCTAssertNil(MPVPlayer.audioPresentationGraph(.track(1), trackIDs: [4]))
+        XCTAssertNil(MPVPlayer.audioPresentationGraph(.surround51([0, 1]), trackIDs: [4, 9]))
+    }
+
+    @MainActor
+    func testPackagedMPVGroupedAudioAuditionAndSingleTrackRestoration() async throws {
+        XCTAssertTrue(MPVPlayer.supportsGroupedAudioPresentation)
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-group-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=8",
+                        "-f", "lavfi", "-i", "aevalsrc=0.25*sin(2*PI*880*t):s=48000:d=8",
+                        "-map", "0:a", "-map", "1:a", "-c:a", "flac", source.path], timeout: .seconds(20)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop() }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        let grouped = await player.selectAudioPresentation(.stereo(left: 1, right: 0))
+        XCTAssertTrue(grouped)
+        XCTAssertTrue(player.audioPresentationFilterGraph?.contains("normalize=0") == true)
+        player.play()
+        try await waitForMeterCondition { player.isPlaying && player.timePos > 0.2 }
+        player.setPlaybackMeterEnabled(true)
+        try await waitForMeterCondition { player.playbackMeterSample?.peaks.count == 2 }
+        let sample = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[0]), -12.04, accuracy: 0.1)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[1]), -18.06, accuracy: 0.1)
+        let single = await player.selectAudioPresentation(.track(0))
+        XCTAssertTrue(single)
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        XCTAssertEqual(player.currentAudioTrackIndex, try XCTUnwrap(player.audioTrackIndexes.first))
+        let invalid = await player.selectAudioPresentation(.stereo(left: 0, right: 99))
+        XCTAssertFalse(invalid)
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        XCTAssertLessThanOrEqual(player.currentAudioTrackIndex, 0)
+        let regrouped = await player.selectAudioPresentation(.stereo(left: 0, right: 1))
+        XCTAssertTrue(regrouped)
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        XCTAssertGreaterThan(player.currentAudioTrackIndex, 0, "Loading another source must restore normal audio selection")
+        withExtendedLifetime(layer) {}
+    }
+
     @MainActor
     func testPackagedMPVCompressedMonoMeter() async throws {
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-aac-meter-\(UUID().uuidString).mkv")

@@ -18,7 +18,11 @@ struct SilenceAnalysisView: View {
     let tracks: [AudioTrackInfo]
     @Environment(\.dismiss) private var dismiss
     @StateObject private var player = MPVPlayer()
-    @State private var selectedTrack: Int
+    @State private var configuration: AudioAnalysisConfiguration
+    @State private var previewReady = false
+    @State private var previewFailed = false
+    @State private var groupValidated = false
+    @State private var groupingError: String?
     @State private var threshold = -50.0
     @State private var minimumDuration = 1.0
     @State private var result: SilenceAnalysisResult?
@@ -32,9 +36,16 @@ struct SilenceAnalysisView: View {
     init(file: URL, tracks: [AudioTrackInfo]) {
         self.file = file
         self.tracks = tracks
-        _selectedTrack = State(initialValue: tracks.first?.streamIndex ?? 0)
+        let mono = tracks.filter { $0.channels == 1 }.map(\.streamIndex)
+        _configuration = State(initialValue: AudioAnalysisConfiguration(
+            trackIndex: tracks.first?.streamIndex ?? 0,
+            monoIndices: (0..<6).map { mono.indices.contains($0) ? mono[$0] : (mono.first ?? 0) }
+        ))
     }
 
+    private var monoTracks: [AudioTrackInfo] { tracks.filter { $0.channels == 1 } }
+    private var presentation: LoudnessPresentation { configuration.presentation }
+    private var validPresentation: Bool { presentation.isValid(for: tracks) }
     private var isAnalyzing: Bool { analysisID != nil }
     private var timelineDuration: Double {
         max(0.1, player.duration.isFinite ? player.duration : 0, result?.intervals.last?.end ?? 0)
@@ -56,7 +67,7 @@ struct SilenceAnalysisView: View {
                     settings
                     HStack {
                         Button("Scan Audio") { analyze() }
-                            .disabled(isAnalyzing || tracks.isEmpty)
+                            .disabled(isAnalyzing || !validPresentation || !groupValidated)
                             .accessibilityIdentifier("analysis.silence.run")
                         if isAnalyzing {
                             ProgressView().controlSize(.small)
@@ -67,8 +78,17 @@ struct SilenceAnalysisView: View {
                             .disabled(isAnalyzing || result == nil)
                             .accessibilityIdentifier("analysis.silence.export")
                     }
-                    Text("Scans the complete selected source track. Silence requires every channel to stay below the sample threshold for the minimum duration. Volume and mute do not affect detection.")
+                    Text("Scans the complete selected source presentation. Silence requires every channel to stay below the sample threshold for the minimum duration. Volume and mute do not affect detection.")
                         .font(.caption).foregroundStyle(.secondary)
+                    if let groupingError {
+                        Text(groupingError).font(.caption).foregroundStyle(.orange)
+                            .accessibilityIdentifier("analysis.silence.group.error")
+                    }
+                    if previewFailed {
+                        Text("Preview unavailable")
+                            .font(.caption).foregroundStyle(.orange)
+                            .accessibilityIdentifier("analysis.silence.preview.error")
+                    }
                     if let errorMessage {
                         Text(errorMessage).font(.callout).foregroundStyle(.red)
                     }
@@ -79,7 +99,7 @@ struct SilenceAnalysisView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ZStack {
                         MPVVideoView(player: player, keyHandler: { key, _, _ in
-                            guard key == " ", player.isFileLoaded else { return false }
+                            guard key == " ", previewReady else { return false }
                             player.togglePause()
                             return true
                         })
@@ -97,10 +117,10 @@ struct SilenceAnalysisView: View {
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         }
                         .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-                        .disabled(!player.isFileLoaded)
+                        .disabled(!previewReady)
                         Slider(value: Binding(get: { position }, set: { seconds in seek(seconds) }), in: 0...timelineDuration)
                             .accessibilityLabel("Inspection playback position")
-                            .disabled(!player.isFileLoaded)
+                            .disabled(!previewReady)
                         Text(verbatim: time(position))
                             .font(.caption).monospacedDigit()
                             .accessibilityIdentifier("analysis.silence.time")
@@ -119,13 +139,37 @@ struct SilenceAnalysisView: View {
             previewAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
             player.load(url: file)
         }
-        .onChange(of: player.isFileLoaded) { _, loaded in
-            if loaded { selectPreviewTrack() }
+        .task(id: presentation.id) {
+            groupValidated = false
+            groupingError = nil
+            guard validPresentation else { return }
+            do {
+                try await SilenceAnalysisService.shared.validateGroupedTracks(file: file, presentation: presentation)
+                try Task.checkCancellation()
+                groupValidated = true
+            } catch {
+                guard !Task.isCancelled else { return }
+                groupingError = error.localizedDescription
+            }
+        }
+        .task(id: "\(player.isFileLoaded)-\(presentation.id)-\(groupValidated)") {
+            previewReady = false
+            previewFailed = false
+            guard player.isFileLoaded, validPresentation, groupValidated else { return }
+            let ready = await player.selectAudioPresentation(presentation)
+            guard !Task.isCancelled else { return }
+            previewReady = ready
+            previewFailed = !ready
         }
         .onChange(of: player.timePos) { _, seconds in
             if seconds.isFinite { position = max(0, seconds) }
         }
-        .onChange(of: selectedTrack) { clearResult(); selectPreviewTrack() }
+        .onChange(of: presentation) {
+            clearResult()
+            previewReady = false
+            groupValidated = false
+            player.pause()
+        }
         .onChange(of: threshold) { clearResult() }
         .onChange(of: minimumDuration) { clearResult() }
         .onDisappear {
@@ -139,12 +183,44 @@ struct SilenceAnalysisView: View {
 
     private var settings: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("Audio track", selection: $selectedTrack) {
-                ForEach(tracks, id: \.streamIndex) { track in
-                    Text(track.displayLabel).tag(track.streamIndex)
+            Picker("Analyze", selection: $configuration.kind) {
+                Text("Audio track").tag(AudioAnalysisConfiguration.Kind.track)
+                if monoTracks.count >= 2 {
+                    Text("Mono pair").tag(AudioAnalysisConfiguration.Kind.stereo)
+                }
+                if monoTracks.count >= 6 {
+                    Text("5.1 multi-mono").tag(AudioAnalysisConfiguration.Kind.surround)
                 }
             }
-            .accessibilityIdentifier("analysis.silence.track")
+            .accessibilityIdentifier("analysis.silence.kind")
+            if configuration.kind == .track {
+                Picker("Audio track", selection: $configuration.trackIndex) {
+                    ForEach(tracks, id: \.streamIndex) { track in
+                        Text(track.displayLabel).tag(track.streamIndex)
+                    }
+                }
+                .accessibilityIdentifier("analysis.silence.track")
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading) {
+                    ForEach(Array(configuration.kind.roles.enumerated()), id: \.offset) { offset, role in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(LocalizedStringKey(role)).font(.caption).foregroundStyle(.secondary)
+                            Picker(LocalizedStringKey(role), selection: $configuration.monoIndices[offset]) {
+                                ForEach(monoTracks, id: \.streamIndex) { track in
+                                    Text(track.displayLabel).tag(track.streamIndex)
+                                }
+                            }
+                            .labelsHidden()
+                            .id("\(configuration.kind.rawValue)-\(offset)")
+                            .accessibilityIdentifier("analysis.silence.channel.\(offset)")
+                        }
+                    }
+                }
+                if !validPresentation {
+                    Text("Choose a different mono track for each channel.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
             Picker("Silence threshold", selection: $threshold) {
                 ForEach([-30.0, -40, -50, -60, -70, -80], id: \.self) { value in
                     Text(verbatim: "\(Int(value)) dBFS").tag(value)
@@ -186,7 +262,7 @@ struct SilenceAnalysisView: View {
                             Text(verbatim: time(interval.duration)).foregroundStyle(.secondary)
                         }
                         .font(.caption).monospacedDigit()
-                        .disabled(!player.isFileLoaded)
+                        .disabled(!previewReady)
                     }
                 }
             }
@@ -220,15 +296,8 @@ struct SilenceAnalysisView: View {
         .accessibilityLabel("Silence timeline")
     }
 
-    private func selectPreviewTrack() {
-        let ids = player.audioTrackIndexes
-        player.pause()
-        // Both track inventories use audio-relative container order.
-        if ids.indices.contains(selectedTrack) { player.currentAudioTrackIndex = ids[selectedTrack] }
-    }
-
     private func seek(_ seconds: Double) {
-        guard seconds.isFinite, player.isFileLoaded else { return }
+        guard seconds.isFinite, previewReady else { return }
         // Match MPV's final playable position when an interval extends to EOF.
         // Reported interval boundaries still retain the full measured duration.
         let lastPlayableTime = player.duration > 0 ? max(0, player.duration - 0.05) : timelineDuration
@@ -260,11 +329,11 @@ struct SilenceAnalysisView: View {
     }
 
     private func analyze() {
-        guard !isAnalyzing else { return }
+        guard !isAnalyzing, validPresentation, groupValidated else { return }
         clearResult()
         let id = UUID()
         analysisID = id
-        let presentation = LoudnessPresentation.track(selectedTrack)
+        let presentation = presentation
         let settings = SilenceDetectionSettings(thresholdDBFS: threshold, minimumDuration: minimumDuration)
         analysisTask = Task { @MainActor in
             do {

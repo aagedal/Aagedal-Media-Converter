@@ -138,7 +138,7 @@ private struct VideoAnalysisTabView: View {
 }
 
 /// One editable card describes one audio program to measure.
-private struct AudioAnalysisConfiguration: Identifiable {
+struct AudioAnalysisConfiguration: Identifiable {
     enum Kind: String, CaseIterable {
         case track, stereo, surround
 

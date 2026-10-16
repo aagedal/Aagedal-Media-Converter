@@ -59,16 +59,66 @@ remain required before considering it as the default meter.
 - [ ] Investigate timestamped decoder measurements and buffering before claiming playhead alignment for Playback; the generated AAC/video benchmark observed readings about 3.4 seconds ahead. Do not infer measurement time from the current playhead or apply one fixed correction across outputs. [Source/API investigation](audio-playback-timing-2026-10-16.md) identifies the missing timestamp/history transport and the dependency instrumentation needed next; alignment remains unqualified.
 - [ ] Qualify Release CPU/thermal behavior and physical-device synchronization on longer representative media before considering Playback as the default.
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
-- [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. This first UI supports one track at a time; multi-mono presentation scanning is covered in the service tests but is not exposed as grouped audition.
+- [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. The UI supports one track, a custom mono pair or six mono tracks assigned to 5.1 roles. Grouped scans and preview require matching sample rates and decoded start times.
 - [x] Source sample-peak threshold intervals and per-channel imbalance checks, with paused preview navigation and whole-track unweighted RMS levels.
 - [ ] Intersample true-peak threshold markers. Keep dBTP distinct from the new dBFS sample-peak intervals; whole-program maximum true peak remains available in the loudness report.
 - [ ] Stereo phase/correlation analysis, with mono compatibility checks and a phase display.
 - [x] Export complete source sample-peak/channel-balance reports as versioned JSON, including selected audio track, thresholds, every interval and whole-track per-channel levels. See [report format](audio-peak-report-format.md).
 - [x] Export complete source silence reports as versioned JSON, with selected presentation, thresholds and every file-relative interval. See [report format](audio-silence-report-format.md).
-- [ ] Expose grouped multi-mono analysis/report selection and audition in the UI. Service-level silence exports preserve grouping context; separate loudness reports retain EBU R128 channel weighting and LFE exclusion.
+- [x] Expose custom mono-pair and 5.1 selection, grouped audition and JSON export in Detect Silence. Reject duplicate/non-mono inputs and unequal decoded start times.
+- [ ] Extend grouped selection/audition to peak/channel-balance reports; qualify discontinuities, unequal track durations and deliberately offset multi-mono sources before extending grouped timing support. Separate loudness reports retain EBU R128 channel weighting and LFE exclusion.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Grouped silence selection and audition — 2026-10-16
+
+Detect Silence now offers Audio track, Mono pair and 5.1 multi-mono. Each group
+assigns distinct mono tracks to explicit channel roles, including LFE. Changing
+roles or presentation invalidates the previous result and export. The same
+captured presentation feeds source detection and the complete JSON report.
+
+MPV audition maps audio-relative selections to actual MPV track IDs. The pinned
+library lacks `join`; available `pan` filters route disjoint channel positions
+before `amix` with normalization disabled. Decoder measurements verify channel
+order and preserved source gains before output/device conversion. Failed selections
+stay paused with controls disabled. Returning to a single track removes the graph;
+loading another file or stopping restores automatic audio selection for owned
+analysis selections. This follows MPV's [documented labelled complex graphs](https://mpv.io/manual/stable/#options-lavfi-complex).
+
+Group filters combine sample positions rather than independently synchronizing
+source timestamps. A bounded, cancellable FFmpeg first-frame preflight therefore
+requires mono inputs with matching sample rates and decoded starts before grouped
+scanning or preview. Unequal/unknown starts or differing sample rates fail explicitly.
+Single-track detection retains its delayed-audio file timeline. Unequal durations and midstream discontinuities
+remain unqualified; this increment targets continuous, synchronized multi-mono
+recordings. Detection includes every assigned channel, including LFE, independently
+of preview volume, mute and device downmixing. Group inputs use equal-sized
+unpadded frames to retain the final samples when codec packet sizes differ.
+Separate EBU R128 measurements are unchanged. No dependencies, bundled binaries or licenses changed.
+
+The ad-hoc-signed Debug app builds. The final complete unit suite executes 1,372
+tests with zero failures and one intentional opt-in benchmark skip in
+`/private/tmp/amc-grouped-final-unit.xcresult`; all 43 focused scanner/player tests
+also pass.
+Three UI checks pass in `/private/tmp/amc-grouped-ui-fresh.xcresult`: English and
+Norwegian grouped selection/navigation, duplicate rejection, stereo report save
+and readback, plus the existing single-track save/cancel/settings flow. All four
+[stereo English](images/audio-grouped-silence-stereo-en.png),
+[stereo Norwegian](images/audio-grouped-silence-stereo-nb.png),
+[5.1 English](images/audio-grouped-silence-surround-en.png) and
+[5.1 Norwegian](images/audio-grouped-silence-surround-nb.png) captures were visually
+inspected for readable controls, intervals and preview without clipping.
+
+An initial graph test had an incorrect expected MPV ID; corrected role indexing
+passes. The first full run caught the FLAC tail loss, now covered by a 96,001-sample
+six-track fixture with an exact one-sample final frame. Combined/cached UI runs
+timed out launching a background app before reaching assertions; fresh build
+products pass all three checks. Seven localization script tests and the 1,887-entry
+catalog audit pass. New translations outside English/Norwegian await review.
+Release/device qualification and sandbox enforcement remain unverified; the
+project currently disables App Sandbox in both configurations.
+
 
 ### Silence report export — 2026-10-16
 
