@@ -2013,9 +2013,12 @@ struct ContentView: View {
             if container == "mp4" { metadataArguments += ["-movflags", "use_metadata_tags"] }
         }
 
-        let fixtureAudio = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_SILENCE")
+        var fixtureAudio = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_SILENCE")
             ? "aevalsrc=if(between(t\\,2\\,4)\\,0\\,0.1*sin(2*PI*440*t)):s=48000:d=\(fixtureDuration)"
             : "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)"
+        if UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PEAKS") {
+            fixtureAudio = "aevalsrc=if(between(t\\,1\\,2)\\,0.8\\,0.01)*sin(2*PI*440*t)|if(between(t\\,1\\,2)\\,0.08\\,0.001)*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
+        }
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
             arguments: [

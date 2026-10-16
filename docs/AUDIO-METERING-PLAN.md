@@ -60,12 +60,67 @@ remain required before considering it as the default meter.
 - [ ] Qualify Release CPU/thermal behavior and physical-device synchronization on longer representative media before considering Playback as the default.
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
 - [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. This first UI supports one track at a time; multi-mono presentation scanning is covered in the service tests but is not exposed as grouped audition.
-- [ ] Sample-peak/true-peak threshold markers and per-channel imbalance checks. Distinguish source sample peaks from intersample true peaks.
+- [x] Source sample-peak threshold intervals and per-channel imbalance checks, with paused preview navigation and whole-track unweighted RMS levels.
+- [ ] Intersample true-peak threshold markers. Keep dBTP distinct from the new dBFS sample-peak intervals; whole-program maximum true peak remains available in the loudness report.
 - [ ] Stereo phase/correlation analysis, with mono compatibility checks and a phase display.
 - [ ] Expand channel-specific analysis/report exports while retaining EBU R128 channel weighting and LFE exclusion.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Sample peaks and channel balance — 2026-10-16
+
+Audio Analysis → Peaks and Channel Balance scans one complete selected source
+track with bundled FFmpeg. Markers cover 4,800-sample windows (100 ms at 48 kHz),
+merged per channel when adjacent windows meet or exceed the configured sample-peak
+threshold. Source samples are neither resampled nor padded at EOF. The actual
+sample rate/count and file-timeline timestamps determine interval boundaries,
+including delayed audio. A marker locates an analysis window containing a peak,
+not the exact sample or an intersample true-peak excursion.
+
+The panel shows every decoded channel's maximum sample peak and unweighted
+whole-track RMS. RMS accumulates linear energy weighted by each window's actual
+sample count; timeline gaps are not synthesized as silence. Channel difference is
+the highest minus lowest RMS level, compared with a configurable threshold.
+Mono and wholly silent tracks have no comparison; a silent channel beside an
+active channel has infinite difference. Surround and LFE level differences may
+be intentional. These checks do not change EBU R128 weighting or LFE exclusion
+in the separate loudness report.
+
+Click interval boundaries or the timeline to seek and pause in MPV. Track or
+threshold changes clear prior results. Volume, mute and conversion trims do not
+affect these source measurements. The service retains scoped access through
+subprocess cleanup, rejects incomplete/failed reports and publishes no cancelled
+results. Line storage is bounded; exceeding 100,000 intervals fails explicitly.
+The chart displays the first 1,000 intervals with a disclosure; the lazy list
+retains all intervals. Sample-rate/layout changes and overlapping frame timestamps
+fail instead of mixing incompatible measurements.
+
+Validation: the ad-hoc-signed Debug build passed. All 1,359 unit tests executed
+with zero failures and one intentional opt-in benchmark skip in
+`/private/tmp/amc-peaks-final.xcresult`. The 10 new scanner tests cover chunked
+reports, sample-weighted RMS, silence, inclusive thresholds, gaps, marker limits,
+malformed/truncated reports, failure/cancellation, selected tracks, 44.1/48/96 kHz,
+and delayed audio with a one-sample final window. The 20 combined peak/silence
+scanner regressions and initial English navigation check also passed in
+`/private/tmp/amc-peaks-focused.xcresult`.
+
+Final English/Norwegian UI checks passed in
+`/private/tmp/amc-peaks-bilingual.xcresult`, after resizing the sheet to fit the
+host display. Both exported screenshots under
+`/private/tmp/amc-peaks-bilingual-screenshots/` were visually inspected for
+clipping, channel levels and marker/preview agreement. The English test navigates
+both boundaries and verifies changed thresholds invalidate prior results; the
+Norwegian test checks translated report/balance controls. The full-suite combined
+run encountered an accessibility snapshot failure before opening the English
+panel; the separate final rebuilt UI run passes both tests. Seven localization
+script tests, the 1,875-entry localization audit and whitespace check pass.
+Translations outside English/Norwegian await review.
+
+True-peak interval markers, grouped multi-mono analysis, phase/correlation and
+report export remain outside this increment. Release packaging and physical-device
+qualification were not performed. No dependencies, bundled binaries or licenses
+changed.
 
 ### Silence detection — 2026-10-16
 

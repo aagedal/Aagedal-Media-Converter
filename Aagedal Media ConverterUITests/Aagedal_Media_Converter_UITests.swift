@@ -1585,6 +1585,71 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testPeakAnalysisNavigatesAndInvalidatesThreshold() throws {
+        launchApp(generatedFixture: true, additionalArguments: ["-AMC_UI_TEST_PEAKS", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Audio"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.peaks.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Peak intervals: 0", of: element("analysis.peaks.summary"), timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Channel difference exceeds threshold", of: element("analysis.peaks.balance"), timeout: 5))
+        element("analysis.peaks.threshold").click()
+        app.menuItems["-6 dBFS"].click()
+        XCTAssertFalse(element("analysis.peaks.summary").exists)
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Peak intervals: 1", of: element("analysis.peaks.summary"), timeout: 20))
+        let start = element("analysis.peaks.start.0")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        let time = element("analysis.peaks.time")
+        let atStart = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 1) < 0.2
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atStart, object: time)], timeout: 5), .completed)
+        element("analysis.peaks.end.0").click()
+        let atEnd = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 2) < 0.2
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atEnd, object: time)], timeout: 5), .completed)
+        attachWindowScreenshot(named: "Source peak intervals and channel balance")
+        element("analysis.peaks.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testPeakAnalysisNorwegianControlsAndReport() throws {
+        launchApp(generatedFixture: true, language: "nb", locale: "nb_NO",
+                  additionalArguments: ["-AMC_UI_TEST_PEAKS", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Lyd"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.peaks.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertEqual(run.label, "Analyser lyd")
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Toppintervaller: 0", of: element("analysis.peaks.summary"), timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Kanalforskjellen overskrider terskelen", of: element("analysis.peaks.balance"), timeout: 5))
+        attachWindowScreenshot(named: "Toppnivå og kanalbalanse på norsk")
+        element("analysis.peaks.close").click()
+    }
+
+    @MainActor
     func testSilenceAnalysisNavigatesIntervalsAndInvalidatesChangedSettings() throws {
         launchApp(generatedFixture: true, additionalArguments: ["-AMC_UI_TEST_SILENCE", "YES"], previewContainer: "mp4")
         defer { terminateAndCleanFixtures() }
