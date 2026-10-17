@@ -1,5 +1,7 @@
 # v.4.5.6
 
+- Added estimated true-peak threshold markers (4× oversampled dBTP) to Peaks and Channel Balance, with paused navigation and complete JSON export for single tracks, mono pairs and 5.1. Source sample peaks and RMS remain separately available.
+
 - Added custom mono-pair and 5.1 multi-mono selections to silence analysis, with grouped preview routing and complete JSON reports. Duplicate channels and unequal track start times are rejected.
 
 - Added JSON export for complete source silence reports, including selected track, detection settings and every interval on the file timeline.

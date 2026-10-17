@@ -229,7 +229,15 @@
       "Grouped analysis requires mono tracks with matching sample rates and start times.",
       "Validating grouped audio…",
       "Grouped peak analysis requires mono tracks with matching sample rates, start times, and decoded lengths, without timestamp discontinuities (within 1 ms container timestamp precision).",
-      "Channel"
+      "Channel",
+      "Peak markers",
+      "Estimated true peak",
+      "True-peak threshold",
+      "Estimated true peak (4× oversampled)",
+      "Estimated true-peak intervals: %lld",
+      "No estimated true peaks meet this threshold.",
+      "True-peak markers estimate reconstructed source peaks using continuous 4× oversampling. Edge samples use zero extension. Markers cover analysis windows, not exact excursions; this is not a certified BS.1770 meter.",
+      "True-peak markers require continuous audio timestamps."
     ],
     "translated-app-intent": [
       "Animated Still",

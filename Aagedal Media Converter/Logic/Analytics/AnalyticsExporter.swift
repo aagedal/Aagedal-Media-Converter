@@ -10,7 +10,7 @@ import OSLog
 /// Exports analytics results to JSON or PDF
 enum AnalyticsExporter {
 
-    /// Single-track reports retain version 1; grouped presentations use version 2.
+    /// Sample-only reports retain versions 1/2; estimated true peaks use version 3.
     /// The explicit context is independent of Swift's enum encoding and UI language.
     private struct AudioPeakReport: Encodable {
         let schemaVersion: Int
@@ -28,6 +28,7 @@ enum AnalyticsExporter {
             let channels: [AudioChannelLevel]
             let duration: Double
             let imbalanceDB: Double?
+            let truePeaks: AudioTruePeakResult?
 
             init(_ result: AudioPeakAnalysisResult) {
                 settings = result.settings
@@ -35,6 +36,7 @@ enum AnalyticsExporter {
                 channels = result.channels
                 duration = result.duration
                 imbalanceDB = result.imbalanceDB
+                truePeaks = result.truePeaks
             }
         }
 
@@ -81,8 +83,12 @@ enum AnalyticsExporter {
             let negativeInfinity = "-Infinity_means_digital_silence"
             let positiveInfinity = "Infinity_means_silent_and_active_channels"
             let scope: String
+            let truePeakUnit: String?
+            let truePeakMeasurement: String?
 
-            init(grouped: Bool) {
+            init(grouped: Bool, truePeaks: Bool) {
+                truePeakUnit = truePeaks ? "dBTP" : nil
+                truePeakMeasurement = truePeaks ? "estimated_continuous_4x_interpolation_zero_extended_edges_not_certified_BS1770" : nil
                 channelNumbering = grouped ? "one_based_presentation_channel_order" : "one_based_decoded_order"
                 rmsMeasurement = grouped ? "unweighted_whole_presentation_sample_weighted_energy" : "unweighted_whole_track_sample_weighted_energy"
                 scope = grouped ? "complete_selected_source_presentation_independent_of_volume_mute_and_conversion_trims" : "complete_selected_source_track_independent_of_volume_mute_and_conversion_trims"
@@ -153,10 +159,25 @@ enum AnalyticsExporter {
               result.imbalanceDB.map({ ($0.isFinite && $0 >= 0) || $0 == .infinity }) ?? true else {
             throw invalidAudioPeakReport(result)
         }
-        let report = AudioPeakReport(schemaVersion: grouped ? 2 : 1, sourceFileName: sourceFile.lastPathComponent,
+        if let truePeaks = result.truePeaks {
+            guard truePeaks.thresholdDBTP == result.settings.truePeakThresholdDBTP,
+                  (1...192_000).contains(truePeaks.sourceSampleRate),
+                  truePeaks.measurementSampleRate == truePeaks.sourceSampleRate * 4,
+                  truePeaks.windowSourceSamples == 4_800,
+                  truePeaks.method == "estimated_4x_libswresample_swr_filter64_cutoff0.97_no_certification",
+                  truePeaks.channels.map(\.channel) == channelIDs,
+                  truePeaks.channels.allSatisfy({ $0.peakDBTP.isFinite || $0.peakDBTP == -.infinity }),
+                  truePeaks.intervals.allSatisfy({
+                      channelIDs.contains($0.channel) && $0.start.isFinite && $0.end.isFinite && $0.peakDBTP.isFinite &&
+                      $0.peakDBTP >= truePeaks.thresholdDBTP && $0.start >= 0 && $0.end > $0.start && $0.end <= result.duration
+                  }) else { throw invalidAudioPeakReport(result) }
+        } else if result.settings.truePeakThresholdDBTP != nil {
+            throw invalidAudioPeakReport(result)
+        }
+        let report = AudioPeakReport(schemaVersion: result.truePeaks != nil ? 3 : (grouped ? 2 : 1), sourceFileName: sourceFile.lastPathComponent,
                                      audioRelativeTrackIndex: trackIndex, timestamp: timestamp,
                                      presentation: result.presentation.map(AudioPeakReport.PresentationContext.init),
-                                     semantics: .init(grouped: grouped), result: .init(result))
+                                     semantics: .init(grouped: grouped, truePeaks: result.truePeaks != nil), result: .init(result))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
