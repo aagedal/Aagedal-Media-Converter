@@ -1,0 +1,2239 @@
+{
+  "alignment_qualified": false,
+  "app_integration_tested": false,
+  "probe_sha256": "501a953ac6cee620425ce30e34ad7f0c8b6021406535ff802e83e823d73049fb",
+  "probe_source_sha256": "6739c4dbc21c3f06676e345ddeedc0afc31bfb74618e2d247e4e910d3d155323",
+  "ffmpeg_sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6",
+  "ffprobe_sha256": "bfe676bfc3a889bebe63af07c71a926a6167f568c7a932a79c2f1fe51ae6d5a1",
+  "fixtures": {
+    "lossless": {
+      "sha256": "ce8c25422d654fd8967cf6d23ab656fec54a188679b09551c5c2b24cfc6aa165",
+      "reference_start": 0.0
+    },
+    "delayed": {
+      "sha256": "097d89521e9e4d28efa2ec0712be2544a79d65b12fcab71c8333535b1cf935ac",
+      "reference_start": 0.75
+    },
+    "aac": {
+      "sha256": "fa0baeb9b2e507c54d0567714c41d015da7551f22202742f71ede493b88c6f0d",
+      "reference_start": 0.0
+    }
+  },
+  "runs": [
+    {
+      "case": "lossless-coreaudio-video0-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "coreaudio",
+        "--steady"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "f711caad4fa1c5bb5664eb3198493e3b9b22706a10678988c742e695e6ea5168",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 169,
+        "missing_history_snapshots": 1,
+        "unique_frames": 181,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 53,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 181,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 168,
+            "minimum": 0.17008587299999967,
+            "median": 0.2281957900000009,
+            "maximum": 0.2335859979999988
+          },
+          "audio-pts": {
+            "count": 168,
+            "minimum": 0.1325965400000002,
+            "median": 0.17522174900000032,
+            "maximum": 0.22857579000000072
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 168,
+          "minimum": 8.800000000000474e-05,
+          "median": 0.0006690000000002527,
+          "maximum": 0.0024660000000000792
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 18.1,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-coreaudio-video0-stall0.jsonl.xz"
+    },
+    {
+      "case": "lossless-coreaudio-video1-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "coreaudio",
+        "--steady",
+        "--video"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "e5125e8b9dd0a7a2b60ac42398925e4cbc6e7d2de1205075e3fe0909d76786eb",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 168,
+        "missing_history_snapshots": 1,
+        "unique_frames": 181,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 53,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 181,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 167,
+            "minimum": 0.09999999999999964,
+            "median": 0.16000000000000014,
+            "maximum": 0.21999999999999997
+          },
+          "audio-pts": {
+            "count": 167,
+            "minimum": 0.12851820699999994,
+            "median": 0.1831962900000006,
+            "maximum": 0.2332002900000001
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 167,
+          "minimum": 0.00012900000000004574,
+          "median": 0.0006839999999996849,
+          "maximum": 0.002722999999999587
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 18.1,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-coreaudio-video1-stall0.jsonl.xz"
+    },
+    {
+      "case": "delayed-coreaudio-video0-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-offset-fixed-hardware/delayed.mov",
+        "coreaudio",
+        "--steady"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "325b81dbb18df0233400265b2d80e867cb0ab439075ccc2b3df53c6748ea35a3",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.75,
+        "received_media_end": 18.85,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 169,
+        "missing_history_snapshots": 1,
+        "unique_frames": 181,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 53,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 181,
+        "tolerance_db": 0.05,
+        "reference_start": 0.75,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 168,
+            "minimum": 0.165550541,
+            "median": 0.22822829000000056,
+            "maximum": 0.2336141240000007
+          },
+          "audio-pts": {
+            "count": 168,
+            "minimum": 0.12724616499999986,
+            "median": 0.17859287399999957,
+            "maximum": 0.23000837300000043
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 168,
+          "minimum": 0.00014900000000001024,
+          "median": 0.0005410000000001247,
+          "maximum": 0.0008069999999982258
+        },
+        "presentation_clock_selected": false
+      },
+      "capture_file": "delayed-coreaudio-video0-stall0.jsonl.xz"
+    },
+    {
+      "case": "delayed-coreaudio-video1-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-offset-fixed-hardware/delayed.mov",
+        "coreaudio",
+        "--steady",
+        "--video"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "00c2838c1f6c8d32c2ee3cb0cb0d734e921b0ba28ce3d358e7535aa9837c90a2",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.75,
+        "received_media_end": 18.15,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 168,
+        "missing_history_snapshots": 1,
+        "unique_frames": 174,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 46,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 174,
+        "tolerance_db": 0.05,
+        "reference_start": 0.75,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 167,
+            "minimum": 0.10999999999999943,
+            "median": 0.16999999999999993,
+            "maximum": 0.8099999999999999
+          },
+          "audio-pts": {
+            "count": 160,
+            "minimum": 0.12478608199999996,
+            "median": 0.17581449900000035,
+            "maximum": 0.22973899900000028
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 167,
+          "minimum": 6.700000000003925e-05,
+          "median": 0.0005059999999996734,
+          "maximum": 0.0007929999999998216
+        },
+        "presentation_clock_selected": false
+      },
+      "capture_file": "delayed-coreaudio-video1-stall0.jsonl.xz"
+    },
+    {
+      "case": "aac-coreaudio-video0-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/aac.mov",
+        "coreaudio",
+        "--steady"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "8dca8d6775baacae44c011f9f465162f1651fd2b5e4c06ab28669238b92958dc",
+      "passed": false,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 168,
+        "missing_history_snapshots": 1,
+        "unique_frames": 181,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 53,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 181,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 167,
+            "minimum": 0.16992874899999677,
+            "median": 0.22797195700000117,
+            "maximum": 0.23357774800000008
+          },
+          "audio-pts": {
+            "count": 167,
+            "minimum": 0.12833741500000073,
+            "median": 0.17796633199999867,
+            "maximum": 0.23100241499999985
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 167,
+          "minimum": 7.200000000000262e-05,
+          "median": 0.0010019999999997253,
+          "maximum": 0.00249600000000072
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": false,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": false,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.021333,
+        "received_media_end": 18.121333,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "aac-coreaudio-video0-stall0.jsonl.xz"
+    },
+    {
+      "case": "aac-coreaudio-video1-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/aac.mov",
+        "coreaudio",
+        "--steady",
+        "--video"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "6fc25a7ce872b054f7a4792e03fa5adf9aa332384a47c8cd92d2fc8950acfe84",
+      "passed": false,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 169,
+        "missing_history_snapshots": 1,
+        "unique_frames": 182,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 54,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 182,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 168,
+            "minimum": 0.10133299999999856,
+            "median": 0.16133299999999906,
+            "maximum": 0.22133299999999956
+          },
+          "audio-pts": {
+            "count": 168,
+            "minimum": 0.12648549899999928,
+            "median": 0.1764890819999998,
+            "maximum": 0.2321942899999998
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 168,
+          "minimum": 9.999999999998899e-05,
+          "median": 0.001196000000000197,
+          "maximum": 0.002536999999998457
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": false,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": false,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.021333,
+        "received_media_end": 18.221333,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "aac-coreaudio-video1-stall0.jsonl.xz"
+    },
+    {
+      "case": "lossless-coreaudio-video0-stall4",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "coreaudio",
+        "--steady",
+        "--short-stall"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "1f0dfe98a2e174e9b1f6b79ad98d58c8b64ed2176e3c4371de8e807a09e87dae",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 134,
+        "missing_history_snapshots": 1,
+        "unique_frames": 181,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 53,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 181,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 133,
+            "minimum": 0.16955870699999842,
+            "median": 0.22824891400000014,
+            "maximum": 0.23359254100000015
+          },
+          "audio-pts": {
+            "count": 133,
+            "minimum": 0.1293103319999993,
+            "median": 0.18953629199999966,
+            "maximum": 0.23145470700000015
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 133,
+          "minimum": 7.80000000000225e-05,
+          "median": 0.0006520000000023174,
+          "maximum": 0.002591000000000676
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 18.1,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-coreaudio-video0-stall4.jsonl.xz"
+    },
+    {
+      "case": "lossless-coreaudio-video0-stall14",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "coreaudio",
+        "--steady",
+        "--stall"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "83971e764286cd4ffeb3c9353daa0fdb47905a6f9bd32c3dd4286a6162217891",
+      "passed": true,
+      "expected_missing_coverage": true,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 39,
+        "missing_history_snapshots": 1,
+        "unique_frames": 168,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 53,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [
+          {
+            "instance": 1,
+            "epoch": 0,
+            "first": 22,
+            "last": 34
+          }
+        ],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 168,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 38,
+            "minimum": 0.17043079000000105,
+            "median": 0.2282366230000008,
+            "maximum": 0.23355362400000002
+          },
+          "audio-pts": {
+            "count": 38,
+            "minimum": 0.13141858099999992,
+            "median": 0.1898445819999992,
+            "maximum": 0.22736174899999995
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 38,
+          "minimum": 6.799999999999862e-05,
+          "median": 0.000693000000001831,
+          "maximum": 0.000997000000001691
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 18.1,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-coreaudio-video0-stall14.jsonl.xz"
+    },
+    {
+      "case": "lossless-avfoundation-video0-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "avfoundation",
+        "--steady"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "0494cb4b7f42cfb3e93df754fafc22ce29d0c473e3d2e3280b92a54fd69db49f",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 170,
+        "missing_history_snapshots": 1,
+        "unique_frames": 213,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 85,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 213,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 169,
+            "minimum": 3.496703416999999,
+            "median": 3.7542508329999986,
+            "maximum": 3.763746165999999
+          },
+          "audio-pts": {
+            "count": 169,
+            "minimum": 3.258846876,
+            "median": 3.5052349169999992,
+            "maximum": 3.754716541999999
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 169,
+          "minimum": 0.00026599999999998847,
+          "median": 0.0006900000000005235,
+          "maximum": 0.0008259999999999934
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 21.3,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-avfoundation-video0-stall0.jsonl.xz"
+    },
+    {
+      "case": "lossless-avfoundation-video1-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "avfoundation",
+        "--steady",
+        "--video"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "0ff189d9fced95e7daa7a65442a23e7d61c56cc2019a1d8b543adfa3fe8b8cff",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 169,
+        "missing_history_snapshots": 1,
+        "unique_frames": 213,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 85,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 213,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 168,
+            "minimum": 2.86,
+            "median": 3.5,
+            "maximum": 3.74
+          },
+          "audio-pts": {
+            "count": 168,
+            "minimum": 2.863595542,
+            "median": 3.512833167,
+            "maximum": 3.761633417999999
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 168,
+          "minimum": 0.0002500000000000002,
+          "median": 0.0006950000000003342,
+          "maximum": 0.0009809999999994545
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 21.3,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-avfoundation-video1-stall0.jsonl.xz"
+    },
+    {
+      "case": "delayed-avfoundation-video0-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-offset-fixed-hardware/delayed.mov",
+        "avfoundation",
+        "--steady"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "e54524c4d95b4adc89909805b5881c3debe8767ce85796746e4caf0c4f4b6007",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.75,
+        "received_media_end": 22.05,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 169,
+        "missing_history_snapshots": 1,
+        "unique_frames": 213,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 85,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 213,
+        "tolerance_db": 0.05,
+        "reference_start": 0.75,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 168,
+            "minimum": 2.886950875,
+            "median": 3.757594917999999,
+            "maximum": 3.765711918000001
+          },
+          "audio-pts": {
+            "count": 168,
+            "minimum": 2.8584724589999997,
+            "median": 3.504992333999999,
+            "maximum": 3.7568552509999993
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 168,
+          "minimum": 0.0002590000000000092,
+          "median": 0.0006900000000005235,
+          "maximum": 0.0007669999999997401
+        },
+        "presentation_clock_selected": false
+      },
+      "capture_file": "delayed-avfoundation-video0-stall0.jsonl.xz"
+    },
+    {
+      "case": "delayed-avfoundation-video1-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-offset-fixed-hardware/delayed.mov",
+        "avfoundation",
+        "--steady",
+        "--video"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "1112b655dfea2d593685872fd14f52c7362b418cbb665f6a58f21f1aaa33d256",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.75,
+        "received_media_end": 21.55,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 168,
+        "missing_history_snapshots": 1,
+        "unique_frames": 208,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 80,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 208,
+        "tolerance_db": 0.05,
+        "reference_start": 0.75,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 167,
+            "minimum": 1.9699999999999998,
+            "median": 3.4899999999999984,
+            "maximum": 3.75
+          },
+          "audio-pts": {
+            "count": 160,
+            "minimum": 2.868406,
+            "median": 3.5135355419999996,
+            "maximum": 3.757761625
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 167,
+          "minimum": 0.000150000000000039,
+          "median": 0.0006649999999979173,
+          "maximum": 0.0007799999999988927
+        },
+        "presentation_clock_selected": false
+      },
+      "capture_file": "delayed-avfoundation-video1-stall0.jsonl.xz"
+    },
+    {
+      "case": "aac-avfoundation-video0-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/aac.mov",
+        "avfoundation",
+        "--steady"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "a7ccc74956144b5f86311bc45ed370d5557cd781c5ccf49e759c81334c824cf9",
+      "passed": false,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 169,
+        "missing_history_snapshots": 1,
+        "unique_frames": 213,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 85,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 213,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 168,
+            "minimum": 2.8859162090000003,
+            "median": 3.7574398349999996,
+            "maximum": 3.765766334000002
+          },
+          "audio-pts": {
+            "count": 168,
+            "minimum": 2.863050834,
+            "median": 3.5088187929999997,
+            "maximum": 3.7594717510000013
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 168,
+          "minimum": 0.0002510000000000012,
+          "median": 0.000693000000001831,
+          "maximum": 0.0007699999999992713
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": false,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": false,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.021333,
+        "received_media_end": 21.321333,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "aac-avfoundation-video0-stall0.jsonl.xz"
+    },
+    {
+      "case": "aac-avfoundation-video1-stall0",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/aac.mov",
+        "avfoundation",
+        "--steady",
+        "--video"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "9980dfef4e1f154dc2fd31bddc6050a7c1426a578a4f1df9861977a43815b9fd",
+      "passed": false,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 169,
+        "missing_history_snapshots": 1,
+        "unique_frames": 213,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 85,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 213,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 168,
+            "minimum": 2.841333,
+            "median": 3.481333000000001,
+            "maximum": 3.741333000000001
+          },
+          "audio-pts": {
+            "count": 168,
+            "minimum": 2.8627170840000002,
+            "median": 3.5057237920000013,
+            "maximum": 3.7556966679999997
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 168,
+          "minimum": 0.0002489999999999992,
+          "median": 0.0006789999999998741,
+          "maximum": 0.0008049999999997226
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": false,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": false,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.021333,
+        "received_media_end": 21.321333,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "aac-avfoundation-video1-stall0.jsonl.xz"
+    },
+    {
+      "case": "lossless-avfoundation-video0-stall4",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "avfoundation",
+        "--steady",
+        "--short-stall"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "e2d0062ca37b98e27095b8e717d335b680ea292e6c1db486d518ed65179040af",
+      "passed": true,
+      "expected_missing_coverage": false,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 132,
+        "missing_history_snapshots": 1,
+        "unique_frames": 213,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 85,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 213,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 131,
+            "minimum": 2.882921042,
+            "median": 3.754764292999999,
+            "maximum": 3.763811709
+          },
+          "audio-pts": {
+            "count": 131,
+            "minimum": 2.862418709,
+            "median": 3.5049661679999993,
+            "maximum": 3.754050501
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 131,
+          "minimum": 0.000260000000000038,
+          "median": 0.0007020000000004245,
+          "maximum": 0.0010870000000000601
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 21.3,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-avfoundation-video0-stall4.jsonl.xz"
+    },
+    {
+      "case": "lossless-avfoundation-video0-stall14",
+      "command": [
+        "/private/tmp/amc-meter-history-expanded-probe",
+        "/private/tmp/amc-meter-history-hardware-v1/lossless.mov",
+        "avfoundation",
+        "--steady",
+        "--stall"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "043f733c72b3c72609eed338fbbfabcd02cdb722319f1c0caa82e7bc9f67dbcb",
+      "passed": true,
+      "expected_missing_coverage": true,
+      "history": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 38,
+        "missing_history_snapshots": 1,
+        "unique_frames": 201,
+        "epochs": 1,
+        "invalid_time_frames": 0,
+        "actions": [
+          0
+        ],
+        "missing_actions": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "post_seek_epoch_observed": false,
+        "post_reinsert_instance_observed": false,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 85,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [
+          {
+            "instance": 1,
+            "epoch": 0,
+            "first": 54,
+            "last": 65
+          }
+        ],
+        "continuity_breaks": [],
+        "errors": []
+      },
+      "signal": {
+        "frames_checked": 201,
+        "tolerance_db": 0.05,
+        "reference_start": 0.0,
+        "impulses_covered": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "errors": []
+      },
+      "clocks": {
+        "newest_frame_start_minus_clock_seconds": {
+          "position": {
+            "count": 37,
+            "minimum": 2.885642833,
+            "median": 3.756992499999999,
+            "maximum": 3.7689657920000004
+          },
+          "audio-pts": {
+            "count": 37,
+            "minimum": 2.863667208,
+            "median": 3.492826042,
+            "maximum": 3.7511400419999994
+          }
+        },
+        "property_read_span_seconds": {
+          "count": 37,
+          "minimum": 0.0002520000000000022,
+          "median": 0.0006909999999997751,
+          "maximum": 0.0007860000000015077
+        },
+        "presentation_clock_selected": false
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": {
+          "probe_succeeded": true,
+          "sustained_media_coverage": true,
+          "final_receipt_observed": true,
+          "sample_oracle_matches": true,
+          "history_valid": true,
+          "expected_gap_behavior": true,
+          "impulses_received": true,
+          "output_confirmed": true,
+          "video_selected": true
+        },
+        "received_media_start": 0.0,
+        "received_media_end": 21.3,
+        "expected_impulses_in_received_span": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."
+      },
+      "capture_file": "lossless-avfoundation-video0-stall14.jsonl.xz"
+    }
+  ],
+  "analysis_source_sha256": "df24618f398de2f558010b9b3d136f95551540d0453ce3e2df51c24d76f9a447",
+  "benchmark_source_sha256": "928388700d41997670ae245889fcce8d4929c2ed6f3824f036f14322bc6c3e60"
+}

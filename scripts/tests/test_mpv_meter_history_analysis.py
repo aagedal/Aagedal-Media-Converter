@@ -29,6 +29,21 @@ def good():
 
 
 class MeterHistoryAnalysisTests(unittest.TestCase):
+    def test_clock_and_read_interval_validation(self):
+        for update in ({"position": True}, {"audio-pts": float("nan")},
+                       {"read-start": 1}, {"read-start": 2, "read-end": 1}):
+            self.assertTrue(MODULE.analyze([{**row(0), **update}])["errors"])
+
+    def test_gap_is_not_reported_as_continuity_break(self):
+        result = MODULE.analyze([row(0), row(0, sequence=3, value=frame(0.2))])
+        self.assertEqual(len(result["sequence_gaps"]), 1)
+        self.assertFalse(result["continuity_breaks"])
+
+    def test_reset_boundary_coverage_is_explicitly_unknown(self):
+        result = MODULE.analyze(good())
+        self.assertEqual(result["reset_boundary_coverage_unknown"],
+                         [{"instance": 1, "epoch": 1, "first_received_sequence": 4}])
+
     def test_good_reset_restart_and_duplicates(self):
         result = MODULE.analyze(good())
         self.assertTrue(result["observed_history_complete"])

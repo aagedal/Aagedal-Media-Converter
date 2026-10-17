@@ -29,6 +29,13 @@ def analyze(rows):
                 raise ValueError("invalid capture row/action")
             action = row["action"]
             actions.add(action)
+            for name in ("position", "audio-pts"):
+                if row.get(name) is not None and not finite(row[name]):
+                    raise ValueError("invalid player clock " + name)
+            if "read-start" in row or "read-end" in row:
+                start, end = row.get("read-start"), row.get("read-end")
+                if not finite(start) or not finite(end) or start < 0 or end < start:
+                    raise ValueError("invalid property read interval")
             if "receipt" in row:
                 receipt = row["receipt"]
                 if not finite(receipt) or receipt < 0 or (last_receipt is not None and receipt < last_receipt):
@@ -148,7 +155,8 @@ def analyze(rows):
             if previous_sequence is not None and sequence != previous_sequence + 1:
                 gaps.append({"instance": instance, "epoch": epoch,
                              "first": previous_sequence + 1, "last": sequence - 1})
-            if previous_frame and previous_frame["valid-time"] and frame["valid-time"]:
+            if (previous_frame and sequence == previous_sequence + 1 and
+                    previous_frame["valid-time"] and frame["valid-time"]):
                 tolerance = 2e-6 + 0.5 / frame["effective-rate"]
                 if (abs(frame["start"] - previous_frame["end"]) > tolerance or
                         frame["sample-rate"] != previous_frame["sample-rate"] or
@@ -161,7 +169,10 @@ def analyze(rows):
     missing_actions = sorted(set(range(6)) - actions)
     complete = bool(seen) and not (errors or missing or invalid or gaps or breaks or missing_actions or output_unconfirmed or
                                    any(c["rejected"] for c in counters.values())) and observed_seek and observed_restart
-    return {"alignment_qualified": False, "observed_history_complete": complete,
+    uncertain = [{"instance": instance, "epoch": epoch,
+                  "first_received_sequence": min(state["frames"], default=None)}
+                 for (instance, epoch), state in sorted(epochs.items()) if epoch != 0]
+    return {"alignment_qualified": False, "reset_boundary_coverage_unknown": uncertain, "observed_history_complete": complete,
             "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
             "snapshots": snapshots, "missing_history_snapshots": missing,
             "unique_frames": len(seen), "epochs": len(epochs), "invalid_time_frames": invalid,

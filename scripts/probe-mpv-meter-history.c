@@ -30,9 +30,27 @@ static void add_meter(mpv_handle *mpv)
 
 int main(int argc, char **argv)
 {
-    if ((argc != 3 && argc != 4) ||
+    if (argc < 3 ||
         (strcmp(argv[2], "null") && strcmp(argv[2], "coreaudio") && strcmp(argv[2], "avfoundation"))) {
-        fprintf(stderr, "usage: probe MEDIA {null|coreaudio|avfoundation} [SECOND_AUDIO_ID]\n");
+        fprintf(stderr, "usage: probe MEDIA {null|coreaudio|avfoundation} [SECOND_AUDIO_ID] [--video] [--steady] [--stall|--short-stall]\n");
+        return 2;
+    }
+    int video = 0, steady = 0, stall = 0;
+    const char *second_audio = NULL;
+    for (int i = 3; i < argc; i++) {
+        if (!strcmp(argv[i], "--video")) video = 1;
+        else if (!strcmp(argv[i], "--steady")) steady = 1;
+        else if (!strcmp(argv[i], "--stall")) stall = 14;
+        else if (!strcmp(argv[i], "--short-stall")) stall = 4;
+        else if (!second_audio && strspn(argv[i], "0123456789") == strlen(argv[i]) && argv[i][0])
+            second_audio = argv[i];
+        else {
+            fprintf(stderr, "Unknown argument: %s\n", argv[i]);
+            return 2;
+        }
+    }
+    if (stall && !steady) {
+        fprintf(stderr, "--stall requires --steady to avoid hiding lifecycle actions\n");
         return 2;
     }
     mpv_handle *mpv = mpv_create();
@@ -40,7 +58,9 @@ int main(int argc, char **argv)
         return 1;
     checked(mpv_set_option_string(mpv, "config", "no"));
     checked(mpv_set_option_string(mpv, "ao", argv[2]));
-    checked(mpv_set_option_string(mpv, "vid", "no"));
+    checked(mpv_set_option_string(mpv, "vid", video ? "auto" : "no"));
+    // Decode and synchronize video without creating a presentation window.
+    checked(mpv_set_option_string(mpv, "vo", "null"));
     checked(mpv_set_option_string(mpv, "volume", "0"));
     checked(mpv_set_option_string(mpv, "keep-open", "yes"));
     checked(mpv_set_option_string(mpv, "terminal", "no"));
@@ -49,8 +69,8 @@ int main(int argc, char **argv)
     const char *load[] = {"loadfile", argv[1], NULL};
     checked(mpv_command(mpv, load));
     double beginning = monotonic_seconds(), poll = 0;
-    int action = 0, seen_history = 0, seen_requested_output = 0;
-    while (monotonic_seconds() - beginning < 12) {
+    int action = 0, seen_history = 0, seen_requested_output = 0, seen_video = 0;
+    while (monotonic_seconds() - beginning < (steady ? 18 : 12)) {
         mpv_event *event = mpv_wait_event(mpv, 0.01);
         if (event->event_id == MPV_EVENT_SHUTDOWN)
             break;
@@ -63,7 +83,10 @@ int main(int argc, char **argv)
             }
         }
         double elapsed = monotonic_seconds() - beginning;
-        if (action == 0 && elapsed > 2) {
+        if (steady) {
+            // Continue draining events while deliberately withholding metadata reads.
+            if (stall && elapsed > 2 && elapsed < 2 + stall) continue;
+        } else if (action == 0 && elapsed > 2) {
             checked(mpv_set_property_string(mpv, "pause", "yes"));
             action++;
         } else if (action == 1 && elapsed > 2.5) {
@@ -81,13 +104,14 @@ int main(int argc, char **argv)
             checked(mpv_command(mpv, remove));
             add_meter(mpv);
             action++;
-        } else if (argc == 4 && action == 5 && elapsed > 10) {
-            checked(mpv_set_property_string(mpv, "aid", argv[3]));
+        } else if (second_audio && action == 5 && elapsed > 10) {
+            checked(mpv_set_property_string(mpv, "aid", second_audio));
             action++;
         }
         if (elapsed < poll)
             continue;
         poll = elapsed + 0.1;
+        double read_start = monotonic_seconds() - beginning;
         double position = 0, audio_pts = 0, speed = 0;
         int paused = 0, seeking = 0;
         int64_t audio_id = 0;
@@ -110,6 +134,9 @@ int main(int argc, char **argv)
         if (output_confirmed)
             seen_requested_output = 1;
         mpv_free(output);
+        int64_t video_id = 0;
+        int have_video = mpv_get_property(mpv, "vid", MPV_FORMAT_INT64, &video_id) >= 0;
+        if (have_video && video_id > 0) seen_video = 1;
         mpv_node metadata;
         int result = mpv_get_property(mpv, "af-metadata/amc_timing", MPV_FORMAT_NODE, &metadata);
         const char *history = NULL;
@@ -123,20 +150,25 @@ int main(int argc, char **argv)
         if (history)
             seen_history = 1;
         printf("{\"receipt\":%.9f,\"action\":%d,\"position\":", elapsed, action);
-        if (have_position) printf("%.9f", position); else printf("null");
+        if (have_position && isfinite(position)) printf("%.9f", position); else printf("null");
         printf(",\"audio-pts\":");
-        if (have_audio_pts) printf("%.9f", audio_pts); else printf("null");
+        if (have_audio_pts && isfinite(audio_pts)) printf("%.9f", audio_pts); else printf("null");
         printf(",\"requested-output\":\"%s\",\"output-confirmed\":%s,\"speed\":", argv[2], output_confirmed ? "true" : "false");
         if (have_speed && isfinite(speed)) printf("%.9f", speed); else printf("null");
         printf(",\"paused\":%s,\"seeking\":%s,\"audio-id\":", have_paused ? (paused ? "true" : "false") : "null", have_seeking ? (seeking ? "true" : "false") : "null");
         if (have_audio_id) printf("%lld", (long long)audio_id); else printf("null");
+        printf(",\"scenario\":\"%s\",\"poll-stall\":%s,\"video-enabled\":%s,\"video-id\":",
+               steady ? "steady" : "lifecycle", stall ? "true" : "false", video ? "true" : "false");
+        if (have_video) printf("%lld", (long long)video_id); else printf("null");
+        printf(",\"read-start\":%.9f,\"read-end\":%.9f,\"stall-seconds\":%d",
+               read_start, monotonic_seconds() - beginning, stall);
         printf(",\"history\":%s}\n", history ? history : "null");
         fflush(stdout);
         if (result >= 0)
             mpv_free_node_contents(&metadata);
     }
     mpv_terminate_destroy(mpv);
-    if (!seen_history || !seen_requested_output || action != (argc == 4 ? 6 : 5)) {
+    if (!seen_history || !seen_requested_output || (!steady && action != (second_audio ? 6 : 5)) || (video && !seen_video)) {
         fprintf(stderr, "Incomplete capture: history=%d, requested-output=%d, actions=%d\n",
                 seen_history, seen_requested_output, action);
         return 1;
