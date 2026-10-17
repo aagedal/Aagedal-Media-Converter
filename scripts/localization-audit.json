@@ -226,7 +226,10 @@
       "Right surround",
       "Choose a different mono track for each channel.",
       "Scans the complete selected source presentation. Silence requires every channel to stay below the sample threshold for the minimum duration. Volume and mute do not affect detection.",
-      "Grouped analysis requires mono tracks with matching sample rates and start times."
+      "Grouped analysis requires mono tracks with matching sample rates and start times.",
+      "Validating grouped audio…",
+      "Grouped peak analysis requires mono tracks with matching sample rates, start times, and decoded lengths, without timestamp discontinuities (within 1 ms container timestamp precision).",
+      "Channel"
     ],
     "translated-app-intent": [
       "Animated Still",

@@ -332,6 +332,7 @@
 		A91000000000000000000003 /* AudioPeakAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000004 /* AudioPeakAnalysisView.swift */; };
 		4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */; };
 		A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000006 /* AudioPeakAnalysisTests.swift */; };
+		A91000000000000000000007 /* GroupedAudioPeakAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000008 /* GroupedAudioPeakAnalysisTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -737,6 +738,7 @@
 		A91000000000000000000004 /* AudioPeakAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisView.swift; sourceTree = "<group>"; };
 		2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisTests.swift; sourceTree = "<group>"; };
 		A91000000000000000000006 /* AudioPeakAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisTests.swift; sourceTree = "<group>"; };
+		A91000000000000000000008 /* GroupedAudioPeakAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupedAudioPeakAnalysisTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1170,6 +1172,7 @@
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
 				2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */,
 				A91000000000000000000006 /* AudioPeakAnalysisTests.swift */,
+				A91000000000000000000008 /* GroupedAudioPeakAnalysisTests.swift */,
 				F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */,
 				575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */,
 				967DA4B812AC4F7996A1822B /* UploadProfileMigrationTests.swift */,
@@ -2014,6 +2017,7 @@
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
 				4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */,
 				A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */,
+				A91000000000000000000007 /* GroupedAudioPeakAnalysisTests.swift in Sources */,
 				D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */,
 				5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */,
 				8D2E74A0058A4C479F145B0F /* UploadProfileMigrationTests.swift in Sources */,

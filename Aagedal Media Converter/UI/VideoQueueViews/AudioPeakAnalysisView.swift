@@ -18,7 +18,11 @@ struct AudioPeakAnalysisView: View {
     let tracks: [AudioTrackInfo]
     @Environment(\.dismiss) private var dismiss
     @StateObject private var player = MPVPlayer()
-    @State private var selectedTrack: Int
+    @State private var configuration: AudioAnalysisConfiguration
+    @State private var previewReady = false
+    @State private var previewFailed = false
+    @State private var groupValidated = false
+    @State private var groupingError: String?
     @State private var threshold = -1.0
     @State private var imbalanceThreshold = 6.0
     @State private var result: AudioPeakAnalysisResult?
@@ -32,9 +36,16 @@ struct AudioPeakAnalysisView: View {
     init(file: URL, tracks: [AudioTrackInfo]) {
         self.file = file
         self.tracks = tracks
-        _selectedTrack = State(initialValue: tracks.first?.streamIndex ?? 0)
+        let mono = tracks.filter { $0.channels == 1 }.map(\.streamIndex)
+        _configuration = State(initialValue: AudioAnalysisConfiguration(
+            trackIndex: tracks.first?.streamIndex ?? 0,
+            monoIndices: (0..<6).map { mono.indices.contains($0) ? mono[$0] : (mono.first ?? 0) }
+        ))
     }
 
+    private var monoTracks: [AudioTrackInfo] { tracks.filter { $0.channels == 1 } }
+    private var presentation: LoudnessPresentation { configuration.presentation }
+    private var validPresentation: Bool { presentation.isValid(for: tracks) }
     private var isAnalyzing: Bool { analysisID != nil }
     private var timelineDuration: Double {
         max(0.1, player.duration.isFinite ? player.duration : 0, result?.duration ?? 0)
@@ -56,7 +67,7 @@ struct AudioPeakAnalysisView: View {
                     settings
                     HStack {
                         Button("Scan Audio") { analyze() }
-                            .disabled(isAnalyzing || tracks.isEmpty)
+                            .disabled(isAnalyzing || !validPresentation || !groupValidated)
                             .accessibilityIdentifier("analysis.peaks.run")
                         if isAnalyzing {
                             ProgressView().controlSize(.small)
@@ -67,8 +78,20 @@ struct AudioPeakAnalysisView: View {
                             .disabled(isAnalyzing || result == nil)
                             .accessibilityIdentifier("analysis.peaks.export")
                     }
-                    Text("Scans the complete selected track in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements.")
+                    Text("Scans the complete selected source presentation in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements.")
                         .font(.caption).foregroundStyle(.secondary)
+                    if configuration.kind != .track && validPresentation && !groupValidated && groupingError == nil {
+                        ProgressView("Validating grouped audio…").controlSize(.small)
+                    }
+                    if let groupingError {
+                        Text(groupingError).font(.caption).foregroundStyle(.orange)
+                            .accessibilityIdentifier("analysis.peaks.group.error")
+                    }
+                    if previewFailed {
+                        Text("Preview unavailable")
+                            .font(.caption).foregroundStyle(.orange)
+                            .accessibilityIdentifier("analysis.peaks.preview.error")
+                    }
                     if let errorMessage {
                         Text(errorMessage).font(.callout).foregroundStyle(.red)
                     }
@@ -79,7 +102,7 @@ struct AudioPeakAnalysisView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     ZStack {
                         MPVVideoView(player: player, keyHandler: { key, _, _ in
-                            guard key == " ", player.isFileLoaded else { return false }
+                            guard key == " ", previewReady else { return false }
                             player.togglePause()
                             return true
                         })
@@ -97,10 +120,10 @@ struct AudioPeakAnalysisView: View {
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         }
                         .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
-                        .disabled(!player.isFileLoaded)
+                        .disabled(!previewReady)
                         Slider(value: Binding(get: { position }, set: { seconds in seek(seconds) }), in: 0...timelineDuration)
                             .accessibilityLabel("Inspection playback position")
-                            .disabled(!player.isFileLoaded)
+                            .disabled(!previewReady)
                         Text(verbatim: time(position))
                             .font(.caption).monospacedDigit()
                             .accessibilityIdentifier("analysis.peaks.time")
@@ -125,13 +148,37 @@ struct AudioPeakAnalysisView: View {
             previewAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
             player.load(url: file)
         }
-        .onChange(of: player.isFileLoaded) { _, loaded in
-            if loaded { selectPreviewTrack() }
+        .task(id: presentation.id) {
+            groupValidated = false
+            groupingError = nil
+            guard validPresentation else { return }
+            do {
+                try await AudioPeakAnalysisService.shared.validateGroupedTracks(file: file, presentation: presentation)
+                try Task.checkCancellation()
+                groupValidated = true
+            } catch {
+                guard !Task.isCancelled else { return }
+                groupingError = error.localizedDescription
+            }
+        }
+        .task(id: "\(player.isFileLoaded)-\(presentation.id)-\(groupValidated)") {
+            previewReady = false
+            previewFailed = false
+            guard player.isFileLoaded, validPresentation, groupValidated else { return }
+            let ready = await player.selectAudioPresentation(presentation)
+            guard !Task.isCancelled else { return }
+            previewReady = ready
+            previewFailed = !ready
         }
         .onChange(of: player.timePos) { _, seconds in
             if seconds.isFinite { position = max(0, seconds) }
         }
-        .onChange(of: selectedTrack) { clearResult(); selectPreviewTrack() }
+        .onChange(of: presentation) {
+            clearResult()
+            previewReady = false
+            groupValidated = false
+            player.pause()
+        }
         .onChange(of: threshold) { clearResult() }
         .onChange(of: imbalanceThreshold) { clearResult() }
         .onDisappear {
@@ -145,12 +192,44 @@ struct AudioPeakAnalysisView: View {
 
     private var settings: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("Audio track", selection: $selectedTrack) {
-                ForEach(tracks, id: \.streamIndex) { track in
-                    Text(track.displayLabel).tag(track.streamIndex)
+            Picker("Analyze", selection: $configuration.kind) {
+                Text("Audio track").tag(AudioAnalysisConfiguration.Kind.track)
+                if monoTracks.count >= 2 {
+                    Text("Mono pair").tag(AudioAnalysisConfiguration.Kind.stereo)
+                }
+                if monoTracks.count >= 6 {
+                    Text("5.1 multi-mono").tag(AudioAnalysisConfiguration.Kind.surround)
                 }
             }
-            .accessibilityIdentifier("analysis.peaks.track")
+            .accessibilityIdentifier("analysis.peaks.kind")
+            if configuration.kind == .track {
+                Picker("Audio track", selection: $configuration.trackIndex) {
+                    ForEach(tracks, id: \.streamIndex) { track in
+                        Text(track.displayLabel).tag(track.streamIndex)
+                    }
+                }
+                .accessibilityIdentifier("analysis.peaks.track")
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading) {
+                    ForEach(Array(configuration.kind.roles.enumerated()), id: \.offset) { offset, role in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(LocalizedStringKey(role)).font(.caption).foregroundStyle(.secondary)
+                            Picker(LocalizedStringKey(role), selection: $configuration.monoIndices[offset]) {
+                                ForEach(monoTracks, id: \.streamIndex) { track in
+                                    Text(track.displayLabel).tag(track.streamIndex)
+                                }
+                            }
+                            .labelsHidden()
+                            .id("\(configuration.kind.rawValue)-\(offset)")
+                            .accessibilityIdentifier("analysis.peaks.channel.\(offset)")
+                        }
+                    }
+                }
+                if !validPresentation {
+                    Text("Choose a different mono track for each channel.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+            }
             Picker("Sample-peak threshold", selection: $threshold) {
                 ForEach([0.0, -1, -3, -6, -12, -20], id: \.self) { value in
                     Text(verbatim: "\(Int(value)) dBFS").tag(value)
@@ -179,7 +258,7 @@ struct AudioPeakAnalysisView: View {
                     }.font(.caption.bold())
                     ForEach(result.channels) { channel in
                         GridRow {
-                            Text("Channel \(channel.channel)")
+                            channelLabel(channel.channel, presentation: result.presentation)
                             Text(verbatim: level(channel.peakDBFS))
                             Text(verbatim: level(channel.rmsDBFS))
                         }.font(.caption).monospacedDigit()
@@ -205,7 +284,7 @@ struct AudioPeakAnalysisView: View {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(result.intervals.enumerated()), id: \.element.id) { index, interval in
                         HStack {
-                            Text("Channel \(interval.channel)")
+                            channelLabel(interval.channel, presentation: result.presentation)
                             Button { seek(interval.start) } label: {
                                 Text(verbatim: time(interval.start))
                             }
@@ -220,11 +299,23 @@ struct AudioPeakAnalysisView: View {
                             Text(verbatim: level(interval.peakDBFS))
                         }
                         .font(.caption).monospacedDigit()
-                        .disabled(!player.isFileLoaded)
+                        .disabled(!previewReady)
                     }
                 }
             }
         }
+        .accessibilityIdentifier("analysis.peaks.results")
+    }
+
+    private func channelLabel(_ channel: Int, presentation: LoudnessPresentation?) -> Text {
+        let roles: [String]
+        switch presentation {
+        case .stereo: roles = ["L", "R"]
+        case .surround51: roles = ["L", "R", "C", "LFE", "Ls", "Rs"]
+        default: roles = []
+        }
+        if roles.indices.contains(channel - 1) { return Text(verbatim: roles[channel - 1]) }
+        return Text("Channel \(channel)")
     }
 
     private func level(_ value: Double) -> String {
@@ -243,7 +334,7 @@ struct AudioPeakAnalysisView: View {
         .chartXScale(domain: 0...timelineDuration)
         .chartYScale(domain: 0.5...Double(max(1, result.channels.count)) + 0.5)
         .chartYAxis { AxisMarks(values: result.channels.map(\.channel)) }
-        .chartYAxisLabel("Channel")
+        .chartYAxisLabel(String(localized: "Channel"))
         .chartXAxisLabel("Seconds")
         .chartOverlay { proxy in
             GeometryReader { geometry in
@@ -255,19 +346,12 @@ struct AudioPeakAnalysisView: View {
                     }
             }
         }
-        .frame(height: 100)
+        .frame(height: result.channels.count > 2 ? 160 : 100)
         .accessibilityLabel("Peak timeline")
     }
 
-    private func selectPreviewTrack() {
-        let ids = player.audioTrackIndexes
-        player.pause()
-        // Both track inventories use audio-relative container order.
-        if ids.indices.contains(selectedTrack) { player.currentAudioTrackIndex = ids[selectedTrack] }
-    }
-
     private func seek(_ seconds: Double) {
-        guard seconds.isFinite, player.isFileLoaded else { return }
+        guard seconds.isFinite, previewReady else { return }
         // Match MPV's final playable position when an interval extends to EOF.
         // Reported interval boundaries still retain the full measured duration.
         let lastPlayableTime = player.duration > 0 ? max(0, player.duration - 0.05) : timelineDuration
@@ -284,7 +368,6 @@ struct AudioPeakAnalysisView: View {
 
     private func exportJSON() {
         guard let result, let timestamp = analysisTimestamp, !isAnalyzing else { return }
-        let trackIndex = selectedTrack
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_audio_peaks.json"
@@ -293,7 +376,7 @@ struct AudioPeakAnalysisView: View {
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         do {
             try AnalyticsExporter.exportAudioPeakJSON(result: result, sourceFile: file,
-                                                       trackIndex: trackIndex, timestamp: timestamp, to: url)
+                                                       timestamp: timestamp, to: url)
             errorMessage = nil
         } catch {
             errorMessage = String(localized: "Export Failed") + ": " + error.localizedDescription
@@ -301,15 +384,15 @@ struct AudioPeakAnalysisView: View {
     }
 
     private func analyze() {
-        guard !isAnalyzing else { return }
+        guard !isAnalyzing, validPresentation, groupValidated else { return }
         clearResult()
         let id = UUID()
         analysisID = id
-        let trackIndex = selectedTrack
+        let presentation = presentation
         let settings = AudioPeakSettings(thresholdDBFS: threshold, imbalanceThresholdDB: imbalanceThreshold)
         analysisTask = Task { @MainActor in
             do {
-                let measured = try await AudioPeakAnalysisService.shared.analyze(file: file, trackIndex: trackIndex, settings: settings)
+                let measured = try await AudioPeakAnalysisService.shared.analyze(file: file, presentation: presentation, settings: settings)
                 try Task.checkCancellation()
                 if analysisID == id {
                     result = measured

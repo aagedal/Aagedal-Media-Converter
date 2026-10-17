@@ -151,12 +151,12 @@ final class SilenceAnalysisTests: XCTestCase {
 
     func testGraphRetainsFileTimelineAndCombinedChannelSemantics() {
         let graph = SilenceAnalysisService.filterGraph(for: .stereo(left: 3, right: 1), settings: .init())
-        XCTAssertEqual(graph, "[0:a:3]asetnsamples=n=4800:p=0[group_input_0];"
-                       + "[0:a:1]asetnsamples=n=4800:p=0[group_input_1];"
-                       + "[group_input_0][group_input_1]join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR,"
+        XCTAssertEqual(graph, "[0:a:3]channelmap=map=0-FC:channel_layout=mono,asetnsamples=n=4800:p=0[group_input_0];"
+                       + "[0:a:1]channelmap=map=0-FC:channel_layout=mono,asetnsamples=n=4800:p=0[group_input_1];"
+                       + "[group_input_0][group_input_1]amerge=inputs=2,channelmap=map=0-FL|1-FR:channel_layout=stereo,"
                        + "asetpts=PTS,silencedetect=noise=-50.0dB:duration=1.0:mono=0[silence]")
         XCTAssertTrue(SilenceAnalysisService.filterGraph(for: .surround51([0, 1, 2, 5, 3, 4]), settings: .init())
-            .contains("map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR"))
+            .contains("map=0-FL|1-FR|2-FC|3-LFE|4-SL|5-SR"))
     }
 
     func testServiceRejectsFailedProcessEvenWithCompleteReport() async throws {
@@ -312,6 +312,36 @@ final class SilenceAnalysisTests: XCTestCase {
         let interval = try XCTUnwrap(result.intervals.first)
         XCTAssertEqual(interval.start, 2, accuracy: 0.002)
         XCTAssertEqual(interval.end, 3, accuracy: 0.002)
+    }
+
+    func testRepeatedSixTrackFLACScansPreserveEverySilenceIntervalThroughEOF() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("silence-eof-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let amplitudes = [0.8, 0.08, 0.04, 0.02, 0.01, 0.005]
+        let inputs = amplitudes.enumerated().flatMap { index, amplitude in
+            ["-f", "lavfi", "-i",
+             "aevalsrc=if(between(t\\,1\\,2)\\,\(amplitude)\\,\(index == 0 ? 0.01 : 0.001))*sin(2*PI*\(440 + index * 100)*t):s=48000:d=6"]
+        }
+        try await generate(ffmpeg, arguments: inputs
+            + amplitudes.indices.flatMap { ["-map", "\($0):a"] }
+            + ["-c:a", "flac", file.path])
+        let service = SilenceAnalysisService(ffmpegPathProvider: { ffmpeg })
+        let presentation = LoudnessPresentation.surround51([0, 1, 2, 5, 3, 4])
+        // The former join graph intermittently reported EOF at 5.9 seconds.
+        for _ in 0..<20 {
+            let result = try await service.analyze(file: file, presentation: presentation,
+                                                 settings: .init(thresholdDBFS: -30, minimumDuration: 0.5))
+            XCTAssertEqual(result.presentation, presentation)
+            XCTAssertEqual(result.intervals.count, 2)
+            let first = try XCTUnwrap(result.intervals.first)
+            XCTAssertEqual(first.start, 0, accuracy: 0.001)
+            XCTAssertEqual(first.end, 1, accuracy: 0.001)
+            let last = try XCTUnwrap(result.intervals.last)
+            XCTAssertEqual(last.start, 2, accuracy: 0.001)
+            XCTAssertEqual(last.end, 6, accuracy: 0.000001)
+            XCTAssertEqual(last.duration, 4, accuracy: 0.001)
+        }
     }
 
     private func complete(_ collector: SilenceLogCollector) {

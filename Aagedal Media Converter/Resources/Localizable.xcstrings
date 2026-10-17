@@ -1691,67 +1691,67 @@
         }
       }
     },
-    "Scans the complete selected track in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements." : {
+    "Scans the complete selected source presentation in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scans the complete selected track in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements."
+            "value" : "Scans the complete selected source presentation in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements."
           }
         },
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Skanner hele det valgte sporet i korte analysevinduer. Markører viser vinduer med sampletopper i kilden som er på eller over terskelen; dette er ikke målinger av sann topp."
+            "value" : "Skanner hele den valgte lydpresentasjonen i korte analysevinduer. Markører viser vinduer med sampletopper i kilden som er på eller over terskelen; dette er ikke målinger av sann topp."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Scannt den gesamten ausgewählten Track in kurzen Analysefenstern. Markierungen zeigen Fenster mit Sample-Peaks der Quelle an oder über der Schwelle; es handelt sich nicht um True-Peak-Messungen."
+            "value" : "Scannt die gesamte ausgewählte Quellpräsentation in kurzen Analysefenstern. Markierungen zeigen Fenster mit Sample-Peaks der Quelle an oder über der Schwelle; es handelt sich nicht um True-Peak-Messungen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Analiza toda la pista seleccionada en ventanas de análisis cortas. Los marcadores indican ventanas con picos de muestra de origen iguales o superiores al umbral; no son mediciones de pico verdadero."
+            "value" : "Analiza toda la presentación de origen seleccionada en ventanas de análisis cortas. Los marcadores indican ventanas con picos de muestra de origen iguales o superiores al umbral; no son mediciones de pico verdadero."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Analyse toute la piste sélectionnée par courtes fenêtres d’analyse. Les marqueurs indiquent les fenêtres contenant des crêtes d’échantillon source égales ou supérieures au seuil ; ce ne sont pas des mesures de crête vraie."
+            "value" : "Analyse toute la présentation source sélectionnée par courtes fenêtres d’analyse. Les marqueurs indiquent les fenêtres contenant des crêtes d’échantillon source égales ou supérieures au seuil ; ce ne sont pas des mesures de crête vraie."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Analizza l’intera traccia selezionata in brevi finestre di analisi. I marcatori indicano le finestre con picchi di campione della sorgente pari o superiori alla soglia; non sono misurazioni true peak."
+            "value" : "Analizza l’intera presentazione sorgente selezionata in brevi finestre di analisi. I marcatori indicano le finestre con picchi di campione della sorgente pari o superiori alla soglia; non sono misurazioni true peak."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "選択したトラック全体を短い解析ウィンドウでスキャンします。マーカーは、しきい値以上のソースサンプルピークを含むウィンドウを示します。トゥルーピークの測定値ではありません。"
+            "value" : "選択したソースプレゼンテーション全体を短い解析ウィンドウでスキャンします。マーカーは、しきい値以上のソースサンプルピークを含むウィンドウを示します。トゥルーピークの測定値ではありません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "선택한 전체 트랙을 짧은 분석 구간으로 스캔합니다. 마커는 임계값 이상의 소스 샘플 피크가 포함된 구간을 나타내며, 트루 피크 측정값이 아닙니다."
+            "value" : "선택한 전체 소스 프레젠테이션을 짧은 분석 구간으로 스캔합니다. 마커는 임계값 이상의 소스 샘플 피크가 포함된 구간을 나타내며, 트루 피크 측정값이 아닙니다."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Analisa toda a faixa selecionada em janelas curtas de análise. Os marcadores indicam janelas com picos de amostra da origem iguais ou superiores ao limite; não são medições de pico verdadeiro."
+            "value" : "Analisa toda a apresentação de origem selecionada em janelas curtas de análise. Os marcadores indicam janelas com picos de amostra da origem iguais ou superiores ao limite; não são medições de pico verdadeiro."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "以短分析窗口扫描整条所选音轨。标记表示包含达到或超过阈值的源采样峰值的窗口，并非真峰值测量结果。"
+            "value" : "以短分析窗口扫描完整的所选源音频呈现。标记表示包含达到或超过阈值的源采样峰值的窗口，并非真峰值测量结果。"
           }
         }
       }
@@ -3705,8 +3705,7 @@
           }
         }
       }
-    }
-,
+    },
     "Start Conversion" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -111830,6 +111829,201 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "仅将此应用创建的已完成文件移到废纸篓。较旧且未标记的文件将保留。清理仅适用于默认输出文件夹。"
+          }
+        }
+      }
+    },
+    "Validating grouped audio…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Validating grouped audio…"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontrollerer gruppert lyd…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gruppiertes Audio wird geprüft…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Validando audio agrupado…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Validation de l’audio groupé…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Verifica dell’audio raggruppato…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "グループ化した音声を検証中…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "그룹화된 오디오 검증 중…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Validando áudio agrupado…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在验证分组音频…"
+          }
+        }
+      }
+    },
+    "Grouped peak analysis requires mono tracks with matching sample rates, start times, and decoded lengths, without timestamp discontinuities (within 1 ms container timestamp precision)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grouped peak analysis requires mono tracks with matching sample rates, start times, and decoded lengths, without timestamp discontinuities (within 1 ms container timestamp precision)."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppert toppanalyse krever monospor med samme samplingsfrekvens, starttid og antall dekodede sampler, uten brudd i tidsstemplene (innenfor beholderens tidsstempelpresisjon på 1 ms)."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Die gruppierte Spitzenanalyse erfordert Monospuren mit gleichen Abtastraten, Startzeiten und dekodierten Längen, ohne Zeitstempelsprünge (bei einer Container-Zeitstempelgenauigkeit von 1 ms)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El análisis de picos agrupado requiere pistas mono con frecuencias de muestreo, inicios y longitudes decodificadas iguales, sin discontinuidades de marcas de tiempo (dentro de la precisión de 1 ms del contenedor)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "L’analyse groupée des crêtes nécessite des pistes mono aux fréquences, débuts et longueurs décodées identiques, sans discontinuités temporelles (dans la précision de 1 ms du conteneur)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "L’analisi dei picchi raggruppati richiede tracce mono con frequenze di campionamento, inizi e lunghezze decodificate uguali, senza discontinuità temporali (entro la precisione di 1 ms del contenitore)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "グループ化したピーク解析には、サンプルレート、開始時刻、デコード後の長さが一致し、タイムスタンプに不連続がないモノラルトラックが必要です（コンテナのタイムスタンプ精度1 ms以内）。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "그룹 피크 분석에는 샘플 레이트, 시작 시간 및 디코딩 길이가 같고 타임스탬프 불연속이 없는 모노 트랙이 필요합니다(컨테이너 타임스탬프 정밀도 1 ms 이내)."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A análise de picos agrupados requer faixas mono com taxas de amostragem, inícios e comprimentos decodificados iguais, sem descontinuidades de tempo (dentro da precisão de 1 ms do contêiner)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "分组峰值分析要求单声道音轨的采样率、起始时间和解码长度相同，且时间戳无不连续（在容器 1 毫秒的时间戳精度范围内）。"
+          }
+        }
+      }
+    },
+    "Channel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Channel"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kanal"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kanal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Canal"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Canal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Canale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "チャンネル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "채널"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Canal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "声道"
           }
         }
       }
