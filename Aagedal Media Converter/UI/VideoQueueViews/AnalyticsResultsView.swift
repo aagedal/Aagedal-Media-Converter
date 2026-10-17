@@ -138,7 +138,7 @@ private struct VideoAnalysisTabView: View {
 }
 
 /// One editable card describes one audio program to measure.
-private struct AudioAnalysisConfiguration: Identifiable {
+struct AudioAnalysisConfiguration: Identifiable {
     enum Kind: String, CaseIterable {
         case track, stereo, surround
 
@@ -187,6 +187,8 @@ struct LoudnessAnalysisView: View {
     @State private var errorMessage: String?
     @State private var analysisTask: Task<Void, Never>?
     @State private var analysisID: UUID?
+    @State private var silenceRequest: SilenceAnalysisRequest?
+    @State private var peakRequest: AudioPeakAnalysisRequest?
 
     private var monoTracks: [AudioTrackInfo] { tracks.filter { $0.channels == 1 } }
     private var file: URL { selectedFileID == "output" ? outputFile ?? sourceFile : sourceFile }
@@ -216,6 +218,16 @@ struct LoudnessAnalysisView: View {
                         Button(isAnalyzing ? "Analyzing…" : "Analyze Audio") { analyze() }
                             .disabled(isAnalyzing || !canAnalyze)
                             .accessibilityIdentifier("analysis.audio.run")
+                        Button("Detect Silence") {
+                            silenceRequest = SilenceAnalysisRequest(file: file, tracks: tracks)
+                        }
+                            .disabled(isAnalyzing)
+                            .accessibilityIdentifier("analysis.audio.silence")
+                        Button("Peaks and Channel Balance") {
+                            peakRequest = AudioPeakAnalysisRequest(file: file, tracks: tracks)
+                        }
+                        .disabled(isAnalyzing)
+                        .accessibilityIdentifier("analysis.audio.peaks")
                         if isAnalyzing {
                             Button("Cancel") { analysisTask?.cancel() }
                             ProgressView().controlSize(.small)
@@ -294,6 +306,12 @@ struct LoudnessAnalysisView: View {
         .onDisappear {
             analysisID = nil
             analysisTask?.cancel()
+        }
+        .sheet(item: $peakRequest) { request in
+            AudioPeakAnalysisView(file: request.file, tracks: request.tracks)
+        }
+        .sheet(item: $silenceRequest) { request in
+            SilenceAnalysisView(file: request.file, tracks: request.tracks)
         }
     }
 

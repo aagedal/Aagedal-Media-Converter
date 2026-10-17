@@ -1,10 +1,167 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-17
+
+## Grouped peak/channel-balance continuation — 2026-10-17
+
+Owner: Codex. Peaks and Channel Balance now supports custom mono pairs and
+5.1 multi-mono roles, grouped MPV audition and complete schema-v2 JSON reports.
+Single-track exports retain schema v1. Reports capture source indices and role
+order; editing roles, presentations or thresholds clears prior measurements.
+Full streamed validation requires mono tracks with matching rates, exact starts
+and decoded sample counts, and rejects timestamp discontinuities beyond a 1 ms
+rounding tolerance. Grouped audition waits for validation, and scanning repeats it
+before combining channels. Combined output must preserve every decoded sample and its EOF.
+Repeated time-varying inputs exposed intermittent EOF loss in FFmpeg's `join`;
+explicit mono concatenation and role mapping fix it in both peak and existing
+grouped silence scans. The [audio roadmap](docs/AUDIO-METERING-PLAN.md) and
+[report format](docs/audio-peak-report-format.md) record timing, latency and
+measurement semantics. Separate EBU R128 loudness behavior is unchanged.
+No dependencies, bundled binaries or licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds, all 46 focused peak/silence scanner/report
+checks pass, and the final full unit suite executes 1,387 tests with zero failures and
+one intentional opt-in benchmark skip. Both final grouped English/Norwegian UI checks pass,
+including stereo/5.1 JSON save/readback; the existing single-track UI flow also
+passes. Six captures were visually inspected, with readable controls and scrolling
+intervals. A transient paused MPEG-4 artifact after regrouping clears on interval
+navigation. Seven localization script tests and the 1,890-entry catalog audit pass.
+Release/device and sandbox qualification remain open; translations outside
+English/Norwegian await review.
+
+## Grouped silence analysis continuation — 2026-10-16
+
+Owner: Codex. Detect Silence now supports custom mono pairs and 5.1 multi-mono
+channel assignments, grouped MPV audition and full JSON export. Roles use distinct
+mono tracks; changing them clears prior results. Explicit channel routing preserves
+source gains before device conversion, and single-track/reload cleanup restores
+normal preview selection. A cancellable first-frame preflight rejects differing
+sample rates or unequal/unknown decoded starts before scanning or grouped playback. Continuous synchronized
+tracks are the supported grouping case; unequal durations and discontinuities remain
+unqualified. Separate loudness analysis and its EBU R128 weighting remain unchanged.
+See the [audio roadmap](docs/AUDIO-METERING-PLAN.md). No dependencies, binaries or
+licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds; all 1,372 unit tests pass with
+one intentional opt-in benchmark skip and zero failures. All 43 focused
+scanner/player checks and three fresh-build UI checks pass, including bilingual
+group selection/navigation, duplicate rejection, JSON save/readback and existing
+single-track export/settings behavior. Four bilingual screenshots were visually
+inspected. Seven localization script tests, the 1,887-entry catalog audit and
+whitespace check pass. Fresh build products resolved cached UI launch timeouts.
+Release/device and sandbox qualification remain open; translations outside
+English/Norwegian await review.
+
+## Audio silence-report export continuation — 2026-10-16
+
+Owner: Codex. Detect Silence now exports complete source reports as versioned JSON
+through the macOS save panel. Exports retain the analysis completion time,
+selected presentation, dBFS threshold, minimum duration and every file-relative
+interval, including empty completed reports. Explicit semantics distinguish
+source sample amplitude from RMS/LUFS/true peak and require every selected
+channel, including LFE, to remain quiet together. Grouped service reports retain
+track order/layout; grouped UI selection remains open. Separate EBU R128
+loudness behavior is unchanged.
+
+Cancelling a save preserves the report, failed saves can be retried, and changed
+tracks/settings or a new scan invalidate the previous result. Atomic writes
+retain security-scoped destination access and omit the source's absolute path.
+See the [report format](docs/audio-silence-report-format.md) and
+[audio roadmap](docs/AUDIO-METERING-PLAN.md). No dependencies, bundled binaries
+or licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds, and the full unit suite executes
+1,367 tests with no failures and one intentional opt-in benchmark skip. All 14
+silence scanner/report tests pass, including complete interval retention, track
+and grouped layout context, empty results, invalid-data rejection, repeated writes
+and destination errors. English/Norwegian UI checks pass: export is disabled
+before analysis and after changed settings, save cancellation preserves the
+report, and a real exported JSON file retains the selected track, threshold and
+2–4 second interval. Both captured screens were visually inspected. Seven
+localization script tests, the 1,876-entry catalog audit and whitespace check
+pass. Release/device qualification remains open. The current Debug and Release
+configurations disable App Sandbox; these checks do not qualify sandbox enforcement.
+
+## Audio channel-report export continuation — 2026-10-16
+
+Owner: Codex. Peaks and Channel Balance now exports complete source reports as
+versioned JSON through the macOS save panel. Reports preserve selected-track
+identity, scan completion time, thresholds, all channel levels and every peak
+interval, including those beyond the chart's display limit. Explicit semantics
+distinguish dBFS sample peaks, unweighted RMS, file-timeline offsets, digital
+silence, infinite channel difference and unavailable comparisons. Export excludes
+the source's absolute path and retains security-scoped access through atomic
+writes. Track/settings changes invalidate export; cancelled saves preserve the
+scan, and save errors allow retry.
+
+Validation: the ad-hoc-signed Debug app builds and all 1,363 unit tests pass with
+one intentional opt-in benchmark skip and no failures. English/Norwegian UI
+checks pass, including save cancellation and a real exported report readback;
+both screenshots were visually inspected. Seven localization script tests, the
+1,876-entry catalog audit and whitespace check pass. Release/device qualification
+and translations outside English/Norwegian remain unverified. Both project
+configurations currently disable App Sandbox, so the save-panel checks do not
+qualify sandbox enforcement.
+
+The [audio roadmap](docs/AUDIO-METERING-PLAN.md) records verification and remaining
+true-peak, phase/correlation, playback-alignment and report work. The
+[report format](docs/audio-peak-report-format.md) documents the version 1 schema.
+No dependencies, bundled binaries or licenses changed.
+
+## Audio peaks and channel balance continuation — 2026-10-16
+
+Owner: Codex. Audio Analysis now offers complete-track source sample-peak
+intervals, per-channel maximum sample peaks and unweighted whole-track RMS,
+configurable peak/channel-difference thresholds, and paused MPV navigation.
+Analysis preserves source-rate samples, delayed timestamps and unpadded EOF.
+Channel differences are advisory, including potentially intentional surround/LFE
+differences. The [audio roadmap](docs/AUDIO-METERING-PLAN.md) records semantics,
+validation and the remaining true-peak interval, phase and export work.
+
+Validation: Debug build passed, with 1,359 unit tests executed, one intentional
+benchmark skip and no failures. Final English/Norwegian UI checks pass and their
+screenshots were visually inspected after correcting sheet clipping. Seven
+localization script tests, the 1,875-entry localization audit and whitespace check
+pass. The audio roadmap records the combined-run accessibility failure and clean
+separate UI rerun. Release/device qualification remains unperformed; translations
+outside English/Norwegian await review. No dependencies, binaries or licenses
+changed.
+
+## Audio silence detection continuation — 2026-10-16
+
+Owner: Codex. Audio Analysis now offers complete-track silence detection with
+configurable dBFS/duration thresholds, interval markers and paused MPV navigation.
+Detection requires every selected channel to remain quiet, preserves delayed
+audio offsets on the file timeline, drains cancellation through the shared
+subprocess runner and rejects incomplete reports. New controls are localized in
+all supported languages; translations outside English/Norwegian await review.
+The [audio roadmap](docs/AUDIO-METERING-PLAN.md) tracks validation and remaining
+peak/phase/report work. A separate [Playback timing investigation](docs/audio-playback-timing-2026-10-16.md)
+identifies missing frame timestamps/history in the current MPV metadata API;
+dependency instrumentation remains necessary before claiming alignment.
+
+Validation: the Debug build, full unit suite (1,349 executed, one intentional
+benchmark skip, no failures), final 10 scanner regressions, two English/Norwegian
+UI checks, all 124 script tests, localization audit and whitespace check pass.
+The preview/interval screenshots were visually reviewed. Release packaging and
+physical-device qualification remain outside this continuation.
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
 issue link when it starts.
+
+## Preview audio metering — 2026-10-15
+
+Owner: Codex. Independent source-channel peak/RMS and momentary/short-term LUFS
+are implemented for preview playback using bounded analysis windows from bundled
+FFmpeg. The pinned MPVKit CoreAudio fixes are preserved. The implementation,
+measurement semantics, opt-in MPV filter integration, silence detection, and
+remaining peak-threshold markers, channel imbalance, phase/correlation analysis and playback-format
+improvements are tracked in [the audio metering plan](docs/AUDIO-METERING-PLAN.md).
+A serial packaged-player CPU and signal-transition benchmark now compares Off,
+Source and Playback modes, including source lookahead and FFmpeg child CPU.
+See [the comparison method and evidence](docs/audio-meter-comparison-2026-10-15.md).
+Release CPU/thermal and physical-device synchronization qualification remain open.
 
 ## Stability and performance continuation — 2026-10-14
 

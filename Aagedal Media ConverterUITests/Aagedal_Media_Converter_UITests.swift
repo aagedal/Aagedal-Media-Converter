@@ -1353,6 +1353,77 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testSourcePeakRMSAndLUFSMeterInNativeAndMPVPreview() throws {
+        for (container, backend) in [("mp4", "AVPlayer"), ("mkv", "MPV")] {
+            launchApp(generatedFixture: true, realtimeInput: true, previewContainer: container)
+            defer { terminateAndCleanFixtures() }
+            let queueItem = element("queue.item")
+            XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+            app.activate()
+            queueItem.rightClick()
+            app.menuItems["Preview / Trim"].click()
+            XCTAssertTrue(waitForValue("\(backend) ready", of: element("preview.media"), timeout: 30))
+            element("trim.timecode").click()
+            let input = element("trim.timecodeInput")
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.click()
+            input.typeKey("a", modifierFlags: .command)
+            input.typeText("00:00:04:00")
+            input.typeKey(.return, modifierFlags: [])
+            XCTAssertTrue(waitForValue("00:00:04:00", of: element("trim.timecode"), timeout: 10))
+            element("trim.audioMeter").click()
+            let momentary = element("preview.audioMeter.momentary")
+            let shortTerm = element("preview.audioMeter.shortTerm")
+            XCTAssertTrue(momentary.waitForExistence(timeout: 15))
+            let measured = XCTNSPredicateExpectation(
+                predicate: NSPredicate { _, _ in
+                    Double((momentary.value as? String) ?? momentary.label) != nil
+                        && Double((shortTerm.value as? String) ?? shortTerm.label) != nil
+                }, object: nil
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [measured], timeout: 20), .completed,
+                           "Source LUFS must be available without starting system-audio capture")
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = "\(backend) source peak RMS and LUFS meter"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            if backend == "MPV" {
+                // Restart to establish fresh playback loudness history. The
+                // longer fixture keeps the decoder away from final AAC padding.
+                element("trim.jumpToStart").click()
+                let mode = element("preview.audioMeter.mode")
+                XCTAssertTrue(mode.waitForExistence(timeout: 5))
+                mode.radioButtons["Playback"].click()
+                app.typeKey("l", modifierFlags: [])
+                let channelReading = element("preview.audioMeter.channel.0")
+                let playbackMeasured = XCTNSPredicateExpectation(
+                    predicate: NSPredicate { _, _ in
+                        let channel = channelReading.label
+                        return Double((momentary.value as? String) ?? momentary.label) != nil
+                            && Double((shortTerm.value as? String) ?? shortTerm.label) != nil
+                            && channel.contains("dBFS") && !channel.contains("−∞")
+                    }, object: nil)
+                let playbackResult = XCTWaiter.wait(for: [playbackMeasured], timeout: 15)
+                let liveAttachment = XCTAttachment(screenshot: app.screenshot())
+                liveAttachment.name = "MPV decoded playback peak RMS and LUFS meter"
+                liveAttachment.lifetime = .keepAlways
+                add(liveAttachment)
+                XCTAssertEqual(playbackResult, .completed,
+                               "Channel: \(channelReading.label); momentary: \(momentary.label); short-term: \(shortTerm.label)")
+                app.typeKey("k", modifierFlags: [])
+                let cleared = XCTNSPredicateExpectation(
+                    predicate: NSPredicate { _, _ in
+                        ((momentary.value as? String) ?? momentary.label) == "—"
+                    }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [cleared], timeout: 5), .completed)
+            }
+            element("trim.audioMeter").click()
+            XCTAssertTrue(momentary.waitForNonExistence(timeout: 5))
+            element("preview.close").click()
+        }
+    }
+
+    @MainActor
     private func exercisePreview(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, previewContainer: container)
         defer { terminateAndCleanFixtures() }
@@ -1511,6 +1582,459 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(element("analysis.result.ssimulacra2").waitForExistence(timeout: 45),
                       "The signed bundled helper must run in the sandbox without any user installation")
         attachWindowScreenshot(named: "Bundled SSIMULACRA2 - completed analysis")
+    }
+
+    @MainActor
+    func testPeakAnalysisNavigatesAndInvalidatesThreshold() throws {
+        launchApp(generatedFixture: true, additionalArguments: ["-AMC_UI_TEST_PEAKS", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Audio"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.peaks.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        let export = element("analysis.peaks.export")
+        XCTAssertTrue(export.exists)
+        XCTAssertFalse(export.isEnabled, "Export requires a complete report")
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Peak intervals: 0", of: element("analysis.peaks.summary"), timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Channel difference exceeds threshold", of: element("analysis.peaks.balance"), timeout: 5))
+        app.activate()
+        element("analysis.peaks.threshold").click()
+        let thresholdChoice = app.menuItems["-6 dBFS"]
+        XCTAssertTrue(thresholdChoice.waitForExistence(timeout: 5))
+        thresholdChoice.click()
+        XCTAssertFalse(element("analysis.peaks.summary").exists)
+        XCTAssertFalse(export.isEnabled, "Changed settings must invalidate the export")
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Peak intervals: 1", of: element("analysis.peaks.summary"), timeout: 20))
+        let start = element("analysis.peaks.start.0")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        let time = element("analysis.peaks.time")
+        let atStart = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 1) < 0.2
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atStart, object: time)], timeout: 5), .completed)
+        element("analysis.peaks.end.0").click()
+        let atEnd = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 2) < 0.2
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atEnd, object: time)], timeout: 5), .completed)
+        attachWindowScreenshot(named: "Source peak intervals and channel balance")
+        XCTAssertTrue(export.isHittable)
+        export.click()
+        let nameField = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(export.isEnabled, "Cancelling a save must preserve the report")
+        XCTAssertTrue(element("analysis.peaks.summary").exists)
+
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-peak-export-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        export.click()
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        nameField.click()
+        nameField.typeKey("a", modifierFlags: .command)
+        nameField.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        XCTAssertEqual(report["audioRelativeTrackIndex"] as? Int, 0)
+        let result = try XCTUnwrap(report["result"] as? [String: Any])
+        XCTAssertEqual((result["intervals"] as? [Any])?.count, 1)
+        XCTAssertEqual((result["settings"] as? [String: Any])?["thresholdDBFS"] as? Double, -6)
+        element("analysis.peaks.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testPeakAnalysisNorwegianControlsAndReport() throws {
+        launchApp(generatedFixture: true, language: "nb", locale: "nb_NO",
+                  additionalArguments: ["-AMC_UI_TEST_PEAKS", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Lyd"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.peaks.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertEqual(run.label, "Analyser lyd")
+        XCTAssertEqual(element("analysis.peaks.export").label, "Eksporter JSON")
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Toppintervaller: 0", of: element("analysis.peaks.summary"), timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Kanalforskjellen overskrider terskelen", of: element("analysis.peaks.balance"), timeout: 5))
+        attachWindowScreenshot(named: "Toppnivå og kanalbalanse på norsk")
+        element("analysis.peaks.close").click()
+    }
+
+    @MainActor
+    func testGroupedPeakSelectionPreviewAndExport() throws {
+        try checkGroupedPeaks(language: "en", locale: "en_US")
+    }
+
+    @MainActor
+    func testGroupedPeakNorwegianSelectionAndPreview() throws {
+        try checkGroupedPeaks(language: "nb", locale: "nb_NO")
+    }
+
+    @MainActor
+    private func checkGroupedPeaks(language: String, locale: String) throws {
+        let norwegian = language == "nb"
+        launchApp(generatedFixture: true, language: language, locale: locale,
+                  additionalArguments: ["-AMC_UI_TEST_GROUPED_PEAKS", "YES"], previewContainer: "mkv")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons[norwegian ? "Lyd" : "Audio"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.peaks.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        let export = element("analysis.peaks.export")
+        XCTAssertFalse(export.isEnabled)
+        let kind = element("analysis.peaks.kind")
+        kind.click()
+        app.menuItems[norwegian ? "Monopar" : "Mono pair"].click()
+        XCTAssertTrue(element("analysis.peaks.channel.0").exists)
+        XCTAssertTrue(element("analysis.peaks.channel.1").exists)
+        element("analysis.peaks.threshold").click()
+        app.menuItems["-6 dBFS"].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        let summary = element("analysis.peaks.summary")
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Toppintervaller: 1" : "Peak intervals: 1", of: summary, timeout: 20))
+        let start = element("analysis.peaks.start.0")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        let time = element("analysis.peaks.time")
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "1,00 s" : "1.00 s", of: time, timeout: 5))
+        element("analysis.peaks.end.0").click()
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "2,00 s" : "2.00 s", of: time, timeout: 5))
+        XCTAssertFalse(element("analysis.peaks.preview.error").exists)
+        attachWindowScreenshot(named: "Grouped stereo peaks \(language)")
+        XCTAssertTrue(export.isEnabled)
+        if !norwegian {
+            try checkGroupedPeakExport(indices: [0, 1], layout: "stereo", order: ["FL", "FR"])
+        }
+
+        kind.click()
+        app.menuItems[norwegian ? "5.1 flerkanals mono" : "5.1 multi-mono"].click()
+        XCTAssertFalse(summary.exists, "Changing presentation must invalidate the report")
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertTrue(element("analysis.peaks.channel.5").exists)
+        let first = element("analysis.peaks.channel.0")
+        let last = element("analysis.peaks.channel.5")
+        let firstTitle = try XCTUnwrap(first.value as? String)
+        let lastTitle = try XCTUnwrap(last.value as? String)
+        last.click()
+        app.menuItems[firstTitle].click()
+        XCTAssertFalse(run.isEnabled, "Duplicate channel assignments must block analysis")
+        XCTAssertFalse(export.isEnabled)
+        last.click()
+        app.menuItems[lastTitle].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        XCTAssertTrue(waitForEnabled(true, of: export, timeout: 20))
+        attachWindowScreenshot(named: "Grouped 5.1 channel levels \(language)")
+        // Six channel rows can place the summary and lazy buttons below the viewport.
+        app.scrollViews["analysis.peaks.results"].scroll(byDeltaX: 0, deltaY: -250)
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Toppintervaller: 1" : "Peak intervals: 1", of: summary, timeout: 5))
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "1,00 s" : "1.00 s", of: time, timeout: 5))
+        XCTAssertFalse(element("analysis.peaks.preview.error").exists)
+        attachWindowScreenshot(named: "Grouped 5.1 peaks \(language)")
+        if !norwegian {
+            try checkGroupedPeakExport(indices: [0, 1, 2, 3, 4, 5], layout: "5.1(side)", order: ["FL", "FR", "FC", "LFE", "SL", "SR"])
+        }
+
+        // A role edit must discard measurements even when the presentation kind stays the same.
+        last.click()
+        app.menuItems[firstTitle].click()
+        XCTAssertFalse(summary.exists)
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertFalse(run.isEnabled)
+        last.click()
+        app.menuItems[lastTitle].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        XCTAssertTrue(waitForEnabled(true, of: export, timeout: 20))
+        kind.click()
+        app.menuItems[norwegian ? "Lydspor" : "Audio track"].click()
+        XCTAssertFalse(summary.exists)
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertTrue(element("analysis.peaks.track").exists)
+        element("analysis.peaks.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func checkGroupedPeakExport(indices: [Int], layout: String, order: [String]) throws {
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-grouped-peaks-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        element("analysis.peaks.export").click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 2)
+        XCTAssertNil(report["audioRelativeTrackIndex"], "Grouped reports must describe all contributing tracks")
+        let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+        XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], indices)
+        XCTAssertEqual(context["channelLayout"] as? String, layout)
+        XCTAssertEqual(context["channelOrder"] as? [String], order)
+        let result = try XCTUnwrap(report["result"] as? [String: Any])
+        let intervals = try XCTUnwrap(result["intervals"] as? [[String: Any]])
+        XCTAssertEqual(intervals.count, 1, "Only the loud mono source exceeds -6 dBFS")
+        XCTAssertEqual(intervals.first?["channel"] as? Int, 1)
+        XCTAssertEqual((result["channels"] as? [Any])?.count, indices.count)
+        XCTAssertEqual((result["settings"] as? [String: Any])?["thresholdDBFS"] as? Double, -6)
+    }
+
+    @MainActor
+    func testGroupedSilenceSelectionPreviewAndExport() throws {
+        try checkGroupedSilence(language: "en", locale: "en_US")
+    }
+
+    @MainActor
+    func testGroupedSilenceNorwegianSelectionAndPreview() throws {
+        try checkGroupedSilence(language: "nb", locale: "nb_NO")
+    }
+
+    @MainActor
+    private func checkGroupedSilence(language: String, locale: String) throws {
+        let norwegian = language == "nb"
+        launchApp(generatedFixture: true, language: language, locale: locale,
+                  additionalArguments: ["-AMC_UI_TEST_SILENCE", "YES", "-AMC_UI_TEST_GROUPED_SILENCE", "YES"],
+                  previewContainer: "mkv")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons[norwegian ? "Lyd" : "Audio"].click()
+        let open = element("analysis.audio.silence")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.silence.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        let kind = element("analysis.silence.kind")
+        kind.click()
+        app.menuItems[norwegian ? "Monopar" : "Mono pair"].click()
+        XCTAssertTrue(element("analysis.silence.channel.0").exists)
+        XCTAssertTrue(element("analysis.silence.channel.1").exists)
+        // Each mono track is quiet for longer, but their shared silence is 3–4 s.
+        element("analysis.silence.duration").click()
+        app.menuItems[norwegian ? "0,50 s" : "0.50 s"].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        let summary = element("analysis.silence.summary")
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Oppdagede intervaller: 1" : "Detected intervals: 1", of: summary, timeout: 20))
+        let start = element("analysis.silence.start.0")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        let time = element("analysis.silence.time")
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "3,00 s" : "3.00 s", of: time, timeout: 5))
+        XCTAssertFalse(element("analysis.silence.preview.error").exists)
+        attachWindowScreenshot(named: "Grouped stereo silence \(language)")
+
+        let export = element("analysis.silence.export")
+        XCTAssertTrue(export.isEnabled)
+        if !norwegian {
+            let reportURL = URL(fileURLWithPath: "/private/tmp/amc-grouped-silence-\(UUID().uuidString).json")
+            defer { try? FileManager.default.removeItem(at: reportURL) }
+            export.click()
+            let name = app.textFields["saveAsNameTextField"]
+            XCTAssertTrue(name.waitForExistence(timeout: 5))
+            name.click()
+            name.typeKey("a", modifierFlags: .command)
+            name.typeText(reportURL.lastPathComponent)
+            app.typeKey("g", modifierFlags: [.command, .shift])
+            let folder = app.textFields["PathTextField"]
+            XCTAssertTrue(folder.waitForExistence(timeout: 5))
+            folder.typeKey("a", modifierFlags: .command)
+            folder.typeText("/private/tmp")
+            app.typeKey(.return, modifierFlags: [])
+            app.dialogs["save-panel"].buttons["Save"].click()
+            let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+            let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+            let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+            XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], [0, 1])
+            XCTAssertEqual(context["channelLayout"] as? String, "stereo")
+        }
+        kind.click()
+        app.menuItems[norwegian ? "5.1 flerkanals mono" : "5.1 multi-mono"].click()
+        XCTAssertFalse(summary.exists)
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertTrue(element("analysis.silence.channel.5").exists)
+        // Duplicating a role invalidates both scanning and audition.
+        let last = element("analysis.silence.channel.5")
+        let first = element("analysis.silence.channel.0")
+        let firstTitle = try XCTUnwrap(first.value as? String)
+        let lastTitle = try XCTUnwrap(last.value as? String)
+        last.click()
+        app.menuItems[firstTitle].click()
+        XCTAssertFalse(run.isEnabled)
+        XCTAssertFalse(export.isEnabled)
+        last.click()
+        app.menuItems[lastTitle].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: run)], timeout: 20), .completed)
+        run.click()
+        XCTAssertTrue(summary.waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Oppdagede intervaller: 1" : "Detected intervals: 1", of: summary, timeout: 5))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        XCTAssertFalse(element("analysis.silence.preview.error").exists)
+        attachWindowScreenshot(named: "Grouped 5.1 silence \(language)")
+        kind.click()
+        app.menuItems[norwegian ? "Lydspor" : "Audio track"].click()
+        XCTAssertFalse(summary.exists)
+        XCTAssertTrue(element("analysis.silence.track").exists)
+        element("analysis.silence.close").click()
+    }
+
+    @MainActor
+    func testSilenceAnalysisNavigatesIntervalsAndInvalidatesChangedSettings() throws {
+        launchApp(generatedFixture: true, additionalArguments: ["-AMC_UI_TEST_SILENCE", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Audio"].click()
+        let open = element("analysis.audio.silence")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.silence.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertTrue(element("analysis.silence.track").exists)
+        XCTAssertTrue(element("analysis.silence.threshold").exists)
+        let export = element("analysis.silence.export")
+        XCTAssertTrue(export.exists)
+        XCTAssertFalse(export.isEnabled)
+        run.click()
+        XCTAssertTrue(element("analysis.silence.summary").waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Detected intervals: 1", of: element("analysis.silence.summary"), timeout: 5))
+        let start = element("analysis.silence.start.0")
+        let end = element("analysis.silence.end.0")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: start)], timeout: 20), .completed)
+        start.click()
+        let time = element("analysis.silence.time")
+        let atStart = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 2) < 0.1
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atStart, object: time)], timeout: 5), .completed)
+        end.click()
+        let atEnd = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 4) < 0.1
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atEnd, object: time)], timeout: 5), .completed)
+        attachWindowScreenshot(named: "Silence intervals and paused preview")
+        XCTAssertTrue(export.isHittable)
+        export.click()
+        let nameField = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(export.isEnabled, "Cancelling a save must preserve the report")
+        XCTAssertTrue(element("analysis.silence.summary").exists)
+
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-silence-export-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        export.click()
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        nameField.click()
+        nameField.typeKey("a", modifierFlags: .command)
+        nameField.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        let presentation = try XCTUnwrap(report["presentation"] as? [String: Any])
+        XCTAssertEqual(presentation["audioRelativeTrackIndices"] as? [Int], [0])
+        let result = try XCTUnwrap(report["result"] as? [String: Any])
+        let intervals = try XCTUnwrap(result["intervals"] as? [[String: Any]])
+        XCTAssertEqual(intervals.count, 1)
+        XCTAssertEqual(try XCTUnwrap(intervals.first?["start"] as? Double), 2, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(intervals.first?["end"] as? Double), 4, accuracy: 0.01)
+        XCTAssertEqual((result["settings"] as? [String: Any])?["thresholdDBFS"] as? Double, -50)
+        let duration = element("analysis.silence.duration")
+        duration.click()
+        app.menuItems["5.00 s"].click()
+        XCTAssertFalse(element("analysis.silence.summary").exists, "Edited settings must invalidate the old intervals")
+        XCTAssertFalse(export.isEnabled)
+        run.click()
+        XCTAssertTrue(element("analysis.silence.summary").waitForExistence(timeout: 20))
+        XCTAssertTrue(waitForLabelOrValue("Detected intervals: 0", of: element("analysis.silence.summary"), timeout: 5))
+        XCTAssertFalse(element("analysis.silence.start.0").exists)
+        XCTAssertTrue(export.isEnabled, "A complete report with no intervals can be exported")
+        element("analysis.silence.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testSilenceAnalysisNorwegianControlsAndReport() throws {
+        launchApp(generatedFixture: true, language: "nb", locale: "nb_NO",
+                  additionalArguments: ["-AMC_UI_TEST_SILENCE", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Lyd"].click()
+        let open = element("analysis.audio.silence")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        XCTAssertEqual(open.label, "Finn stillhet")
+        open.click()
+        let run = element("analysis.silence.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertEqual(run.label, "Analyser lyd")
+        XCTAssertEqual(element("analysis.silence.export").label, "Eksporter JSON")
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue("Oppdagede intervaller: 1", of: element("analysis.silence.summary"), timeout: 20))
+        XCTAssertTrue(element("analysis.silence.start.0").exists)
+        attachWindowScreenshot(named: "Stillhetsanalyse på norsk")
+        element("analysis.silence.close").click()
     }
 
     @MainActor

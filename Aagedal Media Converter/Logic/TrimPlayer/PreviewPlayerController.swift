@@ -142,9 +142,6 @@ final class PreviewPlayerController: ObservableObject {
     @Published var selectedAudioTrackOrderIndex: Int = 0
     var selectedSubtitleTrackOrderIndex: Int = -1  // -1 means subtitles disabled
 
-    // MARK: - Audio Monitoring
-    // UniversalAudioMeterService is defined below in Audio Metering section
-    
     // MARK: - MPV State
     @Published var mpvPlayer: MPVPlayer?
     @Published var useMPV = false
@@ -188,7 +185,6 @@ final class PreviewPlayerController: ObservableObject {
     ) {
         self.videoItem = videoItem
         self.screenshotCaptureSubprocess = screenshotCaptureSubprocess
-        setupAudioMonitoring()
     }
     
     // MARK: - Video Item Management
@@ -335,7 +331,6 @@ final class PreviewPlayerController: ObservableObject {
         updatePlayerActionAtEnd()
         loadPreviewAssets(for: videoItem.url)
         
-        // Audio monitoring is handled globally by UniversalAudioMeterService
     }
     
     var debugWindowController: Any? // Holds strong reference to keep window alive
@@ -383,7 +378,6 @@ final class PreviewPlayerController: ObservableObject {
         // This uses the cache so it's instant
         loadPreviewAssets(for: url)
 
-        // Audio monitoring is handled globally by UniversalAudioMeterService
 
         // DON'T call updateCurrentWaveform() here!
         // It will be called automatically via previewAssets.didSet when assets finish loading
@@ -1698,57 +1692,12 @@ final class PreviewPlayerController: ObservableObject {
     
     // MARK: - Audio Metering
     
-    private let universalAudioMeter = UniversalAudioMeterService()
-    private var cancellables = Set<AnyCancellable>()
-    
-    @Published var audioLevels: UniversalAudioMeterService.AudioLevels?
-    /// Real-time frequency band magnitudes for the frequency visualizer.
-    @Published var frequencyBands: [Float]?
-    @Published var isAudioMeterEnabled = false {
-        didSet {
-            toggleAudioMeter()
-        }
-    }
-    
-    private func setupAudioMonitoring() {
-        // Subscribe to universal meter updates
-        universalAudioMeter.$currentLevels
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] levels in
-                self?.audioLevels = levels
-            }
-            .store(in: &cancellables)
+    @Published var isAudioMeterEnabled = false
 
-        // Subscribe to frequency band updates for visualizer
-        universalAudioMeter.$frequencyBands
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] bands in
-                self?.frequencyBands = bands
-            }
-            .store(in: &cancellables)
-            
-        // Handle permission errors if needed
-        universalAudioMeter.$permissionError
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] hasError in
-                if hasError {
-                    self?.logger.debug("Audio meter permission denied")
-                    // Could show alert here or disable meter
-                    self?.isAudioMeterEnabled = false
-                }
-            }
-            .store(in: &cancellables)
+    var audioMeterSourceURL: URL? {
+        useImageSequence ? imageSequenceConfig?.associatedAudioURL : videoItem.url
     }
-    
-    private func toggleAudioMeter() {
-        Task {
-            if isAudioMeterEnabled {
-                await universalAudioMeter.startMonitoring()
-            } else {
-                await universalAudioMeter.stopMonitoring()
-            }
-        }
-    }
+
 }
 
 /// Owns delayed playback seeks and queued timer deliveries for one playback intent.
