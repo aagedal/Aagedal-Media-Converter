@@ -21,6 +21,7 @@ struct YTDLPSettingsView: View {
         .init(label: "Edge", value: "edge"),
         .init(label: "Brave", value: "brave"),
         .init(label: "Firefox", value: "firefox"),
+        .init(label: "Zen", value: "zen"),
         .init(label: "Opera", value: "opera"),
         .init(label: "Vivaldi", value: "vivaldi"),
         .init(label: "Whale", value: "whale")
@@ -55,6 +56,7 @@ struct YTDLPSettingsView: View {
     @AppStorage(AppConstants.ytdlpCookiesBrowserKey) private var cookiesBrowser = ""
     @AppStorage(AppConstants.ytdlpHeliumProfileKey) private var heliumProfile = "Default"
     @AppStorage(AppConstants.ytdlpHeliumNeoProfileKey) private var heliumNeoProfile = "Default"
+    @AppStorage(AppConstants.ytdlpZenProfileKey) private var zenProfile = ""
     @AppStorage(AppConstants.downloadFolderKey) private var downloadFolder = AppConstants.defaultDownloadDirectory.path
     @AppStorage(AppConstants.ytdlpFilenameRestrictionModeKey) private var filenameRestrictionRaw = AppConstants.defaultYTDLPFilenameRestrictionMode
     @AppStorage(AppConstants.allowPrivateNetworkDownloadsKey) private var allowPrivateNetworkDownloads = false
@@ -671,6 +673,14 @@ struct YTDLPSettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                }
+
+                if cookiesBrowser == "zen" {
+                    TextField("Profile directory (automatic if blank)", text: $zenProfile)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Leave blank to use the most recently updated cookie database in Zen’s Profiles folder. To choose a specific profile, open about:profiles in Zen and enter the last folder name from its Root Directory (for example, abc123.default-release).")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 if !cookiesBrowser.isEmpty {
