@@ -1,0 +1,64 @@
+{
+  "alignment_qualified": false,
+  "reset_boundary_coverage_unknown": [
+    {
+      "instance": 1,
+      "epoch": 1,
+      "first_received_sequence": 40
+    }
+  ],
+  "observed_history_complete": false,
+  "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+  "snapshots": 112,
+  "missing_history_snapshots": 1,
+  "unique_frames": 152,
+  "epochs": 3,
+  "invalid_time_frames": 0,
+  "actions": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "missing_actions": [],
+  "post_seek_epoch_observed": true,
+  "post_reinsert_instance_observed": true,
+  "frame_speed_values": [
+    1.0
+  ],
+  "speed_change_verified": false,
+  "playback_speed_values": [
+    1.0,
+    1.5
+  ],
+  "audio_track_ids": [
+    1
+  ],
+  "paused_values": [
+    false,
+    true
+  ],
+  "seeking_values": [
+    false
+  ],
+  "requested_outputs": [
+    "null"
+  ],
+  "output_unconfirmed_snapshots": 1,
+  "instance_counters": {
+    "1": {
+      "evicted": 0,
+      "rejected": 0
+    },
+    "2": {
+      "evicted": 0,
+      "rejected": 0
+    }
+  },
+  "sequence_gaps": [],
+  "continuity_breaks": [],
+  "errors": [],
+  "capture_sha256": "0952c4e7ea46674d3c572d4137a0d8d22fbdc069194f86b7c7f3a1101e008e23"
+}
