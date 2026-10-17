@@ -1,0 +1,208 @@
+--- a/filters/f_lavfi.c
++++ b/filters/f_lavfi.c
+@@ -22,6 +22,12 @@
+ #include <inttypes.h>
+ #include <stdarg.h>
+ #include <assert.h>
++#include <stdatomic.h>
++
++#include <mpv/client.h>
++#include "misc/node.h"
++#include "misc/json.h"
++#include "amc_meter_history.h"
+ 
+ #include <libavutil/avstring.h>
+ #include <libavutil/mem.h>
+@@ -99,6 +105,15 @@
+     int64_t in_samples; // samples ever sent to the filter
+     double delay;       // seconds of audio apparently buffered by filter
+ 
++    // Experimental transport, allocated only by explicit af=lavfi opt-in.
++    struct amc_meter_history *meter_history;
++    uint64_t meter_instance;
++    bool meter_last_valid;
++    double meter_last_end;
++    int meter_last_rate;
++    struct mp_chmap meter_last_layout;
++    const char *meter_reset_reason;
++
+     struct mp_lavfi public;
+ 
+     // Identify a specific hwdec_interop to use
+@@ -135,6 +150,13 @@
+ // Does not free pending data intentionally.
+ static void free_graph(struct lavfi *c)
+ {
++    if (c->meter_history) {
++        amc_meter_history_clear(c->meter_history);
++        c->meter_last_valid = false;
++        c->meter_reset_reason = "graph-reset";
++        for (int n = 0; n < c->num_out_pads; n++)
++            mp_tags_clear(c->out_pads[n]->metadata);
++    }
+     avfilter_graph_free(&c->graph);
+     for (int n = 0; n < c->num_all_pads; n++) {
+         struct lavfi_pad *pad = c->all_pads[n];
+@@ -687,6 +709,105 @@
+     return true;
+ }
+ 
++// Diagnostic transport only: filter-boundary media identity, not device time.
++static void meter_capture(struct lavfi *c, struct mp_aframe *af,
++                          struct mp_tags *tags)
++{
++    struct amc_meter_history *h = c->meter_history;
++    if (!h)
++        return;
++    double start = mp_aframe_get_pts(af), end = mp_aframe_end_pts(af);
++    double effective_rate = mp_aframe_get_effective_rate(af);
++    int rate = mp_aframe_get_rate(af), samples = mp_aframe_get_size(af);
++    struct mp_chmap layout = {0};
++    bool valid = mp_aframe_get_chmap(af, &layout) &&
++        start != MP_NOPTS_VALUE && end != MP_NOPTS_VALUE &&
++        isfinite(start) && isfinite(end) && end > start &&
++        rate > 0 && samples > 0 && isfinite(effective_rate) && effective_rate > 0;
++    bool continuous = valid && c->meter_last_valid &&
++        rate == c->meter_last_rate &&
++        mp_chmap_equals(&layout, &c->meter_last_layout) &&
++        fabs(start - c->meter_last_end) <= 0.5 / effective_rate;
++    if (!valid || (c->meter_last_valid && !continuous)) {
++        amc_meter_history_clear(h);
++        c->meter_reset_reason = valid ? "discontinuity" : "invalid-frame-time";
++    }
++    c->meter_last_valid = valid;
++    c->meter_last_end = end;
++    c->meter_last_rate = rate;
++    c->meter_last_layout = layout;
++
++    // Bound transient node/string allocation as well as retained records.
++    size_t tag_bytes = 0;
++    for (int n = 0; n < tags->num_keys; n++) {
++        tag_bytes += strlen(tags->keys[n]) + strlen(tags->values[n]);
++        if (n >= 512 || tag_bytes > AMC_METER_MAX_RECORD_BYTES) {
++            amc_meter_history_clear(h);
++            h->sequence++;
++            h->rejected++;
++            c->meter_last_valid = false;
++            c->meter_reset_reason = "metadata-limit";
++            return;
++        }
++    }
++    struct mpv_node record;
++    node_init(&record, MPV_FORMAT_NODE_MAP, NULL);
++    node_map_add_flag(&record, "valid-time", valid);
++    if (valid) {
++        node_map_add_double(&record, "start", start);
++        node_map_add_double(&record, "end", end);
++        node_map_add_double(&record, "effective-rate", effective_rate);
++        node_map_add_double(&record, "speed", mp_aframe_get_speed(af));
++    }
++    node_map_add_int64(&record, "sample-rate", rate);
++    node_map_add_int64(&record, "samples", samples);
++    node_map_add_string(&record, "layout", mp_chmap_to_str(&layout));
++    struct mpv_node *metadata = node_map_add(&record, "metadata", MPV_FORMAT_NODE_MAP);
++    for (int n = 0; n < tags->num_keys; n++)
++        node_map_add_string(metadata, tags->keys[n], tags->values[n]);
++    char *json = NULL;
++    if (json_write(&json, &record) >= 0) {
++        if (!amc_meter_history_append(h, json)) {
++            // Keep the observable gap; no complete-coverage claim is possible.
++            c->meter_reset_reason = "record-rejected";
++        }
++    } else {
++        h->sequence++;
++        h->rejected++;
++        c->meter_reset_reason = "serialization-failed";
++    }
++    talloc_free(json);
++    talloc_free(record.u.list);
++}
++
++static void meter_snapshot(struct lavfi *c, struct mp_tags *tags)
++{
++    struct amc_meter_history *h = c->meter_history;
++    struct mpv_node snapshot;
++    node_init(&snapshot, MPV_FORMAT_NODE_MAP, NULL);
++    node_map_add_int64(&snapshot, "schema-version", 1);
++    node_map_add_int64(&snapshot, "instance", c->meter_instance);
++    node_map_add_int64(&snapshot, "epoch", h->epoch);
++    node_map_add_int64(&snapshot, "last-sequence", h->sequence);
++    node_map_add_int64(&snapshot, "evicted", h->evicted);
++    node_map_add_int64(&snapshot, "rejected", h->rejected);
++    node_map_add_int64(&snapshot, "capacity", AMC_METER_CAPACITY);
++    node_map_add_string(&snapshot, "reset-reason", c->meter_reset_reason);
++    struct mpv_node *frames = node_map_add(&snapshot, "frames", MPV_FORMAT_NODE_ARRAY);
++    for (size_t n = 0; n < h->count; n++) {
++        const struct amc_meter_record *r = amc_meter_history_at(h, n);
++        struct mpv_node *entry = node_array_add(frames, MPV_FORMAT_NODE_MAP);
++        node_map_add_int64(entry, "sequence", r->sequence);
++        // Deliberately retain the copied JSON verbatim; a reader parses it once.
++        node_map_add_string(entry, "frame", r->json);
++    }
++    char *json = NULL;
++    if (json_write(&json, &snapshot) >= 0)
++        mp_tags_set_str(tags, "amc-meter-history-v1", json);
++    talloc_free(json);
++    talloc_free(snapshot.u.list);
++}
++
+ static bool read_output_pads(struct lavfi *c)
+ {
+     bool progress = false;
+@@ -715,6 +836,8 @@
+         }
+ 
+         if (r >= 0) {
++            if (c->meter_history)
++                mp_tags_clear(pad->metadata);
+             mp_tags_copy_from_av_dictionary(pad->metadata, c->tmp_frame->metadata);
+             struct mp_frame frame =
+                 mp_frame_from_av(pad->type, c->tmp_frame, &pad->timebase);
+@@ -731,6 +854,8 @@
+                 vframe->nominal_fps =
+                     av_q2d(av_buffersink_get_frame_rate(pad->buffer));
+             }
++            if (frame.type == MP_FRAME_AUDIO)
++                meter_capture(c, frame.data, pad->metadata);
+             av_frame_unref(c->tmp_frame);
+             if (frame.type) {
+                 mp_pin_in_write(pad->pin, frame);
+@@ -826,6 +951,8 @@
+             return false;
+         struct mp_tags **ptags = cmd->res;
+         *ptags = mp_tags_dup(NULL, c->out_pads[0]->metadata);
++        if (c->meter_history)
++            meter_snapshot(c, *ptags);
+         return true;
+     }
+     default:
+@@ -953,6 +1080,7 @@
+     char **filter_opts;
+ 
+     bool fix_pts;
++    bool amc_meter_history;
+ 
+     char *hwdec_interop;
+ };
+@@ -972,6 +1100,13 @@
+     if (l) {
+         struct lavfi *c = l->f->priv;
+         c->emulate_audio_pts = opts->fix_pts;
++        if (opts->amc_meter_history && opts->type == MP_FRAME_AUDIO) {
++            static atomic_uint_fast64_t next_instance = 1;
++            c->meter_instance = atomic_fetch_add_explicit(&next_instance, 1,
++                                                          memory_order_relaxed);
++            c->meter_history = talloc_zero(c, struct amc_meter_history);
++            c->meter_reset_reason = "filter-created";
++        }
+     }
+     talloc_free(opts);
+     return l ? l->f : NULL;
+@@ -1143,6 +1278,7 @@
+         .options = (const m_option_t[]){
+             {"graph", OPT_STRING(graph)},
+             {"fix-pts", OPT_BOOL(fix_pts)},
++            {"amc-meter-history", OPT_BOOL(amc_meter_history)},
+             {"o", OPT_KEYVALUELIST(avopts)},
+             {"hwdec_interop",
+              OPT_STRING_VALIDATE(hwdec_interop,

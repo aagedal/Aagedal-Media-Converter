@@ -1,0 +1,735 @@
+{
+  "alignment_qualified": false,
+  "installed": false,
+  "captures": {
+    "amc-meter-history-aac-avfoundation-v3.jsonl": {
+      "sha256": "1c246102401ce2899c949740d034eac691f09fef8d2421b8a33e4430623eafbc",
+      "gzip_sha256": "6b9b7e3c03f63a389ea3d4eebef5ca7100c4d536431853a748c3b2561acac2d5",
+      "analysis": {
+        "alignment_qualified": false,
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 112,
+        "missing_history_snapshots": 1,
+        "unique_frames": 267,
+        "epochs": 4,
+        "invalid_time_frames": 0,
+        "actions": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "missing_actions": [],
+        "post_seek_epoch_observed": true,
+        "post_reinsert_instance_observed": true,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0,
+          1.5
+        ],
+        "audio_track_ids": [
+          1,
+          2
+        ],
+        "paused_values": [
+          false,
+          true
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "avfoundation"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "2": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "3": {
+            "evicted": 0,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      }
+    },
+    "amc-meter-history-aac-coreaudio-v3.jsonl": {
+      "sha256": "15be993c778e07f19c68721e7c7ddd7d6202f5106742093f02bc7717c12dd62d",
+      "gzip_sha256": "764cd5f0b13060d183738d430f0a4de928393767563a72dd799fcbd6f6d550e0",
+      "analysis": {
+        "alignment_qualified": false,
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 113,
+        "missing_history_snapshots": 1,
+        "unique_frames": 150,
+        "epochs": 4,
+        "invalid_time_frames": 0,
+        "actions": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "missing_actions": [],
+        "post_seek_epoch_observed": true,
+        "post_reinsert_instance_observed": true,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0,
+          1.5
+        ],
+        "audio_track_ids": [
+          1,
+          2
+        ],
+        "paused_values": [
+          false,
+          true
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "coreaudio"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "2": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "3": {
+            "evicted": 0,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      }
+    },
+    "amc-meter-history-aac-null-v3.jsonl": {
+      "sha256": "ad3303747f7be933f8b33747f7964d22708babf3e91d668f373b9797d4d5f9cd",
+      "gzip_sha256": "e6383225c6cbc100160ca633ee00b58baa7bc9e64ac133e9c20ec9b2761ef6b3",
+      "analysis": {
+        "alignment_qualified": false,
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 113,
+        "missing_history_snapshots": 1,
+        "unique_frames": 157,
+        "epochs": 4,
+        "invalid_time_frames": 0,
+        "actions": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "missing_actions": [],
+        "post_seek_epoch_observed": true,
+        "post_reinsert_instance_observed": true,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0,
+          1.5
+        ],
+        "audio_track_ids": [
+          1,
+          2
+        ],
+        "paused_values": [
+          false,
+          true
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "null"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "2": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "3": {
+            "evicted": 0,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      }
+    },
+    "amc-meter-history-flac-null-v3.jsonl": {
+      "sha256": "dd0269d536cfb8aae298f675fdbd835f800ff4fe8e14af06b38a32aa6213c083",
+      "gzip_sha256": "389604a0acd6aea717e0983eb8f4362e81221af8574507c61288c9d11b4cabe5",
+      "analysis": {
+        "alignment_qualified": false,
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 113,
+        "missing_history_snapshots": 1,
+        "unique_frames": 151,
+        "epochs": 3,
+        "invalid_time_frames": 0,
+        "actions": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "missing_actions": [],
+        "post_seek_epoch_observed": true,
+        "post_reinsert_instance_observed": true,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0,
+          1.5
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false,
+          true
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "null"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "2": {
+            "evicted": 0,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      }
+    },
+    "amc-meter-history-flac-null-x86-v3.jsonl": {
+      "sha256": "d1888bfe1606a8711b37fa3f3bbe88480578a2973745cd49807917bffb1056cf",
+      "gzip_sha256": "88e1f99da878bafa9da8b490a484322aaa59d1449208680ec202b08c5b86b1df",
+      "analysis": {
+        "alignment_qualified": false,
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 113,
+        "missing_history_snapshots": 1,
+        "unique_frames": 150,
+        "epochs": 3,
+        "invalid_time_frames": 0,
+        "actions": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "missing_actions": [],
+        "post_seek_epoch_observed": true,
+        "post_reinsert_instance_observed": true,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0,
+          1.5
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false,
+          true
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "null"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "2": {
+            "evicted": 0,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      }
+    }
+  },
+  "builds": {
+    "arm64": {
+      "status": "probe-built",
+      "arch": "arm64",
+      "source_sha256": "064f23b34cdf424a583d35d2d12d9a3760aff901f5ae15c82e30faa0cffcc80b",
+      "patch_sha256": "6045e5cf778a58cd951c638df95786e3bf7cdba975db75ff83caf1e95db7bdf1",
+      "header_sha256": "93b1adf11a27b2f59d0298de0579bd50baf80d19d4e78cf500c376673cf62746",
+      "compile_commands_sha256": "17563fc1dcb926851afb318372ccc64f2a991cf2b1348fa6b272237f043eb66f",
+      "input_library_sha256": "9855abc54747df89df16e604f316e7ca17bd7e7c5ba72458d6f89a1c9d139301",
+      "probe_source_sha256": "6eb5a725fcd50acac36e96ce10b71a5ab323f49f938ae5da783ed987eeab8361",
+      "probe_sha256": "37e25fa61f650b2492faa186a1bbade32996856c0a2c92ceb4d9ff45b329bea8",
+      "compile": [
+        "/usr/bin/clang",
+        "-Ilibmpv.a.p",
+        "-I.",
+        "-I../../../../libmpv-v0.41.0",
+        "-I../../../../libmpv-v0.41.0/include",
+        "-Icommon",
+        "-Ietc",
+        "-Iplayer/javascript",
+        "-Iplayer/lua",
+        "-Isub",
+        "-ITOOLS/osxbundle",
+        "-Iosdep/mac",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libass/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libfreetype/macos/thin/arm64/include/freetype2",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libfribidi/macos/thin/arm64/include/fribidi",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libharfbuzz/macos/thin/arm64/include/harfbuzz",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libunibreak/macos/thin/arm64/include",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/FFmpeg/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libplacebo/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libshaderc/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/vulkan/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/lcms2/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libdovi/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libbluray/macos/thin/arm64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libuchardet/macos/thin/arm64/include/uchardet",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/gmp/macos/thin/arm64/include",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/libsmbclient/macos/thin/arm64/include",
+        "-fvisibility=hidden",
+        "-fdiagnostics-color=always",
+        "-Wall",
+        "-Winvalid-pch",
+        "-Wextra",
+        "-std=c11",
+        "-O3",
+        "-D_FILE_OFFSET_BITS=64",
+        "-Wdisabled-optimization",
+        "-Wempty-body",
+        "-Wformat",
+        "-Wimplicit-fallthrough",
+        "-Woverflow",
+        "-Wparentheses",
+        "-Wpointer-arith",
+        "-Wshadow",
+        "-Wundef",
+        "-Wvla",
+        "-Wno-cast-function-type",
+        "-Wno-format-zero-length",
+        "-Wno-missing-field-initializers",
+        "-Wno-sign-compare",
+        "-Wno-switch",
+        "-Wno-unused-parameter",
+        "-fno-math-errno",
+        "-fno-signed-zeros",
+        "-fno-trapping-math",
+        "-Werror=format-security",
+        "-D_GNU_SOURCE",
+        "-Wmissing-prototypes",
+        "-Wstrict-prototypes",
+        "-Werror=implicit-function-declaration",
+        "-Wno-pointer-sign",
+        "-DWINICONV_CONST=",
+        "-arch",
+        "arm64",
+        "-isysroot",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk",
+        "-target",
+        "arm64-apple-macos12.0",
+        "-mmacosx-version-min=12.0",
+        "-DPL_HAVE_PTHREAD",
+        "-DPL_STATIC",
+        "-c",
+        "/private/tmp/amc-meter-history-candidate-v3/source/filters/f_lavfi.c",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/libmpv-v0.41.0/filters",
+        "-o",
+        "/private/tmp/amc-meter-history-candidate-v3/filters_f_lavfi.c.o"
+      ],
+      "compile_directory": "/private/tmp/amc-mpvkit-n9-build-20261015/dist/libmpv/macos/scratch/arm64",
+      "link": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "arm64",
+        "-mmacosx-version-min=12.0",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/Users/truls.aagedal/.t3/worktrees/Aagedal-Media-Converter/t3-2f020306/scripts/probe-mpv-meter-history.c",
+        "-I/private/tmp/amc-meter-history-candidate-v3/products/Libmpv.framework/Headers",
+        "-F/private/tmp/amc-meter-history-candidate-v3/products",
+        "-L/private/tmp/amc-meter-history-candidate-v3/products",
+        "-L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx",
+        "-o",
+        "/private/tmp/amc-meter-history-candidate-v3/probe",
+        "-framework",
+        "Libass",
+        "-framework",
+        "Libavcodec",
+        "-framework",
+        "Libavdevice",
+        "-framework",
+        "Libavfilter",
+        "-framework",
+        "Libavformat",
+        "-framework",
+        "Libavutil",
+        "-framework",
+        "Libbluray",
+        "-framework",
+        "Libcrypto",
+        "-framework",
+        "Libdav1d",
+        "-framework",
+        "Libdovi",
+        "-framework",
+        "Libfreetype",
+        "-framework",
+        "Libfribidi",
+        "-framework",
+        "Libharfbuzz",
+        "-framework",
+        "Libmpv",
+        "-framework",
+        "Libplacebo",
+        "-framework",
+        "Libshaderc_combined",
+        "-framework",
+        "Libsmbclient",
+        "-framework",
+        "Libssl",
+        "-framework",
+        "Libswresample",
+        "-framework",
+        "Libswscale",
+        "-framework",
+        "Libuavs3d",
+        "-framework",
+        "Libuchardet",
+        "-framework",
+        "Libunibreak",
+        "-framework",
+        "gmp",
+        "-framework",
+        "gnutls",
+        "-framework",
+        "hogweed",
+        "-framework",
+        "lcms2",
+        "-framework",
+        "nettle",
+        "-framework",
+        "AVFoundation",
+        "-framework",
+        "CoreAudio",
+        "-framework",
+        "AudioToolbox",
+        "-framework",
+        "CoreVideo",
+        "-framework",
+        "CoreFoundation",
+        "-framework",
+        "CoreMedia",
+        "-framework",
+        "Metal",
+        "-framework",
+        "VideoToolbox",
+        "-framework",
+        "AppKit",
+        "-lMoltenVK",
+        "-lbz2",
+        "-liconv",
+        "-lexpat",
+        "-lresolv",
+        "-lxml2",
+        "-lz",
+        "-lc++",
+        "-Wl,-rpath,/private/tmp/amc-meter-history-candidate-v3/products",
+        "-Wl,-rpath,/usr/lib/swift"
+      ],
+      "alignment_qualified": false,
+      "installed": false
+    },
+    "x86_64": {
+      "status": "probe-built",
+      "arch": "x86_64",
+      "source_sha256": "064f23b34cdf424a583d35d2d12d9a3760aff901f5ae15c82e30faa0cffcc80b",
+      "patch_sha256": "6045e5cf778a58cd951c638df95786e3bf7cdba975db75ff83caf1e95db7bdf1",
+      "header_sha256": "93b1adf11a27b2f59d0298de0579bd50baf80d19d4e78cf500c376673cf62746",
+      "compile_commands_sha256": "3e7ef0749fe63f8318d503520aaf1a14c609d63d72c47ffad4b43b963b26e699",
+      "input_library_sha256": "9855abc54747df89df16e604f316e7ca17bd7e7c5ba72458d6f89a1c9d139301",
+      "probe_source_sha256": "6eb5a725fcd50acac36e96ce10b71a5ab323f49f938ae5da783ed987eeab8361",
+      "probe_sha256": "6734a0e1555f257dc42edf0de9b8a8d87cbb02e1a365fe9c103c3c8fc641d1de",
+      "compile": [
+        "/usr/bin/clang",
+        "-Ilibmpv.a.p",
+        "-I.",
+        "-I../../../../libmpv-v0.41.0",
+        "-I../../../../libmpv-v0.41.0/include",
+        "-Icommon",
+        "-Ietc",
+        "-Iplayer/javascript",
+        "-Iplayer/lua",
+        "-Isub",
+        "-ITOOLS/osxbundle",
+        "-Iosdep/mac",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libass/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libfreetype/macos/thin/x86_64/include/freetype2",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libfribidi/macos/thin/x86_64/include/fribidi",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libharfbuzz/macos/thin/x86_64/include/harfbuzz",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libunibreak/macos/thin/x86_64/include",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/FFmpeg/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libplacebo/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libshaderc/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/vulkan/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/lcms2/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libdovi/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libbluray/macos/thin/x86_64/include",
+        "-I/Users/truls.aagedal/Developer/MPVKit/dist/libuchardet/macos/thin/x86_64/include/uchardet",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/gmp/macos/thin/x86_64/include",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/libsmbclient/macos/thin/x86_64/include",
+        "-fvisibility=hidden",
+        "-fdiagnostics-color=always",
+        "-Wall",
+        "-Winvalid-pch",
+        "-Wextra",
+        "-std=c11",
+        "-O3",
+        "-D_FILE_OFFSET_BITS=64",
+        "-Wdisabled-optimization",
+        "-Wempty-body",
+        "-Wformat",
+        "-Wimplicit-fallthrough",
+        "-Woverflow",
+        "-Wparentheses",
+        "-Wpointer-arith",
+        "-Wshadow",
+        "-Wundef",
+        "-Wvla",
+        "-Wno-cast-function-type",
+        "-Wno-format-zero-length",
+        "-Wno-missing-field-initializers",
+        "-Wno-sign-compare",
+        "-Wno-switch",
+        "-Wno-unused-parameter",
+        "-fno-math-errno",
+        "-fno-signed-zeros",
+        "-fno-trapping-math",
+        "-Werror=format-security",
+        "-D_GNU_SOURCE",
+        "-Wmissing-prototypes",
+        "-Wstrict-prototypes",
+        "-Werror=implicit-function-declaration",
+        "-Wno-pointer-sign",
+        "-DWINICONV_CONST=",
+        "-arch",
+        "x86_64",
+        "-isysroot",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk",
+        "-target",
+        "x86_64-apple-macos12.0",
+        "-mmacosx-version-min=12.0",
+        "-DPL_HAVE_PTHREAD",
+        "-DPL_STATIC",
+        "-c",
+        "/private/tmp/amc-meter-history-candidate-x86-v3/source/filters/f_lavfi.c",
+        "-I/private/tmp/amc-mpvkit-n9-build-20261015/dist/libmpv-v0.41.0/filters",
+        "-o",
+        "/private/tmp/amc-meter-history-candidate-x86-v3/filters_f_lavfi.c.o"
+      ],
+      "compile_directory": "/private/tmp/amc-mpvkit-n9-build-20261015/dist/libmpv/macos/scratch/x86_64",
+      "link": [
+        "xcrun",
+        "clang",
+        "-arch",
+        "x86_64",
+        "-mmacosx-version-min=12.0",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/Users/truls.aagedal/.t3/worktrees/Aagedal-Media-Converter/t3-2f020306/scripts/probe-mpv-meter-history.c",
+        "-I/private/tmp/amc-meter-history-candidate-x86-v3/products/Libmpv.framework/Headers",
+        "-F/private/tmp/amc-meter-history-candidate-x86-v3/products",
+        "-L/private/tmp/amc-meter-history-candidate-x86-v3/products",
+        "-L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/macosx",
+        "-o",
+        "/private/tmp/amc-meter-history-candidate-x86-v3/probe",
+        "-framework",
+        "Libass",
+        "-framework",
+        "Libavcodec",
+        "-framework",
+        "Libavdevice",
+        "-framework",
+        "Libavfilter",
+        "-framework",
+        "Libavformat",
+        "-framework",
+        "Libavutil",
+        "-framework",
+        "Libbluray",
+        "-framework",
+        "Libcrypto",
+        "-framework",
+        "Libdav1d",
+        "-framework",
+        "Libdovi",
+        "-framework",
+        "Libfreetype",
+        "-framework",
+        "Libfribidi",
+        "-framework",
+        "Libharfbuzz",
+        "-framework",
+        "Libmpv",
+        "-framework",
+        "Libplacebo",
+        "-framework",
+        "Libshaderc_combined",
+        "-framework",
+        "Libsmbclient",
+        "-framework",
+        "Libssl",
+        "-framework",
+        "Libswresample",
+        "-framework",
+        "Libswscale",
+        "-framework",
+        "Libuavs3d",
+        "-framework",
+        "Libuchardet",
+        "-framework",
+        "Libunibreak",
+        "-framework",
+        "gmp",
+        "-framework",
+        "gnutls",
+        "-framework",
+        "hogweed",
+        "-framework",
+        "lcms2",
+        "-framework",
+        "nettle",
+        "-framework",
+        "AVFoundation",
+        "-framework",
+        "CoreAudio",
+        "-framework",
+        "AudioToolbox",
+        "-framework",
+        "CoreVideo",
+        "-framework",
+        "CoreFoundation",
+        "-framework",
+        "CoreMedia",
+        "-framework",
+        "Metal",
+        "-framework",
+        "VideoToolbox",
+        "-framework",
+        "AppKit",
+        "-lMoltenVK",
+        "-lbz2",
+        "-liconv",
+        "-lexpat",
+        "-lresolv",
+        "-lxml2",
+        "-lz",
+        "-lc++",
+        "-Wl,-rpath,/private/tmp/amc-meter-history-candidate-x86-v3/products",
+        "-Wl,-rpath,/usr/lib/swift"
+      ],
+      "alignment_qualified": false,
+      "installed": false
+    }
+  },
+  "fixtures": {
+    "amc-meter-history-fixture.flac": {
+      "sha256": "eee5ad0ed6a101ea0844ece0516070c55015d02ac2b94607156f0df0fc212ff8"
+    },
+    "amc-meter-history-aac.m4a": {
+      "sha256": "c679f1238f52b8bab49a7b282b34cde87c0a6359c4f28611264447db18a7ae5e"
+    }
+  },
+  "lossless_signal_checks": {
+    "amc-meter-history-flac-null-v3.jsonl": {
+      "checked_frames": 148,
+      "mismatches": 0,
+      "tolerance_db": 0.02,
+      "max_error_db": 1.2913279626047824e-05,
+      "excluded": "Frames straddling a known two-second signal transition."
+    },
+    "amc-meter-history-flac-null-x86-v3.jsonl": {
+      "checked_frames": 147,
+      "mismatches": 0,
+      "tolerance_db": 0.02,
+      "max_error_db": 1.2913279626047824e-05,
+      "excluded": "Frames straddling a known two-second signal transition."
+    }
+  },
+  "fixture_ffmpeg_sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6"
+}

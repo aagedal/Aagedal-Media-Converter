@@ -2,6 +2,28 @@
 
 Last reviewed: 2026-10-17
 
+## Playback meter timestamp prototype — 2026-10-17
+
+Owner: Codex. An isolated, opt-in mpv dependency patch now captures media frame
+intervals after timestamp remapping, with bounded copied metadata history,
+instance/epoch/sequence identity and explicit eviction/rejection counters. A
+reproducible builder links diagnostic probes without changing source inputs,
+package products or the app pin. Captures include separately queried player
+clocks and actual playback state. Source remains the default; Playback timing
+behavior is unchanged. See the [prototype and validation](docs/audio-playback-timestamp-prototype-2026-10-17.md)
+and [hashed evidence](docs/provenance/audio-meter-timestamps-2026-10-17/report.json).
+
+Both architecture probes build; five final FLAC/AAC captures run across null,
+CoreAudio and AVFoundation, including x86_64 through Rosetta. Received histories
+have no sequence gaps, malformed identities, continuity breaks or rejections.
+All 295 lossless frames away from signal transitions match their independently
+known source peak at the recorded timestamp. Queue sanitizers and analyzer/
+existing benchmark parser regressions pass. Initial missing startup snapshots
+keep observed coverage explicitly incomplete; alignment remains unqualified.
+The next work is matched app/video/offset/impulse and overflow benchmarks,
+presentation-clock buffering, loudness continuity/reset handling, and longer
+Release/physical-device qualification. No packaged binaries or licenses changed.
+
 ## Stereo phase and mono compatibility continuation — 2026-10-17
 
 Owner: Codex. Audio Analysis now offers source stereo correlation and mono
