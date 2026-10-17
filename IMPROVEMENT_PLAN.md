@@ -1,6 +1,23 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-10-17
+Last reviewed: 2026-10-18
+
+## Playback meter lifecycle continuation — 2026-10-18
+
+Owner: Codex. The isolated timestamp probe now retains bounded command/event
+evidence, declared scenario requirements, queried source identity and replacement
+generation. A separate analyzer checks observed pause/resume, seek, player speed,
+filter reinsertion, optional track selection and source replacement within
+command windows. The repeatable runner adds independent nonperiodic per-generation
+peak/RMS checks. All eight arm64/null/CoreAudio/AVFoundation and x86_64/Rosetta
+matrix cases pass, plus a separate arm64 track-switch case. Both probes build;
+169 script tests and 62 focused MPV tests pass. See the
+[validation and limits](docs/audio-playback-lifecycle-validation-2026-10-18.md).
+
+MPV events lack command IDs, so causal event attribution and loudness resets
+remain unverified. App-renderer integration, dependency packaging, presentation
+clock/buffering, Release thermal behavior and physical synchronization remain
+open. App behavior, Source default, package pins, binaries and licenses are unchanged.
 
 ## Playback meter timestamp prototype — 2026-10-17
 
