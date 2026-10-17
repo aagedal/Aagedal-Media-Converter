@@ -5,6 +5,43 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class YTDLPCookieSourceTests: XCTestCase {
+    func testZenUsesFirefoxReaderWithOnlyZenProfiles() throws {
+        let name = "YTDLPCookieSourceTests.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("Zen Tests \(UUID())")
+        defaults.set("zen", forKey: AppConstants.ytdlpCookiesBrowserKey)
+        // Even when Zen is absent, pass its explicit path rather than falling
+        // back to Firefox. Spaces must remain inside a single argument.
+        for profile in ["", "abc123.default-release", "Personal Profile"] {
+            defaults.set(profile, forKey: AppConstants.ytdlpZenProfileKey)
+            let source = try YTDLPCookieSource.configured(defaults: defaults, homeDirectory: home) { _, _ in
+                XCTFail("Zen cookies should not query the Chromium Keychain")
+                return Data()
+            }
+            let root = home.appendingPathComponent("Library/Application Support/zen/Profiles")
+            let directory = profile.isEmpty ? root : root.appendingPathComponent(profile)
+            XCTAssertEqual(source.arguments, ["--cookies-from-browser", "firefox:\(directory.path)"])
+            source.cleanup()
+        }
+        // A saved Zen profile must not affect the standard Firefox option.
+        defaults.set("firefox", forKey: AppConstants.ytdlpCookiesBrowserKey)
+        XCTAssertEqual(try YTDLPCookieSource.configured(defaults: defaults).arguments, ["--cookies-from-browser", "firefox"])
+    }
+
+    func testZenRejectsProfileTraversalAndArgumentDelimiters() throws {
+        let name = "YTDLPCookieSourceTests.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("zen", forKey: AppConstants.ytdlpCookiesBrowserKey)
+        for profile in [".", "..", "../Firefox", "/tmp/profile", "Profiles/test", "..\\Firefox", "profile::container", "profile\nname"] {
+            defaults.set(profile, forKey: AppConstants.ytdlpZenProfileKey)
+            XCTAssertThrowsError(try YTDLPCookieSource.configured(defaults: defaults)) { error in
+                XCTAssertTrue(error.localizedDescription.contains("Zen"))
+            }
+        }
+    }
+
     func testHeliumAndNeoExportFromTheirOwnProfilesAndKeychainIdentities() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: home) }

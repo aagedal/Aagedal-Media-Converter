@@ -749,6 +749,7 @@ enum AppConstants {
     static let ytdlpCookiesBrowserKey = "ytdlpCookiesBrowser"
     static let ytdlpHeliumProfileKey = "ytdlpHeliumProfile"
     static let ytdlpHeliumNeoProfileKey = "ytdlpHeliumNeoProfile"
+    static let ytdlpZenProfileKey = "ytdlpZenProfile"
     static let ytdlpLiveFromStartKey = "ytdlpLiveFromStart"
     static let ytdlpAudioOnlyKey = "ytdlpAudioOnly"
     static let ytdlpDownloadPlaylistKey = "ytdlpDownloadPlaylist"

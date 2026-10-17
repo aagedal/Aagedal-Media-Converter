@@ -36,6 +36,21 @@ struct YTDLPCookieSource {
         storagePassword: (String, String) throws -> Data = ChromiumCookieExport.storagePassword
     ) throws -> Self {
         let browser = defaults.string(forKey: AppConstants.ytdlpCookiesBrowserKey) ?? ""
+        if browser == "zen" {
+            // Zen uses Firefox's cookie format, but its profiles must never fall
+            // back to Firefox's signed-in accounts. yt-dlp selects the newest
+            // cookie database when given the Profiles directory.
+            let profile = (defaults.string(forKey: AppConstants.ytdlpZenProfileKey) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard ![".", ".."].contains(profile),
+                  !profile.contains("/"), !profile.contains("\\"), !profile.contains(":"),
+                  profile.rangeOfCharacter(from: .controlCharacters) == nil else {
+                throw CookieError.message("Choose a valid Zen profile directory name in Downloads settings.")
+            }
+            var directory = homeDirectory.appendingPathComponent("Library/Application Support/zen/Profiles")
+            if !profile.isEmpty { directory.appendPathComponent(profile) }
+            return Self(arguments: ["--cookies-from-browser", "firefox:\(directory.path)"], temporaryDirectory: nil)
+        }
         guard let source = YTDLPChromiumBrowser(rawValue: browser) else {
             return Self(arguments: browser.isEmpty ? [] : ["--cookies-from-browser", browser], temporaryDirectory: nil)
         }
