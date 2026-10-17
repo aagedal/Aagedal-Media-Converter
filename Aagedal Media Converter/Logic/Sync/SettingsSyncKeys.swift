@@ -269,6 +269,8 @@ enum SettingsSyncKeys {
         AppConstants.autoEncodeAfterDownloadKey,
         AppConstants.autoUploadAfterDownloadKey,
         AppConstants.ytdlpCookiesBrowserKey,
+        AppConstants.ytdlpHeliumProfileKey,
+        AppConstants.ytdlpHeliumNeoProfileKey,
         AppConstants.ytdlpLiveFromStartKey,
         AppConstants.ytdlpAudioOnlyKey,
         AppConstants.ytdlpDownloadPlaylistKey,

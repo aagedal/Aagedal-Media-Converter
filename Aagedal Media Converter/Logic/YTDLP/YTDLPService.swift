@@ -551,8 +551,9 @@ actor YTDLPService {
         if let denoPath = await updateService.ensureDenoInstalled() {
             arguments.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
         }
-        let browser = UserDefaults.standard.string(forKey: AppConstants.ytdlpCookiesBrowserKey) ?? ""
-        if !browser.isEmpty { arguments.append(contentsOf: ["--cookies-from-browser", browser]) }
+        let cookies = try YTDLPCookieSource.configured()
+        defer { cookies.cleanup() }
+        arguments.append(contentsOf: cookies.arguments)
         let json = try await probePostJSON(url: url, ytdlpPath: path, arguments: arguments)
         return TwitterPostSelection.isPostURL(url)
             ? TwitterPostSelection.videos(from: json, url: url)
@@ -582,10 +583,9 @@ actor YTDLPService {
         if let denoPath {
             arguments.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
         }
-        let cookiesBrowser = UserDefaults.standard.string(forKey: AppConstants.ytdlpCookiesBrowserKey) ?? ""
-        if !cookiesBrowser.isEmpty {
-            arguments.append(contentsOf: ["--cookies-from-browser", cookiesBrowser])
-        }
+        let cookies = try YTDLPCookieSource.configured()
+        defer { cookies.cleanup() }
+        arguments.append(contentsOf: cookies.arguments)
         let json: [String: Any]
         if InstagramCarouselSelection.isPostURL(url) {
             json = try await probeInstagramPost(url: url, ytdlpPath: ytdlpPath, arguments: arguments).metadata
@@ -658,10 +658,9 @@ actor YTDLPService {
         if let denoPath {
             arguments.append(contentsOf: ["--js-runtimes", "deno:\(denoPath)"])
         }
-        let cookiesBrowser = UserDefaults.standard.string(forKey: AppConstants.ytdlpCookiesBrowserKey) ?? ""
-        if !cookiesBrowser.isEmpty {
-            arguments.append(contentsOf: ["--cookies-from-browser", cookiesBrowser])
-        }
+        let cookies = try YTDLPCookieSource.configured()
+        defer { cookies.cleanup() }
+        arguments.append(contentsOf: cookies.arguments)
         arguments.append(contentsOf: ["--flat-playlist", "-J", "--no-warnings", "--", url])
 
         let probe = try await runProbe(ytdlpPath: ytdlpPath, arguments: arguments)
@@ -776,11 +775,9 @@ actor YTDLPService {
         }
 
         // Add browser cookies if configured
-        let cookiesBrowser = UserDefaults.standard.string(forKey: AppConstants.ytdlpCookiesBrowserKey) ?? ""
-        if !cookiesBrowser.isEmpty {
-            args.append(contentsOf: ["--cookies-from-browser", cookiesBrowser])
-            logger.info("[YTDLPService] Using cookies from browser: \(cookiesBrowser)")
-        }
+        let cookies = try YTDLPCookieSource.configured()
+        defer { cookies.cleanup() }
+        args.append(contentsOf: cookies.arguments)
 
         var outputTemplate = "%(title)s.%(ext)s"
         if InstagramCarouselSelection.isPostURL(url) {
