@@ -94,6 +94,16 @@ filenames include version, build and manifest hash, preserving source material
 for older builds. Manual releases must attach the source companion as well as
 the application ZIP. No public release is performed by the attribution checks.
 
+After publishing the GitHub release, `release.sh` opens an appcast-only PR using
+an isolated temporary checkout. Merge the printed PR and confirm that the
+**Publish website appcast** workflow succeeds: publishing the release alone does
+not deploy the app's live update feed. The helper preserves entries from `main`
+and reuses an open PR when retried. If this step fails, the script exits with an
+error and prints a `publish-release-appcast.py` command to retry using the
+verified artifacts, without rebuilding or uploading the release again. When
+GitHub CLI is unavailable or unauthenticated, the script prints the manual
+release and appcast deployment steps instead.
+
 ## MPVKit 1.1.0 / FFmpeg 9.0.2 — 2026-10-15
 
 The current package pin is `68c8989362a0daedabcc1540b2b5f0e1fea4be1f`.
