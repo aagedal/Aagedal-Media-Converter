@@ -145,3 +145,9 @@ transport schema, verification and remaining acceptance work](../audio-playback-
 Build candidates using `scripts/prototype-mpv-meter-history.py` with matching
 source, generated compile commands and static frameworks. The script stages
 new outputs and leaves existing build inputs untouched.
+
+The builder also stages `mpv-0.41.0-aac-discard-priming.patch` against the exact
+pinned decoder source. It accounts for codec priming already consumed by discarded
+frames, including multi-frame skip budgets. See the [AAC startup diagnosis and
+nonperiodic peak/RMS validation](../audio-playback-aac-startup-validation-2026-10-17.md).
+This supplemental fix is isolated from the application's packaged dependency.

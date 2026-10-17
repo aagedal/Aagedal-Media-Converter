@@ -31,15 +31,30 @@ def run(command, **kwargs):
     return subprocess.run([str(p) for p in command], check=True, timeout=90, **kwargs)
 
 
-def fixtures(ffmpeg, output):
-    # Distinct channels: alternating sustained level, and 1 ms impulses every 2 s.
-    # PCM keeps the reference independent of codec reconstruction.
-    raw = output / "signal.f32"
+SIGNAL_VERSION = 2
+
+
+def signal_samples():
+    """Thirty seconds with unique 100 ms tone levels and independent impulses.
+
+    Multiplication by 137 permutes all 300 levels (coprime with 300). Adjacent
+    sorted levels differ by about 0.103 dB, exceeding twice the oracle tolerance.
+    The level sequence never repeats within this fixture, unlike version 1's
+    four-second cycle. Peak/RMS still cannot identify every sub-window offset.
+    """
+    levels = [0.02 * (0.7 / 0.02) ** (((i * 137 + 53) % 300) / 299)
+              for i in range(300)]
     samples = array.array("f")
     for n in range(30 * 48000):
-        t = n / 48000
-        samples.extend(((0.05 if int(t / 2) % 2 == 0 else 0.2) * math.sin(2 * math.pi * 1000 * t),
+        samples.extend((levels[n // 4800] * math.sin(2 * math.pi * 1000 * n / 48000),
                         0.5 if n % 96000 in range(48000, 48048) else 0))
+    return samples
+
+
+def fixtures(ffmpeg, output):
+    # PCM keeps the reference independent of codec reconstruction.
+    raw = output / "signal.f32"
+    samples = signal_samples()
     if sys.byteorder != "little":
         samples.byteswap()
     raw.write_bytes(samples.tobytes())
@@ -69,7 +84,7 @@ def reference(ffmpeg, ffprobe, path):
     return start, samples
 
 
-def signal_check(rows, start, samples, tolerance_db=0.05):
+def signal_check(rows, start, samples, tolerance_db=0.05, signal_version=1):
     seen, errors, checked, impulses = set(), [], 0, set()
     for row in rows:
         h = row.get("history")
@@ -91,25 +106,32 @@ def signal_check(rows, start, samples, tolerance_db=0.05):
                 continue
             for channel in range(2):
                 peak = max(abs(v) for v in samples[first * 2 + channel:end * 2:2])
-                expected = 20 * math.log10(peak) if peak else -math.inf
-                key = f"lavfi.astats.{channel + 1}.Peak_level"
-                try:
-                    actual = float(frame["metadata"][key])
-                except (KeyError, ValueError):
-                    errors.append({"identity": identity, "error": "missing peak", "channel": channel + 1})
-                    continue
-                if not (actual == expected or
-                        (math.isfinite(actual) and math.isfinite(expected) and abs(actual - expected) <= tolerance_db)):
-                    errors.append({"identity": identity, "channel": channel + 1,
-                                   "expected": expected if math.isfinite(expected) else "-inf",
-                                   "actual": actual if math.isfinite(actual) else str(actual)})
+                measurements = {"Peak_level": peak}
+                if signal_version >= 2:
+                    values = samples[first * 2 + channel:end * 2:2]
+                    measurements["RMS_level"] = math.sqrt(math.fsum(v * v for v in values) / len(values))
+                for metric, amplitude in measurements.items():
+                    expected = 20 * math.log10(amplitude) if amplitude else -math.inf
+                    key = f"lavfi.astats.{channel + 1}.{metric}"
+                    try:
+                        actual = float(frame["metadata"][key])
+                    except (KeyError, ValueError):
+                        errors.append({"identity": identity, "error": "missing measurement",
+                                       "channel": channel + 1, "metric": metric})
+                        continue
+                    if not (actual == expected or
+                            (math.isfinite(actual) and math.isfinite(expected) and abs(actual - expected) <= tolerance_db)):
+                        errors.append({"identity": identity, "channel": channel + 1, "metric": metric,
+                                       "expected": expected if math.isfinite(expected) else "-inf",
+                                       "actual": actual if math.isfinite(actual) else str(actual)})
                 if channel == 1 and peak >= 0.49:
                     # Record independently known impulse sample locations covered by this frame.
                     impulses.update(n // 96000 for n in range(first, end)
                                     if n % 96000 in range(48000, 48048))
             checked += 1
     return {"frames_checked": checked, "tolerance_db": tolerance_db,
-            "reference_start": start, "impulses_covered": sorted(impulses), "errors": errors}
+            "reference_start": start, "signal_version": signal_version,
+            "impulses_covered": sorted(impulses), "errors": errors}
 
 
 def acceptance(rows, analysis, signal, exit_code, video, stall):
@@ -152,7 +174,9 @@ def acceptance(rows, analysis, signal, exit_code, video, stall):
             "received_media_start": start if math.isfinite(start) else None,
             "received_media_end": end if math.isfinite(end) else None,
             "expected_impulses_in_received_span": expected_impulses,
-            "periodic_signal_limits": "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error."}
+            "signal_limits": ("Unique tone levels within the 30-second fixture; peak/RMS agreement does not exclude every sub-window timestamp error."
+                              if signal.get("signal_version", 1) >= 2 else
+                              "Signal repeats every four seconds; matching peaks cannot exclude a whole-period timestamp error.")}
 
 
 def clock_diagnostics(rows):
@@ -210,7 +234,7 @@ def main():
             stall = 14 if "--stall" in item["command"] else 4 if "--short-stall" in item["command"] else 0
             item["capture_sha256"] = digest(capture)
             item["history"] = HISTORY.analyze(rows)
-            item["signal"] = signal_check(rows, *references[name])
+            item["signal"] = signal_check(rows, *references[name], signal_version=report.get("signal_version", 1))
             item["clocks"] = clock_diagnostics(rows)
             item["acceptance"] = acceptance(rows, item["history"], item["signal"], item["exit_code"], video, stall)
             item["passed"] = item["acceptance"]["passed"]
@@ -229,7 +253,7 @@ def main():
             raise ValueError(f"Fixture {name} starts at {start}, expected {expected}")
     report = {"analysis_source_sha256": digest(ROOT / "scripts/analyze-mpv-meter-history.py"),
               "benchmark_source_sha256": digest(Path(__file__)),
-              "alignment_qualified": False, "app_integration_tested": False,
+              "alignment_qualified": False, "app_integration_tested": False, "signal_version": SIGNAL_VERSION,
               "probe_sha256": digest(args.probe), "probe_source_sha256": digest(ROOT / "scripts/probe-mpv-meter-history.c"),
               "ffmpeg_sha256": digest(args.ffmpeg), "ffprobe_sha256": digest(args.ffprobe),
               "fixtures": {name: {"sha256": digest(path), "reference_start": references[name][0]}
@@ -251,7 +275,7 @@ def main():
                 target.write(result.stdout)
             rows = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
             analysis = HISTORY.analyze(rows)
-            signal = signal_check(rows, *references[name])
+            signal = signal_check(rows, *references[name], signal_version=report.get("signal_version", 1))
             expected_loss = stall == 14
             accepted = acceptance(rows, analysis, signal, result.returncode, video, stall)
             passed = accepted["passed"]
