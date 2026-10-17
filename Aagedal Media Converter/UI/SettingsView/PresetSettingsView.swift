@@ -152,6 +152,10 @@ struct PresetsSettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     presetDetailView
+                    if selectedPreset.supportsOriginalMetadataPreservation {
+                        PresetMetadataPreservationView(preset: selectedPreset)
+                            .id(selectedPreset)
+                    }
                     if selectedPreset.isCustom {
                         customPresetSection
                     }
@@ -219,72 +223,73 @@ struct PresetsSettingsView: View {
             }
         }
         .contentShape(Rectangle())
+        .accessibilityIdentifier("settings.preset.\(preset.rawValue)")
     }
 
     // MARK: - Preset Detail View
 
     private var presetDetailView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header with preset name and default button
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(selectedPreset.displayName)
-                            .font(.title2.bold())
-                        if selectedPreset.isExperimental {
-                            Text("EXPERIMENTAL")
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.orange)
-                                .clipShape(Capsule())
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                // Keep the description with the preset identity, separated from its controls.
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(selectedPreset.displayName)
+                                .font(.title2.bold())
+                            if selectedPreset.isExperimental {
+                                Text("EXPERIMENTAL")
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.orange.opacity(0.2))
+                                    .foregroundColor(.orange)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            Text(selectedPreset.fileSuffix)
+                            Text(".\(selectedPreset.fileExtension)")
+                        }
+                        .font(.subheadline)
+                        .monospaced()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.15))
+                        .foregroundColor(.accentColor)
+                        .clipShape(Capsule())
+                    }
+
+                    Spacer()
+
+                    Button(action: setSelectedPresetAsDefault) {
+                        if isSelectedPresetDefault {
+                            Label("Default", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                        } else {
+                            Text("Set as Default")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
                         }
                     }
-                    HStack(spacing: 8) {
-                        Text(selectedPreset.fileSuffix)
-                        Text(".\(selectedPreset.fileExtension)")
-                    }
-                    .font(.subheadline)
-                    .monospaced()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.accentColor.opacity(0.15))
-                    .foregroundColor(.accentColor)
-                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                    .disabled(isSelectedPresetDefault)
+                    .help(isSelectedPresetDefault ? "Current default preset" : "Set this preset as the default for new files")
                 }
 
-                Spacer()
+                Divider()
 
-                Button(action: setSelectedPresetAsDefault) {
-                    if isSelectedPresetDefault {
-                        Label("Default", systemImage: "checkmark.circle.fill")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.green)
-                    } else {
-                        Text("Set as Default")
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(isSelectedPresetDefault)
-                .help(isSelectedPresetDefault ? "Current default preset" : "Set this preset as the default for new files")
+                Text(selectedPreset.description)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding()
+            .padding(14)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-            .cornerRadius(10)
-
-            // Description
-            Text(selectedPreset.description)
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
-                .cornerRadius(10)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
 
             // Preset-specific settings
             presetSpecificSettings
@@ -303,8 +308,8 @@ struct PresetsSettingsView: View {
                             Text(profile.rawValue).tag(profile.rawValue)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 200)
                     .labelsHidden()
                     .help("Proxy and LT are lightweight for offline editing. Standard 422 is the most common for post-production. HQ offers higher quality at roughly 50% larger files. 4444 and 4444 XQ add alpha channel support and are suited for compositing and VFX.")
                 }
@@ -748,16 +753,18 @@ struct PresetsSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Encoder")
+                            .fixedSize(horizontal: true, vertical: false)
                         Spacer()
                         Picker("", selection: $h264Encoder) {
                             ForEach(H264Encoder.allCases) { encoder in
-                                Text(encoder.rawValue).tag(encoder.rawValue)
+                                Text(encoder == .hardware ? String(localized: "Hardware") : String(localized: "Software"))
+                                    .tag(encoder.rawValue)
                             }
                         }
                         .pickerStyle(.segmented)
                         .fixedSize()
                         .labelsHidden()
-                        .help("Hardware uses VideoToolbox for fast encoding. Software (libx264) offers better compression with CRF quality control.")
+                        .help("Hardware (VideoToolbox) encodes much faster, but usually produces lower quality at the same bitrate. Software (libx264) usually gives slightly better quality and compression, but can take much longer to encode.")
                     }
 
                     if H264Encoder(rawValue: h264Encoder) == .software {
@@ -873,16 +880,18 @@ struct PresetsSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Encoder")
+                            .fixedSize(horizontal: true, vertical: false)
                         Spacer()
                         Picker("", selection: $h265Encoder) {
                             ForEach(H265Encoder.allCases) { encoder in
-                                Text(encoder.rawValue).tag(encoder.rawValue)
+                                Text(encoder == .hardware ? String(localized: "Hardware") : String(localized: "Software"))
+                                    .tag(encoder.rawValue)
                             }
                         }
                         .pickerStyle(.segmented)
                         .fixedSize()
                         .labelsHidden()
-                        .help("Hardware uses VideoToolbox for fast encoding. Software (libx265) offers better compression with CRF quality control.")
+                        .help("Hardware (VideoToolbox) encodes much faster, but usually produces lower quality at the same bitrate. Software (libx265) usually gives slightly better quality and compression, but can take much longer to encode.")
                     }
 
                     if H265Encoder(rawValue: h265Encoder) == .software {
@@ -1335,10 +1344,13 @@ struct PresetsSettingsView: View {
                     DisclosureGroup("Advanced") {
                         VStack(alignment: .leading, spacing: 10) {
                             Stepper("Parallel Chunks: \(av2ParallelChunks == 0 ? "Auto" : (av2ParallelChunks == 1 ? "Off (single process)" : "\(av2ParallelChunks)"))", value: $av2ParallelChunks, in: 0...64)
-                                .help("Splits the clip into independent ranges and encodes them simultaneously, one avmenc per CPU core — the biggest speed-up for AV2. 0 = Auto (one chunk per core). 1 = off (a single encoder using tiles). Higher values force a specific chunk count. Constant-Quality only; tiling below is disabled while chunking is active because chunks already use every core (and untiled chunks compress slightly better).")
+                                .help("Encodes independent ranges simultaneously within the Threads budget. 0 = Auto, keeping at least two seconds and 48 frames per chunk. 1 = off (a single encoder using tiles). Higher values request a chunk count, limited by Threads and a 24-frame minimum per chunk. Concurrent workers also respect available memory and memory pressure. Constant-Quality only; tile settings are ignored while chunking is active.")
+                            Text("Completed chunks are saved for retry with the same source and encoding settings. Up to 20 GiB is saved per job. Idle recovery data is pruned to 20 GiB total and expires after seven days; active jobs are kept.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             Divider()
                             Stepper("Threads: \(av2Threads == 0 ? "Auto" : "\(av2Threads)")", value: $av2Threads, in: 0...64)
-                                .help("avmenc -t for the single-process path. 0 lets the app use all available cores.")
+                                .help("Total encoder thread budget, shared across parallel chunks. 0 uses the available CPU core count. FFmpeg decoding and filtering use additional threads.")
                             Stepper("Tile Columns (log2): \(av2TileColumns == 0 ? "Auto" : "\(av2TileColumns)")", value: $av2TileColumns, in: 0...6)
                                 .help("avmenc --tile-columns (log2: 1 = 2 columns, 2 = 4, …) for the single-process path. 0 = Auto, which picks a tile count from the resolution. Ignored when Parallel Chunks is active.")
                             Stepper("Tile Rows (log2): \(av2TileRows == 0 ? "Auto" : "\(av2TileRows)")", value: $av2TileRows, in: 0...6)
@@ -1993,4 +2005,37 @@ struct PresetsSettingsView: View {
     }
 
 
+}
+
+/// Each preset has its own stored choice; the old global value supplies the
+/// initial value until the user changes this preset.
+private struct PresetMetadataPreservationView: View {
+    let preset: ExportPreset
+    @AppStorage private var preserveMetadata: Bool
+
+    init(preset: ExportPreset) {
+        self.preset = preset
+        _preserveMetadata = AppStorage(wrappedValue: preset.preservesOriginalMetadata(),
+                                      AppConstants.preserveMetadataPreferenceKey(for: preset))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Preserve all original metadata", isOn: $preserveMetadata)
+                .toggleStyle(.switch)
+                .accessibilityIdentifier("preset.metadata.preserve")
+            Text("Keep source metadata when exporting with this preset. Available fields depend on the output format.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Enabled fields in the per-file metadata editor are written even when this setting is off.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
+        .cornerRadius(10)
+    }
 }

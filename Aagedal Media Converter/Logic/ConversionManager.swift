@@ -344,6 +344,7 @@ actor ConversionManager: Sendable {
         let preset: ExportPreset
         let settings: ConversionPreparationSettings
         let comment: String
+        let metadataEditorSettings: MetadataEditorSettings?
         let includeDateTag: Bool
         let waveformRequest: WaveformVideoRequest?
         let synthesizedVideoRequest: SynthesizedVideoRequest?
@@ -513,6 +514,7 @@ actor ConversionManager: Sendable {
             preset: preset,
             settings: settings,
             comment: firstItem.comment,
+            metadataEditorSettings: firstItem.metadataEditorSettings,
             includeDateTag: firstItem.includeDateTag,
             waveformRequest: waveformRequest,
             synthesizedVideoRequest: synthesizedVideoRequest,
@@ -943,6 +945,7 @@ actor ConversionManager: Sendable {
             chapterMetadataURL: chapterMetadataURL,
             chapterMetadataTitles: chapterMetadataTitles,
             comment: plan.comment,
+            metadataEditorSettings: plan.metadataEditorSettings,
             includeDateTag: plan.includeDateTag,
             expectedDuration: plan.totalDuration,
             videoFrameRate: primaryInput.metadata?.primaryVideoStream?.frameRate?.value,
@@ -1238,6 +1241,7 @@ actor ConversionManager: Sendable {
             preset: .streamCopy, // Concat pass always uses stream copy
             settings: settings,
             comment: firstItem.comment,
+            metadataEditorSettings: firstItem.metadataEditorSettings,
             includeDateTag: firstItem.includeDateTag,
             waveformRequest: nil,
             synthesizedVideoRequest: nil,
@@ -2047,6 +2051,7 @@ actor ConversionManager: Sendable {
             outputURL: outputURL,
             preset: preset,
             comment: currentItem.comment,
+            metadataEditorSettings: currentItem.metadataEditorSettings,
             includeDateTag: currentItem.includeDateTag,
             sourceMetadata: currentItem.metadata,
             sourceCameraMetadata: currentItem.cameraMetadata,
@@ -3181,6 +3186,7 @@ actor ConversionManager: Sendable {
                 enabledMetrics: enabledMetrics,
                 vmafModel: vmafModel,
                 ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames,
+                comparisonResolution: settings.comparisonResolution,
                 operationID: followUp.analyticsOperationID
             ) { metric, progressValue in
                 Task { @MainActor in

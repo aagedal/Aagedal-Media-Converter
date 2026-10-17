@@ -1,0 +1,48 @@
+{
+  "encoder": "/Users/truls.aagedal/.t3/worktrees/Aagedal-Media-Converter/t3-62a1f76c/Aagedal Media Converter/Binaries/avmenc",
+  "cases": [
+    {
+      "name": "new-8-q",
+      "seconds": 11.807,
+      "bytes": 3878
+    },
+    {
+      "name": "new-8-vbr",
+      "seconds": 12.589,
+      "bytes": 5533
+    },
+    {
+      "name": "old-8",
+      "seconds": 11.649,
+      "backwardDecodeIdentical": true
+    },
+    {
+      "name": "new-10-q",
+      "seconds": 12.068,
+      "bytes": 4292
+    },
+    {
+      "name": "new-10-vbr",
+      "seconds": 10.668,
+      "bytes": 5543
+    },
+    {
+      "name": "old-10",
+      "seconds": 12.299,
+      "backwardDecodeIdentical": true
+    }
+  ],
+  "containerChecks": [
+    "lagged IVF decode",
+    "chunk concatenation",
+    "CodecPrivate probe",
+    "Matroska video decode",
+    "AAC audio decode"
+  ],
+  "additionalChecks": [
+    "10-bit decoder stdout piped to FFmpeg",
+    "1294 XCTest cases passed",
+    "Final Release bundle helper hashes match repository",
+    "Offline source-companion rebuild succeeded with exact version string"
+  ]
+}

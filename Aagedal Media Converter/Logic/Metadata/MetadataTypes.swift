@@ -4,6 +4,46 @@
 
 import Foundation
 
+struct MetadataEditorField: Codable, Equatable, Sendable {
+    var value: String = ""
+    var isEnabled: Bool = true
+}
+
+/// Per-item values captured with a conversion. Disabled fields follow the
+/// general source-preservation policy; enabled empty fields explicitly clear tags.
+struct MetadataEditorSettings: Codable, Equatable, Sendable {
+    /// Missing in older snapshots, which retain their enabled editor behavior.
+    var isEnabled: Bool? = true
+    var isActive: Bool { isEnabled != false }
+    var writesComment: Bool { isActive && comment.isEnabled }
+    var comment = MetadataEditorField()
+    var description = MetadataEditorField()
+    var title = MetadataEditorField()
+    var artist = MetadataEditorField()
+    var sourceURL: String?
+
+    init(comment: String = "", description: String = "", title: String = "", artist: String = "", sourceURL: String? = nil) {
+        self.comment.value = comment
+        self.description.value = description
+        self.title.value = title
+        self.artist.value = artist
+        self.sourceURL = sourceURL
+    }
+
+    var outputArguments: [String] {
+        guard isActive else { return [] }
+        var arguments: [String] = []
+        for (name, field) in [("description", description), ("title", title), ("artist", artist)] where field.isEnabled {
+            arguments += ["-metadata", "\(name)=\(field.value)"]
+        }
+        if description.isEnabled {
+            arguments += ["-metadata", "synopsis=\(description.value)"]
+        }
+        if let sourceURL { arguments += ["-metadata", "purl=\(sourceURL)"] }
+        return arguments
+    }
+}
+
 /// C2PA (Content Authenticity) metadata extracted from a video container.
 struct C2PAMetadata: Codable, Sendable, Equatable {
     let hasContentCredentials: Bool

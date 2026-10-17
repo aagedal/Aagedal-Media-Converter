@@ -145,6 +145,7 @@ struct VideoQueueTableView: NSViewRepresentable {
     var onDelete: (IndexSet) -> Void
     var onReset: (Int, Bool) -> Void
     var onCancelApplicationJob: ((ApplicationJobID) -> Void)? = nil
+    var onDismissApplicationJobSource: ((ApplicationJobID, Int) -> Void)? = nil
     var onOpenTrim: ((UUID) -> Void)?
     var onOpenTrimWithCrop: ((UUID) -> Void)?
     var onOpenTimecode: ((UUID) -> Void)?
@@ -1032,6 +1033,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                 applicationJobOrigin: item.applicationJobOrigin,
                 applicationJobSettingsSummary: item.applicationJobSettingsSummary,
                 comment: item.comment,
+                metadataEditorSettings: item.metadataEditorSettings,
+                sourceTextMetadata: ContainerTextMetadata(description: metadata?.description, comment: metadata?.comment, sourceURL: metadata?.sourceURL),
+                sourceTitle: metadata?.title,
+                sourceArtist: metadata?.artist,
                 recursiveEncodingGenerations: item.recursiveEncodingGenerations,
                 includeDateTag: item.includeDateTag,
                 outputURL: item.outputURL,
@@ -1340,6 +1345,10 @@ struct VideoQueueTableView: NSViewRepresentable {
                     } else if let gIdx = parent.encodingGroups.firstIndex(where: {
                         $0.items.contains(where: { $0.id == itemID })
                     }), let iIdx = parent.encodingGroups[gIdx].items.firstIndex(where: { $0.id == itemID }) {
+                        let removed = parent.encodingGroups[gIdx].items[iIdx]
+                        if let jobID = removed.applicationJobID, let source = removed.applicationJobSourceIndex {
+                            parent.onDismissApplicationJobSource?(jobID, source)
+                        }
                         if let operationID = parent.encodingGroups[gIdx].items[iIdx].analyticsOperationID {
                             Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
                         }
@@ -1357,7 +1366,7 @@ struct VideoQueueTableView: NSViewRepresentable {
                     }
                 }
             case .cancel:
-                if let item = parent.droppedFiles.first(where: { $0.id == itemID }),
+                if let item = findItem(by: itemID),
                    let jobID = item.applicationJobID {
                     parent.onCancelApplicationJob?(jobID)
                 } else {
@@ -1516,6 +1525,12 @@ struct VideoQueueTableView: NSViewRepresentable {
             case .commentChanged(let text):
                 if let idx = droppedFilesIndex[itemID] {
                     parent.droppedFiles[idx].comment = text
+                    parent.droppedFiles[idx].metadataEditorSettings?.comment.value = text
+                }
+            case .metadataEditorChanged(let settings):
+                if let idx = droppedFilesIndex[itemID] {
+                    parent.droppedFiles[idx].metadataEditorSettings = settings
+                    parent.droppedFiles[idx].comment = settings.writesComment ? settings.comment.value : ""
                 }
             case .commentFocusChanged(let focused):
                 if focused {

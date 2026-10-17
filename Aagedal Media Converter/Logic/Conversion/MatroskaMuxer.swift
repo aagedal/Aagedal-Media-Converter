@@ -8,6 +8,7 @@
 // (at your option) any later version.
 
 import Foundation
+import Darwin
 import OSLog
 
 /// A minimal Matroska (`.mkv`) muxer — just enough to wrap an already-encoded video track plus
@@ -20,9 +21,9 @@ import OSLog
 /// `CodecPrivate` from a tiny `avmenc --webm` probe and copy the video frames verbatim out of the
 /// IVF bitstream (the IVF frame payload is byte-identical to the Matroska block payload).
 ///
-/// The writer builds the whole file in memory (≈ output size) and writes it in one pass with all
-/// element sizes known, which keeps the EBML correct and the file seekable. AV2 encodes are slow
-/// and short, so the memory cost is a non-issue in practice.
+/// The writer streams blocks and clusters to a sibling temporary file, patches sizes
+/// and cues, then atomically installs the completed output. Video payloads can be read
+/// directly from IVF in bounded buffers; the timeline retains only lightweight offsets.
 enum MatroskaMuxer {
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "MatroskaMuxer")
@@ -49,6 +50,10 @@ enum MatroskaMuxer {
     struct Metadata: Sendable, Equatable {
         var comment: String? = nil
         var timecode: String? = nil
+        var description: String? = nil
+        var title: String? = nil
+        var artist: String? = nil
+        var sourceURL: String? = nil
     }
 
     /// A decoded video frame ready to mux: the raw bitstream payload + whether it is a key frame.
@@ -121,175 +126,209 @@ enum MatroskaMuxer {
         audioTracks: [AudioTrack],
         metadata: Metadata? = nil
     ) throws {
-        guard !videoFrames.isEmpty else { throw MuxError.noVideoFrames }
-        let activeAudioTracks = audioTracks.filter { !$0.frames.isEmpty }
+        try writeStream(to: url, video: video, videoSizes: videoFrames.map { $0.data.count },
+            isKeyframe: { videoFrames[$0].isKeyframe },
+            writeVideo: { index, output in try output.write(contentsOf: videoFrames[index].data) },
+            audioTracks: audioTracks, metadata: metadata)
+    }
 
+    /// Stream payloads directly from IVF. Only frame offsets/sizes and block timing are
+    /// indexed; payload reads are capped at 1 MiB regardless of frame or output size.
+    static func write(
+        to url: URL,
+        video: VideoTrackInfo,
+        videoIVFURL: URL,
+        keyframeIndices: [Int],
+        audioTracks: [AudioTrack],
+        metadata: Metadata? = nil
+    ) throws {
+        guard let header = IVFHeaderParser.parse(url: videoIVFURL),
+              header.width == video.width, header.height == video.height,
+              header.fpsNumerator == video.fpsNumerator, header.fpsDenominator == video.fpsDenominator else {
+            throw MuxError.writeFailed("IVF geometry or frame rate does not match the video track")
+        }
+        let records = try IVFConcatenator.frameRecords(in: videoIVFURL)
+        let input = try FileHandle(forReadingFrom: videoIVFURL)
+        defer { try? input.close() }
+        let keys = Set(keyframeIndices)
+        try writeStream(to: url, video: video, videoSizes: records.map(\.payloadSize),
+            isKeyframe: { $0 == 0 || keys.contains($0) },
+            writeVideo: { index, output in
+                let record = records[index]
+                try input.seek(toOffset: record.payloadOffset)
+                var remaining = record.payloadSize
+                while remaining > 0 {
+                    try Task.checkCancellation()
+                    guard let bytes = try input.read(upToCount: min(1024 * 1024, remaining)), !bytes.isEmpty else {
+                        throw MuxError.writeFailed("Truncated IVF frame")
+                    }
+                    try output.write(contentsOf: bytes)
+                    remaining -= bytes.count
+                }
+            }, audioTracks: audioTracks, metadata: metadata)
+    }
+
+    private static func writeStream(
+        to url: URL, video: VideoTrackInfo, videoSizes: [Int],
+        isKeyframe: (Int) -> Bool,
+        writeVideo: (Int, FileHandle) throws -> Void,
+        audioTracks: [AudioTrack], metadata: Metadata?
+    ) throws {
+        try Task.checkCancellation()
+        guard !videoSizes.isEmpty else { throw MuxError.noVideoFrames }
+        let activeAudioTracks = audioTracks.filter { !$0.frames.isEmpty }
         let fpsNum = max(1, video.fpsNumerator)
         let fpsDen = max(1, video.fpsDenominator)
-
-        // MARK: Build the block timeline (ms timestamps, TimestampScale = 1,000,000 ns).
         struct Block {
             let track: Int
+            let order: Int
             let pts: Int64
-            let data: Data
+            let videoIndex: Int?
+            let data: Data?
+            let payloadSize: Int
             let key: Bool
             var discardPaddingNanoseconds: Int64 = 0
         }
         var blocks: [Block] = []
-        blocks.reserveCapacity(videoFrames.count + activeAudioTracks.reduce(0) { $0 + $1.frames.count })
-
-        for (i, frame) in videoFrames.enumerated() {
-            let pts = Int64((Double(i) * 1000.0 * Double(fpsDen) / Double(fpsNum)).rounded())
-            blocks.append(Block(track: 1, pts: pts, data: frame.data, key: frame.isKeyframe))
+        blocks.reserveCapacity(videoSizes.count + activeAudioTracks.reduce(0) { $0 + $1.frames.count })
+        for index in videoSizes.indices {
+            try Task.checkCancellation()
+            let pts = Int64((Double(index) * 1000 * Double(fpsDen) / Double(fpsNum)).rounded())
+            blocks.append(Block(track: 1, order: blocks.count, pts: pts, videoIndex: index, data: nil,
+                payloadSize: videoSizes[index], key: isKeyframe(index)))
         }
         var lastAudioEndMs: Double = 0
         for (audioIndex, audioTrack) in activeAudioTracks.enumerated() {
-            let trackNumber = audioIndex + 2
             var sampleOffset = 0
             for frame in audioTrack.frames {
+                try Task.checkCancellation()
                 let pts = frame.presentationTimestampMilliseconds
-                    ?? Int64((Double(sampleOffset) * 1000.0 / audioTrack.info.sampleRate).rounded())
-                blocks.append(Block(
-                    track: trackNumber, pts: pts, data: frame.data, key: true,
-                    discardPaddingNanoseconds: frame.discardPaddingNanoseconds
-                ))
-                let frameDurationMs = Double(max(0, frame.durationSamples)) * 1000.0 / audioTrack.info.sampleRate
-                let discardedMs = Double(frame.discardPaddingNanoseconds) / 1_000_000
-                let codecDelayMs = Double(audioTrack.info.codecDelayNs ?? 0) / 1_000_000
-                lastAudioEndMs = max(lastAudioEndMs, Double(pts) + frameDurationMs - discardedMs - codecDelayMs)
+                    ?? Int64((Double(sampleOffset) * 1000 / audioTrack.info.sampleRate).rounded())
+                blocks.append(Block(track: audioIndex + 2, order: blocks.count, pts: pts, videoIndex: nil, data: frame.data,
+                    payloadSize: frame.data.count, key: true, discardPaddingNanoseconds: frame.discardPaddingNanoseconds))
+                let duration = Double(max(0, frame.durationSamples)) * 1000 / audioTrack.info.sampleRate
+                lastAudioEndMs = max(lastAudioEndMs, Double(pts) + duration
+                    - Double(frame.discardPaddingNanoseconds) / 1_000_000
+                    - Double(audioTrack.info.codecDelayNs ?? 0) / 1_000_000)
                 sampleOffset += max(0, frame.durationSamples)
             }
         }
-
-        // Stable order: by timestamp, video before audio on ties (keeps each cluster opening on the
-        // video key frame).
-        blocks.sort { $0.pts != $1.pts ? $0.pts < $1.pts : $0.track < $1.track }
-
-        let lastVideoEndMs = Int64((Double(videoFrames.count) * 1000.0 * Double(fpsDen) / Double(fpsNum)).rounded())
-        let durationMs = max(Double(lastVideoEndMs), lastAudioEndMs)
-
-        // MARK: EBML header
+        blocks.sort {
+            if $0.pts != $1.pts { return $0.pts < $1.pts }
+            if $0.track != $1.track { return $0.track < $1.track }
+            return $0.order < $1.order
+        }
+        let durationMs = max((Double(videoSizes.count) * 1000 * Double(fpsDen) / Double(fpsNum)).rounded(), lastAudioEndMs)
         var ebml = Data()
-        ebml += element(0x4286, uintData(1))                 // EBMLVersion
-        ebml += element(0x42F7, uintData(1))                 // EBMLReadVersion
-        ebml += element(0x42F2, uintData(4))                 // EBMLMaxIDLength
-        ebml += element(0x42F3, uintData(8))                 // EBMLMaxSizeLength
-        ebml += element(0x4282, Data("matroska".utf8))       // DocType
-        ebml += element(0x4287, uintData(4))                 // DocTypeVersion
-        ebml += element(0x4285, uintData(2))                 // DocTypeReadVersion
-        let ebmlHeader = element(0x1A45DFA3, ebml)
-
-        // MARK: Segment » Info
-        let appName = "Aagedal Media Converter"
+        ebml += element(0x4286, uintData(1))
+        ebml += element(0x42F7, uintData(1))
+        ebml += element(0x42F2, uintData(4))
+        ebml += element(0x42F3, uintData(8))
+        ebml += element(0x4282, Data("matroska".utf8))
+        ebml += element(0x4287, uintData(4))
+        ebml += element(0x4285, uintData(2))
         var info = Data()
-        info += element(0x2AD7B1, uintData(1_000_000))       // TimestampScale (1 ms)
-        info += element(0x4D80, Data(appName.utf8))          // MuxingApp
-        info += element(0x5741, Data(appName.utf8))          // WritingApp
-        info += element(0x4489, float64Data(Double(durationMs))) // Duration (TimestampScale units)
-        let infoElement = element(0x1549A966, info)
+        info += element(0x2AD7B1, uintData(1_000_000))
+        info += element(0x4D80, Data("Aagedal Media Converter".utf8))
+        info += element(0x5741, Data("Aagedal Media Converter".utf8))
+        info += element(0x4489, float64Data(durationMs))
+        var tracks = buildVideoTrackEntry(video,
+            defaultDurationNs: Int64((1_000_000_000 * Double(fpsDen) / Double(fpsNum)).rounded()))
+        for (index, track) in activeAudioTracks.enumerated() { tracks += buildAudioTrackEntry(track.info, trackNumber: index + 2) }
 
-        // MARK: Segment » Tracks
-        var tracks = Data()
-        tracks += buildVideoTrackEntry(video, defaultDurationNs: Int64((1_000_000_000.0 * Double(fpsDen) / Double(fpsNum)).rounded()))
-        for (audioIndex, audioTrack) in activeAudioTracks.enumerated() {
-            tracks += buildAudioTrackEntry(audioTrack.info, trackNumber: audioIndex + 2)
+        let temporary = url.deletingLastPathComponent().appendingPathComponent(".mkv_\(UUID().uuidString).partial")
+        let fd = Darwin.open(temporary.path, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        guard fd >= 0 else { throw MuxError.writeFailed("Could not create temporary output") }
+        let output = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        defer { try? output.close(); try? FileManager.default.removeItem(at: temporary) }
+        func header(_ id: UInt32, _ size: Int) throws {
+            try output.write(contentsOf: idBytes(id) + vint(UInt64(size)))
         }
-        let tracksElement = element(0x1654AE6B, tracks)
-
-        // MARK: Segment » Clusters (group blocks, each cluster opening on a video key frame)
-        var groups: [[Block]] = []
-        var current: [Block] = []
+        func begin(_ id: UInt32) throws -> UInt64 {
+            try output.write(contentsOf: idBytes(id))
+            let offset = try output.offset()
+            try output.write(contentsOf: Data([0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]))
+            return offset
+        }
+        func finish(_ offset: UInt64) throws {
+            let end = try output.offset()
+            let size = end - offset - 8
+            guard size < (UInt64(1) << 56) - 1 else { throw MuxError.writeFailed("Matroska element is too large") }
+            var bytes = (0..<8).map { UInt8((size >> (8 * (7 - $0))) & 0xff) }
+            bytes[0] |= 0x01
+            try output.seek(toOffset: offset)
+            try output.write(contentsOf: Data(bytes))
+            try output.seek(toOffset: end)
+        }
+        try output.write(contentsOf: element(0x1A45DFA3, ebml))
+        let segmentSizeOffset = try begin(0x18538067)
+        let segmentStart = try output.offset()
+        try output.write(contentsOf: element(0x1549A966, info))
+        try output.write(contentsOf: element(0x1654AE6B, tracks))
+        var clusterSizeOffset: UInt64?
+        var clusterPosition: UInt64 = 0
         var clusterStart: Int64 = 0
-        for b in blocks {
-            var startNew = false
-            if current.isEmpty {
-                startNew = false
-            } else if b.track == 1 && b.key {
-                startNew = true                       // open a new cluster at each video key frame
-            } else if b.pts - clusterStart > 1000 {
-                startNew = true                       // cap cluster span ≈ 1 s (keeps rel ts in Int16)
-            }
-            if startNew { groups.append(current); current = [] }
-            if current.isEmpty { clusterStart = b.pts }
-            current.append(b)
+        var clusterBase: Int64 = 0
+        var clusterHasKeyframe = false
+        var cues: [(time: Int64, offset: UInt64)] = []
+        func closeCluster() throws {
+            guard let offset = clusterSizeOffset else { return }
+            try finish(offset)
+            if clusterHasKeyframe { cues.append((clusterBase, clusterPosition)) }
         }
-        if !current.isEmpty { groups.append(current) }
-
-        var clusterElements: [Data] = []
-        clusterElements.reserveCapacity(groups.count)
-        var cuePoints: [(time: Int64, clusterIndex: Int)] = []
-        for (gi, group) in groups.enumerated() {
-            // Encoder preroll can precede time zero. Cluster timestamps are unsigned, but a
-            // SimpleBlock's signed relative timestamp can represent those initial packets.
-            let base = max(0, group[0].pts)
-            var body = Data()
-            body += element(0xE7, uintData(UInt64(base)))    // cluster Timestamp
-            for b in group {
-                let rel = Int(b.pts - base)
-                let clamped = Int16(max(-32768, min(32767, rel)))
-                var sb = Data()
-                sb += vint(UInt64(b.track))                  // track number VINT (1→0x81, 2→0x82)
-                let u = UInt16(bitPattern: clamped)
-                sb.append(UInt8((u >> 8) & 0xFF))
-                sb.append(UInt8(u & 0xFF))
-                // Block reserves the SimpleBlock keyframe flag. No ReferenceBlock means that
-                // an audio BlockGroup is independently decodable.
-                sb.append(b.discardPaddingNanoseconds == 0 && b.key ? 0x80 : 0x00)
-                sb += b.data
-                if b.discardPaddingNanoseconds > 0 {
-                    var blockGroup = element(0xA1, sb)      // Block
-                    blockGroup += element(0x75A2, signedIntData(b.discardPaddingNanoseconds))
-                    body += element(0xA0, blockGroup)       // BlockGroup + DiscardPadding
-                } else {
-                    body += element(0xA3, sb)               // SimpleBlock
-                }
+        for block in blocks {
+            try Task.checkCancellation()
+            if clusterSizeOffset == nil || (block.track == 1 && block.key) || block.pts - clusterStart > 1000 {
+                try closeCluster()
+                clusterStart = block.pts
+                clusterBase = max(0, block.pts)
+                clusterPosition = try output.offset() - segmentStart
+                clusterSizeOffset = try begin(0x1F43B675)
+                clusterHasKeyframe = false
+                try output.write(contentsOf: element(0xE7, uintData(UInt64(clusterBase))))
             }
-            clusterElements.append(element(0x1F43B675, body))
-            if group.contains(where: { $0.track == 1 && $0.key }) {
-                cuePoints.append((time: base, clusterIndex: gi))
+            clusterHasKeyframe = clusterHasKeyframe || (block.track == 1 && block.key)
+            let relative = block.pts - clusterBase
+            guard relative >= Int64(Int16.min), relative <= Int64(Int16.max) else {
+                throw MuxError.writeFailed("Block timestamp exceeds the cluster range")
+            }
+            var prefix = vint(UInt64(block.track))
+            let timestamp = UInt16(bitPattern: Int16(relative))
+            prefix.append(UInt8(timestamp >> 8)); prefix.append(UInt8(timestamp & 0xff))
+            prefix.append(block.discardPaddingNanoseconds == 0 && block.key ? 0x80 : 0)
+            let size = prefix.count + block.payloadSize
+            if block.discardPaddingNanoseconds > 0 {
+                let padding = element(0x75A2, signedIntData(block.discardPaddingNanoseconds))
+                try header(0xA0, idBytes(0xA1).count + vint(UInt64(size)).count + size + padding.count)
+                try header(0xA1, size)
+                try output.write(contentsOf: prefix)
+                if let index = block.videoIndex { try writeVideo(index, output) }
+                else if let data = block.data { try output.write(contentsOf: data) }
+                try output.write(contentsOf: padding)
+            } else {
+                try header(0xA3, size)
+                try output.write(contentsOf: prefix)
+                if let index = block.videoIndex { try writeVideo(index, output) }
+                else if let data = block.data { try output.write(contentsOf: data) }
             }
         }
-
-        // Cluster Segment-positions (offset from the first byte of the Segment's data) for Cues.
-        let positionBase = infoElement.count + tracksElement.count
-        var clusterOffsets: [Int] = []
-        var running = positionBase
-        for ce in clusterElements { clusterOffsets.append(running); running += ce.count }
-
-        // MARK: Segment » Cues (one per cluster that opens on a video key frame)
-        var cuesBody = Data()
-        for cp in cuePoints {
-            var positions = Data()
-            positions += element(0xF7, uintData(1))                                // CueTrack = video
-            positions += element(0xF1, uintData(UInt64(clusterOffsets[cp.clusterIndex]))) // CueClusterPosition
-            var cuePoint = Data()
-            cuePoint += element(0xB3, uintData(UInt64(cp.time)))                   // CueTime
-            cuePoint += element(0xB7, positions)                                   // CueTrackPositions
-            cuesBody += element(0xBB, cuePoint)                                    // CuePoint
+        try closeCluster()
+        if !cues.isEmpty {
+            let cuesOffset = try begin(0x1C53BB6B)
+            for cue in cues {
+                try Task.checkCancellation()
+                let positions = element(0xF7, uintData(1)) + element(0xF1, uintData(cue.offset))
+                try output.write(contentsOf: element(0xBB, element(0xB3, uintData(UInt64(cue.time))) + element(0xB7, positions)))
+            }
+            try finish(cuesOffset)
         }
-        let cuesElement = cuePoints.isEmpty ? Data() : element(0x1C53BB6B, cuesBody)
-        let tagsElement = buildTags(metadata)
-
-        // MARK: Assemble
-        var segmentBody = Data()
-        segmentBody += infoElement
-        segmentBody += tracksElement
-        for ce in clusterElements { segmentBody += ce }
-        segmentBody += cuesElement
-        segmentBody += tagsElement
-        let segment = element(0x18538067, segmentBody)
-
-        var file = Data()
-        file += ebmlHeader
-        file += segment
-
-        do {
-            try file.write(to: url, options: .atomic)
-        } catch {
-            throw MuxError.writeFailed(error.localizedDescription)
-        }
-        let audioFrameCount = activeAudioTracks.reduce(0) { $0 + $1.frames.count }
-        logger.info("Wrote Matroska \(url.lastPathComponent, privacy: .public): \(videoFrames.count) video + \(audioFrameCount) audio frames across \(activeAudioTracks.count) tracks, \(durationMs) ms")
+        try output.write(contentsOf: buildTags(metadata))
+        try finish(segmentSizeOffset)
+        try Task.checkCancellation()
+        try output.synchronize()
+        try output.close()
+        guard Darwin.rename(temporary.path, url.path) == 0 else { throw MuxError.writeFailed("Could not install completed Matroska output") }
+        logger.info("Streamed Matroska: \(videoSizes.count) video frames, \(durationMs) ms")
     }
 
     // MARK: - Track entries
@@ -345,7 +384,11 @@ enum MatroskaMuxer {
 
         let values: [(name: String, value: String?)] = [
             ("COMMENT", metadata.comment),
-            ("TIMECODE", metadata.timecode)
+            ("TIMECODE", metadata.timecode),
+            ("DESCRIPTION", metadata.description),
+            ("TITLE", metadata.title),
+            ("ARTIST", metadata.artist),
+            ("PURL", metadata.sourceURL)
         ]
         let populated = values.compactMap { pair -> (String, String)? in
             guard let value = pair.value?.trimmingCharacters(in: .whitespacesAndNewlines),

@@ -62,6 +62,11 @@ final class FileImportTaskCoordinator: ObservableObject {
     }
 }
 
+private enum ApplicationQueueLocation {
+    case file(Int)
+    case group(Int, Int)
+}
+
 struct ContentView: View {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "ContentView")
     @Environment(\.openSettings) private var openSettings
@@ -117,10 +122,15 @@ struct ContentView: View {
     
     @State private var encodingGroups: [EncodingGroup] = []
     @State private var queueOrder: [UUID] = []
+    @State private var dismissedApplicationJobSources = Set<ApplicationJobSourceID>()
     @State private var dismissedApplicationJobIDs = Set<ApplicationJobID>()
     @State private var applicationJobVisibilityStart = Date().addingTimeInterval(-60)
+    @State private var manualSubmissionGeneration = 0
     @State private var pendingManualApplicationJobItems: [UUID: [UUID]] = [:]
+    @State private var synchronizedApplicationJobs: [ApplicationJobID: ApplicationJobRecord] = [:]
+    @State private var applicationJobPlannedOutputs: [ApplicationJobID: [URL]] = [:]
     @State private var activeApplicationJobIDs = Set<ApplicationJobID>()
+    @State private var activeApplicationJobSourceURLs = Set<URL>()
 
     @StateObject private var updateChecker = UpdateChecker.shared
     @State private var showUpdateNotification = false
@@ -166,11 +176,11 @@ struct ContentView: View {
     /// independently. Present them as one conversion owner to the toolbar so a
     /// handed-off manual, Shortcut, or agent job remains cancellable.
     private var isAnyConversionActive: Bool {
-        isConverting || !activeApplicationJobIDs.isEmpty
+        isConverting || !activeApplicationJobIDs.isEmpty || !pendingManualApplicationJobItems.isEmpty
     }
 
     private var hasResettableItems: Bool {
-        droppedFiles.contains { $0.status != .waiting && $0.applicationJobID == nil }
+        droppedFiles.contains { $0.status != .waiting }
         || encodingGroups.contains { $0.items.contains { $0.status != .waiting } }
     }
 
@@ -300,6 +310,7 @@ struct ContentView: View {
             onCancelApplicationJob: { jobID in
                 Task { _ = try? await ApplicationJobService.shared.requestCancellation(jobID) }
             },
+            onDismissApplicationJobSource: dismissApplicationJobSource,
             preset: selectedPreset,
             mergeClipsEnabled: mergeClipsEnabled,
             mergeClipsAvailable: mergeClipsAvailable,
@@ -375,6 +386,10 @@ struct ContentView: View {
                 // progress callback fires into an items array that no longer
                 // contains the uploading item (caused index-out-of-range crash).
                 if let group = encodingGroups.first(where: { $0.id == groupID }) {
+                    for jobID in Set(group.items.compactMap(\.applicationJobID)) {
+                        dismissedApplicationJobIDs.insert(jobID)
+                        Task { _ = try? await ApplicationJobService.shared.requestCancellation(jobID) }
+                    }
                     for item in group.items {
                         if item.uploadStatus.isActive {
                             Task { await UploadManager.shared.cancelUpload(itemID: item.id) }
@@ -402,6 +417,9 @@ struct ContentView: View {
                     for ii in encodingGroups[gi].items.indices where encodingGroups[gi].items[ii].status != .waiting {
                         if let operationID = encodingGroups[gi].items[ii].analyticsOperationID {
                             Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                        }
+                        if let source = ApplicationJobRowProjection.releaseTerminalOwnership(of: &encodingGroups[gi].items[ii]) {
+                            dismissedApplicationJobSources.insert(source)
                         }
                         encodingGroups[gi].items[ii].resetConversionState()
                     }
@@ -462,7 +480,8 @@ struct ContentView: View {
                         MetadataWindowState.shared.selectedItemIDs = Set(validIDs)
                         MetadataWindowState.shared.allItems = allItems
                         MetadataWindowController.shared.showWindow()
-                    }
+                    },
+                    onDismissApplicationJobSource: dismissApplicationJobSource
                 )
             },
             onOpenSettingsTab: { tab in
@@ -473,6 +492,11 @@ struct ContentView: View {
         )
     }
 
+    private func dismissApplicationJobSource(_ jobID: ApplicationJobID, sourceIndex: Int) {
+        dismissedApplicationJobSources.insert(ApplicationJobSourceID(jobID: jobID, sourceIndex: sourceIndex))
+        Task { _ = try? await ApplicationJobService.shared.requestCancellation(jobID) }
+    }
+
     private func handleFileDeletion(_ indexSet: IndexSet) {
         let itemsToRemove = indexSet.compactMap { index -> VideoItem? in
             guard index < droppedFiles.count else { return nil }
@@ -481,8 +505,9 @@ struct ContentView: View {
 
         for item in itemsToRemove {
             if let jobID = item.applicationJobID {
-                dismissedApplicationJobIDs.insert(jobID)
-                Task { _ = try? await ApplicationJobService.shared.requestCancellation(jobID) }
+                if let source = item.applicationJobSourceIndex {
+                    dismissApplicationJobSource(jobID, sourceIndex: source)
+                }
             }
             if item.isDownloading {
                 DownloadManager.shared.cancelDownload(itemID: item.id)
@@ -511,7 +536,10 @@ struct ContentView: View {
 
     private func handleFileReset(_ index: Int, optionKeyPressed: Bool = false) {
         if index < droppedFiles.count {
-            guard droppedFiles[index].applicationJobID == nil else { return }
+            guard droppedFiles[index].applicationJobID == nil || !isAnyConversionActive else { return }
+            if let source = ApplicationJobRowProjection.releaseTerminalOwnership(of: &droppedFiles[index]) {
+                dismissedApplicationJobSources.insert(source)
+            }
             if let operationID = droppedFiles[index].analyticsOperationID {
                 Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
             }
@@ -1932,7 +1960,15 @@ struct ContentView: View {
                     // failure when the sequence reaches its unavailable source.
                     try FileManager.default.removeItem(at: secondURL)
                 }
-                let group = EncodingGroup(name: "UI Test Sequence", items: items, preset: fixturePreset)
+                let sharedGroup = environment["AMC_UI_TEST_SHARED_GROUP"] == "1"
+                if sharedGroup {
+                    for index in items.indices {
+                        items[index].trimStart = nil
+                        items[index].trimEnd = nil
+                    }
+                }
+                let group = EncodingGroup(name: "UI Test Sequence", items: items, isExpanded: sharedGroup,
+                                          preset: fixturePreset, concatEnabled: !sharedGroup)
                 encodingGroups.append(group)
                 queueOrder.append(group.id)
             } else {
@@ -1969,17 +2005,44 @@ struct ContentView: View {
         let fixtureDuration = ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1"
             ? 15
             : (ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] != nil ? 6 : 2)
+        var metadataArguments: [String] = []
+        if UserDefaults.standard.bool(forKey: "AMC_UI_TEST_TEXT_METADATA") {
+            metadataArguments = ["-metadata", "title=Source title", "-metadata", "artist=Source artist",
+                                 "-metadata", "description=Source description\nSecond line 日本語 🎬",
+                                 "-metadata", "comment=Source comment", "-metadata", "purl=https://example.com/source"]
+            if container == "mp4" { metadataArguments += ["-movflags", "use_metadata_tags"] }
+        }
 
+        var fixtureAudio = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_SILENCE")
+            ? "aevalsrc=if(between(t\\,2\\,4)\\,0\\,0.1*sin(2*PI*440*t)):s=48000:d=\(fixtureDuration)"
+            : "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)"
+        if UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PEAKS") {
+            fixtureAudio = "aevalsrc=if(between(t\\,1\\,2)\\,0.8\\,0.01)*sin(2*PI*440*t)|if(between(t\\,1\\,2)\\,0.08\\,0.001)*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
+        }
+        let groupedSilence = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_SILENCE")
+        var extraAudioInputs: [String] = []
+        var extraAudioMaps: [String] = []
+        if groupedSilence {
+            for index in 1..<6 {
+                let start = index == 1 ? 3 : 2
+                let end = index == 1 ? 5 : 4
+                extraAudioInputs += ["-f", "lavfi", "-i",
+                    "aevalsrc=if(between(t\\,\(start)\\,\(end))\\,0\\,0.1*sin(2*PI*\(440 + index * 100)*t)):s=48000:d=\(fixtureDuration)"]
+                extraAudioMaps += ["-map", "\(index + 1):a:0"]
+            }
+        }
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
             arguments: [
                 "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
                 "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)",
-                "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=\(fixtureDuration)",
+                "-f", "lavfi", "-i", fixtureAudio,
+            ] + extraAudioInputs + [
                 "-map", "0:v:0", "-map", "1:a:0",
+            ] + extraAudioMaps + [
                 "-c:v", "mpeg4", "-q:v", "5", "-g", "12", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-shortest", fixtureURL.path,
-            ],
+                "-c:a", groupedSilence ? "flac" : "aac", "-shortest",
+            ] + metadataArguments + [fixtureURL.path],
             timeout: .seconds(30),
             standardOutputCaptureLimit: 0,
             standardErrorCaptureLimit: 8 * 1024,
@@ -2031,46 +2094,68 @@ struct ContentView: View {
     @MainActor
     private func synchronizeApplicationJobs(_ records: [ApplicationJobRecord]) async {
         activeApplicationJobIDs = Set(records.lazy.filter { !$0.state.isTerminal }.map(\.id))
+        activeApplicationJobSourceURLs = Set(records.filter { !$0.state.isTerminal }.flatMap { $0.request.sourceURLs })
         let visibleRecords = records.filter { record in
             guard !dismissedApplicationJobIDs.contains(record.id) else { return false }
             return !record.state.isTerminal || record.updatedAt >= applicationJobVisibilityStart
         }
 
+        let visibleIDs = Set(visibleRecords.map(\.id))
+        synchronizedApplicationJobs = synchronizedApplicationJobs.filter { visibleIDs.contains($0.key) }
+        applicationJobPlannedOutputs = applicationJobPlannedOutputs.filter { visibleIDs.contains($0.key) }
+
+        // Resolve missing immutable plans before indexing rows. No row index
+        // survives a suspension or concurrent user edit.
+        for record in visibleRecords where applicationJobPlannedOutputs[record.id] == nil {
+            if let outputs = try? await ApplicationJobService.shared.plannedOutputURLs(for: record.id) {
+                applicationJobPlannedOutputs[record.id] = outputs
+            }
+        }
+        guard !Task.isCancelled else { return }
+        let rowsByID = applicationQueueLocations()
+        var rowsByJob: [ApplicationJobID: [Int: ApplicationQueueLocation]] = [:]
+        for location in rowsByID.values {
+            let item = applicationQueueItem(at: location)
+            if let jobID = item.applicationJobID, let sourceIndex = item.applicationJobSourceIndex {
+                rowsByJob[jobID, default: [:]][sourceIndex] = location
+            }
+        }
         for record in visibleRecords {
-            let plannedOutputs = (try? await ApplicationJobService.shared.plannedOutputURLs(for: record.id)) ?? []
+            // Dismissal can occur while a missing plan is being resolved.
+            guard !dismissedApplicationJobIDs.contains(record.id) else { continue }
+            let plannedOutputs = applicationJobPlannedOutputs[record.id] ?? []
+            let rowsBySource = rowsByJob[record.id] ?? [:]
+            if synchronizedApplicationJobs[record.id] == record,
+               rowsBySource.count == record.request.sourceURLs.count { continue }
+            synchronizedApplicationJobs[record.id] = record
             for (sourceIndex, sourceURL) in record.request.sourceURLs.enumerated() {
+                guard !dismissedApplicationJobSources.contains(ApplicationJobSourceID(jobID: record.id, sourceIndex: sourceIndex)) else { continue }
                 let outputURL = record.outputURLs.indices.contains(sourceIndex)
                     ? record.outputURLs[sourceIndex]
                     : (plannedOutputs.indices.contains(sourceIndex) ? plannedOutputs[sourceIndex] : nil)
 
-                if let itemIndex = droppedFiles.firstIndex(where: {
-                    $0.applicationJobID == record.id && $0.applicationJobSourceIndex == sourceIndex
-                }) {
+                if let itemIndex = rowsBySource[sourceIndex] {
                     applyApplicationJob(
                         record,
                         sourceIndex: sourceIndex,
                         outputURL: outputURL,
-                        to: &droppedFiles[itemIndex]
+                        at: itemIndex
                     )
                     continue
                 }
 
-                // Manual shared submissions already have visible queue rows.
-                // Claim the exact row reserved for this request instead of
-                // guessing from a path that may also appear in older history.
+                // Pending submissions reserve exact row identities. Removal
+                // during admission must cancel that source, never recreate it.
                 if record.request.origin == .manual,
                    let itemIDs = pendingManualApplicationJobItems[record.request.requestID],
-                   itemIDs.indices.contains(sourceIndex),
-                   let itemIndex = droppedFiles.firstIndex(where: {
-                       $0.id == itemIDs[sourceIndex]
-                           && ($0.applicationJobID == nil || $0.applicationJobID == record.id)
-                   }) {
-                    applyApplicationJob(
-                        record,
-                        sourceIndex: sourceIndex,
-                        outputURL: outputURL,
-                        to: &droppedFiles[itemIndex]
-                    )
+                   itemIDs.indices.contains(sourceIndex) {
+                    guard let itemIndex = rowsByID[itemIDs[sourceIndex]] else {
+                        dismissApplicationJobSource(record.id, sourceIndex: sourceIndex)
+                        continue
+                    }
+                    if applicationQueueItem(at: itemIndex).applicationJobID == nil || applicationQueueItem(at: itemIndex).applicationJobID == record.id {
+                        applyApplicationJob(record, sourceIndex: sourceIndex, outputURL: outputURL, at: itemIndex)
+                    }
                     continue
                 }
 
@@ -2120,59 +2205,41 @@ struct ContentView: View {
     }
 
     @MainActor
+    private func applicationQueueLocations() -> [UUID: ApplicationQueueLocation] {
+        var result: [UUID: ApplicationQueueLocation] = [:]
+        for (index, item) in droppedFiles.enumerated() { result[item.id] = .file(index) }
+        for (groupIndex, group) in encodingGroups.enumerated() {
+            for (itemIndex, item) in group.items.enumerated() { result[item.id] = .group(groupIndex, itemIndex) }
+        }
+        return result
+    }
+
+    @MainActor
+    private func applicationQueueItem(at location: ApplicationQueueLocation) -> VideoItem {
+        switch location {
+        case .file(let index): droppedFiles[index]
+        case .group(let group, let index): encodingGroups[group].items[index]
+        }
+    }
+
+    @MainActor
+    private func applyApplicationJob(_ record: ApplicationJobRecord, sourceIndex: Int, outputURL: URL?, at location: ApplicationQueueLocation) {
+        switch location {
+        case .file(let index):
+            applyApplicationJob(record, sourceIndex: sourceIndex, outputURL: outputURL, to: &droppedFiles[index])
+        case .group(let group, let index):
+            applyApplicationJob(record, sourceIndex: sourceIndex, outputURL: outputURL, to: &encodingGroups[group].items[index])
+        }
+    }
+
+    @MainActor
     private func applyApplicationJob(
         _ record: ApplicationJobRecord,
         sourceIndex: Int,
         outputURL: URL?,
         to item: inout VideoItem
     ) {
-        item.applicationJobID = record.id
-        item.applicationJobSourceIndex = sourceIndex
-        item.applicationJobOrigin = record.request.origin
-        item.applicationPresetID = record.request.presetID
-        item.applicationJobSettingsSummary = record.request.acceptedSettingsSummary(
-            sourceIndex: sourceIndex
-        )
-        item.outputURL = outputURL
-        if let sourceSettings = record.request.sourceSettings, sourceSettings.indices.contains(sourceIndex) {
-            let settings = sourceSettings[sourceIndex]
-            item.analyticsSourceRange = AnalyticsSourceRange(start: settings.trimStart, end: settings.trimEnd)
-        } else {
-            item.analyticsSourceRange = AnalyticsSourceRange()
-        }
-        item.progress = record.progress ?? 0
-        item.eta = nil
-        item.statusMessage = switch record.state {
-        case .queued: "Queued"
-        case .running: record.stage ?? "Encoding"
-        case .cancelling: "Cancelling"
-        case .succeeded: nil
-        case .failed: "Shared job failed"
-        case .cancelled: nil
-        case .interrupted: "Interrupted after app restart"
-        }
-        item.conversionError = switch record.state {
-        case .failed, .interrupted: record.diagnostic
-        default: nil
-        }
-        item.status = switch record.state {
-        // Treat queued shared jobs as active in the legacy row model. This keeps
-        // manual encode actions from claiming work already owned by the service.
-        case .queued, .running, .cancelling: .converting
-        case .succeeded: .done
-        case .failed, .interrupted: .failed
-        case .cancelled: .cancelled
-        }
-        // A later failure or cancellation does not undo earlier batch outputs.
-        if record.outputURLs.indices.contains(sourceIndex) {
-            item.status = .done
-            item.statusMessage = nil
-            item.conversionError = nil
-        }
-        if item.status == .done {
-            item.progress = 1
-            item.refreshOutputFileCache()
-        }
+        ApplicationJobRowProjection.apply(record, sourceIndex: sourceIndex, outputURL: outputURL, to: &item)
     }
     
     @MainActor
@@ -2182,9 +2249,9 @@ struct ContentView: View {
         dockProgressUpdater.updateProgress(0.0)
         sanitizeQueueOrder()
 
-        // When every pending row belongs to the ordinary v1 preset subset, hand
-        // the whole manual batch to the application-owned queue. Mixed/grouped or
-        // customized work remains on the legacy path so no setting is discarded.
+        // Submit a representable ungrouped batch as one durable job. Mixed
+        // queues admit each batch in order below, retaining the established path
+        // for settings that the immutable shared contract cannot yet capture.
         let hasWaitingGroup = encodingGroups.contains {
             $0.items.contains { $0.status == .waiting }
         }
@@ -2215,6 +2282,10 @@ struct ContentView: View {
                 // Encoding group entry
                 let group = encodingGroups[groupIndex]
                 if group.items.contains(where: { $0.status == .waiting }) {
+                    if await submitApplicationGroupIfSupported(groupID: id, waitForCompletion: true) {
+                        i += 1
+                        continue
+                    }
                     // Apply sequential naming if enabled
                     if group.sequentialNamingEnabled {
                         let processedName = FileNameProcessor.processFileName(group.name)
@@ -2252,14 +2323,21 @@ struct ContentView: View {
             } else {
                 // Consecutive ungrouped items — collect IDs for this batch
                 var batchIDs = Set<UUID>()
+                var orderedBatchIDs: [UUID] = []
                 while i < queueOrder.count && !encodingGroups.contains(where: { $0.id == queueOrder[i] }) {
                     let itemID = queueOrder[i]
                     if droppedFiles.first(where: { $0.id == itemID })?.applicationJobID == nil {
                         batchIDs.insert(itemID)
+                        orderedBatchIDs.append(itemID)
                     }
                     i += 1
                 }
                 if droppedFiles.contains(where: { $0.status == .waiting && batchIDs.contains($0.id) }) {
+                    let itemsByID = Dictionary(uniqueKeysWithValues: droppedFiles.map { ($0.id, $0) })
+                    let items = orderedBatchIDs.compactMap { itemsByID[$0] }.filter { $0.status == .waiting }
+                    if await submitManualApplicationJobIfSupported(
+                        items: items, mergeClipsEnabled: mergeClipsEnabled, waitForCompletion: true
+                    ) { continue }
                     await ConversionManager.shared.startConversion(
                         droppedFiles: $droppedFiles,
                         outputFolder: currentOutputFolder.path,
@@ -2307,56 +2385,88 @@ struct ContentView: View {
     @MainActor
     private func submitManualApplicationJobIfSupported(
         items: [VideoItem],
-        mergeClipsEnabled: Bool
+        mergeClipsEnabled: Bool,
+        preset: ExportPreset? = nil,
+        waitForCompletion: Bool = false
     ) async -> Bool {
+        let effectivePreset = preset ?? selectedPreset
         guard let request = ManualApplicationJobBridge.makeRequest(
             items: items,
             destinationFolderURL: currentOutputFolder,
-            preset: selectedPreset,
+            preset: effectivePreset,
             mergeClipsEnabled: mergeClipsEnabled
         ) else {
             return false
         }
 
+        let submissionGeneration = manualSubmissionGeneration
         ManualApplicationJobBridge.persistFileAccess(for: request)
         pendingManualApplicationJobItems[request.requestID] = items.map(\.id)
 
         do {
             let acceptance = try await ApplicationJobService.shared.planAndSubmit(request)
+            if submissionGeneration != manualSubmissionGeneration {
+                _ = try? await ApplicationJobService.shared.requestCancellation(acceptance.record.id)
+            }
             let record = try await ApplicationJobService.shared.record(for: acceptance.record.id)
                 ?? acceptance.record
             if !record.state.isTerminal {
                 activeApplicationJobIDs.insert(record.id)
             }
             let outputs = try await ApplicationJobService.shared.plannedOutputURLs(for: record.id)
+            let locations = applicationQueueLocations()
             for (sourceIndex, item) in items.enumerated() {
-                guard let index = droppedFiles.firstIndex(where: { $0.id == item.id }) else { continue }
+                guard let index = locations[item.id] else {
+                    dismissApplicationJobSource(record.id, sourceIndex: sourceIndex)
+                    continue
+                }
                 let outputURL = outputs.indices.contains(sourceIndex) ? outputs[sourceIndex] : nil
                 applyApplicationJob(
                     record,
                     sourceIndex: sourceIndex,
                     outputURL: outputURL,
-                    to: &droppedFiles[index]
+                    at: index
                 )
             }
             pendingManualApplicationJobItems.removeValue(forKey: request.requestID)
+            if waitForCompletion, !record.state.isTerminal {
+                for await records in await ApplicationJobService.shared.recordUpdates() {
+                    if records.first(where: { $0.id == record.id })?.state.isTerminal == true { break }
+                }
+            }
         } catch {
             let message = ApplicationAgentToolFailure(error: error).message
+            let locations = applicationQueueLocations()
             for item in items {
-                guard let index = droppedFiles.firstIndex(where: {
-                    $0.id == item.id && $0.status == .waiting && $0.applicationJobID == nil
-                }) else { continue }
-                droppedFiles[index].status = .failed
-                droppedFiles[index].progress = 0
-                droppedFiles[index].statusMessage = "Shared job submission failed"
-                droppedFiles[index].conversionError = message
-                droppedFiles[index].applicationJobOrigin = .manual
-                droppedFiles[index].applicationPresetID = ApplicationPresetID(exportPreset: selectedPreset)
+                guard let location = locations[item.id] else { continue }
+                var failed = applicationQueueItem(at: location)
+                guard failed.status == .waiting, failed.applicationJobID == nil else { continue }
+                failed.status = .failed
+                failed.progress = 0
+                failed.statusMessage = "Shared job submission failed"
+                failed.conversionError = message
+                failed.applicationJobOrigin = .manual
+                failed.applicationPresetID = ApplicationPresetID(exportPreset: effectivePreset)
+                switch location {
+                case .file(let index): droppedFiles[index] = failed
+                case .group(let group, let index): encodingGroups[group].items[index] = failed
+                }
             }
             pendingManualApplicationJobItems.removeValue(forKey: request.requestID)
             Self.logger.error("Shared manual submission failed: \(error.localizedDescription, privacy: .public)")
         }
         return true
+    }
+
+    @MainActor
+    private func submitApplicationGroupIfSupported(groupID: UUID, waitForCompletion: Bool) async -> Bool {
+        guard let index = encodingGroups.firstIndex(where: { $0.id == groupID }) else { return false }
+        let group = encodingGroups[index]
+        guard let items = ManualApplicationJobBridge.representableGroupItems(group) else { return false }
+        return await submitManualApplicationJobIfSupported(
+            items: items, mergeClipsEnabled: false,
+            preset: group.preset ?? selectedPreset, waitForCompletion: waitForCompletion
+        )
     }
 
     /// Encodes all waiting items in a single group immediately (Option+click on the
@@ -2371,6 +2481,10 @@ struct ContentView: View {
         isConverting = true
         dockProgressUpdater.updateProgress(0.0)
 
+        if await submitApplicationGroupIfSupported(groupID: groupID, waitForCompletion: false) {
+            isConverting = false
+            return
+        }
         let group = encodingGroups[groupIndex]
         if group.sequentialNamingEnabled {
             let processedName = FileNameProcessor.processFileName(group.name)
@@ -2409,6 +2523,7 @@ struct ContentView: View {
 
     @MainActor
     private func cancelConversion() async {
+        manualSubmissionGeneration &+= 1
         let applicationJobIDs = activeApplicationJobIDs
         for jobID in applicationJobIDs {
             _ = try? await ApplicationJobService.shared.requestCancellation(jobID)
@@ -2876,6 +2991,7 @@ struct ContentView: View {
     @MainActor
     private func clearAllFilesAfterEmbeddingCancellation() {
         let allItems = droppedFiles + encodingGroups.flatMap(\.items)
+        dismissedApplicationJobIDs.formUnion(allItems.compactMap(\.applicationJobID))
 
         for item in allItems {
             if item.isDownloading {
@@ -2935,10 +3051,12 @@ struct ContentView: View {
 
         var didReset = false
         for index in droppedFiles.indices
-            where droppedFiles[index].status != .waiting
-                && droppedFiles[index].applicationJobID == nil {
+            where droppedFiles[index].status != .waiting {
             if let operationID = droppedFiles[index].analyticsOperationID {
                 Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+            }
+            if let source = ApplicationJobRowProjection.releaseTerminalOwnership(of: &droppedFiles[index]) {
+                dismissedApplicationJobSources.insert(source)
             }
             droppedFiles[index].resetConversionState()
             droppedFiles[index].outputURL = expectedOutputURL(for: droppedFiles[index], preset: selectedPreset)
@@ -2953,6 +3071,9 @@ struct ContentView: View {
             for ii in encodingGroups[gi].items.indices where encodingGroups[gi].items[ii].status != .waiting {
                 if let operationID = encodingGroups[gi].items[ii].analyticsOperationID {
                     Task { await AnalyticsService.shared.cancelAnalysis(operationID: operationID) }
+                }
+                if let source = ApplicationJobRowProjection.releaseTerminalOwnership(of: &encodingGroups[gi].items[ii]) {
+                    dismissedApplicationJobSources.insert(source)
                 }
                 encodingGroups[gi].items[ii].resetConversionState()
                 didReset = true
@@ -3006,7 +3127,12 @@ struct ContentView: View {
                             watchFolderPath = newPath
                         }
                     },
-                    onNewFiles: { urls in await addFilesFromWatchFolder(urls) }
+                    onNewFiles: { urls in await addFilesFromWatchFolder(urls) },
+                    protectedFiles: {
+                        Set(allConversionItems.map(\.url))
+                            .union(allConversionItems.compactMap { $0.imageSequenceConfig?.associatedAudioURL })
+                            .union(activeApplicationJobSourceURLs)
+                    }
                 )
 
                 if watchFolderToggleID == toggleID, !success {
@@ -3061,6 +3187,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
         context.coordinator.install()
         let view = NSView(frame: .zero)
         view.isHidden = true
+        context.coordinator.hostView = view
         return view
     }
     
@@ -3092,6 +3219,7 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
         var onShowPresetQuickSelect: () -> Void
         var onSelectPresetByIndex: (Int) -> Bool
         var onShowShortcuts: () -> Void
+        weak var hostView: NSView?
         private var monitor: Any?
 
         init(
@@ -3128,57 +3256,24 @@ private struct GlobalKeyboardShortcutHandler: NSViewRepresentable {
                 let hasShift = event.modifierFlags.contains(.shift)
                 let hasControl = event.modifierFlags.contains(.control)
                 
-                // Option+W: Toggle Watch Folder
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_W {
-                    self.onToggleWatchFolder()
-                    return nil
-                }
-                
-                // Option+F: Select Output Folder
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_F {
-                    self.onSelectOutputFolder()
-                    return nil
-                }
-                
-                // Option+M: Toggle Merge
-                if hasOption && !hasCommand && !hasShift && !hasControl && event.keyCode == kVK_ANSI_M {
-                    self.onToggleMerge()
-                    return nil
-                }
-                
-                // Cmd+Shift+R: Reset All
-                if hasCommand && hasShift && !hasOption && !hasControl && event.keyCode == kVK_ANSI_R {
-                    self.onResetAll()
-                    return nil
-                }
+                // Do not route main-window commands into Settings, players, or sheets.
+                guard let window = self.hostView?.window, event.window === window,
+                      window.isKeyWindow, window.attachedSheet == nil else { return event }
 
-                // Cmd+Return: Start/Stop Conversion
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_Return {
-                    self.onToggleConversion(false)
-                    return nil
-                }
-
-                // Cmd+D: Show URL Input Overlay (D for Download)
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_D {
-                    self.onShowURLInput()
-                    return nil
-                }
-
-                // Cmd+Shift+C: Open Capture Mode
-                if hasCommand && hasShift && !hasOption && !hasControl && event.keyCode == kVK_ANSI_C {
-                    self.onShowCapture()
-                    return nil
-                }
-
-                // Cmd+P: Show Preset Quick Select
-                if hasCommand && !hasOption && !hasShift && !hasControl && event.keyCode == kVK_ANSI_P {
-                    self.onShowPresetQuickSelect()
-                    return nil
-                }
-
-                // Control+K: Show Shortcuts (opens Settings to Shortcuts tab)
-                if hasControl && !hasCommand && !hasOption && !hasShift && event.keyCode == kVK_ANSI_K {
-                    self.onShowShortcuts()
+                let settings = KeyboardShortcutSettings()
+                if let action = MainWindowShortcut.allCases.first(where: { settings.binding(for: $0).matches(event) }) {
+                    guard !event.isARepeat else { return nil }
+                    switch action {
+                    case .watchFolder: self.onToggleWatchFolder()
+                    case .outputFolder: self.onSelectOutputFolder()
+                    case .merge: self.onToggleMerge()
+                    case .resetAll: self.onResetAll()
+                    case .conversion: self.onToggleConversion(false)
+                    case .download: self.onShowURLInput()
+                    case .capture: self.onShowCapture()
+                    case .presets: self.onShowPresetQuickSelect()
+                    case .shortcuts: self.onShowShortcuts()
+                    }
                     return nil
                 }
 

@@ -1,0 +1,32 @@
+{
+  "upstream": "https://github.com/AOMediaCodec/avm",
+  "refsVerifiedOn": "2026-10-14",
+  "main": "0da4c36474f8d1952bbc54e3ccf833d5f0d2280c",
+  "candidate": "b38429d1ea69a3d0e17d4b8ae2495ff0b30b40a0",
+  "mergeBase": "8e89428e47563ebab09cf2cbbb4420709a0dc99a",
+  "candidateTrackedTreeClean": true,
+  "licensePatentAndThirdPartyChangedPaths": [],
+  "mainOnlyCommits": [
+    "0da4c36474f8d1952bbc54e3ccf833d5f0d2280c Avoid null pointer offset in highbd_vfilter8 (#5522)",
+    "3c7086bfdf58bd48f1bb9db479fa90cd68f05761 Fix calculation of max symbol count (#5519)",
+    "5c446e1bc4fb0c36b98f1fdf5c93fbf7add80067 encode_small_width_height_test: Port libaom changes (#5510)",
+    "aebae1304e8f58b5608d796abb4442fbee76c4d3 Apply fixes for aomedia:3113 to libavm (#5506)",
+    "01803db6afa5a0616702a3814fc5934ab9e99adf Add NEON for av2_update_nbr_diagonal (#5410)",
+    "732ed4e6a239158d4f5d9fa62c0255e1a27d2071 Reject VCL OBUs with mlayer_id/tlayer_id > max (#5430)",
+    "59e14d0b2b92fae24aa5dcf17c37000ff1998ac3 Fix fixed partition tree building at partial superblocks (#5417) (#5427)",
+    "2886e6a75b7b419588ec436e9cfaa166c6ffe81f Optimize find_best_path C, remove AVX2 RTCD (#5411)",
+    "abc60b8f8ecb38ac1f369b4cdee5b797f8c3449c Remove dead v256 pack functions (GCC NEON register bug) (#5424)",
+    "5446ded2cda4377e3010bbcdeb332cc04a76d290 Fix subsampling rounding in rdopt_utils.h (#5391)",
+    "9976f125c4840600d56ae4253494b10dffb9d476 Add NEON for fwd_txfm (#5409)",
+    "b4e6a09df1e692fed7be2736c2d075dedadabe2d Index seq_ptl directly instead of via LcrXLayerID (#5413)",
+    "1fa9495c2e88cb6f8cfcf127f776efb374136e31 AV2 ctc test script update sept 2026 (#5371)",
+    "cd2ba5446504e24c4ad1c7c06ef382214653a537 Add NEON for fwd_stxfm and inv_stxfm (#5382)"
+  ],
+  "candidateBuildConfiguration": [
+    "CMAKE_BUILD_TYPE:STRING=Release",
+    "CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/c++",
+    "CMAKE_C_COMPILER:FILEPATH=/usr/bin/cc",
+    "CMAKE_OSX_ARCHITECTURES:STRING=arm64",
+    "CMAKE_OSX_DEPLOYMENT_TARGET:UNINITIALIZED=14.0"
+  ]
+}

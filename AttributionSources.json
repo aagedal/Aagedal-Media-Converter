@@ -8,6 +8,12 @@
       "sha256": "1a020a15b0054bf684cb64f90bc8342281e38f4c731a9ef69a2afe849c6e89f0"
     },
     {
+      "component": "AVM av2-enc + main 2026-10-14",
+      "path": "build/attribution/avm-2026-10-14-integrated-source.tar.gz",
+      "bytes": 179598688,
+      "sha256": "21bfed7e825222d29eb98eb778431b4f53df007794e4af19b16744f24387e908"
+    },
+    {
       "component": "SwiftMediaMetadata 3.0.1",
       "path": "build/attribution/swiftmediametadata-3.0.1-source.tar.gz",
       "bytes": 1487639,
@@ -20,16 +26,22 @@
       "sha256": "e0fb1eab57712cbfdb3014db08894a7fbe7526f92de35299c64b24c89cb2568e"
     },
     {
-      "component": "FFmpeg 9.0.1 build",
-      "path": "build/attribution/ffmpeg-9.0.1-source.tar.gz",
-      "bytes": 176572218,
-      "sha256": "23587fed102cfe66910db1d4ae66b50565387a1750e039fb10fde6fbfd027e71"
+      "component": "FFmpeg 9.0.2 build",
+      "path": "build/attribution/ffmpeg-9.0.2-source.tar.gz",
+      "bytes": 184520633,
+      "sha256": "822c0658ec5dc937ed521db0baf8ef3a1c107680a53de8fbbdc2e038f8065c72"
     },
     {
       "component": "FFmpeg generated inputs",
-      "path": "build/attribution/ffmpeg-9.0.1-generated-inputs.tar.gz",
-      "bytes": 93452,
-      "sha256": "0e18c9471ded3960d40ce59d7b2a37963423a9e1002449982ab65271a7b55869"
+      "path": "build/attribution/ffmpeg-9.0.2-generated-inputs.tar.gz",
+      "bytes": 204314,
+      "sha256": "1a7e46f3691bd78478fab71dcd29a1896b109f8f0d29de7d9a1ad1abbea86ce0"
+    },
+    {
+      "component": "FFmpeg 9.0.2 Metal correction",
+      "path": "build/attribution/ffmpeg-9.0.2-metal-source.tar.gz",
+      "bytes": 18015006,
+      "sha256": "883bc2cd83b5f8af0f5fff03396b0caae943210db616554209a434987a2c9bc8"
     },
     {
       "component": "MPVKit: gnutls",
@@ -578,18 +590,6 @@
       "url": "https://codeload.github.com/mpvkit/openssl-build/tar.gz/refs/tags/3.3.5"
     },
     {
-      "component": "mpv",
-      "path": "build/attribution/mpvkit/mpv-coreaudio-4.5-source.tar.gz",
-      "bytes": 12313086,
-      "sha256": "da2b0dfe33c59d7aa7c02c130b3dbc339aa31bcf9efc1c294a4c105ef085d913"
-    },
-    {
-      "component": "FFmpeg",
-      "path": "build/attribution/mpvkit/FFmpeg-local-source.tar.gz",
-      "bytes": 16873307,
-      "sha256": "feb1f8c5a2ed8116745a09e92d194a6f226e783fc277ca2259672e4bf3c24a63"
-    },
-    {
       "component": "MPVKit Rust standard-library licensing/source reference (build-date inference)",
       "path": "build/attribution/mpvkit/rust-src-nightly-2025-12-22.tar.xz",
       "bytes": 3722860,
@@ -597,24 +597,25 @@
       "url": "https://static.rust-lang.org/dist/2025-12-22/rust-src-nightly.tar.xz"
     },
     {
-      "component": "MPVKit pinned wrapper and build sources",
-      "path": "build/attribution/mpvkit/MPVKit-coreaudio-pinned-source.tar.gz",
-      "bytes": 81751,
-      "sha256": "9a48cc6bf5bc8af168b652429df5bfbcf22921277de8339e691d4c0aa51a5128",
-      "url": "https://github.com/aagedal/MPVKit/tree/400202b687841fb394cbf0ef59ad8c6fcfc1275b"
-    },
-    {
-      "component": "MPVKit local patches and build configuration",
-      "path": "build/attribution/mpvkit/coreaudio-build-configuration.tar.gz",
-      "bytes": 93863,
-      "sha256": "302c4e8f620f795551a93eaf163dc7eab77e6af89ac12d4d5c34c268859fa977"
-    },
-    {
       "component": "MPVKit crc-catalog upstream source (crate VCS revision)",
       "path": "build/attribution/mpvkit/crc-catalog-upstream-source.tar.gz",
       "bytes": 10317,
       "sha256": "16b5e9a284c91f9b9750a95213ac770a965a65780525fe2671580c9ab1aaa51f",
       "url": "https://codeload.github.com/akhilles/crc-catalog/tar.gz/b500ea693c552f8d946e290722a7b3ee8b9a7ee2"
+    },
+    {
+      "component": "MPVKit 1.1.0 custom GPL build",
+      "path": "build/attribution/mpvkit/mpvkit-n9.0.2-sources.tar.gz",
+      "bytes": 25014386,
+      "sha256": "06ea1673ac95e435bde9e5bcb8f996c15a6c4cec5862bc4a7e8dfb7271da25a9",
+      "url": "https://github.com/aagedal/MPVKit/releases/download/aagedal-1.1.0-n9.0.2-audio.1/mpvkit-n9.0.2-sources.tar.gz"
+    },
+    {
+      "component": "MPVKit pinned wrapper and build sources",
+      "path": "build/attribution/mpvkit/MPVKit-1.1.0-pinned-source.tar.gz",
+      "bytes": 123220,
+      "sha256": "aa229dfc6d607949accd53512b1e9e9d5884501945563135697e38aa06f5e8bb",
+      "url": "https://github.com/aagedal/MPVKit/tree/68c8989362a0daedabcc1540b2b5f0e1fea4be1f"
     }
   ]
 }

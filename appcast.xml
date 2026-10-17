@@ -485,5 +485,67 @@
             ]]></description>
         </item>
 
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.3</title>
+            <pubDate>Mon, 12 Oct 2026 19:33:10 +0200</pubDate>
+            <sparkle:version>599</sparkle:version>
+            <sparkle:shortVersionString>4.5.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.3/Aagedal_Media_Converter_4-5-3.zip"
+                length="120475985"
+                type="application/octet-stream"
+                sparkle:edSignature="9ppvCk6Wsm7VVE+ApeQ9eWC66J+E8qA0YhjrWyu7ozKA62KHfWVwPbjdO+jG4pivgzaBGyjzDTXDniK46KGjBQ==" />
+            <description><![CDATA[
+                <ul>
+                <li>New website downloads embed the available post text or video description and the source page link in the file's metadata, including audio-only downloads. Metadata support and visibility depend on the source website, file format, and player. Existing downloads are not updated automatically.</li>
+                </ul>
+            ]]></description>
+        </item>
+
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.5</title>
+            <pubDate>Tue, 13 Oct 2026 14:23:57 +0200</pubDate>
+            <sparkle:version>600</sparkle:version>
+            <sparkle:shortVersionString>4.5.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.5/Aagedal_Media_Converter_4-5-5.zip"
+                length="121808460"
+                type="application/octet-stream"
+                sparkle:edSignature="Rg4q8rmvAz8GyzpH+neqgeBpK6yUsvVH9Iio6bitdzdK+5Le6e0VpWWCxLjFigVSjw/JfvIeP0eR+rHnCTi6CA==" />
+            <description><![CDATA[
+                <ul>
+                <li>Added source-prefilled metadata editing, with a master metadata switch and per-preset preservation settings. Improved access to files on offline volumes so unavailable bookmarks do not freeze imports.</li>
+                <li>Updated bundled FFmpeg to the signed and notarized corrected full 9.0.2 build, restoring Metal-backed <code>yadif_videotoolbox</code> deinterlacing with the teardown fix. Refreshed dependency notices and corresponding-source records.</li>
+                <li>Watch-folder imports and cleanup now wait for unchanged file size and modification time. Choose a settling time of 5–60 seconds in Settings; the default is 10 seconds. Unreadable files are retried automatically, and queued sources are protected from cleanup.</li>
+                <li>Added Settings search for section and setting names, with Command-F access, and made the Settings window resizable.</li>
+                <li>Localized the conversion button’s accessibility labels and tooltips in all supported languages.</li>
+                <li>Improved Agent Access connection diagnostics with shared subprocess timeout, cancellation, and output handling.</li>
+                <li>Fixed a recursive encoding crash in optimized Release builds by preserving converter actor isolation through cancellation handling.</li>
+                </ul>
+            ]]></description>
+        </item>
+
+
+            <item xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <title>Version 4.5.6</title>
+            <pubDate>Tue, 13 Oct 2026 16:38:02 +0200</pubDate>
+            <sparkle:version>601</sparkle:version>
+            <sparkle:shortVersionString>4.5.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/aagedal/Aagedal-Media-Converter/releases/download/4.5.6/Aagedal_Media_Converter_4-5-6.zip"
+                length="121815244"
+                type="application/octet-stream"
+                sparkle:edSignature="EiJDUonaK4EAPPzL0O2k4a7qq4tYqTx5dME+N3TLrk7V4MWZHWiP09IdcMMas7qmpI1LRjBwYQ2nOCDT8+XgBw==" />
+            <description><![CDATA[
+                <ul>
+                <li>Added VMAF v1.0.16 models for standard, phone, and 4K viewing, including 50/60 fps variants. New installations use the standard v1 model by default; saved model selections are preserved, and v0 models remain available for comparison with earlier scores.</li>
+                <li>VMAF v1 analysis processes both inputs at 10-bit precision for banding and chroma assessment. Uses the models already included in the bundled FFmpeg; no bundled binaries or licenses changed.</li>
+                </ul>
+            ]]></description>
+        </item>
+
     </channel>
 </rss>

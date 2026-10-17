@@ -4,6 +4,166 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class MPVPreviewObservationTests: XCTestCase {
+    func testGroupedAudioGraphPreservesIDsRolesAndGain() throws {
+        let stereo = try XCTUnwrap(MPVPlayer.audioPresentationGraph(.stereo(left: 1, right: 0), trackIDs: [4, 9]))
+        XCTAssertTrue(stereo.contains("[aid9]pan=stereo|FL=c0|FR=0*c0"))
+        XCTAssertTrue(stereo.contains("[aid4]pan=stereo|FL=0*c0|FR=c0"))
+        XCTAssertTrue(stereo.hasSuffix("amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[ao]"))
+        let surround = try XCTUnwrap(MPVPlayer.audioPresentationGraph(.surround51([5, 4, 3, 2, 1, 0]), trackIDs: [1, 2, 3, 4, 5, 6]))
+        XCTAssertTrue(surround.contains("[aid3]pan=5.1(side)|FL=0*c0|FR=0*c0|FC=0*c0|LFE=c0|SL=0*c0|SR=0*c0"))
+        XCTAssertEqual(MPVPlayer.audioPresentationGraph(.track(0), trackIDs: [4]), "")
+        XCTAssertNil(MPVPlayer.audioPresentationGraph(.stereo(left: 0, right: 0), trackIDs: [4]))
+        XCTAssertNil(MPVPlayer.audioPresentationGraph(.track(1), trackIDs: [4]))
+        XCTAssertNil(MPVPlayer.audioPresentationGraph(.surround51([0, 1]), trackIDs: [4, 9]))
+    }
+
+    @MainActor
+    func testPackagedMPVGroupedAudioAuditionAndSingleTrackRestoration() async throws {
+        XCTAssertTrue(MPVPlayer.supportsGroupedAudioPresentation)
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-group-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=8",
+                        "-f", "lavfi", "-i", "aevalsrc=0.25*sin(2*PI*880*t):s=48000:d=8",
+                        "-map", "0:a", "-map", "1:a", "-c:a", "flac", source.path], timeout: .seconds(20)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop() }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        let grouped = await player.selectAudioPresentation(.stereo(left: 1, right: 0))
+        XCTAssertTrue(grouped)
+        XCTAssertTrue(player.audioPresentationFilterGraph?.contains("normalize=0") == true)
+        player.play()
+        try await waitForMeterCondition { player.isPlaying && player.timePos > 0.2 }
+        player.setPlaybackMeterEnabled(true)
+        try await waitForMeterCondition { player.playbackMeterSample?.peaks.count == 2 }
+        let sample = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[0]), -12.04, accuracy: 0.1)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[1]), -18.06, accuracy: 0.1)
+        let single = await player.selectAudioPresentation(.track(0))
+        XCTAssertTrue(single)
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        XCTAssertEqual(player.currentAudioTrackIndex, try XCTUnwrap(player.audioTrackIndexes.first))
+        let invalid = await player.selectAudioPresentation(.stereo(left: 0, right: 99))
+        XCTAssertFalse(invalid)
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        XCTAssertLessThanOrEqual(player.currentAudioTrackIndex, 0)
+        let regrouped = await player.selectAudioPresentation(.stereo(left: 0, right: 1))
+        XCTAssertTrue(regrouped)
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        XCTAssertGreaterThan(player.currentAudioTrackIndex, 0, "Loading another source must restore normal audio selection")
+        withExtendedLifetime(layer) {}
+    }
+
+    @MainActor
+    func testPackagedMPVCompressedMonoMeter() async throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-aac-meter-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                        "testsrc2=size=320x180:rate=24:duration=15", "-f", "lavfi", "-i",
+                        "sine=frequency=440:sample_rate=48000:duration=15", "-c:v", "mpeg4", "-c:a", "aac", source.path],
+            timeout: .seconds(20)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop() }
+        player.load(url: source, autostart: true)
+        try await waitForMeterCondition { player.isPlaying && player.isFileLoaded }
+        player.setPlaybackMeterEnabled(true)
+        try await waitForMeterCondition { player.playbackMeterSample?.shortTermLUFS != nil }
+        let sample = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[0]), -18.06, accuracy: 0.6)
+        XCTAssertEqual(try XCTUnwrap(sample.rms[0]), -21.07, accuracy: 0.3)
+        XCTAssertEqual(try XCTUnwrap(sample.momentaryLUFS), -21.8, accuracy: 0.3)
+        withExtendedLifetime(layer) {}
+    }
+
+    @MainActor
+    func testPackagedMPVPlaybackMeterSignalAndLifecycle() async throws {
+        XCTAssertTrue(MPVPlayer.supportsPlaybackMeter, "Pinned libavfilter must provide astats and ebur128")
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-meter-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                        "aevalsrc=0.5*sin(2*PI*1000*t)|0.25*sin(2*PI*1000*t):s=48000:d=14:c=stereo",
+                        "-f", "lavfi", "-i",
+                        "aevalsrc=0.125*sin(2*PI*500*t)|0.0625*sin(2*PI*500*t):s=48000:d=14:c=stereo",
+                        "-map", "0:a", "-map", "1:a", "-c:a", "flac", source.path], timeout: .seconds(20)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let sourceWindow = try await PlaybackAudioMeterDecoder.decode(
+            SourceAudioMeterRequest(url: source, track: 0, channels: 2, window: 0))
+        let referenceLUFS = try XCTUnwrap(sourceWindow.sample(at: 4)?.momentaryLUFS)
+        let player = MPVPlayer()
+        player.attachDrawable(MPVMetalLayer())
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop() }
+        player.load(url: source, autostart: true)
+        try await waitForMeterCondition { player.isFileLoaded && player.isPlaying }
+        XCTAssertNil(player.playbackMeterSample, "Normal playback must not install the meter")
+        player.setPlaybackMeterEnabled(true)
+        try await waitForMeterCondition { player.playbackMeterSample?.shortTermLUFS != nil }
+        let sample = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertEqual(sample.peaks.count, 2)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[0]), -6.0206, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[1]), -12.0412, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(sample.rms[0]), -9.0309, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(sample.rms[1]), -15.0515, accuracy: 0.05)
+        XCTAssertEqual(try XCTUnwrap(sample.momentaryLUFS), referenceLUFS, accuracy: 0.2)
+        player.volume = 10
+        player.pause()
+        try await waitForMeterCondition { !player.isPlaying && player.playbackMeterSample == nil }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertNil(player.playbackMeterSample, "Old replies cannot revive paused readings")
+        player.seek(to: 7)
+        player.play()
+        try await waitForMeterCondition { (player.playbackMeterSample?.seconds ?? 0) >= 7 }
+        XCTAssertNil(player.playbackMeterSample?.shortTermLUFS, "Seek must restart loudness warm-up")
+        XCTAssertEqual(try XCTUnwrap(player.playbackMeterSample?.peaks[0]), -6.0206, accuracy: 0.05)
+        let tracks = player.audioTrackIndexes
+        XCTAssertEqual(tracks.count, 2)
+        player.currentAudioTrackIndex = try XCTUnwrap(tracks.last)
+        try await waitForMeterCondition { (player.playbackMeterSample?.peaks.first.flatMap { $0 } ?? 0) < -17 }
+        XCTAssertEqual(try XCTUnwrap(player.playbackMeterSample?.peaks[0]), -18.0618, accuracy: 0.05)
+        XCTAssertNil(player.playbackMeterSample?.shortTermLUFS, "Track changes reset loudness history")
+        player.setPlaybackMeterEnabled(false)
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertNil(player.playbackMeterSample)
+        player.setPlaybackMeterEnabled(true)
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        player.load(url: source, autostart: true)
+        try await waitForMeterCondition { (player.playbackMeterSample?.seconds ?? 100) < 2 }
+        XCTAssertNil(player.playbackMeterSample?.shortTermLUFS, "Replacement sources reset history")
+        player.seek(to: 13.8)
+        try await waitForMeterCondition { player.reachedEnd }
+        XCTAssertNil(player.playbackMeterSample, "EOF must clear decoded readings")
+        player.stop()
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertNil(player.playbackMeterSample, "Stopping rejects late metadata")
+    }
+
+    @MainActor
+    private func waitForMeterCondition(file: StaticString = #filePath, line: UInt = #line,
+                                       _ condition: () -> Bool) async throws {
+        for _ in 0..<400 {
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTFail("Timed out waiting for packaged MPV meter", file: file, line: line)
+    }
+
     @MainActor
     func testSilentDecoderTimesOutAndRejectsLateReadinessAndEOF() async throws {
         let controller = makeController()

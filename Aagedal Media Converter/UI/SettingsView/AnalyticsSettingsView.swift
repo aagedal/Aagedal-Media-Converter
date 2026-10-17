@@ -13,6 +13,8 @@ struct AnalyticsSettingsView: View {
     @AppStorage(AppConstants.analyticsAutoExportFormatKey) private var autoExportFormat = AppConstants.defaultAnalyticsAutoExportFormat
     @AppStorage(AppConstants.ssimulacra2MaxFramesKey) private var ssimulacra2MaxFrames = AppConstants.defaultSSIMULACRA2MaxFrames
 
+    @AppStorage(AppConstants.analyticsComparisonResolutionKey) private var comparisonResolution = AnalyticsComparisonResolution.encoded.rawValue
+
     @State private var enabledMetrics: Set<String> = []
 
     private var isSSIMULACRA2Enabled: Bool {
@@ -22,6 +24,20 @@ struct AnalyticsSettingsView: View {
     var body: some View {
         Form {
             if showsAutomation { automationSection }
+            Section("Comparison") {
+                Picker("Compare at", selection: $comparisonResolution) {
+                    ForEach(AnalyticsComparisonResolution.allCases, id: \.self) { resolution in
+                        Text(resolution.displayName).tag(resolution.rawValue)
+                    }
+                }
+                .accessibilityIdentifier("analysis.comparison.resolution")
+                Text("All metrics use bicubic scaling at the selected resolution. Encoded resolution measures compression at output size; source resolution also includes the effect of resizing. Timing differences are flagged in results.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("AV2 video is decoded once into a temporary lossless file for analysis. This requires additional disk space.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             metricsSection
             vmafSettingsSection
         }

@@ -137,6 +137,8 @@ struct MetadataExportView: View {
         } else {
             infoRow("Timecode", value: metadata?.timecode)
         }
+        infoRow("Source URL", value: metadata?.sourceURL)
+        infoRow("Description", value: metadata?.description)
         if let comment = item.metadataComment {
             infoRow("Comment", value: comment)
         }

@@ -132,6 +132,13 @@ actor FFMPEGConverter {
     private var currentMCALabelTask: Task<URL?, Never>?
     private var currentMCALabelTaskID: UUID?
     private var currentAV2PipelineTasks: [UUID: Task<SubprocessPipelineResult, Error>] = [:]
+    private struct AV2FileTask {
+        let cancel: @Sendable () -> Void
+        let drain: Task<Void, Never>
+    }
+    private var currentAV2FileTasks: [UUID: AV2FileTask] = [:]
+    private var av2CancellationToken = UUID()
+
     private var currentProgressGate: ConversionProgressGate?
     private var activeConversionID: UUID?
     private var postProcessingConversionID: UUID?
@@ -140,6 +147,8 @@ actor FFMPEGConverter {
     private let bmxService: BMXService
     private let ffmpegPathProvider: @Sendable () -> String?
     private let avmdecPathProvider: @Sendable () -> String?
+    private let av2MemorySnapshot: @Sendable () -> AV2MemorySnapshot
+    private let av2RecoveryRoot: @Sendable () -> URL
     private let dependencyPreflight: ConversionDependencyPreflight
     private let mcaAudioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
     private let preflightAudioStreamProvider: @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]?
@@ -185,6 +194,8 @@ actor FFMPEGConverter {
         bmxService: BMXService = .shared,
         ffmpegPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ffmpegPath },
         avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath },
+        av2MemorySnapshot: @escaping @Sendable () -> AV2MemorySnapshot = { AV2MemoryMonitor.shared.snapshot() },
+        av2RecoveryRoot: @escaping @Sendable () -> URL = { AV2RecoveryStore.defaultRoot },
         dependencyPreflight: ConversionDependencyPreflight = ConversionDependencyPreflight(),
         mcaAudioStreamProvider: @escaping @Sendable (URL) async -> [FFMPEGProbeService.AudioStreamInfo]? = {
             await FFMPEGProbeService.fetchAudioStreams(for: $0)
@@ -193,6 +204,8 @@ actor FFMPEGConverter {
             await FFMPEGProbeService.fetchAudioStreams(for: $0)
         }
     ) {
+        self.av2MemorySnapshot = av2MemorySnapshot
+        self.av2RecoveryRoot = av2RecoveryRoot
         self.subprocessRunner = subprocessRunner
         self.bmxService = bmxService
         self.ffmpegPathProvider = ffmpegPathProvider
@@ -561,6 +574,9 @@ actor FFMPEGConverter {
         progressUpdate: @escaping @Sendable (Double, String?) -> Void,
         completion: @escaping @Sendable (Bool, String?) -> Void
     ) async {
+        let request = request.applyingMetadataEditor(
+            outputExtension: av2Settings?.container.fileExtension ?? audioOnlySettings?.format.fileExtension ?? codecSettings?.outputExtension(for: request.inputURL)
+        )
         if let generations = recursiveGenerations {
             guard !Task.isCancelled else {
                 completion(false, "Recursive encoding cancelled")
@@ -627,7 +643,7 @@ actor FFMPEGConverter {
                     pass.chapterMetadataURL = nil
                     pass.chapterMetadataTitles = []
                 }
-                let result: (Bool, String?) = await withTaskCancellationHandler {
+                let result: (Bool, String?) = await withTaskCancellationHandler(operation: {
                     await withCheckedContinuation { continuation in
                         Task {
                             guard self.recursiveOperationID == operationID else {
@@ -649,9 +665,9 @@ actor FFMPEGConverter {
                             )
                         }
                     }
-                } onCancel: {
+                }, onCancel: {
                     Task { await self.cancelRecursiveConversion(operationID: operationID) }
-                }
+                }, isolation: self)
                 guard result.0, let output = resolvedOutput.withLock({ $0 }) else {
                     completion(false, result.1 ?? "Generation \(generation) failed")
                     return
@@ -685,7 +701,9 @@ actor FFMPEGConverter {
         let capturedImageSequenceSettings = preset == .imageSequence ? (imageSequenceSettings ?? ImageSequenceSettings()) : nil
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedSubtitleSettings = subtitleSettings ?? SubtitleExportSettings()
-        let capturedCommentSettings = commentSettings ?? CommentSettings()
+        let sourceCommentSettings = commentSettings ?? CommentSettings()
+        let capturedCommentSettings = request.metadataEditorSettings?.writesComment == false
+            ? sourceCommentSettings.withoutAffixes : sourceCommentSettings
         guard let ffmpegPath = ffmpegPathProvider() else {
             Self.logger.error("FFMPEG binary not found")
             completion(false, "FFmpeg binary not found")
@@ -750,6 +768,9 @@ actor FFMPEGConverter {
         currentMCALabelTaskID = nil
         for task in currentAV2PipelineTasks.values { task.cancel() }
         currentAV2PipelineTasks.removeAll()
+        av2CancellationToken = UUID()
+        for work in currentAV2FileTasks.values { work.cancel() }
+        currentAV2FileTasks.removeAll()
         let supersededBMXOperationID = activeBMXOperationID
         activeConversionID = nil
         postProcessingConversionID = nil
@@ -1045,6 +1066,7 @@ actor FFMPEGConverter {
                 trimStart: request.trimStart,
                 trimEnd: request.trimEnd,
                 comment: request.comment,
+                writeEmptyComment: request.metadataEditorSettings?.writesComment == true,
                 includeDateTag: request.includeDateTag,
                 commentSettings: capturedCommentSettings,
                 isMuted: request.isMuted,
@@ -1160,6 +1182,7 @@ actor FFMPEGConverter {
                     isMuted: request.isMuted,
                     audioRoutingConfig: request.audioRoutingConfig,
                     comment: request.comment,
+                    metadataEditorSettings: request.metadataEditorSettings,
                     includeDateTag: request.includeDateTag,
                     commentSettings: capturedCommentSettings,
                     timecodeConfig: request.timecodeConfig,
@@ -1176,11 +1199,15 @@ actor FFMPEGConverter {
                     progressUpdate: progressUpdate
                 )
                 Self.cleanupTempFile(at: encodeURL, label: "AV2 intermediate .ivf")
-                if ok { progressUpdate(1.0, nil) }
+                if ok {
+                    if let directory = encodeResult.recoveryDirectory { AV2RecoveryStore.discard(directory) }
+                    progressUpdate(1.0, nil)
+                }
                 finish(ok, reason)
                 return
             }
 
+            if let directory = encodeResult.recoveryDirectory { AV2RecoveryStore.discard(directory) }
             finish(true, nil)
             return
         }
@@ -1237,6 +1264,7 @@ actor FFMPEGConverter {
             commentSettings: capturedCommentSettings,
             subtitleSettings: capturedSubtitleSettings,
             comment: request.comment,
+            writeEmptyComment: request.metadataEditorSettings?.writesComment == true,
             includeDateTag: request.includeDateTag,
             trimStart: tempAudioURL != nil ? nil : request.trimStart,  // Trim already applied in pre-processing
             trimEnd: tempAudioURL != nil ? nil : request.trimEnd,
@@ -2663,6 +2691,7 @@ actor FFMPEGConverter {
         let success: Bool
         let errorReason: String?
         let keyframeIndices: [Int]
+        var recoveryDirectory: URL? = nil
     }
 
     private struct AV2SegmentOutcome: Sendable {
@@ -2671,7 +2700,29 @@ actor FFMPEGConverter {
         let errorReason: String?
     }
 
-    /// Runs a parallel chunked AV2 encode: one ffmpeg│avmenc pipe per chunk, all concurrent, with
+    /// Keep hashing, copying and muxing off this actor, but retain cancellation and
+    /// ownership until file work has drained. Stop remains responsive on large files.
+    private func runAV2FileWork<T: Sendable>(_ operation: @escaping @Sendable () throws -> T) async throws -> T {
+        let id = UUID()
+        let task = Task.detached(priority: .utility) {
+            try Self.$runningSubprocessID.withValue(id) { try operation() }
+        }
+        let drain = Task { _ = await task.result }
+        currentAV2FileTasks[id] = AV2FileTask(cancel: { task.cancel() }, drain: drain)
+        defer { currentAV2FileTasks.removeValue(forKey: id) }
+        do {
+            let result = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+            await drain.value
+            guard !task.isCancelled else { throw CancellationError() }
+            try Task.checkCancellation()
+            return result
+        } catch {
+            await drain.value
+            throw error
+        }
+    }
+
+    /// Runs a chunked AV2 encode in a memory-limited pool of ffmpeg│avmenc pipelines, with
     /// `POC:` progress aggregated across workers. When every chunk succeeds the segment `.ivf`
     /// files are joined (in order) by ``IVFConcatenator`` into the final video-only `.ivf`. A single
     /// failing chunk aborts the rest. Each chunk is an independent AV2 sequence (key frame at its
@@ -2683,7 +2734,8 @@ actor FFMPEGConverter {
         avmencPath: String,
         progressUpdate: @escaping @Sendable (Double, String?) -> Void
     ) async -> AV2EncodeResult {
-        guard !Task.isCancelled else {
+        let cancellationToken = av2CancellationToken
+        guard !Task.isCancelled, av2CancellationToken == cancellationToken else {
             return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
         }
 
@@ -2704,12 +2756,12 @@ actor FFMPEGConverter {
         }
         defer { Self.cleanupDirectory(plan.segmentDirectory) }
 
-        guard !Task.isCancelled else {
+        guard !Task.isCancelled, av2CancellationToken == cancellationToken else {
             return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
         }
         let totalFrames = plan.totalFrames
         let chunkCount = plan.segments.count
-        Self.logger.info("AV2 chunked encode: \(chunkCount) workers, \(totalFrames) frames → \(outputFileURL.lastPathComponent, privacy: .public)")
+        Self.logger.info("AV2 chunked encode: \(chunkCount) chunks in a memory-limited pool, \(totalFrames) frames → \(outputFileURL.lastPathComponent, privacy: .public)")
 
         // Aggregate per-worker "POC:" frame counts into one progress value, throttled to per-mille
         // steps so N workers don't flood the main thread.
@@ -2729,24 +2781,88 @@ actor FFMPEGConverter {
 
         progressUpdate(0.0, "Encoding AV2 — \(chunkCount) chunks — frame 0/\(totalFrames)")
 
+        let recovery: AV2RecoveryStore?
+        do {
+            let root = av2RecoveryRoot()
+            recovery = try await runAV2FileWork {
+                try AV2RecoveryStore.open(plan: plan, ffmpeg: URL(fileURLWithPath: ffmpegPath),
+                    encoder: URL(fileURLWithPath: avmencPath), root: root)
+            }
+        } catch is CancellationError {
+            return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
+        } catch let error as AV2RecoveryStore.RecoveryError {
+            return AV2EncodeResult(success: false, errorReason: error.localizedDescription, keyframeIndices: [])
+        } catch {
+            // Recovery is best-effort. An unwritable cache must not prevent encoding.
+            Self.logger.warning("AV2 recovery cache unavailable")
+            recovery = nil
+        }
+        guard !Task.isCancelled, av2CancellationToken == cancellationToken else {
+            return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
+        }
+        var pending: [AV2CommandBuilder.AV2SegmentCommand] = []
+        var reused = 0
+        for segment in plan.segments {
+            do {
+                if try await runAV2FileWork({ try recovery?.restore(segment) == true }) {
+                    reused += 1
+                    onFrames(segment.frameCount)
+                    continue
+                }
+            } catch is CancellationError {
+                return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
+            } catch let error as AV2RecoveryStore.RecoveryError {
+                return AV2EncodeResult(success: false, errorReason: error.localizedDescription, keyframeIndices: [])
+            } catch {
+                Self.cleanupAV2SegmentIfPresent(segment.outputURL, label: "unusable recovered AV2 chunk")
+            }
+            pending.append(segment)
+        }
+        guard !Task.isCancelled, av2CancellationToken == cancellationToken else {
+            return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
+        }
+        if reused > 0 { progressUpdate(min(0.99, Double(plan.totalFrames - pending.reduce(0) { $0 + $1.frameCount }) / Double(max(1, totalFrames))), "Resumed \(reused) completed AV2 chunks") }
         var outcomes: [AV2SegmentOutcome] = []
         var firstFailure: AV2SegmentOutcome?
         await withTaskGroup(of: AV2SegmentOutcome.self) { group in
-            for seg in plan.segments {
-                group.addTask {
-                    await self.encodeAV2Segment(seg, ffmpegPath: ffmpegPath, avmencPath: avmencPath, onFrames: onFrames)
+            var next = 0
+            var running = 0
+            while next < pending.count || running > 0 {
+                if Task.isCancelled || av2CancellationToken != cancellationToken { group.cancelAll() }
+                let limit = av2MemorySnapshot().workerLimit(width: plan.outputWidth, height: plan.outputHeight,
+                    bitDepth: plan.bitDepth, planned: chunkCount, running: running)
+                while firstFailure == nil, !Task.isCancelled, av2CancellationToken == cancellationToken, next < pending.count, running < limit {
+                    let segment = pending[next]
+                    next += 1
+                    running += 1
+                    group.addTask {
+                        await self.encodeAV2Segment(segment, ffmpegPath: ffmpegPath, avmencPath: avmencPath, onFrames: onFrames)
+                    }
                 }
-            }
-            for await outcome in group {
+                if running == 0 {
+                    if firstFailure != nil || Task.isCancelled || av2CancellationToken != cancellationToken { break }
+                    progressUpdate(progressState.withLock { min(0.99, Double($0.total) / Double(max(1, totalFrames))) },
+                        "Waiting for memory — completed AV2 chunks are saved")
+                    try? await Task.sleep(for: .seconds(1))
+                    continue
+                }
+                guard let outcome = await group.next() else { break }
+                running -= 1
                 outcomes.append(outcome)
-                // Preserve the root failure and cancel the remaining coordinated pipelines so we
-                // don't burn cores on a doomed encode. Later sibling-cancellation outcomes must not
-                // replace the actionable error from the worker that failed first.
-                if !outcome.success, firstFailure == nil {
+                if outcome.success, let segment = plan.segments.first(where: { $0.index == outcome.index }) {
+                    do { try await runAV2FileWork { try recovery?.store(segment) } }
+                    catch let error as AV2RecoveryStore.RecoveryError {
+                        firstFailure = AV2SegmentOutcome(index: segment.index, success: false, errorReason: error.localizedDescription)
+                        group.cancelAll()
+                    } catch { Self.logger.warning("Could not checkpoint completed AV2 chunk") }
+                } else if !outcome.success, firstFailure == nil {
                     firstFailure = outcome
                     group.cancelAll()
                 }
             }
+        }
+        guard !Task.isCancelled, av2CancellationToken == cancellationToken else {
+            return AV2EncodeResult(success: false, errorReason: "Conversion cancelled", keyframeIndices: [])
         }
 
         // All workers have exited (the task group is the 2N-of-2N termination barrier).
@@ -2758,14 +2874,18 @@ actor FFMPEGConverter {
         // Join the chunk bitstreams in order.
         let ordered = plan.segments.sorted { $0.index < $1.index }.map { $0.outputURL }
         do {
-            let result = try IVFConcatenator.concatenate(segmentURLs: ordered, into: outputFileURL)
+            let result = try await runAV2FileWork {
+                try recovery?.validateSource()
+                return try IVFConcatenator.concatenate(segmentURLs: ordered, into: outputFileURL)
+            }
+            guard !Task.isCancelled, av2CancellationToken == cancellationToken else { throw CancellationError() }
             if let validationError = Self.validateOutputFile(at: outputFileURL) {
                 Self.cleanupTempFile(at: outputFileURL, label: "invalid AV2 .ivf")
                 return AV2EncodeResult(success: false, errorReason: validationError, keyframeIndices: [])
             }
             progressUpdate(1.0, nil)
             Self.logger.info("AV2 chunked encode complete: \(result.totalFrames) frames → \(outputFileURL.lastPathComponent, privacy: .public)")
-            return AV2EncodeResult(success: true, errorReason: nil, keyframeIndices: result.keyframeIndices)
+            return AV2EncodeResult(success: true, errorReason: nil, keyframeIndices: result.keyframeIndices, recoveryDirectory: recovery?.directory)
         } catch {
             if FileManager.default.fileExists(atPath: outputFileURL.path) {
                 Self.cleanupTempFile(at: outputFileURL, label: "partial AV2 .ivf")
@@ -2820,7 +2940,8 @@ actor FFMPEGConverter {
                             guard case .standardOutput = chunk.stream else { return }
                             progressParser.consume(chunk.data)
                         }
-                    }
+                    },
+                    drainProducer: true
                 )
                 try Task.checkCancellation()
                 return result
@@ -2940,6 +3061,7 @@ actor FFMPEGConverter {
         isMuted: Bool,
         audioRoutingConfig: AudioRoutingConfig?,
         comment: String,
+        metadataEditorSettings: MetadataEditorSettings?,
         includeDateTag: Bool,
         commentSettings: CommentSettings,
         timecodeConfig: TimecodeConfig?,
@@ -2980,20 +3102,8 @@ actor FFMPEGConverter {
             return (false, "Conversion cancelled")
         }
 
-        // 2. Read the video frames, flagging known key frames (chunk boundaries) for seeking.
-        let keyset = Set(keyframeIndices)
-        var videoFrames: [MatroskaMuxer.VideoFrame] = []
-        do {
-            var idx = 0
-            try IVFConcatenator.forEachFrame(in: videoIvfURL) { payload, _ in
-                videoFrames.append(MatroskaMuxer.VideoFrame(data: payload, isKeyframe: idx == 0 || keyset.contains(idx)))
-                idx += 1
-            }
-        } catch {
-            return (false, "AV2 muxing: \(error.localizedDescription)")
-        }
-        guard !videoFrames.isEmpty else { return (false, "AV2 muxing: no video frames in bitstream") }
-
+        // Video payloads stay in the IVF file. The muxer indexes record offsets and
+        // copies bytes in bounded buffers after routed audio has been prepared.
         // 3. Extract + parse routed audio. A video-only .mkv is fine only when audio is absent,
         // muted, or explicitly removed by the routing configuration.
         var audioTracks: [MatroskaMuxer.AudioTrack] = []
@@ -3029,7 +3139,7 @@ actor FFMPEGConverter {
         // the Matroska path keeps the same comment/date and timecode policy as
         // ordinary FFmpeg-backed exports.
         let sourceMetadata: VideoMetadata?
-        if case .preserveSource? = timecodeConfig?.mode, knownSourceMetadata == nil {
+        if knownSourceMetadata == nil, timecodeConfig?.mode == .preserveSource || settings.preserveMetadata == true {
             sourceMetadata = try? await BoundedVideoMetadataProbe.metadata(for: sourceURL)
         } else {
             sourceMetadata = knownSourceMetadata
@@ -3044,13 +3154,16 @@ actor FFMPEGConverter {
                 trimStart: timecodeTrimStart ?? trimStart
             )
         }
+        let inheritedText = settings.preserveMetadata == true ? sourceMetadata : nil
+        let composedComment = FFMPEGCommandBuilder.commentMetadataValue(comment: comment, includeDateTag: includeDateTag, settings: commentSettings)
+        let editor = metadataEditorSettings.flatMap { $0.isActive ? $0 : nil }
         let metadata = MatroskaMuxer.Metadata(
-            comment: FFMPEGCommandBuilder.commentMetadataValue(
-                comment: comment,
-                includeDateTag: includeDateTag,
-                settings: commentSettings
-            ),
-            timecode: timecode
+            comment: editor?.writesComment == true ? composedComment : composedComment ?? inheritedText?.comment,
+            timecode: timecode,
+            description: editor.flatMap { $0.description.isEnabled ? $0.description.value : nil } ?? inheritedText?.description,
+            title: editor.flatMap { $0.title.isEnabled ? $0.title.value : nil } ?? inheritedText?.title,
+            artist: editor.flatMap { $0.artist.isEnabled ? $0.artist.value : nil } ?? inheritedText?.artist,
+            sourceURL: editor?.sourceURL ?? inheritedText?.sourceURL
         )
 
         // 5. Write the Matroska file.
@@ -3059,13 +3172,17 @@ actor FFMPEGConverter {
             width: width, height: height, fpsNumerator: fpsNum, fpsDenominator: fpsDen
         )
         do {
-            try MatroskaMuxer.write(
-                to: outputURL,
-                video: video,
-                videoFrames: videoFrames,
-                audioTracks: audioTracks,
-                metadata: metadata
-            )
+            let routedAudio = audioTracks
+            try await runAV2FileWork {
+                try MatroskaMuxer.write(
+                    to: outputURL,
+                    video: video,
+                    videoIVFURL: videoIvfURL,
+                    keyframeIndices: keyframeIndices,
+                    audioTracks: routedAudio,
+                    metadata: metadata
+                )
+            }
         } catch {
             return (false, "AV2 muxing failed: \(error.localizedDescription)")
         }
@@ -3073,7 +3190,7 @@ actor FFMPEGConverter {
             return (false, validationError)
         }
         let audioFrameCount = audioTracks.reduce(0) { $0 + $1.frames.count }
-        Self.logger.info("AV2 mux complete: \(videoFrames.count) video + \(audioFrameCount) audio frames across \(audioTracks.count) tracks → \(outputURL.lastPathComponent, privacy: .public)")
+        Self.logger.info("AV2 mux complete: streamed video + \(audioFrameCount) audio frames across \(audioTracks.count) tracks → \(outputURL.lastPathComponent, privacy: .public)")
         return (true, nil)
     }
 
@@ -3594,6 +3711,7 @@ actor FFMPEGConverter {
         trimStart: Double?,
         trimEnd: Double?,
         comment: String,
+        writeEmptyComment: Bool,
         includeDateTag: Bool,
         commentSettings: CommentSettings,
         isMuted: Bool,
@@ -3716,6 +3834,7 @@ actor FFMPEGConverter {
             trimEnd: trimEnd,
             isMuted: isMuted,
             comment: comment,
+            writeEmptyComment: writeEmptyComment,
             includeDateTag: includeDateTag,
             additionalOutputArguments: additionalOutputArguments
         )
@@ -4533,6 +4652,7 @@ actor FFMPEGConverter {
         let mcaLabelTask = currentMCALabelTask
         let mcaLabelTaskID = currentMCALabelTaskID
         let av2PipelineTasks = currentAV2PipelineTasks
+        let av2FileTasks = currentAV2FileTasks
         let waveformAnalysisTask = currentWaveformAnalysisTask
         let waveformAnalysisID = currentWaveformAnalysisID
         let waveformEncodingTask = currentWaveformEncodingTask
@@ -4579,6 +4699,9 @@ actor FFMPEGConverter {
         currentMCALabelTaskID = nil
         for task in currentAV2PipelineTasks.values { task.cancel() }
         currentAV2PipelineTasks.removeAll()
+        av2CancellationToken = UUID()
+        for work in currentAV2FileTasks.values { work.cancel() }
+        currentAV2FileTasks.removeAll()
         // Tracking belongs to the post-processing callback, which may still be
         // between its ownership check and entering the BMX actor.
         if let bmxOperationID {
@@ -4622,6 +4745,7 @@ actor FFMPEGConverter {
         if let mcaLabelTaskID, Self.runningSubprocessID != mcaLabelTaskID {
             _ = await mcaLabelTask?.result
         }
+        for (id, work) in av2FileTasks where Self.runningSubprocessID != id { await work.drain.value }
         for (pipelineID, task) in av2PipelineTasks where Self.runningSubprocessID != pipelineID {
             _ = await task.result
         }

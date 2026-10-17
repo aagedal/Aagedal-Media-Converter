@@ -146,6 +146,37 @@ enum IVFConcatenator {
         )
     }
 
+    struct FrameRecord: Sendable {
+        let payloadOffset: UInt64
+        let payloadSize: Int
+        let timestamp: UInt64
+    }
+
+    /// Index offsets, not frame payloads. Used by streaming muxing and checkpoint validation.
+    static func frameRecords(in url: URL) throws -> [FrameRecord] {
+        let input = try FileHandle(forReadingFrom: url)
+        defer { try? input.close() }
+        let end = try input.seekToEnd()
+        try input.seek(toOffset: 0)
+        guard let bytes = try input.read(upToCount: 32), bytes.count == 32,
+              let header = IVFHeaderParser.parse(data: bytes), header.isAV2,
+              bytes[4] == 0, bytes[5] == 0, bytes[6] == 32, bytes[7] == 0,
+              header.fpsNumerator > 0, header.fpsDenominator > 0 else { throw ConcatError.notIVF(url) }
+        var records: [FrameRecord] = []
+        while let record = try input.read(upToCount: 12), !record.isEmpty {
+            try Task.checkCancellation()
+            guard record.count == 12 else { throw ConcatError.notIVF(url) }
+            let size = (0..<4).reduce(0) { $0 | Int(record[$1]) << (8 * $1) }
+            let offset = try input.offset()
+            guard size > 0, offset <= end, UInt64(size) <= end - offset else { throw ConcatError.notIVF(url) }
+            let timestamp = (0..<8).reduce(UInt64(0)) { $0 | UInt64(record[4 + $1]) << (8 * $1) }
+            records.append(FrameRecord(payloadOffset: offset, payloadSize: size, timestamp: timestamp))
+            try input.seek(toOffset: offset + UInt64(size))
+        }
+        guard !records.isEmpty, header.frameCount == 0 || header.frameCount == records.count else { throw ConcatError.notIVF(url) }
+        return records
+    }
+
     /// Streams every frame of a single IVF file, invoking `body` with the raw payload and the
     /// frame's original (per-segment) timestamp. The 32-byte container header is skipped.
     /// Reads one frame at a time, rejecting incomplete records instead of publishing a shortened video.

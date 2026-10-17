@@ -42,7 +42,8 @@ final class WatchFolderCoordinator: ObservableObject {
         currentPath: String,
         promptForFolder: @escaping @Sendable () async -> URL?,
         updatePath: @escaping @Sendable (String) async -> Void,
-        onNewFiles: @escaping @Sendable ([URL]) async -> Void
+        onNewFiles: @escaping @Sendable ([URL]) async -> Void,
+        protectedFiles: @escaping @MainActor @Sendable () -> Set<URL> = { [] }
     ) async -> Bool {
         monitoringGeneration += 1
         let generation = monitoringGeneration
@@ -82,7 +83,7 @@ final class WatchFolderCoordinator: ObservableObject {
                     guard self?.monitoringGeneration == generation else { return }
                     await onNewFiles(urls)
                 }
-            }, onError: { [weak self] message in
+            }, protectedFiles: protectedFiles, onError: { [weak self] message in
                 Task { @MainActor [weak self] in
                     guard let self, self.monitoringGeneration == generation else { return }
                     // Preserve any error already awaiting acknowledgement.

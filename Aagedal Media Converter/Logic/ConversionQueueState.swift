@@ -132,3 +132,80 @@ enum ConversionQueueState {
         }
     }
 }
+
+struct ApplicationJobSourceID: Hashable, Sendable {
+    let jobID: ApplicationJobID
+    let sourceIndex: Int
+}
+
+/// Projects authoritative jobs without reformatting immutable settings or
+/// re-reading completed outputs on every unrelated progress snapshot.
+enum ApplicationJobRowProjection {
+    /// A retry gets fresh ownership while the old durable record stays intact.
+    /// Active batch rows cannot be detached while their executor still owns them.
+    static func releaseTerminalOwnership(of item: inout VideoItem) -> ApplicationJobSourceID? {
+        guard item.status != .waiting, item.status != .converting,
+              let jobID = item.applicationJobID, let index = item.applicationJobSourceIndex else { return nil }
+        item.applicationJobID = nil
+        item.applicationJobSourceIndex = nil
+        item.applicationJobOrigin = nil
+        item.applicationPresetID = nil
+        item.applicationJobSettingsSummary = nil
+        return ApplicationJobSourceID(jobID: jobID, sourceIndex: index)
+    }
+
+    static func apply(_ record: ApplicationJobRecord, sourceIndex: Int, outputURL: URL?, to item: inout VideoItem) {
+        let needsSettings = item.applicationJobID != record.id || item.applicationJobSourceIndex != sourceIndex
+        let previousStatus = item.status
+        let previousOutputURL = item.outputURL
+        item.applicationJobID = record.id
+        item.applicationJobSourceIndex = sourceIndex
+        item.applicationJobOrigin = record.request.origin
+        item.applicationPresetID = record.request.presetID
+        if needsSettings {
+            item.applicationJobSettingsSummary = record.request.acceptedSettingsSummary(sourceIndex: sourceIndex)
+        }
+        item.outputURL = outputURL
+        if let sourceSettings = record.request.sourceSettings, sourceSettings.indices.contains(sourceIndex) {
+            let settings = sourceSettings[sourceIndex]
+            item.analyticsSourceRange = AnalyticsSourceRange(start: settings.trimStart, end: settings.trimEnd)
+        } else {
+            item.analyticsSourceRange = AnalyticsSourceRange()
+        }
+        item.progress = record.progress ?? 0
+        item.eta = nil
+        item.statusMessage = switch record.state {
+        case .queued: "Queued"
+        case .running: record.stage ?? "Encoding"
+        case .cancelling: "Cancelling"
+        case .succeeded: nil
+        case .failed: "Shared job failed"
+        case .cancelled: nil
+        case .interrupted: "Interrupted after app restart"
+        }
+        item.conversionError = switch record.state {
+        case .failed, .interrupted: record.diagnostic
+        default: nil
+        }
+        item.status = switch record.state {
+        // Treat queued shared jobs as active in the legacy row model. This keeps
+        // manual encode actions from claiming work already owned by the service.
+        case .queued, .running, .cancelling: .converting
+        case .succeeded: .done
+        case .failed, .interrupted: .failed
+        case .cancelled: .cancelled
+        }
+        // A later failure or cancellation does not undo earlier batch outputs.
+        if record.outputURLs.indices.contains(sourceIndex) {
+            item.status = .done
+            item.statusMessage = nil
+            item.conversionError = nil
+        }
+        if item.status == .done {
+            item.progress = 1
+            if previousStatus != .done || previousOutputURL != outputURL {
+                item.refreshOutputFileCache()
+            }
+        }
+    }
+}

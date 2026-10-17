@@ -170,11 +170,19 @@ enum ManualApplicationJobBridge {
         let destinationSettings = OutputDestinationSettings(defaults: defaults)
         guard !mergeClipsEnabled,
               let presetID = ApplicationPresetID(exportPreset: preset),
-              presetID.usesExistingManualSharedBridge,
+              presetID.supportsManualSharedExecution,
               !items.isEmpty,
               items.allSatisfy({ isRepresentable($0, preset: preset) }) else {
             return nil
         }
+
+        // Preserve the UI's collision-safe repeat-export behavior. Exact shared
+        // plans intentionally reject existing outputs; the established executor
+        // reserves a unique sibling name instead of overwriting the old export.
+        guard !items.contains(where: \.outputFileExists) else { return nil }
+
+        let generated = GeneratedVideoSettings(preset: preset, defaults: defaults).requests(for: items)
+        guard generated.waveform == nil, generated.synthesized == nil else { return nil }
 
         var sources = Set<URL>()
         guard items.allSatisfy({ sources.insert($0.url.standardizedFileURL).inserted }) else {
@@ -209,6 +217,7 @@ enum ManualApplicationJobBridge {
                 sourceURL: item.url,
                 destinationFolderURL: destinationFolder,
                 comment: item.comment,
+                metadataEditorSettings: item.metadataEditorSettings,
                 includeDateTag: item.includeDateTag,
                 timecodeConfig: item.timecodeConfig,
                 trimStart: item.trimStart,
@@ -239,6 +248,20 @@ enum ManualApplicationJobBridge {
         )
         guard (try? ApplicationJobRegistry.validate(request)) != nil else { return nil }
         return request
+    }
+
+    /// Prepare names on a copy; rejected groups keep every original setting.
+    static func representableGroupItems(_ group: EncodingGroup) -> [VideoItem]? {
+        guard !group.concatEnabled, !group.conformanceMergeEnabled,
+              !group.transcriptionEnabled, !group.uploadEnabled, !group.analyticsEnabled else { return nil }
+        var items = group.items
+        if group.sequentialNamingEnabled {
+            let name = FileNameProcessor.processFileName(group.name)
+            for index in items.indices {
+                items[index].outputFileNameOverride = String(format: "%@_%03d", name, index + 1)
+            }
+        }
+        return items.filter { $0.status == .waiting && $0.applicationJobID == nil }
     }
 
     private static func isRepresentable(_ item: VideoItem, preset: ExportPreset) -> Bool {

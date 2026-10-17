@@ -166,14 +166,15 @@ enum TimecodeMetadataPlan: Equatable, Sendable {
     }
 }
 
-/// Empty comments retain mapped source metadata; an explicit composed comment owns the
-/// global comment option. Image outputs leave container metadata untouched.
+/// Empty legacy comments retain source metadata. An enabled editor field can
+/// explicitly clear the tag; otherwise a composed comment owns the global option.
+/// Image outputs leave container metadata untouched.
 enum CommentMetadataPlan: Equatable, Sendable {
     case unchanged
     case source
     case set(String)
 
-    init(comment: String, includeDateTag: Bool, date: Date = Date(), settings: CommentSettings) {
+    init(comment: String, includeDateTag: Bool, date: Date = Date(), settings: CommentSettings, writeEmptyComment: Bool = false) {
         var parts: [String] = []
         if includeDateTag {
             let formatter = DateFormatter()
@@ -182,7 +183,7 @@ enum CommentMetadataPlan: Equatable, Sendable {
         }
         let trimmedComment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
         parts += [settings.prefix, trimmedComment, settings.suffix].filter { !$0.isEmpty }
-        self = parts.isEmpty ? .source : .set(parts.joined(separator: settings.separator))
+        self = parts.isEmpty ? (writeEmptyComment ? .set("") : .source) : .set(parts.joined(separator: settings.separator))
     }
 
     var value: String? {
@@ -271,8 +272,14 @@ struct OutputMetadataPlan: Equatable, Sendable {
     let comment: CommentMetadataPlan
     let timecode: TimecodeMetadataPlan
 
-    func apply(to arguments: inout [String], outputArgumentsStart: Int = 0) {
+    func apply(to arguments: inout [String], outputArgumentsStart: Int = 0, outputExtension: String? = nil) {
         source.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+        if case .preserve = source, ["mp4", "mov", "m4v", "m4a"].contains(outputExtension?.lowercased() ?? "") {
+            // The default MOV muxer drops description and source URL tags; MP4
+            // also drops nonstandard tags such as PURL. Keep them independent of
+            // an authored comment, and retain any other configured movflags.
+            arguments += ["-movflags", "+use_metadata_tags"]
+        }
         comment.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
         timecode.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
     }
@@ -335,6 +342,7 @@ enum FFMPEGCommandBuilder {
         commentSettings: CommentSettings? = nil,
         subtitleSettings: SubtitleExportSettings? = nil,
         comment: String,
+        writeEmptyComment: Bool = false,
         includeDateTag: Bool,
         trimStart: Double?,
         trimEnd: Double?,
@@ -378,7 +386,7 @@ enum FFMPEGCommandBuilder {
         var arguments = ["-y", "-nostdin", "-progress", "pipe:2"]
 
         let commentPlan: CommentMetadataPlan = preset == .imageSequence ? .unchanged : CommentMetadataPlan(
-            comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings
+            comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings, writeEmptyComment: writeEmptyComment
         )
         let metadataPlan = OutputMetadataPlan(
             source: capturedAudioOnlySettings?.sourceMetadataPlan ?? capturedCodecSettings?.sourceMetadataPlan ?? .unchanged,
@@ -457,7 +465,7 @@ enum FFMPEGCommandBuilder {
             if let additionalOutputArguments {
                 arguments.append(contentsOf: additionalOutputArguments)
             }
-            metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+            metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
             logger.debug("Waveform ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
@@ -547,7 +555,7 @@ enum FFMPEGCommandBuilder {
             if ffmpegArgs.contains("-an"), let effectiveDuration {
                 arguments.append(contentsOf: ["-t", ffmpegTimeString(from: effectiveDuration)])
             }
-            metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+            metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
             logger.debug("Synthesized video ffmpeg arguments: \(arguments.joined(separator: " "), privacy: .public)")
             arguments.append(outputFileURL.path)
 
@@ -726,7 +734,7 @@ enum FFMPEGCommandBuilder {
         if let additionalOutputArguments {
             arguments.append(contentsOf: additionalOutputArguments)
         }
-        metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+        metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
         // These chapters are explicitly authored by the stitching workflow and
         // must survive the preset's policy for inherited source metadata.
         if let chapterInputIndex {
@@ -1032,6 +1040,7 @@ extension FFMPEGCommandBuilder {
         trimEnd: Double?,
         isMuted: Bool = false,
         comment: String = "",
+        writeEmptyComment: Bool = false,
         includeDateTag: Bool = true,
         additionalOutputArguments: [String]? = nil
     ) async -> FFMPEGCommand {
@@ -1053,7 +1062,7 @@ extension FFMPEGCommandBuilder {
         let capturedCodecSettings = codecSettings ?? CodecExportSettings(preset: preset)
         let capturedCommentSettings = commentSettings ?? CommentSettings()
         let commentPlan: CommentMetadataPlan = preset == .imageSequence ? .unchanged : CommentMetadataPlan(
-            comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings
+            comment: comment, includeDateTag: includeDateTag, settings: capturedCommentSettings, writeEmptyComment: writeEmptyComment
         )
         let metadataPlan = OutputMetadataPlan(
             source: (capturedAudioOnlySettings?.sourceMetadataPlan ?? capturedCodecSettings?.sourceMetadataPlan ?? .unchanged)
@@ -1123,7 +1132,7 @@ extension FFMPEGCommandBuilder {
         // Use -shortest so video stops when audio ends (or vice versa)
         arguments.append("-shortest")
 
-        metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart)
+        metadataPlan.apply(to: &arguments, outputArgumentsStart: outputArgumentsStart, outputExtension: outputFileURL.pathExtension)
         arguments.append(outputFileURL.path)
 
         let effectiveDuration = trimPlan.effectiveDuration

@@ -43,7 +43,7 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         },
         resolveData: @escaping (Data) throws -> (url: URL, isStale: Bool) = {
             var stale = false
-            let url = try URL(resolvingBookmarkData: $0, options: [.withSecurityScope],
+            let url = try URL(resolvingBookmarkData: $0, options: [.withSecurityScope, .withoutUI, .withoutMounting],
                               relativeTo: nil, bookmarkDataIsStale: &stale)
             return (url, stale)
         },
@@ -97,26 +97,33 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
     }
 
     private func saveBookmark(for url: URL, storageURL: URL, readOnly: Bool) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
         let accessed = startScope(url)
         defer { if accessed { stopScope(url) } }
         do {
-            var modes = try storedDictionary(forKey: readOnlyKey)
-            var bookmarks = try storedDictionary(forKey: bookmarksKey)
-            // A later import must not downgrade a folder already saved for output.
-            // Legacy records have unknown permissions; preserve their scope too.
-            let savedReadOnly = modes[storageURL.absoluteString] as? Bool
-            let existingMayBeWritable = bookmarks[storageURL.absoluteString] != nil && savedReadOnly != true
-            let effectiveReadOnly = readOnly && !existingMayBeWritable && savedReadOnly != false
+            // Bookmark IPC can wait on an unavailable volume. Never hold the
+            // shared state lock while calling the system bookmark service.
+            let effectiveReadOnly = try lock.withLock {
+                let modes = try storedDictionary(forKey: readOnlyKey)
+                let bookmarks = try storedDictionary(forKey: bookmarksKey)
+                let savedReadOnly = modes[storageURL.absoluteString] as? Bool
+                let existingMayBeWritable = bookmarks[storageURL.absoluteString] != nil && savedReadOnly != true
+                return readOnly && !existingMayBeWritable && savedReadOnly != false
+            }
             var options: URL.BookmarkCreationOptions = [.withSecurityScope]
             if effectiveReadOnly { options.insert(.securityScopeAllowOnlyReadAccess) }
             let data = try createBookmark(url, options)
-            bookmarks[storageURL.absoluteString] = data
-            modes[storageURL.absoluteString] = effectiveReadOnly
-            userDefaults.set(bookmarks, forKey: bookmarksKey)
-            userDefaults.set(modes, forKey: readOnlyKey)
-            return true
+            return try lock.withLock {
+                var modes = try storedDictionary(forKey: readOnlyKey)
+                var bookmarks = try storedDictionary(forKey: bookmarksKey)
+                // Another writer may have upgraded the grant during creation.
+                if effectiveReadOnly, bookmarks[storageURL.absoluteString] != nil,
+                   modes[storageURL.absoluteString] as? Bool != true { return true }
+                bookmarks[storageURL.absoluteString] = data
+                modes[storageURL.absoluteString] = effectiveReadOnly
+                userDefaults.set(bookmarks, forKey: bookmarksKey)
+                userDefaults.set(modes, forKey: readOnlyKey)
+                return true
+            }
         } catch {
             logger.error("Failed to create bookmark: \(error.localizedDescription, privacy: .public)")
             return false
@@ -133,16 +140,17 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
     }
 
     func resolveBookmark(for url: URL) -> URL? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey),
-              let data = bookmarks[url.absoluteString] as? Data else { return nil }
+        guard let data = lock.withLock({
+            userDefaults.dictionary(forKey: bookmarksKey)?[url.absoluteString] as? Data
+        }) else { return nil }
         do {
             let resolved = try resolveData(data)
             if resolved.isStale {
                 // Legacy data did not record permissions. Do not add a read-only
                 // restriction when renewing it; the resolved scope limits access.
-                let readOnly = userDefaults.dictionary(forKey: readOnlyKey)?[url.absoluteString] as? Bool ?? false
+                let readOnly = lock.withLock {
+                    userDefaults.dictionary(forKey: readOnlyKey)?[url.absoluteString] as? Bool ?? false
+                }
                 _ = saveBookmark(for: resolved.url, storageURL: url, readOnly: readOnly)
             }
             return resolved.url
@@ -153,17 +161,25 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
     }
 
     func startAccessingSecurityScopedResource(for url: URL) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        // Reuse the same resolved scope until its last borrower releases it.
-        // Resolving again after a move or renewal could stop a different URL.
-        if var active = activeBookmarks[url] {
-            active.count += 1
-            activeBookmarks[url] = active
-            return true
-        }
+        if lock.withLock({
+            if var active = activeBookmarks[url] {
+                active.count += 1
+                activeBookmarks[url] = active
+                return true
+            }
+            return false
+        }) { return true }
         guard let resolved = resolveBookmark(for: url), startScope(resolved) else { return false }
-        activeBookmarks[url] = (resolved, 1)
+        let reused = lock.withLock {
+            if var active = activeBookmarks[url] {
+                active.count += 1
+                activeBookmarks[url] = active
+                return true
+            }
+            activeBookmarks[url] = (resolved, 1)
+            return false
+        }
+        if reused { stopScope(resolved) }
         return true
     }
 
@@ -176,13 +192,10 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
         containing url: URL,
         requiresWriteAccess: Bool
     ) -> SecurityScopedAccess {
-        lock.lock()
-        defer { lock.unlock() }
-
-        guard let bookmarks = userDefaults.dictionary(forKey: bookmarksKey) else {
-            return .none
+        let (bookmarks, modes) = lock.withLock {
+            (userDefaults.dictionary(forKey: bookmarksKey) ?? [:],
+             userDefaults.dictionary(forKey: readOnlyKey) ?? [:])
         }
-        let modes = userDefaults.dictionary(forKey: readOnlyKey) ?? [:]
         let target = url.standardizedFileURL.resolvingSymlinksInPath()
         var candidates: [(storageURL: URL, resolvedURL: URL)] = []
 
@@ -190,9 +203,10 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
             guard value is Data,
                   let storageURL = URL(string: key),
                   storageURL.isFileURL,
+                  Self.url(target, isContainedBy: storageURL.standardizedFileURL),
                   !(requiresWriteAccess && (modes[key] as? Bool) == true) else { continue }
             let resolvedURL: URL
-            if let active = activeBookmarks[storageURL] {
+            if let active = lock.withLock({ activeBookmarks[storageURL] }) {
                 // Do not resolve again while a borrower owns the old resolution;
                 // its eventual stop must remain paired with that exact URL.
                 resolvedURL = active.url
@@ -212,13 +226,17 @@ final class SecurityScopedBookmarkManager: @unchecked Sendable {
                 > $1.resolvedURL.standardizedFileURL.pathComponents.count
         }
         for candidate in candidates {
-            if var active = activeBookmarks[candidate.storageURL] {
-                active.count += 1
-                activeBookmarks[candidate.storageURL] = active
-                return .bookmark(candidate.storageURL)
-            }
             guard startScope(candidate.resolvedURL) else { continue }
-            activeBookmarks[candidate.storageURL] = (candidate.resolvedURL, 1)
+            let reused = lock.withLock {
+                if var active = activeBookmarks[candidate.storageURL] {
+                    active.count += 1
+                    activeBookmarks[candidate.storageURL] = active
+                    return true
+                }
+                activeBookmarks[candidate.storageURL] = (candidate.resolvedURL, 1)
+                return false
+            }
+            if reused { stopScope(candidate.resolvedURL) }
             return .bookmark(candidate.storageURL)
         }
         return .none

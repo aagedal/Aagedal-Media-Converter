@@ -1,3 +1,32 @@
+# v.4.5.6
+
+- Added custom mono-pair and 5.1 multi-mono selections to silence analysis, with grouped preview routing and complete JSON reports. Duplicate channels and unequal track start times are rejected.
+
+- Added JSON export for complete source silence reports, including selected track, detection settings and every interval on the file timeline.
+
+- Added JSON export for complete source peak/channel-balance reports, including every interval, per-channel levels, selected track and measurement settings.
+- Added navigable source sample-peak intervals and per-channel RMS balance checks to Audio Analysis, with configurable thresholds and complete-track channel levels.
+
+- Added silence detection to Audio Analysis, with configurable sample thresholds and minimum durations, timeline markers, and paused preview navigation for each interval.
+- Accelerated experimental AV2 encoding with the AVM encoder branch combined with all fixes from the October 12 reference build, including Apple Silicon optimizations and correctness fixes. The paired encoder and decoder retain existing AV2 settings and container/audio support.
+- Added VMAF v1.0.16 models for standard, phone, and 4K viewing, including 50/60 fps variants. New installations use the standard v1 model by default; saved model selections are preserved, and v0 models remain available for comparison with earlier scores.
+- VMAF v1 analysis processes both inputs at 10-bit precision for banding and chroma assessment. Uses the models already included in the bundled FFmpeg; no bundled binaries or licenses changed.
+
+# v.4.5.5
+
+- Added source-prefilled metadata editing, with a master metadata switch and per-preset preservation settings. Improved access to files on offline volumes so unavailable bookmarks do not freeze imports.
+- Updated bundled FFmpeg to the signed and notarized corrected full 9.0.2 build, restoring Metal-backed `yadif_videotoolbox` deinterlacing with the teardown fix. Refreshed dependency notices and corresponding-source records.
+
+- Watch-folder imports and cleanup now wait for unchanged file size and modification time. Choose a settling time of 5–60 seconds in Settings; the default is 10 seconds. Unreadable files are retried automatically, and queued sources are protected from cleanup.
+- Added Settings search for section and setting names, with Command-F access, and made the Settings window resizable.
+- Localized the conversion button’s accessibility labels and tooltips in all supported languages.
+- Improved Agent Access connection diagnostics with shared subprocess timeout, cancellation, and output handling.
+- Fixed a recursive encoding crash in optimized Release builds by preserving converter actor isolation through cancellation handling.
+
+# v.4.5.3
+
+- New website downloads embed the available post text or video description and the source page link in the file's metadata, including audio-only downloads. Metadata support and visibility depend on the source website, file format, and player. Existing downloads are not updated automatically.
+
 # v.4.5.2
 
 - Added a video picker for Instagram carousel and Twitter/X post links. Choose

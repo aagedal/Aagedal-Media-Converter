@@ -26,6 +26,7 @@ enum SettingsSyncKeys {
         var keys = Set<String>()
         keys.formUnion(customPresetKeys)
         keys.formUnion(staticKeys)
+        keys.formUnion(ExportPreset.allCases.map { AppConstants.preserveMetadataPreferenceKey(for: $0) })
         return keys
     }()
 
@@ -253,6 +254,7 @@ enum SettingsSyncKeys {
         AppConstants.watchFolderDeleteDurationValueKey,
         AppConstants.watchFolderDeleteDurationUnitKey,
         AppConstants.watchFolderKeepAwakeKey,
+        AppConstants.watchFolderSettlingSecondsKey,
         AppConstants.previewCacheCleanupPolicyKey,
 
         // Output handling (modes/names only — not absolute folder paths)
@@ -298,6 +300,7 @@ enum SettingsSyncKeys {
         AppConstants.analyticsAutoExportKey,
         AppConstants.analyticsAutoExportFormatKey,
         AppConstants.ssimulacra2MaxFramesKey,
+        AppConstants.analyticsComparisonResolutionKey,
 
         // Content authenticity
         AppConstants.c2paCheckEnabledKey,

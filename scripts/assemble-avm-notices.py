@@ -1,9 +1,10 @@
-import pathlib,json,re,hashlib,tarfile,io,gzip
+import pathlib,json,re,hashlib,tarfile,io,gzip,subprocess
 import argparse
 parser=argparse.ArgumentParser(description='Rebuild AVM notices and the Eigen source companion from retained sources.')
 parser.add_argument('--source-root', type=pathlib.Path, required=True)
 args=parser.parse_args()
 root=pathlib.Path(__file__).resolve().parents[1]; src=args.source_root.resolve(); base=root/'docs/provenance/4.4-local-builds/avm-dependencies'; idx=json.loads((base/'compiler-inputs.json').read_text())
+revision=subprocess.check_output(['git','-C',str(src),'rev-parse','HEAD'],text=True).strip()
 for files in idx['components'].values():
  for path, expected in files.items():
   if hashlib.sha256((src/path).read_bytes()).hexdigest()!=expected: raise SystemExit('Source drift: '+path)
@@ -23,7 +24,7 @@ for block,files in sorted(blocks.items(),key=lambda item:sorted(item[1])[0]):out
 selected=[p for p in (src/'build_arm64/eigen').rglob('*') if p.is_file() and (p.relative_to(src/'build_arm64/eigen').parts[0] in ('Eigen','unsupported') or p.name.startswith('COPYING.'))]
 archive=root/'build/attribution/avm-eigen-source.tar.gz';archive.parent.mkdir(parents=True,exist_ok=True)
 with archive.open('wb') as raw:
- with gzip.GzipFile(fileobj=raw,mode='wb',mtime=0,filename='') as gz:
+ with gzip.GzipFile(fileobj=raw,mode='wb',mtime=0,filename='',compresslevel=9) as gz:
   with tarfile.open(fileobj=gz,mode='w') as tar:
    for p in sorted(selected):
     data=p.read_bytes(); info=tarfile.TarInfo('eigen/'+str(p.relative_to(src/'build_arm64/eigen')));info.size=len(data);info.mode=0o644;tar.addfile(info,io.BytesIO(data))
@@ -39,7 +40,7 @@ for component in json.loads((base/'inventory.json').read_text())['components']:
 for path in ['libyuv/LICENSE','libyuv/PATENTS','libyuv/AUTHORS','libyuv/upstream-file-NOTICES.txt','tensorflow/nested/fft2d-LICENSE','tensorflow/nested/xla-LICENSE','tensorflow/nested/tsl-LICENSE','file-level-NOTICES.txt']:
  sections.append((path,base/path))
 notice=['AVM encoder and decoder — third-party notices',
- 'AVM upstream: https://gitlab.com/AOMediaCodec/avm\nRetained AVM revision: 000682c868c9c265fe0bd5b552a8d10ec49ac9a4',
+ f'AVM upstream: https://github.com/AOMediaCodec/avm\nRetained AVM revision: {revision}',
  'These notices cover AVM and all 17 dependency groups appearing in the retained build compiler records, including conditional code and headers. Inclusion does not imply every component is used in every operation.',
  'Eigen Source Code Form (MPL 2.0) is supplied in avm-eigen-source.tar.gz in the source companion accompanying this application release. It contains the retained Eigen headers, supporting source files, and licenses. You may use and modify that source under its included licenses. Retained sources are used because the build selected local directories; no unverified upstream version is asserted.',
  'libyuv notices were recovered from the official version 1456 revision 7cd7f5a80fa7d63cdd0ca3b7e11447b8e6a1e7ec: https://chromium.googlesource.com/libyuv/libyuv/+/7cd7f5a80fa7d63cdd0ca3b7e11447b8e6a1e7ec/ . The compiled subset differs only in AOM copyright headers and one renamed-project comment. Both upstream and retained notices are preserved.']

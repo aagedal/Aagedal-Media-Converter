@@ -4037,7 +4037,8 @@ final class ApplicationJobContractTests: XCTestCase {
             accumulated + (try JSONSerialization.data(withJSONObject: message)) + Data([0x0A])
         }
         waitingInput.fileHandleForWriting.write(waitData)
-        try waitingInput.fileHandleForWriting.close()
+        // A live client keeps stdin open while awaiting the response. EOF now
+        // cancels pending waits so disconnected helpers can exit promptly.
         try await Task.sleep(for: .milliseconds(350))
 
         let statusStarted = Date()
@@ -4057,8 +4058,15 @@ final class ApplicationJobContractTests: XCTestCase {
         // Drain stdout before waiting for exit: a response can exceed the pipe
         // buffer on CI and otherwise leave the child blocked while writing.
         let waitResponseData = await Task.detached {
-            waitingOutput.fileHandleForReading.readDataToEndOfFile()
+            var data = Data()
+            while data.filter({ $0 == 0x0A }).count < 2 {
+                let chunk = waitingOutput.fileHandleForReading.availableData
+                guard !chunk.isEmpty else { break }
+                data.append(chunk)
+            }
+            return data
         }.value
+        try waitingInput.fileHandleForWriting.close()
         await fulfillment(of: [waitingExited], timeout: 10)
         guard !waitingHelper.isRunning else { throw CocoaError(.fileReadUnknown) }
         XCTAssertEqual(waitingHelper.terminationStatus, 0)

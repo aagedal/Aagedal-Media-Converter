@@ -47,6 +47,7 @@ struct VideoFileListView: View {
     var onDelete: (IndexSet) -> Void
     var onReset: (Int, Bool) -> Void
     var onCancelApplicationJob: ((ApplicationJobID) -> Void)? = nil
+    var onDismissApplicationJobSource: ((ApplicationJobID, Int) -> Void)? = nil
     var preset: ExportPreset
     var mergeClipsEnabled: Bool
     var mergeClipsAvailable: Bool
@@ -248,6 +249,7 @@ struct VideoFileListView: View {
                     onDelete: onDelete,
                     onReset: onReset,
                     onCancelApplicationJob: onCancelApplicationJob,
+                    onDismissApplicationJobSource: onDismissApplicationJobSource,
                     onOpenTrim: onOpenTrim,
                     onOpenTrimWithCrop: onOpenTrimWithCrop,
                     onOpenTimecode: onOpenTimecode,
@@ -549,8 +551,7 @@ struct VideoFileListView: View {
             }
         }
 
-        // Save the bookmark for future access
-        _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+        // Persist below, off the main actor: bookmark IPC can wait on a volume.
 
         // Get the output folder from UserDefaults or use default
         let outputFolder = UserDefaults.standard.string(forKey: "outputFolder")
@@ -578,7 +579,9 @@ struct VideoFileListView: View {
         Task(priority: .utility) {
             defer { releaseSecurityAccess() }
 
-            _ = SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+            _ = try? await NonJoiningTaskDeadline.run(timeout: .seconds(5)) {
+                SecurityScopedBookmarkManager.shared.saveBookmark(for: url)
+            }
 
             let details = await VideoFileUtils.loadDetails(for: url, outputFolder: outputFolder, preset: preset, counter: placeholder.customCounterValue, namingSettings: naming)
             await MainActor.run {
@@ -1606,6 +1609,7 @@ struct VideoFileListView: View {
                 enabledMetrics: metrics,
                 vmafModel: settings.vmafModel,
                 ssimulacra2MaxFrames: settings.ssimulacra2MaxFrames,
+                comparisonResolution: settings.comparisonResolution,
                 operationID: attempt.operationID
             ) { metric, progressValue in
                 Task { @MainActor in

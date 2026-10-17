@@ -1,0 +1,50 @@
+{
+  "verified": true,
+  "assets": [
+    {
+      "asset": "Libavcodec-GPL.xcframework.zip",
+      "sha256": "99a3005e484f8674a1c9aa4dac601c78aaae5dd0dd38ebbfc4d34d08789229fe",
+      "bytes": 10039614
+    },
+    {
+      "asset": "Libavdevice-GPL.xcframework.zip",
+      "sha256": "935865c4ec2df96e79126d213781667dfa3273139ce1cf4c2006dddf6f982244",
+      "bytes": 17243
+    },
+    {
+      "asset": "Libavfilter-GPL.xcframework.zip",
+      "sha256": "7e305daf10997b543f2ee38fd14920008e3c320e5a9f24551c1f87f3cca55faf",
+      "bytes": 990812
+    },
+    {
+      "asset": "Libavformat-GPL.xcframework.zip",
+      "sha256": "a9d42602666ac65110cf305109fd1a43ac82496e4c674d0081d3454b2982ba96",
+      "bytes": 2206217
+    },
+    {
+      "asset": "Libavutil-GPL.xcframework.zip",
+      "sha256": "22f5e30bdedcd2436d3738ad606b60ca4f14a792aad51b3233a91ef00972bbc2",
+      "bytes": 1181929
+    },
+    {
+      "asset": "Libmpv-GPL.xcframework.zip",
+      "sha256": "59732502c468d695743c2012878f0433a39fb258cb4e650c41e29514a5385431",
+      "bytes": 5809217
+    },
+    {
+      "asset": "Libswresample-GPL.xcframework.zip",
+      "sha256": "be3c9e3c96ff433a54c957e2afdfc14ce90a1ba4ad6a192db160108c19b12243",
+      "bytes": 125055
+    },
+    {
+      "asset": "Libswscale-GPL.xcframework.zip",
+      "sha256": "20d79627f22b93c656efc2428359452c55499f75a33cad0497fd6ee48c240e51",
+      "bytes": 1201358
+    },
+    {
+      "asset": "mpvkit-n9.0.2-sources.tar.gz",
+      "sha256": "06ea1673ac95e435bde9e5bcb8f996c15a6c4cec5862bc4a7e8dfb7271da25a9",
+      "bytes": 25014386
+    }
+  ]
+}

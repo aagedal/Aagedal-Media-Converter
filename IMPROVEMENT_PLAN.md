@@ -1,10 +1,247 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-09-26
+Last reviewed: 2026-10-16
+
+## Grouped silence analysis continuation — 2026-10-16
+
+Owner: Codex. Detect Silence now supports custom mono pairs and 5.1 multi-mono
+channel assignments, grouped MPV audition and full JSON export. Roles use distinct
+mono tracks; changing them clears prior results. Explicit channel routing preserves
+source gains before device conversion, and single-track/reload cleanup restores
+normal preview selection. A cancellable first-frame preflight rejects differing
+sample rates or unequal/unknown decoded starts before scanning or grouped playback. Continuous synchronized
+tracks are the supported grouping case; unequal durations and discontinuities remain
+unqualified. Separate loudness analysis and its EBU R128 weighting remain unchanged.
+See the [audio roadmap](docs/AUDIO-METERING-PLAN.md). No dependencies, binaries or
+licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds; all 1,372 unit tests pass with
+one intentional opt-in benchmark skip and zero failures. All 43 focused
+scanner/player checks and three fresh-build UI checks pass, including bilingual
+group selection/navigation, duplicate rejection, JSON save/readback and existing
+single-track export/settings behavior. Four bilingual screenshots were visually
+inspected. Seven localization script tests, the 1,887-entry catalog audit and
+whitespace check pass. Fresh build products resolved cached UI launch timeouts.
+Release/device and sandbox qualification remain open; translations outside
+English/Norwegian await review.
+
+## Audio silence-report export continuation — 2026-10-16
+
+Owner: Codex. Detect Silence now exports complete source reports as versioned JSON
+through the macOS save panel. Exports retain the analysis completion time,
+selected presentation, dBFS threshold, minimum duration and every file-relative
+interval, including empty completed reports. Explicit semantics distinguish
+source sample amplitude from RMS/LUFS/true peak and require every selected
+channel, including LFE, to remain quiet together. Grouped service reports retain
+track order/layout; grouped UI selection remains open. Separate EBU R128
+loudness behavior is unchanged.
+
+Cancelling a save preserves the report, failed saves can be retried, and changed
+tracks/settings or a new scan invalidate the previous result. Atomic writes
+retain security-scoped destination access and omit the source's absolute path.
+See the [report format](docs/audio-silence-report-format.md) and
+[audio roadmap](docs/AUDIO-METERING-PLAN.md). No dependencies, bundled binaries
+or licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds, and the full unit suite executes
+1,367 tests with no failures and one intentional opt-in benchmark skip. All 14
+silence scanner/report tests pass, including complete interval retention, track
+and grouped layout context, empty results, invalid-data rejection, repeated writes
+and destination errors. English/Norwegian UI checks pass: export is disabled
+before analysis and after changed settings, save cancellation preserves the
+report, and a real exported JSON file retains the selected track, threshold and
+2–4 second interval. Both captured screens were visually inspected. Seven
+localization script tests, the 1,876-entry catalog audit and whitespace check
+pass. Release/device qualification remains open. The current Debug and Release
+configurations disable App Sandbox; these checks do not qualify sandbox enforcement.
+
+## Audio channel-report export continuation — 2026-10-16
+
+Owner: Codex. Peaks and Channel Balance now exports complete source reports as
+versioned JSON through the macOS save panel. Reports preserve selected-track
+identity, scan completion time, thresholds, all channel levels and every peak
+interval, including those beyond the chart's display limit. Explicit semantics
+distinguish dBFS sample peaks, unweighted RMS, file-timeline offsets, digital
+silence, infinite channel difference and unavailable comparisons. Export excludes
+the source's absolute path and retains security-scoped access through atomic
+writes. Track/settings changes invalidate export; cancelled saves preserve the
+scan, and save errors allow retry.
+
+Validation: the ad-hoc-signed Debug app builds and all 1,363 unit tests pass with
+one intentional opt-in benchmark skip and no failures. English/Norwegian UI
+checks pass, including save cancellation and a real exported report readback;
+both screenshots were visually inspected. Seven localization script tests, the
+1,876-entry catalog audit and whitespace check pass. Release/device qualification
+and translations outside English/Norwegian remain unverified. Both project
+configurations currently disable App Sandbox, so the save-panel checks do not
+qualify sandbox enforcement.
+
+The [audio roadmap](docs/AUDIO-METERING-PLAN.md) records verification and remaining
+true-peak, phase/correlation, playback-alignment and report work. The
+[report format](docs/audio-peak-report-format.md) documents the version 1 schema.
+No dependencies, bundled binaries or licenses changed.
+
+## Audio peaks and channel balance continuation — 2026-10-16
+
+Owner: Codex. Audio Analysis now offers complete-track source sample-peak
+intervals, per-channel maximum sample peaks and unweighted whole-track RMS,
+configurable peak/channel-difference thresholds, and paused MPV navigation.
+Analysis preserves source-rate samples, delayed timestamps and unpadded EOF.
+Channel differences are advisory, including potentially intentional surround/LFE
+differences. The [audio roadmap](docs/AUDIO-METERING-PLAN.md) records semantics,
+validation and the remaining true-peak interval, phase and export work.
+
+Validation: Debug build passed, with 1,359 unit tests executed, one intentional
+benchmark skip and no failures. Final English/Norwegian UI checks pass and their
+screenshots were visually inspected after correcting sheet clipping. Seven
+localization script tests, the 1,875-entry localization audit and whitespace check
+pass. The audio roadmap records the combined-run accessibility failure and clean
+separate UI rerun. Release/device qualification remains unperformed; translations
+outside English/Norwegian await review. No dependencies, binaries or licenses
+changed.
+
+## Audio silence detection continuation — 2026-10-16
+
+Owner: Codex. Audio Analysis now offers complete-track silence detection with
+configurable dBFS/duration thresholds, interval markers and paused MPV navigation.
+Detection requires every selected channel to remain quiet, preserves delayed
+audio offsets on the file timeline, drains cancellation through the shared
+subprocess runner and rejects incomplete reports. New controls are localized in
+all supported languages; translations outside English/Norwegian await review.
+The [audio roadmap](docs/AUDIO-METERING-PLAN.md) tracks validation and remaining
+peak/phase/report work. A separate [Playback timing investigation](docs/audio-playback-timing-2026-10-16.md)
+identifies missing frame timestamps/history in the current MPV metadata API;
+dependency instrumentation remains necessary before claiming alignment.
+
+Validation: the Debug build, full unit suite (1,349 executed, one intentional
+benchmark skip, no failures), final 10 scanner regressions, two English/Norwegian
+UI checks, all 124 script tests, localization audit and whitespace check pass.
+The preview/interval screenshots were visually reviewed. Release packaging and
+physical-device qualification remain outside this continuation.
 
 This is the prioritized improvement roadmap. `TODO.md` remains a small historical
 feature checklist; new improvement work should be tracked here with an owner or
 issue link when it starts.
+
+## Preview audio metering — 2026-10-15
+
+Owner: Codex. Independent source-channel peak/RMS and momentary/short-term LUFS
+are implemented for preview playback using bounded analysis windows from bundled
+FFmpeg. The pinned MPVKit CoreAudio fixes are preserved. The implementation,
+measurement semantics, opt-in MPV filter integration, silence detection, and
+remaining peak-threshold markers, channel imbalance, phase/correlation analysis and playback-format
+improvements are tracked in [the audio metering plan](docs/AUDIO-METERING-PLAN.md).
+A serial packaged-player CPU and signal-transition benchmark now compares Off,
+Source and Playback modes, including source lookahead and FFmpeg child CPU.
+See [the comparison method and evidence](docs/audio-meter-comparison-2026-10-15.md).
+Release CPU/thermal and physical-device synchronization qualification remain open.
+
+## Stability and performance continuation — 2026-10-14
+
+Owner: Codex. First implementation batch from the app review (items 1–4):
+
+- Per-channel waveform storage uses source fingerprints, LRU eviction, a 64 MiB
+  estimated decoded-data budget, and a four-source cap. Completed preview bundles
+  also have a 64 MiB channel-waveform budget. These bound retained cache data,
+  not memory held by an open preview or an active renderer. Cache cleanup clears
+  memory, cancels full-preview generation, and rejects late cache publication.
+  Fingerprints include file identity as well as path, size, and modification time.
+- The MCP helper runs up to four job waits independently of the input reader,
+  serializes stdout framing, and accepts request-cancellation notifications.
+  Cancelling a wait or disconnecting does not cancel an accepted conversion.
+- Queue synchronization resolves immutable output plans once, indexes both
+  ordinary and grouped rows, and skips unchanged records. Progress does not
+  reformat accepted settings or restat already-completed output files. Removing
+  one source no longer dismisses all sibling rows from a shared batch.
+- Manual shared execution expands from six to 13 presets and supports eligible
+  separate-file groups, including captured sequential names. Mixed queues retain
+  batch ordering. Pending admissions remain visibly active and carry cancellation
+  through acceptance. Grouped rows use authoritative job IDs for cancellation
+  and are excluded from duplicate legacy MCP summaries. Resetting terminal rows
+  releases their UI ownership without altering durable history; existing-output
+  repeats retain the established collision-safe unique-name executor.
+
+This is an incremental migration, not closure of the entire architecture roadmap.
+Merged/conformed groups, package and image-sequence exports, generated video,
+custom/recursive presets, and upload/subtitle/analytics follow-ups keep the
+established executor until their settings and lifetimes have typed ownership.
+MCP editing controls and toolbar/UI redesign are outside this batch.
+
+Validation: the Debug app and test targets build with Xcode 27.0. The full unit
+suite passes all 1,304 tests with no failures or skips. All 121 script tests pass,
+including 11 standalone MCP framing/concurrency/lifecycle checks. Five UI smoke
+flows pass across targeted runs: ordinary successful export, cancellation,
+keyboard reset/retry including an existing output, separate-file group
+cancellation/reset without duplicate rows, and legacy stitched export. The final
+combined smoke run passes six affected unit tests and three UI tests. Localization
+(1,841 entries) and diff whitespace checks pass.
+
+Validation caught concurrent CFMessagePort polling replies crossing between
+waiters; individual round trips now serialize while the waits remain independent.
+The packaged-helper test keeps stdin open until its wait response arrives, matching
+a connected client; a separate disconnect test verifies prompt shutdown. New group
+UI assertions use the summary card/editor hierarchy and state identifiers because
+SwiftUI group accessibility values are empty on this host. Initial reuse of an old
+build directory encountered an unwritable UI-runner binary; the final runs use an
+isolated temporary build directory and ad hoc signing. Release packaging,
+long-session memory profiling, and representative large-queue timing were not run.
+
+## 4.5.5 PR validation — 2026-10-13
+
+Owner: Codex. Updated the app’s Debug and Release marketing version to 4.5.5
+and build number to 600, and promoted the new changelog entries to that release.
+Before PR submission, the full unit-only suite passed all 1,291 tests with no
+failures, and all 117 Python release/validation-script tests passed. Localization,
+bundled-manifest freshness, changelog extraction, and diff whitespace checks pass.
+Earlier targeted UI checks and signed FFmpeg/Metal/Release packaging evidence
+remain recorded below. No public app release is part of this PR workflow.
+
+## FFmpeg 9.0.2 bundle continuation — 2026-10-13
+
+Owner: Codex. Replaced bundled FFmpeg with the supplied full ARM64 9.0.2 build,
+installed its signed/notarized artifact, refreshed active manifests, and preserved
+matching source archives/build evidence without overwriting the historical 4.4 records. The Release
+build and bundle audit pass, along with twelve encode/decode smoke cases, six
+app conversion regressions, and 26 dependency/source-packaging script tests.
+The corrected full build restores `yadif_videotoolbox`, with passing NV12/P010
+frame/field checks through EOF and Metal teardown. The original dependency
+source archives remain required alongside the new patched full-source archive.
+See [the validation record](docs/ffmpeg-9.0.2-validation-2026-10-13.md)
+for the source-capture scope, archive retention, and unperformed release checks.
+
+## Watch-folder safety and Settings usability — 2026-10-13
+
+Owner: Codex. Implemented the five improvements from the app review:
+
+- Watch-folder cleanup requires unchanged file size and modification time over
+  a quiet interval. The final inspection, queue-protection check, and move to Trash
+  share a main-actor turn. Queued files, active-job sources, and associated
+  image-sequence audio are protected, including sources accessed through symlinks.
+- File settling time is configurable at 5, 10, 15, 30, or 60 seconds, defaults to
+  10 seconds, and participates in settings sync. Readiness probes retry failures,
+  suppress repeated alerts, and run with bounded concurrency so healthy imports
+  can arrive while another probe is still pending. Changed files settle again.
+- Agent Access diagnostics use the shared subprocess runner with a 15-second
+  timeout, bounded output, and cancellation when leaving the pane or disabling
+  access. Preset responses are matched by JSON-RPC request ID.
+- Conversion-button accessibility labels and tooltips are localized in every
+  supported language. New translations outside English/Norwegian are marked for
+  language review, consistent with the existing catalog.
+- Settings supports search across pane names, setting labels, descriptions, and
+  transcription-engine options, with Command-F access and a clear/no-results
+  flow. The window can resize above its minimum dimensions.
+
+Validation: Debug app and test targets compiled with Xcode 27.0. All 41 selected
+unit tests and three UI tests passed together, covering cleanup safety, settling,
+probe retries/concurrency, diagnostics, sandbox-access lifecycle, subprocess
+output/timeout/cancellation, search, pane navigation, and English/Norwegian
+conversion labels. All 14 localization/MCP script tests and the localization
+catalog audit passed. The final Settings search screenshot was visually checked.
+The unsigned UI runner initially failed before bootstrapping; ad hoc signing
+resolved that. Concurrent desktop work interfered with a later screenshot run;
+explicit app activation and a focus retry produced a passing search run and the
+correct screenshot. The full unit suite, Release packaging, and live watch-folder
+copy/conversion scenarios were not run in this batch.
 
 ## Release split and completion rule
 

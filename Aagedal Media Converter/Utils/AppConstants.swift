@@ -197,6 +197,10 @@ enum AppConstants {
     static let maxThumbnailSize = CGSize(width: 320, height: 320)
     static let includeDateTagPreferenceKey = "includeDateTagByDefault"
     static let preserveMetadataPreferenceKey = "preserveMetadataByDefault"
+    static func preserveMetadataPreferenceKey(for preset: ExportPreset) -> String {
+        "preserveMetadata.\(preset.rawValue)"
+    }
+
     static let commentPrefixKey = "commentPrefix"
     static let commentSuffixKey = "commentSuffix"
     static let commentSeparatorKey = "commentSeparator"
@@ -269,6 +273,9 @@ enum AppConstants {
     static let watchFolderIgnoreDurationUnitKey = "watchFolderIgnoreDurationUnit"
     static let watchFolderDeleteDurationValueKey = "watchFolderDeleteDurationValue"
     static let watchFolderDeleteDurationUnitKey = "watchFolderDeleteDurationUnit"
+    static let watchFolderSettlingSecondsKey = "watchFolderSettlingSeconds"
+    static let defaultWatchFolderSettlingSeconds: TimeInterval = 10
+    static let watchFolderSettlingSecondsValues = [5, 10, 15, 30, 60]
     static let watchFolderKeepAwakeKey = "watchFolderKeepAwake"
     static let defaultWatchFolderKeepAwake = false
     static let previewCacheCleanupPolicyKey = "previewCacheCleanupPolicy"
@@ -588,7 +595,7 @@ enum AppConstants {
     static let defaultAV2Speed = 9                             // AVM is extremely slow; default to the fastest
     static let av2BitDepthKey = "av2BitDepth"                   // AV2BitDepthOption raw value
     static let defaultAV2BitDepth = "Auto"
-    static let av2ThreadsKey = "av2Threads"                     // avmenc -t (0 = auto / all cores)
+    static let av2ThreadsKey = "av2Threads"                     // shared encoder thread budget (0 = available cores)
     static let defaultAV2Threads = 0
     static let av2TileColumnsKey = "av2TileColumns"             // avmenc --tile-columns log2 (0 = auto)
     static let defaultAV2TileColumns = 0
@@ -596,8 +603,8 @@ enum AppConstants {
     static let defaultAV2TileRows = 0
     static let av2ResolutionLimitKey = "av2ResolutionLimit"     // CodecResolutionLimit raw value
     static let defaultAV2ResolutionLimit = "Unlimited"
-    static let av2ParallelChunksKey = "av2ParallelChunks"       // 0 = auto (all cores), 1 = single-process, N = explicit
-    static let defaultAV2ParallelChunks = 0                     // auto-on: split into one chunk per core
+    static let av2ParallelChunksKey = "av2ParallelChunks"       // 0 = auto, 1 = single-process, N = requested chunks within thread budget
+    static let defaultAV2ParallelChunks = 0                     // auto: length-aware chunks within encoder thread budget
     static let av2ContainerKey = "av2Container"                 // AV2Container raw value (ivf video-only / mkv with audio)
     static let defaultAV2Container = "IVF (video only)"
     static let av2AudioCodecKey = "av2AudioCodec"               // AV2AudioCodec raw value (used by the .mkv muxer)
@@ -892,7 +899,7 @@ enum AppConstants {
     static let analyticsExportFormatKey = "analyticsExportFormat"
     static let analyticsAutoRunKey = "analyticsAutoRunAfterConversion"
     static let defaultAnalyticsEnabledMetrics: [String] = ["vmaf"]
-    static let defaultAnalyticsVMAFModel = "vmaf_v0.6.1"
+    static let defaultAnalyticsVMAFModel = VMAFModel.defaultModel.rawValue
     static let defaultAnalyticsExportFormat = "json"
 
     static let analyticsAutoExportKey = "analyticsAutoExport"
@@ -901,6 +908,7 @@ enum AppConstants {
 
     // MARK: - SSIMULACRA2 Settings
     static let ssimulacra2CustomPathKey = "ssimulacra2CustomPath"
+    static let analyticsComparisonResolutionKey = "analyticsComparisonResolution"
     static let ssimulacra2MaxFramesKey = "ssimulacra2MaxFrames"
     static let defaultSSIMULACRA2MaxFrames: Int = 50
 

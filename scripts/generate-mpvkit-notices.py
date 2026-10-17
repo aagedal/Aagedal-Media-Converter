@@ -19,8 +19,10 @@ INTRO = """MPVKit and preview playback dependencies
 =======================================
 
 Aagedal Media Converter uses the MPVKit-GPL package for media preview playback.
-The package is pinned to revision 400202b687841fb394cbf0ef59ad8c6fcfc1275b.
-Its custom libraries contain mpv 0.41.0 and FFmpeg n8.1.2 with local patches.
+The package is pinned to revision 68c8989362a0daedabcc1540b2b5f0e1fea4be1f.
+Its custom libraries contain mpv 0.41.0 and FFmpeg n9.0.2 with local patches.
+The original source notice collections below are retained for unchanged inputs;
+the current FFmpeg n9.0.2 source notices follow them as a separate collection.
 
 The following copyright notices and license texts cover the package, its
 binary dependencies, and the accompanying source and build materials.
@@ -49,6 +51,12 @@ def render(index: Path = INDEX) -> bytes:
     if set(mapping) != set(pins):
         raise ValueError("MPVKit target notice coverage differs from the pinned graph")
     collections = {item["component"]: item["notices"] for item in document["components"]}
+    selected = json.loads((ROOT / "docs/provenance/4.5-local-builds/mpvkit-n9.0.2/selected-targets.json").read_text())
+    if {entry["target"] for entry in selected["targets"]} != set(mapping):
+        raise ValueError("Current MPVKit target coverage differs from retained notice collections")
+    for entry in selected["targets"]:
+        if not entry["target"].endswith("-GPL") and entry["sha256"] != pins[entry["target"]]:
+            raise ValueError(f"Unreviewed MPVKit auxiliary archive changed: {entry['target']}")
     for target, entry in mapping.items():
         if entry["archiveSHA256"] != pins[target]:
             raise ValueError(f"MPVKit archive pin changed: {target}")
@@ -79,6 +87,12 @@ def render(index: Path = INDEX) -> bytes:
             else:
                 emitted[digest] = title + " / " + notice["sources"][0]
                 parts.extend(["\n", text.decode("utf-8"), "\n\n"])
+    current_ffmpeg = ROOT / "docs/provenance/4.5-local-builds/mpvkit-n9.0.2/FFmpeg-NOTICES.txt"
+    current_index = json.loads(current_ffmpeg.with_name("ffmpeg-notice-index.json").read_text())
+    current_bytes = current_ffmpeg.read_bytes()
+    if hashlib.sha256(current_bytes).hexdigest() != current_index["containerSHA256"]:
+        raise ValueError("Current MPVKit FFmpeg notice collection hash mismatch")
+    parts.extend(["\n" + "=" * 72 + "\n", current_bytes.decode("utf-8")])
     return "".join(parts).encode("utf-8")
 
 

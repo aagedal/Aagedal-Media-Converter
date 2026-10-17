@@ -1,0 +1,463 @@
+diff --git a/README.md b/README.md
+index 6ffac35..89abf40 100644
+--- a/README.md
++++ b/README.md
+@@ -31,7 +31,7 @@ The dependency pins below were audited against their upstream stable releases on
+ - **libass** 0.17.5 - Advanced subtitle rendering
+ - **Freetype** 2.15.0 / **Fribidi** 1.0.17 / **HarfBuzz** 14.6.0 - Text shaping and rendering
+ - **VMAF** 3.2.1 - Perceptual video quality analysis
+-- **VideoToolbox** - macOS hardware-accelerated encoding (H.264, HEVC, ProRes)
++- **VideoToolbox** - macOS hardware-accelerated encoding (H.264, HEVC, ProRes) and Metal deinterlacing (`yadif_videotoolbox`)
+ - **AudioToolbox** - macOS audio processing
+ - **NEON optimizations** - ARM64 SIMD instructions for better performance
+ - Full static linking for portable binaries
+@@ -68,7 +68,7 @@ The script will:
+ 1. Check for required tools
+ 2. Show build progress (what's already built)
+ 3. Build all components in order
+-4. Create the binaries under `dist/<ffmpeg-version>/`: `full/ffmpeg` + `full/ffprobe` (full build) and `photo/ffmpeg` + `photo/ffprobe` (image-only build). Every variant keeps the plain `ffmpeg`/`ffprobe` names, and multiple FFmpeg versions can coexist side by side.
++4. Create three variants under `dist/<ffmpeg-version>/`: `full/` (Media Converter, stock Whisper), `photo-agent/` (full codecs with the canonical Whisper patch), and `photo/` (image-only). Each contains `ffmpeg` and `ffprobe`. Every variant keeps the plain `ffmpeg`/`ffprobe` names, and multiple FFmpeg versions can coexist side by side.
+ 
+ **Note:** The build process takes several hours. You can safely interrupt (Ctrl+C) and resume later - the script tracks progress and skips already-built components.
+ 
+@@ -141,6 +141,7 @@ ffmpeg_aagedal/
+ └── dist/                 # Final binaries (created after build)
+     └── <version>/        # e.g. 9.0.2/
+         ├── full/         # ffmpeg + ffprobe (full build)
++        ├── photo-agent/  # ffmpeg + ffprobe (full codecs, canonical Whisper)
+         └── photo/        # ffmpeg + ffprobe (image-only build)
+ ```
+ 
+@@ -180,6 +181,51 @@ Example encoding with JPEG XL:
+ ./ffmpeg -i input.mp4 -c:v libjxl output.jxl
+ ```
+ 
++### Separate app builds
++
++Media Converter uses `dist/9.0.2/full/`, which retains stock Whisper output.
++Photo Agent uses `dist/9.0.2/photo-agent/`, with the same codecs and filters plus
++its pinned `af_whisper.c` correction. JSON retains original whitespace and
++`[BLANK_AUDIO]`, escapes JSON syntax/control bytes, bounds timestamps to supplied
++audio, and propagates inference/output failures. Text/SRT retain their cleaning.
++The existing `photo/` edition remains image-only and cannot transcribe audio.
++
++```bash
++bash scripts/12-ffmpeg.sh                 # stock full build
++bash scripts/12b-ffmpeg-photo-agent.sh     # patched full build
++bash tools/verify.sh full
++bash tools/verify.sh photo-agent
++bash tools/test_yadif_videotoolbox.sh full
++bash tools/test_yadif_videotoolbox.sh photo-agent
++```
++
++The patched build has its own source tree and patch-sensitive completion marker;
++it never installs over `compiled/bin/ffmpeg` or the stock distribution. Both full
++builds require Metal and `yadif_videotoolbox` explicitly. The recipe checks `xcrun`
++and falls back to an already mounted Xcode MetalToolchain. If needed, set
++`FFMPEG_METALCC` and `FFMPEG_METALLIB` to working compiler/linker paths. An absent
++compiler fails the build instead of silently dropping the filter. Both builds
++also carry the proposed [upstream Metal autorelease fix](https://code.ffmpeg.org/FFmpeg/FFmpeg/pulls/23850)
++for the reproduced deinterlacer teardown crash.
++
++The Photo Agent build runs the supplied ASan/UBSan harness before compilation.
++Run real CPU/Metal speech, silence, JSON/text/SRT, VAD, short-queue, model-refusal,
++cancellation and output-failure checks with explicit local inputs:
++
++```bash
++python3 tools/test_whisper_runtime.py \
++  --binary dist/9.0.2/photo-agent/ffmpeg \
++  --model /absolute/path/ggml-tiny.en.bin \
++  --vad-model /absolute/path/ggml-silero-v6.2.0.bin \
++  --audio /absolute/path/speech-16khz-mono.wav \
++  --output build/whisper-runtime
++```
++
++The runner retains commands, logs, outputs, and binary/model/audio hashes. It
++requires an active Metal backend; run in a session with GPU access. The real-model
++checks validate output contracts and process failures; the sanitizer harness injects
++inference/allocation/metadata/close failures. See [patch attribution and test scope](scripts/ffmpeg/README.md).
++
+ ### Photo Edition (`ffmpeg-photo`)
+ 
+ A much smaller image-only binary built by `scripts/12a-ffmpeg-photo.sh`. It decodes most common image formats (PNG, JPEG, JPEG 2000, JPEG XL, WebP, TIFF, BMP, GIF, AVIF, HEIC, PSD, EXR, DPX, TGA, PNM, QOI, and more) and encodes **AVIF** (via SVT-AV1 or libaom) and **JPEG XL** (via libjxl), plus WebP/PNG/JPEG/TIFF/EXR for convenience. No audio codecs, no general video codecs, no network.
+diff --git a/build.sh b/build.sh
+index d441f17..b847263 100755
+--- a/build.sh
++++ b/build.sh
+@@ -99,6 +99,7 @@ BUILD_SCRIPTS=(
+     "11b-vmaf.sh"
+     "12-ffmpeg.sh"
+     "12a-ffmpeg-photo.sh"
++    "12b-ffmpeg-photo-agent.sh"
+ )
+ 
+ echo "Build Progress:"
+@@ -115,6 +116,10 @@ for script in "${BUILD_SCRIPTS[@]}"; do
+         exit 1
+     fi
+     component_name="$(sed -n 's/^COMPONENT="\([^"]*\)"/\1/p' "${script_path}" | head -1)"
++    case "${script}" in
++        12-ffmpeg.sh) component_name="$(ffmpeg_component_name full)" ;;
++        12b-ffmpeg-photo-agent.sh) component_name="$(ffmpeg_component_name photo-agent)" ;;
++    esac
+     if [ -z "${component_name}" ]; then
+         echo "ERROR: ${script_path} does not declare COMPONENT" >&2
+         exit 1
+@@ -137,6 +142,7 @@ if [ $COMPLETED -eq $TOTAL ]; then
+     echo ""
+     echo "FFmpeg binaries are located at:"
+     echo "  ${OUTPUT_DIR}/${FFMPEG_VERSION}/full/ffmpeg     (+ ffprobe)"
++    echo "  ${OUTPUT_DIR}/${FFMPEG_VERSION}/photo-agent/ffmpeg (+ ffprobe; full codecs, patched Whisper)"
+     echo "  ${OUTPUT_DIR}/${FFMPEG_VERSION}/photo/ffmpeg    (+ ffprobe; image-only: most formats in, AVIF/JXL out)"
+     echo ""
+     exit 0
+@@ -179,6 +185,7 @@ echo ""
+ echo "FFmpeg binaries:"
+ echo "  ${OUTPUT_DIR}/${FFMPEG_VERSION}/full/ffmpeg     (+ ffprobe)"
+ echo "  ${OUTPUT_DIR}/${FFMPEG_VERSION}/photo/ffmpeg    (+ ffprobe; image-only: most formats in, AVIF/JXL out)"
++echo "  ${OUTPUT_DIR}/${FFMPEG_VERSION}/photo-agent/ffmpeg (+ ffprobe; full codecs, patched Whisper)"
+ echo ""
+ echo "Supported features:"
+ echo "  - x264 (H.264)"
+diff --git a/config.sh b/config.sh
+index 46ff77d..bd2c46a 100644
+--- a/config.sh
++++ b/config.sh
+@@ -15,7 +15,7 @@ export LIB_DIR="${INSTALL_DIR}/lib"
+ export INCLUDE_DIR="${INSTALL_DIR}/include"
+ export CLANG_MODULE_CACHE_PATH="${BUILD_DIR}/clang-module-cache"
+ 
+-# Final binaries land in dist/<ffmpeg-version>/<variant>/ (full, photo, minimal)
++# Final binaries land in dist/<ffmpeg-version>/<variant>/ (full, photo-agent, photo, minimal)
+ # so every variant keeps the plain names ffmpeg/ffprobe and versions can coexist
+ # Avoid exporting the generic name DIST_DIR: libvpx uses it internally and
+ # would otherwise install into our distribution folder instead of compiled/.
+@@ -108,6 +108,61 @@ download_file() {
+     mv "${partial}" "${output}"
+ }
+ 
++# Xcode can mount MetalToolchain while xcrun still resolves an unusable shim.
++# Explicit overrides also support separately installed toolchains.
++resolve_ffmpeg_metal() {
++    local toolchain
++    if [ -z "${FFMPEG_METALCC:-}" ]; then
++        if xcrun -sdk macosx metal -v >/dev/null 2>&1; then
++            FFMPEG_METALCC="xcrun -sdk macosx metal"
++            FFMPEG_METALLIB="${FFMPEG_METALLIB:-xcrun -sdk macosx metallib}"
++        else
++            for toolchain in /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-*/Metal.xctoolchain/usr/bin; do
++                if [ -x "${toolchain}/metal" ] && "${toolchain}/metal" -v >/dev/null 2>&1; then
++                    FFMPEG_METALCC="${toolchain}/metal"
++                    FFMPEG_METALLIB="${FFMPEG_METALLIB:-${toolchain}/metallib}"
++                    break
++                fi
++            done
++        fi
++    fi
++    FFMPEG_METALLIB="${FFMPEG_METALLIB:-xcrun -sdk macosx metallib}"
++    if [ -z "${FFMPEG_METALCC:-}" ] || ! ${FFMPEG_METALCC} -v >/dev/null 2>&1 ||
++       ! ${FFMPEG_METALLIB} --version >/dev/null 2>&1; then
++        echo "ERROR: A working Metal compiler/linker is required for yadif_videotoolbox." >&2
++        echo "Install Xcode's MetalToolchain or set FFMPEG_METALCC and FFMPEG_METALLIB." >&2
++        return 1
++    fi
++    export FFMPEG_METALCC FFMPEG_METALLIB
++    echo "Metal compiler: ${FFMPEG_METALCC}"
++    echo "Metal linker: ${FFMPEG_METALLIB}"
++}
++
++# Include source patches in completion identities for both app variants.
++ffmpeg_component_name() {
++    local variant="$1"
++    local common_id whisper_id
++    common_id="$(shasum -a 256 "${WORKSPACE}/scripts/ffmpeg/yadif-videotoolbox-autorelease.patch" | cut -d ' ' -f1)"
++    if [ "${variant}" = "photo-agent" ]; then
++        whisper_id="$(shasum -a 256 "${WORKSPACE}/scripts/ffmpeg/af_whisper-canonical-json.patch" | cut -d ' ' -f1)"
++        echo "ffmpeg-photo-agent-metal-${common_id}-${whisper_id}"
++    else
++        echo "ffmpeg-full-metal-${common_id}"
++    fi
++}
++
++# Replacing an executable in place can leave macOS with a stale code-signature
++# cache. Publish a new inode with an atomic rename instead.
++copy_dist_binary() {
++    local source="$1"
++    local target="$2"
++    local temporary
++    temporary="$(mktemp "${target}.XXXXXX")"
++    cp "${source}" "${temporary}"
++    chmod +x "${temporary}"
++    mv -f "${temporary}" "${target}"
++}
++
+ # Helper function to mark component as complete
+ mark_complete() {
+     local component="$1"
+@@ -169,6 +224,17 @@ write_dist_readme() {
+         echo "- Minimum macOS: ${MACOSX_DEPLOYMENT_TARGET} (Apple Silicon only)"
+         echo "- License: GPL version 3 or later (no nonfree components)"
+         echo ""
++        if [ "${variant}" = "full" ] || [ "${variant}" = "photo-agent" ]; then
++            echo "- Common source correction: yadif_videotoolbox Metal autorelease teardown fix (upstream PR 23850)"
++            echo "- YADIF patch SHA-256: $(shasum -a 256 "${WORKSPACE}/scripts/ffmpeg/yadif-videotoolbox-autorelease.patch" | cut -d ' ' -f1)"
++            echo ""
++        fi
++        if [ "${variant}" = "photo-agent" ]; then
++            echo "- Whisper output: canonical JSON, sample-bounded timestamps, propagated failures"
++            echo "- Whisper patch SHA-256: $(shasum -a 256 "${WORKSPACE}/scripts/ffmpeg/af_whisper-canonical-json.patch" | cut -d ' ' -f1)"
++            echo "- Patched af_whisper.c SHA-256: eba0b4645581f5fd14f841f25b83550522d67d064aaa9fd752c828fa9ba38b71"
++            echo ""
++        fi
+         echo "## External libraries"
+         echo ""
+ 
+diff --git a/scripts/12-ffmpeg.sh b/scripts/12-ffmpeg.sh
+index caade52..89cc013 100755
+--- a/scripts/12-ffmpeg.sh
++++ b/scripts/12-ffmpeg.sh
+@@ -2,35 +2,90 @@
+ 
+ # Build FFmpeg with all codecs and macOS VideoToolbox/AudioToolbox support
+ 
++set -e
++
++if [ "$(uname -m)" != "arm64" ]; then
++    echo "ERROR: Apple Silicon (ARM64) is required" >&2
++    exit 1
++fi
++
+ source "$(dirname "$0")/../config.sh"
+ 
+-COMPONENT="ffmpeg"
++VARIANT="${FFMPEG_VARIANT:-full}"
++case "${VARIANT}" in
++    full|photo-agent) ;;
++    *) echo "ERROR: Unknown full build variant: ${VARIANT}" >&2; exit 1 ;;
++esac
++RECIPE_DIR="$(cd "$(dirname "$0")" && pwd)"
+ 
+-OUT_DIR="${OUTPUT_DIR}/${FFMPEG_VERSION}/full"
++COMPONENT="$(ffmpeg_component_name "${VARIANT}")"
++
++OUT_DIR="${OUTPUT_DIR}/${FFMPEG_VERSION}/${VARIANT}"
+ 
+ if is_complete "${COMPONENT}"; then
+     echo "[SKIP] ${COMPONENT} already built"
+-    # Always ensure binaries are copied to dist
+-    if [ -f "${BIN_DIR}/ffmpeg" ]; then
++    # Preserve signed dist binaries on resume; restore missing stock outputs only.
++    if [ "${VARIANT}" = "full" ] && [ -f "${BIN_DIR}/ffmpeg" ] &&
++       { [ ! -x "${OUT_DIR}/ffmpeg" ] || [ ! -x "${OUT_DIR}/ffprobe" ]; }; then
+         mkdir -p "${OUT_DIR}"
+-        cp "${BIN_DIR}/ffmpeg" "${OUT_DIR}/ffmpeg"
+-        cp "${BIN_DIR}/ffprobe" "${OUT_DIR}/ffprobe"
+-        chmod +x "${OUT_DIR}/ffmpeg" "${OUT_DIR}/ffprobe"
+-        write_dist_readme "${OUT_DIR}" "full"
++        copy_dist_binary "${BIN_DIR}/ffmpeg" "${OUT_DIR}/ffmpeg"
++        copy_dist_binary "${BIN_DIR}/ffprobe" "${OUT_DIR}/ffprobe"
++    fi
++    if [ -x "${OUT_DIR}/ffmpeg" ] && [ -x "${OUT_DIR}/ffprobe" ]; then
++        write_dist_readme "${OUT_DIR}" "${VARIANT}"
++        exit 0
+     fi
+-    exit 0
++    echo "Completed binaries are missing; rebuilding ${VARIANT}..."
++else
++    echo "Building FFmpeg ${FFMPEG_VERSION} (${VARIANT})..."
+ fi
+ 
+-echo "Building FFmpeg ${FFMPEG_VERSION}..."
+-
+-cd "${SOURCE_DIR}"
++resolve_ffmpeg_metal
+ 
+-if [ ! -d "ffmpeg-${FFMPEG_VERSION}" ]; then
+-    download_file "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" "ffmpeg-${FFMPEG_VERSION}.tar.xz"
+-    tar xf "ffmpeg-${FFMPEG_VERSION}.tar.xz"
++# Extract separate source trees so a patch/configure can never affect full/photo.
++TREE="${SOURCE_DIR}/ffmpeg-${FFMPEG_VERSION}"
++if [ "${VARIANT}" = "photo-agent" ]; then
++    TREE="${SOURCE_DIR}/ffmpeg-${FFMPEG_VERSION}-photo-agent"
++fi
++if [ ! -d "${TREE}" ]; then
++    ARCHIVE="${SOURCE_DIR}/ffmpeg-${FFMPEG_VERSION}.tar.xz"
++    if [ ! -f "${ARCHIVE}" ]; then
++        download_file "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" "${ARCHIVE}"
++    fi
++    mkdir -p "${TREE}"
++    tar xf "${ARCHIVE}" --strip-components=1 -C "${TREE}"
++fi
++cd "${TREE}"
++
++# Both app builds need the upstream proposed Metal ownership correction.
++YADIF_HASH="$(shasum -a 256 libavfilter/vf_yadif_videotoolbox.m | cut -d ' ' -f1)"
++case "${YADIF_HASH}" in
++    dad7ff78662f5e6eda23e36a8f9fb4c155e6606d2dd8178df81063a657fb8d3c)
++        patch --batch --fuzz=0 -p1 -i "${RECIPE_DIR}/ffmpeg/yadif-videotoolbox-autorelease.patch"
++        ;;
++    950f9acd1346a45171710c163d5f78c0673b0dcd59d57ee767b66919a07c7e37) ;;
++    *) echo "ERROR: Unrecognized yadif_videotoolbox source" >&2; exit 1 ;;
++esac
++if [ "$(shasum -a 256 libavfilter/vf_yadif_videotoolbox.m | cut -d ' ' -f1)" != \
++     "950f9acd1346a45171710c163d5f78c0673b0dcd59d57ee767b66919a07c7e37" ]; then
++    echo "ERROR: YADIF correction produced unexpected source bytes" >&2
++    exit 1
+ fi
+ 
+-cd "ffmpeg-${FFMPEG_VERSION}"
++if [ "${VARIANT}" = "photo-agent" ]; then
++    # Run the actual extracted-function sanitizer harness before compiling.
++    python3 "${RECIPE_DIR}/ci/test_ffmpeg_whisper_patch.py"
++    PATCHED_HASH="eba0b4645581f5fd14f841f25b83550522d67d064aaa9fd752c828fa9ba38b71"
++    FILTER_HASH="$(shasum -a 256 libavfilter/af_whisper.c | cut -d " " -f1)"
++    if [ "${FILTER_HASH}" != "${PATCHED_HASH}" ]; then
++        python3 "${RECIPE_DIR}/ffmpeg/prepare_whisper_source.py" libavfilter/af_whisper.c \
++            --output libavfilter/af_whisper.c.patched
++        mv libavfilter/af_whisper.c.patched libavfilter/af_whisper.c
++    fi
++else
++    # Fail if somebody has patched the stock source instead of the isolated tree.
++    python3 "${RECIPE_DIR}/ffmpeg/prepare_whisper_source.py" libavfilter/af_whisper.c
++fi
+ 
+ if [ ! -f VERSION ] || [ "$(tr -d '\r\n' < VERSION)" != "${FFMPEG_VERSION}" ]; then
+     echo "ERROR: FFmpeg source tree does not match requested version ${FFMPEG_VERSION}" >&2
+@@ -46,7 +101,9 @@ export PATH="${BIN_DIR}:${PATH}"
+ 
+ ./configure \
+     --prefix="${INSTALL_DIR}" \
+-    --metalcc="xcrun -sdk macosx metal -fmodules-cache-path=${CLANG_MODULE_CACHE_PATH}" \
++    --metalcc="${FFMPEG_METALCC} -fmodules-cache-path=${CLANG_MODULE_CACHE_PATH}" \
++    --metallib="${FFMPEG_METALLIB}" \
++    --enable-metal \
+     --arch=arm64 \
+     --target-os=darwin \
+     --pkg-config-flags="--static" \
+@@ -128,15 +185,18 @@ export PATH="${BIN_DIR}:${PATH}"
+     --enable-filter=scale \
+     --enable-filter=overlay \
+     --enable-filter=whisper \
++    --enable-filter=yadif_videotoolbox \
+     --enable-filter=ssim \
+     --enable-filter=psnr \
+     --enable-filter=xpsnr \
+     --enable-filter=msad
+ 
+ make ${MAKEFLAGS}
+-make install
++if [ "${VARIANT}" = "full" ]; then
++    make install
++fi
+ 
+-if ! "${BIN_DIR}/ffmpeg" -version | head -1 | grep -Fq "ffmpeg version ${FFMPEG_VERSION}"; then
++if ! ./ffmpeg -version | head -1 | grep -Fq "ffmpeg version ${FFMPEG_VERSION}"; then
+     echo "ERROR: built FFmpeg binary is not version ${FFMPEG_VERSION}" >&2
+     exit 1
+ fi
+@@ -144,10 +204,10 @@ fi
+ # Copy standalone binaries to dist
+ echo "Creating standalone binaries in ${OUT_DIR}..."
+ mkdir -p "${OUT_DIR}"
+-cp "${BIN_DIR}/ffmpeg" "${OUT_DIR}/ffmpeg"
+-cp "${BIN_DIR}/ffprobe" "${OUT_DIR}/ffprobe"
++copy_dist_binary ./ffmpeg "${OUT_DIR}/ffmpeg"
++copy_dist_binary ./ffprobe "${OUT_DIR}/ffprobe"
+ chmod +x "${OUT_DIR}/ffmpeg" "${OUT_DIR}/ffprobe"
+-write_dist_readme "${OUT_DIR}" "full"
++write_dist_readme "${OUT_DIR}" "${VARIANT}"
+ 
+ echo ""
+ echo "FFmpeg binaries created:"
+diff --git a/tools/sign.sh b/tools/sign.sh
+index 66b9120..a803aa9 100755
+--- a/tools/sign.sh
++++ b/tools/sign.sh
+@@ -11,7 +11,7 @@ if [ -z "${SIGN_IDENTITY:-}" ]; then
+     security find-identity -v -p codesigning >&2
+     echo "" >&2
+     echo "Usage:" >&2
+-    echo "  SIGN_IDENTITY='<Developer ID identity>' $0 [ffmpeg-version]" >&2
++    echo "  SIGN_IDENTITY='<Developer ID identity>' $0 [ffmpeg-version] [variant ...]" >&2
+     exit 2
+ fi
+ 
+@@ -20,6 +20,22 @@ source "$(dirname "$0")/../config.sh"
+ IDENTITY="${SIGN_IDENTITY}"
+ ID_PREFIX="${SIGN_ID_PREFIX:-ffmpeg}"
+ VERSION="${1:-${FFMPEG_VERSION}}"
++if [ "$#" -gt 0 ]; then
++    shift
++fi
++VARIANTS=("$@")
++if [ "${#VARIANTS[@]}" -eq 0 ]; then
++    for directory in "${OUTPUT_DIR}/${VERSION}"/*; do
++        [ -d "${directory}" ] || continue
++        VARIANTS+=("$(basename "${directory}")")
++    done
++fi
++for variant in "${VARIANTS[@]}"; do
++    case "${variant}" in
++        full|photo-agent|photo|minimal) ;;
++        *) echo "ERROR: Unknown variant: ${variant}" >&2; exit 2 ;;
++    esac
++done
+ 
+ cd "$(dirname "$0")/.."
+ 
+@@ -59,17 +75,18 @@ fi
+ # Sign every binary under dist/<requested-version>/<variant>/.
+ # Identifier becomes <prefix>.<variant>.<name>, e.g. ffmpeg.photo.ffmpeg.
+ found=0
+-for b in "dist/${VERSION}"/*/ffmpeg "dist/${VERSION}"/*/ffprobe; do
+-    [ -f "$b" ] || continue
+-    found=1
+-    variant="$(basename "$(dirname "$b")")"
+-    name="$(basename "$b")"
++for variant in "${VARIANTS[@]}"; do
++    for name in ffmpeg ffprobe; do
++        b="${OUTPUT_DIR}/${VERSION}/${variant}/${name}"
++        [ -f "${b}" ] || continue
++        found=1
+ 
+-    validate_binary "$b"
+-    codesign --force --sign "${IDENTITY}" --options runtime --timestamp \
+-        --identifier "${ID_PREFIX}.${variant}.${name}" "$b"
+-    codesign --verify --strict --verbose=2 "$b"
+-    echo "[✓] signed and verified: $b"
++        validate_binary "${b}"
++        codesign --force --sign "${IDENTITY}" --options runtime --timestamp \
++            --identifier "${ID_PREFIX}.${variant}.${name}" "${b}"
++        codesign --verify --strict --verbose=2 "${b}"
++        echo "[✓] signed and verified: ${b}"
++    done
+ done
+ 
+ if [ "$found" -eq 0 ]; then
+diff --git a/tools/verify.sh b/tools/verify.sh
+index 5c9393c..8258326 100755
+--- a/tools/verify.sh
++++ b/tools/verify.sh
+@@ -6,7 +6,12 @@ set -e
+ 
+ source "$(dirname "$0")/../config.sh"
+ 
+-FULL_DIR="${OUTPUT_DIR}/${FFMPEG_VERSION}/full"
++VARIANT="${1:-full}"
++case "${VARIANT}" in
++    full|photo-agent) ;;
++    *) echo "ERROR: Expected full or photo-agent" >&2; exit 2 ;;
++esac
++FULL_DIR="${OUTPUT_DIR}/${FFMPEG_VERSION}/${VARIANT}"
+ FFMPEG_BIN="${FULL_DIR}/ffmpeg"
+ FFPROBE_BIN="${FULL_DIR}/ffprobe"
+ FAILURES=0
+@@ -78,7 +83,7 @@ for encoder in \
+     fi
+ done
+ 
+-for filter in ass subtitles whisper libvmaf; do
++for filter in ass subtitles whisper libvmaf yadif_videotoolbox; do
+     if has_entry "${FILTERS}" "${filter}"; then
+         pass "Filter available: ${filter}"
+     else

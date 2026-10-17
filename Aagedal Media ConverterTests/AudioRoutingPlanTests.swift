@@ -431,3 +431,119 @@ private actor CancellingLoudnessBatchRunner: SubprocessRunning {
         throw CancellationError()
     }
 }
+
+final class PlaybackAudioMeterTests: XCTestCase {
+    func testMPVMetadataKeepsChannelsIndependentAndRequiresFreshHistory() throws {
+        let values = ["lavfi.astats.1.Peak_level": "-6.0206", "lavfi.astats.1.RMS_level": "-9.0309",
+                      "lavfi.astats.2.Peak_level": "-inf", "lavfi.astats.2.RMS_level": "nan",
+                      "lavfi.r128.M": "-18.0", "lavfi.r128.S": "-19.0", "lavfi.r128.I": "-20.0"]
+        let startup = try XCTUnwrap(MPVAudioMeterMetadata.sample(values, seconds: 10, history: 0))
+        XCTAssertEqual(startup.peaks[0], -6.0206)
+        XCTAssertEqual(startup.rms[0], -9.0309)
+        XCTAssertNil(startup.peaks[1])
+        XCTAssertNil(startup.rms[1])
+        XCTAssertNil(startup.momentaryLUFS)
+        XCTAssertNil(startup.shortTermLUFS)
+        let momentary = try XCTUnwrap(MPVAudioMeterMetadata.sample(values, seconds: 10.4, history: 0.4))
+        XCTAssertEqual(momentary.momentaryLUFS, -18)
+        XCTAssertNil(momentary.shortTermLUFS)
+        let warmed = try XCTUnwrap(MPVAudioMeterMetadata.sample(values, seconds: 13, history: 3))
+        XCTAssertEqual(warmed.shortTermLUFS, -19)
+        XCTAssertNil(MPVAudioMeterMetadata.sample([:], seconds: 0, history: 3))
+        XCTAssertNil(MPVAudioMeterMetadata.sample(values, seconds: .nan, history: 3))
+        XCTAssertNil(MPVAudioMeterMetadata.sample(values, seconds: 0, history: -.infinity))
+    }
+
+    func testFrameTimingSilenceAndUnavailableHistory() throws {
+        let request = SourceAudioMeterRequest(url: URL(fileURLWithPath: "/tmp/meter.wav"), track: 0, channels: 2, window: 0)
+        let chunk = PlaybackAudioMeterChunk(request: request, metadata: """
+        frame:0 pts:0 pts_time:0
+        lavfi.r128.M=-120.691
+        lavfi.r128.S=-120.691
+        lavfi.astats.1.Peak_level=-6.0206
+        lavfi.astats.1.RMS_level=-9.0309
+        lavfi.astats.2.Peak_level=-inf
+        lavfi.astats.2.RMS_level=nan
+        frame:1 pts:14400 pts_time:0.3
+        lavfi.r128.M=-18.0
+        lavfi.r128.S=-120.691
+        lavfi.astats.1.Peak_level=-12.0
+        lavfi.astats.1.RMS_level=-15.0
+        """)
+        XCTAssertNil(chunk.sample(at: 0.05), "Do not display future decoded samples")
+        let first = try XCTUnwrap(chunk.sample(at: 0.1))
+        XCTAssertEqual(first.peaks[0], -6.0206)
+        XCTAssertNil(first.peaks[1])
+        XCTAssertNil(first.rms[1])
+        XCTAssertNil(first.momentaryLUFS)
+        XCTAssertNil(first.shortTermLUFS)
+        let later = try XCTUnwrap(chunk.sample(at: 0.4))
+        XCTAssertEqual(later.momentaryLUFS, -18)
+        XCTAssertNil(later.peaks[1], "Missing metadata must not retain the previous frame")
+        XCTAssertNil(chunk.sample(at: 0.8), "EOF must not leave stale levels")
+        XCTAssertNil(chunk.sample(at: .nan))
+        XCTAssertNil(chunk.sample(at: 8))
+    }
+
+    func testPreRollUsesSourceTimeAndDoesNotExposeWindowIntegratedLoudness() throws {
+        let request = SourceAudioMeterRequest(url: URL(fileURLWithPath: "/tmp/meter.wav"), track: 1, channels: 6, window: 1)
+        let chunk = PlaybackAudioMeterChunk(request: request, metadata: """
+        frame:0 pts:0 pts_time:0
+        lavfi.r128.M=-120.691
+        frame:29 pts:139200 pts_time:2.9
+        lavfi.r128.M=-23.0
+        lavfi.r128.S=-24.0
+        lavfi.r128.I=-25.0
+        lavfi.astats.4.Peak_level=-3.0
+        lavfi.astats.4.RMS_level=-6.0
+        """)
+        XCTAssertNil(chunk.sample(at: 5))
+        let sample = try XCTUnwrap(chunk.sample(at: 8))
+        XCTAssertEqual(sample.shortTermLUFS, -24)
+        XCTAssertEqual(sample.peaks[3], -3)
+        XCTAssertEqual(sample.rms[3], -6)
+        let arguments = PlaybackAudioMeterDecoder.arguments(for: request)
+        XCTAssertTrue(arguments.contains("0:a:1"))
+        XCTAssertFalse(arguments.contains("-ac"), "Do not downmix before loudness weighting")
+        XCTAssertFalse(arguments.joined().contains("pan="))
+    }
+
+    func testGeneratedStereoAndDelayedLFEKeepLevelsAndLoudnessAcrossWindows() async throws {
+        guard let path = BinaryPathResolver.ffmpegPath else { throw XCTSkip("Bundled FFmpeg unavailable") }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("live-meter.mkv")
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: path),
+            arguments: ["-hide_banner", "-loglevel", "error", "-nostdin", "-f", "lavfi", "-i",
+                        "aevalsrc=0.5*sin(2*PI*1000*t)|0.25*sin(2*PI*1000*t):s=48000:d=11:c=stereo",
+                        "-itsoffset", "0.5", "-f", "lavfi", "-i",
+                        "aevalsrc=0|0|0|0.5*sin(2*PI*1000*t)|0|0:s=48000:d=10.5:c=5.1",
+                        "-map", "0:a", "-map", "1:a", "-c:a", "pcm_f32le", "-y", url.path],
+            timeout: .seconds(20)
+        ))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let request = SourceAudioMeterRequest(url: url, track: 0, channels: 2, window: 0)
+        let first = try await PlaybackAudioMeterDecoder.decode(request)
+        let sample = try XCTUnwrap(first.sample(at: 3.5))
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[0]), -6.0206, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(sample.rms[0]), -9.0309, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[1]), -12.0412, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(sample.rms[1]), -15.0515, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(sample.momentaryLUFS), -8.055, accuracy: 0.1)
+        XCTAssertEqual(try XCTUnwrap(sample.shortTermLUFS), -8.055, accuracy: 0.1)
+        let next = try await PlaybackAudioMeterDecoder.decode(request.adjacent(1))
+        let boundary = try XCTUnwrap(next.sample(at: 8))
+        XCTAssertEqual(try XCTUnwrap(boundary.shortTermLUFS), try XCTUnwrap(sample.shortTermLUFS), accuracy: 0.1)
+        XCTAssertEqual(boundary.peaks.count, 2)
+        XCTAssertNil(next.sample(at: 12), "Do not reuse the final reading beyond EOF")
+
+        let lfe = try await PlaybackAudioMeterDecoder.decode(.init(url: url, track: 1, channels: 6, window: 0))
+        XCTAssertTrue(try XCTUnwrap(lfe.sample(at: 0.2)).peaks.allSatisfy { $0 == nil })
+        let lfeSample = try XCTUnwrap(lfe.sample(at: 3.5))
+        XCTAssertEqual(try XCTUnwrap(lfeSample.peaks[3]), -6.0206, accuracy: 0.01)
+        XCTAssertLessThan(try XCTUnwrap(lfeSample.momentaryLUFS), -70, "LFE is excluded from EBU loudness weighting")
+        XCTAssertLessThan(try XCTUnwrap(lfeSample.shortTermLUFS), -70)
+    }
+}

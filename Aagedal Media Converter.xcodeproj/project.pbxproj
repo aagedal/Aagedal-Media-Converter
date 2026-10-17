@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */; };
+		3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */; };
+		3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */; };
 		00B3F16A9264F886CA667DAC /* NativeWaveformVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E03D85E11E51D07B7265C81 /* NativeWaveformVideoRenderer.swift */; };
 		010A25E4BFF94166AD0C8126 /* AV2AudioTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3675B15B144940809F827E09 /* AV2AudioTimingTests.swift */; };
 		042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */; };
@@ -28,6 +31,7 @@
 		24CB417957434AF98E564C83 /* UploadLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */; };
 		26F5C2D4170D479CA5B52180 /* PostConversionSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFDA902947BA4C97BAD3B996 /* PostConversionSettingsTests.swift */; };
 		2746B3C583424D6AAF97362A /* WatchFolderPollingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 924448BC707A4A8BBE774393 /* WatchFolderPollingTests.swift */; };
+		AF129A6A3D374C449DE8B303 /* AppImprovementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF129A6A3D374C449DE8B304 /* AppImprovementTests.swift */; };
 		280D65D8BFBC4D9D9BEDA2AC /* MCALabelCancellationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E224DF5E7934DB7BE4B5BB4 /* MCALabelCancellationTests.swift */; };
 		306C6161F506493D979C6420 /* WatchFolderSelectionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D34ECA0E63C471788FE1831 /* WatchFolderSelectionServiceTests.swift */; };
 		3094266907AA46E2AD89E2EB /* ConversionDependencyPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63ABBF018D774A599B331811 /* ConversionDependencyPreflight.swift */; };
@@ -309,6 +313,7 @@
 		SE01XIF00PRB000000000001 /* SwiftExifMediaProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE01XIF00PRB000000000002 /* SwiftExifMediaProbe.swift */; };
 		SE01XIF00SVC000000000001 /* SwiftExifMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE01XIF00SVC000000000002 /* SwiftExifMetadataService.swift */; };
 		SE01XIF00TYP000000000001 /* MetadataTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE01XIF00TYP000000000002 /* MetadataTypes.swift */; };
+		C7EAC10A0000000000000001 /* ContainerTextMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7EAC10A0000000000000002 /* ContainerTextMetadata.swift */; };
 		SMPTEPKGUTL00000001 /* SMPTEPackageUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = SMPTEPKGUTL00000002 /* SMPTEPackageUtils.swift */; };
 		SNAPSHOTSYNC000001 /* SettingsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = SNAPSHOTSYNC000002 /* SettingsSnapshot.swift */; };
 		SYNCKEYS00000001 /* SettingsSyncKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = SYNCKEYS00000002 /* SettingsSyncKeys.swift */; };
@@ -318,6 +323,15 @@
 		VDISPMGR00001000BUILD /* VirtualDisplayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = VDISPMGR00001000FREF1 /* VirtualDisplayManager.swift */; };
 		VIDITEMIDX00000001 /* VideoItemIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = VIDITEMIDX00000002 /* VideoItemIndex.swift */; };
 		A906AA120000000000000101 /* ssimulacra2-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */; };
+		46B0B00A2A6A498898911DEF /* AV2ResourcePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */; };
+		A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */; };
+		FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */; };
+		8816201A4FA14E8A8CFAD590 /* SilenceAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */; };
+		A91000000000000000000001 /* AudioPeakAnalysisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000002 /* AudioPeakAnalysisService.swift */; };
+		B15AF6492A5845EF8CA8C899 /* SilenceAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */; };
+		A91000000000000000000003 /* AudioPeakAnalysisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000004 /* AudioPeakAnalysisView.swift */; };
+		4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */; };
+		A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000006 /* AudioPeakAnalysisTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -378,6 +392,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMeterBenchmarkTests.swift; sourceTree = "<group>"; };
+		64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettingsTests.swift; sourceTree = "<group>"; };
+		E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettings.swift; sourceTree = "<group>"; };
 		02B1DCFCB3DC44408B8C4598 /* MergeCompatibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeCompatibilityPolicy.swift; sourceTree = "<group>"; };
 		045E9C8BA166403190A5B12D /* ImageSequenceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceSettings.swift; sourceTree = "<group>"; };
 		06E2B90D341C4818B814DED4 /* UploadLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadLifecycleTests.swift; sourceTree = "<group>"; };
@@ -554,6 +571,7 @@
 		8EFBDA8F2EA56F8E005ADDCF /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ffmpeg; sourceTree = "<group>"; };
 		8EFBDA932EA58975005ADDCF /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		924448BC707A4A8BBE774393 /* WatchFolderPollingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchFolderPollingTests.swift; sourceTree = "<group>"; };
+		AF129A6A3D374C449DE8B304 /* AppImprovementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppImprovementTests.swift; sourceTree = "<group>"; };
 		9315E73973904E2E92CE7C22 /* AV2TrimPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2TrimPlan.swift; sourceTree = "<group>"; };
 		94F96374D9F9450B93232C46 /* IMFSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMFSettings.swift; sourceTree = "<group>"; };
 		9609862A8EC6964A0A45885F /* WaveformPCMDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformPCMDecoder.swift; sourceTree = "<group>"; };
@@ -698,6 +716,7 @@
 		SE01XIF00PRB000000000002 /* SwiftExifMediaProbe.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftExifMediaProbe.swift; sourceTree = "<group>"; };
 		SE01XIF00SVC000000000002 /* SwiftExifMetadataService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftExifMetadataService.swift; sourceTree = "<group>"; };
 		SE01XIF00TYP000000000002 /* MetadataTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MetadataTypes.swift; sourceTree = "<group>"; };
+		C7EAC10A0000000000000002 /* ContainerTextMetadata.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ContainerTextMetadata.swift; sourceTree = "<group>"; };
 		SMPTEPKGUTL00000002 /* SMPTEPackageUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMPTEPackageUtils.swift; sourceTree = "<group>"; };
 		SNAPSHOTSYNC000002 /* SettingsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSnapshot.swift; sourceTree = "<group>"; };
 		SYNCKEYS00000002 /* SettingsSyncKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSyncKeys.swift; sourceTree = "<group>"; };
@@ -709,6 +728,15 @@
 		VIDITEMIDX00000002 /* VideoItemIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoItemIndex.swift; sourceTree = "<group>"; };
 		A906AA120000000000000201 /* ssimulacra2-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "ssimulacra2-LICENSE.txt"; sourceTree = "<group>"; };
 		A906AA120000000000000202 /* ssimulacra2_rs */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = ssimulacra2_rs; sourceTree = "<group>"; };
+		20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ResourcePolicy.swift; sourceTree = "<group>"; };
+		B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2RecoveryStore.swift; sourceTree = "<group>"; };
+		FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV2ResourceRecoveryTests.swift; sourceTree = "<group>"; };
+		9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisService.swift; sourceTree = "<group>"; };
+		A91000000000000000000002 /* AudioPeakAnalysisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisService.swift; sourceTree = "<group>"; };
+		743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisView.swift; sourceTree = "<group>"; };
+		A91000000000000000000004 /* AudioPeakAnalysisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisView.swift; sourceTree = "<group>"; };
+		2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilenceAnalysisTests.swift; sourceTree = "<group>"; };
+		A91000000000000000000006 /* AudioPeakAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPeakAnalysisTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -769,6 +797,7 @@
 			isa = PBXGroup;
 			children = (
 				SE01XIF00TYP000000000002 /* MetadataTypes.swift */,
+				C7EAC10A0000000000000002 /* ContainerTextMetadata.swift */,
 				SE01XIF00SVC000000000002 /* SwiftExifMetadataService.swift */,
 				SE01XIF00PRB000000000002 /* SwiftExifMediaProbe.swift */,
 				METAEXPORT000000000002 /* MetadataExporter.swift */,
@@ -884,6 +913,7 @@
 				4DBE93147D3D4B659639E3C1 /* SubtitleExportSettings.swift */,
 				AE38B73146584B3EA484D5F8 /* OutputFolderSelectionService.swift */,
 				EE7542FB9D7445F09123B467 /* CommentSettings.swift */,
+				E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */,
 				204052BD416D4C0D98872778 /* ConversionFollowUp.swift */,
 				4875611B4C8E4E829800286B /* PackageMetadataSettings.swift */,
 				CF2A7FD698474D319CF8046A /* ConversionPreparationSettings.swift */,
@@ -1109,6 +1139,7 @@
 				3134DA738FF74AC8BA27ADE5 /* SubtitleExportSettingsTests.swift */,
 				FA9E57AC40EF429691668B6D /* DownloadDetailsLifecycleTests.swift */,
 				3171BC386A1446B89E470B2C /* MPVPreviewObservationTests.swift */,
+				F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */,
 				A45919000000000000000003 /* StitchingTimelineTests.swift */,
 				A45920000000000000000001 /* SubtitleAgentCoexistenceTests.swift */,
 				A4591900000000000000000E /* StitchMarkerExportTests.swift */,
@@ -1137,6 +1168,8 @@
 				1EFDAD2CCF6B4D1BAB4AA7B1 /* BMXProbeLifecycleTests.swift */,
 				42E08E9AD75145B68E1C049D /* ConversionPreparationSettingsTests.swift */,
 				3645F27A874241C7AF89277E /* AudioRoutingPlanTests.swift */,
+				2576C110E5DB47CFB87BCFD8 /* SilenceAnalysisTests.swift */,
+				A91000000000000000000006 /* AudioPeakAnalysisTests.swift */,
 				F4D04393D4534BA2A77B8F64 /* ImageSequenceSettingsTests.swift */,
 				575D0C999AA742709E45A3AF /* StartupSettingsMigrationTests.swift */,
 				967DA4B812AC4F7996A1822B /* UploadProfileMigrationTests.swift */,
@@ -1144,8 +1177,11 @@
 				AAD060010000000000000002 /* KeychainCredentialManagerTests.swift */,
 				CD4320100000000000000002 /* CaptureFrameRateTests.swift */,
 				A15F59A5246B4BA880E781B3 /* AV2ScratchDirectoryTests.swift */,
+				FD7F35730E574E58B708A19A /* AV2ResourceRecoveryTests.swift */,
 				E0148C0DED554F1ABE4B7DB0 /* MergeCompatibilityPolicyTests.swift */,
 				924448BC707A4A8BBE774393 /* WatchFolderPollingTests.swift */,
+				AF129A6A3D374C449DE8B304 /* AppImprovementTests.swift */,
+				64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */,
 				2CEDDD06B78842E6A7446610 /* ConversionQueueStateTests.swift */,
 				DAEE8F6BC37E461AA2DBC4AC /* ConversionUploadFollowUpTests.swift */,
 				2535309175E14070B4849816 /* AppIntentHandoffTests.swift */,
@@ -1173,6 +1209,8 @@
 				A4591900000000000000000C /* StitchMarkerExport.swift */,
 				A4591900000000000000000A /* StitchMarkerTimecodeRate.swift */,
 				AF22AF22AF22AF22AF22AF22 /* AV2CommandBuilder.swift */,
+				B62CDCA03AD943938CBC4A43 /* AV2RecoveryStore.swift */,
+				20BBB011334640A3A8D04D5D /* AV2ResourcePolicy.swift */,
 				9315E73973904E2E92CE7C22 /* AV2TrimPlan.swift */,
 				AF26AF26AF26AF26AF26AF26 /* IVFHeaderParser.swift */,
 				AF28AF28AF28AF28AF28AF28 /* IVFConcatenator.swift */,
@@ -1285,6 +1323,8 @@
 				8E545D822C33FD4A0088C274 /* DragAndDropView.swift */,
 				E777B19FE611FEB91A8AD3C5 /* VideoQueueTableView.swift */,
 				ANALYTICSRESV0000001 /* AnalyticsResultsView.swift */,
+				743E8FA11CE041EF8FA61896 /* SilenceAnalysisView.swift */,
+				A91000000000000000000004 /* AudioPeakAnalysisView.swift */,
 				D74FE70B45739608F6F73A9C /* CellConfiguration.swift */,
 				2FAC27FC4405A72BB163575D /* VideoFileCellView.swift */,
 				C2018B1D061B2AD00DB22947 /* VideoFileCellView+Thumbnail.swift */,
@@ -1349,6 +1389,8 @@
 				ANALYTICSEXP00000001 /* AnalyticsExporter.swift */,
 				ANALYTICSMOD00000001 /* AnalyticsModels.swift */,
 				ANALYTICSSRV00000001 /* AnalyticsService.swift */,
+				9A4AF03E4925475F940E1E96 /* SilenceAnalysisService.swift */,
+				A91000000000000000000002 /* AudioPeakAnalysisService.swift */,
 				FC6C7287376844AF919CCFE0 /* AnalyticsAttempt.swift */,
 			);
 			path = Analytics;
@@ -1699,6 +1741,7 @@
 				9F8D99DD5029416DA4559EF2 /* SubtitleExportSettings.swift in Sources */,
 				12B0864F27DD4CD6BADB329A /* OutputFolderSelectionService.swift in Sources */,
 				1122330BD4DA4103ACF80E38 /* CommentSettings.swift in Sources */,
+				3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */,
 				CE5F75F4C4B14D14BD081FC8 /* ConversionFollowUp.swift in Sources */,
 				7FFE54EBBEF744FBB7F6571B /* PackageMetadataSettings.swift in Sources */,
 				14303B1061214301B2A3C30F /* ConversionPreparationSettings.swift in Sources */,
@@ -1811,6 +1854,8 @@
 				A4591900000000000000000D /* StitchMarkerExport.swift in Sources */,
 				A4591900000000000000000B /* StitchMarkerTimecodeRate.swift in Sources */,
 				AF23AF23AF23AF23AF23AF23 /* AV2CommandBuilder.swift in Sources */,
+				A598C35C58B24CE8BBE4CF00 /* AV2RecoveryStore.swift in Sources */,
+				46B0B00A2A6A498898911DEF /* AV2ResourcePolicy.swift in Sources */,
 				94BB782C3556462DA5325475 /* AV2TrimPlan.swift in Sources */,
 				AF27AF27AF27AF27AF27AF27 /* IVFHeaderParser.swift in Sources */,
 				AF29AF29AF29AF29AF29AF29 /* IVFConcatenator.swift in Sources */,
@@ -1880,6 +1925,7 @@
 				SE01XIF00SVC000000000001 /* SwiftExifMetadataService.swift in Sources */,
 				SE01XIF00PRB000000000001 /* SwiftExifMediaProbe.swift in Sources */,
 				SE01XIF00TYP000000000001 /* MetadataTypes.swift in Sources */,
+				C7EAC10A0000000000000001 /* ContainerTextMetadata.swift in Sources */,
 				METAEXPORT000000000001 /* MetadataExporter.swift in Sources */,
 				METAEXPVIEW000000000001 /* MetadataExportView.swift in Sources */,
 				PRESET01MGR000000001 /* PresetManager.swift in Sources */,
@@ -1898,10 +1944,14 @@
 				5DA60AEC78445845148F3FFA /* VideoQueueTableView.swift in Sources */,
 				ANALYTICSMOD00000002 /* AnalyticsModels.swift in Sources */,
 				ANALYTICSSRV00000002 /* AnalyticsService.swift in Sources */,
+				8816201A4FA14E8A8CFAD590 /* SilenceAnalysisService.swift in Sources */,
+				A91000000000000000000001 /* AudioPeakAnalysisService.swift in Sources */,
 				45F558E3D9034661AEE5F90D /* AnalyticsAttempt.swift in Sources */,
 				ANALYTICSEXP00000002 /* AnalyticsExporter.swift in Sources */,
 				ANALYTICSSETV0000002 /* AnalyticsSettingsView.swift in Sources */,
 				ANALYTICSRESV0000002 /* AnalyticsResultsView.swift in Sources */,
+				B15AF6492A5845EF8CA8C899 /* SilenceAnalysisView.swift in Sources */,
+				A91000000000000000000003 /* AudioPeakAnalysisView.swift in Sources */,
 				458167E4620773C7016C5230 /* CellConfiguration.swift in Sources */,
 				A77C1C13727AF20711BFF51D /* VideoFileCellView.swift in Sources */,
 				ENCGRPCELL00000001 /* EncodingGroupHeaderCellView.swift in Sources */,
@@ -1933,6 +1983,7 @@
 				6A8F1890F8004362BBE6461C /* SubtitleExportSettingsTests.swift in Sources */,
 				C4D287CF98164FE5AF3C20AB /* DownloadDetailsLifecycleTests.swift in Sources */,
 				7A7E2E5F4BA94EE6A50474C7 /* MPVPreviewObservationTests.swift in Sources */,
+				F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */,
 				A45919000000000000000004 /* StitchingTimelineTests.swift in Sources */,
 				A45920000000000000000002 /* SubtitleAgentCoexistenceTests.swift in Sources */,
 				A4591900000000000000000F /* StitchMarkerExportTests.swift in Sources */,
@@ -1961,6 +2012,8 @@
 				A0299B59F2D04382840AD8B0 /* BMXProbeLifecycleTests.swift in Sources */,
 				6333450EF06E41EF9B17CB73 /* ConversionPreparationSettingsTests.swift in Sources */,
 				B33D258C71A742F9A3D2D8DD /* AudioRoutingPlanTests.swift in Sources */,
+				4D809870F6BD46AEA540E7FA /* SilenceAnalysisTests.swift in Sources */,
+				A91000000000000000000005 /* AudioPeakAnalysisTests.swift in Sources */,
 				D249323D5DD7455983FE38F9 /* ImageSequenceSettingsTests.swift in Sources */,
 				5FBE128C06EE4A82968F95F9 /* StartupSettingsMigrationTests.swift in Sources */,
 				8D2E74A0058A4C479F145B0F /* UploadProfileMigrationTests.swift in Sources */,
@@ -1968,8 +2021,11 @@
 				AAD060010000000000000001 /* KeychainCredentialManagerTests.swift in Sources */,
 				CD4320100000000000000001 /* CaptureFrameRateTests.swift in Sources */,
 				35D23935EC554B1B97085056 /* AV2ScratchDirectoryTests.swift in Sources */,
+				FF13CD1ED3C14E4EB0F4D822 /* AV2ResourceRecoveryTests.swift in Sources */,
 				042DE77076B347F3863AE8A9 /* MergeCompatibilityPolicyTests.swift in Sources */,
 				2746B3C583424D6AAF97362A /* WatchFolderPollingTests.swift in Sources */,
+				AF129A6A3D374C449DE8B303 /* AppImprovementTests.swift in Sources */,
+				3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */,
 				68DB0573FE4F499AA72EF9AF /* ConversionQueueStateTests.swift in Sources */,
 				3559AE0D84F84065A06C6888 /* ConversionUploadFollowUpTests.swift in Sources */,
 				7D163C3579E64EFABCEBCF29 /* AppIntentHandoffTests.swift in Sources */,
@@ -2183,7 +2239,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 598;
+				CURRENT_PROJECT_VERSION = 602;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
@@ -2213,7 +2269,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 4.5.2;
+				MARKETING_VERSION = 4.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2240,7 +2296,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 598;
+				CURRENT_PROJECT_VERSION = 602;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Aagedal Media Converter/Preview Content\"";
 				ENABLE_APP_SANDBOX = NO;
@@ -2270,7 +2326,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 4.5.2;
+				MARKETING_VERSION = 4.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.aagedal.Aagedal-Media-Converter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -2455,7 +2511,7 @@
 			repositoryURL = "https://github.com/aagedal/MPVKit.git";
 			requirement = {
 				kind = revision;
-				revision = 400202b687841fb394cbf0ef59ad8c6fcfc1275b;
+				revision = 68c8989362a0daedabcc1540b2b5f0e1fea4be1f;
 			};
 		};
 		8ED369EF2F8CEFFC00FB9A33 /* XCRemoteSwiftPackageReference "SwiftMediaMetadata" */ = {

@@ -42,6 +42,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     var actionHandler: ((CellAction) -> Void)?
     var canMoveSelectionToNewGroup: (() -> Bool)?
     internal var currentConfig: VideoFileCellConfiguration?
+    var metadataEditorLoadTask: Task<Void, Never>?
 
     // MARK: - Card Container
 
@@ -955,6 +956,11 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     // MARK: - Configure
 
     func configure(with config: VideoFileCellConfiguration, actionHandler: @escaping (CellAction) -> Void) {
+        if currentConfig?.itemID != config.itemID || currentConfig?.url != config.url {
+            metadataEditorLoadTask?.cancel()
+            metadataEditorLoadTask = nil
+            commentPopover?.performClose(nil)
+        }
         let prev = self.currentConfig
         self.actionHandler = actionHandler
         updateAccessibilityContract(with: config)
@@ -1215,7 +1221,22 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
         // because `supportsMetadataComment` (which gates the comment button) is
         // derived from it; skipping preset here leaves the button stale when
         // the user switches to a format that can't carry a comment.
-        if Self.commentSectionEnabled, isFirstConfigure || prev?.comment != config.comment || prev?.isCompactMode != config.isCompactMode || prev?.showCommentField != config.showCommentField || prev?.includeDateTag != config.includeDateTag || prev?.isFocusedComment != config.isFocusedComment || prev?.waveformVideoEnabled != config.waveformVideoEnabled || prev?.preset != config.preset || prev?.hasVideoStream != config.hasVideoStream || prev?.dcpMetadataTitle != config.dcpMetadataTitle || prev?.imfMetadataTitle != config.imfMetadataTitle {
+        if Self.commentSectionEnabled, isFirstConfigure
+            || prev?.comment != config.comment
+            || prev?.metadataEditorSettings != config.metadataEditorSettings
+            || prev?.isDownloading != config.isDownloading
+            || prev?.scheduledDownloadTime != config.scheduledDownloadTime
+            || prev?.isLiveStreamRecording != config.isLiveStreamRecording
+            || prev?.downloadError != config.downloadError
+            || prev?.isCompactMode != config.isCompactMode
+            || prev?.showCommentField != config.showCommentField
+            || prev?.includeDateTag != config.includeDateTag
+            || prev?.isFocusedComment != config.isFocusedComment
+            || prev?.waveformVideoEnabled != config.waveformVideoEnabled
+            || prev?.preset != config.preset
+            || prev?.hasVideoStream != config.hasVideoStream
+            || prev?.dcpMetadataTitle != config.dcpMetadataTitle
+            || prev?.imfMetadataTitle != config.imfMetadataTitle {
             updateCommentSection(config: config)
         }
 
@@ -1319,6 +1340,9 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        metadataEditorLoadTask?.cancel()
+        metadataEditorLoadTask = nil
+        commentPopover?.performClose(nil)
         isEditingOutputName = false
         shouldCommitOutputNameOnEndEditing = true
         outputNameField.isHidden = true
@@ -1703,14 +1727,7 @@ final class VideoFileCellView: NSTableCellView, NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         guard let field = obj.object as? NSTextField, field === commentField else { return }
         actionHandler?(.commentChanged(field.stringValue))
-        // Refresh the popover preview live as the user types so the full-output
-        // box always reflects the current comment + prefix/suffix composition.
-        if commentPopover?.isShown == true {
-            refreshPreviewContent(
-                comment: field.stringValue,
-                includeDateTag: currentConfig?.includeDateTag ?? false
-            )
-        }
+
     }
 
     func controlTextDidBeginEditing(_ obj: Notification) {

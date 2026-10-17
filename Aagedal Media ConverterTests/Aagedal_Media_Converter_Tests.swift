@@ -4482,7 +4482,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
             "-nostdin",
             "-i", fixture.encoded.path,
             "-i", fixture.source.path,
-            "-filter_complex", "[1:v]setpts=PTS-STARTPTS[src];[0:v]setpts=PTS-STARTPTS[enc];[src][enc]scale2ref=flags=bicubic[ref][dist];[dist][ref]psnr=shortest=1",
+            "-filter_complex", try XCTUnwrap(request.arguments.first { $0.contains("psnr=") }),
             "-an", "-f", "null", "-"
         ])
         XCTAssertEqual(request.timeout, .seconds(12 * 60 * 60))
@@ -4572,7 +4572,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         XCTAssertEqual(requests[0].timeout, .seconds(10 * 60))
         XCTAssertEqual(requests[0].standardOutputCaptureLimit, 0)
         XCTAssertEqual(requests[1].executableURL.path, ffmpegPath)
-        XCTAssertTrue(requests[1].arguments.contains("scale=640:360"))
+        XCTAssertTrue(requests[1].arguments.contains("scale=640:360:flags=bicubic"))
         XCTAssertEqual(requests[2].executableURL.path, ssimulacra2Path)
         XCTAssertEqual(requests[2].arguments.first, "image")
         XCTAssertEqual(requests[2].timeout, .seconds(2 * 60))
@@ -7664,11 +7664,36 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
 
         await runner.waitUntilStarted()
-        XCTAssertTrue(control.cancel())
+        // The runner can start before the service installs its cancellation action.
+        // A queued cancellation is valid too; verify the download result below.
+        _ = control.cancel()
 
         do {
             _ = try await downloadTask.value
             XCTFail("Expected user cancellation")
+        } catch let error as YTDLPError {
+            guard case .cancelled = error else {
+                return XCTFail("Expected cancelled, got \(error)")
+            }
+        }
+    }
+
+    func testYTDLPDownloadControlMapsCancellationRequestedBeforeStartup() async throws {
+        let service = YTDLPService(
+            updateService: StubYTDLPUpdateService(path: "/bin/sh"),
+            subprocessRunner: BlockingSubprocessRunner()
+        )
+        let control = YTDLPDownloadControl()
+        XCTAssertFalse(control.cancel())
+
+        do {
+            _ = try await service.download(
+                url: "https://example.com/watch?v=private",
+                outputFolder: FileManager.default.temporaryDirectory,
+                control: control,
+                progress: { _, _, _ in }
+            )
+            XCTFail("Expected queued user cancellation")
         } catch let error as YTDLPError {
             guard case .cancelled = error else {
                 return XCTFail("Expected cancelled, got \(error)")
@@ -7758,7 +7783,7 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         }
 
         await runner.waitUntilStarted()
-        XCTAssertTrue(control.stopLiveRecording())
+        _ = control.stopLiveRecording()
 
         do {
             _ = try await downloadTask.value
@@ -12030,21 +12055,118 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
     func testAV2ChunkPlanningRespectsRateControlAndMinimumChunkSize() {
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .targetBitrate),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .targetBitrate, threadBudget: 8),
             1
         )
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 47, hint: 8, rateMode: .constantQuality),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 47, hint: 8, rateMode: .constantQuality, threadBudget: 8),
             1
         )
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 48, hint: 8, rateMode: .constantQuality),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 48, hint: 8, rateMode: .constantQuality, threadBudget: 8),
             2
         )
         XCTAssertEqual(
-            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .constantQuality),
+            AV2CommandBuilder.resolvedChunkCount(totalFrames: 240, hint: 8, rateMode: .constantQuality, threadBudget: 8),
             8
         )
+    }
+
+    func testAV2AutomaticChunksKeepTwoSecondsAndAtLeast48Frames() {
+        for (frames, fps, expected) in [(95, 24.0, 1), (96, 24.0, 2),
+                                         (239, 60.0, 1), (240, 60.0, 2),
+                                         (95, 12.0, 1), (96, 12.0, 2),
+                                         (119, 29.97, 1), (120, 29.97, 2)] {
+            XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                totalFrames: frames, hint: 0, rateMode: .constantQuality,
+                threadBudget: 8, frameRate: fps
+            ), expected, "\(frames) frames at \(fps) fps")
+        }
+        let unknownFrameRates: [Double?] = [nil, 0, -1, .nan, .infinity]
+        for fps in unknownFrameRates {
+            XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                totalFrames: 96, hint: 0, rateMode: .constantQuality,
+                threadBudget: 8, frameRate: fps
+            ), 2)
+        }
+    }
+
+    func testAV2ChunksRespectEncoderBudgetAndSingleProcessModes() {
+        for hint in [0, 3, 64] {
+            for budget in [1, 2, 8] {
+                let chunks = AV2CommandBuilder.resolvedChunkCount(
+                    totalFrames: 1_440, hint: hint, rateMode: .constantQuality,
+                    threadBudget: budget, frameRate: 24
+                )
+                XCTAssertEqual(chunks, min(hint == 0 ? budget : hint, budget))
+                XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                    totalFrames: 1_440, hint: hint, rateMode: .targetBitrate,
+                    threadBudget: budget, frameRate: 24
+                ), 1)
+            }
+        }
+        for frames in [0, -1, 1_440] {
+            XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+                totalFrames: frames, hint: 1, rateMode: .constantQuality, threadBudget: 8
+            ), 1)
+        }
+        XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+            totalFrames: 1_440, hint: 8, rateMode: .constantQuality, threadBudget: 0
+        ), 1)
+        XCTAssertEqual(AV2CommandBuilder.resolvedChunkCount(
+            totalFrames: Int.max, hint: 0, rateMode: .constantQuality,
+            threadBudget: 8, frameRate: .greatestFiniteMagnitude
+        ), 1)
+    }
+
+    func testAV2SegmentCommandsShareCapturedThreadBudgetAndCoverEveryFrame() async throws {
+        let suite = "AV2ThreadBudgetTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(3, forKey: AppConstants.av2ParallelChunksKey)
+        defaults.set(AV2RateControlMode.constantQuality.rawValue, forKey: AppConstants.av2RateControlModeKey)
+        let metadata = videoMetadata(timecode: nil, frameRate: 24)
+        let inputURL = URL(fileURLWithPath: "/private/nonexistent-av2-budget.mov")
+
+        for (budget, expectedChunks) in [(7, 3), (2, 2), (1, 1)] {
+            defaults.set(budget, forKey: AppConstants.av2ThreadsKey)
+            let settings = AV2Settings(defaults: defaults)
+            // Later preference changes must not alter a queued conversion's budget.
+            defaults.set(64, forKey: AppConstants.av2ThreadsKey)
+            let plan = await AV2CommandBuilder.buildSegments(
+                inputURL: inputURL, trimStart: nil, trimEnd: nil, cropConfig: nil,
+                expectedDuration: 241.0 / 24, metadataSource: .resolved(metadata), settings: settings
+            )
+            if expectedChunks == 1 {
+                XCTAssertNil(plan)
+                let command = await AV2CommandBuilder.build(
+                    inputURL: inputURL, outputURL: inputURL.appendingPathExtension("ivf"),
+                    trimStart: nil, trimEnd: nil, cropConfig: nil,
+                    expectedDuration: 241.0 / 24, metadataSource: .resolved(metadata), settings: settings
+                )
+                XCTAssertTrue(try XCTUnwrap(command).avmencArguments.containsAdjacent("-t", "1"))
+                continue
+            }
+            let unwrapped = try XCTUnwrap(plan)
+            XCTAssertEqual(unwrapped.segments.count, expectedChunks)
+            XCTAssertEqual(unwrapped.totalFrames, 241)
+            XCTAssertEqual(unwrapped.segments.reduce(0) { $0 + $1.frameCount }, 241)
+            var startFrame = 0
+            for segment in unwrapped.segments {
+                XCTAssertTrue(segment.avmencArguments.containsAdjacent("-t", "\(budget / expectedChunks)"))
+                XCTAssertTrue(segment.avmencArguments.contains("--limit=\(segment.frameCount)"))
+                XCTAssertTrue(segment.ffmpegArguments.containsAdjacent("-frames:v", "\(segment.frameCount)"))
+                if startFrame > 0 {
+                    XCTAssertTrue(segment.ffmpegArguments.containsAdjacent(
+                        "-ss", String(format: "%.6f", Double(startFrame) / 24)
+                    ))
+                } else {
+                    XCTAssertFalse(segment.ffmpegArguments.contains("-ss"))
+                }
+                startFrame += segment.frameCount
+            }
+            XCTAssertLessThanOrEqual(expectedChunks * (budget / expectedChunks), budget)
+        }
     }
 
     func testAV2EffectiveDurationHandlesEveryTrimShape() {
@@ -12626,7 +12748,13 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         let runner = TwoStageBlockingPipelineRunner()
         let converter = FFMPEGConverter(
             subprocessRunner: runner,
-            ffmpegPathProvider: { "/private/tools/ffmpeg" }
+            ffmpegPathProvider: { "/private/tools/ffmpeg" },
+            // Exercise cancellation of two active workers independently of host memory.
+            av2MemorySnapshot: {
+                AV2MemorySnapshot(physicalBytes: 64 * 1024 * 1024 * 1024,
+                                  availableBytes: 48 * 1024 * 1024 * 1024,
+                                  pressure: .normal)
+            }
         )
         let outputBaseURL = temporaryDirectory.appendingPathComponent("output")
         let outputURL = outputBaseURL.appendingPathExtension("ivf")
@@ -13565,12 +13693,16 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
                 videoFrames: [MatroskaMuxer.VideoFrame(data: Data([0x12, 0x34]), isKeyframe: true)],
                 audio: nil,
                 audioFrames: [],
-                metadata: MatroskaMuxer.Metadata(comment: comment, timecode: timecode)
+                metadata: MatroskaMuxer.Metadata(comment: comment, timecode: timecode, description: "AV2 description", title: "AV2 title", artist: "AV2 artist", sourceURL: "https://example.com/av2")
             )
 
             let data = try Data(contentsOf: outputURL)
             XCTAssertNotNil(data.range(of: Data("COMMENT".utf8)))
             XCTAssertNotNil(data.range(of: Data(comment.utf8)))
+            XCTAssertNotNil(data.range(of: Data("AV2 description".utf8)))
+            XCTAssertNotNil(data.range(of: Data("AV2 title".utf8)))
+            XCTAssertNotNil(data.range(of: Data("AV2 artist".utf8)))
+            XCTAssertNotNil(data.range(of: Data("https://example.com/av2".utf8)))
             XCTAssertNotNil(data.range(of: Data(timecode.utf8)))
             let firstTimecodeTag = try XCTUnwrap(data.range(of: Data("TIMECODE".utf8)))
             XCTAssertNotNil(data[firstTimecodeTag.upperBound...].range(of: Data("TIMECODE".utf8)))
@@ -16811,6 +16943,269 @@ final class SettingsSyncDestinationTests: XCTestCase {
         service.syncNow()
         let recreated = try SettingsSyncService.decodeSnapshot(Data(contentsOf: url))
         XCTAssertEqual(recreated.defaults[AppConstants.fileNameReplaceSpacesKey], .bool(true))
+    }
+}
+
+final class ContainerTextMetadataTests: XCTestCase {
+    func testEditorSettingsAreCapturedAndOlderJobsStillDecode() throws {
+        let source = URL(fileURLWithPath: "/tmp/source.webm")
+        var editor = MetadataEditorSettings(comment: "Comment", description: "Description", title: "Title", artist: "Artist", sourceURL: "https://example.com/source")
+        let captured = ApplicationSourceExecutionSettings(
+            sourceURL: source, metadataEditorSettings: editor, includeDateTag: false, timecodeConfig: nil
+        )
+        editor.description.value = "Later edit"
+        let encoded = try JSONEncoder().encode(captured)
+        let decoded = try JSONDecoder().decode(ApplicationSourceExecutionSettings.self, from: encoded)
+        XCTAssertEqual(decoded.metadataEditorSettings?.description.value, "Description")
+        XCTAssertEqual(decoded.metadataEditorSettings?.sourceURL, "https://example.com/source")
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "metadataEditorSettings")
+        let oldJob = try JSONDecoder().decode(ApplicationSourceExecutionSettings.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(oldJob.metadataEditorSettings)
+    }
+
+    func testAV2TextPreservationIsCapturedAndOldSnapshotsDecode() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        defaults.set(true, forKey: AppConstants.preserveMetadataPreferenceKey)
+        let settings = AV2Settings(defaults: defaults)
+        defaults.set(false, forKey: AppConstants.preserveMetadataPreferenceKey)
+        XCTAssertEqual(settings.preserveMetadata, true)
+        let encoded = try JSONEncoder().encode(settings)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "preserveMetadata")
+        let decoded = try JSONDecoder().decode(AV2Settings.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(decoded.preserveMetadata)
+    }
+
+    private func element(_ id: [UInt8], _ payload: Data) -> Data {
+        precondition(payload.count < 16_383)
+        let size = payload.count
+        return Data(id + [UInt8(0x40 | (size >> 8)), UInt8(size & 0xff)]) + payload
+    }
+
+    private func tag(_ name: String, _ value: String) -> Data {
+        element([0x67, 0xc8], element([0x45, 0xa3], Data(name.utf8)) + element([0x44, 0x87], Data(value.utf8)))
+    }
+
+    private func read(_ tags: Data, targeted: Bool = false, unknownSegment: Bool = false) async throws -> ContainerTextMetadata {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".webm")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let targets = targeted ? element([0x63, 0xc0], element([0x63, 0xc5], Data([1]))) : Data()
+        let payload = element([0x12, 0x54, 0xc3, 0x67], element([0x73, 0x73], targets + tags))
+        let data = unknownSegment ? Data([0x18, 0x53, 0x80, 0x67, 0xff]) + payload : element([0x18, 0x53, 0x80, 0x67], payload)
+        try data.write(to: url)
+        return await ContainerTextMetadata.read(from: url)
+    }
+
+    func testDescriptionCommentAndSourceRemainDistinctInEitherOrder() async throws {
+        let description = "Description with an unrelated https://example.com/ad\næøå 日本語 🎬\n "
+        let source = "https://www.youtube.com/watch?v=fixture"
+        let entries = [tag("DESCRIPTION", description), tag("COMMENT", source), tag("PURL", source)]
+        for tags in [entries.reduce(Data(), +), entries.reversed().reduce(Data(), +)] {
+            let result = try await read(tags)
+            XCTAssertEqual(result.description, description)
+            XCTAssertEqual(result.comment, source)
+            XCTAssertEqual(result.sourceURL, source)
+        }
+    }
+
+    func testDoesNotMistakeDescriptionLinksForSourceURL() async throws {
+        let result = try await read(tag("DESCRIPTION", "Visit https://example.com/ad") + tag("COMMENT", "A note: https://example.com/other"))
+        XCTAssertNil(result.sourceURL)
+        XCTAssertEqual(result.comment, "A note: https://example.com/other")
+    }
+
+    func testFullProbeDoesNotPromoteADescriptionContainingOnlyAURL() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mkv")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-f", "lavfi", "-i", "color=size=32x32:duration=0.1", "-c:v", "libx264", "-metadata", "description=https://example.com/ad", url.path],
+            timeout: .seconds(10)
+        ))
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+        let metadata = try await VideoMetadataService.shared.metadata(for: url)
+        XCTAssertEqual(metadata.description, "https://example.com/ad")
+        XCTAssertNil(metadata.comment)
+        XCTAssertNil(metadata.sourceURL)
+    }
+
+    func testExplicitSourceURLWinsOverCommentAndSynopsisIsFallback() async throws {
+        let result = try await read(tag("SYNOPSIS", "Fallback description") + tag("COMMENT", "https://example.com/comment") + tag("PURL", "https://example.com/source"), unknownSegment: true)
+        XCTAssertEqual(result.description, "Fallback description")
+        XCTAssertEqual(result.sourceURL, "https://example.com/source")
+    }
+
+    func testTrackTagsAreNotPromotedToFileMetadata() async throws {
+        let result = try await read(tag("PURL", "https://example.com/track") + tag("DESCRIPTION", "Track description"), targeted: true)
+        XCTAssertEqual(result, ContainerTextMetadata())
+    }
+
+    func testTruncatedElementFailsWithoutReadingBeyondItsBounds() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".webm")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data([0x18, 0x53, 0x80, 0x67, 0xfe, 0x12]).write(to: url)
+        let result = await ContainerTextMetadata.read(from: url)
+        XCTAssertEqual(result, ContainerTextMetadata())
+    }
+
+    func testConvertedMP4AndMOVKeepDescriptionSourceAndAuthoredCommentSeparate() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appendingPathComponent("source.mkv")
+        let description = "Description with https://example.com/ad\næøå 日本語 🎬"
+        let sourceURL = "https://www.youtube.com/watch?v=fixture"
+        let runner = SubprocessRunner()
+        let generated = try await runner.run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-v", "error", "-f", "lavfi", "-i", "color=size=32x32:duration=0.1",
+                        "-c:v", "libx264", "-metadata", "description=\(description)",
+                        "-metadata", "purl=\(sourceURL)", "-metadata", "comment=\(sourceURL)", source.path],
+            timeout: .seconds(10)
+        ))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        for ext in ["mp4", "mov"] {
+            for preserve in [true, false] {
+                let output = folder.appendingPathComponent("output-\(preserve).\(ext)")
+                var args = ["-v", "error", "-i", source.path, "-c", "copy", "-movflags", "+faststart"]
+                let plan = OutputMetadataPlan(
+                    source: preserve ? .preserve(input: 0) : .strip,
+                    comment: .set("My custom comment"), timecode: .unchanged
+                )
+                plan.apply(to: &args, outputArgumentsStart: 4, outputExtension: ext)
+                args.append(output.path)
+                let conversion = try await runner.run(SubprocessRequest(
+                    executableURL: URL(fileURLWithPath: ffmpeg), arguments: args, timeout: .seconds(10)
+                ))
+                XCTAssertTrue(conversion.succeeded, conversion.standardErrorText)
+                let result = await ContainerTextMetadata.read(from: output)
+                XCTAssertEqual(result.comment, "My custom comment", ext)
+                XCTAssertEqual(result.description, preserve ? description : nil, ext)
+                XCTAssertEqual(result.sourceURL, preserve ? sourceURL : nil, ext)
+                if preserve {
+                    let metadata = try await VideoMetadataService.shared.metadata(for: output)
+                    XCTAssertEqual(metadata.description, description)
+                    XCTAssertEqual(metadata.comment, "My custom comment")
+                    XCTAssertEqual(metadata.sourceURL, sourceURL)
+                    let cleared = folder.appendingPathComponent("cleared.\(ext)")
+                    var clearArgs = ["-v", "error", "-i", output.path, "-c", "copy"]
+                    let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+                    OutputMetadataPlan(
+                        source: .preserve(input: 0),
+                        comment: CommentMetadataPlan(comment: "", includeDateTag: false, settings: CommentSettings(defaults: defaults), writeEmptyComment: true),
+                        timecode: .unchanged
+                    ).apply(to: &clearArgs, outputArgumentsStart: 4, outputExtension: ext)
+                    clearArgs.append(cleared.path)
+                    let clearResult = try await runner.run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg), arguments: clearArgs, timeout: .seconds(10)))
+                    XCTAssertTrue(clearResult.succeeded, clearResult.standardErrorText)
+                    let clearedMetadata = await ContainerTextMetadata.read(from: cleared)
+                    XCTAssertNil(clearedMetadata.comment)
+                    XCTAssertEqual(clearedMetadata.description, description)
+                    XCTAssertEqual(clearedMetadata.sourceURL, sourceURL)
+                }
+            }
+        }
+    }
+
+    func testEnabledEditorFieldsAreWrittenWhenSourceMetadataIsStripped() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for ext in ["mp4", "mov"] {
+            let output = folder.appendingPathComponent("edited.\(ext)")
+            let editor = MetadataEditorSettings(comment: "Edited comment", description: "Edited description\n日本語 🎬", title: "Edited title", artist: "Edited artist", sourceURL: "https://example.com/source")
+            let captured = ConversionRequest(
+                inputURL: URL(fileURLWithPath: "/tmp/source.webm"), outputURL: output,
+                preset: .h264, requiredOutputURL: output, metadataEditorSettings: editor, includeDateTag: false
+            ).applyingMetadataEditor()
+            var args = ["-v", "error", "-f", "lavfi", "-i", "color=size=32x32:duration=0.1", "-c:v", "libx264"]
+            args += captured.additionalOutputArguments ?? []
+            OutputMetadataPlan(source: .strip, comment: .set(captured.comment), timecode: .unchanged)
+                .apply(to: &args, outputArgumentsStart: 6, outputExtension: ext)
+            args.append(output.path)
+            let result = try await SubprocessRunner().run(SubprocessRequest(
+                executableURL: URL(fileURLWithPath: ffmpeg), arguments: args, timeout: .seconds(10)
+            ))
+            XCTAssertTrue(result.succeeded, result.standardErrorText)
+            let metadata = try await VideoMetadataService.shared.metadata(for: output)
+            XCTAssertEqual(metadata.comment, editor.comment.value)
+            XCTAssertEqual(metadata.description, editor.description.value)
+            XCTAssertEqual(metadata.title, editor.title.value)
+            XCTAssertEqual(metadata.artist, editor.artist.value)
+            XCTAssertEqual(metadata.sourceURL, editor.sourceURL)
+        }
+    }
+
+    func testMasterOffRetainsValuesAndDecodesLegacyEditors() throws {
+        var editor = MetadataEditorSettings(comment: "Comment", description: "Description", title: "Title", artist: "Artist", sourceURL: "https://example.com/source")
+        editor.isEnabled = false
+        XCTAssertFalse(editor.writesComment)
+        XCTAssertTrue(editor.outputArguments.isEmpty)
+        let request = ConversionRequest(inputURL: URL(fileURLWithPath: "/tmp/source.webm"), outputURL: URL(fileURLWithPath: "/tmp/output"), preset: .h264, comment: "Old comment", metadataEditorSettings: editor, includeDateTag: true).applyingMetadataEditor(outputExtension: "mp4")
+        XCTAssertEqual(request.comment, "")
+        XCTAssertFalse(request.includeDateTag)
+        XCTAssertNil(request.additionalOutputArguments)
+        XCTAssertEqual(request.metadataEditorSettings?.title.value, "Title")
+        let decoded = try JSONDecoder().decode(MetadataEditorSettings.self, from: JSONEncoder().encode(editor))
+        XCTAssertFalse(decoded.isActive)
+        XCTAssertEqual(decoded, editor)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(editor)) as? [String: Any])
+        legacy.removeValue(forKey: "isEnabled")
+        let older = try JSONDecoder().decode(MetadataEditorSettings.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertTrue(older.isActive)
+        XCTAssertTrue(older.writesComment)
+    }
+
+    func testMasterOffExportsFollowSourcePreservationPolicy() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = folder.appendingPathComponent("source.mp4")
+        let runner = SubprocessRunner()
+        let sourceArgs = ["-v", "error", "-f", "lavfi", "-i", "color=size=32x32:duration=0.1", "-c:v", "libx264", "-metadata", "comment=Source comment", "-metadata", "description=Source description", "-metadata", "title=Source title", "-metadata", "artist=Source artist", "-metadata", "purl=https://example.com/original", "-movflags", "+use_metadata_tags", source.path]
+        let generated = try await runner.run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg), arguments: sourceArgs, timeout: .seconds(10)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        var editor = MetadataEditorSettings(comment: "Edited comment", description: "Edited description", title: "Edited title", artist: "Edited artist", sourceURL: "https://example.com/edited")
+        editor.isEnabled = false
+        for preserve in [true, false] {
+            let output = folder.appendingPathComponent("output-\(preserve).mp4")
+            let request = ConversionRequest(inputURL: source, outputURL: output, preset: .h264, comment: editor.comment.value, metadataEditorSettings: editor, includeDateTag: true).applyingMetadataEditor(outputExtension: "mp4")
+            var args = ["-v", "error", "-i", source.path, "-c", "copy"]
+            args += request.additionalOutputArguments ?? []
+            OutputMetadataPlan(source: SourceMetadataPlan(preserveMetadata: preserve, defaultInput: 0), comment: .source, timecode: .unchanged).apply(to: &args, outputArgumentsStart: 4, outputExtension: "mp4")
+            args.append(output.path)
+            let result = try await runner.run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg), arguments: args, timeout: .seconds(10)))
+            XCTAssertTrue(result.succeeded, result.standardErrorText)
+            let text = await ContainerTextMetadata.read(from: output)
+            XCTAssertEqual(text.comment, preserve ? "Source comment" : nil)
+            XCTAssertEqual(text.description, preserve ? "Source description" : nil)
+            XCTAssertEqual(text.title, preserve ? "Source title" : nil)
+            XCTAssertEqual(text.artist, preserve ? "Source artist" : nil)
+            XCTAssertEqual(text.sourceURL, preserve ? "https://example.com/original" : nil)
+        }
+    }
+
+    func testDisabledEditorCommentDoesNotGenerateDateTag() {
+        var editor = MetadataEditorSettings(comment: "Disabled", description: "", title: "", artist: "")
+        editor.comment.isEnabled = false
+        editor.artist.isEnabled = false
+        let request = ConversionRequest(inputURL: URL(fileURLWithPath: "/tmp/source.webm"), outputURL: URL(fileURLWithPath: "/tmp/output"), preset: .h264, metadataEditorSettings: editor).applyingMetadataEditor(outputExtension: "mov")
+        XCTAssertEqual(request.comment, "")
+        XCTAssertFalse(request.includeDateTag)
+        XCTAssertTrue(request.additionalOutputArguments?.contains("description=") == true)
+        XCTAssertFalse(request.additionalOutputArguments?.contains("artist=") == true)
+        XCTAssertTrue(request.metadataEditorWasApplied)
+        XCTAssertEqual(request.applyingMetadataEditor().additionalOutputArguments, request.additionalOutputArguments)
+        let settings = CommentSettings(prefix: "Prefix", suffix: "Suffix", separator: " | ", dateFormat: "yyyy", dateTagPrefix: "Date")
+        XCTAssertNil(CommentMetadataPlan(comment: request.comment, includeDateTag: request.includeDateTag, settings: settings.withoutAffixes).value)
+        let native = ConversionRequest(inputURL: request.inputURL, outputURL: request.outputURL, preset: .av2, metadataEditorSettings: editor).applyingMetadataEditor(outputExtension: "mkv")
+        XCTAssertNil(native.additionalOutputArguments)
+        XCTAssertEqual(native.metadataEditorSettings, editor)
     }
 }
 

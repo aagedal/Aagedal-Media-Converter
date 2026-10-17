@@ -1,0 +1,169 @@
+{
+  "version": "9.0.2",
+  "cases": [
+    {
+      "case": "h264",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 12601,
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "yuv420p"
+        },
+        {
+          "codec_name": "aac",
+          "channels": 1
+        }
+      ],
+      "diagnostic": ""
+    },
+    {
+      "case": "hevc10",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 10320,
+      "streams": [
+        {
+          "codec_name": "hevc",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "yuv420p10le"
+        },
+        {
+          "codec_name": "aac",
+          "channels": 1
+        }
+      ],
+      "diagnostic": ""
+    },
+    {
+      "case": "av1",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 8531,
+      "streams": [
+        {
+          "codec_name": "av1",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "yuv420p10le"
+        },
+        {
+          "codec_name": "opus",
+          "channels": 1
+        }
+      ],
+      "diagnostic": "Svt[info]: -------------------------------------------\nSvt[info]: SVT [version]:\tSVT-AV1 Encoder Lib v4.2.0\nSvt[info]: SVT [build]  :\tApple LLVM 21.0.0 (clang-2100.3.34.2)\t 64 bit\nSvt[info]: LIB Build date: Oct 13 2026 12:07:13\nSvt[info]: -------------------------------------------\nSvt[warn]: Preset M12 is mapped to M11.\nSvt[warn]: Screen-content detection and tools are disabled for RA mode coding at M9 and above; forcing NSC path\nSvt[warn]: Non-RTC M10+ are meant for automation tooling usage. Visual artifacts may occur otherwise.\nSvt[info]: Level of Parallelism: 2\nSvt[info]: Number of PPCS 42\nSvt[info]: [asm level on system : up to neon_i8mm]\nSvt[info]: [asm level selected : up to neon_i8mm]\nSvt[info]: -------------------------------------------\nSvt[info]: SVT [config]: main profile\ttier (auto)\tlevel (auto)\nSvt[info]: SVT [config]: width / height / fps numerator / fps denominator \t\t: 128 / 72 / 25 / 1\nSvt[info]: SVT [config]: bit-depth / color format \t\t\t\t\t: 10 / YUV420\nSvt[info]: SVT [config]: preset / tune / pred struct \t\t\t\t\t: 11 / PSNR / random access\nSvt[info]: SVT [config]: gop size / mini-gop size / key-frame type \t\t\t: 161 / 16 / key frame\nSvt[info]: SVT [config]: BRC mode / rate factor \t\t\t\t\t: CRF / 35.00 \nSvt[info]: SVT [config]: AQ mode / Variance Boost \t\t\t\t\t: 2 / 0\nSvt[info]: SVT [config]: sharpness / luminance-based QP bias \t\t\t\t: 0 / 0\nSvt[info]: SVT [config]: QP scale compress strength \t\t\t\t\t: 0\nSvt[info]: -------------------------------------------\n"
+    },
+    {
+      "case": "prores",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 64931,
+      "streams": [
+        {
+          "codec_name": "prores",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "yuv422p10le"
+        },
+        {
+          "codec_name": "pcm_s24le",
+          "channels": 1
+        }
+      ],
+      "diagnostic": ""
+    },
+    {
+      "case": "lossless",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 117763,
+      "streams": [
+        {
+          "codec_name": "ffv1",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "yuv422p10le"
+        },
+        {
+          "codec_name": "pcm_f64le",
+          "channels": 1
+        }
+      ],
+      "diagnostic": ""
+    },
+    {
+      "case": "deinterlace",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 12826,
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "yuv420p"
+        },
+        {
+          "codec_name": "aac",
+          "channels": 1
+        }
+      ],
+      "diagnostic": ""
+    },
+    {
+      "case": "waveform",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 6314,
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "yuv444p"
+        },
+        {
+          "codec_name": "aac",
+          "channels": 1
+        }
+      ],
+      "diagnostic": ""
+    },
+    {
+      "case": "jpegxl",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 4478,
+      "streams": [
+        {
+          "codec_name": "jpegxl",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "rgb48le"
+        }
+      ],
+      "diagnostic": ""
+    },
+    {
+      "case": "jpeg2000",
+      "encodeExitCode": 0,
+      "decodeExitCode": 0,
+      "bytes": 15549,
+      "streams": [
+        {
+          "codec_name": "jpeg2000",
+          "width": 128,
+          "height": 72,
+          "pix_fmt": "rgb48le"
+        }
+      ],
+      "diagnostic": ""
+    }
+  ],
+  "passed": true
+}

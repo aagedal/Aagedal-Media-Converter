@@ -74,6 +74,7 @@ private struct VideoAnalysisTabView: View {
     @Binding var item: VideoItem
     var onRun: ([QualityMetric]?) -> Void
     var onCancel: () -> Void
+    @State private var inspection: QualityInspectionRequest?
 
     var body: some View {
         if !item.hasVideoStream {
@@ -117,6 +118,13 @@ private struct VideoAnalysisTabView: View {
                         Text(error).foregroundStyle(.red).font(.callout)
                     }
                     if let results = item.analyticsResults {
+                        Button("Inspect Quality Timeline", systemImage: "chart.xyaxis.line") {
+                            guard let output = item.outputURL else { return }
+                            inspection = QualityInspectionRequest(results: results, source: item.url, encoded: output)
+                        }
+                        .disabled(!item.outputFileExists || item.analyticsStatus.isInProgress)
+                        .accessibilityIdentifier("analysis.video.inspect")
+                        .sheet(item: $inspection) { request in QualityInspectionView(request: request) }
                         AnalyticsResultsView(results: results, onRunMetrics: { onRun($0) }, isEmbedded: true)
                             .disabled(item.analyticsStatus.isInProgress)
                     } else {
@@ -130,7 +138,7 @@ private struct VideoAnalysisTabView: View {
 }
 
 /// One editable card describes one audio program to measure.
-private struct AudioAnalysisConfiguration: Identifiable {
+struct AudioAnalysisConfiguration: Identifiable {
     enum Kind: String, CaseIterable {
         case track, stereo, surround
 
@@ -179,6 +187,8 @@ struct LoudnessAnalysisView: View {
     @State private var errorMessage: String?
     @State private var analysisTask: Task<Void, Never>?
     @State private var analysisID: UUID?
+    @State private var silenceRequest: SilenceAnalysisRequest?
+    @State private var peakRequest: AudioPeakAnalysisRequest?
 
     private var monoTracks: [AudioTrackInfo] { tracks.filter { $0.channels == 1 } }
     private var file: URL { selectedFileID == "output" ? outputFile ?? sourceFile : sourceFile }
@@ -208,6 +218,16 @@ struct LoudnessAnalysisView: View {
                         Button(isAnalyzing ? "Analyzing…" : "Analyze Audio") { analyze() }
                             .disabled(isAnalyzing || !canAnalyze)
                             .accessibilityIdentifier("analysis.audio.run")
+                        Button("Detect Silence") {
+                            silenceRequest = SilenceAnalysisRequest(file: file, tracks: tracks)
+                        }
+                            .disabled(isAnalyzing)
+                            .accessibilityIdentifier("analysis.audio.silence")
+                        Button("Peaks and Channel Balance") {
+                            peakRequest = AudioPeakAnalysisRequest(file: file, tracks: tracks)
+                        }
+                        .disabled(isAnalyzing)
+                        .accessibilityIdentifier("analysis.audio.peaks")
                         if isAnalyzing {
                             Button("Cancel") { analysisTask?.cancel() }
                             ProgressView().controlSize(.small)
@@ -286,6 +306,12 @@ struct LoudnessAnalysisView: View {
         .onDisappear {
             analysisID = nil
             analysisTask?.cancel()
+        }
+        .sheet(item: $peakRequest) { request in
+            AudioPeakAnalysisView(file: request.file, tracks: request.tracks)
+        }
+        .sheet(item: $silenceRequest) { request in
+            SilenceAnalysisView(file: request.file, tracks: request.tracks)
         }
     }
 
@@ -604,8 +630,17 @@ struct AnalyticsResultsView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     ForEach(results.metrics, id: \.metric) { metric in
-                        MetricScoreCard(result: metric)
-                            .accessibilityIdentifier("analysis.result.\(metric.metric.rawValue)")
+                        VStack(alignment: .leading, spacing: 6) {
+                            MetricScoreCard(result: metric)
+                                .accessibilityIdentifier("analysis.result.\(metric.metric.rawValue)")
+                            if let comparison = metric.comparison {
+                                Text(comparison.summary).font(.caption).foregroundStyle(.secondary)
+                                ForEach(comparison.warnings, id: \.self) { warning in
+                                    Label(warning, systemImage: "exclamationmark.triangle")
+                                        .font(.caption).foregroundStyle(.orange)
+                                }
+                            }
+                        }
                     }
 
                     if !missingMetrics.isEmpty, onRunMetrics != nil {
@@ -881,4 +916,274 @@ struct MetricScoreCard: View {
         timestamp: Date(),
         durationSeconds: 120.0
     ))
+}
+
+private struct QualityInspectionRequest: Identifiable {
+    let id = UUID()
+    let results: AnalyticsResults
+    let source: URL
+    let encoded: URL
+}
+
+/// Output-relative chart time stays stable while switching to the trimmed source interval.
+private struct QualityInspectionView: View {
+    let request: QualityInspectionRequest
+    private let timelines: [QualityTimeline]
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var player = MPVPlayer()
+    @State private var selectedMetric: QualityMetric
+    @State private var showingSource = false
+    @State private var position = 0.0
+    @State private var playbackSourceStart = 0.0
+    @State private var preparing = true
+    @State private var previewError: String?
+    @State private var assets: [URL: AnalyticsPreviewAsset] = [:]
+
+    init(request: QualityInspectionRequest) {
+        self.request = request
+        let timelines = request.results.metrics.map { QualityTimeline(result: $0, fallbackDuration: request.results.durationSeconds) }
+        self.timelines = timelines
+        _selectedMetric = State(initialValue: timelines.first(where: { !$0.samples.isEmpty })?.metric ?? timelines.first?.metric ?? .vmaf)
+    }
+
+    private var timeline: QualityTimeline { timelines.first { $0.metric == selectedMetric } ?? QualityTimeline(result: MetricResult(metric: .vmaf, overallScore: 0, min: nil, max: nil, unit: "", channelScores: nil)) }
+    private var playbackURL: URL { showingSource ? request.source : request.encoded }
+    private var loadID: String { "\(playbackURL.absoluteString)|\(timeline.sourceStart)|\(showingSource)" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Inspect Video Quality").font(.title2.bold())
+                    Text(request.encoded.lastPathComponent).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier("analysis.inspection.close")
+            }
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Preview", selection: $showingSource) {
+                        Text("Encoded").tag(false)
+                        Text("Source").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("analysis.inspection.preview")
+                    ZStack {
+                        MPVVideoView(player: player, keyHandler: { key, _, _ in
+                            guard key == " ", !preparing else { return false }
+                            player.togglePause()
+                            return true
+                        })
+                        .opacity(preparing || previewError != nil ? 0 : 1)
+                        if preparing { ProgressView("Preparing preview…").tint(.white).foregroundStyle(.white) }
+                        if let error = previewError ?? player.error {
+                            Text(error).font(.callout).foregroundStyle(.white).padding()
+                        }
+                    }
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    HStack {
+                        Button { player.togglePause() } label: {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        }
+                        .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                        .accessibilityIdentifier("analysis.inspection.play")
+                        .disabled(preparing || !player.isFileLoaded)
+                        Slider(value: Binding(get: { position }, set: { seconds in seek(seconds) }), in: 0...timeline.duration)
+                            .accessibilityLabel("Inspection playback position")
+                            .accessibilityIdentifier("analysis.inspection.position")
+                            .disabled(preparing || !player.isFileLoaded)
+                        Text(position.formatted(.number.precision(.fractionLength(2))) + " s")
+                            .accessibilityIdentifier("analysis.inspection.time")
+                            .accessibilityLabel("Encoded time")
+                            .accessibilityValue(position.formatted(.number.precision(.fractionLength(2))) + " s")
+                            .monospacedDigit().font(.caption)
+                    }
+                    Text(showingSource ? "Source time: \((position + timeline.sourceStart).formatted(.number.precision(.fractionLength(2)))) s. The graph uses encoded time." : "Encoded time. Click the graph or a low-score timestamp to seek and pause.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if assets[playbackURL]?.url != nil, assets[playbackURL]?.url != playbackURL {
+                        Text("AV2 inspection uses a lossless, video-only preview.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Metric")
+                            Picker("Metric", selection: $selectedMetric) {
+                                ForEach(timelines, id: \.metric) { data in
+                                    Text(data.metric.displayName).tag(data.metric)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(width: 150)
+                            .accessibilityIdentifier("analysis.inspection.metric")
+                        }
+                        if timeline.samples.isEmpty {
+                            ContentUnavailableView("No timeline data", systemImage: "chart.xyaxis.line",
+                                description: Text("Run this metric again to collect timestamped quality scores."))
+                        } else {
+                            QualityTimelineChart(timeline: timeline, position: position, onSeek: { seconds in seek(seconds) })
+                                .frame(height: 235)
+                            HStack {
+                                Text(verbatim: "5th percentile: \(score(timeline.fifthPercentile))")
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("analysis.inspection.percentile")
+                                Spacer()
+                                Text("\(timeline.samples.count) measured frames")
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
+                            if let sample = timeline.sample(nearest: position) {
+                                Text(verbatim: "Nearest measured frame: \(sample.seconds.formatted(.number.precision(.fractionLength(3)))) s · \(score(sample.score))")
+                                    .font(.caption).monospacedDigit()
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("analysis.inspection.nearest")
+                            }
+                            Text(selectedMetric == .ssimulacra2
+                                 ? "Sampled frames only. Quality between these points was not measured."
+                                 : "Per-frame measurements. The graph preserves brief lows and highs when reducing detail.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Text("Lowest measured sections").font(.headline)
+                            ForEach(timeline.worstSamples) { sample in
+                                Button { seek(sample.seconds) } label: {
+                                    HStack {
+                                        Label(sample.seconds.formatted(.number.precision(.fractionLength(3))) + " s", systemImage: "play.circle")
+                                        Spacer()
+                                        Text(score(sample.score)).monospacedDigit()
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .accessibilityIdentifier("analysis.inspection.low.\(sample.frame)")
+                                .accessibilityLabel("Inspect \(selectedMetric.displayName) score \(score(sample.score)) at \(sample.seconds) seconds")
+                            }
+                            if timeline.worstSamples.isEmpty {
+                                Text("All measured frames have infinite (perfect-match) scores.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 860, height: 620)
+        .task(id: loadID) { await loadPreview() }
+        .onChange(of: player.timePos) { _, time in
+            guard player.isFileLoaded, !preparing, time.isFinite else { return }
+            let relative = max(0, time - playbackSourceStart)
+            position = min(relative, timeline.duration)
+            if relative >= timeline.duration { player.pause() }
+        }
+        .onDisappear {
+            player.stop()
+            assets.removeAll()
+        }
+    }
+
+    private func loadPreview() async {
+        let url = playbackURL
+        preparing = true
+        previewError = nil
+        player.pause()
+        do {
+            let asset: AnalyticsPreviewAsset
+            if let cached = assets[url] { asset = cached }
+            else { asset = try await AnalyticsService.shared.prepareQualityPreview(url) }
+            try Task.checkCancellation()
+            assets[url] = asset
+            player.isMuted = true
+            playbackSourceStart = showingSource ? timeline.sourceStart : 0
+            player.load(url: asset.url, startTime: timeline.playbackTime(for: position, source: showingSource))
+            preparing = false
+        } catch is CancellationError {
+            // A replacement task owns the next preview state.
+        } catch {
+            guard !Task.isCancelled else { return }
+            previewError = error.localizedDescription
+            preparing = false
+        }
+    }
+
+    private func seek(_ seconds: Double) {
+        position = max(0, min(seconds, timeline.duration))
+        player.pause()
+        guard !preparing, player.isFileLoaded else { return }
+        player.seek(to: timeline.playbackTime(for: position, source: showingSource))
+    }
+
+    private func score(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        if value == .infinity { return "∞" }
+        let suffix = selectedMetric == .psnr || selectedMetric == .xpsnr ? " dB" : ""
+        return value.formatted(.number.precision(.fractionLength(2))) + suffix
+    }
+}
+
+private struct QualityTimelineChart: View {
+    let timeline: QualityTimeline
+    let position: Double
+    let onSeek: (Double) -> Void
+
+    private let bounds: ClosedRange<Double>
+    private let hasInfiniteScores: Bool
+
+    init(timeline: QualityTimeline, position: Double, onSeek: @escaping (Double) -> Void) {
+        self.timeline = timeline
+        self.position = position
+        self.onSeek = onSeek
+        let finite = timeline.graphSamples.map(\.score).filter(\.isFinite)
+        let defaultTop = timeline.metric == .psnr || timeline.metric == .xpsnr ? 50.0 : 100.0
+        bounds = min(0, (finite.min() ?? 0) - 2)...max(defaultTop, (finite.max() ?? defaultTop) + 2)
+        hasInfiniteScores = timeline.graphSamples.contains { $0.score == .infinity }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Chart {
+                ForEach(timeline.graphSamples) { sample in
+                    if timeline.metric == .ssimulacra2 {
+                        PointMark(x: .value("Seconds", sample.seconds), y: .value("Score", plotted(sample.score)))
+                            .foregroundStyle(Color.accentColor)
+                    } else {
+                        LineMark(x: .value("Seconds", sample.seconds), y: .value("Score", plotted(sample.score)))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                if let percentile = timeline.fifthPercentile, percentile.isFinite {
+                    RuleMark(y: .value("5th percentile", percentile))
+                        .foregroundStyle(.orange).lineStyle(StrokeStyle(dash: [4, 4]))
+                }
+                RuleMark(x: .value("Playback", position)).foregroundStyle(.secondary)
+            }
+            .chartXScale(domain: 0...timeline.duration)
+            .chartYScale(domain: bounds)
+            .chartXAxisLabel("Encoded time (seconds)")
+            .chartYAxisLabel(timeline.metric == .psnr || timeline.metric == .xpsnr ? "dB" : "Score")
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                            guard let plotFrame = proxy.plotFrame else { return }
+                            let frame = geometry[plotFrame]
+                            guard frame.width > 0 else { return }
+                            let x = min(frame.width, max(0, value.location.x - frame.minX))
+                            if let seconds: Double = proxy.value(atX: x) { onSeek(seconds) }
+                        })
+                }
+            }
+            .accessibilityLabel("\(timeline.metric.displayName) quality timeline")
+            .accessibilityIdentifier("analysis.inspection.chart")
+            if hasInfiniteScores {
+                Text("∞ (perfect match) is drawn at the chart ceiling.").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func plotted(_ score: Double) -> Double { score.isFinite ? score : bounds.upperBound }
 }

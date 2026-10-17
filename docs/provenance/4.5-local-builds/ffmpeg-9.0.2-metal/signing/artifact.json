@@ -1,0 +1,14 @@
+{
+  "archiveName": "ffmpeg-9.0.2-full-signed.zip",
+  "archiveSHA256": "5989664a399ab795df0d326a7571509ad4f2ceb913f323f89332309df6a6ce3e",
+  "sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6",
+  "preSigningSHA256": "04ad42326ff2dee1b5fb6d545f6206f9c4a409674295306b9287fef0f0e5339a",
+  "bytes": 60144480,
+  "cdhash": "e57dfafe46e4a3cece0514eb1d3a903e63e9fa73",
+  "teamIdentifier": "3R5QGG9DW6",
+  "signature": "Developer ID Application: Truls Aagedal (3R5QGG9DW6); hardened runtime; secure timestamp",
+  "notarizationStatus": "Accepted",
+  "notarizedCodeRequirementVerified": true,
+  "sourceArchiveChanged": false,
+  "note": "The final ZIP includes post-notarization records, so its archive hash differs from the originally submitted ZIP. The extracted binary CDHash matches the accepted ticket."
+}

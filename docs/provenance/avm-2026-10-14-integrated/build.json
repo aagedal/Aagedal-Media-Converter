@@ -1,0 +1,49 @@
+{
+  "sourceURL": "https://github.com/AOMediaCodec/avm",
+  "sourceRevision": "14342caad234d23f717dfd058fc17bcfb502a244",
+  "parents": [
+    "b38429d1ea69a3d0e17d4b8ae2495ff0b30b40a0",
+    "0da4c36474f8d1952bbc54e3ccf833d5f0d2280c"
+  ],
+  "sourceTree": "402bc70d4157b90836b3b5820337f0f73dd88593",
+  "version": "1.0.0-445-g14342caad",
+  "buildCommand": [
+    "bash",
+    "scripts/build-avm-tools.sh",
+    "AVM_SOURCE_DIR",
+    "BUILD_DIR"
+  ],
+  "cmakeOptions": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_OSX_ARCHITECTURES": "arm64",
+    "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0",
+    "ENABLE_TESTS": "OFF",
+    "ENABLE_DOCS": "OFF"
+  },
+  "compiler": "Apple clang version 21.0.0 (clang-2100.3.34.2)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+  "signing": "Ad-hoc with hardened runtime; Xcode applies the configured release identity.",
+  "tools": [
+    {
+      "path": "Aagedal Media Converter/Binaries/avmenc",
+      "bytes": 12988304,
+      "sha256": "8d7d4a0994a1421c9cd74cb492b963cf7821a643b46527aebd2f0fcd9d309a6e",
+      "localBuildSHA256": "d4cf1be72d49c5314af586f9250dedb34e4313d4ea78f58544f58c41bc518008",
+      "dependencies": [
+        "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)",
+        "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+        "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)"
+      ]
+    },
+    {
+      "path": "Aagedal Media Converter/Binaries/avmdec",
+      "bytes": 12954080,
+      "sha256": "a4523761a3647e384d5112257c9df7683a8fb50143e0310a62e60dd6715e052a",
+      "localBuildSHA256": "c70bffb9e243ad477fe88983234269f176733b6a6e15dcb75567bd093868d780",
+      "dependencies": [
+        "\t/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 5027.0.69)",
+        "\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1359.0.0)",
+        "\t/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 2200.27.0)"
+      ]
+    }
+  ]
+}

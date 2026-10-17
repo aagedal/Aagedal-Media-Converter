@@ -167,6 +167,8 @@ enum MetadataExporter {
                 general["gps"] = gps
             }
             if let v = m.comment { general["comment"] = v }
+            if let v = m.description { general["description"] = v }
+            if let v = m.sourceURL { general["sourceURL"] = v }
             if !m.warnings.isEmpty { general["warnings"] = m.warnings }
         }
         if !general.isEmpty {

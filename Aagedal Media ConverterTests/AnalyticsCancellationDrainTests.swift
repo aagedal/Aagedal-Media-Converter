@@ -177,6 +177,71 @@ final class AnalyticsCancellationDrainTests: XCTestCase {
         await assertCancelled(run)
     }
 
+    func testAV2CancellationDrainsDecoderAndRemovesLosslessScratch() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        // The container detection used by the app recognizes this codec ID.
+        let output = fixture.directory.appendingPathComponent("av2.mkv")
+        try Data("V_AV2".utf8).write(to: output)
+        let started = expectation(description: "AV2 decoder started")
+        let cancelled = expectation(description: "Decoder cancellation requested")
+        let runner = AnalyticsDrainRunner(started: [started], cancelled: [cancelled])
+        let service = AnalyticsService(subprocessRunner: runner,
+            ffmpegPathProvider: { "/fixture/ffmpeg" }, avmdecPathProvider: { "/fixture/avmdec" })
+        let run = startAnalysis(service: service, fixture: (fixture.directory, fixture.source, output))
+        await fulfillment(of: [started], timeout: 2)
+        let path = await runner.pipelineOutputPath
+        let scratch = URL(fileURLWithPath: try XCTUnwrap(path)).deletingLastPathComponent()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: scratch.path))
+        var returned = false
+        let cancellation = Task {
+            await service.cancelAnalysis()
+            returned = true
+        }
+        await fulfillment(of: [cancelled], timeout: 2)
+        XCTAssertFalse(returned)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: scratch.path))
+        await runner.finish(run: 0)
+        await cancellation.value
+        await assertCancelled(run)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: scratch.path))
+        let requests = await runner.requests
+        XCTAssertEqual(requests.count, 1, "Cancellation must not start a metric after decoding")
+        XCTAssertEqual(requests[0].executableURL.path, "/fixture/avmdec")
+    }
+
+    func testClosingAV2PreviewDrainsDecoderBeforeRemovingScratch() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let output = fixture.directory.appendingPathComponent("preview-av2.mkv")
+        try Data("V_AV2".utf8).write(to: output)
+        let started = expectation(description: "Preview decoder started")
+        let cancelled = expectation(description: "Preview decoder cancelled")
+        let runner = AnalyticsDrainRunner(started: [started], cancelled: [cancelled])
+        let service = AnalyticsService(subprocessRunner: runner,
+            ffmpegPathProvider: { "/fixture/ffmpeg" }, avmdecPathProvider: { "/fixture/avmdec" })
+        let preview = Task { try await service.prepareQualityPreview(output) }
+        await fulfillment(of: [started], timeout: 2)
+        let path = await runner.pipelineOutputPath
+        let scratch = URL(fileURLWithPath: try XCTUnwrap(path)).deletingLastPathComponent()
+        var returned = false
+        let completion = Task {
+            let result = await preview.result
+            returned = true
+            return result
+        }
+        preview.cancel()
+        await fulfillment(of: [cancelled], timeout: 2)
+        XCTAssertFalse(returned)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: scratch.path))
+        await runner.finish(run: 0)
+        switch await completion.value {
+        case .success: XCTFail("Cancelled preview must not publish an asset")
+        case .failure: break
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: scratch.path))
+    }
+
     private typealias Fixture = (directory: URL, source: URL, output: URL)
 
     private func makeFixture() throws -> Fixture {
@@ -251,6 +316,19 @@ private actor AnalyticsDrainRunner: SubprocessRunning {
         if Task.isCancelled { cancelledRuns.append(run) }
         // Simulate a successful process exit arriving only after cancellation drains.
         return analyticsDrainResult()
+    }
+
+    private(set) var pipelineOutputPath: String?
+
+    func runWithStreamingStandardInput(
+        _ request: SubprocessRequest, inputProducer: @escaping SubprocessStandardInputProducer,
+        outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
+    ) async throws -> SubprocessResult {
+        pipelineOutputPath = request.arguments.last
+        let writer = SubprocessStandardInputWriter(write: { _ in }, finish: {})
+        await inputProducer(writer)
+        try Task.checkCancellation()
+        return try await run(request, outputHandler: outputHandler)
     }
 
     func finish(run: Int) {
