@@ -265,6 +265,10 @@ final class AudioPeakAnalysisTests: XCTestCase {
         for value in [Double.nan, .infinity, -.infinity, -1, 121] {
             XCTAssertThrowsError(try AudioPeakSettings(imbalanceThresholdDB: value).validate())
         }
+        for value in [Double.nan, .infinity, -.infinity, -121, 7] {
+            XCTAssertThrowsError(try AudioPeakSettings(truePeakThresholdDBTP: value).validate())
+        }
+        try AudioPeakSettings(truePeakThresholdDBTP: 6).validate()
     }
 
     func testDecoderFailureDoesNotReturnReport() async {
@@ -334,6 +338,208 @@ final class AudioPeakAnalysisTests: XCTestCase {
         XCTAssertEqual(result.imbalanceDB, .infinity)
     }
 
+    func testBundledTruePeakFindsIntersampleExcursionsWithoutCumulativeQuietMarkersAtAllRates() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        for rate in [44100, 48000, 96000, 192000] {
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("true-peaks-\(UUID().uuidString).wav")
+            defer { try? FileManager.default.removeItem(at: file) }
+            // Quarter-rate samples all have magnitude 0.9/sqrt(2); their
+            // reconstructed sine reaches 0.9 between samples.
+            let wave = "sin(2*PI*n/4+PI/4)"
+            try await generate(ffmpeg, arguments: [
+                "-f", "lavfi", "-i", "aevalsrc=if(lt(t\\,0.1)\\,0.9*\(wave)\\,0)|if(lt(t\\,0.1)\\,0.09*\(wave)\\,0):s=\(rate):d=0.4",
+                "-c:a", "pcm_f64le", file.path
+            ])
+            let service = AudioPeakAnalysisService(ffmpegPathProvider: { ffmpeg })
+            let source = try await service.analyze(file: file, trackIndex: 0, settings: .init(thresholdDBFS: -2))
+            let result = try await service.analyze(file: file, trackIndex: 0,
+                                                   settings: .init(thresholdDBFS: -2, truePeakThresholdDBTP: -2))
+            XCTAssertEqual(result.channels, source.channels, "True-peak analysis must preserve source RMS and sample peaks")
+            XCTAssertEqual(result.intervals, source.intervals)
+            XCTAssertTrue(result.intervals.isEmpty)
+            XCTAssertLessThan(result.channels[0].peakDBFS, -3.9)
+            let peaks = try XCTUnwrap(result.truePeaks)
+            XCTAssertEqual(peaks.sourceSampleRate, rate)
+            XCTAssertEqual(peaks.measurementSampleRate, rate * 4)
+            XCTAssertEqual(peaks.windowSourceSamples, 4800)
+            XCTAssertEqual(peaks.thresholdDBTP, -2)
+            XCTAssertEqual(peaks.channels.map(\.channel), [1, 2])
+            XCTAssertGreaterThan(peaks.channels[0].peakDBTP, -1.1)
+            XCTAssertLessThan(peaks.channels[1].peakDBTP, -19)
+            XCTAssertFalse(peaks.intervals.isEmpty)
+            XCTAssertTrue(peaks.intervals.allSatisfy { $0.channel == 1 && $0.end <= 0.21 },
+                          "A high early peak must not keep quiet later windows above threshold")
+            XCTAssertEqual(result.duration, 0.4, accuracy: 1e-9)
+        }
+    }
+
+    func testBundledTruePeakPreservesTinyAndPartialEOFOnDelayedTimeline() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        for samples in [1, 17, 4801] {
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("tiny-true-peaks-\(UUID().uuidString).mkv")
+            defer { try? FileManager.default.removeItem(at: file) }
+            try await generate(ffmpeg, arguments: [
+                "-f", "lavfi", "-i", "color=c=black:s=16x16:r=1:d=3",
+                "-itsoffset", "2", "-f", "lavfi", "-i", "aevalsrc=0.95:s=48000:d=1",
+                "-map", "0:v", "-map", "1:a", "-af", "atrim=end_sample=\(samples)",
+                "-c:v", "ffv1", "-c:a", "pcm_f64le", file.path
+            ])
+            let result = try await AudioPeakAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+                file: file, trackIndex: 0, settings: .init(truePeakThresholdDBTP: -2))
+            let peaks = try XCTUnwrap(result.truePeaks)
+            XCTAssertEqual(result.duration, 2 + Double(samples) / 48000, accuracy: 1e-9)
+            XCTAssertEqual(peaks.intervals.count, 1)
+            let interval = try XCTUnwrap(peaks.intervals.first)
+            XCTAssertEqual(interval.start, 2, accuracy: 1e-9)
+            XCTAssertEqual(interval.end, result.duration, accuracy: 1e-9)
+            XCTAssertEqual(interval.channel, 1)
+            XCTAssertGreaterThan(interval.peakDBTP, -2)
+        }
+    }
+
+    func testBundledTruePeakGroupedPresentationRetainsReorderedChannelsAndJSONContext() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("grouped-true-peaks-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try await generate(ffmpeg, arguments: [
+            "-f", "lavfi", "-i", "aevalsrc=0.9*sin(2*PI*n/4+PI/4):s=48000:d=0.1000208333333333",
+            "-f", "lavfi", "-i", "aevalsrc=0.09*sin(2*PI*n/4+PI/4):s=48000:d=0.1000208333333333",
+            "-map", "0:a", "-map", "1:a", "-c:a", "pcm_f64le", file.path
+        ])
+        let presentation = LoudnessPresentation.stereo(left: 1, right: 0)
+        let result = try await AudioPeakAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+            file: file, presentation: presentation, settings: .init(thresholdDBFS: -2, truePeakThresholdDBTP: -2))
+        let peaks = try XCTUnwrap(result.truePeaks)
+        XCTAssertEqual(peaks.channels.map(\.channel), [1, 2])
+        XCTAssertLessThan(peaks.channels[0].peakDBTP, -19)
+        XCTAssertGreaterThan(peaks.channels[1].peakDBTP, -1.1)
+        XCTAssertTrue(peaks.intervals.allSatisfy { $0.channel == 2 })
+        XCTAssertFalse(peaks.intervals.isEmpty)
+        XCTAssertEqual(try XCTUnwrap(peaks.intervals.last).end, 0.1, accuracy: 1e-9)
+        XCTAssertEqual(result.duration, 4801.0 / 48000, accuracy: 1e-9)
+        let data = try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: file, timestamp: Date())
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 3)
+        let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+        XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], [1, 0])
+        let payload = try XCTUnwrap(report["result"] as? [String: Any])
+        let truePeakPayload = try XCTUnwrap(payload["truePeaks"] as? [String: Any])
+        XCTAssertEqual(truePeakPayload["thresholdDBTP"] as? Double, -2)
+        XCTAssertEqual((truePeakPayload["intervals"] as? [Any])?.count, peaks.intervals.count)
+        var exportedMeasurements = result
+        exportedMeasurements.presentation = nil // Stable presentation context lives beside result.
+        XCTAssertEqual(try JSONDecoder().decode(AudioPeakAnalysisResult.self, from: JSONSerialization.data(withJSONObject: payload)), exportedMeasurements)
+    }
+
+    func testBundledTruePeakRejectsDecodedGapHiddenInsideOneAnalysisWindow() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("gapped-true-peaks-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        // Both packets fit within one analysis window, which would otherwise
+        // conceal the 100 ms discontinuity between them.
+        try await generate(ffmpeg, arguments: [
+            "-f", "lavfi", "-i", "aevalsrc=0.95:s=48000:d=0.02,asetnsamples=n=512:p=0,asetpts=PTS+if(gte(N\\,512)\\,4800\\,0)",
+            "-c:a", "pcm_f64le", file.path
+        ])
+        do {
+            _ = try await AudioPeakAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+                file: file, trackIndex: 0, settings: .init(truePeakThresholdDBTP: -2))
+            XCTFail("A discontinuous decoded timeline returned true-peak markers")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("tim") || error.localizedDescription.contains("continu"),
+                          error.localizedDescription)
+        }
+    }
+
+    func testTruePeakJSONRejectsMissingMismatchedAndMalformedMeasurements() throws {
+        let source = URL(fileURLWithPath: "/tmp/audio.wav")
+        var result = AudioPeakAnalysisResult(settings: .init(truePeakThresholdDBTP: -2), intervals: [],
+                                             channels: [.init(channel: 1, peakDBFS: -3, rmsDBFS: -6)], duration: 1,
+                                             imbalanceDB: nil, presentation: .track(0))
+        XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, timestamp: Date()))
+        let valid = AudioTruePeakResult(thresholdDBTP: -2, sourceSampleRate: 48000, measurementSampleRate: 192000,
+                                        windowSourceSamples: 4800,
+                                        method: "estimated_4x_libswresample_swr_filter64_cutoff0.97_no_certification",
+                                        channels: [.init(channel: 1, peakDBTP: -1)],
+                                        intervals: [.init(start: 0, end: 0.1, channel: 1, peakDBTP: -1)])
+        result.truePeaks = valid
+        XCTAssertNoThrow(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, timestamp: Date()))
+        let malformed: [AudioTruePeakResult] = [
+            .init(thresholdDBTP: -3, sourceSampleRate: 48000, measurementSampleRate: 192000,
+                  windowSourceSamples: 4800, method: valid.method, channels: valid.channels, intervals: valid.intervals),
+            .init(thresholdDBTP: -2, sourceSampleRate: 48000, measurementSampleRate: 48000,
+                  windowSourceSamples: 4800, method: valid.method, channels: valid.channels, intervals: valid.intervals),
+            .init(thresholdDBTP: -2, sourceSampleRate: 48000, measurementSampleRate: 192000,
+                  windowSourceSamples: 4800, method: valid.method,
+                  channels: [.init(channel: 1, peakDBTP: .nan)], intervals: valid.intervals),
+            .init(thresholdDBTP: -2, sourceSampleRate: 48000, measurementSampleRate: 192000,
+                  windowSourceSamples: 4800, method: valid.method,
+                  channels: [.init(channel: 2, peakDBTP: -1)], intervals: valid.intervals),
+            .init(thresholdDBTP: -2, sourceSampleRate: 48000, measurementSampleRate: 192000,
+                  windowSourceSamples: 4800, method: valid.method, channels: valid.channels,
+                  intervals: [.init(start: 0, end: 1.1, channel: 1, peakDBTP: -1)]),
+            .init(thresholdDBTP: -2, sourceSampleRate: 48000, measurementSampleRate: 192000,
+                  windowSourceSamples: 4800, method: valid.method, channels: valid.channels,
+                  intervals: [.init(start: 0, end: 0.1, channel: 1, peakDBTP: -3)])
+        ]
+        for peaks in malformed {
+            result.truePeaks = peaks
+            XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, timestamp: Date()))
+        }
+        result = .init(settings: .init(), intervals: [], channels: result.channels, duration: 1,
+                       imbalanceDB: nil, presentation: .track(0), truePeaks: valid)
+        XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, timestamp: Date()))
+    }
+
+    func testBundledTruePeakSixMonoGroupingPreservesSelectedSurroundOrder() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("surround-true-peaks-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        var arguments: [String] = []
+        for index in 0..<6 {
+            let amplitude = index == 3 ? 0.9 : 0.09
+            arguments += ["-f", "lavfi", "-i", "aevalsrc=\(amplitude)*sin(2*PI*n/4+PI/4):s=48000:d=0.1000208333333333"]
+        }
+        for index in 0..<6 { arguments += ["-map", "\(index):a"] }
+        arguments += ["-c:a", "pcm_f64le", file.path]
+        try await generate(ffmpeg, arguments: arguments)
+        let presentation = LoudnessPresentation.surround51([5, 3, 1, 4, 2, 0])
+        let result = try await AudioPeakAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+            file: file, presentation: presentation, settings: .init(thresholdDBFS: -2, truePeakThresholdDBTP: -2))
+        let peaks = try XCTUnwrap(result.truePeaks)
+        XCTAssertEqual(result.presentation, presentation)
+        XCTAssertEqual(peaks.channels.map(\.channel), [1, 2, 3, 4, 5, 6])
+        XCTAssertGreaterThan(peaks.channels[1].peakDBTP, -1.1)
+        XCTAssertTrue(peaks.channels.filter { $0.channel != 2 }.allSatisfy { $0.peakDBTP < -19 })
+        XCTAssertFalse(peaks.intervals.isEmpty)
+        XCTAssertTrue(peaks.intervals.allSatisfy { $0.channel == 2 })
+        XCTAssertEqual(result.duration, 4801.0 / 48000, accuracy: 1e-9)
+    }
+
+    func testTruePeakInterpolationFailureAndCancellationNeverReturnPartialReport() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("interpolation-failure-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try await generate(ffmpeg, arguments: ["-f", "lavfi", "-i", "aevalsrc=0.95:s=48000:d=0.1", "-c:a", "pcm_f64le", file.path])
+        let failureRunner = PeakInterpolationRunner(cancellationStarted: nil)
+        do {
+            _ = try await AudioPeakAnalysisService(runner: failureRunner, ffmpegPathProvider: { ffmpeg }).analyze(
+                file: file, trackIndex: 0, settings: .init(truePeakThresholdDBTP: -2))
+            XCTFail("Interpolation failure returned partial source-only success")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("interpolation failure"), error.localizedDescription) }
+
+        let started = expectation(description: "Interpolation pass started after successful source analysis")
+        let cancellationRunner = PeakInterpolationRunner(cancellationStarted: started)
+        let service = AudioPeakAnalysisService(runner: cancellationRunner, ffmpegPathProvider: { ffmpeg })
+        let task = Task { try await service.analyze(file: file, trackIndex: 0, settings: .init(truePeakThresholdDBTP: -2)) }
+        await fulfillment(of: [started], timeout: 5)
+        task.cancel()
+        do { _ = try await task.value; XCTFail("Cancelled interpolation returned a report") }
+        catch is CancellationError { }
+        let active = await cancellationRunner.active
+        XCTAssertFalse(active)
+    }
+
     private func frame(_ index: Int, pts: Int, samples: Int, peaks: [Double], rms: [Double], rate: Int = 48000) -> String {
         var result = "[Parsed_ashowinfo_2 @ 0x1] n:\(index) pts:\(pts) pts_time:0 fmt:dbl channels:\(peaks.count) chlayout:stereo rate:\(rate) nb_samples:\(samples) checksum:0\n"
         result += "[Parsed_ametadata_4 @ 0x1] frame:\(index) pts:\(pts) pts_time:0\n"
@@ -388,5 +594,28 @@ private actor PeakCancellationRunner: SubprocessRunning {
         started.fulfill()
         try await Task.sleep(for: .seconds(60))
         throw CancellationError()
+    }
+}
+
+private actor PeakInterpolationRunner: SubprocessRunning {
+    let cancellationStarted: XCTestExpectation?
+    private(set) var active = false
+
+    init(cancellationStarted: XCTestExpectation?) { self.cancellationStarted = cancellationStarted }
+
+    func run(_ request: SubprocessRequest, outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?) async throws -> SubprocessResult {
+        guard request.arguments.contains(where: { $0.contains("aresample=") }) else {
+            return try await SubprocessRunner().run(request, outputHandler: outputHandler)
+        }
+        active = true
+        defer { active = false }
+        if let cancellationStarted {
+            cancellationStarted.fulfill()
+            try await Task.sleep(for: .seconds(60))
+            throw CancellationError()
+        }
+        return .init(terminationStatus: 1, termination: .exited, standardOutput: Data(),
+                     standardError: Data("interpolation failure".utf8), discardedStandardOutputBytes: 0,
+                     discardedStandardErrorBytes: 0, duration: .zero)
     }
 }

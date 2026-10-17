@@ -2,6 +2,30 @@
 
 Last reviewed: 2026-10-17
 
+## Estimated true-peak marker continuation — 2026-10-17
+
+Owner: Codex. Peaks and Channel Balance now offers opt-in estimated true-peak
+markers with continuous 4× interpolation, per-channel dBTP maxima, paused interval
+navigation and complete schema-v3 JSON. Original dBFS sample peaks and unweighted
+RMS remain separate; sample-only exports retain schemas 1/2. Single tracks, custom
+mono pairs and reordered 5.1 share captured roles. Raw timestamp validation prevents
+reframing from concealing gaps; symmetric zero context and exact-count trimming
+preserve delayed starts and one-sample EOF. The [audio roadmap](docs/AUDIO-METERING-PLAN.md),
+[report schema](docs/audio-peak-report-format.md) and
+[validation record](docs/audio-true-peak-validation-2026-10-17.md) document method,
+edge/timing limitations and verification. Separate EBU R128 behavior is unchanged.
+No dependencies, bundled binaries or licenses changed.
+
+Validation: ad-hoc-signed Debug builds pass. The final full unit suite executes
+1,402 tests with zero failures and one intentional benchmark skip. All 53 final
+focused peak/grouped/silence tests and both English/Norwegian UI checks pass, including native JSON
+save/readback and settings invalidation. Both captures were visually inspected.
+Seven localization tests and the 1,898-entry catalog audit pass. Stalled initial
+XCTest sessions were recovered through direct focused XCTest and fresh products;
+no shared test services were restarted. Release/device and sandbox qualification
+remain open; translations outside English/Norwegian await review. This is estimated
+source reconstruction, not certified BS.1770 conformance or playback alignment.
+
 ## Grouped peak/channel-balance continuation — 2026-10-17
 
 Owner: Codex. Peaks and Channel Balance now supports custom mono pairs and

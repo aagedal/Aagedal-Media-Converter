@@ -1,22 +1,23 @@
 # Audio peak and channel-balance JSON reports
 
 Audio Analysis → Peaks and Channel Balance → Export JSON saves a completed scan
-through the macOS save panel. Changing the selected presentation or either threshold
+through the macOS save panel. Changing the selected presentation or any measurement/threshold
 invalidates the report and disables export until another scan finishes. Cancelled
 or failed scans cannot be exported. Cancelling the save panel keeps the completed
 scan available. Repeated exports retain the same analysis timestamp.
 
 Single-track reports retain schema version 1. Grouped stereo and 5.1 reports use
 schema version 2, with an explicit ordered source mapping instead of a single
-track index. The report contains:
+track index. Opt-in estimated true-peak scans use schema version 3 for either
+presentation. The report contains:
 
-- `schemaVersion`: `1` for a source track; `2` for grouped mono tracks.
+- `schemaVersion`: `1` for sample-only source tracks; `2` for sample-only grouped mono tracks; `3` when estimated true peaks are included.
 - `analysis`: `source_sample_peaks_and_channel_balance`.
 - `sourceFileName`: the source basename, including its extension. The source's
   absolute path is excluded.
 - `audioRelativeTrackIndex`: zero-based audio-track order, as used by FFmpeg's
   `0:a:index` mapping. This is not an absolute container stream index. This field
-  is present only in version 1; a grouped report never names one track as its source.
+  is present for single-track reports; a grouped report never names one track as its source.
 - `presentation`: the captured selection, with `type` (`track`, `stereo`, or
   `surround51`), `audioRelativeTrackIndices`, `channelLayout`, and `channelOrder`.
   Grouped reports always include it. Legacy version 1 reports may omit it.
@@ -51,7 +52,7 @@ that timeline, not the audible duration after subtracting the initial offset or
 the duration of a longer video stream. Intervals locate 4,800-source-sample
 analysis windows and merge adjacent qualifying windows per channel. Window
 duration therefore depends on source sample rate. The last window is unpadded;
-the scanner neither resamples source audio nor fills timestamp gaps with silence.
+the sample-peak pass neither resamples source audio nor fills timestamp gaps with silence.
 Grouped scans additionally verify compatible sample rates, common initial offset,
 matching decoded sample counts, and continuous per-track timing before combining channels.
 Timestamp continuity allows up to 1 ms of rounding (at least one sample), to
@@ -86,3 +87,50 @@ The report is UTF-8 JSON with sorted keys and locale-independent numbers. No
 media data or security-scoped bookmark is included. Writes are atomic to the
 destination explicitly selected by the user; export does not start a conversion
 or authorize automatic writes beside the source.
+
+## Version 3: estimated true-peak markers
+
+Choose **Peak markers → Estimated true peak** and a dBTP threshold before scanning.
+The report retains the original `intervals`, `channels`, sample threshold, RMS and
+channel balance, and adds `settings.truePeakThresholdDBTP` and `result.truePeaks`:
+
+- `thresholdDBTP`: the inclusive reconstructed-peak threshold.
+- `sourceSampleRate`, `measurementSampleRate`: decoded rate and four times that rate.
+- `windowSourceSamples`: 4,800 (19,200 interpolated samples per complete window).
+- `method`: `estimated_4x_libswresample_swr_filter64_cutoff0.97_no_certification`.
+- `channels`: ordered `{channel, peakDBTP}` values for every selected channel.
+- `intervals`: every `{start, end, channel, peakDBTP}` marker, merged per channel
+  across adjacent qualifying windows. This array is independent of sample markers.
+
+`semantics.peakUnit` remains `dBFS`; the new `truePeakUnit` is `dBTP`.
+These values estimate reconstructed source peaks using continuous 4× interpolation
+with bundled FFmpeg/libswresample (double precision, 64-tap SWR filter, 0.97 cutoff,
+phase shift 10, no linear phase interpolation). They are not a certified BS.1770
+conformance measurement. Filter response and edge policy affect estimates, especially
+near Nyquist or an abrupt boundary. Separate whole-program EBU R128 analysis is unchanged.
+
+The scanner validates raw decoded timestamps before reframing. Rates up to 192 kHz
+are supported, including 4× interpolation of 96/192 kHz sources. Discontinuities
+beyond the raw validation's 1 ms container-rounding allowance fail. The reframed
+source and interpolated windows must additionally be contiguous to within half
+a sample. Thus some coarse-clock files may be rejected conservatively. Neither
+resampling timestamp compensation nor synthesized gap silence is used.
+
+Both edges receive 64 zero source samples of interpolation context; that context
+is trimmed before measurement, and original file timestamps are restored. The
+resampler drains at EOF, including one-sample clips. Exactly four times the decoded
+source sample count, the same channel count, and unchanged initial/end times are
+required. Markers cover windows containing an estimated excursion, not its exact
+sample position. Source RMS is measured before interpolation and remains unweighted.
+True-peak mode requires a validation decode plus separate source and interpolation
+decodes, so it takes longer than sample-only scanning. Cancellation drains the
+active subprocess and publishes no partial combined report.
+
+The result's settings, channel topology, rates, method, thresholds and interval
+times are validated before export. Sample-only reports retain schema versions 1/2.
+
+Implementation references: FFmpeg's [EBU R128 filter source](https://ffmpeg.org/doxygen/trunk/f__ebur128_8c_source.html)
+exports cumulative per-channel true-peak metadata, which cannot locate individual
+threshold windows. The separate interpolation pass instead uses the documented
+[resampler controls](https://ffmpeg.org/ffmpeg-resampler.html) and the
+[aresample EOF flush](https://ffmpeg.org/doxygen/trunk/af__aresample_8c_source.html).

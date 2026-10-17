@@ -1687,6 +1687,140 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testEstimatedTruePeakNavigationExportAndSettingsInvalidation() throws {
+        try checkEstimatedTruePeaks(language: "en", locale: "en_US")
+    }
+
+    @MainActor
+    func testEstimatedTruePeakNorwegianControlsAndReport() throws {
+        try checkEstimatedTruePeaks(language: "nb", locale: "nb_NO")
+    }
+
+    @MainActor
+    private func checkEstimatedTruePeaks(language: String, locale: String) throws {
+        let norwegian = language == "nb"
+        launchApp(generatedFixture: true, language: language, locale: locale,
+                  additionalArguments: ["-AMC_UI_TEST_PEAKS", "YES"], previewContainer: "mp4")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons[norwegian ? "Lyd" : "Audio"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.peaks.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        let export = element("analysis.peaks.export")
+        let measurement = element("analysis.peaks.measurement")
+        XCTAssertTrue(measurement.exists)
+        XCTAssertFalse(element("analysis.peaks.trueThreshold").exists)
+        measurement.click()
+        let estimated = app.menuItems[norwegian ? "Estimert sann topp" : "Estimated true peak"]
+        XCTAssertTrue(estimated.waitForExistence(timeout: 5))
+        estimated.click()
+        let trueThreshold = element("analysis.peaks.trueThreshold")
+        XCTAssertTrue(trueThreshold.waitForExistence(timeout: 5))
+        XCTAssertFalse(element("analysis.peaks.threshold").exists)
+        trueThreshold.click()
+        app.menuItems["-6 dBTP"].click()
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertTrue(waitForEnabled(true, of: run, timeout: 20))
+        run.click()
+        let summary = element("analysis.peaks.summary")
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Estimerte intervaller med sann topp: 1" : "Estimated true-peak intervals: 1",
+                                         of: summary, timeout: 30))
+        XCTAssertTrue(export.isEnabled)
+        let start = element("analysis.peaks.start.0")
+        XCTAssertTrue(waitForEnabled(true, of: start, timeout: 20))
+        start.click()
+        let time = element("analysis.peaks.time")
+        let atStart = NSPredicate { _, _ in
+            let text = ((time.value as? String) ?? time.label).replacingOccurrences(of: ",", with: ".")
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 1) < 0.2
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atStart, object: time)], timeout: 5), .completed)
+        element("analysis.peaks.end.0").click()
+        let atEnd = NSPredicate { _, _ in
+            let text = ((time.value as? String) ?? time.label).replacingOccurrences(of: ",", with: ".")
+            guard let seconds = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(seconds - 2) < 0.2
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: atEnd, object: time)], timeout: 5), .completed)
+        XCTAssertFalse(element("analysis.peaks.preview.error").exists)
+        attachWindowScreenshot(named: "Estimated true peaks \(language)")
+        if !norwegian {
+            try checkEstimatedTruePeakExport()
+        }
+
+        trueThreshold.click()
+        app.menuItems["-3 dBTP"].click()
+        XCTAssertFalse(summary.exists, "Changing the true-peak threshold must discard the completed report")
+        XCTAssertFalse(export.isEnabled)
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Estimerte intervaller med sann topp: 1" : "Estimated true-peak intervals: 1",
+                                         of: summary, timeout: 30))
+        measurement.click()
+        app.menuItems[norwegian ? "Sampletopp" : "Sample peak"].click()
+        XCTAssertFalse(summary.exists, "Changing the measurement must discard the completed report")
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertFalse(trueThreshold.exists)
+        XCTAssertTrue(element("analysis.peaks.threshold").exists)
+        run.click()
+        XCTAssertTrue(waitForLabelOrValue(norwegian ? "Toppintervaller: 0" : "Peak intervals: 0", of: summary, timeout: 20))
+        element("analysis.peaks.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func checkEstimatedTruePeakExport() throws {
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-true-peaks-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        element("analysis.peaks.export").click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 3)
+        XCTAssertEqual(report["audioRelativeTrackIndex"] as? Int, 0)
+        let semantics = try XCTUnwrap(report["semantics"] as? [String: Any])
+        XCTAssertEqual(semantics["peakUnit"] as? String, "dBFS")
+        XCTAssertEqual(semantics["truePeakUnit"] as? String, "dBTP")
+        let result = try XCTUnwrap(report["result"] as? [String: Any])
+        XCTAssertEqual((result["intervals"] as? [Any])?.count, 0, "Source sample markers retain their own -1 dBFS threshold")
+        XCTAssertEqual((result["channels"] as? [Any])?.count, 2)
+        let settings = try XCTUnwrap(result["settings"] as? [String: Any])
+        XCTAssertEqual(settings["thresholdDBFS"] as? Double, -1)
+        XCTAssertEqual(settings["truePeakThresholdDBTP"] as? Double, -6)
+        let truePeaks = try XCTUnwrap(result["truePeaks"] as? [String: Any])
+        XCTAssertEqual(truePeaks["thresholdDBTP"] as? Double, -6)
+        XCTAssertEqual(truePeaks["sourceSampleRate"] as? Int, 48_000)
+        XCTAssertEqual(truePeaks["measurementSampleRate"] as? Int, 192_000)
+        XCTAssertEqual(truePeaks["windowSourceSamples"] as? Int, 4_800)
+        XCTAssertFalse(try XCTUnwrap(truePeaks["method"] as? String).isEmpty)
+        XCTAssertEqual((truePeaks["channels"] as? [Any])?.count, 2)
+        let intervals = try XCTUnwrap(truePeaks["intervals"] as? [[String: Any]])
+        XCTAssertEqual(intervals.count, 1)
+        let interval = try XCTUnwrap(intervals.first)
+        XCTAssertEqual(interval["channel"] as? Int, 1)
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(interval["peakDBTP"] as? Double), -6)
+        XCTAssertEqual(try XCTUnwrap(interval["start"] as? Double), 1, accuracy: 0.2)
+        XCTAssertEqual(try XCTUnwrap(interval["end"] as? Double), 2, accuracy: 0.2)
+    }
+
+    @MainActor
     func testGroupedPeakSelectionPreviewAndExport() throws {
         try checkGroupedPeaks(language: "en", locale: "en_US")
     }

@@ -25,6 +25,8 @@ struct AudioPeakAnalysisView: View {
     @State private var groupingError: String?
     @State private var threshold = -1.0
     @State private var imbalanceThreshold = 6.0
+    @State private var truePeakMarkers = false
+    @State private var truePeakThreshold = -1.0
     @State private var result: AudioPeakAnalysisResult?
     @State private var analysisTimestamp: Date?
     @State private var analysisTask: Task<Void, Never>?
@@ -78,8 +80,13 @@ struct AudioPeakAnalysisView: View {
                             .disabled(isAnalyzing || result == nil)
                             .accessibilityIdentifier("analysis.peaks.export")
                     }
-                    Text("Scans the complete selected source presentation in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Group {
+                        if truePeakMarkers {
+                            Text("True-peak markers estimate reconstructed source peaks using continuous 4× oversampling. Edge samples use zero extension. Markers cover analysis windows, not exact excursions; this is not a certified BS.1770 meter.")
+                        } else {
+                            Text("Scans the complete selected source presentation in short analysis windows. Markers locate windows containing source sample peaks at or above the threshold; they are not true-peak measurements.")
+                        }
+                    }.font(.caption).foregroundStyle(.secondary)
                     if configuration.kind != .track && validPresentation && !groupValidated && groupingError == nil {
                         ProgressView("Validating grouped audio…").controlSize(.small)
                     }
@@ -130,7 +137,7 @@ struct AudioPeakAnalysisView: View {
                     }
                     if let result {
                         timeline(result)
-                        if result.intervals.count > 1_000 {
+                        if displayedIntervals(result).count > 1_000 {
                             Text("Timeline shows the first \(1_000) intervals. All intervals remain in the list.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
@@ -180,6 +187,8 @@ struct AudioPeakAnalysisView: View {
             player.pause()
         }
         .onChange(of: threshold) { clearResult() }
+        .onChange(of: truePeakMarkers) { clearResult() }
+        .onChange(of: truePeakThreshold) { clearResult() }
         .onChange(of: imbalanceThreshold) { clearResult() }
         .onDisappear {
             analysisID = nil
@@ -230,12 +239,26 @@ struct AudioPeakAnalysisView: View {
                         .font(.caption).foregroundStyle(.orange)
                 }
             }
-            Picker("Sample-peak threshold", selection: $threshold) {
-                ForEach([0.0, -1, -3, -6, -12, -20], id: \.self) { value in
-                    Text(verbatim: "\(Int(value)) dBFS").tag(value)
-                }
+            Picker("Peak markers", selection: $truePeakMarkers) {
+                Text("Sample peak").tag(false)
+                Text("Estimated true peak").tag(true)
             }
-            .accessibilityIdentifier("analysis.peaks.threshold")
+            .accessibilityIdentifier("analysis.peaks.measurement")
+            if truePeakMarkers {
+                Picker("True-peak threshold", selection: $truePeakThreshold) {
+                    ForEach([3.0, 0, -1, -3, -6, -12, -20], id: \.self) { value in
+                        Text(verbatim: "\(Int(value)) dBTP").tag(value)
+                    }
+                }
+                .accessibilityIdentifier("analysis.peaks.trueThreshold")
+            } else {
+                Picker("Sample-peak threshold", selection: $threshold) {
+                    ForEach([0.0, -1, -3, -6, -12, -20], id: \.self) { value in
+                        Text(verbatim: "\(Int(value)) dBFS").tag(value)
+                    }
+                }
+                .accessibilityIdentifier("analysis.peaks.threshold")
+            }
             Picker("Channel difference threshold", selection: $imbalanceThreshold) {
                 ForEach([1.0, 3, 6, 10, 20], id: \.self) { value in
                     Text(verbatim: "\(Int(value)) dB").tag(value)
@@ -253,13 +276,18 @@ struct AudioPeakAnalysisView: View {
                 Grid(alignment: .leading, horizontalSpacing: 12) {
                     GridRow {
                         Text("Channel")
-                        Text("Sample peak")
+                        if result.truePeaks != nil { Text("Estimated true peak") }
+                        else { Text("Sample peak") }
                         Text("Whole-track RMS")
                     }.font(.caption.bold())
                     ForEach(result.channels) { channel in
                         GridRow {
                             channelLabel(channel.channel, presentation: result.presentation)
-                            Text(verbatim: level(channel.peakDBFS))
+                            if let truePeak = result.truePeaks?.channels.first(where: { $0.channel == channel.channel }) {
+                                Text(verbatim: level(truePeak.peakDBTP, unit: "dBTP"))
+                            } else {
+                                Text(verbatim: level(channel.peakDBFS))
+                            }
                             Text(verbatim: level(channel.rmsDBFS))
                         }.font(.caption).monospacedDigit()
                     }
@@ -276,13 +304,20 @@ struct AudioPeakAnalysisView: View {
                 Text("Channel balance compares unweighted whole-track RMS across all decoded channels. Surround and LFE differences may be intentional. Volume, mute and conversion trims do not affect analysis.")
                     .font(.caption).foregroundStyle(.secondary)
                 Divider()
-                Text("Peak intervals: \(result.intervals.count)").font(.headline)
-                    .accessibilityIdentifier("analysis.peaks.summary")
-                if result.intervals.isEmpty {
-                    Text("No sample peaks meet this threshold.").foregroundStyle(.secondary)
+                if result.truePeaks != nil {
+                    Text("Estimated true peak (4× oversampled)").font(.caption).foregroundStyle(.secondary)
+                    Text("Estimated true-peak intervals: \(displayedIntervals(result).count)").font(.headline)
+                        .accessibilityIdentifier("analysis.peaks.summary")
+                } else {
+                    Text("Peak intervals: \(result.intervals.count)").font(.headline)
+                        .accessibilityIdentifier("analysis.peaks.summary")
+                }
+                if displayedIntervals(result).isEmpty {
+                    if result.truePeaks != nil { Text("No estimated true peaks meet this threshold.").foregroundStyle(.secondary) }
+                    else { Text("No sample peaks meet this threshold.").foregroundStyle(.secondary) }
                 }
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(result.intervals.enumerated()), id: \.element.id) { index, interval in
+                    ForEach(Array(displayedIntervals(result).enumerated()), id: \.element.id) { index, interval in
                         HStack {
                             channelLabel(interval.channel, presentation: result.presentation)
                             Button { seek(interval.start) } label: {
@@ -296,7 +331,7 @@ struct AudioPeakAnalysisView: View {
                             .accessibilityLabel(Text("End of peak interval") + Text(verbatim: ": \(time(interval.end))"))
                             .accessibilityIdentifier("analysis.peaks.end.\(index)")
                             Spacer()
-                            Text(verbatim: level(interval.peakDBFS))
+                            Text(verbatim: level(interval.peakDBFS, unit: result.truePeaks == nil ? "dBFS" : "dBTP"))
                         }
                         .font(.caption).monospacedDigit()
                         .disabled(!previewReady)
@@ -318,13 +353,18 @@ struct AudioPeakAnalysisView: View {
         return Text("Channel \(channel)")
     }
 
-    private func level(_ value: Double) -> String {
-        value.isFinite ? String(format: "%.1f dBFS", value) : "−∞ dBFS"
+    private func level(_ value: Double, unit: String = "dBFS") -> String {
+        value.isFinite ? String(format: "%.1f %@", value, unit) : "−∞ \(unit)"
+    }
+
+    private func displayedIntervals(_ result: AudioPeakAnalysisResult) -> [AudioPeakInterval] {
+        guard let truePeaks = result.truePeaks else { return result.intervals }
+        return truePeaks.intervals.map { .init(start: $0.start, end: $0.end, channel: $0.channel, peakDBFS: $0.peakDBTP) }
     }
 
     private func timeline(_ result: AudioPeakAnalysisResult) -> some View {
         Chart {
-            ForEach(result.intervals.prefix(1_000)) { interval in
+            ForEach(displayedIntervals(result).prefix(1_000)) { interval in
                 RectangleMark(xStart: .value("Start", interval.start), xEnd: .value("End", interval.end),
                               yStart: .value("Channel", Double(interval.channel) - 0.4), yEnd: .value("Channel", Double(interval.channel) + 0.4))
                     .foregroundStyle(.blue.opacity(0.4))
@@ -389,7 +429,8 @@ struct AudioPeakAnalysisView: View {
         let id = UUID()
         analysisID = id
         let presentation = presentation
-        let settings = AudioPeakSettings(thresholdDBFS: threshold, imbalanceThresholdDB: imbalanceThreshold)
+        let settings = AudioPeakSettings(thresholdDBFS: threshold, imbalanceThresholdDB: imbalanceThreshold,
+                                         truePeakThresholdDBTP: truePeakMarkers ? truePeakThreshold : nil)
         analysisTask = Task { @MainActor in
             do {
                 let measured = try await AudioPeakAnalysisService.shared.analyze(file: file, presentation: presentation, settings: settings)

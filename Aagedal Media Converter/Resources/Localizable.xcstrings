@@ -1,6 +1,526 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Peak markers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peak markers"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toppmarkører"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spitzenmarker"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marcadores de picos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marqueurs de crête"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marcatori di picco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ピークマーカー"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "피크 마커"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marcadores de pico"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "峰值标记"
+          }
+        }
+      }
+    },
+    "Estimated true peak" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated true peak"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimert sann topp"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Geschätzter True Peak"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pico real estimado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crête vraie estimée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Picco reale stimato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "推定トゥルーピーク"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "추정 트루 피크"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pico verdadeiro estimado"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "估计真峰值"
+          }
+        }
+      }
+    },
+    "True-peak threshold" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "True-peak threshold"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terskel for sann topp"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "True-Peak-Schwelle"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Umbral de pico real"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seuil de crête vraie"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Soglia del picco reale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "トゥルーピークのしきい値"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "트루 피크 임계값"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Limite de pico verdadeiro"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "真峰值阈值"
+          }
+        }
+      }
+    },
+    "Estimated true peak (4× oversampled)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated true peak (4× oversampled)"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimert sann topp (4× oversampling)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Geschätzter True Peak (4× Oversampling)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pico real estimado (sobremuestreo de 4×)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Crête vraie estimée (suréchantillonnage 4×)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Picco reale stimato (sovracampionamento 4×)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "推定トゥルーピーク（4倍オーバーサンプリング）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "추정 트루 피크(4배 오버샘플링)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Pico verdadeiro estimado (sobreamostragem de 4×)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "估计真峰值（4倍过采样）"
+          }
+        }
+      }
+    },
+    "Estimated true-peak intervals: %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated true-peak intervals: %lld"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimerte intervaller med sann topp: %lld"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Geschätzte True-Peak-Intervalle: %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Intervalos de picos reales estimados: %lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Intervalles de crête vraie estimée : %lld"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Intervalli di picco reale stimato: %lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "推定トゥルーピーク区間: %lld"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "추정 트루 피크 구간: %lld"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Intervalos de pico verdadeiro estimado: %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "估计真峰值区间：%lld"
+          }
+        }
+      }
+    },
+    "No estimated true peaks meet this threshold." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No estimated true peaks meet this threshold."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen estimerte sanne topper når denne terskelen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Keine geschätzten True Peaks erreichen diese Schwelle."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ningún pico real estimado alcanza este umbral."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aucune crête vraie estimée n’atteint ce seuil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nessun picco reale stimato raggiunge questa soglia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "このしきい値に達する推定トゥルーピークはありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이 임계값에 도달하는 추정 트루 피크가 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nenhum pico verdadeiro estimado atinge este limite."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "没有估计真峰值达到此阈值。"
+          }
+        }
+      }
+    },
+    "True-peak markers estimate reconstructed source peaks using continuous 4× oversampling. Edge samples use zero extension. Markers cover analysis windows, not exact excursions; this is not a certified BS.1770 meter." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "True-peak markers estimate reconstructed source peaks using continuous 4× oversampling. Edge samples use zero extension. Markers cover analysis windows, not exact excursions; this is not a certified BS.1770 meter."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markører for sann topp estimerer rekonstruerte kildetopper med kontinuerlig 4× oversampling. Samplene ved kantene bruker nullutvidelse. Markørene dekker analysevinduer, ikke nøyaktige terskeloverskridelser; dette er ikke en sertifisert BS.1770-måler."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "True-Peak-Marker schätzen rekonstruierte Quellspitzen mit kontinuierlichem 4× Oversampling. Rand-Samples werden durch Nullen ergänzt. Marker kennzeichnen Analysefenster, keine exakten Schwellenüberschreitungen; dies ist kein zertifiziertes BS.1770-Messgerät."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los marcadores de pico real estiman los picos reconstruidos de la fuente mediante sobremuestreo continuo de 4×. Las muestras de los bordes se extienden con ceros. Los marcadores abarcan ventanas de análisis, no las superaciones exactas del umbral; este no es un medidor BS.1770 certificado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les marqueurs de crête vraie estiment les crêtes reconstruites de la source par suréchantillonnage continu 4×. Les échantillons aux extrémités sont prolongés par des zéros. Les marqueurs couvrent des fenêtres d’analyse, et non les dépassements exacts du seuil ; il ne s’agit pas d’un appareil de mesure certifié BS.1770."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "I marcatori di picco reale stimano i picchi ricostruiti della sorgente mediante sovracampionamento continuo 4×. I campioni ai bordi usano un’estensione con zeri. I marcatori coprono finestre di analisi, non gli esatti superamenti della soglia; questo non è un misuratore BS.1770 certificato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "トゥルーピークマーカーは、連続した4倍オーバーサンプリングで再構成されたソースのピークを推定します。端のサンプルにはゼロ拡張を使用します。マーカーは解析ウィンドウを示し、しきい値を超える正確な範囲を示すものではありません。これはBS.1770認証済みのメーターではありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "트루 피크 마커는 연속 4배 오버샘플링을 사용하여 재구성된 소스 피크를 추정합니다. 가장자리 샘플에는 0 확장을 사용합니다. 마커는 정확한 임계값 초과 구간이 아닌 분석 창을 나타냅니다. 이 미터는 BS.1770 인증을 받지 않았습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Os marcadores de pico verdadeiro estimam os picos reconstruídos da fonte usando sobreamostragem contínua de 4×. As amostras nas bordas usam extensão com zeros. Os marcadores abrangem janelas de análise, não os trechos exatos que excedem o limite; este não é um medidor BS.1770 certificado."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "真峰值标记通过连续4倍过采样来估计重建后的源峰值。边缘采样使用零延拓。标记覆盖分析窗口，而非超出阈值的精确区间；这不是经过认证的 BS.1770 电平表。"
+          }
+        }
+      }
+    },
+    "True-peak markers require continuous audio timestamps." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "True-peak markers require continuous audio timestamps."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markører for sann topp krever sammenhengende lydtidsstempler."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "True-Peak-Marker erfordern durchgehende Audio-Zeitstempel."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los marcadores de pico real requieren marcas de tiempo de audio continuas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Les marqueurs de crête vraie nécessitent des horodatages audio continus."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "I marcatori di picco reale richiedono timestamp audio continui."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "トゥルーピークマーカーには連続した音声タイムスタンプが必要です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "트루 피크 마커에는 연속적인 오디오 타임스탬프가 필요합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Os marcadores de pico verdadeiro exigem carimbos de tempo de áudio contínuos."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "真峰值标记要求音频时间戳连续。"
+          }
+        }
+      }
+    },
     "Grouped analysis requires mono tracks with matching sample rates and start times." : {
       "extractionState" : "manual",
       "localizations" : {

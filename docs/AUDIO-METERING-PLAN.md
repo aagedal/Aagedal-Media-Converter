@@ -61,7 +61,7 @@ remain required before considering it as the default meter.
 - [ ] If useful, add running integrated playback-session LUFS, clearly distinguish it from whole-program analysis, and reset it explicitly after seeking, changing source/track or restarting the measurement.
 - [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. The UI supports one track, a custom mono pair or six mono tracks assigned to 5.1 roles. Grouped scans and preview require matching sample rates and decoded start times.
 - [x] Source sample-peak threshold intervals and per-channel imbalance checks, with paused preview navigation and whole-track unweighted RMS levels.
-- [ ] Intersample true-peak threshold markers. Keep dBTP distinct from the new dBFS sample-peak intervals; whole-program maximum true peak remains available in the loudness report.
+- [x] Estimated intersample true-peak threshold markers with continuous 4× oversampling, dBTP navigation and schema-v3 JSON. Source dBFS/RMS remain separate; this is not a certified BS.1770 meter. Whole-program maximum true peak remains available in the loudness report.
 - [ ] Stereo phase/correlation analysis, with mono compatibility checks and a phase display.
 - [x] Export complete source sample-peak/channel-balance reports as versioned JSON, including selected audio track, thresholds, every interval and whole-track per-channel levels. See [report format](audio-peak-report-format.md).
 - [x] Export complete source silence reports as versioned JSON, with selected presentation, thresholds and every file-relative interval. See [report format](audio-silence-report-format.md).
@@ -70,6 +70,36 @@ remain required before considering it as the default meter.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Estimated true-peak markers — 2026-10-17
+
+Peaks and Channel Balance now offers Sample peak / Estimated true peak. Opt-in
+true-peak scans retain original source sample peaks/RMS while adding per-channel
+estimated reconstructed maxima and navigable dBTP threshold windows. Single tracks,
+custom mono pairs and 5.1 share the same presentation mapping. Changed measurement,
+thresholds or roles invalidate results. Schema-v3 JSON retains both complete interval
+sets, method/rates, ordered channels and thresholds. Sample-only schemas stay 1/2.
+
+A complete raw decode checks timing before reframing, with the existing 1 ms
+container-rounding tolerance. A separate continuous four-times-rate interpolation
+pass uses bundled SWR, explicit zero extension at both edges, and trimming back to
+exactly the source sample count/timeline. Subprocess EOF is drained. One-sample
+clips receive context without reporting artificial padding. Reframed timing must
+also be continuous within half a sample, so coarse-clock files may fail conservatively.
+The [report format](audio-peak-report-format.md#version-3-estimated-true-peak-markers)
+details method, edge effects, timing and scope. This is an estimated peak meter,
+not certified BS.1770 conformance; separate EBU R128 behavior is unchanged.
+No dependencies, bundled binaries or licenses changed.
+
+The final full unit suite executes 1,402 tests with zero failures and one intentional
+benchmark skip. All 53 final focused peak/grouped/silence tests and both bilingual UI checks pass.
+The English UI test saves and reads back a real schema-v3 report. Both
+[English](images/audio-true-peaks-en.png) and [Norwegian](images/audio-true-peaks-nb.png)
+captures were visually inspected. Seven localization tests and the 1,898-entry
+catalog audit pass. [Validation details](audio-true-peak-validation-2026-10-17.md)
+record generated fixtures, timing/EOF safeguards and test-runner recovery.
+Release/device and sandbox qualification remain open; translations outside
+English/Norwegian await review.
 
 ### Grouped peak/channel-balance analysis — 2026-10-17
 
