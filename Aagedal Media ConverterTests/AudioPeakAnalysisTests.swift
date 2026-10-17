@@ -76,6 +76,106 @@ final class AudioPeakAnalysisTests: XCTestCase {
         }
     }
 
+    func testGroupedJSONReportPreservesReorderedChannelMappingAndEveryInterval() throws {
+        let presentations: [LoudnessPresentation] = [.stereo(left: 4, right: 1), .surround51([2, 3, 4, 7, 5, 6])]
+        for presentation in presentations {
+            let count = presentation.streamIndices.count
+            let intervals = (0..<1_005).map {
+                AudioPeakInterval(start: Double($0), end: Double($0) + 0.1, channel: ($0 % count) + 1, peakDBFS: -0.5)
+            }
+            var result = AudioPeakAnalysisResult(settings: .init(), intervals: intervals,
+                                                 channels: (1...count).map { .init(channel: $0, peakDBFS: -0.5, rmsDBFS: -20) },
+                                                 duration: 1005, imbalanceDB: 0)
+            result.presentation = presentation
+            let data = try AnalyticsExporter.audioPeakJSON(result: result,
+                                                            sourceFile: URL(fileURLWithPath: "/private/source.wav"), timestamp: Date())
+            let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertEqual(report["schemaVersion"] as? Int, 2)
+            XCTAssertNil(report["audioRelativeTrackIndex"], "A group must not be attributed to one source track")
+            let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+            XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], presentation.streamIndices)
+            XCTAssertEqual(context["channelOrder"] as? [String], count == 2 ? ["FL", "FR"] : ["FL", "FR", "FC", "LFE", "SL", "SR"])
+            XCTAssertEqual(context["channelLayout"] as? String, count == 2 ? "stereo" : "5.1(side)")
+            XCTAssertEqual(context["type"] as? String, count == 2 ? "stereo" : "surround51")
+            let semantics = try XCTUnwrap(report["semantics"] as? [String: Any])
+            XCTAssertEqual(semantics["channelNumbering"] as? String, "one_based_presentation_channel_order")
+            let payload = try XCTUnwrap(report["result"] as? [String: Any])
+            let exported = try XCTUnwrap(payload["intervals"] as? [[String: Any]])
+            XCTAssertEqual(exported.count, intervals.count)
+            for (index, interval) in exported.enumerated() {
+                XCTAssertEqual(interval["channel"] as? Int, intervals[index].channel)
+                XCTAssertEqual(interval["start"] as? Double, intervals[index].start)
+                XCTAssertEqual(interval["end"] as? Double, intervals[index].end)
+                XCTAssertEqual(interval["peakDBFS"] as? Double, intervals[index].peakDBFS)
+            }
+        }
+    }
+
+    func testJSONReportUsesCapturedTrackAndRejectsCallerRelabelingOrMissingPresentation() throws {
+        var result = AudioPeakAnalysisResult(settings: .init(), intervals: [],
+                                             channels: [.init(channel: 1, peakDBFS: -10, rmsDBFS: -20)], duration: 1, imbalanceDB: nil)
+        let source = URL(fileURLWithPath: "/tmp/audio.wav")
+        XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, timestamp: Date()))
+        result.presentation = .track(3)
+        let data = try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, timestamp: Date())
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(report["audioRelativeTrackIndex"] as? Int, 3)
+        let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+        XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], [3])
+        XCTAssertNoThrow(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, trackIndex: 3, timestamp: Date()))
+        XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, trackIndex: 0, timestamp: Date()))
+        result.presentation = .stereo(left: 0, right: 1)
+        XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result, sourceFile: source, trackIndex: 0, timestamp: Date()))
+    }
+
+    func testGroupedJSONReportRejectsInvalidPresentationAndChannelTopology() {
+        let cases: [(LoudnessPresentation, [Int], Int?)] = [
+            (.stereo(left: -1, right: 2), [1, 2], nil),
+            (.stereo(left: 2, right: 2), [1, 2], nil),
+            (.stereo(left: 0, right: 1), [1], nil),
+            (.stereo(left: 0, right: 1), [1, 1], nil),
+            (.stereo(left: 0, right: 1), [0, 1], nil),
+            (.stereo(left: 0, right: 1), [2, 1], nil),
+            (.stereo(left: 0, right: 1), [1, 2], 3),
+            (.surround51([0, 1, 2, 3, 4]), [1, 2, 3, 4, 5, 6], nil),
+            (.surround51([0, 1, 2, 3, 4, 4]), [1, 2, 3, 4, 5, 6], nil),
+            (.surround51([0, 1, 2, 3, 4, -1]), [1, 2, 3, 4, 5, 6], nil),
+            (.surround51([0, 1, 2, 3, 4, 5]), [1, 2, 3, 4, 5], nil),
+            (.track(-1), [1], nil),
+            (.track(0), [1, 3], nil)
+        ]
+        for (presentation, channels, intervalChannel) in cases {
+            var result = AudioPeakAnalysisResult(settings: .init(),
+                                                 intervals: intervalChannel.map { [.init(start: 0, end: 0.1, channel: $0, peakDBFS: 0)] } ?? [],
+                                                 channels: channels.map { .init(channel: $0, peakDBFS: -10, rmsDBFS: -20) },
+                                                 duration: 1, imbalanceDB: nil)
+            result.presentation = presentation
+            XCTAssertThrowsError(try AnalyticsExporter.audioPeakJSON(result: result,
+                                                                     sourceFile: URL(fileURLWithPath: "/tmp/audio.wav"), timestamp: Date()),
+                                 "Invalid topology must fail: \(presentation), channels \(channels)")
+        }
+    }
+
+    func testGroupedJSONReportWritesCapturedPresentationAtomically() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var result = AudioPeakAnalysisResult(settings: .init(), intervals: [],
+                                             channels: [1, 2].map { .init(channel: $0, peakDBFS: -10, rmsDBFS: -20) },
+                                             duration: 1, imbalanceDB: 0)
+        result.presentation = .stereo(left: 4, right: 2)
+        let file = directory.appendingPathComponent("report.json")
+        for _ in 0..<2 {
+            try AnalyticsExporter.exportAudioPeakJSON(result: result, sourceFile: directory.appendingPathComponent("source.wav"),
+                                                       timestamp: Date(), to: file)
+            let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+            let context = try XCTUnwrap(report["presentation"] as? [String: Any])
+            XCTAssertEqual(context["audioRelativeTrackIndices"] as? [Int], [4, 2])
+        }
+        XCTAssertThrowsError(try AnalyticsExporter.exportAudioPeakJSON(result: result, sourceFile: file, timestamp: Date(), to: directory))
+    }
+
     func testChunkedParserMergesChannelsAndWeightsRMSByActualSamples() throws {
         let collector = AudioPeakLogCollector(settings: .init(thresholdDBFS: -10))
         let log = frame(0, pts: 0, samples: 4800, peaks: [0, -20], rms: [0, -20])

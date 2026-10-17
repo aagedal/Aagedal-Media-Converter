@@ -10,20 +10,62 @@ import OSLog
 /// Exports analytics results to JSON or PDF
 enum AnalyticsExporter {
 
-    /// A versioned source report. Channel numbers are one-based decoded order;
-    /// the track index is audio-relative, matching the scanner's 0:a:index map.
-    /// Keep the schema independent of UI language and never export the source path.
+    /// Single-track reports retain version 1; grouped presentations use version 2.
+    /// The explicit context is independent of Swift's enum encoding and UI language.
     private struct AudioPeakReport: Encodable {
-        let schemaVersion = 1
+        let schemaVersion: Int
         let analysis = "source_sample_peaks_and_channel_balance"
         let sourceFileName: String
-        let audioRelativeTrackIndex: Int
+        let audioRelativeTrackIndex: Int?
         let timestamp: Date
-        let semantics = Semantics()
-        let result: AudioPeakAnalysisResult
+        let presentation: PresentationContext?
+        let semantics: Semantics
+        let result: Measurements
+
+        struct Measurements: Encodable {
+            let settings: AudioPeakSettings
+            let intervals: [AudioPeakInterval]
+            let channels: [AudioChannelLevel]
+            let duration: Double
+            let imbalanceDB: Double?
+
+            init(_ result: AudioPeakAnalysisResult) {
+                settings = result.settings
+                intervals = result.intervals
+                channels = result.channels
+                duration = result.duration
+                imbalanceDB = result.imbalanceDB
+            }
+        }
+
+        struct PresentationContext: Encodable {
+            let type: String
+            let audioRelativeTrackIndices: [Int]
+            let channelLayout: String
+            let channelOrder: [String]
+
+            init(_ presentation: LoudnessPresentation) {
+                audioRelativeTrackIndices = presentation.streamIndices
+                switch presentation {
+                case .track:
+                    type = "track"
+                    channelLayout = "source_track_layout"
+                    channelOrder = ["all_source_track_channels_in_decoded_order"]
+                case .stereo:
+                    type = "stereo"
+                    channelLayout = "stereo"
+                    channelOrder = ["FL", "FR"]
+                case .surround51:
+                    type = "surround51"
+                    channelLayout = "5.1(side)"
+                    channelOrder = ["FL", "FR", "FC", "LFE", "SL", "SR"]
+                }
+            }
+        }
 
         struct Semantics: Encodable {
-            let channelNumbering = "one_based_decoded_order"
+            let channelNumbering: String
+            let trackIndexing = "zero_based_audio_relative_matching_0:a:index"
             let timeUnit = "seconds"
             let timeline = "file_relative_including_initial_audio_offset"
             let duration = "end_of_decoded_audio_on_file_timeline"
@@ -32,35 +74,89 @@ enum AnalyticsExporter {
             let windowSamples = 4_800
             let intervalBoundaries = "analysis_windows_merged_per_channel_when_adjacent"
             let thresholdComparison = "greater_than_or_equal"
-            let rmsMeasurement = "unweighted_whole_track_sample_weighted_energy"
+            let rmsMeasurement: String
             let imbalanceUnit = "dB"
             let imbalanceMeasurement = "maximum_minus_minimum_channel_rms"
             let unavailableImbalance = "omitted_for_mono_or_entirely_silent_audio"
             let negativeInfinity = "-Infinity_means_digital_silence"
             let positiveInfinity = "Infinity_means_silent_and_active_channels"
-            let scope = "complete_selected_source_track_independent_of_volume_mute_and_conversion_trims"
+            let scope: String
+
+            init(grouped: Bool) {
+                channelNumbering = grouped ? "one_based_presentation_channel_order" : "one_based_decoded_order"
+                rmsMeasurement = grouped ? "unweighted_whole_presentation_sample_weighted_energy" : "unweighted_whole_track_sample_weighted_energy"
+                scope = grouped ? "complete_selected_source_presentation_independent_of_volume_mute_and_conversion_trims" : "complete_selected_source_track_independent_of_volume_mute_and_conversion_trims"
+            }
         }
     }
 
+    /// Production exports use the presentation captured by the completed analysis.
+    static func audioPeakJSON(result: AudioPeakAnalysisResult, sourceFile: URL, timestamp: Date) throws -> Data {
+        guard let presentation = result.presentation else {
+            throw invalidAudioPeakReport(result)
+        }
+        return try encodeAudioPeakJSON(result: result, sourceFile: sourceFile,
+                                       presentation: presentation, timestamp: timestamp)
+    }
+
+    /// Compatibility for legacy results without captured presentation. A caller may
+    /// never relabel a captured result with a different track or flatten a group.
     static func audioPeakJSON(result: AudioPeakAnalysisResult, sourceFile: URL,
                               trackIndex: Int, timestamp: Date) throws -> Data {
+        if let presentation = result.presentation, presentation != .track(trackIndex) {
+            throw invalidAudioPeakReport(result)
+        }
+        return try encodeAudioPeakJSON(result: result, sourceFile: sourceFile,
+                                       presentation: .track(trackIndex), timestamp: timestamp)
+    }
+
+    private static func invalidAudioPeakReport(_ result: AudioPeakAnalysisResult) -> EncodingError {
+        .invalidValue(result, .init(codingPath: [], debugDescription: "Invalid audio peak report or presentation."))
+    }
+
+    private static func encodeAudioPeakJSON(result: AudioPeakAnalysisResult, sourceFile: URL,
+                                            presentation: LoudnessPresentation, timestamp: Date) throws -> Data {
         try result.settings.validate()
-        guard trackIndex >= 0, timestamp.timeIntervalSince1970.isFinite,
+        let indices = presentation.streamIndices
+        let channelIDs = result.channels.map(\.channel)
+        let expectedChannelIDs = Array(1...max(1, result.channels.count))
+        let grouped: Bool
+        let trackIndex: Int?
+        let validChannelCount: Bool
+        switch presentation {
+        case .track(let index):
+            grouped = false
+            trackIndex = index
+            validChannelCount = !result.channels.isEmpty
+        case .stereo:
+            grouped = true
+            trackIndex = nil
+            validChannelCount = result.channels.count == 2
+        case .surround51:
+            grouped = true
+            trackIndex = nil
+            validChannelCount = indices.count == 6 && result.channels.count == 6
+        }
+        guard !indices.isEmpty, indices.allSatisfy({ $0 >= 0 }), Set(indices).count == indices.count,
+              validChannelCount, channelIDs == expectedChannelIDs,
+              timestamp.timeIntervalSince1970.isFinite,
               result.duration.isFinite, result.duration > 0,
-              !result.channels.isEmpty,
               result.channels.allSatisfy({
                   ($0.peakDBFS.isFinite || $0.peakDBFS == -.infinity) &&
                   ($0.rmsDBFS.isFinite || $0.rmsDBFS == -.infinity)
               }),
               result.intervals.allSatisfy({
+                  channelIDs.contains($0.channel) &&
                   $0.start.isFinite && $0.end.isFinite && $0.peakDBFS.isFinite &&
                   $0.start >= 0 && $0.end > $0.start && $0.end <= result.duration
               }),
               result.imbalanceDB.map({ ($0.isFinite && $0 >= 0) || $0 == .infinity }) ?? true else {
-            throw EncodingError.invalidValue(result, .init(codingPath: [], debugDescription: "Invalid audio peak report."))
+            throw invalidAudioPeakReport(result)
         }
-        let report = AudioPeakReport(sourceFileName: sourceFile.lastPathComponent,
-                                     audioRelativeTrackIndex: trackIndex, timestamp: timestamp, result: result)
+        let report = AudioPeakReport(schemaVersion: grouped ? 2 : 1, sourceFileName: sourceFile.lastPathComponent,
+                                     audioRelativeTrackIndex: trackIndex, timestamp: timestamp,
+                                     presentation: result.presentation.map(AudioPeakReport.PresentationContext.init),
+                                     semantics: .init(grouped: grouped), result: .init(result))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -72,9 +168,14 @@ enum AnalyticsExporter {
     }
 
     static func exportAudioPeakJSON(result: AudioPeakAnalysisResult, sourceFile: URL,
+                                    timestamp: Date, to url: URL) throws {
+        try audioPeakJSON(result: result, sourceFile: sourceFile, timestamp: timestamp).write(to: url, options: .atomic)
+    }
+
+    static func exportAudioPeakJSON(result: AudioPeakAnalysisResult, sourceFile: URL,
                                     trackIndex: Int, timestamp: Date, to url: URL) throws {
-        let data = try audioPeakJSON(result: result, sourceFile: sourceFile, trackIndex: trackIndex, timestamp: timestamp)
-        try data.write(to: url, options: .atomic)
+        try audioPeakJSON(result: result, sourceFile: sourceFile, trackIndex: trackIndex,
+                          timestamp: timestamp).write(to: url, options: .atomic)
     }
 
     /// Complete source silence report, independent of UI presentation.

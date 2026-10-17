@@ -1,6 +1,33 @@
 # Aagedal Media Converter Improvement Plan
 
-Last reviewed: 2026-10-16
+Last reviewed: 2026-10-17
+
+## Grouped peak/channel-balance continuation — 2026-10-17
+
+Owner: Codex. Peaks and Channel Balance now supports custom mono pairs and
+5.1 multi-mono roles, grouped MPV audition and complete schema-v2 JSON reports.
+Single-track exports retain schema v1. Reports capture source indices and role
+order; editing roles, presentations or thresholds clears prior measurements.
+Full streamed validation requires mono tracks with matching rates, exact starts
+and decoded sample counts, and rejects timestamp discontinuities beyond a 1 ms
+rounding tolerance. Grouped audition waits for validation, and scanning repeats it
+before combining channels. Combined output must preserve every decoded sample and its EOF.
+Repeated time-varying inputs exposed intermittent EOF loss in FFmpeg's `join`;
+explicit mono concatenation and role mapping fix it in both peak and existing
+grouped silence scans. The [audio roadmap](docs/AUDIO-METERING-PLAN.md) and
+[report format](docs/audio-peak-report-format.md) record timing, latency and
+measurement semantics. Separate EBU R128 loudness behavior is unchanged.
+No dependencies, bundled binaries or licenses changed.
+
+Validation: the ad-hoc-signed Debug app builds, all 46 focused peak/silence scanner/report
+checks pass, and the final full unit suite executes 1,387 tests with zero failures and
+one intentional opt-in benchmark skip. Both final grouped English/Norwegian UI checks pass,
+including stereo/5.1 JSON save/readback; the existing single-track UI flow also
+passes. Six captures were visually inspected, with readable controls and scrolling
+intervals. A transient paused MPEG-4 artifact after regrouping clears on interval
+navigation. Seven localization script tests and the 1,890-entry catalog audit pass.
+Release/device and sandbox qualification remain open; translations outside
+English/Norwegian await review.
 
 ## Grouped silence analysis continuation — 2026-10-16
 

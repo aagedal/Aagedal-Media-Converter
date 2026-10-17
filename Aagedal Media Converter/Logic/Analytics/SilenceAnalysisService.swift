@@ -73,7 +73,7 @@ actor SilenceAnalysisService {
         self.ffmpegPathProvider = ffmpegPathProvider
     }
 
-    /// join/amix combine sample positions, not independent stream timestamps.
+    /// Channel merging combines sample positions, not independent stream timestamps.
     /// Reject unequal starts instead of reporting or auditioning shifted channels.
     func validateGroupedTracks(file: URL, presentation: LoudnessPresentation) async throws {
         try Task.checkCancellation()
@@ -172,23 +172,25 @@ actor SilenceAnalysisService {
             inputs = "[0:a:\(indices[0])]"
             preparation = ""
         } else {
-            // Equal-size frames prevent join dropping a shorter final frame when
-            // mono codecs choose different packet sizes. Never pad source samples.
+            // Force matching mono labels so amerge concatenates input order.
+            // Explicit channelmap assigns roles without resampling or gain changes.
+            // Equal, unpadded frames retain tails across different codec block sizes;
+            // join can intermittently drop its final full window at EOF.
             preparation = indices.enumerated().map { offset, index in
-                "[0:a:\(index)]asetnsamples=n=4800:p=0[group_input_\(offset)];"
+                "[0:a:\(index)]channelmap=map=0-FC:channel_layout=mono,asetnsamples=n=4800:p=0[group_input_\(offset)];"
             }.joined()
             inputs = indices.indices.map { "[group_input_\($0)]" }.joined()
         }
-        let join: String
+        let merge: String
         switch presentation {
-        case .track: join = ""
-        case .stereo: join = "join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR,"
+        case .track: merge = ""
+        case .stereo: merge = "amerge=inputs=2,channelmap=map=0-FL|1-FR:channel_layout=stereo,"
         case .surround51:
-            join = "join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,"
+            merge = "amerge=inputs=6,channelmap=map=0-FL|1-FR|2-FC|3-LFE|4-SL|5-SR:channel_layout=5.1(side),"
         }
         // FFmpeg normalizes the container start timestamp by default. Preserve
         // stream offsets within that file timeline (including delayed audio).
-        return "\(preparation)\(inputs)\(join)asetpts=PTS,"
+        return "\(preparation)\(inputs)\(merge)asetpts=PTS,"
             + "silencedetect=noise=\(settings.thresholdDBFS)dB:duration=\(settings.minimumDuration):mono=0[silence]"
     }
 }

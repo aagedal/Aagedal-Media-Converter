@@ -66,10 +66,75 @@ remain required before considering it as the default meter.
 - [x] Export complete source sample-peak/channel-balance reports as versioned JSON, including selected audio track, thresholds, every interval and whole-track per-channel levels. See [report format](audio-peak-report-format.md).
 - [x] Export complete source silence reports as versioned JSON, with selected presentation, thresholds and every file-relative interval. See [report format](audio-silence-report-format.md).
 - [x] Expose custom mono-pair and 5.1 selection, grouped audition and JSON export in Detect Silence. Reject duplicate/non-mono inputs and unequal decoded start times.
-- [ ] Extend grouped selection/audition to peak/channel-balance reports; qualify discontinuities, unequal track durations and deliberately offset multi-mono sources before extending grouped timing support. Separate loudness reports retain EBU R128 channel weighting and LFE exclusion.
+- [x] Extend grouped selection/audition to peak/channel-balance reports. Full decoded-timeline validation rejects unequal decoded lengths, sample rates, starts and discontinuities beyond a 1 ms rounding tolerance before grouped audition or scanning. Reordered roles, common delayed starts and one-sample final FLAC frames retain source gains/timing. Separate loudness reports retain EBU R128 channel weighting and LFE exclusion.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Grouped peak/channel-balance analysis — 2026-10-17
+
+Peaks and Channel Balance now offers Audio track, Mono pair and 5.1 multi-mono
+with distinct source-track assignments. The completed scan captures role order;
+channel labels, grouped MPV audition and schema-v2 JSON all retain that order.
+Single-track JSON remains version 1. Presentation/role changes invalidate results
+and exports. The shared audition graph preserves source gains before device
+conversion and returns to ordinary selection when a single track is selected.
+
+A complete streamed decode validates every assigned mono track before grouped
+audition is enabled. Scans independently repeat validation before joining. Matching
+sample rates, exact initial sample timestamps and total decoded sample counts are
+required. Per-frame timing allows up to 1 ms of rounding (at least one sample),
+which accommodates Matroska clocks but can hide sub-millisecond discontinuities.
+Unequal lengths, deliberately different starts and larger midstream gaps fail
+explicitly; missing samples are never synthesized. Combined output must preserve
+the validated sample count and EOF, including an unpadded one-sample final frame.
+Full preparation takes longer on long files; role changes and dismissal cancel it.
+Grouped analysis normalizes each mono channel label, concatenates channels with
+`amerge`, then explicitly maps channel roles. Repeated time-varying six-track
+fixtures exposed an intermittent `join` EOF loss: scans could omit one complete
+4,800-sample window. The peak scanner's expected-sample guard rejected these
+reports. The same filter issue shortened grouped silence reports at EOF; both
+scanners now use the concatenation graph, with repeated regression coverage.
+A shell comparison preserved all samples in 100/100 replacement-graph scans.
+Separate EBU R128 loudness measurements are unchanged. No dependencies, bundled
+binaries or licenses changed.
+
+The ad-hoc-signed Debug app builds. All 46 focused peak/silence scanner/report tests pass,
+including generated 44.1/48/96 kHz stereo, reordered six-channel levels, common
+delayed starts, unequal lengths/offsets/rates, midstream gaps, cancellation drain,
+decoder failures and a 96,001-sample six-track FLAC fixture with differing codec
+block sizes and a single nonzero EOF sample. The complete unit suite executes
+1,387 tests with zero failures and one intentional opt-in benchmark skip in
+`/private/tmp/amc-grouped-peaks-final-full.xcresult`. The focused result is
+`/private/tmp/amc-grouped-peaks-merge-confirmed.xcresult`.
+
+Both final English/Norwegian grouped UI checks pass in
+`/private/tmp/amc-grouped-peaks-ui-verified.xcresult`, covering stereo and 5.1
+selection, duplicate rejection, paused interval navigation, role/report invalidation,
+return to a single track, and both grouped JSON exports with actual save/readback.
+The existing single-track navigation/settings/save/cancel flow passed in
+`/private/tmp/amc-grouped-peaks-ui.xcresult`. Six captures were visually inspected:
+[stereo English](images/audio-grouped-peaks-stereo-en.png),
+[stereo Norwegian](images/audio-grouped-peaks-stereo-nb.png),
+[5.1 levels English](images/audio-grouped-peaks-surround-levels-en.png),
+[5.1 levels Norwegian](images/audio-grouped-peaks-surround-levels-nb.png),
+[5.1 navigation English](images/audio-grouped-peaks-surround-navigation-en.png) and
+[5.1 navigation Norwegian](images/audio-grouped-peaks-surround-navigation-nb.png).
+Controls and chart labels fit; the channel report scrolls to reach interval buttons.
+One paused Norwegian capture after audio regrouping shows an MPEG-4 video artifact;
+the subsequent interval seek redraws correctly. These checks qualify source/audio
+analysis and navigation, not frame-accurate video reconfiguration.
+
+Initial UI attempts exposed lazy interval/summary rows outside the viewport;
+tests now scroll explicitly and wait for export readiness after scans. The UI
+runs also exposed the intermittent EOF loss that motivated the concatenation fix.
+The repeated tone test originally assumed ideal sine-wave amplitude; it now checks
+actual discrete source-track peak/RMS values independently. Initial Xcode runs
+needed permitted package-cache access, and the new test file needed explicit
+registration in the project. Seven localization script tests, the 1,890-entry
+catalog audit and whitespace check pass. Translations outside English/Norwegian
+await review. Release/device and sandbox enforcement remain unverified; the
+project currently disables App Sandbox in both configurations.
 
 ### Grouped silence selection and audition — 2026-10-16
 
