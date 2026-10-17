@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EA25C0011234567890000003 /* YTDLPCookieSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */; };
+		EA25C0011234567890000001 /* YTDLPCookieSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA25C0011234567890000002 /* YTDLPCookieSource.swift */; };
 		F14AA070D0CA4AB1A0B157B1 /* AudioMeterBenchmarkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */; };
 		3068888A137E42F3A0BD3EDC /* KeyboardShortcutSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */; };
 		3E3AFCB991AB43B29AD7B9CE /* KeyboardShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */; };
@@ -393,6 +395,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YTDLPCookieSourceTests.swift; sourceTree = "<group>"; };
+		EA25C0011234567890000002 /* YTDLPCookieSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = YTDLPCookieSource.swift; path = YTDLP/YTDLPCookieSource.swift; sourceTree = "<group>"; };
 		F14AA070D0CA4AB1A0B157B2 /* AudioMeterBenchmarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMeterBenchmarkTests.swift; sourceTree = "<group>"; };
 		64183E70C2B54C9D87A2C3AA /* KeyboardShortcutSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettingsTests.swift; sourceTree = "<group>"; };
 		E6DECDFA138A4F6AA59674EA /* KeyboardShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutSettings.swift; sourceTree = "<group>"; };
@@ -790,6 +794,7 @@
 				SCHEDDL01SERV00000002 /* ScheduledDownloadService.swift */,
 				1A1EE023174847EFC6A551B7 /* YTDLPProgressParser.swift */,
 				66B862E87364609527CEEC84 /* YTDLPService.swift */,
+				EA25C0011234567890000002 /* YTDLPCookieSource.swift */,
 				FE5D4D8671AB2EB5948179AE /* YTDLPUpdateService.swift */,
 			);
 			name = YTDLP;
@@ -1162,6 +1167,7 @@
 				D81BE4D4410A4875A8EF38EE /* IVFConcatenatorTests.swift */,
 				DA1CFA07927E49B1A1883FBD /* DownloadHistoryServiceTests.swift */,
 				993C771FF0CA4AD3BD29060C /* YTDLPWarmUpDrainTests.swift */,
+				EA25C0011234567890000004 /* YTDLPCookieSourceTests.swift */,
 				CDC94AC62B82453580FBD4E4 /* YTDLPUpdateOwnershipTests.swift */,
 				758CDC06BC9341C186C773BD /* DenoExtractionDrainTests.swift */,
 				7748A92962A74E189CB18CD7 /* AV2AACParserTests.swift */,
@@ -1894,6 +1900,7 @@
 				SCHEDDL01SERV00000001 /* ScheduledDownloadService.swift in Sources */,
 				8567742F36A93E24233F8006 /* YTDLPProgressParser.swift in Sources */,
 				FE7150EDC2D2BFA59C20A1F1 /* YTDLPService.swift in Sources */,
+				EA25C0011234567890000001 /* YTDLPCookieSource.swift in Sources */,
 				CCF14EFA815D8DCCB62749E1 /* YTDLPUpdateService.swift in Sources */,
 				E69050ED114BBF6B493BE257 /* URLInputOverlay.swift in Sources */,
 				LQGLSTB00000001 /* LiquidGlassToolbarConfigurator.swift in Sources */,
@@ -2007,6 +2014,7 @@
 				81F0864DD57840B9971CD561 /* IVFConcatenatorTests.swift in Sources */,
 				C954573AF1D84E73A9596708 /* DownloadHistoryServiceTests.swift in Sources */,
 				7A33AB1A44DF44149B983E60 /* YTDLPWarmUpDrainTests.swift in Sources */,
+				EA25C0011234567890000003 /* YTDLPCookieSourceTests.swift in Sources */,
 				57105645EB2B47EE9B17F716 /* YTDLPUpdateOwnershipTests.swift in Sources */,
 				E1ACF6BCCBB0485C81D569A9 /* DenoExtractionDrainTests.swift in Sources */,
 				EC4CE91691E24FB19B6E1838 /* AV2AACParserTests.swift in Sources */,

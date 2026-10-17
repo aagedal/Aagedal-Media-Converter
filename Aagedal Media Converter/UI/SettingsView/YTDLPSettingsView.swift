@@ -16,6 +16,8 @@ struct YTDLPSettingsView: View {
         .init(label: "Safari", value: "safari"),
         .init(label: "Chrome", value: "chrome"),
         .init(label: "Chromium", value: "chromium"),
+        .init(label: "Helium", value: "helium"),
+        .init(label: "Helium Neo", value: "helium-neo"),
         .init(label: "Edge", value: "edge"),
         .init(label: "Brave", value: "brave"),
         .init(label: "Firefox", value: "firefox"),
@@ -51,6 +53,8 @@ struct YTDLPSettingsView: View {
     @AppStorage(AppConstants.autoEncodeAfterDownloadKey) private var autoEncodeAfterDownload = false
     @AppStorage(AppConstants.autoUploadAfterDownloadKey) private var autoUploadAfterDownload = false
     @AppStorage(AppConstants.ytdlpCookiesBrowserKey) private var cookiesBrowser = ""
+    @AppStorage(AppConstants.ytdlpHeliumProfileKey) private var heliumProfile = "Default"
+    @AppStorage(AppConstants.ytdlpHeliumNeoProfileKey) private var heliumNeoProfile = "Default"
     @AppStorage(AppConstants.downloadFolderKey) private var downloadFolder = AppConstants.defaultDownloadDirectory.path
     @AppStorage(AppConstants.ytdlpFilenameRestrictionModeKey) private var filenameRestrictionRaw = AppConstants.defaultYTDLPFilenameRestrictionMode
     @AppStorage(AppConstants.allowPrivateNetworkDownloadsKey) private var allowPrivateNetworkDownloads = false
@@ -654,6 +658,19 @@ struct YTDLPSettingsView: View {
                     }
                     .labelsHidden()
                     .frame(width: 150)
+                }
+
+                if let source = YTDLPChromiumBrowser(rawValue: cookiesBrowser) {
+                    TextField("Profile directory", text: source == .helium ? $heliumProfile : $heliumNeoProfile)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Use Default or Profile 1, Profile 2, etc. Find the directory at helium://version under Profile Path. macOS may ask to access \(source.keychainService) in Keychain.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    if source == .heliumNeo {
+                        Text("Cookies from Neo’s WebKit tabs are separate. Sign in using the Chromium renderer to use those accounts for downloads.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 if !cookiesBrowser.isEmpty {
