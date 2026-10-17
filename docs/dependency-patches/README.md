@@ -135,3 +135,13 @@ attribution now refer to that revision. See
 app build/test results, and remaining release gates. The original preparation
 record remains marked `release_ready: false` because it describes the earlier
 local stage, not a final app release.
+
+## Experimental meter timestamp history
+
+The opt-in `mpv-0.41.0-meter-history.patch` and `amc_meter_history.h` target the
+current pinned fork, separately from the historical CoreAudio rebuild recipe
+above. They are not installed into the app. See the [prototype instructions,
+transport schema, verification and remaining acceptance work](../audio-playback-timestamp-prototype-2026-10-17.md).
+Build candidates using `scripts/prototype-mpv-meter-history.py` with matching
+source, generated compile commands and static frameworks. The script stages
+new outputs and leaves existing build inputs untouched.

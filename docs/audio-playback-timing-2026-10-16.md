@@ -10,6 +10,10 @@ This is a source/API investigation and reinspection of existing benchmark
 evidence. No new playback benchmark, build, physical-device synchronization,
 Release performance or thermal validation was performed.
 
+The [2026-10-17 isolated prototype](audio-playback-timestamp-prototype-2026-10-17.md)
+now implements dependency timestamp/history capture and diagnostic state polling.
+It does not change the production app or establish playback alignment.
+
 ## Evidence in the app
 
 - `Logic/MPV/MPVPlayer.swift`, `pollPlaybackMeterLocked()`, inserts
