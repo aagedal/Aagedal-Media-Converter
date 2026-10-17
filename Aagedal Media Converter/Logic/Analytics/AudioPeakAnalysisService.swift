@@ -94,14 +94,15 @@ actor AudioPeakAnalysisService {
     }
 
     /// Validate the complete presentation before grouped audition or analysis.
-    func validateGroupedTracks(file: URL, presentation: LoudnessPresentation) async throws {
+    @discardableResult
+    func validateGroupedTracks(file: URL, presentation: LoudnessPresentation) async throws -> GroupedPeakTimingCollector.Summary? {
         try Task.checkCancellation()
         try Self.validateSelection(presentation)
-        if case .track = presentation { return }
+        if case .track = presentation { return nil }
         guard let path = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
-        _ = try await validateCompleteGroupedTiming(file: file, indices: presentation.streamIndices, path: path)
+        return try await validateCompleteGroupedTiming(file: file, indices: presentation.streamIndices, path: path)
     }
 
     private static func validateSelection(_ presentation: LoudnessPresentation) throws {
@@ -434,7 +435,7 @@ final class AudioPeakLogCollector: @unchecked Sendable {
 /// quantization, but never a changed sample rate, sample total, or start time.
 /// Sub-millisecond discontinuities cannot be distinguished from that rounding.
 final class GroupedPeakTimingCollector: @unchecked Sendable {
-    struct Summary {
+    struct Summary: Sendable {
         let start: Int64
         let samples: Int64
         let rate: Int

@@ -2,6 +2,32 @@
 
 Last reviewed: 2026-10-17
 
+## Stereo phase and mono compatibility continuation — 2026-10-17
+
+Owner: Codex. Audio Analysis now offers source stereo correlation and mono
+fold-down checks for stereo tracks and custom mono pairs. The panel includes
+unweighted mid/side RMS, a bounded whole-source density display, correlation
+history, paused window navigation and complete schema-v1 JSON. Silence and exact
+mono cancellation have explicit null/infinity semantics. Raw source timing is
+checked before reframing; grouped output must retain every preflight sample.
+Presentation/role changes invalidate prior reports. Separate EBU R128 analysis
+is unchanged. The [audio roadmap](docs/AUDIO-METERING-PLAN.md),
+[report format](docs/audio-phase-report-format.md) and
+[validation record](docs/audio-phase-validation-2026-10-17.md) document method,
+timing/phase limitations and verification. No dependencies, bundled binaries or
+licenses changed.
+
+Validation: the ad-hoc-signed Debug app and test targets build. All 23 focused
+phase/grouped-peak regressions and both final English/Norwegian UI checks pass,
+including native JSON saving/readback. Four captures were visually inspected.
+All seven localization tests and the 1,917-entry catalog audit pass. The final
+full unit suite executes 1,415 tests with zero failures and one intentional
+benchmark skip. Release/device and sandbox qualification
+remain open; translations outside English/Norwegian await review. An initial
+paused MPEG-4 artifact after regrouping clears with window navigation; final
+grouped captures show correct video. Source analysis is independent of video
+reconfiguration.
+
 ## Estimated true-peak marker continuation — 2026-10-17
 
 Owner: Codex. Peaks and Channel Balance now offers opt-in estimated true-peak

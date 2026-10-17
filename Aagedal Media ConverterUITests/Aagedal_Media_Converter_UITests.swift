@@ -1959,6 +1959,171 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testStereoPhaseNavigationExportAndSettingsInvalidation() throws {
+        try checkStereoPhase(language: "en", locale: "en_US")
+    }
+
+    @MainActor
+    func testStereoPhaseNorwegianControlsAndReport() throws {
+        try checkStereoPhase(language: "nb", locale: "nb_NO")
+    }
+
+    @MainActor
+    private func checkStereoPhase(language: String, locale: String) throws {
+        let norwegian = language == "nb"
+        launchApp(generatedFixture: true, language: language, locale: locale,
+                  additionalArguments: ["-AMC_UI_TEST_PHASE", "YES"], previewContainer: "mkv")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons[norwegian ? "Lyd" : "Audio"].click()
+        let open = element("analysis.audio.phase")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let run = element("analysis.phase.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertEqual(run.label, norwegian ? "Analyser lyd" : "Scan Audio")
+        let export = element("analysis.phase.export")
+        XCTAssertEqual(export.label, norwegian ? "Eksporter JSON" : "Export JSON")
+        XCTAssertFalse(export.isEnabled, "Export requires a completed source scan")
+        XCTAssertTrue(element("analysis.phase.track").exists)
+        XCTAssertTrue(waitForEnabled(true, of: run, timeout: 20))
+        run.click()
+        let summary = element("analysis.phase.summary")
+        XCTAssertTrue(summary.waitForExistence(timeout: 30))
+        XCTAssertTrue(waitForEnabled(true, of: export, timeout: 5))
+        XCTAssertTrue(element("analysis.phase.chart").exists)
+        XCTAssertTrue(element("analysis.phase.correlation").exists)
+        XCTAssertTrue(element("analysis.phase.mono").exists)
+        let start = element("analysis.phase.start.0")
+        XCTAssertTrue(waitForEnabled(true, of: start, timeout: 20))
+        start.click()
+        let time = element("analysis.phase.time")
+        XCTAssertTrue(waitForPhaseTime(0, of: time))
+        element("analysis.phase.end.0").click()
+        XCTAssertTrue(waitForPhaseTime(0.1, of: time))
+        // A paused result seek must remain at its boundary instead of resuming playback.
+        let moved = NSPredicate { _, _ in
+            let text = ((time.value as? String) ?? time.label).replacingOccurrences(of: ",", with: ".")
+            guard let actual = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(actual - 0.1) > 0.02
+        }
+        let staysPaused = XCTNSPredicateExpectation(predicate: moved, object: time)
+        staysPaused.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [staysPaused], timeout: 0.5), .completed)
+        XCTAssertEqual(element("analysis.phase.play").label, norwegian ? "Spill av" : "Play")
+        XCTAssertFalse(element("analysis.phase.preview.error").exists)
+        attachWindowScreenshot(named: "Stereo phase and mono compatibility \(language)")
+        if !norwegian {
+            export.click()
+            XCTAssertTrue(app.textFields["saveAsNameTextField"].waitForExistence(timeout: 5))
+            app.typeKey(.escape, modifierFlags: [])
+            XCTAssertTrue(export.isEnabled, "Cancelling a save must preserve the source report")
+            XCTAssertTrue(summary.exists)
+            try checkStereoPhaseExport()
+        }
+
+        let kind = element("analysis.phase.kind")
+        kind.click()
+        app.menuItems[norwegian ? "Monopar" : "Mono pair"].click()
+        XCTAssertFalse(summary.exists, "Changing presentation must invalidate the completed scan")
+        XCTAssertFalse(export.isEnabled)
+        let left = element("analysis.phase.channel.0")
+        let right = element("analysis.phase.channel.1")
+        XCTAssertTrue(left.exists)
+        XCTAssertTrue(right.exists)
+        let leftTitle = try XCTUnwrap(left.value as? String)
+        let rightTitle = try XCTUnwrap(right.value as? String)
+        right.click()
+        app.menuItems[leftTitle].click()
+        XCTAssertFalse(run.isEnabled, "Duplicate left/right assignments must block analysis")
+        XCTAssertFalse(export.isEnabled)
+        right.click()
+        app.menuItems[rightTitle].click()
+        XCTAssertTrue(waitForEnabled(true, of: run, timeout: 20))
+        run.click()
+        XCTAssertTrue(summary.waitForExistence(timeout: 30))
+        XCTAssertTrue(waitForEnabled(true, of: export, timeout: 5))
+        let groupedStart = element("analysis.phase.start.0")
+        XCTAssertTrue(waitForEnabled(true, of: groupedStart, timeout: 20))
+        groupedStart.click()
+        XCTAssertTrue(waitForPhaseTime(0, of: time))
+        XCTAssertEqual(element("analysis.phase.play").label, norwegian ? "Spill av" : "Play")
+        attachWindowScreenshot(named: "Mono pair phase report \(language)")
+        right.click()
+        app.menuItems[leftTitle].click()
+        XCTAssertFalse(summary.exists, "Changing a channel role must discard the completed report")
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertFalse(run.isEnabled)
+        kind.click()
+        app.menuItems[norwegian ? "Lydspor" : "Audio track"].click()
+        XCTAssertTrue(element("analysis.phase.track").exists)
+        XCTAssertFalse(export.isEnabled)
+        element("analysis.phase.close").click()
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func checkStereoPhaseExport() throws {
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-stereo-phase-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        element("analysis.phase.export").click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(report["analysis"] as? String, "source_stereo_phase_analysis")
+        let result = try XCTUnwrap(report["result"] as? [String: Any])
+        XCTAssertEqual(result["sampleRate"] as? Int, 48_000)
+        XCTAssertEqual(result["windowSourceSamples"] as? Int, 4_800)
+        let totals = try XCTUnwrap(result["totals"] as? [String: Any])
+        XCTAssertTrue(try XCTUnwrap(totals["correlation"] as? Double).isFinite)
+        XCTAssertTrue(try XCTUnwrap(totals["monoFoldDownDeltaDB"] as? Double).isFinite)
+        let windows = try XCTUnwrap(result["windows"] as? [[String: Any]])
+        XCTAssertGreaterThan(windows.count, 12)
+        for window in windows {
+            let measurement = try XCTUnwrap(window["measurement"] as? [String: Any])
+            XCTAssertTrue(try XCTUnwrap(measurement["correlation"] as? Double).isFinite)
+            if let delta = measurement["monoFoldDownDeltaDB"] as? Double {
+                XCTAssertTrue(delta.isFinite, "Non-finite measurements must use the report's explicit string encoding")
+            }
+        }
+        let identical = try XCTUnwrap(windows[2]["measurement"] as? [String: Any])
+        XCTAssertEqual(try XCTUnwrap(identical["correlation"] as? Double), 1, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(identical["monoFoldDownDeltaDB"] as? Double), 0, accuracy: 0.001)
+        let inverted = try XCTUnwrap(windows[12]["measurement"] as? [String: Any])
+        XCTAssertEqual(try XCTUnwrap(inverted["correlation"] as? Double), -1, accuracy: 0.001)
+        if let delta = inverted["monoFoldDownDeltaDB"] as? Double {
+            XCTAssertLessThan(delta, -60, "Opposite polarity should show severe mono cancellation")
+        } else {
+            XCTAssertEqual(inverted["monoFoldDownDeltaDB"] as? String, "-Infinity")
+        }
+    }
+
+    @MainActor
+    private func waitForPhaseTime(_ seconds: Double, of time: XCUIElement) -> Bool {
+        let predicate = NSPredicate { _, _ in
+            let text = ((time.value as? String) ?? time.label).replacingOccurrences(of: ",", with: ".")
+            guard let actual = Double(text.replacingOccurrences(of: " s", with: "")) else { return false }
+            return abs(actual - seconds) < 0.02
+        }
+        return XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: time)], timeout: 5) == .completed
+    }
+
+    @MainActor
     func testGroupedSilenceSelectionPreviewAndExport() throws {
         try checkGroupedSilence(language: "en", locale: "en_US")
     }

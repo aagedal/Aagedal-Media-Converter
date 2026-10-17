@@ -62,7 +62,7 @@ remain required before considering it as the default meter.
 - [x] Silence detection with navigable timeline markers and configurable thresholds/durations. Audio Analysis → Detect Silence scans a complete selected track, includes every channel, and retains file-relative timestamps for delayed audio. Threshold choices span −30 to −80 dBFS; minimum durations span 0.1–5 seconds. Intervals offer paused start/end navigation and a clickable timeline. The UI supports one track, a custom mono pair or six mono tracks assigned to 5.1 roles. Grouped scans and preview require matching sample rates and decoded start times.
 - [x] Source sample-peak threshold intervals and per-channel imbalance checks, with paused preview navigation and whole-track unweighted RMS levels.
 - [x] Estimated intersample true-peak threshold markers with continuous 4× oversampling, dBTP navigation and schema-v3 JSON. Source dBFS/RMS remain separate; this is not a certified BS.1770 meter. Whole-program maximum true peak remains available in the loudness report.
-- [ ] Stereo phase/correlation analysis, with mono compatibility checks and a phase display.
+- [x] Stereo phase/correlation analysis for stereo tracks and custom mono pairs, with source mono fold-down checks, a bounded whole-source mid/side density display, correlation history, paused window navigation and complete schema-v1 JSON. See [measurement/report semantics](audio-phase-report-format.md).
 - [x] Export complete source sample-peak/channel-balance reports as versioned JSON, including selected audio track, thresholds, every interval and whole-track per-channel levels. See [report format](audio-peak-report-format.md).
 - [x] Export complete source silence reports as versioned JSON, with selected presentation, thresholds and every file-relative interval. See [report format](audio-silence-report-format.md).
 - [x] Expose custom mono-pair and 5.1 selection, grouped audition and JSON export in Detect Silence. Reject duplicate/non-mono inputs and unequal decoded start times.
@@ -70,6 +70,29 @@ remain required before considering it as the default meter.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
 ## Validation
+
+### Stereo phase and mono compatibility — 2026-10-17
+
+Audio Analysis → Stereo Phase supports stereo tracks and distinct mono pairs.
+The full source decode accumulates unweighted energy/cross-product statistics in
+4,800-native-sample windows, retaining unpadded EOF and initial audio offsets.
+The panel shows normalized correlation, mono fold-down delta, mid/side RMS,
+a whole-source 33 × 33 mid/side density display and paused window navigation.
+The density grid has fixed full-scale axes and explicit edge-clamping counts;
+no gain normalization or playback timing is implied. Reports retain every window
+and explicit null/cancellation semantics. Changing presentations/roles invalidates
+measurements and export. The [schema and method](audio-phase-report-format.md)
+record mono reference energy, whole-source aggregation, timeline tolerances,
+window limits and the distinction from EBU R128/frequency-dependent phase.
+No dependencies, bundled binaries or licenses changed.
+
+The final rebuilt full unit suite executes 1,415 tests with zero failures and
+one intentional opt-in benchmark skip. All 23 focused phase/grouped-peak tests
+and both English/Norwegian UI checks pass; four captures were visually inspected.
+Seven localization tests and the 1,917-entry catalog audit pass. See
+[the phase validation record](audio-phase-validation-2026-10-17.md).
+Release/device and sandbox qualification remain open; translations outside
+English/Norwegian await review.
 
 ### Estimated true-peak markers — 2026-10-17
 

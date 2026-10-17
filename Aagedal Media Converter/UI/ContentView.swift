@@ -2019,6 +2019,10 @@ struct ContentView: View {
         if UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PEAKS") {
             fixtureAudio = "aevalsrc=if(between(t\\,1\\,2)\\,0.8\\,0.01)*sin(2*PI*440*t)|if(between(t\\,1\\,2)\\,0.08\\,0.001)*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
         }
+        let stereoPhase = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PHASE")
+        if stereoPhase {
+            fixtureAudio = "aevalsrc=0.25*sin(2*PI*440*t)|if(lt(t\\,1)\\,1\\,-1)*0.25*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
+        }
         let groupedSilence = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_SILENCE")
         let groupedPeaks = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_PEAKS")
         if groupedPeaks {
@@ -2026,7 +2030,13 @@ struct ContentView: View {
         }
         var extraAudioInputs: [String] = []
         var extraAudioMaps: [String] = []
-        if groupedPeaks {
+        if stereoPhase {
+            for index in 0..<2 {
+                let signal = index == 0 ? "0.25*sin(2*PI*440*t)" : "if(lt(t\\,1)\\,1\\,-1)*0.25*sin(2*PI*440*t)"
+                extraAudioInputs += ["-f", "lavfi", "-i", "aevalsrc=\(signal):s=48000:d=\(fixtureDuration)"]
+                extraAudioMaps += ["-map", "\(index + 2):a:0"]
+            }
+        } else if groupedPeaks {
             let amplitudes = [0.08, 0.04, 0.02, 0.01, 0.005]
             for (offset, amplitude) in amplitudes.enumerated() {
                 let index = offset + 1
@@ -2053,7 +2063,7 @@ struct ContentView: View {
                 "-map", "0:v:0", "-map", "1:a:0",
             ] + extraAudioMaps + [
                 "-c:v", "mpeg4", "-q:v", "5", "-g", "12", "-pix_fmt", "yuv420p",
-                "-c:a", (groupedSilence || groupedPeaks) ? "flac" : "aac", "-shortest",
+                "-c:a", (groupedSilence || groupedPeaks || stereoPhase) ? "flac" : "aac", "-shortest",
             ] + metadataArguments + [fixtureURL.path],
             timeout: .seconds(30),
             standardOutputCaptureLimit: 0,

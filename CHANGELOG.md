@@ -1,5 +1,7 @@
 # v.4.5.6
 
+- Added source stereo phase/correlation analysis, mono fold-down checks, a mid/side phase display, paused window navigation and complete JSON export for stereo tracks and mono pairs.
+
 - Added estimated true-peak threshold markers (4× oversampled dBTP) to Peaks and Channel Balance, with paused navigation and complete JSON export for single tracks, mono pairs and 5.1. Source sample peaks and RMS remain separately available.
 
 - Added custom mono-pair and 5.1 multi-mono selections to silence analysis, with grouped preview routing and complete JSON reports. Duplicate channels and unequal track start times are rejected.

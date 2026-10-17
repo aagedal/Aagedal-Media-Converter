@@ -10,6 +10,109 @@ import OSLog
 /// Exports analytics results to JSON or PDF
 enum AnalyticsExporter {
 
+    private struct AudioPhaseReport: Encodable {
+        let schemaVersion = 1
+        let analysis = "source_stereo_phase_analysis"
+        let sourceFileName: String
+        let timestamp: Date
+        let presentation: Presentation
+        let semantics = Semantics()
+        let result: AudioPhaseAnalysisResult
+
+        struct Presentation: Encodable {
+            let type: String
+            let audioRelativeTrackIndices: [Int]
+            let channelOrder = ["L", "R"]
+        }
+        struct Semantics: Encodable {
+            let scope = "complete_source_presentation_independent_of_volume_mute_and_conversion_trims"
+            let timeUnit = "seconds"
+            let timeline = "file_relative_including_initial_audio_offset"
+            let duration = "end_of_decoded_audio_on_file_timeline"
+            let trackIndexing = "zero_based_audio_relative_matching_0:a:index"
+            let correlation = "uncentered_sum_LR_divided_by_sqrt_sum_L2_sum_R2_no_DC_removal"
+            let unavailableCorrelation = "null_when_either_channel_has_zero_energy"
+            let monoFoldDown = "M=(L+R)/2"
+            let monoFoldDownDeltaDB = "10_log10_sum_M2_divided_by_mean_sum_L2_sum_R2"
+            let unavailableMonoFoldDown = "null_when_both_channels_are_silent"
+            let negativeInfinity = "-Infinity_means_exact_mono_cancellation_of_non_silent_channels"
+            let midSide = "mid=(L+R)/2_side=(L-R)/2"
+            let rmsUnit = "linear_full_scale"
+            let weighting = "unweighted_source_samples_not_LUFS_or_frequency_dependent_phase"
+            let windowing = "4800_native_sample_frames_unpadded_final_window"
+            let sourceTimestampTolerance = "1_ms_container_rounding_before_reframing"
+            let totals = "sample_energy_sums_not_average_window_correlations"
+            let phaseDisplay = "33_by_33_row_major_y_mid_x_side_nearest_bins_fixed_minus1_plus1_clamped_no_gain_normalization"
+        }
+    }
+
+    static func audioPhaseJSON(result: AudioPhaseAnalysisResult, sourceFile: URL, timestamp: Date) throws -> Data {
+        func invalid() -> EncodingError {
+            .invalidValue(result, .init(codingPath: [], debugDescription: "Invalid stereo phase report."))
+        }
+        let indices = result.presentation.streamIndices
+        let type: String
+        switch result.presentation {
+        case .track: type = "track"
+        case .stereo: type = "stereo"
+        case .surround51: throw invalid()
+        }
+        guard indices.allSatisfy({ $0 >= 0 }), Set(indices).count == indices.count,
+              timestamp.timeIntervalSince1970.isFinite, result.sampleRate > 0,
+              result.windowSourceSamples == 4_800, !result.windows.isEmpty,
+              result.windows.count <= 100_000 else { throw invalid() }
+        func valid(_ m: AudioPhaseMeasurement) -> Bool {
+            let energy = [m.leftEnergy, m.rightEnergy, m.midEnergy, m.sideEnergy]
+            guard m.sampleCount > 0, energy.allSatisfy({ $0.isFinite && $0 >= 0 }), m.crossProduct.isFinite else { return false }
+            let total = m.leftEnergy + m.rightEnergy
+            guard total.isFinite, abs(2 * (m.midEnergy + m.sideEnergy) - total) <= max(1e-12, total * 1e-9),
+                  abs((m.midEnergy - m.sideEnergy) - m.crossProduct) <= max(1e-12, total * 1e-9),
+                  abs(m.crossProduct) <= sqrt(m.leftEnergy) * sqrt(m.rightEnergy) + max(1e-12, total * 1e-9) else { return false }
+            return true
+        }
+        var previousEnd: Double?
+        var count: Int64 = 0
+        var sums = [Double](repeating: 0, count: 5)
+        for (index, window) in result.windows.enumerated() {
+            let m = window.measurement
+            guard valid(m), m.sampleCount <= 4_800,
+                  index == result.windows.count - 1 || m.sampleCount == 4_800,
+                  window.start.isFinite, window.start >= 0, window.end.isFinite, window.end > window.start,
+                  abs((window.end - window.start) * Double(result.sampleRate) - Double(m.sampleCount)) < 0.001,
+                  previousEnd.map({ abs(window.start - $0) * Double(result.sampleRate) < 0.001 }) ?? true else { throw invalid() }
+            previousEnd = window.end
+            count += m.sampleCount
+            for (offset, value) in [m.leftEnergy, m.rightEnergy, m.midEnergy, m.sideEnergy, m.crossProduct].enumerated() {
+                sums[offset] += value
+            }
+        }
+        guard valid(result.totals), result.totals.sampleCount == count else { throw invalid() }
+        for (sum, value) in zip(sums, [result.totals.leftEnergy, result.totals.rightEnergy, result.totals.midEnergy,
+                                       result.totals.sideEnergy, result.totals.crossProduct]) {
+            guard abs(sum - value) <= max(1e-12, abs(sum) * 1e-9) else { throw invalid() }
+        }
+        guard result.scope.dimension == 33, result.scope.bins.count == 1089,
+              result.scope.clippedSampleCount >= 0, result.scope.clippedSampleCount <= count else { throw invalid() }
+        var remaining = count
+        for bin in result.scope.bins {
+            guard bin >= 0, bin <= remaining else { throw invalid() }
+            remaining -= bin
+        }
+        guard remaining == 0 else { throw invalid() }
+        let report = AudioPhaseReport(sourceFileName: sourceFile.lastPathComponent, timestamp: timestamp,
+                                      presentation: .init(type: type, audioRelativeTrackIndices: indices), result: result)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "Infinity", negativeInfinity: "-Infinity", nan: "NaN")
+        return try encoder.encode(report)
+    }
+
+    static func exportAudioPhaseJSON(result: AudioPhaseAnalysisResult, sourceFile: URL,
+                                     timestamp: Date, to url: URL) throws {
+        try audioPhaseJSON(result: result, sourceFile: sourceFile, timestamp: timestamp).write(to: url, options: .atomic)
+    }
+
     /// Sample-only reports retain versions 1/2; estimated true peaks use version 3.
     /// The explicit context is independent of Swift's enum encoding and UI language.
     private struct AudioPeakReport: Encodable {

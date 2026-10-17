@@ -112547,6 +112547,1241 @@
           }
         }
       }
+    },
+    "Stereo Phase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stereo Phase"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stereofase"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stereophase"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase estéreo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Phase stéréo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase stereo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ステレオ位相"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "스테레오 위상"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase estéreo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "立体声相位"
+          }
+        }
+      }
+    },
+    "Stereo Phase and Mono Compatibility" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stereo Phase and Mono Compatibility"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stereofase og monokompatibilitet"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Stereophase und Monokompatibilität"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase estéreo y compatibilidad mono"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Phase stéréo et compatibilité mono"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase stereo e compatibilità mono"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ステレオ位相とモノ互換性"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "스테레오 위상 및 모노 호환성"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase estéreo e compatibilidade mono"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "立体声相位与单声道兼容性"
+          }
+        }
+      }
+    },
+    "Measures source stereo correlation and mono fold-down in 4,800-sample windows. Volume, mute and conversion trims do not affect analysis." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Measures source stereo correlation and mono fold-down in 4,800-sample windows. Volume, mute and conversion trims do not affect analysis."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Måler kildens stereokorrelasjon og nedmiksing til mono i vinduer på 4 800 samplinger. Volum, demping og trimming ved konvertering påvirker ikke analysen."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Misst Stereokorrelation und Mono-Downmix der Quelle in Fenstern mit 4.800 Samples. Lautstärke, Stummschaltung und Zuschnitt für die Konvertierung beeinflussen die Analyse nicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mide la correlación estéreo y la mezcla a mono de la fuente en ventanas de 4800 muestras. El volumen, el silencio y los recortes de conversión no afectan al análisis."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mesure la corrélation stéréo et le repliement mono de la source sur des fenêtres de 4 800 échantillons. Le volume, la mise en sourdine et les points de coupe de conversion ne modifient pas l’analyse."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Misura la correlazione stereo e la riduzione a mono della sorgente in finestre di 4.800 campioni. Volume, silenziamento e tagli di conversione non influiscono sull’analisi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ソースのステレオ相関とモノへのダウンミックスを4,800サンプルのウィンドウで測定します。音量、ミュート、変換時のトリミングは解析に影響しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "4,800샘플 구간마다 소스의 스테레오 상관관계와 모노 다운믹스를 측정합니다. 음량, 음소거 및 변환 트리밍은 분석에 영향을 주지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mede a correlação estéreo e a redução a mono da fonte em janelas de 4.800 amostras. Volume, silenciamento e cortes de conversão não afetam a análise."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "以每个窗口 4,800 个采样测量源音频的立体声相关性和单声道混缩。音量、静音和转换裁剪不影响分析。"
+          }
+        }
+      }
+    },
+    "Chart shows the first 2,000 windows. All windows remain in the list and JSON report." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chart shows the first 2,000 windows. All windows remain in the list and JSON report."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagrammet viser de første 2 000 vinduene. Alle vinduene er med i listen og JSON-rapporten."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Das Diagramm zeigt die ersten 2.000 Fenster. Alle Fenster bleiben in der Liste und im JSON-Bericht enthalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "El gráfico muestra las primeras 2000 ventanas. Todas las ventanas se conservan en la lista y en el informe JSON."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le graphique affiche les 2 000 premières fenêtres. Toutes les fenêtres restent dans la liste et le rapport JSON."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Il grafico mostra le prime 2.000 finestre. Tutte le finestre restano nell’elenco e nel report JSON."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "グラフには最初の2,000ウィンドウが表示されます。リストとJSONレポートにはすべてのウィンドウが含まれます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "차트에는 처음 2,000개 구간이 표시됩니다. 목록과 JSON 보고서에는 모든 구간이 포함됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "O gráfico mostra as primeiras 2.000 janelas. Todas as janelas permanecem na lista e no relatório JSON."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "图表显示前 2,000 个窗口。列表和 JSON 报告保留所有窗口。"
+          }
+        }
+      }
+    },
+    "Select a window boundary to seek and pause on the file timeline." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a window boundary to seek and pause on the file timeline."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg en vindusgrense for å gå til og pause på det punktet i filens tidslinje."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wähle eine Fenstergrenze, um diese Position auf der Dateizeitleiste anzusteuern und dort zu pausieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Selecciona el límite de una ventana para ir a ese punto y pausar en la línea de tiempo del archivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sélectionnez une limite de fenêtre pour atteindre ce point et mettre en pause sur la chronologie du fichier."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Seleziona il limite di una finestra per raggiungere quel punto e mettere in pausa sulla timeline del file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ウィンドウの境界を選択すると、ファイルのタイムラインのその位置に移動して一時停止します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "구간 경계를 선택하면 파일 타임라인의 해당 위치로 이동하여 일시 정지합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Selecione o limite de uma janela para ir até esse ponto e pausar na linha do tempo do arquivo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "选择窗口边界可跳转到文件时间线上的该位置并暂停。"
+          }
+        }
+      }
+    },
+    "Choose a stereo track or two distinct mono tracks." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a stereo track or two distinct mono tracks."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg et stereospor eller to forskjellige monospor."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wähle eine Stereospur oder zwei unterschiedliche Monospuren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Elige una pista estéreo o dos pistas mono distintas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Choisissez une piste stéréo ou deux pistes mono distinctes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Scegli una traccia stereo o due tracce mono distinte."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ステレオトラックを1つ、または異なるモノトラックを2つ選択してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "스테레오 트랙 하나 또는 서로 다른 모노 트랙 두 개를 선택하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Escolha uma faixa estéreo ou duas faixas mono distintas."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "请选择一个立体声音轨或两个不同的单声道音轨。"
+          }
+        }
+      }
+    },
+    "Whole-source phase" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whole-source phase"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fase for hele kilden"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Phase der gesamten Quelle"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase de toda la fuente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Phase de la source entière"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase dell’intera sorgente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ソース全体の位相"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "전체 소스 위상"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fase de toda a fonte"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "整个源音频的相位"
+          }
+        }
+      }
+    },
+    "Correlation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correlation"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korrelasjon"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Korrelation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correlación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corrélation"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correlazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "相関"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "상관관계"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correlação"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "相关性"
+          }
+        }
+      }
+    },
+    "Mono fold-down" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mono fold-down"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nedmiksing til mono"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mono-Downmix"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mezcla a mono"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Repliement mono"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Riduzione a mono"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "モノへのダウンミックス"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "모노 다운믹스"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Redução a mono"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "单声道混缩"
+          }
+        }
+      }
+    },
+    "Mid RMS" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mid RMS"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mid RMS"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mid-RMS"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS central"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS du signal médian"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS del segnale Mid"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ミッドRMS"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "미드 RMS"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS do sinal central"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "中置信号 RMS"
+          }
+        }
+      }
+    },
+    "Side RMS" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Side RMS"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Side RMS"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Side-RMS"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS lateral"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS du signal latéral"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS del segnale Side"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "サイドRMS"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "사이드 RMS"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "RMS do sinal lateral"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "侧置信号 RMS"
+          }
+        }
+      }
+    },
+    "Stereo phase correlation timeline" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stereo phase correlation timeline"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidslinje for stereofasekorrelasjon"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zeitleiste der Stereophasenkorrelation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Línea de tiempo de correlación de fase estéreo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Chronologie de corrélation de phase stéréo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Timeline della correlazione di fase stereo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ステレオ位相相関タイムライン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "스테레오 위상 상관관계 타임라인"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Linha do tempo da correlação de fase estéreo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "立体声相位相关性时间线"
+          }
+        }
+      }
+    },
+    "Correlation: +1 means matching polarity, 0 means no linear correlation, and −1 means opposite polarity. A silent channel has no correlation value. Negative windows may cancel in mono; a whole-source average can hide local problems." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Correlation: +1 means matching polarity, 0 means no linear correlation, and −1 means opposite polarity. A silent channel has no correlation value. Negative windows may cancel in mono; a whole-source average can hide local problems."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korrelasjon: +1 betyr lik polaritet, 0 betyr ingen lineær korrelasjon og −1 betyr motsatt polaritet. En stille kanal har ingen korrelasjonsverdi. Vinduer med negative verdier kan gi utfasing i mono; et gjennomsnitt for hele kilden kan skjule lokale problemer."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Korrelation: +1 bedeutet gleiche Polarität, 0 bedeutet keine lineare Korrelation und −1 bedeutet entgegengesetzte Polarität. Ein stummer Kanal hat keinen Korrelationswert. Fenster mit negativen Werten können sich in Mono auslöschen; ein Mittelwert über die gesamte Quelle kann lokale Probleme verbergen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correlación: +1 indica la misma polaridad, 0 indica ausencia de correlación lineal y −1 indica polaridad opuesta. Un canal en silencio no tiene valor de correlación. Las ventanas negativas pueden cancelarse en mono; el promedio de toda la fuente puede ocultar problemas locales."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Corrélation : +1 indique une polarité identique, 0 une absence de corrélation linéaire et −1 une polarité opposée. Un canal silencieux n’a pas de valeur de corrélation. Les fenêtres négatives peuvent s’annuler en mono ; une moyenne sur toute la source peut masquer des problèmes locaux."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correlazione: +1 indica la stessa polarità, 0 indica assenza di correlazione lineare e −1 indica polarità opposta. Un canale silenzioso non ha un valore di correlazione. Le finestre negative possono annullarsi in mono; la media dell’intera sorgente può nascondere problemi locali."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "相関：+1は同じ極性、0は線形相関なし、−1は逆極性を示します。無音のチャンネルには相関値がありません。負の値のウィンドウはモノで打ち消し合う可能性があります。ソース全体の平均値では局所的な問題が隠れることがあります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "상관관계: +1은 같은 극성, 0은 선형 상관관계 없음, −1은 반대 극성을 뜻합니다. 무음 채널에는 상관관계 값이 없습니다. 음수인 구간은 모노에서 상쇄될 수 있으며, 전체 소스 평균은 국소적인 문제를 가릴 수 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Correlação: +1 indica polaridade igual, 0 indica ausência de correlação linear e −1 indica polaridade oposta. Um canal silencioso não tem valor de correlação. Janelas negativas podem se cancelar em mono; a média de toda a fonte pode ocultar problemas locais."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "相关性：+1 表示极性相同，0 表示无线性相关，−1 表示极性相反。静音声道没有相关性数值。负值窗口可能在单声道中相互抵消；整个源音频的平均值可能掩盖局部问题。"
+          }
+        }
+      }
+    },
+    "Mono fold-down compares the energy of (L + R) / 2 with mean left/right energy. 0 dB preserves matching channels; −3 dB is typical for uncorrelated audio; −∞ means complete cancellation. Both silent channels have no comparison. Mid = (L + R) / 2; side = (L − R) / 2. These are unweighted source checks, not loudness or frequency-dependent phase measurements." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mono fold-down compares the energy of (L + R) / 2 with mean left/right energy. 0 dB preserves matching channels; −3 dB is typical for uncorrelated audio; −∞ means complete cancellation. Both silent channels have no comparison. Mid = (L + R) / 2; side = (L − R) / 2. These are unweighted source checks, not loudness or frequency-dependent phase measurements."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nedmiksing til mono sammenligner energien i (L + R) / 2 med gjennomsnittsenergien i venstre og høyre kanal. 0 dB bevarer like kanaler; −3 dB er typisk for ukorrelert lyd; −∞ betyr fullstendig utfasing. Når begge kanalene er stille, finnes ingen sammenligningsverdi. Mid = (L + R) / 2; side = (L − R) / 2. Dette er uvektede kildekontroller, ikke målinger av lydstyrke eller frekvensavhengig fase."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Der Mono-Downmix vergleicht die Energie von (L + R) / 2 mit der mittleren Energie des linken und rechten Kanals. 0 dB erhält übereinstimmende Kanäle; −3 dB ist typisch für unkorreliertes Audio; −∞ bedeutet vollständige Auslöschung. Sind beide Kanäle stumm, gibt es keinen Vergleichswert. Mid = (L + R) / 2; Side = (L − R) / 2. Dies sind ungewichtete Quellenprüfungen, keine Lautheitsmessungen oder frequenzabhängigen Phasenmessungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La mezcla a mono compara la energía de (L + R) / 2 con la energía media de los canales izquierdo y derecho. 0 dB conserva los canales coincidentes; −3 dB es típico del audio no correlacionado; −∞ significa cancelación total. Si ambos canales están en silencio, no hay comparación. Central = (L + R) / 2; lateral = (L − R) / 2. Son comprobaciones de la fuente sin ponderación, no mediciones de sonoridad ni de fase dependiente de la frecuencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Le repliement mono compare l’énergie de (L + R) / 2 à l’énergie moyenne des canaux gauche et droit. 0 dB préserve les canaux identiques ; −3 dB est typique d’un signal non corrélé ; −∞ signifie une annulation totale. Si les deux canaux sont silencieux, aucune comparaison n’est possible. Médian = (L + R) / 2 ; latéral = (L − R) / 2. Ce sont des contrôles non pondérés de la source, pas des mesures de sonie ni de phase en fonction de la fréquence."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "La riduzione a mono confronta l’energia di (L + R) / 2 con l’energia media dei canali sinistro e destro. 0 dB preserva i canali identici; −3 dB è tipico dell’audio non correlato; −∞ indica annullamento completo. Se entrambi i canali sono silenziosi, non è possibile il confronto. Mid = (L + R) / 2; Side = (L − R) / 2. Questi sono controlli non ponderati della sorgente, non misurazioni di loudness o di fase dipendente dalla frequenza."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "モノへのダウンミックスは、(L + R) / 2のエネルギーを左右チャンネルの平均エネルギーと比較します。0 dBでは一致するチャンネルが維持され、−3 dBは無相関の音声で一般的な値、−∞は完全な打ち消しを示します。両チャンネルが無音の場合、比較値はありません。ミッド = (L + R) / 2、サイド = (L − R) / 2です。これらは重み付けを行わないソースのチェックであり、ラウドネスや周波数依存の位相の測定ではありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "모노 다운믹스는 (L + R) / 2의 에너지를 좌우 채널의 평균 에너지와 비교합니다. 0 dB는 일치하는 채널을 유지하며, −3 dB는 상관관계가 없는 오디오의 일반적인 값이고, −∞는 완전한 상쇄를 뜻합니다. 두 채널이 모두 무음이면 비교 값이 없습니다. 미드 = (L + R) / 2, 사이드 = (L − R) / 2입니다. 이는 가중치를 적용하지 않은 소스 점검이며, 라우드니스 또는 주파수에 따른 위상 측정이 아닙니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "A redução a mono compara a energia de (L + R) / 2 com a energia média dos canais esquerdo e direito. 0 dB preserva canais iguais; −3 dB é típico de áudio não correlacionado; −∞ significa cancelamento completo. Se ambos os canais estiverem silenciosos, não há comparação. Central = (L + R) / 2; lateral = (L − R) / 2. São verificações da fonte sem ponderação, não medições de loudness ou de fase dependente da frequência."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "单声道混缩将 (L + R) / 2 的能量与左右声道的平均能量进行比较。0 dB 表示相同的声道得以保留；−3 dB 是无相关音频的典型值；−∞ 表示完全抵消。两个声道都静音时没有比较值。中置信号 = (L + R) / 2；侧置信号 = (L − R) / 2。这些是未加权的源音频检查，并非响度测量或随频率变化的相位测量。"
+          }
+        }
+      }
+    },
+    "Whole-source phase scope" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whole-source phase scope"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fasevisning for hele kilden"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Phasendarstellung der gesamten Quelle"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vectorscopio de fase de toda la fuente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vectorscope de phase de la source entière"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vettorscopio di fase dell’intera sorgente"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ソース全体の位相スコープ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "전체 소스 위상 스코프"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vetorscópio de fase de toda a fonte"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "整个源音频的相位示波图"
+          }
+        }
+      }
+    },
+    "Mid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mid"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mid"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mid"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Central"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Médian"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mid"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ミッド"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "미드"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Central"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "中置信号"
+          }
+        }
+      }
+    },
+    "Side" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Side"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Side"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Side"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lateral"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Latéral"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Side"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "サイド"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "사이드"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lateral"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "侧置信号"
+          }
+        }
+      }
+    },
+    "Clamped samples" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clamped samples"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Samplinger begrenset til kantene"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "An den Rändern begrenzte Samples"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Muestras limitadas a los bordes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Échantillons limités aux bords"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Campioni limitati ai bordi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "表示の端に制限されたサンプル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "표시 가장자리로 제한된 샘플"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Amostras limitadas às bordas"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "限制在显示边缘的采样"
+          }
+        }
+      }
+    },
+    "Each dot shows source-sample density: matching channels form a vertical line; opposite polarity forms a horizontal line. Fixed ±1 full-scale axes; samples outside the display are clamped to its edges." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each dot shows source-sample density: matching channels form a vertical line; opposite polarity forms a horizontal line. Fixed ±1 full-scale axes; samples outside the display are clamped to its edges."
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hver prikk viser tettheten av kildesamplinger: like kanaler danner en loddrett linje; motsatt polaritet danner en vannrett linje. Aksene er faste ved ±1 full skala; samplinger utenfor visningen begrenses til kantene."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Jeder Punkt zeigt die Dichte der Quellsamples: Übereinstimmende Kanäle bilden eine senkrechte Linie, entgegengesetzte Polarität eine waagerechte Linie. Feste Achsen bei ±1 Vollaussteuerung; Samples außerhalb der Darstellung werden auf die Ränder begrenzt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada punto muestra la densidad de muestras de la fuente: los canales coincidentes forman una línea vertical; la polaridad opuesta forma una línea horizontal. Ejes fijos de ±1 a escala completa; las muestras fuera de la visualización se limitan a sus bordes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Chaque point montre la densité des échantillons de la source : des canaux identiques forment une ligne verticale ; une polarité opposée forme une ligne horizontale. Les axes sont fixes à ±1 en pleine échelle ; les échantillons hors de l’affichage sont limités à ses bords."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ogni punto mostra la densità dei campioni della sorgente: i canali identici formano una linea verticale; la polarità opposta forma una linea orizzontale. Assi fissi a ±1 a fondo scala; i campioni esterni alla visualizzazione sono limitati ai bordi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "各点はソースサンプルの密度を示します。一致するチャンネルは垂直線を、逆極性は水平線を形成します。軸はフルスケールの±1に固定され、表示範囲外のサンプルは表示の端に制限されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "각 점은 소스 샘플의 밀도를 나타냅니다. 일치하는 채널은 수직선을, 반대 극성은 수평선을 형성합니다. 축은 풀 스케일 ±1로 고정되며, 표시 범위 밖의 샘플은 가장자리로 제한됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cada ponto mostra a densidade de amostras da fonte: canais iguais formam uma linha vertical; polaridade oposta forma uma linha horizontal. Eixos fixos em ±1 de escala completa; amostras fora da visualização são limitadas às bordas."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "每个点显示源采样的密度：相同声道形成竖线，极性相反则形成横线。坐标轴固定为满量程 ±1；超出显示范围的采样会被限制在显示边缘。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
