@@ -189,6 +189,7 @@ struct LoudnessAnalysisView: View {
     @State private var analysisID: UUID?
     @State private var silenceRequest: SilenceAnalysisRequest?
     @State private var peakRequest: AudioPeakAnalysisRequest?
+    @State private var phaseRequest: AudioPhaseAnalysisRequest?
 
     private var monoTracks: [AudioTrackInfo] { tracks.filter { $0.channels == 1 } }
     private var file: URL { selectedFileID == "output" ? outputFile ?? sourceFile : sourceFile }
@@ -228,6 +229,11 @@ struct LoudnessAnalysisView: View {
                         }
                         .disabled(isAnalyzing)
                         .accessibilityIdentifier("analysis.audio.peaks")
+                        Button("Stereo Phase") {
+                            phaseRequest = AudioPhaseAnalysisRequest(file: file, tracks: tracks)
+                        }
+                        .disabled(isAnalyzing || (!tracks.contains { $0.channels == 2 } && monoTracks.count < 2))
+                        .accessibilityIdentifier("analysis.audio.phase")
                         if isAnalyzing {
                             Button("Cancel") { analysisTask?.cancel() }
                             ProgressView().controlSize(.small)
@@ -306,6 +312,9 @@ struct LoudnessAnalysisView: View {
         .onDisappear {
             analysisID = nil
             analysisTask?.cancel()
+        }
+        .sheet(item: $phaseRequest) { request in
+            AudioPhaseAnalysisView(file: request.file, tracks: request.tracks)
         }
         .sheet(item: $peakRequest) { request in
             AudioPeakAnalysisView(file: request.file, tracks: request.tracks)
