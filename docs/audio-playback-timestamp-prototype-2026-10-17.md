@@ -69,10 +69,12 @@ No snapshot proves whole-program completeness.
 
 The [builder](../scripts/prototype-mpv-meter-history.py) requires the matching
 local MPVKit static framework products, thin macOS `compile_commands.json`, and
-exact corresponding mpv source. It rejects a changed source hash. It copies only
-the instrumented translation unit, compiles against the existing generated
-configuration, replaces the exact object member in a copied thin archive, and
-links the [probe](../scripts/probe-mpv-meter-history.c). Framework aliases must
+exact corresponding mpv source. It rejects changed source hashes. The original
+builder copied only the instrumented filter translation unit. The
+[AAC startup continuation](audio-playback-aac-startup-validation-2026-10-17.md)
+now also stages the decoder's priming fix. Both compile against the existing
+generated configuration and replace their exact object members in a copied thin
+archive before linking the [probe](../scripts/probe-mpv-meter-history.c). Framework aliases must
 resolve to that replacement inside the copied framework. Original source, build
 objects, products and the app's dependency remain untouched. Build evidence
 records source/patch/header/compiler-command/library/probe hashes and commands.

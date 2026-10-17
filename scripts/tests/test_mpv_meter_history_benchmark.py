@@ -2,6 +2,7 @@
 import importlib.util
 import array
 import json
+import math
 from pathlib import Path
 import unittest
 import tempfile
@@ -25,6 +26,46 @@ def row(start=0.75, peak="-6.020599913"):
 
 
 class HistoryBenchmarkTests(unittest.TestCase):
+    def test_nonperiodic_oracle_rejects_former_four_second_alias(self):
+        samples = MODULE.signal_samples()
+        levels = [max(abs(v) for v in samples[i * 9600:(i + 1) * 9600:2])
+                  for i in range(300)]
+        self.assertEqual(len(set(levels)), 300)
+        ordered = sorted(20 * math.log10(v) for v in levels)
+        self.assertGreater(min(b - a for a, b in zip(ordered, ordered[1:])), 0.1)
+        item = row(start=0)
+        frame = json.loads(item["history"]["frames"][0]["frame"])
+        for channel in range(2):
+            values = samples[channel:9600:2]
+            peak = max(abs(v) for v in values)
+            rms = math.sqrt(math.fsum(v * v for v in values) / len(values))
+            for metric, value in (("Peak_level", peak), ("RMS_level", rms)):
+                frame["metadata"][f"lavfi.astats.{channel + 1}.{metric}"] = str(
+                    20 * math.log10(value) if value else -math.inf)
+        item["history"]["frames"][0]["frame"] = json.dumps(frame)
+        self.assertFalse(MODULE.signal_check([item], 0, samples, signal_version=2)["errors"])
+        for offset in (0.1, 4, 8, 16, 24):
+            with self.subTest(offset=offset):
+                shifted = {**frame, "start": offset, "end": offset + 0.1}
+                item["history"]["frames"][0]["frame"] = json.dumps(shifted)
+                self.assertTrue(MODULE.signal_check([item], 0, samples, signal_version=2)["errors"])
+
+    def test_rms_detects_wrong_energy_with_matching_peak(self):
+        samples = array.array("f", [0.5, 0] * 4800)
+        item = row()
+        frame = json.loads(item["history"]["frames"][0]["frame"])
+        frame["metadata"].update({"lavfi.astats.1.RMS_level": "-12",
+                                  "lavfi.astats.2.RMS_level": "-inf"})
+        item["history"]["frames"][0]["frame"] = json.dumps(frame)
+        result = MODULE.signal_check([item], 0.75, samples, signal_version=2)
+        self.assertEqual([error["metric"] for error in result["errors"]], ["RMS_level"])
+        # Legacy captures continue to use their original peak-only oracle.
+        self.assertFalse(MODULE.signal_check([item], 0.75, samples)["errors"])
+        del frame["metadata"]["lavfi.astats.1.RMS_level"]
+        item["history"]["frames"][0]["frame"] = json.dumps(frame)
+        self.assertEqual(MODULE.signal_check([item], 0.75, samples, signal_version=2)["errors"][0]["error"],
+                         "missing measurement")
+
     def test_generated_delay_survives_container_muxing(self):
         ffmpeg = MODULE.ROOT / "Aagedal Media Converter/Binaries/ffmpeg"
         with tempfile.TemporaryDirectory() as directory:

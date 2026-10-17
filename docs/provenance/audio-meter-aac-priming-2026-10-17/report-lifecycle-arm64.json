@@ -1,0 +1,158 @@
+{
+  "analyzer_sha256": "df24618f398de2f558010b9b3d136f95551540d0453ce3e2df51c24d76f9a447",
+  "probe_source_sha256": "6739c4dbc21c3f06676e345ddeedc0afc31bfb74618e2d247e4e910d3d155323",
+  "probe_sha256": "5dbea4ce0eae7baf7825e68c36c25d20407f9c98bb09a5941c1e6c44c06a5977",
+  "decoder_patch_sha256": "9a9bcc00f23717b0a5f4a2a7cf12417737f0b85b667689f9849ac3c3fc4dfd98",
+  "alignment_qualified": false,
+  "reset_attribution": "Heuristic; unobserved boundaries and final-frame completeness remain uncertified.",
+  "cases": {
+    "lossless": {
+      "command": [
+        "/private/tmp/amc-meter-history-aac-fixed-v3/probe",
+        "/private/tmp/amc-meter-history-nonperiodic-fixed-v3/lossless.mov",
+        "null",
+        "--video"
+      ],
+      "fixture_sha256": "c9aafa5bc0460de68bc882b2f176fa37888bfb3e592f4e3b77b21ca3703a2149",
+      "capture_sha256": "17727f884ec16a835818f03b51b8ab96a74c3347544b3c9c41935e5197f379f6",
+      "xz_sha256": "9964b4c0d26f9e04c0d9b2f7b898ff9cd3080f2d00dda5c40fc57f1bec7b215c",
+      "analysis": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [
+          {
+            "instance": 1,
+            "epoch": 1,
+            "first_received_sequence": 40
+          }
+        ],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 111,
+        "missing_history_snapshots": 1,
+        "unique_frames": 151,
+        "epochs": 3,
+        "invalid_time_frames": 0,
+        "actions": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "missing_actions": [],
+        "post_seek_epoch_observed": true,
+        "post_reinsert_instance_observed": true,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0,
+          1.5
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false,
+          true
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "null"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "2": {
+            "evicted": 0,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      }
+    },
+    "aac": {
+      "command": [
+        "/private/tmp/amc-meter-history-aac-fixed-v3/probe",
+        "/private/tmp/amc-meter-history-nonperiodic-fixed-v3/aac.mov",
+        "null",
+        "--video"
+      ],
+      "fixture_sha256": "8ccfba50763a47cfb0efd067083d65e7ea3899dfa57ba5321b2bc2d4d32784a6",
+      "capture_sha256": "58c88e3e7bb16d1253b92346ec47c1143359d692394a79b8c57e10fa1d1bf759",
+      "xz_sha256": "1ccccf767263f0590d25f02a87f87055ff291f37c0b6cf9135e69adcf8a418ea",
+      "analysis": {
+        "alignment_qualified": false,
+        "reset_boundary_coverage_unknown": [
+          {
+            "instance": 1,
+            "epoch": 1,
+            "first_received_sequence": 40
+          }
+        ],
+        "observed_history_complete": false,
+        "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+        "snapshots": 111,
+        "missing_history_snapshots": 1,
+        "unique_frames": 150,
+        "epochs": 3,
+        "invalid_time_frames": 0,
+        "actions": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "missing_actions": [],
+        "post_seek_epoch_observed": true,
+        "post_reinsert_instance_observed": true,
+        "frame_speed_values": [
+          1.0
+        ],
+        "speed_change_verified": false,
+        "playback_speed_values": [
+          1.0,
+          1.5
+        ],
+        "audio_track_ids": [
+          1
+        ],
+        "paused_values": [
+          false,
+          true
+        ],
+        "seeking_values": [
+          false
+        ],
+        "requested_outputs": [
+          "null"
+        ],
+        "output_unconfirmed_snapshots": 1,
+        "instance_counters": {
+          "1": {
+            "evicted": 0,
+            "rejected": 0
+          },
+          "2": {
+            "evicted": 0,
+            "rejected": 0
+          }
+        },
+        "sequence_gaps": [],
+        "continuity_breaks": [],
+        "errors": []
+      }
+    }
+  }
+}

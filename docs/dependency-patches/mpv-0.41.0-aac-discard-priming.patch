@@ -1,0 +1,29 @@
+--- a/audio/decode/ad_lavc.c
++++ b/audio/decode/ad_lavc.c
+@@ -208,8 +208,25 @@
+         MP_ERR(da, "Error decoding audio.\n");
+     }
+ 
+-    if (priv->avframe->flags & AV_FRAME_FLAG_DISCARD)
++    if (priv->avframe->flags & AV_FRAME_FLAG_DISCARD) {
++        // A discarded initial priming frame can already consume the codec delay.
++        // Remember its explicit skip budget before dropping its side data, or the
++        // delay fallback below would skip the first valid decoded frame again.
++        AVFrameSideData *sd = av_frame_get_side_data(priv->avframe,
++                                                   AV_FRAME_DATA_SKIP_SAMPLES);
++        if (!priv->preroll_done && sd && sd->size >= 10) {
++            uint32_t skip = AV_RL32(sd->data);
++            if (skip) {
++                priv->skip_samples = skip;
++                priv->preroll_done = true;
++            }
++        }
++        // Discarded samples also consume an outstanding multi-frame skip budget.
++        uint32_t consumed = MPMIN(priv->skip_samples,
++                                  (uint32_t)priv->avframe->nb_samples);
++        priv->skip_samples -= consumed;
+         av_frame_unref(priv->avframe);
++    }
+ 
+     if (!priv->avframe->buf[0])
+         return ret;

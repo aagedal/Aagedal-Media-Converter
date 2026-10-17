@@ -1,5 +1,9 @@
 # Playback timestamp-history matrix — 2026-10-17
 
+The [AAC startup continuation](audio-playback-aac-startup-validation-2026-10-17.md)
+adds a nonperiodic peak/RMS oracle and investigates the startup failure below.
+The results in this record retain their original periodic stimulus.
+
 This continues the [isolated dependency prototype](audio-playback-timestamp-prototype-2026-10-17.md).
 It tests received decoder-frame history against independently decoded source
 samples. The application, package pin, bundled dependencies and notices are unchanged.
