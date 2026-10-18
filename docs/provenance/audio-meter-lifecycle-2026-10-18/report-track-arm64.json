@@ -1,0 +1,175 @@
+{
+  "passed": true,
+  "command": [
+    "/private/tmp/amc-meter-lifecycle-build-arm64/probe",
+    "/private/tmp/amc-meter-lifecycle-multitrack.mov",
+    "null",
+    "2",
+    "--video",
+    "--replacement",
+    "/private/tmp/amc-meter-history-nonperiodic-fixed-v3/delayed.mov"
+  ],
+  "fixture_command": [
+    "/Users/truls.aagedal/.t3/worktrees/Aagedal-Media-Converter/t3-5e10d8b6/Aagedal Media Converter/Binaries/ffmpeg",
+    "-v",
+    "error",
+    "-i",
+    "/private/tmp/amc-meter-history-nonperiodic-fixed-v3/lossless.mov",
+    "-i",
+    "/private/tmp/amc-meter-history-nonperiodic-fixed-v3/delayed.mov",
+    "-map",
+    "0:v",
+    "-map",
+    "0:a",
+    "-map",
+    "1:a",
+    "-c",
+    "copy",
+    "/private/tmp/amc-meter-lifecycle-multitrack.mov"
+  ],
+  "lifecycle": {
+    "passed": true,
+    "checks": {
+      "load": true,
+      "pause": true,
+      "resume": true,
+      "seek": true,
+      "speed": true,
+      "reinsert": true,
+      "track": true,
+      "replace": true
+    },
+    "errors": [],
+    "history": {
+      "alignment_qualified": false,
+      "reset_boundary_coverage_unknown": [
+        {
+          "instance": 1,
+          "epoch": 1,
+          "first_received_sequence": 40
+        }
+      ],
+      "observed_history_complete": true,
+      "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+      "snapshots": 149,
+      "missing_history_snapshots": 0,
+      "unique_frames": 224,
+      "epochs": 5,
+      "invalid_time_frames": 0,
+      "actions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "missing_actions": [],
+      "post_seek_epoch_observed": true,
+      "post_reinsert_instance_observed": true,
+      "frame_speed_values": [
+        1.0
+      ],
+      "speed_change_verified": false,
+      "playback_speed_values": [
+        1.0,
+        1.5
+      ],
+      "audio_track_ids": [
+        1,
+        2
+      ],
+      "paused_values": [
+        false,
+        true
+      ],
+      "seeking_values": [
+        false
+      ],
+      "requested_outputs": [
+        "null"
+      ],
+      "output_unconfirmed_snapshots": 0,
+      "instance_counters": {
+        "1": {
+          "evicted": 0,
+          "rejected": 0
+        },
+        "2": {
+          "evicted": 0,
+          "rejected": 0
+        },
+        "3": {
+          "evicted": 0,
+          "rejected": 0
+        },
+        "4": {
+          "evicted": 0,
+          "rejected": 0
+        }
+      },
+      "sequence_gaps": [],
+      "continuity_breaks": [],
+      "errors": []
+    },
+    "alignment_qualified": false,
+    "causal_event_attribution_verified": false,
+    "loudness_reset_verified": false,
+    "scope": "Observed API acceptance, event order, player state and history identity in scheduled command windows. Events have no command IDs; unobserved reset boundaries, final frames and presentation timing remain uncertified."
+  },
+  "signal": {
+    "original": {
+      "frames_checked": 120,
+      "tolerance_db": 0.05,
+      "reference_start": 0.0,
+      "signal_version": 2,
+      "impulses_covered": [
+        0,
+        1,
+        4,
+        5,
+        6,
+        7
+      ],
+      "errors": []
+    },
+    "track": {
+      "frames_checked": 45,
+      "tolerance_db": 0.05,
+      "reference_start": 0.75,
+      "signal_version": 2,
+      "impulses_covered": [
+        7,
+        8
+      ],
+      "errors": []
+    },
+    "replacement": {
+      "frames_checked": 59,
+      "tolerance_db": 0.05,
+      "reference_start": 0.75,
+      "signal_version": 2,
+      "impulses_covered": [
+        0,
+        1,
+        2
+      ],
+      "errors": []
+    }
+  },
+  "capture_sha256": "092d1ffaae59499c355199a90e9c169e84fbeea15db5d2eb3127f0d89342f524",
+  "probe_sha256": "858c4a877d77348acf9ccbdddf7c21fa63bacca20369412afe62949b0c28e0f6",
+  "probe_source_sha256": "e8b1c2d279e5f71c0a3871897790b50c32b04fe2a6713f61f719c2bc28c1ab48",
+  "analyzer_sha256": "8c7732056ea614893fa31809ed42263c60ace917f842210ca879934fb3c19cf6",
+  "ffmpeg_sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6",
+  "ffprobe_sha256": "bfe676bfc3a889bebe63af07c71a926a6167f568c7a932a79c2f1fe51ae6d5a1",
+  "fixtures": {
+    "/private/tmp/amc-meter-lifecycle-multitrack.mov": "87986fc210dc06dccf62bf65a5324f8da89c78515ef5a2c1b94646d29ed58819",
+    "/private/tmp/amc-meter-history-nonperiodic-fixed-v3/lossless.mov": "c9aafa5bc0460de68bc882b2f176fa37888bfb3e592f4e3b77b21ca3703a2149",
+    "/private/tmp/amc-meter-history-nonperiodic-fixed-v3/delayed.mov": "f64093f3f059f671d56a1d37eb7014f334e222919859c2da57991dacafa81c2f"
+  },
+  "exit_code": 0,
+  "alignment_qualified": false
+}

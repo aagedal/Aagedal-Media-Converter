@@ -1,0 +1,566 @@
+{
+  "probe_sha256": "858c4a877d77348acf9ccbdddf7c21fa63bacca20369412afe62949b0c28e0f6",
+  "ffmpeg_sha256": "ec3d81944809bf5d0173edb77b8dbf8eaeabf2388289812ce87b3f90fbe410c6",
+  "ffprobe_sha256": "bfe676bfc3a889bebe63af07c71a926a6167f568c7a932a79c2f1fe51ae6d5a1",
+  "build_record_sha256": "55914cd762a6e19e10bcda5383253e67746243dd742972b98ae85590201cb2ec",
+  "fixtures": {
+    "lossless": {
+      "sha256": "c9aafa5bc0460de68bc882b2f176fa37888bfb3e592f4e3b77b21ca3703a2149"
+    },
+    "delayed": {
+      "sha256": "f64093f3f059f671d56a1d37eb7014f334e222919859c2da57991dacafa81c2f"
+    },
+    "aac": {
+      "sha256": "8ccfba50763a47cfb0efd067083d65e7ea3899dfa57ba5321b2bc2d4d32784a6"
+    }
+  },
+  "runs": [
+    {
+      "case": "lossless-coreaudio",
+      "source": "lossless",
+      "command": [
+        "/private/tmp/amc-meter-lifecycle-build-arm64/probe",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/lossless.mov",
+        "coreaudio",
+        "--video",
+        "--replacement",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/delayed.mov"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "639e716e5e042c8f6de9306e1b2bcedcc1c5a47be4f721c68b916933e6e7aecd",
+      "passed": true,
+      "lifecycle": {
+        "passed": true,
+        "checks": {
+          "load": true,
+          "pause": true,
+          "resume": true,
+          "seek": true,
+          "speed": true,
+          "reinsert": true,
+          "replace": true
+        },
+        "errors": [],
+        "history": {
+          "alignment_qualified": false,
+          "reset_boundary_coverage_unknown": [
+            {
+              "instance": 1,
+              "epoch": 1,
+              "first_received_sequence": 37
+            }
+          ],
+          "observed_history_complete": true,
+          "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+          "snapshots": 151,
+          "missing_history_snapshots": 0,
+          "unique_frames": 203,
+          "epochs": 4,
+          "invalid_time_frames": 0,
+          "actions": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "missing_actions": [],
+          "post_seek_epoch_observed": true,
+          "post_reinsert_instance_observed": true,
+          "frame_speed_values": [
+            1.0
+          ],
+          "speed_change_verified": false,
+          "playback_speed_values": [
+            1.0,
+            1.5
+          ],
+          "audio_track_ids": [
+            1
+          ],
+          "paused_values": [
+            false,
+            true
+          ],
+          "seeking_values": [
+            false,
+            true
+          ],
+          "requested_outputs": [
+            "coreaudio"
+          ],
+          "output_unconfirmed_snapshots": 0,
+          "instance_counters": {
+            "1": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "2": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "3": {
+              "evicted": 0,
+              "rejected": 0
+            }
+          },
+          "sequence_gaps": [],
+          "continuity_breaks": [],
+          "errors": []
+        },
+        "alignment_qualified": false,
+        "causal_event_attribution_verified": false,
+        "loudness_reset_verified": false,
+        "scope": "Observed API acceptance, event order, player state and history identity in scheduled command windows. Events have no command IDs; unobserved reset boundaries, final frames and presentation timing remain uncertified."
+      },
+      "signal": {
+        "original": {
+          "frames_checked": 147,
+          "tolerance_db": 0.05,
+          "reference_start": 0.0,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "errors": []
+        },
+        "delayed": {
+          "frames_checked": 56,
+          "tolerance_db": 0.05,
+          "reference_start": 0.75,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            2
+          ],
+          "errors": []
+        }
+      }
+    },
+    {
+      "case": "aac-coreaudio",
+      "source": "aac",
+      "command": [
+        "/private/tmp/amc-meter-lifecycle-build-arm64/probe",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/aac.mov",
+        "coreaudio",
+        "--video",
+        "--replacement",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/delayed.mov"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "352746edda573a9b5f114e163fc272cae9d9e062f85d19a6cdf14d7727661837",
+      "passed": true,
+      "lifecycle": {
+        "passed": true,
+        "checks": {
+          "load": true,
+          "pause": true,
+          "resume": true,
+          "seek": true,
+          "speed": true,
+          "reinsert": true,
+          "replace": true
+        },
+        "errors": [],
+        "history": {
+          "alignment_qualified": false,
+          "reset_boundary_coverage_unknown": [
+            {
+              "instance": 1,
+              "epoch": 1,
+              "first_received_sequence": 38
+            }
+          ],
+          "observed_history_complete": true,
+          "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+          "snapshots": 152,
+          "missing_history_snapshots": 0,
+          "unique_frames": 203,
+          "epochs": 4,
+          "invalid_time_frames": 0,
+          "actions": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "missing_actions": [],
+          "post_seek_epoch_observed": true,
+          "post_reinsert_instance_observed": true,
+          "frame_speed_values": [
+            1.0
+          ],
+          "speed_change_verified": false,
+          "playback_speed_values": [
+            1.0,
+            1.5
+          ],
+          "audio_track_ids": [
+            1
+          ],
+          "paused_values": [
+            false,
+            true
+          ],
+          "seeking_values": [
+            false,
+            true
+          ],
+          "requested_outputs": [
+            "coreaudio"
+          ],
+          "output_unconfirmed_snapshots": 0,
+          "instance_counters": {
+            "1": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "2": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "3": {
+              "evicted": 0,
+              "rejected": 0
+            }
+          },
+          "sequence_gaps": [],
+          "continuity_breaks": [],
+          "errors": []
+        },
+        "alignment_qualified": false,
+        "causal_event_attribution_verified": false,
+        "loudness_reset_verified": false,
+        "scope": "Observed API acceptance, event order, player state and history identity in scheduled command windows. Events have no command IDs; unobserved reset boundaries, final frames and presentation timing remain uncertified."
+      },
+      "signal": {
+        "original": {
+          "frames_checked": 147,
+          "tolerance_db": 0.05,
+          "reference_start": 0.0,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "errors": []
+        },
+        "delayed": {
+          "frames_checked": 56,
+          "tolerance_db": 0.05,
+          "reference_start": 0.75,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            2
+          ],
+          "errors": []
+        }
+      }
+    },
+    {
+      "case": "lossless-avfoundation",
+      "source": "lossless",
+      "command": [
+        "/private/tmp/amc-meter-lifecycle-build-arm64/probe",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/lossless.mov",
+        "avfoundation",
+        "--video",
+        "--replacement",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/delayed.mov"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "9af4cd1e19b5cc64f278ec790c91391bc609e40657c0cd4689a4cb5e2c86269d",
+      "passed": true,
+      "lifecycle": {
+        "passed": true,
+        "checks": {
+          "load": true,
+          "pause": true,
+          "resume": true,
+          "seek": true,
+          "speed": true,
+          "reinsert": true,
+          "replace": true
+        },
+        "errors": [],
+        "history": {
+          "alignment_qualified": false,
+          "reset_boundary_coverage_unknown": [
+            {
+              "instance": 1,
+              "epoch": 1,
+              "first_received_sequence": 74
+            }
+          ],
+          "observed_history_complete": false,
+          "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+          "snapshots": 152,
+          "missing_history_snapshots": 2,
+          "unique_frames": 315,
+          "epochs": 4,
+          "invalid_time_frames": 0,
+          "actions": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "missing_actions": [],
+          "post_seek_epoch_observed": true,
+          "post_reinsert_instance_observed": true,
+          "frame_speed_values": [
+            1.0
+          ],
+          "speed_change_verified": false,
+          "playback_speed_values": [
+            1.0,
+            1.5
+          ],
+          "audio_track_ids": [
+            1
+          ],
+          "paused_values": [
+            false,
+            true
+          ],
+          "seeking_values": [
+            false,
+            true
+          ],
+          "requested_outputs": [
+            "avfoundation"
+          ],
+          "output_unconfirmed_snapshots": 0,
+          "instance_counters": {
+            "1": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "2": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "3": {
+              "evicted": 0,
+              "rejected": 0
+            }
+          },
+          "sequence_gaps": [],
+          "continuity_breaks": [],
+          "errors": []
+        },
+        "alignment_qualified": false,
+        "causal_event_attribution_verified": false,
+        "loudness_reset_verified": false,
+        "scope": "Observed API acceptance, event order, player state and history identity in scheduled command windows. Events have no command IDs; unobserved reset boundaries, final frames and presentation timing remain uncertified."
+      },
+      "signal": {
+        "original": {
+          "frames_checked": 212,
+          "tolerance_db": 0.05,
+          "reference_start": 0.0,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            2,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "errors": []
+        },
+        "delayed": {
+          "frames_checked": 103,
+          "tolerance_db": 0.05,
+          "reference_start": 0.75,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "errors": []
+        }
+      }
+    },
+    {
+      "case": "aac-avfoundation",
+      "source": "aac",
+      "command": [
+        "/private/tmp/amc-meter-lifecycle-build-arm64/probe",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/aac.mov",
+        "avfoundation",
+        "--video",
+        "--replacement",
+        "/private/tmp/amc-meter-lifecycle-hardware-permitted/delayed.mov"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "capture_sha256": "54c66a053cbd0dc81fdcdcbc3d168a17527bdf8bd870b8633522cfd93dc9bb70",
+      "passed": true,
+      "lifecycle": {
+        "passed": true,
+        "checks": {
+          "load": true,
+          "pause": true,
+          "resume": true,
+          "seek": true,
+          "speed": true,
+          "reinsert": true,
+          "replace": true
+        },
+        "errors": [],
+        "history": {
+          "alignment_qualified": false,
+          "reset_boundary_coverage_unknown": [
+            {
+              "instance": 1,
+              "epoch": 1,
+              "first_received_sequence": 74
+            }
+          ],
+          "observed_history_complete": false,
+          "coverage": "Received snapshots and observed epochs only; unobserved epoch boundaries and final frames are not certified.",
+          "snapshots": 151,
+          "missing_history_snapshots": 1,
+          "unique_frames": 315,
+          "epochs": 4,
+          "invalid_time_frames": 0,
+          "actions": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "missing_actions": [],
+          "post_seek_epoch_observed": true,
+          "post_reinsert_instance_observed": true,
+          "frame_speed_values": [
+            1.0
+          ],
+          "speed_change_verified": false,
+          "playback_speed_values": [
+            1.0,
+            1.5
+          ],
+          "audio_track_ids": [
+            1
+          ],
+          "paused_values": [
+            false,
+            true
+          ],
+          "seeking_values": [
+            false,
+            true
+          ],
+          "requested_outputs": [
+            "avfoundation"
+          ],
+          "output_unconfirmed_snapshots": 0,
+          "instance_counters": {
+            "1": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "2": {
+              "evicted": 0,
+              "rejected": 0
+            },
+            "3": {
+              "evicted": 0,
+              "rejected": 0
+            }
+          },
+          "sequence_gaps": [],
+          "continuity_breaks": [],
+          "errors": []
+        },
+        "alignment_qualified": false,
+        "causal_event_attribution_verified": false,
+        "loudness_reset_verified": false,
+        "scope": "Observed API acceptance, event order, player state and history identity in scheduled command windows. Events have no command IDs; unobserved reset boundaries, final frames and presentation timing remain uncertified."
+      },
+      "signal": {
+        "original": {
+          "frames_checked": 212,
+          "tolerance_db": 0.05,
+          "reference_start": 0.0,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            2,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "errors": []
+        },
+        "delayed": {
+          "frames_checked": 103,
+          "tolerance_db": 0.05,
+          "reference_start": 0.75,
+          "signal_version": 2,
+          "impulses_covered": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "errors": []
+        }
+      }
+    }
+  ],
+  "alignment_qualified": false,
+  "app_integration_tested": false,
+  "analyzer_sha256": "8c7732056ea614893fa31809ed42263c60ace917f842210ca879934fb3c19cf6",
+  "runner_sha256": "fa284d8f8c955b141c8950500eb832e0a3a8ff1d65c16cb9722f68455fceee64",
+  "history_analyzer_sha256": "df24618f398de2f558010b9b3d136f95551540d0453ce3e2df51c24d76f9a447",
+  "signal_oracle_sha256": "fb21aed095b0e3574ee5ffe6f3fb1ef49725b7c6aa08fd1062af94d0acce9282",
+  "passed": true
+}
