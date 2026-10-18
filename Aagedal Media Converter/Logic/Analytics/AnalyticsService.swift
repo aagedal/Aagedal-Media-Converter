@@ -19,8 +19,59 @@ extension AnalyticsMediaInfoProviding {
     func pixelFormat(for file: URL, ffmpegPath: String) async -> String? { nil }
 }
 
+/// A run and every outstanding metadata reader share one cleanup owner.
+private final class AnalyticsRunResources: Sendable {
+    let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("analytics_\(UUID().uuidString)", isDirectory: true)
+    private let manager: SecurityScopedBookmarkManager
+    private let accesses: [SecurityScopedAccess]
+
+    init(inputs: [URL], manager: SecurityScopedBookmarkManager) {
+        self.manager = manager
+        var seen = Set<URL>()
+        accesses = inputs.filter { seen.insert($0).inserted }.map { manager.startAccessing(url: $0) }
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: scratch)
+        for access in accesses.reversed() { manager.stopAccessing(access) }
+    }
+}
+
+/// Deadline tasks can outlive their callers. Keep their file grants and scratch
+/// alive through the actual provider return, including noncooperative reads.
+private struct RetainedAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
+    let base: any AnalyticsMediaInfoProviding
+    let resources: AnalyticsRunResources
+
+    func duration(for file: URL) async -> Double? {
+        defer { withExtendedLifetime(resources) {} }
+        return await base.duration(for: file)
+    }
+
+    func resolution(for file: URL) async -> (width: Int, height: Int)? {
+        defer { withExtendedLifetime(resources) {} }
+        return await base.resolution(for: file)
+    }
+
+    func bitDepth(for file: URL) async -> Int? {
+        defer { withExtendedLifetime(resources) {} }
+        return await base.bitDepth(for: file)
+    }
+
+    func timing(for file: URL) async -> AnalyticsTiming? {
+        defer { withExtendedLifetime(resources) {} }
+        return await base.timing(for: file)
+    }
+
+    func pixelFormat(for file: URL, ffmpegPath: String) async -> String? {
+        defer { withExtendedLifetime(resources) {} }
+        return await base.pixelFormat(for: file, ffmpegPath: ffmpegPath)
+    }
+}
+
 private struct DefaultAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
     let subprocessRunner: any SubprocessRunning
+    let resources: AnalyticsRunResources
 
     func timing(for file: URL) async -> AnalyticsTiming? {
         if file.pathExtension.lowercased() == "ivf", let header = IVFHeaderParser.parse(url: file) {
@@ -34,12 +85,14 @@ private struct DefaultAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
         let video = VideoMetadataService.mapVideoStream(stream)
         let duration: Double?
         if let streamDuration = video.duration { duration = streamDuration }
-        else { duration = await SwiftExifMediaProbe.duration(for: file) }
+        else { duration = await SwiftExifMediaProbe.durationWithoutDeadline(for: file) }
         return AnalyticsTiming(duration: duration, frameRate: video.frameRate?.value, frameCount: stream.frameCount)
     }
 
     func pixelFormat(for file: URL, ffmpegPath: String) async -> String? {
+        let resources = resources
         let metadataFormat = try? await NonJoiningTaskDeadline.run(timeout: .seconds(15)) {
+            defer { withExtendedLifetime(resources) {} }
             guard let meta = try? await SwiftExifMediaProbe.readVideo(file),
                   let stream = meta.videoStreams.first(where: { $0.isAttachedPic != true }) else { return nil as String? }
             return VideoMetadataService.mapVideoStream(stream).pixelFormat
@@ -70,7 +123,7 @@ private struct DefaultAnalyticsMediaInfoProvider: AnalyticsMediaInfoProviding {
     }
 
     func duration(for file: URL) async -> Double? {
-        await SwiftExifMediaProbe.duration(for: file)
+        await SwiftExifMediaProbe.durationWithoutDeadline(for: file)
     }
 
     func resolution(for file: URL) async -> (width: Int, height: Int)? {
@@ -121,7 +174,8 @@ actor AnalyticsService {
     private let ffmpegPathProvider: @Sendable () -> String?
     private let avmdecPathProvider: @Sendable () -> String?
     private let ssimulacra2PathProvider: @Sendable () -> String?
-    private let mediaInfoProvider: any AnalyticsMediaInfoProviding
+    private let mediaInfoProvider: (any AnalyticsMediaInfoProviding)?
+    private let inputAccessManager: SecurityScopedBookmarkManager
     private let mediaInfoTimeout: Duration
     private var activeAnalysisID: UUID?
     private var activeAnalysisRunID: UUID?
@@ -134,13 +188,15 @@ actor AnalyticsService {
         ssimulacra2PathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.ssimulacra2Path },
         avmdecPathProvider: @escaping @Sendable () -> String? = { BinaryPathResolver.avmdecPath },
         mediaInfoProvider: (any AnalyticsMediaInfoProviding)? = nil,
-        mediaInfoTimeout: Duration = AnalyticsService.mediaInfoTimeout
+        mediaInfoTimeout: Duration = AnalyticsService.mediaInfoTimeout,
+        inputAccessManager: SecurityScopedBookmarkManager = .shared
     ) {
         self.avmdecPathProvider = avmdecPathProvider
         self.subprocessRunner = subprocessRunner
         self.ffmpegPathProvider = ffmpegPathProvider
         self.ssimulacra2PathProvider = ssimulacra2PathProvider
-        self.mediaInfoProvider = mediaInfoProvider ?? DefaultAnalyticsMediaInfoProvider(subprocessRunner: subprocessRunner)
+        self.mediaInfoProvider = mediaInfoProvider
+        self.inputAccessManager = inputAccessManager
         self.mediaInfoTimeout = mediaInfoTimeout
     }
 
@@ -184,6 +240,9 @@ actor AnalyticsService {
             throw AnalyticsError.ffmpegNotFound
         }
 
+        let resources = AnalyticsRunResources(inputs: [sourceFile, encodedFile], manager: inputAccessManager)
+        defer { withExtendedLifetime(resources) {} }
+
         // Reject directories explicitly — `fileExists(atPath:)` alone returns true for folders,
         // which would let callers (e.g. DCP/IMF package outputs) sail past validation and
         // surface a confusing FFmpeg error instead.
@@ -202,7 +261,7 @@ actor AnalyticsService {
                     sourceFile: sourceFile, encodedFile: encodedFile, sourceRange: sourceRange,
                     enabledMetrics: enabledMetrics, vmafModel: vmafModel,
                     maxFrames: ssimulacra2MaxFrames, resolution: comparisonResolution,
-                    ffmpegPath: ffmpegPath, progress: progress
+                    ffmpegPath: ffmpegPath, resources: resources, progress: progress
                 )
             }
         }
@@ -224,24 +283,29 @@ actor AnalyticsService {
         sourceFile: URL, encodedFile: URL, sourceRange: AnalyticsSourceRange,
         enabledMetrics: [QualityMetric], vmafModel: VMAFModel, maxFrames: Int,
         resolution: AnalyticsComparisonResolution, ffmpegPath: String,
+        resources: AnalyticsRunResources,
         progress: @escaping @Sendable (QualityMetric, Double) -> Void
     ) async throws -> [MetricResult] {
         guard !enabledMetrics.isEmpty else { return [] }
-        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("analytics_\(UUID().uuidString)", isDirectory: true)
+        let scratch = resources.scratch
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: scratch) }
+        let provider = RetainedAnalyticsMediaInfoProvider(
+            base: mediaInfoProvider ?? DefaultAnalyticsMediaInfoProvider(subprocessRunner: subprocessRunner, resources: resources),
+            resources: resources
+        )
         let source = try await prepareInput(sourceFile, output: scratch.appendingPathComponent("source.mkv"), ffmpegPath: ffmpegPath)
         let encoded = sourceFile == encodedFile ? source : try await prepareInput(encodedFile, output: scratch.appendingPathComponent("encoded.mkv"), ffmpegPath: ffmpegPath)
-        let provider = mediaInfoProvider
         let timings = try? await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {
+            try Task.checkCancellation()
             let sourceTiming = await provider.timing(for: sourceFile)
+            try Task.checkCancellation()
             let encodedTiming = await provider.timing(for: encodedFile)
             return (sourceTiming, encodedTiming)
         }
         try Task.checkCancellation()
         let dimensions: (width: Int, height: Int)?
         do {
-            dimensions = try await getVideoResolution(for: resolution == .source ? source : encoded)
+            dimensions = try await getVideoResolution(for: resolution == .source ? source : encoded, provider: provider)
         } catch {
             try Task.checkCancellation()
             // FFmpeg can resolve dimensions itself; frame extraction needs known geometry.
@@ -263,7 +327,7 @@ actor AnalyticsService {
             try Task.checkCancellation()
             var result = try await runMetric(metric, ffmpegPath: ffmpegPath, sourceFile: source, encodedFile: encoded,
                                              sourceRange: sourceRange, vmafModel: vmafModel,
-                                             ssimulacra2MaxFrames: maxFrames, comparisonResolution: resolution, comparisonDimensions: dimensions) {
+                                             ssimulacra2MaxFrames: maxFrames, comparisonResolution: resolution, comparisonDimensions: dimensions, provider: provider) {
                 progress(metric, $0)
             }
             try Task.checkCancellation()
@@ -343,7 +407,8 @@ actor AnalyticsService {
         return output
     }
 
-    /// Cancels the captured analyses and waits for their helpers and scratch cleanup to drain.
+    /// Cancels captured analyses and drains their helpers. Timed-out metadata reads
+    /// retain input access and scratch until they actually exit, without blocking cancellation.
     func cancelAnalysis(operationID: UUID? = nil) async {
         let tasks = analysisTasks.filter { operationID == nil || $0.value.operationID == operationID }
         if operationID == nil || activeAnalysisID == operationID {
@@ -373,6 +438,7 @@ actor AnalyticsService {
         ssimulacra2MaxFrames: Int,
         comparisonResolution: AnalyticsComparisonResolution,
         comparisonDimensions: (width: Int, height: Int)?,
+        provider: any AnalyticsMediaInfoProviding,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
         logger.info("Starting \(metric.displayName, privacy: .public) analysis")
@@ -387,6 +453,7 @@ actor AnalyticsService {
                 maxFrames: ssimulacra2MaxFrames,
                 comparisonResolution: comparisonResolution,
                 comparisonDimensions: comparisonDimensions,
+                provider: provider,
                 progress: progress
             )
         }
@@ -403,7 +470,6 @@ actor AnalyticsService {
             vmafLogURL = logFile
             let encodedBitDepth: Int?
             if vmafModel.usesV1Features {
-                let provider = mediaInfoProvider
                 do {
                     encodedBitDepth = try await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {
                         await provider.bitDepth(for: encodedFile)
@@ -627,23 +693,23 @@ actor AnalyticsService {
         maxFrames: Int,
         comparisonResolution: AnalyticsComparisonResolution,
         comparisonDimensions: (width: Int, height: Int)?,
+        provider: any AnalyticsMediaInfoProviding,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> MetricResult {
         guard let ssimulacra2Path = ssimulacra2PathProvider() else {
             throw AnalyticsError.ssimulacra2NotFound
         }
 
-        let encodedDuration = try await getVideoDuration(for: encodedFile)
-        let sourceDuration = try await getVideoDuration(for: sourceFile)
+        let encodedDuration = try await getVideoDuration(for: encodedFile, provider: provider)
+        let sourceDuration = try await getVideoDuration(for: sourceFile, provider: provider)
         let duration = min(encodedDuration, sourceRange.duration ?? encodedDuration, max(0, sourceDuration - sourceRange.start))
         guard duration.isFinite, duration > 0 else {
             throw AnalyticsError.parsingFailed("Source interval and encoded video have no overlapping duration")
         }
         let resolution: (width: Int, height: Int)
         if let comparisonDimensions { resolution = comparisonDimensions }
-        else { resolution = try await getVideoResolution(for: comparisonResolution == .source ? sourceFile : encodedFile) }
+        else { resolution = try await getVideoResolution(for: comparisonResolution == .source ? sourceFile : encodedFile, provider: provider) }
 
-        let provider = mediaInfoProvider
         // Pixel discovery may launch a bounded helper; join it on cancellation before
         // releasing scratch files, just like metric extraction and AV2 decoding.
         let sourceFormat = await provider.pixelFormat(for: sourceFile, ffmpegPath: ffmpegPath)
@@ -880,8 +946,7 @@ actor AnalyticsService {
     }
 
     /// Gets video duration in seconds via SwiftMediaMetadata (AVFoundation fallback).
-    private func getVideoDuration(for file: URL) async throws -> Double {
-        let provider = mediaInfoProvider
+    private func getVideoDuration(for file: URL, provider: any AnalyticsMediaInfoProviding) async throws -> Double {
         let duration: Double?
         do {
             duration = try await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {
@@ -905,8 +970,7 @@ actor AnalyticsService {
     }
 
     /// Gets video resolution (width x height) via SwiftMediaMetadata.
-    private func getVideoResolution(for file: URL) async throws -> (width: Int, height: Int) {
-        let provider = mediaInfoProvider
+    private func getVideoResolution(for file: URL, provider: any AnalyticsMediaInfoProviding) async throws -> (width: Int, height: Int) {
         let resolution: (width: Int, height: Int)?
         do {
             resolution = try await NonJoiningTaskDeadline.run(timeout: mediaInfoTimeout) {

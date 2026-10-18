@@ -2,6 +2,26 @@
 
 Last reviewed: 2026-10-18
 
+## Quality-analysis input ownership — 2026-10-18
+
+Owner: Codex. Quality runs now acquire their own source/output scopes before file
+validation and share one cleanup owner with outstanding metadata reads. Helpers
+retain access through drain; nonjoining metadata deadlines retain scopes and AV2
+reconstructions until the actual reader returns. Default duration discovery uses
+the existing outer deadline. Cancellation checks prevent a late source timing
+read from starting another encoded read. No translation, measurement algorithm,
+dependency, bundled binary or license changed.
+
+All 14 access/cancellation regressions pass, including distinct/identical-input
+success, validation failure, helper drain, AV2 resolution timeout/cancellation,
+optional VMAF timeout with successful metric completion, and late timing return.
+The earlier 39 focused quality/report/lifecycle checks also pass. The final
+Debug build and all 1,448 unit tests pass, with zero failures and one benchmark
+skip (`/private/tmp/amc-analysis-access-unit.xcresult`). The optimized build and all 41 Release lifecycle/quality checks pass
+(`/private/tmp/amc-analysis-access-release.xcresult`). See [ownership details](docs/video-quality-report-format.md#input-access-and-cancellation-ownership).
+A parser that never returns retains its resources; sandbox enforcement and the
+other qualification limits below remain open.
+
 ## Paused audio-group preview refresh — 2026-10-18
 
 Owner: Codex. A native pixel test reproduced the documented MPEG-4 regrouping

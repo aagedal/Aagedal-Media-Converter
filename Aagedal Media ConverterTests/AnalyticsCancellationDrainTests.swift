@@ -10,7 +10,9 @@ final class AnalyticsCancellationDrainTests: XCTestCase {
         let started = expectation(description: "Metric started")
         let cancelled = expectation(description: "Metric cancellation requested")
         let runner = AnalyticsDrainRunner(started: [started], cancelled: [cancelled])
-        let service = makeService(runner: runner)
+        let access = AnalyticsAccessRecorder()
+        let service = AnalyticsService(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" },
+            mediaInfoProvider: AnalyticsDrainMediaInfoProvider(), inputAccessManager: access.manager())
         let run = startAnalysis(service: service, fixture: fixture, metrics: [.psnr, .xpsnr])
         await fulfillment(of: [started], timeout: 2)
 
@@ -21,12 +23,15 @@ final class AnalyticsCancellationDrainTests: XCTestCase {
         }
         await fulfillment(of: [cancelled], timeout: 2)
         XCTAssertFalse(cancellationReturned, "Cancellation returned while the helper still held its inputs")
+        XCTAssertEqual(Set(access.started), Set([fixture.source, fixture.output]))
+        XCTAssertTrue(access.stopped.isEmpty, "Input access must outlive helper drain")
         await runner.finish(run: 0)
         await cancellation.value
         await assertCancelled(run)
         let runCount = await runner.runCount
         XCTAssertTrue(cancellationReturned)
         XCTAssertEqual(runCount, 1)
+        XCTAssertEqual(Set(access.stopped), Set([fixture.source, fixture.output]))
     }
 
     func testSSIMULACRACancellationDrainsDiscoveryAndRemovesScratchBeforeReturning() async throws {
@@ -277,6 +282,139 @@ final class AnalyticsCancellationDrainTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: scratch.path))
     }
 
+    func testQualityInputAccessBalancesSuccessAndDeduplicatesIdenticalURLs() async throws {
+        for sameInput in [false, true] {
+            let fixture = try makeFixture()
+            defer { try? FileManager.default.removeItem(at: fixture.directory) }
+            let access = AnalyticsAccessRecorder()
+            let started = expectation(description: "Leased metric started")
+            let runner = AnalyticsDrainRunner(started: [started], cancelled: [])
+            let service = AnalyticsService(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" },
+                mediaInfoProvider: AnalyticsDrainMediaInfoProvider(), inputAccessManager: access.manager())
+            let output = sameInput ? fixture.source : fixture.output
+            let run = startAnalysis(service: service, fixture: (fixture.directory, fixture.source, output))
+            await fulfillment(of: [started], timeout: 2)
+            XCTAssertEqual(access.started.count, sameInput ? 1 : 2)
+            XCTAssertTrue(access.stopped.isEmpty)
+            await runner.finish(run: 0)
+            let results = try await run.value
+            XCTAssertEqual(results.count, 1)
+            XCTAssertEqual(access.stopped.count, access.started.count)
+            XCTAssertEqual(Set(access.stopped), Set(access.started))
+        }
+    }
+
+    func testQualityInputAccessReleasesAfterValidationFailure() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        try FileManager.default.removeItem(at: fixture.source)
+        let access = AnalyticsAccessRecorder()
+        let runner = AnalyticsDrainRunner(started: [], cancelled: [])
+        let service = AnalyticsService(subprocessRunner: runner, ffmpegPathProvider: { "/fixture/ffmpeg" },
+            inputAccessManager: access.manager())
+        do {
+            _ = try await startAnalysis(service: service, fixture: fixture).value
+            XCTFail("Missing source must fail validation")
+        } catch AnalyticsError.sourceFileNotFound { }
+        XCTAssertEqual(Set(access.started), Set([fixture.source, fixture.output]))
+        XCTAssertEqual(access.stopped.count, 2)
+        let count = await runner.runCount
+        XCTAssertEqual(count, 0)
+    }
+
+    func testTimedOutOrCancelledMetadataRetainsAV2ScratchAndInputAccessUntilReadExits() async throws {
+        for cancel in [false, true] {
+            let fixture = try makeFixture()
+            defer { try? FileManager.default.removeItem(at: fixture.directory) }
+            let source = fixture.directory.appendingPathComponent("source-av2.mkv")
+            try Data("V_AV2".utf8).write(to: source)
+            let access = AnalyticsAccessRecorder()
+            let started = expectation(description: "Reconstructed metadata read started")
+            let provider = GatedAnalyticsMetadata(started: started)
+            defer { Task { await provider.finish() } }
+            let service = AnalyticsService(subprocessRunner: ImmediateAnalyticsLeaseRunner(),
+                ffmpegPathProvider: { "/fixture/ffmpeg" }, ssimulacra2PathProvider: { "/fixture/ssimulacra2" },
+                avmdecPathProvider: { "/fixture/avmdec" }, mediaInfoProvider: provider,
+                mediaInfoTimeout: cancel ? .seconds(5) : .milliseconds(50), inputAccessManager: access.manager())
+            let run = startAnalysis(service: service, fixture: (fixture.directory, source, source), metrics: [.ssimulacra2])
+            await fulfillment(of: [started], timeout: 2)
+            let preparedFile = await provider.file
+            let prepared = try XCTUnwrap(preparedFile)
+            XCTAssertNotEqual(prepared, source)
+            XCTAssertTrue(FileManager.default.fileExists(atPath: prepared.path))
+            if cancel {
+                try await NonJoiningTaskDeadline.run(timeout: .seconds(2)) { await service.cancelAnalysis() }
+                await assertCancelled(run)
+            } else {
+                do {
+                    _ = try await run.value
+                    XCTFail("Blocked metadata must time out")
+                } catch AnalyticsError.metricFailed { }
+            }
+            XCTAssertTrue(access.stopped.isEmpty, "Deadline return must not revoke access from a live read")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: prepared.path), "A live parser still owns the reconstructed file")
+            await provider.finish()
+            let deadline = ContinuousClock.now + .seconds(2)
+            while access.stopped.count < 1, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertEqual(access.stopped.count, 1)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: prepared.deletingLastPathComponent().path))
+        }
+    }
+
+    func testOptionalMetadataTimeoutRetainsAccessAfterSuccessfulMetric() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let access = AnalyticsAccessRecorder()
+        let started = expectation(description: "Optional bit-depth read started")
+        let provider = GatedAnalyticsMetadata(started: started, gate: .bitDepth)
+        defer { Task { await provider.finish() } }
+        let service = AnalyticsService(subprocessRunner: ImmediateAnalyticsLeaseRunner(),
+            ffmpegPathProvider: { "/fixture/ffmpeg" }, mediaInfoProvider: provider,
+            mediaInfoTimeout: .milliseconds(50), inputAccessManager: access.manager())
+        let run = Task {
+            try await service.runAnalytics(sourceFile: fixture.source, encodedFile: fixture.output,
+                enabledMetrics: [.vmaf], vmafModel: .vmaf_v1_0_16) { _, _ in }
+        }
+        await fulfillment(of: [started], timeout: 2)
+        let results = try await run.value
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results.first?.overallScore, 90)
+        XCTAssertTrue(access.stopped.isEmpty, "A successful metric must not revoke a timed-out reader's grant")
+        await provider.finish()
+        try await waitForInputRelease(access, count: 2)
+    }
+
+    func testCancelledTimingReadDoesNotStartEncodedProbeAfterReturningLate() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let access = AnalyticsAccessRecorder()
+        let started = expectation(description: "Source timing read started")
+        let provider = GatedAnalyticsMetadata(started: started, gate: .timing)
+        defer { Task { await provider.finish() } }
+        let service = AnalyticsService(subprocessRunner: ImmediateAnalyticsLeaseRunner(),
+            ffmpegPathProvider: { "/fixture/ffmpeg" }, mediaInfoProvider: provider,
+            mediaInfoTimeout: .seconds(5), inputAccessManager: access.manager())
+        let run = startAnalysis(service: service, fixture: fixture)
+        await fulfillment(of: [started], timeout: 2)
+        try await NonJoiningTaskDeadline.run(timeout: .seconds(2)) { await service.cancelAnalysis() }
+        await assertCancelled(run)
+        XCTAssertTrue(access.stopped.isEmpty)
+        await provider.finish()
+        try await waitForInputRelease(access, count: 2)
+        let timingReads = await provider.timingReads
+        XCTAssertEqual(timingReads, [fixture.source], "A cancelled timing worker must not start the encoded read")
+    }
+
+    private func waitForInputRelease(_ access: AnalyticsAccessRecorder, count: Int) async throws {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while access.stopped.count < count, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(access.stopped.count, count)
+    }
+
     private typealias Fixture = (directory: URL, source: URL, output: URL)
 
     private func makeFixture() throws -> Fixture {
@@ -411,4 +549,75 @@ private func analyticsDrainResult() -> SubprocessResult {
         standardError: Data("PSNR y:38.12 u:42.34 v:43.56 average:39.01 min:25.67 max:48.90".utf8),
         discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .milliseconds(1)
     )
+}
+
+private final class AnalyticsAccessRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var starts: [URL] = []
+    private var stops: [URL] = []
+    var started: [URL] { lock.withLock { starts } }
+    var stopped: [URL] { lock.withLock { stops } }
+
+    func manager() -> SecurityScopedBookmarkManager {
+        SecurityScopedBookmarkManager(defaults: UserDefaults(suiteName: "analytics-lease-\(UUID().uuidString)")!,
+            startScope: { [self] url in lock.withLock { starts.append(url) }; return true },
+            stopScope: { [self] url in lock.withLock { stops.append(url) } })
+    }
+}
+
+private actor GatedAnalyticsMetadata: AnalyticsMediaInfoProviding {
+    let started: XCTestExpectation
+    enum Gate { case resolution, bitDepth, timing }
+    let gate: Gate
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var timingReads: [URL] = []
+    private(set) var file: URL?
+    init(started: XCTestExpectation, gate: Gate = .resolution) {
+        self.started = started
+        self.gate = gate
+    }
+    func duration(for file: URL) async -> Double? { 1 }
+    func resolution(for file: URL) async -> (width: Int, height: Int)? {
+        if gate == .resolution { await wait(for: file) }
+        return (16, 16)
+    }
+    func bitDepth(for file: URL) async -> Int? {
+        if gate == .bitDepth { await wait(for: file) }
+        return 8
+    }
+    func timing(for file: URL) async -> AnalyticsTiming? {
+        timingReads.append(file)
+        if gate == .timing { await wait(for: file) }
+        return nil
+    }
+    private func wait(for file: URL) async {
+        self.file = file
+        await withCheckedContinuation {
+            continuation = $0
+            started.fulfill()
+        }
+    }
+    func finish() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private struct ImmediateAnalyticsLeaseRunner: SubprocessRunning {
+    func run(_ request: SubprocessRequest,
+             outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?) async throws -> SubprocessResult {
+        if request.arguments.contains("ffv1"), let path = request.arguments.last {
+            try Data([0]).write(to: URL(fileURLWithPath: path))
+        }
+        if let filterIndex = request.arguments.firstIndex(where: { $0 == "-lavfi" || $0 == "-filter_complex" }),
+           let filter = request.arguments.dropFirst(filterIndex + 1).first,
+           let marker = filter.range(of: "log_path="),
+           let end = filter[marker.upperBound...].firstIndex(of: ":") {
+            let escaped = String(filter[marker.upperBound..<end])
+            let path = escaped.replacingOccurrences(of: "\\\\", with: "\\").replacingOccurrences(of: "\\'", with: "'")
+            try Data("{\"pooled_metrics\":{\"vmaf\":{\"mean\":90,\"min\":90,\"max\":90}}}".utf8)
+                .write(to: URL(fileURLWithPath: path))
+        }
+        return analyticsDrainResult()
+    }
 }

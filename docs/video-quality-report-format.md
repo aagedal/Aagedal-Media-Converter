@@ -63,6 +63,28 @@ footers are repeated; long text is paginated using actual visible character
 ranges. Native JSON and PDF saves hold security-scoped destination access and
 write atomically. Cancelling the save panel preserves the measurement.
 
+## Input access and cancellation ownership
+
+Quality analysis acquires source and encoded-file security-scoped access before
+checking file availability. Identical input URLs share one grant. The run owns
+those grants and its AV2 reconstruction directory through validation, metrics
+and helper draining, independently of the caller's preview/conversion access.
+
+Metadata deadlines return promptly even when a parser does not observe
+cancellation. Each outstanding reader retains the run's grants and reconstruction
+files until its actual return; timeout or cancellation cannot delete its input
+underneath it. This also applies to optional VMAF bit-depth discovery when the
+metric completes successfully using its fallback. A cancelled source timing read
+cannot start a new encoded timing read after returning late. The default duration
+probe uses the service's outer deadline, avoiding a nested detached reader that
+could otherwise outlive the resource owner.
+
+Cleanup occurs after the final owner exits. A parser that never returns retains
+its grant and reconstruction directory for that lifetime; the analysis UI does
+not wait for it. This ownership behavior is covered by gated metadata and helper
+regressions. It does not establish App Sandbox enforcement, which is disabled
+in the current project configurations.
+
 ## SSIMULACRA2 frame sampling
 
 The frame limit applies to distinct decoded frame ordinals, including on short
