@@ -88,3 +88,17 @@ cancellation, so the report retains all windows.
 Release/device and sandbox enforcement qualification remain open; the project
 currently disables App Sandbox in both configurations. Translations outside
 English/Norwegian await language review.
+
+
+## Paused preview continuation — 2026-10-18
+
+A later native decoded-pixel test independently reproduces the MPEG-4 artifact
+noted above (0.410028 normalized RGB error after a mono-pair selection). The shared
+MPV selection lifecycle now waits for an exact scheduled refresh and decoded
+restart while preserving pause, current/newer seek targets and source ownership.
+The first corrected run preserves identical image pixels across all four
+mono-pair/5.1/single-track/reselection transitions. See the
+[current method and validation](AUDIO-METERING-PLAN.md#paused-grouped-preview-refresh--2026-10-18).
+All four final native UI checks pass in
+`/private/tmp/amc-regrouping-final-ui.xcresult`, including grouped peak, grouped
+silence and stereo phase. This does not qualify physical audio/video synchronization.

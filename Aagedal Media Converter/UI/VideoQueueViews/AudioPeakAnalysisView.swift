@@ -119,6 +119,8 @@ struct AudioPeakAnalysisView: View {
                             ProgressView("Preparing preview…").tint(.white)
                         }
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("analysis.peaks.video")
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .background(.black)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -127,9 +129,11 @@ struct AudioPeakAnalysisView: View {
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         }
                         .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                        .accessibilityIdentifier("analysis.peaks.play")
                         .disabled(!previewReady)
                         Slider(value: Binding(get: { position }, set: { seconds in seek(seconds) }), in: 0...timelineDuration)
                             .accessibilityLabel("Inspection playback position")
+                            .accessibilityIdentifier("analysis.peaks.position")
                             .disabled(!previewReady)
                         Text(verbatim: time(position))
                             .font(.caption).monospacedDigit()

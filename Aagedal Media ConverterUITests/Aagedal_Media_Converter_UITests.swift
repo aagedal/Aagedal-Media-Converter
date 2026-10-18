@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import AppKit
 import PDFKit
 
 final class Aagedal_Media_Converter_UITests: XCTestCase {
@@ -1945,6 +1946,67 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(interval["peakDBTP"] as? Double), -6)
         XCTAssertEqual(try XCTUnwrap(interval["start"] as? Double), 1, accuracy: 0.2)
         XCTAssertEqual(try XCTUnwrap(interval["end"] as? Double), 2, accuracy: 0.2)
+    }
+
+    @MainActor
+    func testAudioRegroupingPreservesPausedVideoPixels() throws {
+        launchApp(generatedFixture: true, additionalArguments: ["-AMC_UI_TEST_GROUPED_PEAKS", "YES"], previewContainer: "mkv")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Audio"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let play = element("analysis.peaks.play")
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForEnabled(true, of: play, timeout: 20))
+        let slider = app.sliders["analysis.peaks.position"]
+        XCTAssertTrue(slider.exists)
+        slider.adjust(toNormalizedSliderPosition: 0.3)
+        let time = element("analysis.peaks.time")
+        let moved = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            return (Double(text.replacingOccurrences(of: " s", with: "")) ?? 0) > 1
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: moved, object: time)], timeout: 5), .completed)
+        let video = element("analysis.peaks.video")
+        XCTAssertTrue(video.exists)
+        let baseline = video.screenshot()
+        let baselinePixels = try previewPixels(baseline)
+        let kind = element("analysis.peaks.kind")
+        for (index, title) in ["Mono pair", "5.1 multi-mono", "Audio track", "Mono pair"].enumerated() {
+            kind.click()
+            app.menuItems[title].click()
+            XCTAssertTrue(waitForEnabled(true, of: play, timeout: 20))
+            XCTAssertEqual(play.label, "Play", "Changing the audition program must leave the preview paused")
+            let regrouped = video.screenshot()
+            let pixels = try previewPixels(regrouped)
+            let difference = zip(baselinePixels, pixels).enumerated().reduce(0.0) { total, pair in
+                pair.offset % 4 == 3 ? total : total + abs(Double(pair.element.0) - Double(pair.element.1))
+            } / Double(64 * 36 * 3 * 255)
+            for (name, screenshot) in [("baseline", baseline), ("regrouped", regrouped)] {
+                let attachment = XCTAttachment(screenshot: screenshot)
+                attachment.name = "Paused video \(index) \(title) \(name) error=\(difference)"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+            XCTAssertLessThan(difference, 0.04, "Audio regrouping changed the paused decoded image without a video seek")
+        }
+    }
+
+    private func previewPixels(_ screenshot: XCUIScreenshot) throws -> [UInt8] {
+        let image = try XCTUnwrap(screenshot.image.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        var pixels = [UInt8](repeating: 0, count: 64 * 36 * 4)
+        try pixels.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: 64, height: 36,
+                bitsPerComponent: 8, bytesPerRow: 64 * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.interpolationQuality = .medium
+            context.draw(image, in: CGRect(x: 0, y: 0, width: 64, height: 36))
+        }
+        return pixels
     }
 
     @MainActor

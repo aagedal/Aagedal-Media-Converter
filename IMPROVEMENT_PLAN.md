@@ -2,6 +2,24 @@
 
 Last reviewed: 2026-10-18
 
+## Paused audio-group preview refresh — 2026-10-18
+
+Owner: Codex. A native pixel test reproduced the documented MPEG-4 regrouping
+corruption at a paused non-keyframe: normalized RGB error 0.410028 after selecting
+a mono pair. Group/track selection now submits a scheduler-owned exact refresh
+and waits for decoded restart rather than property acceptance. It captures the
+actual libmpv position, preserves newer seek targets, pause and near-EOF frames,
+and checks cancellation/source generation before returning. Owned waiters resolve
+on replacement/stop/EOF/shutdown/cancellation or a bounded deadline.
+
+The first corrected native run preserves identical pixels through four group/track
+transitions (all errors 0.0). Thirty-four focused playback tests and the final
+rapid-seek/EOF/cancellation/replacement cases pass. The final reviewed Debug build
+and 1,443 unit tests pass with zero failures and one intentional benchmark skip
+(`/private/tmp/amc-regrouping-final-unit.xcresult`). All four final native UI checks pass: paused pixels, grouped peak, grouped
+silence and stereo phase (`/private/tmp/amc-regrouping-final-ui.xcresult`). See [method and evidence](docs/AUDIO-METERING-PLAN.md).
+No source measurement algorithms, dependencies, bundled binaries or licenses changed.
+
 ## Analysis controls and score guidance — 2026-10-18
 
 Owner: Codex. Added 75 catalog entries covering analysis tabs/settings, audio
@@ -25,8 +43,9 @@ No dependencies, bundled binaries or licenses changed.
 Remaining display work: detailed assembled comparison/pixel-processing metadata,
 warnings and some shared track labels remain English; PDF numbers retain the
 existing decimal-point convention. These are distinct from the now-localized
-primary controls. Paused MPEG-4 regrouping and playback timestamp integration,
-plus Release/device and sandbox qualification, remain open. The completion goal
+primary controls. The paused MPEG-4 continuation above addresses regrouping;
+playback timestamp integration plus Release/device and sandbox qualification
+remain open. The completion goal
 stays active.
 
 ## Decoded SSIMULACRA2 sampling — 2026-10-18

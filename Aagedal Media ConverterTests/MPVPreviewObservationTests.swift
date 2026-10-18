@@ -64,6 +64,84 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testAudioRegroupingPreservesNearEOFPositionAndRejectsCancelledSelection() async throws {
+        let source = try await makeGroupedVideoFixture()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.stop() }
+        player.load(url: source, autostart: true)
+        try await waitForMeterCondition { player.isFileLoaded && player.reachedEnd && !player.isPlaying }
+        let position = player.timePos
+        XCTAssertGreaterThan(position, 0.97)
+        let ready = await player.selectAudioPresentation(.stereo(left: 0, right: 1))
+        XCTAssertTrue(ready)
+        try await waitForMeterCondition { !player.isPlaying && abs(player.timePos - position) < 0.02 }
+        XCTAssertEqual(player.timePos, position, accuracy: 0.02,
+                       "Refreshing the paused last frame must not rewind by the navigation EOF margin")
+        let graph = player.audioPresentationFilterGraph
+        let cancelled = Task { await player.selectAudioPresentation(.track(0)) }
+        cancelled.cancel()
+        let cancelledResult = await cancelled.value
+        XCTAssertFalse(cancelledResult)
+        XCTAssertEqual(player.audioPresentationFilterGraph, graph)
+        withExtendedLifetime(layer) {}
+    }
+
+    @MainActor
+    func testAudioRefreshWaitersDrainAcrossReplacementAndStop() async throws {
+        let source = try await makeGroupedVideoFixture()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.stop() }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        let replaced = Task { await player.selectAudioPresentation(.stereo(left: 0, right: 1)) }
+        await Task.yield()
+        player.load(url: source)
+        _ = try await NonJoiningTaskDeadline.run(timeout: .seconds(2)) { await replaced.value }
+        try await waitForMeterCondition { player.isFileLoaded }
+        XCTAssertEqual(player.audioPresentationFilterGraph, "", "An old readiness waiter cannot restore a replaced audio graph")
+        player.seek(to: 0.625)
+        let grouped = await player.selectAudioPresentation(.stereo(left: 0, right: 1))
+        XCTAssertTrue(grouped)
+        try await waitForMeterCondition { abs(player.timePos - 0.625) < 0.02 }
+        let changing = Task { await player.selectAudioPresentation(.track(0)) }
+        await Task.yield()
+        player.seek(to: 0.375)
+        let changed = await changing.value
+        XCTAssertTrue(changed)
+        try await waitForMeterCondition { abs(player.timePos - 0.375) < 0.02 }
+        XCTAssertFalse(player.isPlaying)
+        let stopped = Task { await player.selectAudioPresentation(.stereo(left: 1, right: 0)) }
+        await Task.yield()
+        player.stop()
+        _ = try await NonJoiningTaskDeadline.run(timeout: .seconds(2)) { await stopped.value }
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        withExtendedLifetime(layer) {}
+    }
+
+    @MainActor
+    private func makeGroupedVideoFixture() async throws -> URL {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-group-video-\(UUID().uuidString).mkv")
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "lavfi", "-i", "testsrc2=s=128x128:r=60:d=1",
+                        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
+                        "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000:duration=1",
+                        "-map", "0:v", "-map", "1:a", "-map", "2:a", "-c:v", "mpeg4", "-g", "60", "-c:a", "flac", file.path],
+            timeout: .seconds(20)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        return file
+    }
+
+    @MainActor
     func testPackagedMPVCompressedMonoMeter() async throws {
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-aac-meter-\(UUID().uuidString).mkv")
         defer { try? FileManager.default.removeItem(at: source) }
@@ -847,6 +925,22 @@ final class MPVWakeupContextTests: XCTestCase {
 }
 
 final class MPVSeekSchedulerTests: XCTestCase {
+    func testCompletionStatusRequiresDecodedRestartAndResetsWithSource() throws {
+        var scheduler = MPVSeekScheduler()
+        let submission = try XCTUnwrap(scheduler.request(.init(time: 1.25, exact: true)))
+        XCTAssertNil(scheduler.lastCompletionSucceeded)
+        XCTAssertNil(scheduler.commandReplied(id: submission.id, succeeded: true))
+        XCTAssertNil(scheduler.lastCompletionSucceeded, "Command acceptance does not certify a visible frame")
+        scheduler.seekStarted()
+        XCTAssertNil(scheduler.playbackRestarted())
+        XCTAssertEqual(scheduler.lastCompletionSucceeded, true)
+        scheduler.reset()
+        XCTAssertNil(scheduler.lastCompletionSucceeded)
+        let failed = try XCTUnwrap(scheduler.request(.init(time: 2.25, exact: true)))
+        XCTAssertNil(scheduler.commandReplied(id: failed.id, succeeded: false))
+        XCTAssertEqual(scheduler.lastCompletionSucceeded, false)
+    }
+
     func testDragWaitsForDecodedFrameAndKeepsOnlyLatestTarget() throws {
         var scheduler = MPVSeekScheduler()
         let first = try XCTUnwrap(scheduler.request(.init(time: 10, exact: false)))

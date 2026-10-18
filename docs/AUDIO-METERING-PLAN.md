@@ -1,5 +1,43 @@
 # Audio metering and analysis
 
+## Paused grouped-preview refresh — 2026-10-18
+
+A native decoded-pixel regression reproduces the previously documented MPEG-4
+regrouping artifact. The fixture has six mono FLAC tracks, 320 × 180 MPEG-4 video
+at 24 fps, a 12-frame GOP, and a paused non-keyframe at 1.792 s. Selecting a mono
+pair changed the visible image without a user video seek. Normalized mean absolute
+RGB difference at 64 × 36 was 0.410028, above the test's 0.04 tolerance. This is
+actual decoded preview corruption, not changed measurement values or window layout.
+
+Audio selection now captures the actual libmpv position on its event queue and
+requests an exact refresh through the existing seek scheduler after applying the
+new graph/track. A newer pending/in-flight user seek takes precedence. Readiness
+waits for command acceptance, a seek event and decoded playback restart, including
+any newer coalesced target. It preserves pause and valid near-EOF positions without
+applying the public navigation margin. Audio-only/unseekable behavior is unchanged.
+Cancellation, superseding selection, source replacement, stop, EOF/error and
+shutdown resolve the owned waiter safely; a 15-second deadline bounds readiness.
+Source generation is checked on the event queue and again before returning.
+
+The first corrected native run retains identical image pixels through mono pair,
+5.1, single track and mono-pair reselection: all four differences are 0.0. Result:
+`/private/tmp/amc-regrouping-refresh-ui.xcresult`. Thirty-four focused playback
+checks pass in `/private/tmp/amc-regrouping-lifecycle-unit.xcresult`; the final
+rapid-seek/replacement/stop and near-EOF/cancellation checks also pass in
+`/private/tmp/amc-regrouping-seek-races.xcresult`. The final reviewed Debug build
+and all 1,443 unit tests pass, with zero failures and one intentional benchmark
+skip (`/private/tmp/amc-regrouping-final-unit.xcresult`). All four final native UI checks pass: paused pixels, grouped peak, grouped
+silence and stereo phase (`/private/tmp/amc-regrouping-final-ui.xcresult`). The
+final pixel run again records 0.0 error for every transition; the Norwegian
+peak, silence and phase captures were also visually inspected.
+
+Paused preview evidence: [corrupt frame before the fix](images/audio-regrouping-before.png)
+and [preserved frame after the fix](images/audio-regrouping-after.png).
+
+This qualifies paused frame preservation for the generated fixture, not physical
+speaker/video synchronization or all possible decoder/remote-file behavior. Source
+analysis algorithms, dependencies, bundled binaries and licenses are unchanged.
+
 ## First implementation
 
 - [x] Independent source-channel sample peak and RMS readings in the preview meter.
@@ -99,8 +137,9 @@ All four English/Norwegian UI checks pass in
 and readback, configuration invalidation, tab persistence, conversion readiness,
 and grouped silence selection/navigation/export. Four report/preview captures
 were visually inspected. Export controls are readable; the existing paused
-MPEG-4 regrouping artifact remains visible in grouped preview and is independent
-of source measurements. The new loudness captures are
+MPEG-4 regrouping artifact is visible in these historical grouped captures and
+is independent of source measurements. The paused-refresh continuation above
+addresses it with a decoded-pixel regression. The new loudness captures are
 [English](images/audio-loudness-en.png) and [Norwegian](images/audio-loudness-nb.png).
 
 ### Stereo phase and mono compatibility — 2026-10-17

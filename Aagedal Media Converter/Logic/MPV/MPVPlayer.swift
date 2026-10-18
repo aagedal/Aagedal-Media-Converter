@@ -471,6 +471,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             if let next = seekScheduler.commandReplied(id: submission.id, succeeded: false) {
                 submitSeekLocked(next)
             }
+            completeAudioPresentationRefreshIfIdleLocked()
         }
     }
 
@@ -598,8 +599,23 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private var audioPresentationOwnsSelection = false // Event queue only.
+    private var audioPresentationRefresh: (id: UUID, generation: UInt64, continuation: CheckedContinuation<Bool, Never>, deadline: DispatchWorkItem)?
+
+    private func finishAudioPresentationRefreshLocked(id: UUID? = nil, succeeded: Bool) {
+        guard let refresh = audioPresentationRefresh, id == nil || id == refresh.id else { return }
+        audioPresentationRefresh = nil
+        refresh.deadline.cancel()
+        refresh.continuation.resume(returning: succeeded && refresh.generation == loadGeneration)
+    }
+
+    private func completeAudioPresentationRefreshIfIdleLocked() {
+        guard seekScheduler.inFlight == nil, seekScheduler.pending == nil,
+              let succeeded = seekScheduler.lastCompletionSucceeded else { return }
+        finishAudioPresentationRefreshLocked(succeeded: succeeded)
+    }
 
     private func resetAudioPresentationLocked() {
+        finishAudioPresentationRefreshLocked(succeeded: false)
         guard audioPresentationOwnsSelection, let mpv else { return }
         _ = mpv_set_property_string(mpv, "lavfi-complex", "")
         _ = mpv_set_property_string(mpv, "aid", "auto")
@@ -634,56 +650,101 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// a suspended caller can never apply its old selection after a newer one.
     @MainActor
     func selectAudioPresentation(_ presentation: LoudnessPresentation) async -> Bool {
-        guard isFileLoaded else { return false }
+        guard isFileLoaded, !Task.isCancelled else { return false }
         let trackIDs = audioTrackIndexes
         let graph = Self.audioPresentationGraph(presentation, trackIDs: trackIDs)
         let generation = loadGeneration
         playbackMeterSample = nil
-        return await withCheckedContinuation { continuation in
-            queue.async { [weak self] in
-                guard let self, let mpv = self.mpv, generation == self.loadGeneration else {
-                    continuation.resume(returning: false)
-                    return
-                }
-                self.resetPlaybackMeterLocked()
-                self.audioPresentationOwnsSelection = true
-                var paused: Int32 = 1
-                _ = mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused)
-                // Clear the previous source before validation, so failed grouping
-                // cannot leave an unrelated track audible when playback resumes.
-                _ = mpv_set_property_string(mpv, "lavfi-complex", "")
-                _ = mpv_set_property_string(mpv, "aid", "no")
-                guard let graph,
-                      graph.isEmpty || Self.supportsGroupedAudioPresentation else {
-                    continuation.resume(returning: false)
-                    return
-                }
-                if !graph.isEmpty {
-                    let selectedIDs = Set(presentation.streamIndices.map { trackIDs[$0] })
-                    let count = self.getInt(MPVProperty.trackListCount)
-                    let monoIDs = (0..<count).compactMap { index -> Int32? in
-                        guard self.getString("track-list/\(index)/type") == "audio",
-                              self.getInt("track-list/\(index)/demux-channel-count") == 1 else { return nil }
-                        return Int32(self.getInt("track-list/\(index)/id"))
-                    }
-                    guard selectedIDs.isSubset(of: Set(monoIDs)) else {
+        let cancellation = MPVPresentationCancellation()
+        let succeeded = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                queue.async { [weak self] in
+                    guard let self, let mpv = self.mpv, generation == self.loadGeneration,
+                          !cancellation.isCancelled else {
                         continuation.resume(returning: false)
                         return
                     }
-                }
-                let status: Int32
-                if case .track(let index) = presentation {
-                    status = mpv_set_property_string(mpv, "aid", String(trackIDs[index]))
-                } else {
-                    status = mpv_set_property_string(mpv, "lavfi-complex", graph)
-                }
-                if status < 0 {
+                    self.finishAudioPresentationRefreshLocked(succeeded: false)
+                    self.resetPlaybackMeterLocked()
+                    var actualPosition = 0.0
+                    let positionStatus = mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &actualPosition)
+                    // Preserve a seek the user has already requested instead of
+                    // replacing it with an older published playback position.
+                    let desiredPosition = self.seekScheduler.pending?.time
+                        ?? self.seekScheduler.inFlight?.request.time ?? actualPosition
+                    var seekable: Int32 = 0
+                    _ = mpv_get_property(mpv, "seekable", MPV_FORMAT_FLAG, &seekable)
+                    let refreshVideo = self.getInt("vid") > 0 && seekable != 0
+                    self.audioPresentationOwnsSelection = true
+                    var paused: Int32 = 1
+                    _ = mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused)
+                    // Clear the previous source before validation, so failed grouping
+                    // cannot leave an unrelated track audible when playback resumes.
                     _ = mpv_set_property_string(mpv, "lavfi-complex", "")
                     _ = mpv_set_property_string(mpv, "aid", "no")
+                    guard let graph,
+                          graph.isEmpty || Self.supportsGroupedAudioPresentation else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    if !graph.isEmpty {
+                        let selectedIDs = Set(presentation.streamIndices.map { trackIDs[$0] })
+                        let count = self.getInt(MPVProperty.trackListCount)
+                        let monoIDs = (0..<count).compactMap { index -> Int32? in
+                            guard self.getString("track-list/\(index)/type") == "audio",
+                                  self.getInt("track-list/\(index)/demux-channel-count") == 1 else { return nil }
+                            return Int32(self.getInt("track-list/\(index)/id"))
+                        }
+                        guard selectedIDs.isSubset(of: Set(monoIDs)) else {
+                            continuation.resume(returning: false)
+                            return
+                        }
+                    }
+                    let status: Int32
+                    if case .track(let index) = presentation {
+                        status = mpv_set_property_string(mpv, "aid", String(trackIDs[index]))
+                    } else {
+                        status = mpv_set_property_string(mpv, "lavfi-complex", graph)
+                    }
+                    if status < 0 {
+                        _ = mpv_set_property_string(mpv, "lavfi-complex", "")
+                        _ = mpv_set_property_string(mpv, "aid", "no")
+                    }
+                    guard status >= 0, !cancellation.isCancelled else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    guard refreshVideo else {
+                        continuation.resume(returning: true)
+                        return
+                    }
+                    guard positionStatus >= 0, desiredPosition.isFinite else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    // Internal redraw must not apply the public navigation EOF
+                    // margin: that would rewind valid frames near the video end.
+                    let target = max(0, desiredPosition)
+                    let deadline = DispatchWorkItem { [weak self] in
+                        self?.finishAudioPresentationRefreshLocked(id: cancellation.id, succeeded: false)
+                    }
+                    self.audioPresentationRefresh = (cancellation.id, generation, continuation, deadline)
+                    self.queue.asyncAfter(deadline: .now() + 15, execute: deadline)
+                    // Audio graph changes can invalidate inter-frame decoder state.
+                    // Readiness requires the exact refresh seek to decode a new frame,
+                    // not just acceptance of the property change or seek command.
+                    if let submission = self.seekScheduler.request(.init(time: target, exact: true)) {
+                        self.submitSeekLocked(submission)
+                    }
                 }
-                continuation.resume(returning: status >= 0)
+            }
+        } onCancel: {
+            cancellation.cancel()
+            self.queue.async { [weak self] in
+                self?.finishAudioPresentationRefreshLocked(id: cancellation.id, succeeded: false)
             }
         }
+        return succeeded && !Task.isCancelled && generation == loadGeneration
     }
 
     // MARK: - Subtitle Tracks
@@ -853,6 +914,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     if let next = seekScheduler.playbackRestarted() {
                         submitSeekLocked(next)
                     }
+                    completeAudioPresentationRefreshIfIdleLocked()
 
                 case MPV_EVENT_COMMAND_REPLY:
                     if pointee.reply_userdata & Self.loadCommandMask != 0 {
@@ -868,6 +930,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     ) {
                         submitSeekLocked(next)
                     }
+                    completeAudioPresentationRefreshIfIdleLocked()
 
                 case MPV_EVENT_GET_PROPERTY_REPLY:
                     receivePlaybackMeterLocked(pointee)
@@ -876,6 +939,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     checkError(pointee.error)
 
                 case MPV_EVENT_SHUTDOWN:
+                    finishAudioPresentationRefreshLocked(succeeded: false)
                     seekScheduler.reset()
                     self.logger.info("MPV shutdown event")
                     if self.mpv != nil {
@@ -919,6 +983,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     }
 
                 case MPV_EVENT_END_FILE:
+                    finishAudioPresentationRefreshLocked(succeeded: false)
                     resetPlaybackMeterLocked()
                     seekScheduler.reset()
                     if let dataPtr = OpaquePointer(pointee.data) {
@@ -1042,6 +1107,7 @@ struct MPVSeekScheduler {
 
     private(set) var pending: Request?
     private(set) var inFlight: Submission?
+    private(set) var lastCompletionSucceeded: Bool?
     private var nextID: UInt64 = 0
     private var accepted = false
     private var started = false
@@ -1055,7 +1121,7 @@ struct MPVSeekScheduler {
 
     mutating func commandReplied(id: UInt64, succeeded: Bool) -> Submission? {
         guard inFlight?.id == id else { return nil }
-        if !succeeded { return finish() }
+        if !succeeded { return finish(succeeded: false) }
         accepted = true
         return finishIfReady()
     }
@@ -1079,6 +1145,7 @@ struct MPVSeekScheduler {
     mutating func reset() {
         pending = nil
         inFlight = nil
+        lastCompletionSucceeded = nil
         accepted = false
         started = false
         restarted = false
@@ -1086,10 +1153,11 @@ struct MPVSeekScheduler {
 
     private mutating func finishIfReady() -> Submission? {
         guard accepted, restarted else { return nil }
-        return finish()
+        return finish(succeeded: true)
     }
 
-    private mutating func finish() -> Submission? {
+    private mutating func finish(succeeded: Bool) -> Submission? {
+        lastCompletionSucceeded = succeeded
         inFlight = nil
         return takeNext()
     }
@@ -1114,4 +1182,13 @@ private extension Array where Element == String {
         defer { for pointer in pointers { if let pointer { free(UnsafeMutablePointer(mutating: pointer)) } } }
         return pointers.withUnsafeMutableBufferPointer { body($0.baseAddress!) }
     }
+}
+
+/// Cancellation can arrive before the event queue installs its readiness waiter.
+private final class MPVPresentationCancellation: @unchecked Sendable {
+    let id = UUID()
+    private let lock = NSLock()
+    private var cancelled = false
+    var isCancelled: Bool { lock.withLock { cancelled } }
+    func cancel() { lock.withLock { cancelled = true } }
 }
