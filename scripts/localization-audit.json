@@ -256,7 +256,16 @@
       "Mid",
       "Side",
       "Clamped samples",
-      "Each dot shows source-sample density: matching channels form a vertical line; opposite polarity forms a horizontal line. Fixed ±1 full-scale axes; samples outside the display are clamped to its edges."
+      "Each dot shows source-sample density: matching channels form a vertical line; opposite polarity forms a horizontal line. Fixed ±1 full-scale axes; samples outside the display are clamped to its edges.",
+      "All measured frames have infinite (perfect-match) scores.",
+      "Encoded time (seconds)",
+      "Lowest measured sections",
+      "No timeline data",
+      "Per-frame measurements. The graph preserves brief lows and highs when reducing detail.",
+      "Quality timeline",
+      "Run this metric again to collect timestamped quality scores.",
+      "Sampled frames only. Quality between these points was not measured.",
+      "∞ (perfect match) is drawn at the chart ceiling."
     ],
     "translated-app-intent": [
       "Animated Still",

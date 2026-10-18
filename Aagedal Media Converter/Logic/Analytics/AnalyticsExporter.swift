@@ -6,6 +6,7 @@ import Foundation
 import AppKit
 import SwiftUI
 import OSLog
+import CoreText
 
 /// Exports analytics results to JSON or PDF
 enum AnalyticsExporter {
@@ -535,7 +536,7 @@ enum AnalyticsExporter {
             }
             data = json
         case .pdf:
-            data = pdfData(results: results)
+            data = try pdfData(results: results)
         }
         let baseName = encodedFileURL.deletingPathExtension().lastPathComponent + "_analytics"
         let folder = encodedFileURL.deletingLastPathComponent()
@@ -557,7 +558,7 @@ enum AnalyticsExporter {
         guard let data = results.toJSON() else {
             throw AnalyticsError.parsingFailed("Failed to encode results to JSON")
         }
-        try data.write(to: url)
+        try data.write(to: url, options: .atomic)
     }
 
     /// Exports results to a PDF report
@@ -567,19 +568,8 @@ enum AnalyticsExporter {
     }
 
     @MainActor
-    private static func pdfData(results: AnalyticsResults) -> Data {
-        let reportView = AnalyticsPDFReportView(results: results)
-        let hostingView = NSHostingView(rootView: reportView)
-
-        let pageWidth: CGFloat = 595  // A4 width in points
-        let pageHeight: CGFloat = 842 // A4 height in points
-        hostingView.frame = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
-
-        let fittingSize = hostingView.fittingSize
-        let contentHeight = max(fittingSize.height, pageHeight)
-        hostingView.frame = CGRect(x: 0, y: 0, width: pageWidth, height: contentHeight)
-
-        return hostingView.dataWithPDF(inside: hostingView.bounds)
+    private static func pdfData(results: AnalyticsResults) throws -> Data {
+        try QualityPDFRenderer(results: results).render()
     }
 
     /// Render the same summary and timelines as the analysis sheet on an A4 page.
@@ -659,113 +649,189 @@ private struct LoudnessPDFReportView: View {
     }
 }
 
-// MARK: - PDF Report View
+// MARK: - Paginated video quality report
 
-/// SwiftUI view designed for PDF rendering
-private struct AnalyticsPDFReportView: View {
-    let results: AnalyticsResults
+/// Text is laid out using Core Text's visible ranges, so long filenames, method
+/// descriptions and warnings continue on A4 pages instead of shrinking or clipping.
+/// Charts are vector paths; full-resolution samples remain in the JSON report.
+@MainActor
+private final class QualityPDFRenderer {
+    private let results: AnalyticsResults
+    private let width: CGFloat = 595
+    private let height: CGFloat = 842
+    private let margin: CGFloat = 38
+    private let bottom: CGFloat = 792
+    private var context: CGContext!
+    private var cursor: CGFloat = 66
+    private var page = 0
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // Title
-            Text("Quality Analytics Report")
-                .font(.title)
-                .fontWeight(.bold)
+    init(results: AnalyticsResults) { self.results = results }
 
-            // File info
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Source File:")
-                        .fontWeight(.medium)
-                    Text(results.sourceFileName)
-                }
-                HStack {
-                    Text("Encoded File:")
-                        .fontWeight(.medium)
-                    Text(results.encodedFileName)
-                }
-                HStack {
-                    Text("Date:")
-                        .fontWeight(.medium)
-                    Text(results.timestamp, style: .date)
-                    Text(results.timestamp, style: .time)
-                }
-            }
-            .font(.body)
-
-            Divider()
-
-            // Metrics
-            ForEach(results.metrics, id: \.metric) { metric in
-                VStack(alignment: .leading, spacing: 8) {
-                    if let comparison = metric.comparison {
-                        Text(comparison.summary).font(.caption).foregroundStyle(.secondary)
-                        ForEach(comparison.warnings, id: \.self) { warning in
-                            Text(warning).font(.caption).foregroundStyle(.orange)
-                        }
-                    }
-                    Text(metric.metric.displayName)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-
-                    HStack(spacing: 20) {
-                        VStack(alignment: .leading) {
-                            Text("Overall Score")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(metric.formattedScore)
-                                .font(.title)
-                                .fontWeight(.bold)
-                        }
-
-                        VStack(alignment: .leading) {
-                            Text("Quality")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(metric.qualityRating)
-                                .font(.title3)
-                        }
-
-                        if let min = metric.min {
-                            VStack(alignment: .leading) {
-                                Text("Min")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text(min == .infinity ? "∞" : String(format: "%.1f", min))
-                                    .font(.body)
-                            }
-                        }
-
-                        if let max = metric.max {
-                            VStack(alignment: .leading) {
-                                Text("Max")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text(max == .infinity ? "∞" : String(format: "%.1f", max))
-                                    .font(.body)
-                            }
-                        }
-                    }
-
-                    if let channels = metric.channelScores, !channels.isEmpty {
-                        HStack(spacing: 16) {
-                            ForEach(channels.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                                Text("\(key): \(value == .infinity ? "∞" : String(format: "%.2f", value)) \(metric.unit)")
-                                    .font(.caption)
-                            }
-                        }
-                    }
-
-                    Divider()
-                }
-            }
-
-            Spacer()
-
-            Text("Generated by Aagedal Media Converter")
-                .font(.caption)
-                .foregroundColor(.secondary)
+    func render() throws -> Data {
+        guard !results.metrics.isEmpty else { throw AnalyticsError.parsingFailed("No quality reports to export") }
+        let data = NSMutableData()
+        var box = CGRect(x: 0, y: 0, width: width, height: height)
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let pdf = CGContext(consumer: consumer, mediaBox: &box, nil) else {
+            throw AnalyticsError.parsingFailed("Could not create the quality PDF report")
         }
-        .padding(40)
+        context = pdf
+        var closed = false
+        defer { if !closed { context.closePDF() } }
+        for metric in results.metrics {
+            newPage()
+            try text(metric.metric.displayName, size: 24, bold: true, spacing: 12)
+            try text(String(localized: "Source File:") + " " + results.sourceFileName)
+            try text(String(localized: "Encoded File:") + " " + results.encodedFileName)
+            try text(String(localized: "Date:") + " " + results.timestamp.formatted(date: .abbreviated, time: .shortened), color: .secondaryLabelColor, spacing: 14)
+            try text(String(localized: "Overall Score") + ": " + metric.formattedScore + "   ·   " + metric.qualityRating,
+                     size: 16, bold: true, spacing: 10)
+            if let channels = metric.channelScores, !channels.isEmpty {
+                try text(channels.sorted { $0.key < $1.key }.map { "\($0.key): \(score($0.value)) \(metric.unit)" }.joined(separator: "    "))
+            }
+            if metric.scoreAggregation == "minimum_channel_average", let channels = metric.channelScores {
+                try text("XPSNR = min(" + channels.keys.sorted().joined(separator: ", ") + ")", color: .secondaryLabelColor)
+            }
+            if let minimum = metric.min { try text(String(localized: "Min") + ": " + score(minimum) + " " + metric.unit) }
+            if let maximum = metric.max { try text(String(localized: "Max") + ": " + score(maximum) + " " + metric.unit) }
+            if let comparison = metric.comparison {
+                try text(comparison.summary, size: 10, color: .secondaryLabelColor, spacing: 8)
+                for warning in comparison.warnings { try text(warning, size: 10, color: .systemBrown, spacing: 6) }
+            }
+            let timeline = QualityTimeline(result: metric, fallbackDuration: results.durationSeconds)
+            if timeline.samples.isEmpty {
+                try text(String(localized: "No timeline data"), size: 14, bold: true, spacing: 8)
+                try text(String(localized: "Run this metric again to collect timestamped quality scores."))
+            } else {
+                ensureSpace(220)
+                try text(String(localized: "Quality timeline"), size: 14, bold: true, spacing: 8)
+                chart(timeline)
+                try text("P05: " + (timeline.fifthPercentile.map(score) ?? "—") + "    n = \(timeline.samples.count)", size: 10)
+                try text(String(localized: "Encoded time (seconds)"), size: 10, color: .secondaryLabelColor, spacing: 10)
+                try text(metric.metric == .ssimulacra2
+                    ? String(localized: "Sampled frames only. Quality between these points was not measured.")
+                    : String(localized: "Per-frame measurements. The graph preserves brief lows and highs when reducing detail."), size: 10, color: .secondaryLabelColor)
+                if timeline.graphSamples.contains(where: { $0.score == .infinity }) {
+                    try text(String(localized: "∞ (perfect match) is drawn at the chart ceiling."), size: 10, color: .secondaryLabelColor)
+                }
+                ensureSpace(46)
+                try text(String(localized: "Lowest measured sections"), size: 14, bold: true, spacing: 8)
+                if timeline.worstSamples.isEmpty {
+                    try text(String(localized: "All measured frames have infinite (perfect-match) scores."), size: 10)
+                } else {
+                    for sample in timeline.worstSamples {
+                        try text(String(format: "%.3f s    ", sample.seconds) + score(sample.score) + " " + metric.unit, size: 11, spacing: 5)
+                    }
+                }
+            }
+        }
+        context.endPDFPage()
+        // Flush the PDF trailer before copying NSMutableData into a value.
+        context.closePDF()
+        closed = true
+        return data as Data
+    }
+
+    private func newPage() {
+        if page > 0 { context.endPDFPage() }
+        context.beginPDFPage(nil)
+        page += 1
+        cursor = 66
+        context.setFillColor(NSColor.white.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        line(String(localized: "Quality Analytics Report"), at: CGPoint(x: margin, y: height - 39), size: 11, bold: true)
+        line(String(localized: "Generated by Aagedal Media Converter"), at: CGPoint(x: margin, y: 26), size: 8)
+        line(String(page), at: CGPoint(x: width - margin - 20, y: 26), size: 8)
+    }
+
+    private func ensureSpace(_ amount: CGFloat) {
+        if cursor + amount > bottom { newPage() }
+    }
+
+    private func attributes(size: CGFloat, bold: Bool, color: NSColor) -> [NSAttributedString.Key: Any] {
+        let font = NSFont.systemFont(ofSize: size, weight: bold ? .semibold : .regular)
+        // Resolve adaptive colors against a light appearance for a printable PDF.
+        var resolved = NSColor.black.cgColor
+        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance { resolved = color.cgColor }
+        return [NSAttributedString.Key(kCTFontAttributeName as String): CTFontCreateWithName(font.fontName as CFString, size, nil),
+                NSAttributedString.Key(kCTForegroundColorAttributeName as String): resolved]
+    }
+
+    private func line(_ string: String, at position: CGPoint, size: CGFloat, bold: Bool = false) {
+        let value = NSAttributedString(string: string, attributes: attributes(size: size, bold: bold, color: .labelColor))
+        context.textPosition = position
+        CTLineDraw(CTLineCreateWithAttributedString(value as CFAttributedString), context)
+    }
+
+    private func text(_ string: String, size: CGFloat = 11, bold: Bool = false,
+                      color: NSColor = .labelColor, spacing: CGFloat = 5) throws {
+        var remaining = NSAttributedString(string: string, attributes: attributes(size: size, bold: bold, color: color))
+        while remaining.length > 0 {
+            ensureSpace(size * 2)
+            let framesetter = CTFramesetterCreateWithAttributedString(remaining as CFAttributedString)
+            let needed = CTFramesetterSuggestFrameSizeWithConstraints(framesetter, CFRange(location: 0, length: 0), nil,
+                CGSize(width: width - 2 * margin, height: .greatestFiniteMagnitude), nil)
+            let available = bottom - cursor
+            let blockHeight = min(ceil(needed.height) + 3, available)
+            let path = CGPath(rect: CGRect(x: margin, y: height - cursor - blockHeight, width: width - 2 * margin, height: blockHeight), transform: nil)
+            let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), path, nil)
+            let visible = CTFrameGetVisibleStringRange(frame)
+            guard visible.length > 0 else { throw AnalyticsError.parsingFailed("Could not lay out the quality PDF report") }
+            CTFrameDraw(frame, context)
+            cursor += blockHeight + spacing
+            remaining = remaining.attributedSubstring(from: NSRange(location: visible.length, length: remaining.length - visible.length))
+            if remaining.length > 0 { newPage() }
+        }
+    }
+
+    private func score(_ value: Double) -> String {
+        value == .infinity ? "∞" : String(format: "%.2f", value)
+    }
+
+    private func chart(_ timeline: QualityTimeline) {
+        let finite = timeline.graphSamples.map(\.score).filter(\.isFinite)
+        let db = timeline.metric == .psnr || timeline.metric == .xpsnr
+        let low = min(0, (finite.min() ?? 0) - 2)
+        let high = max(db ? 50 : 100, (finite.max() ?? 0) + 2)
+        let plot = CGRect(x: margin + 38, y: height - cursor - 138, width: width - 2 * margin - 46, height: 124)
+        context.saveGState()
+        for tick in 0...4 {
+            let fraction = Double(tick) / 4
+            let y = plot.minY + plot.height * fraction
+            context.setStrokeColor(NSColor(calibratedWhite: 0.88, alpha: 1).cgColor)
+            context.setLineWidth(0.5)
+            context.move(to: CGPoint(x: plot.minX, y: y))
+            context.addLine(to: CGPoint(x: plot.maxX, y: y))
+            context.strokePath()
+            line(String(format: "%.0f", low + (high - low) * fraction), at: CGPoint(x: margin, y: y - 3), size: 8)
+            line(String(format: "%.2f", timeline.duration * fraction), at: CGPoint(x: plot.minX + plot.width * fraction - 7, y: plot.minY - 16), size: 8)
+        }
+        line(db ? "dB" : String(localized: "Score"), at: CGPoint(x: margin, y: plot.maxY + 5), size: 8)
+        func point(_ sample: QualitySample) -> CGPoint {
+            let value = sample.score.isFinite ? sample.score : high
+            return CGPoint(x: plot.minX + plot.width * min(1, max(0, sample.seconds / timeline.duration)),
+                           y: plot.minY + plot.height * min(1, max(0, (value - low) / (high - low))))
+        }
+        context.setStrokeColor(NSColor.systemBlue.cgColor)
+        context.setFillColor(NSColor.systemBlue.cgColor)
+        context.setLineWidth(1.1)
+        for (index, sample) in timeline.graphSamples.enumerated() {
+            let p = point(sample)
+            if timeline.metric == .ssimulacra2 || timeline.graphSamples.count == 1 {
+                context.fillEllipse(in: CGRect(x: p.x - 2, y: p.y - 2, width: 4, height: 4))
+            } else if index == 0 { context.move(to: p) }
+            else { context.addLine(to: p) }
+        }
+        context.strokePath()
+        if let percentile = timeline.fifthPercentile, percentile.isFinite {
+            let y = point(QualitySample(frame: 0, seconds: 0, score: percentile)).y
+            context.setStrokeColor(NSColor.systemOrange.cgColor)
+            context.setLineDash(phase: 0, lengths: [3, 3])
+            context.move(to: CGPoint(x: plot.minX, y: y))
+            context.addLine(to: CGPoint(x: plot.maxX, y: y))
+            context.strokePath()
+        }
+        context.restoreGState()
+        cursor += 165
     }
 }

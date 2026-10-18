@@ -30,6 +30,7 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - **Konverter i grupper** nesten alle video- og lydfiler (alternativ til Shutter Encoder eller Handbrake)
 - **Spill av** i fullskjerm med tidskode og JKL-kontroller (alternativ til IINA eller VLC)
 - **Vis og sammenlign metadata**, inkludert sjekk for C2PA (alternativ til MediaInfo)
+- **Analyser** lydstyrke, stillhet, topper, stereofase og kvaliteten på kodet video
 - **Last ned** videoer fra nettsteder, med planlegging og nedlasting av direktesendinger
 - **Ta opp skjermen** med systemlyd og valgfritt separat mikrofonspor (alternativ til OBS)
 - **Transkriber** video og lyd til SRT-undertekster
@@ -128,6 +129,14 @@ Kameraknappen i trimspilleren tar stillbilder med kildens oppløsning. Standardf
 - Kommentarfelt per fil for valgfri metadata, for eksempel kreditering
 - Valgfri datotagg (Generated [YYYYMMDD]), prefiks og suffiks i kommentarfeltet før kommentaren
 - Vis og sammenlign metadata
+
+### Medieanalyse
+Åpne diagramknappen på en fil i køen for å se rapporter for lyd og video.
+
+- Mål programlydstyrke og sann toppverdi for enkeltspor, egendefinerte monopar eller 5.1-monogrupper. Eksporter komplette JSON- eller PDF-rapporter.
+- Finn stillhet og toppintervaller, sammenlign kanalbalanse, eller kontroller stereokorrelasjon og mononedmiksing. Hopp til målte seksjoner i en pauset forhåndsvisning, og eksporter alle målinger som JSON.
+- Etter koding kan du sammenligne video med VMAF, PSNR, XPSNR eller utvalgte SSIMULACRA2-bilder. Se kvaliteten over tid, bytt mellom kilde og kodet video, og hopp til seksjonene med lavest målt kvalitet.
+- Eksporter videokvalitet som JSON med alle måleverdier eller en A4-PDF med tidslinjer, komponentverdier og sammenligningsadvarsler. Se [tolkning av verdier og rapportdetaljer](../video-quality-report-format.md).
 
 ### 15-sekundersvarsel for automatisk avspilling med VideoLoop
 

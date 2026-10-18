@@ -786,10 +786,12 @@ struct AnalyticsResultsView: View {
             Button("Export JSON") {
                 exportResults(format: .json)
             }
+            .accessibilityIdentifier("analysis.video.exportJSON")
 
             Button("Export PDF") {
                 exportResults(format: .pdf)
             }
+            .accessibilityIdentifier("analysis.video.exportPDF")
 
             Spacer()
 
@@ -811,6 +813,8 @@ struct AnalyticsResultsView: View {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         do {
             switch format {
             case .json:

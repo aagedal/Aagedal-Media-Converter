@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import PDFKit
 @testable import Aagedal_Media_Converter
 
 final class AnalyticsAttemptTests: XCTestCase {
@@ -352,7 +353,7 @@ final class AnalyticsAttemptTests: XCTestCase {
         XCTAssertEqual(psnr.map(\.seconds), [0, 0.125, 0.9])
         XCTAssertEqual(psnr.map(\.score), [.infinity, 31.2, 20])
         let xpsnr = AnalyticsService.parseFrameScores("n: 1 XPSNR y: 30 XPSNR u: 40 XPSNR v: 40\nn: 2 XPSNR y: inf XPSNR u: inf XPSNR v: inf", metric: .xpsnr, timestamps: timestamps)
-        XCTAssertEqual(xpsnr.map(\.score), [32.5, .infinity])
+        XCTAssertEqual(xpsnr.map(\.score), [30, .infinity])
         XCTAssertEqual(xpsnr.map(\.seconds), [0, 0.125])
     }
 
@@ -475,5 +476,169 @@ final class LoudnessExportTests: XCTestCase {
         XCTAssertThrowsError(try AnalyticsExporter.exportLoudnessJSON(results: [], sourceFile: url,
                              timestamp: Date(), to: url))
         XCTAssertEqual(try Data(contentsOf: url), existing)
+    }
+}
+
+final class VideoQualityScoreTests: XCTestCase {
+    func testXPSNRMatchingChromaCannotHideLumaDistortion() throws {
+        let result = try AnalyticsService.parseXPSNRResults(from: "[Parsed_xpsnr_2] XPSNR y: 18.7197 u: inf v: inf (minimum: 18.7197)")
+        XCTAssertEqual(result.overallScore, 18.7197)
+        XCTAssertEqual(result.channelScores?["U"], .infinity)
+        XCTAssertNil(result.min, "The channel minimum is not a minimum across frames")
+        XCTAssertEqual(result.scoreAggregation, "minimum_channel_average")
+        let timeline = AnalyticsService.parseFrameScores("n: 1 XPSNR y: 30 XPSNR u: inf XPSNR v: 25\nn: 2 XPSNR y: inf XPSNR u: inf XPSNR v: inf",
+                                                        metric: .xpsnr, timestamps: [0: 0, 1: 0.25])
+        XCTAssertEqual(timeline.map(\.score), [25, .infinity])
+    }
+
+    func testPSNRParsesGrayscaleRGBAndAlphaWithoutInventingChannels() throws {
+        for (components, keys) in [("y:inf", ["Y"]), ("r:inf g:inf b:inf", ["R", "G", "B"]),
+                                   ("y:inf u:inf v:inf a:inf", ["Y", "U", "V", "A"]),
+                                   ("r:inf g:inf b:inf a:inf", ["R", "G", "B", "A"])] {
+            let result = try AnalyticsService.parsePSNRResults(from: "PSNR \(components) average:inf min:inf max:inf")
+            XCTAssertEqual(Set(result.channelScores?.keys.map { $0 } ?? []), Set(keys))
+            XCTAssertEqual(result.overallScore, .infinity)
+            XCTAssertEqual(result.scoreAggregation, "pooled_mse_all_components")
+        }
+        let exponent = try AnalyticsService.parsePSNRResults(from: "PSNR y:3.2e1 average:3.2e1 min:+3.0e1 max:4e1")
+        XCTAssertEqual(exponent.overallScore, 32)
+        for invalid in ["y:nan", "y:-inf", "r:30 g:30", "y:30 u:inf", "y:30 y:30", "y:30 u:bad v:30"] {
+            XCTAssertThrowsError(try AnalyticsService.parsePSNRResults(from: "PSNR \(invalid) average:30 min:20 max:40"))
+            XCTAssertThrowsError(try AnalyticsService.parseXPSNRResults(from: "XPSNR \(invalid)"))
+        }
+        XCTAssertThrowsError(try AnalyticsService.parseXPSNRResults(from: "XPSNR y:30 u:40 v:50 (minimum: 40)"))
+        XCTAssertThrowsError(try AnalyticsService.parsePSNRResults(from: "PSNR y:30 average:nan min:20 max:40"))
+    }
+
+    func testFrameScoresRejectInvalidValuesAndFrameIdentity() {
+        let log = "n:1 psnr_avg:nan\nn:2 psnr_avg:-inf\nn:0 psnr_avg:30\nn:3 psnr_avg:20\nn:4 psnr_avg:inf\nn:5 psnr_avg:1e2"
+        let samples = AnalyticsService.parseFrameScores(log, metric: .psnr, timestamps: [0: 0, 1: 0.25, 2: .nan, 3: 0.75, 4: 1])
+        XCTAssertEqual(samples.map(\.score), [.infinity, 100])
+        XCTAssertEqual(samples.map(\.frame), [3, 4])
+        let invalid = AnalyticsService.parseFrameScores("n:1 XPSNR y:nan\nn:2 XPSNR r:20 XPSNR g:-inf XPSNR b:30",
+                                                       metric: .xpsnr, timestamps: [0: 0, 1: 0.5])
+        XCTAssertTrue(invalid.isEmpty)
+    }
+
+    func testXPSNRSupportsGrayscaleAndRGBFrameLogs() throws {
+        XCTAssertEqual(try AnalyticsService.parseXPSNRResults(from: "XPSNR y: 27").overallScore, 27)
+        XCTAssertEqual(try AnalyticsService.parseXPSNRResults(from: "XPSNR r: inf g: 24 b: 25 (minimum: 24)").overallScore, 24)
+        let samples = AnalyticsService.parseFrameScores("n: 1 XPSNR y: 27\nn: 2 XPSNR r: inf XPSNR g: 24 XPSNR b: 25",
+                                                       metric: .xpsnr, timestamps: [0: 0, 1: 0.5])
+        XCTAssertEqual(samples.map(\.score), [27, 24])
+    }
+
+    func testBundledMetricsAcceptNativeGrayscaleRGBAlphaAndDistortedLuma() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for format in ["gray", "gbrp", "yuva444p", "yuv420p"] {
+            let source = folder.appendingPathComponent("\(format).nut")
+            let distorted = folder.appendingPathComponent("\(format)-distorted.nut")
+            let generated = try await SubprocessRunner().run(.init(executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-hide_banner", "-nostdin", "-f", "lavfi", "-i", "testsrc2=s=128x128:r=4:d=1,format=\(format)",
+                            "-c:v", "rawvideo", source.path], timeout: .seconds(30)))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+            let identical = try await AnalyticsService().runAnalytics(sourceFile: source, encodedFile: source,
+                enabledMetrics: [.psnr, .xpsnr], vmafModel: .vmaf_v0_6_1) { _, _ in }
+            for metric in identical {
+                XCTAssertEqual(metric.overallScore, .infinity, format)
+                XCTAssertEqual(metric.samples?.count, 4, format)
+                XCTAssertTrue(try XCTUnwrap(metric.samples).allSatisfy { $0.score == .infinity }, format)
+            }
+            if format == "yuva444p" {
+                let changed = try await SubprocessRunner().run(.init(executableURL: URL(fileURLWithPath: ffmpeg),
+                    arguments: ["-hide_banner", "-nostdin", "-i", source.path, "-vf", "lut=a=val/2", "-c:v", "rawvideo", distorted.path], timeout: .seconds(30)))
+                XCTAssertTrue(changed.succeeded, changed.standardErrorText)
+                let results = try await AnalyticsService().runAnalytics(sourceFile: source, encodedFile: distorted,
+                    enabledMetrics: [.psnr, .xpsnr], vmafModel: .vmaf_v0_6_1) { _, _ in }
+                XCTAssertTrue(try XCTUnwrap(results.first { $0.metric == .psnr }?.overallScore).isFinite)
+                XCTAssertTrue(try XCTUnwrap(results.first { $0.metric == .psnr }?.channelScores?["A"]).isFinite)
+                let xpsnr = try XCTUnwrap(results.first { $0.metric == .xpsnr })
+                XCTAssertEqual(xpsnr.overallScore, .infinity, "FFmpeg XPSNR measures color planes only")
+                XCTAssertTrue(try XCTUnwrap(xpsnr.comparison?.pixelProcessing).contains("excludes alpha"))
+            }
+            if format == "yuv420p" {
+                let changed = try await SubprocessRunner().run(.init(executableURL: URL(fileURLWithPath: ffmpeg),
+                    arguments: ["-hide_banner", "-nostdin", "-i", source.path, "-vf", "lut=y=val+8", "-c:v", "rawvideo", distorted.path], timeout: .seconds(30)))
+                XCTAssertTrue(changed.succeeded, changed.standardErrorText)
+                let results = try await AnalyticsService().runAnalytics(sourceFile: source, encodedFile: distorted,
+                    enabledMetrics: [.xpsnr], vmafModel: .vmaf_v0_6_1) { _, _ in }
+                let report = try XCTUnwrap(results.first)
+                XCTAssertEqual(report.overallScore, 18.7197, accuracy: 0.001)
+                XCTAssertEqual(report.channelScores?["U"], .infinity)
+                XCTAssertTrue(try XCTUnwrap(report.samples).allSatisfy { $0.score.isFinite })
+                let data = try XCTUnwrap(AnalyticsResults(sourceFileName: "source.nut", encodedFileName: "distorted.nut",
+                    metrics: results, timestamp: Date(), durationSeconds: 1).toJSON())
+                let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                let metric = try XCTUnwrap((json["metrics"] as? [[String: Any]])?.first)
+                XCTAssertEqual(metric["scoreAggregation"] as? String, "minimum_channel_average")
+                XCTAssertEqual(try XCTUnwrap(metric["overallScore"] as? Double), report.overallScore)
+            }
+        }
+    }
+}
+
+
+final class VideoQualityPDFTests: XCTestCase {
+    @MainActor
+    func testQualityPDFUsesA4PagesAndRetainsTimelinesMethodsAndWorstSections() throws {
+        let comparison = AnalyticsComparison(resolution: .encoded, width: 1920, height: 1080,
+            scaling: "bicubic", sourceRange: .init(start: 2, end: 12), vmafModel: .vmaf_v0_6_1,
+            sourceTiming: .init(duration: 20, frameRate: 24), encodedTiming: .init(duration: 10, frameRate: 24),
+            warnings: ["Source interval and encoded duration differ; only overlapping video is compared."])
+        let samples = (0..<240).map {
+            QualitySample(frame: $0, seconds: Double($0) / 24, score: $0 == 120 ? 12 : 90 + sin(Double($0) / 8) * 5)
+        }
+        let metrics: [MetricResult] = [
+            .init(metric: .vmaf, overallScore: 91, min: 12, max: 95, unit: "score", channelScores: nil, comparison: comparison, samples: samples),
+            .init(metric: .xpsnr, overallScore: 32, min: nil, max: nil, unit: "dB", channelScores: ["Y": 32, "U": .infinity, "V": 40],
+                  comparison: comparison, samples: samples.map { .init(frame: $0.frame, seconds: $0.seconds, score: $0.score / 2) }, scoreAggregation: "minimum_channel_average"),
+            .init(metric: .psnr, overallScore: .infinity, min: .infinity, max: .infinity, unit: "dB", channelScores: ["Y": .infinity],
+                  samples: samples.map { .init(frame: $0.frame, seconds: $0.seconds, score: .infinity) }, scoreAggregation: "pooled_mse_all_components"),
+            .init(metric: .ssimulacra2, overallScore: 85, min: 12, max: 95, unit: "score", channelScores: nil,
+                  comparison: comparison, samples: stride(from: 0, to: samples.count, by: 24).map { samples[$0] })
+        ]
+        let reports = AnalyticsResults(sourceFileName: "Reference source.mov", encodedFileName: "Delivery.mp4",
+                                       metrics: metrics, timestamp: Date(timeIntervalSince1970: 0), durationSeconds: 10)
+        let url = URL(fileURLWithPath: "/private/tmp/amc-quality-report-validation.pdf")
+        try AnalyticsExporter.exportPDF(results: reports, to: url)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        XCTAssertEqual(document.pageCount, 4)
+        for index in 0..<document.pageCount {
+            let page = try XCTUnwrap(document.page(at: index))
+            XCTAssertEqual(page.bounds(for: .mediaBox).size, CGSize(width: 595, height: 842))
+            let text = try XCTUnwrap(page.string)
+            for expected in ["Quality Analytics Report", "Reference source.mov", "Delivery.mp4", "Quality timeline", "P05:",
+                             "Lowest measured sections", "Generated by Aagedal Media Converter"] {
+                XCTAssertTrue(text.contains(expected), "Missing \(expected) on page \(index + 1)")
+            }
+        }
+        XCTAssertTrue(try XCTUnwrap(document.page(at: 1)?.string).contains("XPSNR = min(U, V, Y)"))
+        XCTAssertTrue(try XCTUnwrap(document.page(at: 2)?.string).contains("perfect-match"))
+        XCTAssertTrue(try XCTUnwrap(document.page(at: 3)?.string).contains("Sampled frames only"))
+    }
+
+    @MainActor
+    func testQualityPDFPaginatesLongMetadataAndHandlesHistoricalMissingTimeline() throws {
+        let warning = String(repeating: "Detailed timing warning with a long source name. ", count: 400) + "END OF WARNING"
+        let comparison = AnalyticsComparison(resolution: .source, width: nil, height: nil, scaling: "bicubic",
+            sourceRange: .init(), vmafModel: nil, sourceTiming: nil, encodedTiming: nil, warnings: [warning])
+        let reports = AnalyticsResults(sourceFileName: String(repeating: "Long source name ", count: 30), encodedFileName: "Output.mp4",
+            metrics: [.init(metric: .psnr, overallScore: 30, min: 20, max: 40, unit: "dB", channelScores: ["Y": 30], comparison: comparison)],
+            timestamp: Date(), durationSeconds: 10)
+        let url = URL(fileURLWithPath: "/private/tmp/amc-quality-report-overflow-validation.pdf")
+        try AnalyticsExporter.exportPDF(results: reports, to: url)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        XCTAssertGreaterThan(document.pageCount, 1)
+        let text = try XCTUnwrap(document.string)
+        let normalized = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        XCTAssertTrue(normalized.contains("END OF WARNING"))
+        XCTAssertTrue(text.contains("No timeline data"))
+        XCTAssertEqual(text.components(separatedBy: "Detailed timing warning").count - 1, 400)
+        for index in 0..<document.pageCount {
+            XCTAssertEqual(document.page(at: index)?.bounds(for: .mediaBox).size, CGSize(width: 595, height: 842))
+        }
     }
 }

@@ -2,6 +2,56 @@
 
 Last reviewed: 2026-10-18
 
+## Video quality scoring and portable reports — 2026-10-18
+
+Owner: Codex. XPSNR now uses the minimum of FFmpeg's whole-program component
+averages and the lowest color-plane score for each timeline frame. The prior
+luma-weighted arithmetic average of dB values could report infinity whenever a
+single chroma component matched, even with severe luma distortion. A bundled
+128 × 128 luma-only change now reports 18.7197 dB instead of infinity. New JSON
+records the aggregation method; historical reports retain their original values
+and should be rerun. Grayscale, RGB and alpha-bearing PSNR summaries retain their
+actual component names. XPSNR's alpha exclusion is explicit in comparison metadata.
+
+Video PDF reports now use paginated A4 pages with vector quality timelines,
+percentiles, distinct low-score sections, component scores and full comparison
+warnings. Long text continues onto extra pages; old reports without samples show
+an explicit rerun message. Native video JSON/PDF saves hold scoped destination
+access and write atomically. See [report and score semantics](docs/video-quality-report-format.md).
+English/Norwegian READMEs now expose the media-analysis workflow.
+
+Validation: the ad-hoc-signed Debug build passes. The final full unit suite
+executes 1,431 tests with no failures and one intentional benchmark skip
+(`/private/tmp/amc-quality-final-unit.xcresult`). Generated checks cover native
+grayscale/RGB/alpha, luma-only distortion with matching chroma, alpha-only
+changes, exponent values and malformed components. Eight final PDF pages were
+visually inspected: all four metrics and a four-page metadata-overflow case,
+with exact retained warning counts. Seven localization tests and the 1,926-entry
+catalog audit pass. Translations outside English/Norwegian await review.
+No dependencies, bundled binaries or licenses changed.
+
+Both final English/Norwegian native PDF checks pass in
+`/private/tmp/amc-quality-verified-ui.xcresult`, including save cancellation,
+readback of both metric timelines, and report preservation after saving. The
+existing interactive source/output timeline check also passes in
+`/private/tmp/amc-quality-report-ui.xcresult`. An earlier English rerun was
+intercepted by an external FTP Sync window; explicit activation and enabled-state
+waiting resolved that test interaction without touching the other app. The
+passing screenshot capture targets the analysis sheet directly.
+
+Remaining audit work: SSIMULACRA2 currently records requested extraction times
+rather than independently verified decoded frame timestamps, and limits sampling
+to at most one point per second. Its VFR sampling/alignment and density controls
+need qualification before declaring the video inspection workflow complete. A
+bundled VFR fixture with frames at 0, 0.25, 1 and 2.25 seconds extracts the
+1-second frame when requested at 0.5 seconds, confirming a half-second timestamp
+misstatement in the current sampling path.
+The earlier playback timing/integration and paused regrouping limitations also
+remain open. The bilingual captures also show existing analysis headings and
+help text falling back to English; those source strings still need catalog
+coverage beyond the newly translated PDF timeline labels. Release/device and
+sandbox qualification are unchanged.
+
 ## Source analysis report completion — 2026-10-18
 
 Owner: Codex. Whole-program loudness now exports complete schema-v1 JSON alongside

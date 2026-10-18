@@ -347,11 +347,13 @@ struct MetricResult: Codable, Equatable, Sendable {
     let max: Double?
     let unit: String
 
-    /// Individual channel scores (PSNR y/u/v)
+    /// Named component scores (Y/U/V, R/G/B, optional A, or grayscale Y).
     let channelScores: [String: Double]?
 
     var comparison: AnalyticsComparison? = nil
     var samples: [QualitySample]? = nil
+    /// Absent on historical reports whose channel aggregation was not recorded.
+    var scoreAggregation: String? = nil
 
     var formattedScore: String {
         if overallScore == .infinity { return "∞ \(unit)" }

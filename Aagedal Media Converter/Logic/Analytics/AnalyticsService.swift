@@ -274,7 +274,8 @@ actor AnalyticsService {
                 vmafModel: metric == .vmaf ? vmafModel : nil,
                 sampleCount: sampling?.sampleCount, sampleTimestamps: sampling?.sampleTimestamps,
                 pixelProcessing: sampling?.pixelProcessing ?? (metric == .vmaf && vmafModel.usesV1Features
-                    ? "YUV 4:2:0 10-bit before scaling" : "Native pixel format"),
+                    ? "YUV 4:2:0 10-bit before scaling" : metric == .xpsnr
+                        ? "Native color planes; XPSNR excludes alpha" : "Native pixel format"),
                 sourceTiming: comparison.sourceTiming, encodedTiming: comparison.encodedTiming,
                 warnings: comparison.warnings + (sampling?.warnings ?? [])
             )
@@ -516,9 +517,9 @@ actor AnalyticsService {
             }
             result = try parseVMAFResults(from: logURL, timestamps: progressParser.frameTimestamps)
         case .psnr:
-            result = try parsePSNRResults(from: stderrOutput)
+            result = try Self.parsePSNRResults(from: stderrOutput)
         case .xpsnr:
-            result = try parseXPSNRResults(from: stderrOutput)
+            result = try Self.parseXPSNRResults(from: stderrOutput)
         case .ssimulacra2:
             throw AnalyticsError.parsingFailed("SSIMULACRA2 uses a dedicated binary and should not reach the FFmpeg parsing path")
         }
@@ -914,93 +915,86 @@ actor AnalyticsService {
         )
     }
 
+    private static let scoreFieldRegex = try! NSRegularExpression(pattern: #"\b([a-z_]+):\s*([^\s()]+)"#)
+    private static let scoreFrameIndexRegex = try! NSRegularExpression(pattern: #"^n:\s*(\d+)\b"#)
+
     /// The PSNR/XPSNR stats index is one-based; showinfo's output frame index is zero-based.
     static func parseFrameScores(_ log: String, metric: QualityMetric, timestamps: [Int: Double]) -> [QualitySample] {
-        let pattern = metric == .psnr
-            ? #"n:\s*(\d+).*?psnr_avg:([^\s]+)"#
-            : #"n:\s*(\d+).*?XPSNR y:\s*([^\s]+).*?XPSNR u:\s*([^\s]+).*?XPSNR v:\s*([^\s]+)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        guard metric == .psnr || metric == .xpsnr else { return [] }
         return log.split(whereSeparator: \.isNewline).compactMap { line in
             let text = String(line)
-            guard let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else { return nil }
-            func field(_ index: Int) -> String? { Range(match.range(at: index), in: text).map { String(text[$0]) } }
-            guard let index = field(1).flatMap(Int.init).map({ $0 - 1 }), let seconds = timestamps[index],
-                  let y = field(2).flatMap(Double.init) else { return nil }
+            guard let match = scoreFrameIndexRegex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                  let range = Range(match.range(at: 1), in: text), let number = Int(text[range]), number > 0,
+                  let seconds = timestamps[number - 1], seconds.isFinite, seconds >= 0 else { return nil }
             let score: Double
-            if metric == .xpsnr {
-                guard let u = field(3).flatMap(Double.init), let v = field(4).flatMap(Double.init) else { return nil }
-                score = (6 * y + u + v) / 8
-            } else { score = y }
+            if metric == .psnr {
+                guard let value = scoreFields(in: text)["psnr_avg"] else { return nil }
+                score = value
+            } else {
+                guard let channels = componentScores(in: text) else { return nil }
+                // Report the worst color plane, as recommended for XPSNR.
+                // Averaging logarithmic scores lets one perfect channel conceal
+                // finite distortion in every other channel.
+                score = channels.values.min()!
+            }
             guard !score.isNaN, score != -.infinity else { return nil }
-            return QualitySample(frame: index, seconds: seconds, score: score)
+            return QualitySample(frame: number - 1, seconds: seconds, score: score)
         }
     }
 
-    private func parsePSNRResults(from stderrOutput: String) throws -> MetricResult {
-        // Parse: [Parsed_psnr_0 @ ...] PSNR y:38.12 u:42.34 v:43.56 average:39.01 min:25.67 max:48.90
-        let pattern = #"PSNR\s+y:([\d.]+|inf)\s+u:([\d.]+|inf)\s+v:([\d.]+|inf)\s+average:([\d.]+|inf)\s+min:([\d.]+|inf)\s+max:([\d.]+|inf)"#
+    /// Parse named fields, preserving positive infinity for exact matches. A
+    /// malformed/nonfinite field cannot silently disappear from a channel set.
+    private static func scoreFields(in text: String) -> [String: Double] {
+        var fields: [String: Double] = [:]
+        for match in scoreFieldRegex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let keyRange = Range(match.range(at: 1), in: text),
+                  let valueRange = Range(match.range(at: 2), in: text) else { continue }
+            let key = String(text[keyRange])
+            let value = Double(text[valueRange]) ?? .nan
+            if fields[key] != nil { fields[key] = .nan }
+            else { fields[key] = value }
+        }
+        return fields
+    }
 
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: stderrOutput, range: NSRange(stderrOutput.startIndex..., in: stderrOutput)) else {
+    private static func componentScores(in text: String) -> [String: Double]? {
+        let fields = scoreFields(in: text)
+        let components = fields.filter { ["y", "u", "v", "r", "g", "b", "a"].contains($0.key) }
+        let keys = Set(components.keys)
+        guard [Set(["y"]), Set(["y", "a"]), Set(["y", "u", "v"]), Set(["y", "u", "v", "a"]),
+               Set(["r", "g", "b"]), Set(["r", "g", "b", "a"])].contains(keys),
+              components.values.allSatisfy({ !$0.isNaN && $0 != -.infinity }) else { return nil }
+        return Dictionary(uniqueKeysWithValues: components.map { ($0.key.uppercased(), $0.value) })
+    }
+
+    static func parsePSNRResults(from stderrOutput: String) throws -> MetricResult {
+        guard let line = stderrOutput.split(whereSeparator: \.isNewline).last(where: { $0.contains("PSNR ") && !$0.contains("XPSNR ") }),
+              let channels = componentScores(in: String(line)) else {
             throw AnalyticsError.parsingFailed("Could not find PSNR summary in FFmpeg output")
         }
-
-        func extractDouble(_ index: Int) -> Double? {
-            guard let range = Range(match.range(at: index), in: stderrOutput) else { return nil }
-            return Double(stderrOutput[range])
-        }
-
-        guard let y = extractDouble(1),
-              let u = extractDouble(2),
-              let v = extractDouble(3),
-              let average = extractDouble(4),
-              let min = extractDouble(5),
-              let max = extractDouble(6) else {
+        let fields = scoreFields(in: String(line))
+        guard let average = fields["average"], let minimum = fields["min"], let maximum = fields["max"],
+              [average, minimum, maximum].allSatisfy({ !$0.isNaN && $0 != -.infinity }),
+              minimum <= average, average <= maximum else {
             throw AnalyticsError.parsingFailed("Could not parse PSNR values")
         }
-
-        return MetricResult(
-            metric: .psnr,
-            overallScore: average,
-            min: min,
-            max: max,
-            unit: "dB",
-            channelScores: ["Y": y, "U": u, "V": v]
-        )
+        return MetricResult(metric: .psnr, overallScore: average, min: minimum, max: maximum,
+                            unit: "dB", channelScores: channels, scoreAggregation: "pooled_mse_all_components")
     }
 
-    private func parseXPSNRResults(from stderrOutput: String) throws -> MetricResult {
-        // Parse: [Parsed_xpsnr_1 @ 0x...] XPSNR  y: 35.0515  u: 49.0707  v: 50.7158  (minimum: 35.0515)
-        let pattern = #"XPSNR\s+y:\s*([\d.]+|inf)\s+u:\s*([\d.]+|inf)\s+v:\s*([\d.]+|inf)\s+\(minimum:\s*([\d.]+|inf)\)"#
-
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: stderrOutput, range: NSRange(stderrOutput.startIndex..., in: stderrOutput)) else {
+    static func parseXPSNRResults(from stderrOutput: String) throws -> MetricResult {
+        guard let line = stderrOutput.split(whereSeparator: \.isNewline).last(where: { $0.contains("XPSNR ") }),
+              let channels = componentScores(in: String(line)), let minimum = channels.values.min() else {
             throw AnalyticsError.parsingFailed("Could not find XPSNR summary in FFmpeg output")
         }
-
-        func extractDouble(_ index: Int) -> Double? {
-            guard let range = Range(match.range(at: index), in: stderrOutput) else { return nil }
-            return Double(stderrOutput[range])
+        if let reported = scoreFields(in: String(line))["minimum"], reported != minimum {
+            throw AnalyticsError.parsingFailed("Inconsistent XPSNR channel minimum")
         }
-
-        guard let y = extractDouble(1),
-              let u = extractDouble(2),
-              let v = extractDouble(3),
-              let minimum = extractDouble(4) else {
-            throw AnalyticsError.parsingFailed("Could not parse XPSNR values")
-        }
-
-        // Weighted XPSNR: (6*Y + U + V) / 8 (luma-weighted average)
-        let weighted = (6.0 * y + u + v) / 8.0
-
-        return MetricResult(
-            metric: .xpsnr,
-            overallScore: weighted,
-            min: minimum,
-            max: nil,
-            unit: "dB",
-            channelScores: ["Y": y, "U": u, "V": v]
-        )
+        // FFmpeg's minimum is across whole-program channel averages, not a
+        // temporal minimum. Keep it as the overall score and leave frame extrema
+        // to the timeline, instead of labelling a channel average as a frame min.
+        return MetricResult(metric: .xpsnr, overallScore: minimum, min: nil, max: nil,
+                            unit: "dB", channelScores: channels, scoreAggregation: "minimum_channel_average")
     }
 
 }

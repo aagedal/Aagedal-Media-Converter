@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import PDFKit
 
 final class Aagedal_Media_Converter_UITests: XCTestCase {
 
@@ -1563,6 +1564,76 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(chartFrame.minX, windowFrame.minX)
         XCTAssertLessThanOrEqual(chartFrame.maxX, windowFrame.maxX)
         attachWindowScreenshot(named: "Quality timeline beside source playback")
+    }
+
+    @MainActor
+    func testVideoQualityPDFExportKeepsBothMetricTimelines() throws {
+        try verifyVideoQualityPDFExport(language: "en")
+    }
+
+    @MainActor
+    func testVideoQualityPDFExportUsesNorwegianTimelineLabels() throws {
+        try verifyVideoQualityPDFExport(language: "nb")
+    }
+
+    @MainActor
+    private func verifyVideoQualityPDFExport(language: String) throws {
+        launchApp(generatedFixture: true, language: language, locale: language == "nb" ? "nb_NO" : "en_US",
+                  additionalArguments: ["-analyticsEnabledMetrics", "(psnr, xpsnr)"])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("toolbar.conversion").click()
+        XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        app.activate()
+        element("queue.analysis").click()
+        let run = element("analysis.video.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForEnabled(true, of: run, timeout: 10))
+        app.activate()
+        run.click()
+        XCTAssertTrue(element("analysis.result.psnr").waitForExistence(timeout: 30))
+        XCTAssertTrue(element("analysis.result.xpsnr").waitForExistence(timeout: 5))
+        let export = element("analysis.video.exportPDF")
+        XCTAssertTrue(export.isHittable)
+        app.activate()
+        export.click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(element("analysis.result.xpsnr").exists, "Cancelling export must preserve the measured report")
+        let url = URL(fileURLWithPath: "/private/tmp/amc-video-quality-\(UUID()).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        app.activate()
+        export.click()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(url.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: url.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        XCTAssertEqual(document.pageCount, 2)
+        for index in 0..<document.pageCount {
+            let page = try XCTUnwrap(document.page(at: index))
+            XCTAssertEqual(page.bounds(for: .mediaBox).size, CGSize(width: 595, height: 842))
+            XCTAssertTrue(try XCTUnwrap(page.string).contains(language == "nb" ? "Kvalitetstidslinje" : "Quality timeline"))
+        }
+        XCTAssertTrue(try XCTUnwrap(document.string).contains("XPSNR = min("))
+        XCTAssertTrue(element("analysis.result.xpsnr").exists, "Saving must preserve the measured report")
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.exists)
+        let attachment = XCTAttachment(screenshot: sheet.screenshot())
+        attachment.name = "Video quality PDF export \(language)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor
