@@ -154,10 +154,26 @@ playhead. All 50 focused tests pass against the clean library; on the normal
 package the three history tests skip as intended and the other 28 player tests
 pass.
 
+Release builds compile the history path out, so optimized performance was measured
+with the Debug configuration rebuilt at `-O`/`-Os` whole-module against the clean
+library (three serial rounds, `time-pos`, muted real output). Over about 17 seconds,
+host plus FFmpeg-child CPU is 0.47–0.56 s with the meter off and 0.66–0.99 s with
+playback history for stereo AAC/AVFoundation. For 5.1 FLAC/CoreAudio it is
+0.27–0.36 s off and 0.65–0.94 s with history, at most 5.8% of one core. History
+ingest P95 is 1.06–2.13 ms, with a maximum of 2.23 ms. All eight level changes are
+found in every playback run. Median edge delay is 0.27–0.33 s (AAC) and
+0.17–0.19 s (FLAC), including 100 ms polling. Optimization does not materially
+change CPU compared with the earlier single Debug runs (0.61/0.99 s), so the cost
+is dominated by the already optimized MPV filters, not the Swift consumer. These
+are short runs. They do not qualify thermal behavior, a true Release
+configuration or physical latency.
+[Optimized report](provenance/audio-meter-lifecycle-2026-10-18/app-consumer/optimized-timepos-report.json)
+and compressed raw readings are retained.
+
 The production pin, Source-default meter, bundled binaries and translations are
 unchanged. Remaining before playback history can ship: corresponding-source
-packaging and a production pin update, Release/thermal performance and physical
-loopback synchronization.
+packaging, a production pin update with a non-Debug enablement decision,
+sustained thermal runs and physical loopback synchronization.
 
 ## Original isolated lifecycle experiment
 
