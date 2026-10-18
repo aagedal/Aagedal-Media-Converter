@@ -131,11 +131,14 @@ Kameraknappen i trimspilleren tar stillbilder med kildens oppløsning. Standardf
 - Vis og sammenlign metadata
 
 ### Medieanalyse
+
+![Verifiserte SSIMULACRA2-bilder ved siden av kildevideoen](../images/ssimulacra2-frame-inspection-nb.png)
 Åpne diagramknappen på en fil i køen for å se rapporter for lyd og video.
 
 - Mål programlydstyrke og sann toppverdi for enkeltspor, egendefinerte monopar eller 5.1-monogrupper. Eksporter komplette JSON- eller PDF-rapporter.
 - Finn stillhet og toppintervaller, sammenlign kanalbalanse, eller kontroller stereokorrelasjon og mononedmiksing. Hopp til målte seksjoner i en pauset forhåndsvisning, og eksporter alle målinger som JSON.
 - Etter koding kan du sammenligne video med VMAF, PSNR, XPSNR eller utvalgte SSIMULACRA2-bilder. Se kvaliteten over tid, bytt mellom kilde og kodet video, og hopp til seksjonene med lavest målt kvalitet.
+- SSIMULACRA2 sammenligner verifiserte dekodede bilder opptil valgt grense, også i korte klipp. Videoene indekseres først; flere prøver tar lengre tid.
 - Eksporter videokvalitet som JSON med alle måleverdier eller en A4-PDF med tidslinjer, komponentverdier og sammenligningsadvarsler. Se [tolkning av verdier og rapportdetaljer](../video-quality-report-format.md).
 
 ### 15-sekundersvarsel for automatisk avspilling med VideoLoop

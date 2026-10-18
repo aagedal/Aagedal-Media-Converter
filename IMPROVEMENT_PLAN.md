@@ -2,6 +2,33 @@
 
 Last reviewed: 2026-10-18
 
+## Analysis controls and score guidance — 2026-10-18
+
+Owner: Codex. Added 75 catalog entries covering analysis tabs/settings, audio
+program controls, summary headings, quality inspection captions, status messages,
+accessibility descriptions and ratings. Dynamic strings now resolve translations
+explicitly. The audio center-channel noun has its own key rather than using an
+alignment verb. SSIMULACRA2 help correctly credits Cloudinary, describes negative
+scores and the perfect-match value, and uses inclusive rating thresholds. PDF
+ratings are localized. Other eight language translations remain marked for review.
+
+Validation: Debug build and 33 focused analysis/PDF tests pass after these display
+changes; seven localization tests and the 2,001-entry catalog audit pass. Both
+English/Norwegian native SSIMULACRA2 checks pass in
+`/private/tmp/amc-analysis-localized-ui.xcresult`, including five samples, preserved
+source/output positions and native PDF save/readback. Norwegian loudness report
+selection/invalidation passes in `/private/tmp/amc-analysis-localized-audio-ui.xcresult`.
+Both inspector captures and both native report pages were visually checked;
+updated EN/NB README images and method details retain that evidence.
+No dependencies, bundled binaries or licenses changed.
+
+Remaining display work: detailed assembled comparison/pixel-processing metadata,
+warnings and some shared track labels remain English; PDF numbers retain the
+existing decimal-point convention. These are distinct from the now-localized
+primary controls. Paused MPEG-4 regrouping and playback timestamp integration,
+plus Release/device and sandbox qualification, remain open. The completion goal
+stays active.
+
 ## Decoded SSIMULACRA2 sampling — 2026-10-18
 
 Owner: Codex. The frame limit now selects distinct decoded ordinals, including
@@ -29,10 +56,13 @@ rounding, audio-only tails, real unseekable raw H.264, successful empty seeks,
 nonfinite helper output and cancellation during discovery/extraction. A negative
 MKV fixture exposes a genuine decoded timestamp reset and is explicitly rejected.
 Seven localization tests and the 1,926-entry catalog audit also pass.
-Native SSIMULACRA2 inspection/PDF and existing timeline UI checks remain unverified:
-`/private/tmp/amc-sampling-native-ui.xcresult` shows a macOS Codex Computer Use
-screen/audio access prompt intercepting Run clicks. That privacy choice has been
-left to the user; no analysis helper was started by those intercepted clicks.
+Final English/Norwegian native SSIMULACRA2 inspection/PDF checks pass in
+`/private/tmp/amc-analysis-localized-ui.xcresult`; the existing graph seek/source
+switch check also passes in `/private/tmp/amc-sampling-unblocked-ui.xcresult`.
+The first attempt was intercepted by a macOS Codex Computer Use screen/audio
+access prompt; the user resolved it. A subsequent long-method PDF assertion was
+corrected to normalize ordinary text wrapping. The final reports and inspector
+captures were visually verified.
 
 Remaining completion work: analysis UI localization (a source/catalog audit found
 missing primary headings, inspector controls and audio help), playback timestamp

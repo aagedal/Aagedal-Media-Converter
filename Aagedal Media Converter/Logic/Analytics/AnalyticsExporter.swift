@@ -684,7 +684,7 @@ private final class QualityPDFRenderer {
             try text(String(localized: "Source File:") + " " + results.sourceFileName)
             try text(String(localized: "Encoded File:") + " " + results.encodedFileName)
             try text(String(localized: "Date:") + " " + results.timestamp.formatted(date: .abbreviated, time: .shortened), color: .secondaryLabelColor, spacing: 14)
-            try text(String(localized: "Overall Score") + ": " + metric.formattedScore + "   ·   " + metric.qualityRating,
+            try text(String(localized: "Overall Score") + ": " + metric.formattedScore + "   ·   " + Bundle.main.localizedString(forKey: metric.qualityRating, value: nil, table: nil),
                      size: 16, bold: true, spacing: 10)
             if let channels = metric.channelScores, !channels.isEmpty {
                 try text(channels.sorted { $0.key < $1.key }.map { "\($0.key): \(score($0.value)) \(metric.unit)" }.joined(separator: "    "))

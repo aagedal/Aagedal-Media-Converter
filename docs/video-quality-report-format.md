@@ -92,7 +92,27 @@ presentation times. Sample `seconds` and graph positions are relative to the fir
 encoded video frame. Inspection uses the measured source and encoded video origins.
 Older reports retain the legacy trim-based playback origin when fields are absent.
 PDF metadata includes the measured origins, compared duration and matching policy.
-SSIMULACRA2 helper scores must be finite; perfect matches score 100.
+SSIMULACRA2 helper scores must be finite; perfect matches score 100. The
+[Cloudinary reference](https://github.com/cloudinary/ssimulacra2) documents negative
+scores for severe distortion; the UI preserves and describes those values.
+
+![Verified sampled frames beside source playback](images/ssimulacra2-frame-inspection-en.png)
+
+![Native sampled-frame PDF report](images/ssimulacra2-frame-report.png)
+
+## Analysis display localization
+
+Primary analysis controls, inspector captions, audio summary headings, status
+messages and accessibility descriptions now have catalog entries. Dynamic strings
+explicitly resolve their translations rather than relying on `Text(String)`.
+English/Norwegian are verified; the other eight translations are marked for review.
+Quality ratings are localized in the UI and PDF while stored numeric results and
+metric identifiers remain unchanged. The audio center-channel label uses its own
+noun context rather than the generic alignment action.
+
+Detailed comparison/pixel-processing warnings and assembled metadata remain in
+English. PDF numeric formatting also retains its existing decimal-point convention;
+full locale presentation of those details is still open.
 
 ## Validation
 
@@ -103,6 +123,18 @@ cover fractional CFR, VFR reference holds, duplicate timestamps, delayed starts,
 trim rounding and exclusive ends, trailing audio, real unseekable raw H.264,
 successful empty seeks, malformed/nonfinite scores and cancellation drainage.
 
+
+Both final English/Norwegian native SSIMULACRA2 checks pass in
+`/private/tmp/amc-analysis-localized-ui.xcresult`, including five measured frames on
+a two-second clip, source/output position preservation and PDF save/readback.
+The existing graph-seek check passes in `/private/tmp/amc-sampling-unblocked-ui.xcresult`.
+Thirty-three focused analysis/PDF tests pass after display localization, as do
+seven localization tests and the 2,001-entry audit. The Norwegian loudness
+selection/invalidation check passes in `/private/tmp/amc-analysis-localized-audio-ui.xcresult`.
+Both inspector captures and both final native PDF pages were visually inspected.
+The first native attempt was intercepted by a macOS screen/audio access prompt;
+the user resolved it. A later PDF assertion was adjusted to normalize ordinary
+line wrapping before matching the method text.
 
 The final Debug build and 1,431 unit tests pass with zero failures and one
 intentional benchmark skip (`/private/tmp/amc-quality-final-unit.xcresult`). Generated examples cover grayscale, RGB, alpha-only

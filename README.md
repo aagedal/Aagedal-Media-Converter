@@ -131,12 +131,13 @@ In the trim player there is a camera button that allows capturing still images. 
 
 ### Media analysis
 
-![Video quality analysis and report export](docs/images/video-analysis-reports-en.png)
+![Verified SSIMULACRA2 samples beside source playback](docs/images/ssimulacra2-frame-inspection-en.png)
 Open the chart button on a queued file to inspect its Audio and Video reports.
 
 - Measure whole-program loudness and true peak for individual tracks, custom mono pairs or 5.1 mono groups; export complete JSON or PDF reports.
 - Find silence and peak intervals, compare channel balance, or check stereo correlation and mono fold-down. Jump to measured sections in the paused preview and export complete JSON measurements.
 - After encoding, compare video with VMAF, PSNR, XPSNR or sampled SSIMULACRA2. Inspect quality over time, switch source/output playback and jump to the lowest-scoring sections.
+- SSIMULACRA2 compares verified decoded frames up to the selected limit, including on short clips. Videos are indexed first; more samples take longer.
 - Export video quality as full-resolution JSON or paginated A4 PDF with timelines, component scores and comparison warnings. See [score interpretation and report details](docs/video-quality-report-format.md).
 
 ### 15-Second Autoplay Warning for VideoLoop presets

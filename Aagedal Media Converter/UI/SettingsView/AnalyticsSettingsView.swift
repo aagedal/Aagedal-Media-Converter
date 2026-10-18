@@ -181,7 +181,7 @@ struct AnalyticsSettingsView: View {
         case .xpsnr:
             return "Extended PSNR by Fraunhofer HHI. Perceptually weighted PSNR metric measured in dB. Values above 42 dB are considered visually lossless."
         case .ssimulacra2:
-            return "Perceptual quality metric by Cloudflare. Measures structural similarity on a 0-100 scale. Scores above 70 indicate good quality. Included with the app."
+            return "Perceptual quality metric by Cloudinary. A perfect match scores 100; severe distortion can produce negative scores. Scores of 70 or more indicate good quality. Included with the app."
         }
     }
 

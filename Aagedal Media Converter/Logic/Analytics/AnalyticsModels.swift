@@ -168,7 +168,7 @@ enum QualityMetric: String, CaseIterable, Codable, Sendable {
         case .xpsnr:
             return "Extended PSNR by Fraunhofer HHI. Perceptually weighted PSNR metric measured in dB."
         case .ssimulacra2:
-            return "Perceptual image quality metric by Cloudflare. Scale: 0-100."
+            return "Perceptual image quality metric by Cloudinary. A perfect match scores 100; severe distortion can produce negative scores."
         }
     }
 }
@@ -195,13 +195,13 @@ enum AnalyticsStatus: Equatable, Sendable {
         case .notQueued:
             return ""
         case .pending:
-            return "Pending"
+            return String(localized: "Pending")
         case .running(let metric, let progress):
-            return "Analyzing \(metric.displayName) \(Int(progress * 100))%"
+            return String(format: String(localized: "Analyzing %@ %lld%%"), metric.displayName, Int64(progress * 100))
         case .completed:
-            return "Done"
+            return String(localized: "Done")
         case .failed(let error):
-            return "Failed: \(error)"
+            return String(format: String(localized: "Failed: %@"), error)
         }
     }
 }
@@ -211,7 +211,7 @@ enum AnalyticsComparisonResolution: String, Codable, CaseIterable, Sendable {
     case encoded
     case source
 
-    var displayName: String { self == .encoded ? "Encoded resolution" : "Source resolution" }
+    var displayName: String { self == .encoded ? String(localized: "Encoded resolution") : String(localized: "Source resolution") }
 }
 
 struct AnalyticsTiming: Codable, Equatable, Sendable {

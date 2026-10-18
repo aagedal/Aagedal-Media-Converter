@@ -1638,7 +1638,17 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
 
     @MainActor
     func testBundledSSIMULACRA2RunsFromAnalysisOverlay() throws {
-        launchApp(generatedFixture: true, additionalArguments: [
+        try verifyBundledSSIMULACRA2(language: "en")
+    }
+
+    @MainActor
+    func testSSIMULACRAInspectorUsesNorwegianLabels() throws {
+        try verifyBundledSSIMULACRA2(language: "nb")
+    }
+
+    @MainActor
+    private func verifyBundledSSIMULACRA2(language: String) throws {
+        launchApp(generatedFixture: true, language: language, locale: language == "nb" ? "nb_NO" : "en_US", additionalArguments: [
             "-analyticsEnabledMetrics", "(ssimulacra2)", "-ssimulacra2MaxFrames", "5"
         ])
         defer { terminateAndCleanFixtures() }
@@ -1654,11 +1664,11 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         app.activate()
         element("analysis.video.run").click()
         XCTAssertTrue(element("analysis.result.ssimulacra2").waitForExistence(timeout: 45),
-                      "The signed bundled helper must run in the sandbox without any user installation")
+                      "The signed bundled helper must run without any user installation")
         app.activate()
         element("analysis.video.inspect").click()
         XCTAssertTrue(element("analysis.inspection.metric").waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["5 measured frames"].exists,
+        XCTAssertTrue(app.staticTexts[language == "nb" ? "5 målte bilder" : "5 measured frames"].exists,
                       "The requested frame density must reach the inspector on a short clip")
         let play = element("analysis.inspection.play")
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
@@ -1666,17 +1676,17 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         app.sliders["analysis.inspection.position"].adjust(toNormalizedSliderPosition: 0.5)
         let time = element("analysis.inspection.time")
         let chosen = try XCTUnwrap(time.value as? String)
-        app.radioButtons["Source"].click()
+        app.radioButtons[language == "nb" ? "Kilde" : "Source"].click()
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "enabled == true"), object: play)], timeout: 20), .completed)
         XCTAssertEqual(time.value as? String, chosen)
         XCTAssertTrue(element("analysis.inspection.nearest").isHittable)
         let attachment = XCTAttachment(screenshot: app.sheets.firstMatch.screenshot())
-        attachment.name = "Verified SSIMULACRA2 samples beside source playback"
+        attachment.name = "Verified SSIMULACRA2 samples beside source playback \(language)"
         attachment.lifetime = .keepAlways
         add(attachment)
         element("analysis.inspection.close").click()
-        let url = URL(fileURLWithPath: "/private/tmp/amc-ssim-sampling-native-report.pdf")
+        let url = URL(fileURLWithPath: "/private/tmp/amc-ssim-sampling-native-report-\(language).pdf")
         try? FileManager.default.removeItem(at: url)
         app.activate()
         element("analysis.video.exportPDF").click()
@@ -1696,8 +1706,9 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
             FileManager.default.fileExists(atPath: url.path)
         }, object: nil)], timeout: 10), .completed)
         let document = try XCTUnwrap(PDFDocument(url: url))
-        XCTAssertTrue(try XCTUnwrap(document.string).contains("decoded video starts"))
-        XCTAssertTrue(try XCTUnwrap(document.string).contains("output timebase rounding tolerance"))
+        let text = try XCTUnwrap(document.string).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        XCTAssertTrue(text.contains("decoded video starts"))
+        XCTAssertTrue(text.contains("output timebase rounding tolerance"))
     }
 
     @MainActor
