@@ -1024,6 +1024,7 @@ actor LoudnessAnalysisService {
     }
 
     func analyze(file: URL, presentation: LoudnessPresentation) async throws -> LoudnessResults {
+        try Task.checkCancellation()
         guard let ffmpegPath = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
         guard !presentation.streamIndices.isEmpty,
               Set(presentation.streamIndices).count == presentation.streamIndices.count,
@@ -1037,10 +1038,16 @@ actor LoudnessAnalysisService {
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
 
+        // Validate original timestamps before reframing can conceal gaps or
+        // amerge can truncate unequal tracks. Use the same injected runner so
+        // batch limits and cancellation cover preflight as well as measurement.
+        let timing = try await AudioPeakAnalysisService(runner: runner, ffmpegPathProvider: { ffmpegPath })
+            .validateGroupedTracks(file: file, presentation: presentation)
+        let outputTiming = timing.map { _ in GroupedPeakTimingCollector(trackCount: 1, requireMono: false) }
         let graph = Self.filterGraph(for: presentation)
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
-            arguments: ["-hide_banner", "-nostdin", "-nostats", "-i", file.path,
+            arguments: ["-hide_banner", "-nostdin", "-nostats", "-xerror", "-progress", "pipe:1", "-i", file.path,
                         "-filter_complex", graph, "-map", "[metered]", "-f", "null", "-"],
             timeout: .seconds(12 * 60 * 60),
             standardOutputCaptureLimit: 0,
@@ -1050,11 +1057,19 @@ actor LoudnessAnalysisService {
         let collector = LoudnessLogCollector()
         let result = try await runner.run(request) { chunk in
             if case .standardOutput = chunk.stream { collector.consume(chunk.data) }
+            outputTiming?.consume(chunk)
         }
         try Task.checkCancellation()
         collector.finish()
         guard result.succeeded else {
             throw AnalyticsError.parsingFailed(request.redactedDiagnostic(result.standardErrorText, limit: 500))
+        }
+        if let timing, let outputTiming {
+            let decoded = try outputTiming.finish()
+            guard decoded.samples == timing.samples, decoded.rate == timing.rate,
+                  decoded.start == timing.start else {
+                throw AnalyticsError.parsingFailed("Grouped loudness analysis did not preserve every source sample.")
+            }
         }
         return try collector.results(presentation: presentation, summary: result.standardErrorText)
     }
@@ -1098,24 +1113,22 @@ actor LoudnessAnalysisService {
     }
 
     static func filterGraph(for presentation: LoudnessPresentation) -> String {
-        let inputs = presentation.streamIndices.map { "[0:a:\($0)]" }.joined()
-        let join: String
-        switch presentation {
-        case .track:
-            join = ""
-        case .stereo:
-            join = "join=inputs=2:channel_layout=stereo:map=0.0-FL|1.0-FR,"
-        case .surround51:
-            join = "join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,"
-        }
-        // ebur128 splits audio into 100 ms frames when metadata is enabled.
-        // astats resets for each of those frames, so RMS/peak are window levels,
-        // rather than cumulative peaks over the entire file. Read metadata from
-        // stdout; keep stderr bounded for the separate gated final summary.
-        return "\(inputs)\(join)asetpts=PTS-STARTPTS,"
-            + "ebur128=metadata=1:peak=true:framelog=verbose,"
+        // Inspect merged source frames before resetting the report's timeline.
+        // This checks that every preflight sample survives the grouping graph.
+        let timing: String
+        if case .track = presentation { timing = "" }
+        else { timing = "asettb=1/sr,ashowinfo@amc_peak_timing_0," }
+        // ebur128 does not drain its internal true-peak resampler at EOF.
+        // Give that measurement symmetric zero context on a separate branch;
+        // the gated integrated/LRA and timeline branch remains unpadded.
+        let measurement = timing + "asplit=2[loudness_input][true_peak_input];"
+            + "[true_peak_input]adelay=100:all=1,apad=pad_dur=0.1,"
+            + "ebur128@amc_true_peak=peak=true:framelog=verbose,anullsink;"
+            + "[loudness_input]asetpts=PTS-STARTPTS,"
+            + "ebur128@amc_loudness=metadata=1:peak=none:framelog=verbose,"
             + "astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level+RMS_level,"
-            + "ametadata=print:file=-[metered]"
+            + "ametadata=print:file=-"
+        return AudioPeakAnalysisService.filterGraph(for: presentation, measurementFilter: measurement, outputLabel: "metered")
     }
 }
 
@@ -1150,15 +1163,22 @@ private final class LoudnessLogCollector: @unchecked Sendable {
     func results(presentation: LoudnessPresentation, summary: String) throws -> LoudnessResults {
         lock.lock()
         defer { lock.unlock() }
-        guard let summaryStart = summary.range(of: "Summary:", options: .backwards) else {
-            throw AnalyticsError.parsingFailed("FFmpeg did not report a loudness summary")
+        func finalSummary(named name: String) throws -> String {
+            guard let filter = summary.range(of: "[ebur128@\(name) ", options: .backwards),
+                  let header = summary.range(of: "Summary:", range: filter.upperBound..<summary.endIndex) else {
+                throw AnalyticsError.parsingFailed("FFmpeg did not report a loudness summary")
+            }
+            let suffix = summary[header.upperBound...]
+            let end = suffix.range(of: "[ebur128@")?.lowerBound ?? summary.endIndex
+            return String(summary[header.upperBound..<end])
         }
-        let final = String(summary[summaryStart.upperBound...])
+        let final = try finalSummary(named: "amc_loudness")
+        let peakSummary = try finalSummary(named: "amc_true_peak")
         guard let integrated = Self.value(after: "Integrated loudness:", key: "I:", in: final),
               let range = Self.value(after: "Loudness range:", key: "LRA:", in: final) else {
             throw AnalyticsError.parsingFailed("Incomplete loudness summary")
         }
-        let peak = Self.value(after: "True peak:", key: "Peak:", in: final)
+        let peak = Self.value(after: "True peak:", key: "Peak:", in: peakSummary)
         return LoudnessResults(
             presentation: presentation,
             integratedLUFS: integrated,

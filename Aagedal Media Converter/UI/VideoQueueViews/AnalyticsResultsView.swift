@@ -184,6 +184,7 @@ struct LoudnessAnalysisView: View {
     @State private var isAnalyzing = false
     @State private var results: [LoudnessResults] = []
     @State private var activeResultID = ""
+    @State private var analysisTimestamp: Date?
     @State private var errorMessage: String?
     @State private var analysisTask: Task<Void, Never>?
     @State private var analysisID: UUID?
@@ -254,7 +255,12 @@ struct LoudnessAnalysisView: View {
                             }
                         }
                         .accessibilityIdentifier("analysis.audio.report")
-                        Button("Export PDF") { exportPDF() }.disabled(isAnalyzing)
+                        Button("Export JSON") { exportLoudness(format: .json) }
+                            .disabled(isAnalyzing)
+                            .accessibilityIdentifier("analysis.audio.exportJSON")
+                        Button("Export PDF") { exportLoudness(format: .pdf) }
+                            .disabled(isAnalyzing)
+                            .accessibilityIdentifier("analysis.audio.exportPDF")
                     }
                     if results.count > 1 {
                         Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
@@ -288,16 +294,7 @@ struct LoudnessAnalysisView: View {
             .padding(.vertical, 8)
         }
         .task(id: file) {
-            isProbing = true
-            tracks = []
-            let probed = await AudioRoutingService.fetchAudioTrackInfo(for: file)
-            guard !Task.isCancelled else { return }
-            tracks = probed
-            configurations = []
-            if !tracks.isEmpty { addConfiguration() }
-            isProbing = false
-        }
-        .onChange(of: selectedFileID) {
+            let probedFile = file
             analysisID = nil
             analysisTask?.cancel()
             analysisTask = nil
@@ -305,9 +302,22 @@ struct LoudnessAnalysisView: View {
             configurations = []
             isProbing = true
             results = []
+            analysisTimestamp = nil
             activeResultID = ""
             errorMessage = nil
             isAnalyzing = false
+            let probed = await AudioRoutingService.fetchAudioTrackInfo(for: probedFile)
+            guard !Task.isCancelled, file == probedFile else { return }
+            tracks = probed
+            if !tracks.isEmpty { addConfiguration() }
+            isProbing = false
+        }
+        .onChange(of: chosenPresentations) {
+            guard !isAnalyzing else { return }
+            results = []
+            activeResultID = ""
+            analysisTimestamp = nil
+            errorMessage = nil
         }
         .onDisappear {
             analysisID = nil
@@ -462,17 +472,23 @@ struct LoudnessAnalysisView: View {
         configurations.append(configuration)
     }
 
-    private func exportPDF() {
+    private func exportLoudness(format: AnalyticsExportFormat) {
+        guard let timestamp = analysisTimestamp, !results.isEmpty else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.pdf]
-        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_loudness.pdf"
+        panel.allowedContentTypes = [format == .json ? .json : .pdf]
+        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_loudness.\(format.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         do {
-            try AnalyticsExporter.exportLoudnessPDF(results: results, fileName: file.lastPathComponent, to: url)
+            switch format {
+            case .json:
+                try AnalyticsExporter.exportLoudnessJSON(results: results, sourceFile: file, timestamp: timestamp, to: url)
+            case .pdf:
+                try AnalyticsExporter.exportLoudnessPDF(results: results, fileName: file.lastPathComponent, timestamp: timestamp, to: url)
+            }
         } catch {
-            errorMessage = "PDF export failed: \(error.localizedDescription)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -486,6 +502,7 @@ struct LoudnessAnalysisView: View {
     private func analyze() {
         guard canAnalyze else { return }
         let chosen = chosenPresentations
+        analysisTimestamp = Date()
         results = []
         activeResultID = ""
         errorMessage = nil

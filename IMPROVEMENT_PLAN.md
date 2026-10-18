@@ -2,6 +2,40 @@
 
 Last reviewed: 2026-10-18
 
+## Source analysis report completion — 2026-10-18
+
+Owner: Codex. Whole-program loudness now exports complete schema-v1 JSON alongside
+PDF, with all timeline readings, explicit presentation/channel roles, null
+semantics and a stable analysis timestamp. Changed files or channel assignments
+clear prior reports; cancelled saves preserve them. File probes reject stale
+publication. See the [loudness report format](docs/audio-loudness-report-format.md).
+
+Grouped loudness and silence now validate complete mono source streams for
+matching rates, starts and sample counts and reject later timestamp gaps. Their
+merged measurements must retain every preflight sample. Loudness uses explicit
+role mapping and unpadded merging shared with peak analysis. A separately named
+true-peak branch supplies zero context at both edges, fixing FFmpeg's missing EOF
+interpolation without padding gated integrated loudness, LRA or timeline data.
+No dependencies, bundled binaries or licenses changed.
+
+Validation: the ad-hoc-signed Debug app and test targets build. The final full
+unit suite executes 1,424 tests with zero failures and one intentional benchmark
+skip (`/private/tmp/amc-analysis-complete-unit.xcresult`). Regressions cover
+unequal grouped lengths/rates/starts, later gaps, successful-but-truncated merged
+reports, different FLAC block sizes and final-sample impulses, one-sample
+programs from 8–192 kHz, preserved EBU weighting and full JSON reading retention.
+Seven localization tests, the 1,917-entry catalog audit and whitespace checks
+pass. Release/device synchronization and conformance certification remain open;
+current Debug/Release configurations disable App Sandbox, so save-panel checks
+do not qualify sandbox enforcement.
+
+All four English/Norwegian UI checks pass, including native JSON save/readback,
+configuration invalidation, tab persistence, conversion readiness and grouped
+silence navigation/export. Four captures were visually inspected; readable
+loudness export controls are retained in the audio roadmap. The existing paused
+MPEG-4 regrouping artifact remains visible in grouped preview; source measurements
+are independent of video reconfiguration.
+
 ## Playback meter lifecycle continuation — 2026-10-18
 
 Owner: Codex. The isolated timestamp probe now retains bounded command/event

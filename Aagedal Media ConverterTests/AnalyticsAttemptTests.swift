@@ -410,3 +410,70 @@ private actor AnalyticsAttemptRunner: SubprocessRunning {
         continuation = nil
     }
 }
+
+final class LoudnessExportTests: XCTestCase {
+    func testLoudnessJSONPreservesFullTimelinesAndExplicitChannelOrder() throws {
+        let samples = (0..<8_000).map {
+            LoudnessSample(seconds: Double($0) / 10, momentaryLUFS: $0 == 0 ? nil : -23,
+                           shortTermLUFS: nil, peakDBFS: -1, rmsDBFS: nil)
+        }
+        let results = [LoudnessResults(presentation: .surround51([2, 3, 4, 7, 5, 6]), integratedLUFS: -23,
+                                      loudnessRangeLU: 4, maximumTruePeakDBTP: nil, samples: samples),
+                       LoudnessResults(presentation: .track(0), integratedLUFS: -70,
+                                       loudnessRangeLU: 0, maximumTruePeakDBTP: -90, samples: [])]
+        let date = Date(timeIntervalSince1970: 0)
+        let data = try AnalyticsExporter.loudnessJSON(results: results,
+                    sourceFile: URL(fileURLWithPath: "/private/source.mov"), timestamp: date)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["sourceFileName"] as? String, "source.mov")
+        XCTAssertEqual(json["timestamp"] as? String, "1970-01-01T00:00:00Z")
+        let reports = try XCTUnwrap(json["results"] as? [[String: Any]])
+        XCTAssertEqual(reports.count, 2)
+        let presentation = try XCTUnwrap(reports[0]["presentation"] as? [String: Any])
+        XCTAssertEqual(presentation["audioRelativeTrackIndices"] as? [Int], [2, 3, 4, 7, 5, 6])
+        XCTAssertEqual(presentation["channelOrder"] as? [String], ["FL", "FR", "FC", "LFE", "SL", "SR"])
+        XCTAssertTrue(reports[0]["maximumTruePeakDBTP"] is NSNull)
+        let readings = try XCTUnwrap(reports[0]["samples"] as? [[String: Any]])
+        XCTAssertEqual(readings.count, samples.count)
+        XCTAssertTrue(readings[0]["momentaryLUFS"] is NSNull)
+        XCTAssertTrue(readings[0]["rmsDBFS"] is NSNull)
+        XCTAssertEqual(readings.last?["seconds"] as? Double, 799.9)
+        XCTAssertEqual(data, try AnalyticsExporter.loudnessJSON(results: results,
+                           sourceFile: URL(fileURLWithPath: "/private/source.mov"), timestamp: date))
+    }
+
+    func testLoudnessJSONRejectsInvalidSummariesTopologyAndTimelines() throws {
+        let file = URL(fileURLWithPath: "/private/source.mov")
+        let date = Date(timeIntervalSince1970: 0)
+        func report(_ presentation: LoudnessPresentation = .track(0), integrated: Double = -23,
+                    range: Double = 4, peak: Double? = -1, samples: [LoudnessSample] = []) -> LoudnessResults {
+            LoudnessResults(presentation: presentation, integratedLUFS: integrated,
+                            loudnessRangeLU: range, maximumTruePeakDBTP: peak, samples: samples)
+        }
+        let invalid: [[LoudnessResults]] = [[], [report(.track(-1))], [report(.stereo(left: 0, right: 0))],
+            [report(.surround51([0, 1]))], [report(integrated: .nan)], [report(range: -1)],
+            [report(peak: .infinity)], [report(), report()],
+            [report(samples: [.init(seconds: -1, momentaryLUFS: -23, shortTermLUFS: nil)])],
+            [report(samples: [.init(seconds: 0, momentaryLUFS: .infinity, shortTermLUFS: nil)])],
+            [report(samples: [.init(seconds: 1, momentaryLUFS: nil, shortTermLUFS: nil),
+                              .init(seconds: 1, momentaryLUFS: nil, shortTermLUFS: nil)])]]
+        for results in invalid {
+            XCTAssertThrowsError(try AnalyticsExporter.loudnessJSON(results: results, sourceFile: file, timestamp: date))
+        }
+        XCTAssertThrowsError(try AnalyticsExporter.loudnessJSON(results: [report()], sourceFile: file,
+                            timestamp: Date(timeIntervalSince1970: .nan)))
+    }
+
+    func testLoudnessJSONFailedValidationPreservesDestination() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("report.json")
+        let existing = Data("existing report".utf8)
+        try existing.write(to: url)
+        XCTAssertThrowsError(try AnalyticsExporter.exportLoudnessJSON(results: [], sourceFile: url,
+                             timestamp: Date(), to: url))
+        XCTAssertEqual(try Data(contentsOf: url), existing)
+    }
+}

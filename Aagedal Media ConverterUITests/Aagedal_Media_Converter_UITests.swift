@@ -2371,6 +2371,41 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(element("analysis.video.run").exists)
         app.radioButtons["Audio"].click()
         XCTAssertTrue(element("analysis.audio.report").exists, "Switching tabs must preserve completed loudness reports")
+        let export = element("analysis.audio.exportJSON")
+        XCTAssertTrue(export.isEnabled)
+        export.click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(export.isEnabled, "Cancelling a save must preserve the completed report")
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-loudness-export-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        export.click()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(report["analysis"] as? String, "whole_program_loudness")
+        let measured = try XCTUnwrap((report["results"] as? [[String: Any]])?.first)
+        XCTAssertEqual((measured["presentation"] as? [String: Any])?["audioRelativeTrackIndices"] as? [Int], [0])
+        XCTAssertFalse(try XCTUnwrap(measured["samples"] as? [Any]).isEmpty)
+        attachWindowScreenshot(named: "Loudness report with JSON and PDF export")
+        element("analysis.audio.add").click()
+        XCTAssertFalse(element("analysis.audio.report").exists, "Changed selections must clear old results")
+        XCTAssertFalse(element("analysis.audio.exportJSON").exists)
+        element("analysis.audio.remove.2").click()
+        XCTAssertTrue(audioRun.isEnabled)
         app.sheets.firstMatch.buttons["Close"].click()
         element("toolbar.conversion").click()
         XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
@@ -2380,6 +2415,26 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: videoRun)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         attachWindowScreenshot(named: "Unified analysis - ready after encoding")
+    }
+
+    @MainActor
+    func testLoudnessNorwegianExportAndSelectionInvalidation() throws {
+        launchApp(generatedFixture: true, language: "nb", locale: "nb_NO")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Lyd"].click()
+        let run = element("analysis.audio.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 15))
+        run.click()
+        XCTAssertTrue(element("analysis.audio.report").waitForExistence(timeout: 20))
+        XCTAssertEqual(element("analysis.audio.exportJSON").label, "Eksporter JSON")
+        XCTAssertEqual(element("analysis.audio.exportPDF").label, "Eksporter PDF")
+        attachWindowScreenshot(named: "Loudness report exports in Norwegian")
+        element("analysis.audio.add").click()
+        XCTAssertFalse(element("analysis.audio.report").exists)
+        XCTAssertFalse(element("analysis.audio.exportJSON").exists)
     }
 
     @MainActor

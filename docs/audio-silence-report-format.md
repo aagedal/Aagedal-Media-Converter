@@ -33,10 +33,13 @@ interval. A trailing interval can end at the filter-reported end of audio.
 The UI selects one audio track with its source layout, a custom mono pair, or
 six mono tracks assigned to 5.1 roles. Stereo maps to FL/FR and 5.1(side) maps to
 FL/FR/FC/LFE/SL/SR in the stated track order. Selection, grouped preview and export
-retain that order. Grouped scans require matching sample rates and decoded start
-times; unequal/unknown starts fail before scanning. Groups target continuous,
-synchronized recordings. The join ends at the shortest input; unequal durations
-and midstream discontinuities remain unqualified. A track report does not claim
+retain that order. Grouped scans decode every selected source stream before
+scanning and require matching sample rates, decoded start times and sample
+counts, with continuous timestamps (within 1 ms container timestamp precision).
+Unequal lengths and later discontinuities fail before scanning. The merged
+measurement must preserve the preflight sample count, rate and start time;
+a successful process and closed silence interval alone do not prove complete
+analysis. Groups target continuous, synchronized recordings. A track report does not claim
 a measured channel count or layout name that the silence detector does not return.
 
 The exporter rejects invalid settings, track topology, non-finite timestamps and

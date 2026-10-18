@@ -68,9 +68,40 @@ remain required before considering it as the default meter.
 - [x] Export complete source silence reports as versioned JSON, with selected presentation, thresholds and every file-relative interval. See [report format](audio-silence-report-format.md).
 - [x] Expose custom mono-pair and 5.1 selection, grouped audition and JSON export in Detect Silence. Reject duplicate/non-mono inputs and unequal decoded start times.
 - [x] Extend grouped selection/audition to peak/channel-balance reports. Full decoded-timeline validation rejects unequal decoded lengths, sample rates, starts and discontinuities beyond a 1 ms rounding tolerance before grouped audition or scanning. Reordered roles, common delayed starts and one-sample final FLAC frames retain source gains/timing. Separate loudness reports retain EBU R128 channel weighting and LFE exclusion.
+- [x] Export whole-program loudness reports as versioned JSON with every reading, explicit presentation/channel roles, null semantics and stable analysis timestamps shared with PDF. Changed files or channel assignments invalidate prior reports. See [report format](audio-loudness-report-format.md).
+- [x] Validate full grouped loudness source timing and exact merged sample retention. Measure true peak on a separate zero-context branch so EOF interpolation includes the final source sample without padding integrated loudness, LRA or timelines.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
+- [x] Extend full decoded-source timing and exact merged sample retention checks to grouped silence reports and audition, rejecting unequal lengths and later timestamp gaps. See [silence report format](audio-silence-report-format.md).
+
 ## Validation
+
+### Whole-program loudness and grouped silence — 2026-10-18
+
+Loudness now has complete schema-v1 JSON alongside PDF, with stable analysis
+start timestamps, all readings and channel roles. File/configuration changes
+invalidate measurements and cancelled saves preserve them. Full source timing
+and exact merged sample validation now protect grouped loudness and silence;
+unequal lengths and later gaps fail before publication. True-peak interpolation
+uses a separate zero-context branch, preserving unpadded gated loudness/LRA and
+timelines while retaining final-sample impulses. See the
+[loudness schema and method](audio-loudness-report-format.md) and
+[silence semantics](audio-silence-report-format.md).
+
+The final ad-hoc-signed Debug build and all 1,424 unit tests pass, with zero
+failures and one intentional benchmark skip. Result:
+`/private/tmp/amc-analysis-complete-unit.xcresult`. The seven localization tests,
+1,917-entry catalog audit and whitespace check pass. Release/device and sandbox
+qualification remain open; no dependencies, bundled binaries or licenses changed.
+
+All four English/Norwegian UI checks pass in
+`/private/tmp/amc-analysis-ui.xcresult`, covering native loudness JSON save/cancel
+and readback, configuration invalidation, tab persistence, conversion readiness,
+and grouped silence selection/navigation/export. Four report/preview captures
+were visually inspected. Export controls are readable; the existing paused
+MPEG-4 regrouping artifact remains visible in grouped preview and is independent
+of source measurements. The new loudness captures are
+[English](images/audio-loudness-en.png) and [Norwegian](images/audio-loudness-nb.png).
 
 ### Stereo phase and mono compatibility — 2026-10-17
 

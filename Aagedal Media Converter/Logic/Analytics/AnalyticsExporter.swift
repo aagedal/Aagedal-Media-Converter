@@ -10,6 +10,128 @@ import OSLog
 /// Exports analytics results to JSON or PDF
 enum AnalyticsExporter {
 
+    /// Portable whole-program results retain all readings, independently of chart decimation.
+    private struct LoudnessReport: Encodable {
+        let schemaVersion = 1
+        let analysis = "whole_program_loudness"
+        let sourceFileName: String
+        let timestamp: Date
+        let semantics = Semantics()
+        let results: [Measurement]
+
+        struct Semantics: Encodable {
+            let scope = "complete_selected_file_independent_of_volume_mute_and_conversion_trims"
+            let trackIndexing = "zero_based_audio_relative_matching_0:a:index"
+            let timeline = "seconds_relative_to_selected_audio_presentation_start"
+            let integrated = "gated_whole_program_LUFS_not_average_of_timeline_readings"
+            let belowGate = "integrated_LUFS_at_or_below_minus70_means_below_gate"
+            let loudnessRange = "LU_not_considered_stable_for_programs_shorter_than_one_minute"
+            let maximumTruePeak = "dBTP_across_all_selected_channels_null_when_unavailable"
+            let truePeakMethod = "FFmpeg_ebur128_separate_branch_100_ms_zero_context_at_both_edges_no_certification"
+            let windowing = "100_ms_readings_momentary_400_ms_short_term_3_s"
+            let levels = "unweighted_sample_peak_and_RMS_dBFS_across_selected_channels_per_window"
+            let unavailableReading = "null_means_below_gate_silence_or_incomplete_window_not_zero"
+            let samples = "full_resolution_measurements_without_chart_decimation"
+        }
+
+        struct Measurement: Encodable {
+            let presentation: Presentation
+            let integratedLUFS: Double
+            let loudnessRangeLU: Double
+            let maximumTruePeakDBTP: Double?
+            let samples: [Sample]
+
+            init(_ result: LoudnessResults) {
+                presentation = Presentation(result.presentation)
+                integratedLUFS = result.integratedLUFS
+                loudnessRangeLU = result.loudnessRangeLU
+                maximumTruePeakDBTP = result.maximumTruePeakDBTP
+                samples = result.samples.map(Sample.init)
+            }
+
+            enum CodingKeys: String, CodingKey { case presentation, integratedLUFS, loudnessRangeLU, maximumTruePeakDBTP, samples }
+            func encode(to encoder: Encoder) throws {
+                var values = encoder.container(keyedBy: CodingKeys.self)
+                try values.encode(presentation, forKey: .presentation)
+                try values.encode(integratedLUFS, forKey: .integratedLUFS)
+                try values.encode(loudnessRangeLU, forKey: .loudnessRangeLU)
+                try values.encode(maximumTruePeakDBTP, forKey: .maximumTruePeakDBTP)
+                try values.encode(samples, forKey: .samples)
+            }
+        }
+
+        struct Presentation: Encodable {
+            let type: String
+            let audioRelativeTrackIndices: [Int]
+            let channelOrder: [String]
+
+            init(_ presentation: LoudnessPresentation) {
+                audioRelativeTrackIndices = presentation.streamIndices
+                switch presentation {
+                case .track:
+                    type = "track"
+                    channelOrder = ["all_source_track_channels_in_decoded_order"]
+                case .stereo:
+                    type = "stereo"
+                    channelOrder = ["FL", "FR"]
+                case .surround51:
+                    type = "surround51"
+                    channelOrder = ["FL", "FR", "FC", "LFE", "SL", "SR"]
+                }
+            }
+        }
+
+        struct Sample: Encodable {
+            let sample: LoudnessSample
+            init(_ sample: LoudnessSample) { self.sample = sample }
+            enum CodingKeys: String, CodingKey { case seconds, momentaryLUFS, shortTermLUFS, peakDBFS, rmsDBFS }
+            func encode(to encoder: Encoder) throws {
+                var values = encoder.container(keyedBy: CodingKeys.self)
+                try values.encode(sample.seconds, forKey: .seconds)
+                try values.encode(sample.momentaryLUFS, forKey: .momentaryLUFS)
+                try values.encode(sample.shortTermLUFS, forKey: .shortTermLUFS)
+                try values.encode(sample.peakDBFS, forKey: .peakDBFS)
+                try values.encode(sample.rmsDBFS, forKey: .rmsDBFS)
+            }
+        }
+    }
+
+    static func loudnessJSON(results: [LoudnessResults], sourceFile: URL, timestamp: Date) throws -> Data {
+        func invalid() -> EncodingError {
+            .invalidValue(results, .init(codingPath: [], debugDescription: "Invalid loudness report."))
+        }
+        guard !results.isEmpty, timestamp.timeIntervalSince1970.isFinite,
+              Set(results.map(\.presentation.id)).count == results.count else { throw invalid() }
+        for result in results {
+            let indices = result.presentation.streamIndices
+            let validLayout: Bool
+            if case .surround51 = result.presentation { validLayout = indices.count == 6 }
+            else { validLayout = true }
+            guard !indices.isEmpty, indices.allSatisfy({ $0 >= 0 }), Set(indices).count == indices.count,
+                  validLayout, result.integratedLUFS.isFinite,
+                  result.loudnessRangeLU.isFinite, result.loudnessRangeLU >= 0,
+                  result.maximumTruePeakDBTP.map(\.isFinite) ?? true else { throw invalid() }
+            var previousTime: Double?
+            for sample in result.samples {
+                guard sample.seconds.isFinite, sample.seconds >= 0,
+                      previousTime.map({ sample.seconds > $0 }) ?? true,
+                      [sample.momentaryLUFS, sample.shortTermLUFS, sample.peakDBFS, sample.rmsDBFS]
+                        .allSatisfy({ $0.map(\.isFinite) ?? true }) else { throw invalid() }
+                previousTime = sample.seconds
+            }
+        }
+        let report = LoudnessReport(sourceFileName: sourceFile.lastPathComponent, timestamp: timestamp,
+                                    results: results.map(LoudnessReport.Measurement.init))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(report)
+    }
+
+    static func exportLoudnessJSON(results: [LoudnessResults], sourceFile: URL, timestamp: Date, to url: URL) throws {
+        try loudnessJSON(results: results, sourceFile: sourceFile, timestamp: timestamp).write(to: url, options: .atomic)
+    }
+
     private struct AudioPhaseReport: Encodable {
         let schemaVersion = 1
         let analysis = "source_stereo_phase_analysis"
@@ -468,7 +590,7 @@ enum AnalyticsExporter {
 
     /// Each independently measured presentation receives its own complete A4 page.
     @MainActor
-    static func exportLoudnessPDF(results: [LoudnessResults], fileName: String, to url: URL) throws {
+    static func exportLoudnessPDF(results: [LoudnessResults], fileName: String, timestamp: Date = Date(), to url: URL) throws {
         guard !results.isEmpty else {
             throw AnalyticsError.parsingFailed("No loudness reports to export")
         }
@@ -479,7 +601,7 @@ enum AnalyticsExporter {
             throw AnalyticsError.parsingFailed("Could not create the loudness PDF report")
         }
         for result in results {
-            let report = LoudnessPDFReportView(results: result, fileName: fileName)
+            let report = LoudnessPDFReportView(results: result, fileName: fileName, timestamp: timestamp)
                 .frame(width: 595, height: 842)
                 .background(Color.white)
                 .environment(\.colorScheme, .light)
@@ -506,7 +628,7 @@ enum AnalyticsExporter {
 private struct LoudnessPDFReportView: View {
     let results: LoudnessResults
     let fileName: String
-    private let timestamp = Date()
+    let timestamp: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

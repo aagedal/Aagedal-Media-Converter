@@ -16,10 +16,85 @@ final class AudioRoutingPlanTests: XCTestCase {
         XCTAssertEqual(presentations.count, 11)
         XCTAssertEqual(presentations[presentations.count - 2], .surround51([0, 1, 2, 3, 4, 5]))
         XCTAssertEqual(presentations.last, .surround51([0, 1, 2, 5, 3, 4]))
-        XCTAssertEqual(LoudnessAnalysisService.filterGraph(for: .surround51([0, 1, 2, 3, 4, 5])),
-                       "[0:a:0][0:a:1][0:a:2][0:a:3][0:a:4][0:a:5]join=inputs=6:channel_layout=5.1(side):map=0.0-FL|1.0-FR|2.0-FC|3.0-LFE|4.0-SL|5.0-SR,"
-                       + "asetpts=PTS-STARTPTS,ebur128=metadata=1:peak=true:framelog=verbose,"
-                       + "astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level+RMS_level,ametadata=print:file=-[metered]")
+        let graph = LoudnessAnalysisService.filterGraph(for: .surround51([0, 1, 2, 3, 4, 5]))
+        XCTAssertTrue(graph.contains("amerge=inputs=6,channelmap=map=0-FL|1-FR|2-FC|3-LFE|4-SL|5-SR:channel_layout=5.1(side)"))
+        XCTAssertTrue(graph.contains("ashowinfo@amc_peak_timing_0,asplit=2"))
+        XCTAssertTrue(graph.hasSuffix("ametadata=print:file=-[metered]"))
+        XCTAssertFalse(graph.contains("join="))
+    }
+
+    func testGroupedLoudnessRejectsMismatchedDecodedSources() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        // Unequal duration, delayed start, differing rates, discontinuity and
+        // multichannel inputs must all fail before a grouped report is published.
+        for variant in 0..<5 {
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("loudness-\(UUID()).nut")
+            defer { try? FileManager.default.removeItem(at: file) }
+            var args = ["-f", "lavfi", "-i", "aevalsrc=0.1*sin(2*PI*1000*t):s=48000:d=1"]
+            if variant == 1 { args += ["-itsoffset", "0.1"] }
+            let expression = variant == 4 ? "0.1|0.2" : "0.2"
+            args += ["-f", "lavfi", "-i", "aevalsrc=\(expression):s=\(variant == 2 ? 44100 : 48000):d=\(variant == 0 ? 0.9 : 1)"]
+            if variant == 3 {
+                args += ["-filter_complex", "[1:a]asetpts=PTS+if(gte(N\\,24000)\\,4800\\,0)[gapped]", "-map", "0:a", "-map", "[gapped]"]
+            } else { args += ["-map", "0:a", "-map", "1:a"] }
+            let generated = try await SubprocessRunner().run(.init(executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-hide_banner", "-nostdin"] + args + ["-c:a", "pcm_f32le", file.path], timeout: .seconds(30)))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+            do {
+                _ = try await LoudnessAnalysisService(ffmpegPathProvider: { ffmpeg })
+                    .analyze(file: file, presentation: .stereo(left: 0, right: 1))
+                XCTFail("Accepted incompatible grouped loudness sources, variant \(variant)")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("matching sample rates"), error.localizedDescription)
+            }
+        }
+    }
+
+    func testGroupedLoudnessKeepsSingleSampleEOFWithDifferentFLACBlocks() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("loudness-\(UUID()).nut")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let args = ["-hide_banner", "-nostdin", "-f", "lavfi", "-i",
+                    "aevalsrc=if(eq(n\\,96000)\\,0.5\\,0):s=48000:d=3", "-f", "lavfi", "-i",
+                    "aevalsrc=if(eq(n\\,96000)\\,0.25\\,0):s=48000:d=3", "-map", "0:a", "-map", "1:a",
+                    "-af", "atrim=end_sample=96001", "-c:a", "flac", "-frame_size:a:0", "1024", "-frame_size:a:1", "8192", file.path]
+        let generated = try await SubprocessRunner().run(.init(executableURL: URL(fileURLWithPath: ffmpeg), arguments: args, timeout: .seconds(30)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        for _ in 0..<3 {
+            let report = try await LoudnessAnalysisService(ffmpegPathProvider: { ffmpeg })
+                .analyze(file: file, presentation: .stereo(left: 1, right: 0))
+            XCTAssertEqual(try XCTUnwrap(report.maximumTruePeakDBTP), -6, accuracy: 0.2,
+                           "A final one-sample impulse must reach the whole-program true peak summary")
+        }
+    }
+
+    func testLoudnessTruePeakMeasuresSingleSampleProgramsAtSourceRates() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        for rate in [8_000, 44_100, 48_000, 96_000, 192_000] {
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("loudness-\(UUID()).wav")
+            defer { try? FileManager.default.removeItem(at: file) }
+            let generated = try await SubprocessRunner().run(.init(executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-hide_banner", "-nostdin", "-f", "lavfi", "-i", "aevalsrc=0.5:s=\(rate)",
+                            "-af", "atrim=end_sample=1", "-c:a", "pcm_f32le", file.path], timeout: .seconds(30)))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+            let report = try await LoudnessAnalysisService(ffmpegPathProvider: { ffmpeg })
+                .analyze(file: file, presentation: .track(0))
+            XCTAssertEqual(try XCTUnwrap(report.maximumTruePeakDBTP), -6, accuracy: 0.2)
+            XCTAssertLessThanOrEqual(report.integratedLUFS, -70, "Peak padding must not change gated program loudness")
+            XCTAssertEqual(report.samples.count, 1, "Peak context must not extend the one-sample program's timeline")
+            XCTAssertEqual(report.samples.first?.seconds, 0)
+            XCTAssertEqual(try XCTUnwrap(report.samples.first?.peakDBFS), 20 * log10(0.5), accuracy: 0.001)
+        }
+    }
+
+    func testGroupedLoudnessRejectsDroppedFinalSampleEvenWithSuccessfulSummary() async throws {
+        let service = LoudnessAnalysisService(runner: TruncatedLoudnessRunner(), ffmpegPathProvider: { "/tmp/ffmpeg" })
+        do {
+            _ = try await service.analyze(file: URL(fileURLWithPath: "/tmp/group.nut"), presentation: .stereo(left: 0, right: 1))
+            XCTFail("A successful summary cannot authorize a report that lost source samples")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("preserve every source sample"), error.localizedDescription)
+        }
     }
 
     func testGraphReductionRetainsMomentaryAndShortTermExtremes() {
@@ -39,12 +114,15 @@ final class AudioRoutingPlanTests: XCTestCase {
 
     func testLoudnessCollectorUsesFinalProgramSummary() async throws {
         let log = """
-        [Parsed_ebur128_0] Summary:
+        [ebur128@amc_loudness @ 0x1] Summary:
           Integrated loudness:
             I:         -20.5 LUFS
             Threshold: -30.5 LUFS
           Loudness range:
             LRA:         1.0 LU
+        [ebur128@amc_true_peak @ 0x2] Summary:
+          Integrated loudness:
+            I:         -50.0 LUFS
           True peak:
             Peak:      -1.5 dBFS
         """
@@ -545,5 +623,22 @@ final class PlaybackAudioMeterTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(lfeSample.peaks[3]), -6.0206, accuracy: 0.01)
         XCTAssertLessThan(try XCTUnwrap(lfeSample.momentaryLUFS), -70, "LFE is excluded from EBU loudness weighting")
         XCTAssertLessThan(try XCTUnwrap(lfeSample.shortTermLUFS), -70)
+    }
+}
+
+/// Both original tracks decode 4,801 samples, but their merged measurement
+/// drops the final sample while returning success and a plausible summary.
+private actor TruncatedLoudnessRunner: SubprocessRunning {
+    func run(_ request: SubprocessRequest, outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?) async throws -> SubprocessResult {
+        let measuring = request.arguments.contains("[metered]")
+        let tracks = measuring ? 1 : 2
+        var stderr = (0..<tracks).map {
+            "[ashowinfo@amc_peak_timing_\($0) @ 0x1] n:0 pts:0 pts_time:0 fmt:dbl channels:\(measuring ? 2 : 1) chlayout:mono rate:48000 nb_samples:\(measuring ? 4800 : 4801) checksum:0\n"
+        }.joined()
+        if measuring { stderr += "Summary:\nIntegrated loudness:\n I: -23.0 LUFS\nLoudness range:\n LRA: 0.0 LU\nTrue peak:\n Peak: -6.0 dBFS\n" }
+        outputHandler?(.init(stream: .standardError, data: Data(stderr.utf8)))
+        outputHandler?(.init(stream: .standardOutput, data: Data("progress=end\n".utf8)))
+        return .init(terminationStatus: 0, termination: .exited, standardOutput: Data(), standardError: Data(stderr.utf8),
+                     discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
     }
 }

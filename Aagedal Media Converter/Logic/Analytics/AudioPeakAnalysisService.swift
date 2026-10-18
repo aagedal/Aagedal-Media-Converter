@@ -214,8 +214,8 @@ actor AudioPeakAnalysisService {
         return try collector.finish()
     }
 
-    static func filterGraph(for presentation: LoudnessPresentation, measurementFilter: String = filterGraph) -> String {
-        if case .track(let index) = presentation { return "[0:a:\(index)]\(measurementFilter)[peaks]" }
+    static func filterGraph(for presentation: LoudnessPresentation, measurementFilter: String = filterGraph, outputLabel: String = "peaks") -> String {
+        if case .track(let index) = presentation { return "[0:a:\(index)]\(measurementFilter)[\(outputLabel)]" }
         // Normalize mono labels so amerge concatenates input order, then assign roles
         // explicitly. join can intermittently drop its final full window at EOF.
         // Equal, unpadded framing preserves source samples with different codecs.
@@ -229,7 +229,7 @@ actor AudioPeakAnalysisService {
         case .stereo: merge = "amerge=inputs=2,channelmap=map=0-FL|1-FR:channel_layout=stereo,"
         case .surround51: merge = "amerge=inputs=6,channelmap=map=0-FL|1-FR|2-FC|3-LFE|4-SL|5-SR:channel_layout=5.1(side),"
         }
-        return "\(preparation)\(inputs)\(merge)\(measurementFilter)[peaks]"
+        return "\(preparation)\(inputs)\(merge)\(measurementFilter)[\(outputLabel)]"
     }
 
     static let filterGraph = measurementFilter(windowSamples: 4_800)

@@ -73,56 +73,11 @@ actor SilenceAnalysisService {
         self.ffmpegPathProvider = ffmpegPathProvider
     }
 
-    /// Channel merging combines sample positions, not independent stream timestamps.
-    /// Reject unequal starts instead of reporting or auditioning shifted channels.
-    func validateGroupedTracks(file: URL, presentation: LoudnessPresentation) async throws {
-        try Task.checkCancellation()
-        let indices = presentation.streamIndices
-        let expectedCount: Int
-        switch presentation {
-        case .track: return
-        case .stereo: expectedCount = 2
-        case .surround51: expectedCount = 6
-        }
-        guard indices.count == expectedCount, Set(indices).count == indices.count,
-              indices.allSatisfy({ $0 >= 0 }) else {
-            throw AnalyticsError.parsingFailed("Invalid grouped audio selection.")
-        }
-        guard let path = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
-        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
-        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
-        let graph = indices.enumerated().map { offset, index in
-            "[0:a:\(index)]asettb=1/1000000000,ashowinfo@amc_group_\(offset)[group_\(offset)]"
-        }.joined(separator: ";")
-        let maps = indices.indices.flatMap { ["-map", "[group_\($0)]"] }
-        let request = SubprocessRequest(executableURL: URL(fileURLWithPath: path),
-            arguments: ["-nostdin", "-hide_banner", "-nostats", "-xerror", "-i", file.path,
-                        "-filter_complex", graph] + maps + ["-frames:a", "1", "-f", "null", "-"],
-            timeout: .seconds(30), standardOutputCaptureLimit: 0, standardErrorCaptureLimit: 64 * 1024,
-            sensitiveValues: [path, file.path])
-        let measured = try await runner.run(request)
-        try Task.checkCancellation()
-        guard measured.succeeded else { throw AnalyticsError.parsingFailed("Could not verify grouped audio timing.") }
-        let expression = try NSRegularExpression(pattern:
-            #"ashowinfo@amc_group_(\d+).*?n:0\s+pts:([-+0-9]+)\s+pts_time:\S+.*?channels:(\d+).*?rate:(\d+)"#)
-        let log = measured.standardErrorText
-        var starts: [Int: Int64] = [:]
-        var rates: [Int] = []
-        for match in expression.matches(in: log, range: NSRange(log.startIndex..., in: log)) {
-            func field(_ index: Int) -> String { Range(match.range(at: index), in: log).map { String(log[$0]) } ?? "" }
-            guard let index = Int(field(1)), let start = Int64(field(2)),
-                  field(3) == "1", let rate = Int(field(4)), rate > 0 else { continue }
-            starts[index] = start
-            rates.append(rate)
-        }
-        guard starts.count == indices.count, rates.count == indices.count, Set(rates).count == 1,
-              let first = starts[0], let rate = rates.max(),
-              starts.values.allSatisfy({ value in
-                  let delta = value.subtractingReportingOverflow(first)
-                  return !delta.overflow && abs(Double(delta.partialValue)) < 500_000_000 / Double(rate)
-              }) else {
-            throw AnalyticsError.parsingFailed(String(localized: "Grouped analysis requires mono tracks with matching sample rates and start times."))
-        }
+    /// Validate complete source streams before grouped scanning or audition.
+    @discardableResult
+    func validateGroupedTracks(file: URL, presentation: LoudnessPresentation) async throws -> GroupedPeakTimingCollector.Summary? {
+        try await AudioPeakAnalysisService(runner: runner, ffmpegPathProvider: ffmpegPathProvider)
+            .validateGroupedTracks(file: file, presentation: presentation)
     }
 
     func analyze(
@@ -139,7 +94,8 @@ actor SilenceAnalysisService {
         if case .surround51 = presentation, indices.count != 6 {
             throw AnalyticsError.parsingFailed("A 5.1 grouping requires exactly six mono tracks.")
         }
-        try await validateGroupedTracks(file: file, presentation: presentation)
+        let timing = try await validateGroupedTracks(file: file, presentation: presentation)
+        let outputTiming = timing.map { _ in GroupedPeakTimingCollector(trackCount: 1, requireMono: false) }
         guard let path = ffmpegPathProvider() else { throw AnalyticsError.ffmpegNotFound }
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: file)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
@@ -155,10 +111,20 @@ actor SilenceAnalysisService {
             sensitiveValues: [path, file.path]
         )
         let collector = SilenceLogCollector()
-        let result = try await runner.run(request) { collector.consume($0) }
+        let result = try await runner.run(request) {
+            collector.consume($0)
+            outputTiming?.consume($0)
+        }
         try Task.checkCancellation()
         guard result.succeeded else {
             throw AnalyticsError.parsingFailed("Silence analysis failed. " + request.redactedDiagnostic(result.standardErrorText, limit: 500))
+        }
+        if let timing, let outputTiming {
+            let decoded = try outputTiming.finish()
+            guard decoded.samples == timing.samples, decoded.rate == timing.rate,
+                  decoded.start == timing.start else {
+                throw AnalyticsError.parsingFailed("Grouped silence analysis did not preserve every source sample.")
+            }
         }
         return SilenceAnalysisResult(presentation: presentation, settings: settings,
                                      intervals: try collector.finish())
@@ -190,7 +156,10 @@ actor SilenceAnalysisService {
         }
         // FFmpeg normalizes the container start timestamp by default. Preserve
         // stream offsets within that file timeline (including delayed audio).
-        return "\(preparation)\(inputs)\(merge)asetpts=PTS,"
+        let timing: String
+        if case .track = presentation { timing = "" }
+        else { timing = "asettb=1/sr,ashowinfo@amc_peak_timing_0," }
+        return "\(preparation)\(inputs)\(merge)\(timing)asetpts=PTS,"
             + "silencedetect=noise=\(settings.thresholdDBFS)dB:duration=\(settings.minimumDuration):mono=0[silence]"
     }
 }

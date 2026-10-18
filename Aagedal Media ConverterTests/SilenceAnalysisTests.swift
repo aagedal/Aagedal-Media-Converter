@@ -154,7 +154,7 @@ final class SilenceAnalysisTests: XCTestCase {
         XCTAssertEqual(graph, "[0:a:3]channelmap=map=0-FC:channel_layout=mono,asetnsamples=n=4800:p=0[group_input_0];"
                        + "[0:a:1]channelmap=map=0-FC:channel_layout=mono,asetnsamples=n=4800:p=0[group_input_1];"
                        + "[group_input_0][group_input_1]amerge=inputs=2,channelmap=map=0-FL|1-FR:channel_layout=stereo,"
-                       + "asetpts=PTS,silencedetect=noise=-50.0dB:duration=1.0:mono=0[silence]")
+                       + "asettb=1/sr,ashowinfo@amc_peak_timing_0,asetpts=PTS,silencedetect=noise=-50.0dB:duration=1.0:mono=0[silence]")
         XCTAssertTrue(SilenceAnalysisService.filterGraph(for: .surround51([0, 1, 2, 5, 3, 4]), settings: .init())
             .contains("map=0-FL|1-FR|2-FC|3-LFE|4-SL|5-SR"))
     }
@@ -222,8 +222,41 @@ final class SilenceAnalysisTests: XCTestCase {
                     file: file, presentation: .stereo(left: 0, right: 1))
                 XCTFail("Incompatible mono tracks must not silently shift grouped channels")
             } catch {
-                XCTAssertTrue(error.localizedDescription.contains("matching sample rates and start times"))
+                XCTAssertTrue(error.localizedDescription.contains("matching sample rates, start times"))
             }
+        }
+    }
+
+    func testGroupedAnalysisRejectsUnequalDecodedLengthsAndLaterTimestampGaps() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        for gapped in [false, true] {
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("silence-timing-\(UUID()).nut")
+            defer { try? FileManager.default.removeItem(at: file) }
+            var args = ["-f", "lavfi", "-i", "aevalsrc=0:s=48000:d=2",
+                        "-f", "lavfi", "-i", "aevalsrc=0:s=48000:d=\(gapped ? 2 : 1)"]
+            if gapped {
+                args += ["-filter_complex", "[1:a]asetpts=PTS+if(gte(N\\,48000)\\,4800\\,0)[gapped]",
+                         "-map", "0:a", "-map", "[gapped]"]
+            } else { args += ["-map", "0:a", "-map", "1:a"] }
+            try await generate(ffmpeg, arguments: args + ["-c:a", "pcm_f32le", file.path])
+            do {
+                _ = try await SilenceAnalysisService(ffmpegPathProvider: { ffmpeg }).analyze(
+                    file: file, presentation: .stereo(left: 0, right: 1), settings: .init(minimumDuration: 0.2))
+                XCTFail("Grouped silence must reject unequal lengths or a later timestamp gap")
+            } catch {
+                XCTAssertTrue(error.localizedDescription.contains("matching sample rates, start times"), error.localizedDescription)
+            }
+        }
+    }
+
+    func testGroupedAnalysisRejectsLostEOFSampleDespiteSuccessfulSilenceReport() async throws {
+        let service = SilenceAnalysisService(runner: TruncatedSilenceRunner(), ffmpegPathProvider: { "/tmp/ffmpeg" })
+        do {
+            _ = try await service.analyze(file: URL(fileURLWithPath: "/tmp/group.nut"),
+                                         presentation: .stereo(left: 0, right: 1), settings: .init(minimumDuration: 0.05))
+            XCTFail("A complete-looking silence report must not authorize lost source samples")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("preserve every source sample"), error.localizedDescription)
         }
     }
 
@@ -377,5 +410,24 @@ private actor SilenceCancellationRunner: SubprocessRunning {
         started.fulfill()
         try await Task.sleep(for: .seconds(60))
         throw CancellationError()
+    }
+}
+
+/// Source streams each contain 4,801 samples; the successful merged scan loses
+/// its final sample but emits valid silence events and a completed progress log.
+private struct TruncatedSilenceRunner: SubprocessRunning {
+    func run(_ request: SubprocessRequest, outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?) async throws -> SubprocessResult {
+        let measuring = request.arguments.contains("[silence]")
+        let trackCount = measuring ? 1 : 2
+        var stderr = (0..<trackCount).map {
+            "[ashowinfo@amc_peak_timing_\($0) @ 0x1] n:0 pts:0 pts_time:0 fmt:dbl channels:\(measuring ? 2 : 1) chlayout:mono rate:48000 nb_samples:\(measuring ? 4800 : 4801) checksum:0\n"
+        }.joined()
+        if measuring {
+            stderr += "[silencedetect @ 0x2] silence_start: 0\n[silencedetect @ 0x2] silence_end: 0.1 | silence_duration: 0.1\n"
+        }
+        outputHandler?(.init(stream: .standardError, data: Data(stderr.utf8)))
+        outputHandler?(.init(stream: .standardOutput, data: Data("out_time_us=100000\nprogress=end\n".utf8)))
+        return .init(terminationStatus: 0, termination: .exited, standardOutput: Data(), standardError: Data(stderr.utf8),
+                     discardedStandardOutputBytes: 0, discardedStandardErrorBytes: 0, duration: .zero)
     }
 }
