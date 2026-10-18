@@ -142,6 +142,53 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testTimestampHistoryMeasuresStartupAndResumeWithoutDecoderReadAheadGap() async throws {
+        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
+            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
+        }
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-history-resume-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=8",
+                "-f", "lavfi", "-i", "aevalsrc=0.25*sin(2*PI*440*t):s=48000:d=8",
+                "-c:v", "mpeg4", "-c:a", "aac", source.path], timeout: .seconds(30)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop(); withExtendedLifetime(layer) {} }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        player.setPlaybackMeterEnabled(true)
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        XCTAssertLessThan(try XCTUnwrap(player.playbackMeterSample).seconds, 0.6,
+                          "Startup must measure decoded audio before the existing output buffer ends")
+        player.pause()
+        try await waitForMeterCondition { !player.isPlaying && player.playbackMeterSample == nil }
+        // Resume without a user seek: the output buffer must also be refreshed.
+        let pausedPosition = player.timePos
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        let resumed = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertLessThan(resumed.seconds - pausedPosition, 0.6)
+        XCTAssertNil(resumed.shortTermLUFS, "Pausing starts a fresh loudness history")
+        player.pause()
+        try await waitForMeterCondition { !player.isPlaying && player.playbackMeterSample == nil }
+        player.seek(to: 3)
+        try await waitForMeterCondition { abs(player.timePos - 3) < 0.03 }
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        let sought = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertGreaterThanOrEqual(sought.seconds, 3)
+        XCTAssertLessThan(sought.seconds, 3.6)
+        XCTAssertNil(sought.shortTermLUFS)
+        XCTAssertTrue(player.playbackMeterHasTimestampHistory)
+    }
+
+    @MainActor
     func testTimestampHistoryDoesNotPublishDelayedAudioBeforeMeasuredInterval() async throws {
         guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
             throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")

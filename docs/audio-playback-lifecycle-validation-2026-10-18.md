@@ -111,6 +111,45 @@ That run did not invoke another build. Its compressed staging record and the
 retain the distinction. Runtime tests against the clean library, corresponding
 source packaging, signing and release qualification remain separate requirements.
 
+## Clean-library runtime qualification
+
+Startup previously lost about 2.2 seconds of measurements because audio already
+decoded into the output buffer had bypassed the newly inserted filter. With
+history enabled, the player now installs the filter before play/seek and
+re-decodes the current position exactly through the normal seek scheduler. It
+keeps any newer user seek. Seeks no longer remove the history filter, and
+polling waits until the in-flight seek completes. The Swift consumer accepts the
+filter's first `graph-reset` snapshot (epoch > 0, no evictions/rejections) as a
+baseline instead of forcing another restart. Later epoch changes, lost records,
+rejections and internal gaps still require a fresh filter (two new unit tests).
+
+Against the clean library (SHA-256 `85495b83…5565`), all 49 focused player/history
+tests pass, including a new startup/resume/seek regression. A new native UI test
+drives the real SwiftUI preview sheet. It uses a Debug-only, environment-gated
+accessibility trace of readings that passed the panel's display gate, with a
+15-second AAC/MKV fixture that has independent stereo level edges at 4, 7 and
+10 seconds. Both `time-pos` and `audio-pts` pass under AVFoundation. The first
+measured interval ends at 0.079 s. Steady levels match the authored signal
+within 2 dB. Every edge appears 0.125–0.375 s after its authored time, never
+before it. After the rewind to 3 s, no pre-seek samples remain and the
+4-second edge repeats with 0.17–0.21 s delay. This delay includes the 100 ms
+trace polling interval; it is not a physical synchronization measurement.
+
+Probes relinked against the clean library pass the full lifecycle matrix: six
+arm64 cases (null/CoreAudio/AVFoundation × lossless/AAC) and both x86_64 null
+cases through Rosetta. Each case checks 202–304 frames against independent
+decoded references with zero signal errors. All replacement histories begin at
+750 ms. With the normal production package, the Debug build and all 1,462 unit
+tests pass with zero failures and three intentional diagnostic skips
+(`/private/tmp/amc-resume-normal-unit.xcresult`).
+[Native timing report](provenance/audio-meter-lifecycle-2026-10-18/app-consumer/native-timing-report.json),
+compressed traces and the `clean-lifecycle-*` reports are retained.
+
+The production pin, Source-default meter, bundled binaries and translations are
+unchanged. Remaining before playback history can ship: corresponding-source
+packaging and a production pin update, Release/thermal performance, speed-change
+continuity and physical loopback synchronization.
+
 ## Original isolated lifecycle experiment
 
 This continues the [isolated AAC startup correction](audio-playback-aac-startup-validation-2026-10-17.md).

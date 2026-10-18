@@ -33,6 +33,7 @@ struct MPVAudioMeterHistory: Sendable {
         let last: UInt64
         let evicted: UInt64
         let rejected: UInt64
+        let resetReason: String
         let frames: [Frame]
     }
 
@@ -86,21 +87,29 @@ struct MPVAudioMeterHistory: Sendable {
         }
 
         var reason: String?
+        // free_graph recreates ebur128 and clears retained records, while the
+        // transport's sequence counter remains monotonic. A first snapshot from
+        // that new graph can establish a baseline without losing another output
+        // buffer to filter recreation. Loss/rejection and later epoch changes
+        // still require a new filter instance.
+        let graphResetBaseline = fresh && snapshot.epoch > 0
+            && snapshot.resetReason == "graph-reset" && snapshot.evicted == 0 && snapshot.rejected == 0
         if fresh {
             queue.removeAll(keepingCapacity: true)
             previous = nil
             continuousMeasuredDuration = 0
             parsedFrames.removeAll(keepingCapacity: true)
-            lastSequence = 0
+            lastSequence = graphResetBaseline ? (snapshot.frames.first.map { $0.sequence - 1 } ?? snapshot.last) : 0
             lastClock = nil
             needsFilterRestart = false
-            if snapshot.epoch != 0 || snapshot.rejected != 0 {
+            if (snapshot.epoch != 0 && !graphResetBaseline) || snapshot.rejected != 0 {
                 reason = "Filter history began after a discontinuity"
             }
         } else if snapshot.epoch != epoch || snapshot.rejected != rejected {
             reason = "Filter history discontinuity"
         }
-        if snapshot.last > 0 && (snapshot.frames.isEmpty || snapshot.frames.last?.sequence != snapshot.last) {
+        if snapshot.last > 0 && !(graphResetBaseline && snapshot.frames.isEmpty)
+            && (snapshot.frames.isEmpty || snapshot.frames.last?.sequence != snapshot.last) {
             reason = "Missing trailing meter records"
         }
         if reason != nil { clearPublication() }
@@ -237,6 +246,7 @@ struct MPVAudioMeterHistory: Sendable {
                 rate: rate, sampleRate: sampleRate, measuredDuration: Double(samples) / Double(sampleRate),
                 speed: speed, layout: layout, metadata: metadata))
         }
-        return Snapshot(instance: instance, epoch: epoch, last: last, evicted: evicted, rejected: rejected, frames: frames)
+        return Snapshot(instance: instance, epoch: epoch, last: last, evicted: evicted, rejected: rejected,
+            resetReason: reason, frames: frames)
     }
 }

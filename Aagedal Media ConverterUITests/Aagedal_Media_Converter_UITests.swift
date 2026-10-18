@@ -1425,6 +1425,159 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }
     }
 
+    /// Drives the normal SwiftUI preview sheet and records the readings that
+    /// actually pass its display gate, against independently authored AAC edges.
+    @MainActor
+    func testMPVPlaybackMeterHistoryTimingInNativePreview() throws {
+        for clock in ["time-pos", "audio-pts"] {
+            launchApp(generatedFixture: true, realtimeInput: true,
+                      extraLaunchEnvironment: ["AMC_UI_TEST_METER_TIMING": "1",
+                                               "AMC_UI_TEST_METER_TRACE": "1",
+                                               "AMC_PLAYBACK_METER_HISTORY": "1",
+                                               "AMC_PLAYBACK_METER_CLOCK": clock], previewContainer: "mkv")
+            defer { terminateAndCleanFixtures() }
+            let queueItem = element("queue.item")
+            XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+            app.activate()
+            queueItem.rightClick()
+            app.menuItems["Preview / Trim"].click()
+            XCTAssertTrue(waitForValue("MPV ready", of: element("preview.media"), timeout: 30))
+            element("trim.audioMeter").click()
+            let mode = element("preview.audioMeter.mode")
+            XCTAssertTrue(mode.waitForExistence(timeout: 5))
+            mode.radioButtons["Playback"].click()
+            let trace = element("preview.audioMeter.timingTrace")
+            XCTAssertTrue(trace.waitForExistence(timeout: 5))
+
+            func rows() -> [[String: Any]] {
+                guard let json = trace.value as? String, let data = json.data(using: .utf8) else { return [] }
+                return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+            }
+            func waitForPosition(_ seconds: Double, segment: Int, timeout: TimeInterval) -> Bool {
+                let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let row = rows().last, let position = row["position"] as? Double,
+                          let currentSegment = row["segment"] as? Int else { return false }
+                    return currentSegment >= segment && position >= seconds && row["playing"] as? Bool == true
+                }, object: nil)
+                return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+            }
+            func pauseAndCapture(_ name: String) throws -> [[String: Any]] {
+                app.typeKey("k", modifierFlags: [])
+                let paused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let row = rows().last else { return false }
+                    return row["playing"] as? Bool == false && row["sampleEnd"] == nil
+                }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 5), .completed)
+                let json = try XCTUnwrap(trace.value as? String)
+                let attachment = XCTAttachment(data: Data(json.utf8), uniformTypeIdentifier: "public.json")
+                attachment.name = "native-meter-\(clock)-\(name).json"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+                return rows()
+            }
+            func capturePreview(_ name: String) {
+                let attachment = XCTAttachment(screenshot: app.sheets.firstMatch.screenshot())
+                attachment.name = name
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+            func validate(_ observations: [[String: Any]], segment: Int, edges: [Double]) {
+                XCTAssertLessThanOrEqual(observations.count, 300)
+                let playing = observations.filter {
+                    $0["segment"] as? Int == segment && $0["playing"] as? Bool == true
+                        && $0["playbackMode"] as? Bool == true
+                }
+                let measured = playing.filter {
+                    $0["sampleEnd"] is Double && ($0["peaks"] as? [Double])?.count == 2
+                        && ($0["rms"] as? [Double])?.count == 2
+                }
+                XCTAssertGreaterThan(measured.count, 10, "\(clock): too few visible playback measurements")
+                XCTAssertTrue(measured.allSatisfy { $0["timestampHistory"] as? Bool == true }, "\(clock): history was not active")
+                XCTAssertTrue(measured.allSatisfy { $0["unavailable"] as? Bool == false })
+                XCTAssertTrue(measured.contains { !(($0["audioOutput"] as? String) ?? "").isEmpty }, "\(clock): no active audio backend")
+                let future = measured.filter {
+                    ($0["sampleEnd"] as? Double ?? .infinity) > ($0["position"] as? Double ?? 0) + 0.15
+                }
+                XCTAssertTrue(future.isEmpty, "\(clock): measured ends led the visible playhead: \(future.prefix(3))")
+                let independentlyTimed = measured.filter {
+                    abs(($0["sampleEnd"] as? Double ?? 0) - ($0["position"] as? Double ?? 0)) > 0.001
+                }
+                XCTAssertGreaterThan(independentlyTimed.count, 5, "\(clock): measurements appear retimestamped to playhead polls")
+                let steady = measured.filter {
+                    guard let position = $0["position"] as? Double,
+                          let sampleEnd = $0["sampleEnd"] as? Double else { return false }
+                    // AAC may ring across an authored step. Exclude transition
+                    // windows in both presentation and measured-frame time.
+                    return position > 0.4 && [4.0, 7.0, 10.0].allSatisfy {
+                        abs(position - $0) > 0.2 && abs(sampleEnd - $0) > 0.2
+                    }
+                }
+                XCTAssertGreaterThan(steady.count, 5)
+                var incorrect: [String] = []
+                for row in steady {
+                    guard let position = row["position"] as? Double,
+                          let peaks = row["peaks"] as? [Double], peaks.count == 2,
+                          let rms = row["rms"] as? [Double], rms.count == 2 else { continue }
+                    let high = (position >= 4 && position < 7) || position >= 10
+                    let expected = high ? [-7.96, -20.0] : [-32.04, -44.08]
+                    for channel in 0..<2 {
+                        if abs(peaks[channel] - expected[channel]) > 2 || abs(rms[channel] - (expected[channel] - 3.01)) > 2 {
+                            incorrect.append("t=\(position) ch=\(channel) peak=\(peaks[channel]) rms=\(rms[channel])")
+                        }
+                    }
+                }
+                XCTAssertTrue(incorrect.isEmpty, "\(clock): steady AAC levels disagree with independent fixture: \(incorrect.prefix(5))")
+                for edge in edges {
+                    let rising = edge != 7
+                    let crossing = measured.first { row in
+                        guard let position = row["position"] as? Double, position >= edge - 0.5,
+                              let peak = (row["peaks"] as? [Double])?.first else { return false }
+                        return rising ? peak > -15 : peak < -25
+                    }
+                    let position = crossing?["position"] as? Double
+                    XCTAssertNotNil(position, "\(clock): missing edge \(edge)")
+                    if let position {
+                        XCTAssertGreaterThanOrEqual(position, edge, "\(clock): edge \(edge) appeared before its authored time")
+                        XCTAssertLessThanOrEqual(position, edge + 0.45, "\(clock): edge \(edge) arrived late")
+                    }
+                }
+            }
+
+            app.typeKey("l", modifierFlags: [])
+            let advanced = waitForPosition(11.5, segment: 0, timeout: 20)
+            if !advanced {
+                let diagnostic = XCTAttachment(string: "value=\(String(describing: trace.value))\nlabel=\(trace.label)\nrows=\(rows())")
+                diagnostic.name = "Native meter trace progress failure"
+                diagnostic.lifetime = .keepAlways
+                add(diagnostic)
+            }
+            XCTAssertTrue(advanced)
+            capturePreview("Native MPV history \(clock) high after ten-second edge")
+            let first = try pauseAndCapture("initial")
+            validate(first, segment: 0, edges: [4, 7, 10])
+            XCTAssertTrue(first.contains { $0["momentaryLUFS"] is Double }, "\(clock): visible momentary loudness was never measured")
+            XCTAssertTrue(first.contains { $0["shortTermLUFS"] is Double }, "\(clock): visible short-term loudness was never measured")
+
+            element("trim.timecode").click()
+            let input = element("trim.timecodeInput")
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.click()
+            input.typeKey("a", modifierFlags: .command)
+            input.typeText("00:00:03:00")
+            input.typeKey(.return, modifierFlags: [])
+            XCTAssertTrue(waitForValue("00:00:03:00", of: element("trim.timecode"), timeout: 10))
+            app.typeKey("l", modifierFlags: [])
+            XCTAssertTrue(waitForPosition(4.8, segment: 1, timeout: 10))
+            capturePreview("Native MPV history \(clock) after seek and repeated edge")
+            let replay = try pauseAndCapture("seek-replay")
+            validate(replay, segment: 1, edges: [4])
+            let replayEnds = replay.filter { $0["segment"] as? Int == 1 && $0["sampleEnd"] is Double }
+            XCTAssertTrue(replayEnds.allSatisfy { ($0["sampleEnd"] as? Double ?? .infinity) < 5.5 },
+                          "\(clock): old pre-seek samples survived rewind")
+            element("preview.close").click()
+        }
+    }
+
     @MainActor
     private func exercisePreview(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, previewContainer: container)
@@ -2942,6 +3095,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         language: String = "en",
         locale: String = "en_US",
         additionalArguments: [String] = [],
+        extraLaunchEnvironment: [String: String] = [:],
         damagedSchedules: Bool = false,
         damagedHistory: Bool = false,
         previewContainer: String? = nil,
@@ -3022,6 +3176,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
                 app.launchEnvironment["AMC_UI_TEST_REALTIME_INPUT"] = "1"
             }
         }
+        app.launchEnvironment.merge(extraLaunchEnvironment) { _, supplied in supplied }
         app.launch()
     }
 

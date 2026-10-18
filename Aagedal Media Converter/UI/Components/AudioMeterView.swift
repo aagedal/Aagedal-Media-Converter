@@ -412,6 +412,80 @@ struct PlaybackAudioMeterPanel: View {
     @State private var liveSample: PlaybackAudioMeterSample?
     @State private var liveChannelCount = 0
     @State private var liveUnavailable = false
+#if DEBUG
+    @State private var timingTrace: [TimingObservation] = []
+    @State private var timingTraceSegment = 0
+    @State private var timingTraceLastPosition: Double?
+
+    private struct TimingObservation: Encodable {
+        let uptime: Double
+        let segment: Int
+        let position: Double
+        let sampleEnd: Double?
+        let peaks: [Double?]?
+        let rms: [Double?]?
+        let momentaryLUFS: Double?
+        let shortTermLUFS: Double?
+        let playing: Bool
+        let playbackMode: Bool
+        let unavailable: Bool
+        let timestampHistory: Bool
+        let ingestSeconds: Double?
+        let audioOutput: String?
+    }
+
+    private var timingTraceEnabled: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["AMC_UI_TEST_SESSION"] == "1" && environment["AMC_UI_TEST_METER_TRACE"] == "1"
+    }
+
+    private var timingTraceJSON: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return (try? encoder.encode(timingTrace)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+    }
+
+    private var timingTraceControl: some View {
+        Text(verbatim: "Timing trace")
+            .font(.system(size: 1))
+            .frame(height: 1)
+            .accessibilityLabel(Text(verbatim: "Playback meter timing trace"))
+            .accessibilityValue(Text(verbatim: timingTraceJSON))
+            .accessibilityIdentifier("preview.audioMeter.timingTrace")
+            .task {
+                // A publisher constructed by body is recreated on every
+                // playhead update and can starve while playback is running.
+                // Tie this observer to the control's stable view lifetime.
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .milliseconds(100)) }
+                    catch { return }
+                    captureTimingObservation()
+                }
+            }
+    }
+
+    private func captureTimingObservation() {
+        guard timingTraceEnabled else { return }
+        let position = controller.currentPlaybackTime
+        guard position.isFinite else { return }
+        if let previous = timingTraceLastPosition, position < previous - 0.25 { timingTraceSegment += 1 }
+        timingTraceLastPosition = position
+        // Compute through the panel's actual freshness/playback gate at callback
+        // time, rather than recording the player's potentially hidden sample.
+        let shown = sample
+        let player = controller.mpvPlayer
+        func finite(_ value: Double?) -> Double? { value.flatMap { $0.isFinite ? $0 : nil } }
+        timingTrace.append(TimingObservation(
+            uptime: ProcessInfo.processInfo.systemUptime, segment: timingTraceSegment, position: position,
+            sampleEnd: finite(shown?.seconds), peaks: shown?.peaks.map { finite($0) },
+            rms: shown?.rms.map { finite($0) }, momentaryLUFS: finite(shown?.momentaryLUFS),
+            shortTermLUFS: finite(shown?.shortTermLUFS), playing: controller.isPlaying,
+            playbackMode: playbackMode, unavailable: liveUnavailable,
+            timestampHistory: player?.playbackMeterHasTimestampHistory ?? false,
+            ingestSeconds: finite(player?.playbackMeterHistoryIngestSeconds), audioOutput: player?.currentAudioOutput))
+        if timingTrace.count > 300 { timingTrace.removeFirst(timingTrace.count - 300) }
+    }
+#endif
 
     private var streams: [VideoMetadata.AudioStream] {
         (controller.useImageSequence ? metadata : (controller.videoItem.metadata ?? metadata))?.audioStreams ?? []
@@ -472,6 +546,9 @@ struct PlaybackAudioMeterPanel: View {
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("preview.audioMeter.mode")
             }
+#if DEBUG
+            if timingTraceEnabled { timingTraceControl }
+#endif
             Text(playbackMode ? "Decoded peak / RMS" : "Source peak / RMS").font(.caption)
             HStack(alignment: .top, spacing: 5) {
                 ForEach(channels) { channel in

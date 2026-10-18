@@ -3,6 +3,32 @@ import XCTest
 @testable import Aagedal_Media_Converter
 
 final class MPVAudioMeterHistoryTests: XCTestCase {
+    func testFreshGraphResetStartsMeasuredHistoryAtItsRetainedSequence() throws {
+        var history = MPVAudioMeterHistory()
+        let first = try snapshot(frames: (31...60).map { frame($0) }, epoch: 1, resetReason: "graph-reset")
+        XCTAssertTrue(history.ingest(json: first, generation: 0).accepted)
+        XCTAssertFalse(history.needsFilterRestart)
+        XCTAssertNil(history.sample(at: 3.3, generation: 0)?.momentaryLUFS)
+        XCTAssertEqual(history.sample(at: 3.4, generation: 0)?.momentaryLUFS, -22)
+        XCTAssertNil(history.sample(at: 5.9, generation: 0)?.shortTermLUFS)
+        XCTAssertEqual(history.sample(at: 6, generation: 0)?.shortTermLUFS, -23)
+        // A reset received after publication is a discontinuity, even when the
+        // sender labels it graph-reset; only the initial baseline is accepted.
+        _ = history.ingest(json: try snapshot(frames: [frame(61)], epoch: 2, resetReason: "graph-reset"), generation: 0)
+        XCTAssertTrue(history.needsFilterRestart)
+    }
+
+    func testFreshGraphResetCannotHideLostRejectedOrInternallyMissingRecords() throws {
+        for (frames, evicted, rejected) in [([frame(31), frame(32)], 1, 0),
+                                           ([frame(31), frame(32)], 0, 1),
+                                           ([frame(31), frame(33)], 0, 0)] {
+            var history = MPVAudioMeterHistory()
+            _ = history.ingest(json: try snapshot(frames: frames, epoch: 1,
+                evicted: evicted, rejected: rejected, resetReason: "graph-reset"), generation: 0)
+            XCTAssertTrue(history.needsFilterRestart)
+        }
+    }
+
     func testFutureFramesWaitForIntervalEndWithoutRetimestamping() throws {
         var history = MPVAudioMeterHistory(generation: 7)
         XCTAssertTrue(history.ingest(json: try snapshot(frames: [frame(1), frame(2)]), generation: 7).accepted)
@@ -247,10 +273,10 @@ final class MPVAudioMeterHistoryTests: XCTestCase {
     }
 
     private func snapshot(frames: [[String: Any]], instance: Int = 1, epoch: Int = 0,
-        evicted: Int = 0, rejected: Int = 0) throws -> String {
+        evicted: Int = 0, rejected: Int = 0, resetReason: String = "fixture") throws -> String {
         try encode(["schema-version": 1, "instance": instance, "epoch": epoch,
             "last-sequence": frames.last?["sequence"] as? Int ?? 0, "evicted": evicted,
-            "rejected": rejected, "capacity": 128, "reset-reason": "fixture", "frames": frames])
+            "rejected": rejected, "capacity": 128, "reset-reason": resetReason, "frames": frames])
     }
 
     private func encode(_ object: [String: Any]) throws -> String {

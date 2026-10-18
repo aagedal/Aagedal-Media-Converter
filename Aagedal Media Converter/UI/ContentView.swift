@@ -2002,7 +2002,8 @@ struct ContentView: View {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let container = ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] == "mkv" ? "mkv" : "mp4"
         let fixtureURL = directory.appendingPathComponent("ui-test-fixture.\(container)")
-        let fixtureDuration = ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1"
+        let meterTiming = ProcessInfo.processInfo.environment["AMC_UI_TEST_METER_TIMING"] == "1"
+        let fixtureDuration = meterTiming || ProcessInfo.processInfo.environment["AMC_UI_TEST_REALTIME_INPUT"] == "1"
             ? 15
             : (ProcessInfo.processInfo.environment["AMC_UI_TEST_PREVIEW_CONTAINER"] != nil ? 6 : 2)
         var metadataArguments: [String] = []
@@ -2019,12 +2020,17 @@ struct ContentView: View {
         if UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PEAKS") {
             fixtureAudio = "aevalsrc=if(between(t\\,1\\,2)\\,0.8\\,0.01)*sin(2*PI*440*t)|if(between(t\\,1\\,2)\\,0.08\\,0.001)*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
         }
-        let stereoPhase = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PHASE")
+        if meterTiming {
+            // Known independent level edges at 4, 7 and 10 seconds. Keep both
+            // channels distinct so a stale/downmixed channel cannot pass.
+            fixtureAudio = "aevalsrc=if(between(t\\,4\\,7)+gte(t\\,10)\\,0.4\\,0.025)*sin(2*PI*440*t)|if(between(t\\,4\\,7)+gte(t\\,10)\\,0.1\\,0.00625)*sin(2*PI*880*t):s=48000:d=\(fixtureDuration)"
+        }
+        let stereoPhase = !meterTiming && UserDefaults.standard.bool(forKey: "AMC_UI_TEST_PHASE")
         if stereoPhase {
             fixtureAudio = "aevalsrc=0.25*sin(2*PI*440*t)|if(lt(t\\,1)\\,1\\,-1)*0.25*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
         }
-        let groupedSilence = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_SILENCE")
-        let groupedPeaks = UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_PEAKS")
+        let groupedSilence = !meterTiming && UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_SILENCE")
+        let groupedPeaks = !meterTiming && UserDefaults.standard.bool(forKey: "AMC_UI_TEST_GROUPED_PEAKS")
         if groupedPeaks {
             fixtureAudio = "aevalsrc=if(between(t\\,1\\,2)\\,0.8\\,0.01)*sin(2*PI*440*t):s=48000:d=\(fixtureDuration)"
         }
@@ -2053,11 +2059,13 @@ struct ContentView: View {
                 extraAudioMaps += ["-map", "\(index + 1):a:0"]
             }
         }
+        let fixtureVideo = "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)"
+            + (meterTiming ? ",drawbox=x=0:y=0:w=80:h=60:color=white:t=fill:enable='between(t,4,7)+gte(t,10)'" : "")
         let request = SubprocessRequest(
             executableURL: URL(fileURLWithPath: ffmpegPath),
             arguments: [
                 "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=\(fixtureDuration)",
+                "-f", "lavfi", "-i", fixtureVideo,
                 "-f", "lavfi", "-i", fixtureAudio,
             ] + extraAudioInputs + [
                 "-map", "0:v:0", "-map", "1:a:0",

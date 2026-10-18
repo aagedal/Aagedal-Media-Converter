@@ -116,6 +116,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             self.meterTimer?.cancel()
             self.meterTimer = nil
             guard self.meterEnabled else { return }
+            self.preparePlaybackMeterHistoryLocked()
             let timer = DispatchSource.makeTimerSource(queue: self.queue)
             timer.schedule(deadline: .now(), repeating: .milliseconds(100))
             timer.setEventHandler { [weak self] in self?.pollPlaybackMeterLocked() }
@@ -124,7 +125,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func resetPlaybackMeterLocked() {
+    private func resetPlaybackMeterLocked(removeFilter: Bool = true) {
         meterGenerationLock.lock()
         meterGeneration = (meterGeneration &+ 1) & ((1 << 62) - 1)
         meterGenerationLock.unlock()
@@ -134,11 +135,11 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         meterHistoryInitialized = false
         meterHistoryLastIngestSeconds = nil
         // Keep at most one outstanding query, even across reset/seek.
-        if meterRunning, let mpv {
+        if removeFilter, meterRunning, let mpv {
             let args = ["af", "remove", "@" + Self.meterLabel]
             _ = args.withUnsafeCStringArray { mpv_command(mpv, $0) }
         }
-        meterRunning = false
+        if removeFilter { meterRunning = false }
         DispatchQueue.main.async {
             self.playbackMeterSample = nil
             self.playbackMeterHasTimestampHistory = false
@@ -148,6 +149,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     private func pollPlaybackMeterLocked() {
         guard meterEnabled, let mpv, meterPending == nil else { return }
+        // A history installed before a seek must survive until decoding restarts.
+        // Do not accept metadata from the outgoing timeline during that interval.
+        if meterUsesHistory, seekScheduler.inFlight != nil { return }
         if meterUsesHistory, meterHistory.needsFilterRestart {
             let now = ProcessInfo.processInfo.systemUptime
             meterHistoryRestarts.removeAll { now - $0 > 5 }
@@ -165,6 +169,16 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         guard mpv_get_property(mpv, "pause", MPV_FORMAT_FLAG, &paused) >= 0,
               mpv_get_property(mpv, "eof-reached", MPV_FORMAT_FLAG, &eof) >= 0,
               paused == 0, eof == 0 else { return }
+        guard installPlaybackMeterFilterLocked() else { return }
+        let id = Self.meterRequestMask | meterGeneration
+        if mpv_get_property_async(mpv, id, "af-metadata/" + Self.meterLabel, MPV_FORMAT_NODE) >= 0 {
+            meterPending = id
+        }
+    }
+
+    @discardableResult
+    private func installPlaybackMeterFilterLocked() -> Bool {
+        guard meterEnabled, let mpv else { return false }
         if !meterRunning {
             let graph = "ebur128=metadata=1:framelog=verbose,"
                 + "astats=metadata=1:reset=1:measure_perchannel=Peak_level+RMS_level:measure_overall=none"
@@ -174,13 +188,27 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             guard status >= 0 else {
                 meterEnabled = false
                 DispatchQueue.main.async { self.playbackMeterUnavailable = true }
-                return
+                return false
             }
             meterRunning = true
         }
-        let id = Self.meterRequestMask | meterGeneration
-        if mpv_get_property_async(mpv, id, "af-metadata/" + Self.meterLabel, MPV_FORMAT_NODE) >= 0 {
-            meterPending = id
+        return true
+    }
+
+    private func preparePlaybackMeterHistoryLocked() {
+        guard meterUsesHistory, meterEnabled, !meterRunning, let mpv,
+              installPlaybackMeterFilterLocked() else { return }
+        // Audio already queued before filter insertion has no measurements.
+        // Re-decode the current position through the installed graph, using the
+        // normal scheduler and preserving any newer user seek already in flight.
+        guard seekScheduler.inFlight == nil, seekScheduler.pending == nil else { return }
+        var seekable: Int32 = 0
+        var position: Double = 0
+        guard mpv_get_property(mpv, "seekable", MPV_FORMAT_FLAG, &seekable) >= 0, seekable != 0,
+              mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0,
+              position.isFinite, position >= 0 else { return }
+        if let submission = seekScheduler.request(.init(time: position, exact: true)) {
+            submitSeekLocked(submission)
         }
     }
 
@@ -488,7 +516,15 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func play() {
-        setFlag(MPVProperty.pause, false)
+        if meterUsesHistory {
+            queue.async { [weak self] in
+                guard let self else { return }
+                self.preparePlaybackMeterHistoryLocked()
+                self.setFlag(MPVProperty.pause, false)
+            }
+        } else {
+            setFlag(MPVProperty.pause, false)
+        }
     }
 
     func pause() {
@@ -559,6 +595,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         queue.async { [weak self] in
             guard let self, self.mpv != nil else { return }
             self.resetPlaybackMeterLocked()
+            if self.meterUsesHistory { self.installPlaybackMeterFilterLocked() }
             if let submission = self.seekScheduler.request(.init(time: time, exact: exact)) {
                 self.submitSeekLocked(submission)
             }
@@ -1017,7 +1054,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     }
 
                 case MPV_EVENT_SEEK:
-                    resetPlaybackMeterLocked()
+                    resetPlaybackMeterLocked(removeFilter: !meterUsesHistory)
                     seekScheduler.seekStarted()
 
                 case MPV_EVENT_PLAYBACK_RESTART:
