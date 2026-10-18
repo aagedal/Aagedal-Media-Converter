@@ -1643,16 +1643,61 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         ])
         defer { terminateAndCleanFixtures() }
         XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
         element("toolbar.conversion").click()
         XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        app.activate()
         element("queue.analysis").click()
         XCTAssertTrue(element("analysis.ssimulacra2.frames").waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Not installed"].exists)
         XCTAssertTrue(element("analysis.video.run").isEnabled)
+        app.activate()
         element("analysis.video.run").click()
         XCTAssertTrue(element("analysis.result.ssimulacra2").waitForExistence(timeout: 45),
                       "The signed bundled helper must run in the sandbox without any user installation")
-        attachWindowScreenshot(named: "Bundled SSIMULACRA2 - completed analysis")
+        app.activate()
+        element("analysis.video.inspect").click()
+        XCTAssertTrue(element("analysis.inspection.metric").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["5 measured frames"].exists,
+                      "The requested frame density must reach the inspector on a short clip")
+        let play = element("analysis.inspection.play")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "enabled == true"), object: play)], timeout: 20), .completed)
+        app.sliders["analysis.inspection.position"].adjust(toNormalizedSliderPosition: 0.5)
+        let time = element("analysis.inspection.time")
+        let chosen = try XCTUnwrap(time.value as? String)
+        app.radioButtons["Source"].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "enabled == true"), object: play)], timeout: 20), .completed)
+        XCTAssertEqual(time.value as? String, chosen)
+        XCTAssertTrue(element("analysis.inspection.nearest").isHittable)
+        let attachment = XCTAttachment(screenshot: app.sheets.firstMatch.screenshot())
+        attachment.name = "Verified SSIMULACRA2 samples beside source playback"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        element("analysis.inspection.close").click()
+        let url = URL(fileURLWithPath: "/private/tmp/amc-ssim-sampling-native-report.pdf")
+        try? FileManager.default.removeItem(at: url)
+        app.activate()
+        element("analysis.video.exportPDF").click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(url.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            FileManager.default.fileExists(atPath: url.path)
+        }, object: nil)], timeout: 10), .completed)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        XCTAssertTrue(try XCTUnwrap(document.string).contains("decoded video starts"))
+        XCTAssertTrue(try XCTUnwrap(document.string).contains("output timebase rounding tolerance"))
     }
 
     @MainActor

@@ -229,8 +229,12 @@ struct AnalyticsComparison: Codable, Equatable, Sendable {
     let sourceRange: AnalyticsSourceRange
     let vmafModel: VMAFModel?
     var sampleCount: Int? = nil
-    /// Planned extraction timestamps, relative to the encoded output.
+    /// Measured decoded-frame timestamps, relative to the first encoded video frame.
     var sampleTimestamps: [Double]? = nil
+    var sourceVideoStart: Double? = nil
+    var encodedVideoStart: Double? = nil
+    var samplingPolicy: String? = nil
+    var comparedDuration: Double? = nil
     var pixelProcessing: String? = nil
     let sourceTiming: AnalyticsTiming?
     let encodedTiming: AnalyticsTiming?
@@ -244,6 +248,9 @@ struct AnalyticsComparison: Codable, Equatable, Sendable {
         if let vmafModel { text += " • \(vmafModel.rawValue)" }
         if let sampleCount { text += " • \(sampleCount) sampled frames" }
         if let pixelProcessing { text += " • \(pixelProcessing)" }
+        if let sourceVideoStart, let encodedVideoStart { text += " • decoded video starts: source \(sourceVideoStart)s, encoded \(encodedVideoStart)s" }
+        if let comparedDuration { text += " • compared duration \(comparedDuration)s" }
+        if let samplingPolicy { text += " • \(samplingPolicy)" }
         return text
     }
 
@@ -274,7 +281,16 @@ struct QualitySample: Codable, Equatable, Sendable, Identifiable {
     let frame: Int
     let seconds: Double
     let score: Double
+    var framePair: QualityFramePair? = nil
     var id: Int { frame }
+}
+
+/// Decoded identities and file-relative presentation times used for a sampled comparison.
+struct QualityFramePair: Codable, Equatable, Sendable {
+    let sourceFrame: Int
+    let sourceSeconds: Double
+    let encodedFrame: Int
+    let encodedSeconds: Double
 }
 
 /// Prepared once per report/metric, keeping playback updates independent of sorting large logs.
@@ -286,6 +302,7 @@ struct QualityTimeline: Sendable {
     let worstSamples: [QualitySample]
     let duration: Double
     let sourceStart: Double
+    let encodedStart: Double
 
     init(result: MetricResult, fallbackDuration: Double = 0, maxBuckets: Int = 500) {
         metric = result.metric
@@ -303,8 +320,9 @@ struct QualityTimeline: Sendable {
             if worst.count == 5 { break }
         }
         worstSamples = worst
-        sourceStart = result.comparison?.sourceRange.start ?? 0
-        let reported = result.comparison?.encodedTiming?.duration ?? result.comparison?.sourceRange.duration ?? fallbackDuration
+        sourceStart = result.comparison?.sourceVideoStart ?? result.comparison?.sourceRange.start ?? 0
+        encodedStart = result.comparison?.encodedVideoStart ?? 0
+        let reported = result.comparison?.comparedDuration ?? result.comparison?.encodedTiming?.duration ?? result.comparison?.sourceRange.duration ?? fallbackDuration
         duration = max(0.001, reported.isFinite ? reported : 0, valid.last?.seconds ?? 0)
         // Keep each bucket's extremes, so short quality drops survive graph decimation.
         let bucketSize = max(1, (valid.count + max(1, maxBuckets) - 1) / max(1, maxBuckets))
@@ -335,7 +353,7 @@ struct QualityTimeline: Sendable {
 
     func playbackTime(for seconds: Double, source: Bool) -> Double {
         let relative = seconds.isFinite ? max(0, min(seconds, duration)) : 0
-        return relative + (source ? sourceStart : 0)
+        return relative + (source ? sourceStart : encodedStart)
     }
 }
 

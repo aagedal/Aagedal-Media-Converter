@@ -273,6 +273,8 @@ actor AnalyticsService {
                 scaling: comparison.scaling, sourceRange: sourceRange,
                 vmafModel: metric == .vmaf ? vmafModel : nil,
                 sampleCount: sampling?.sampleCount, sampleTimestamps: sampling?.sampleTimestamps,
+                sourceVideoStart: sampling?.sourceVideoStart, encodedVideoStart: sampling?.encodedVideoStart,
+                samplingPolicy: sampling?.samplingPolicy, comparedDuration: sampling?.comparedDuration,
                 pixelProcessing: sampling?.pixelProcessing ?? (metric == .vmaf && vmafModel.usesV1Features
                     ? "YUV 4:2:0 10-bit before scaling" : metric == .xpsnr
                         ? "Native color planes; XPSNR excludes alpha" : "Native pixel format"),
@@ -651,8 +653,6 @@ actor AnalyticsService {
         let sourceScale = Self.frameScaleFilter(width: resolution.width, height: resolution.height, pixelFormat: sourceFormat)
         let encodedScale = Self.frameScaleFilter(width: resolution.width, height: resolution.height, pixelFormat: encodedFormat)
         let frameCount = max(1, maxFrames > 0 ? maxFrames : AppConstants.defaultSSIMULACRA2MaxFrames)
-        let actualFrameCount = min(frameCount, max(1, Int(duration)))
-        let interval = duration / Double(actualFrameCount)
 
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("ssimulacra2_\(UUID().uuidString)")
@@ -661,37 +661,81 @@ actor AnalyticsService {
             try? FileManager.default.removeItem(at: tempDir)
         }
 
-        var scores: [Double] = []
-
-        for i in 0..<actualFrameCount {
-            guard !Task.isCancelled else { throw AnalyticsError.cancelled }
-
-            let timestamp = Double(i) * interval
-            let sourceFrame = tempDir.appendingPathComponent("source_\(String(format: "%04d", i)).png")
-            let encodedFrame = tempDir.appendingPathComponent("encoded_\(String(format: "%04d", i)).png")
-
-            // Extract frames from both videos
-            try await extractFrame(ffmpegPath: ffmpegPath, input: sourceFile, timestamp: timestamp + sourceRange.start, output: sourceFrame, scaleFilter: sourceScale)
-            try await extractFrame(ffmpegPath: ffmpegPath, input: encodedFile, timestamp: timestamp, output: encodedFrame, scaleFilter: encodedScale)
-
-            // Compare with ssimulacra2_rs
-            let score = try await compareFrames(ssimulacra2Path: ssimulacra2Path, source: sourceFrame, encoded: encodedFrame)
-            guard !Task.isCancelled else { throw AnalyticsError.cancelled }
-            scores.append(score)
-
-            // Clean up frames immediately to save disk space
-            try? FileManager.default.removeItem(at: sourceFrame)
-            try? FileManager.default.removeItem(at: encodedFrame)
-
-            let currentProgress = Double(i + 1) / Double(actualFrameCount)
-            progress(min(currentProgress, 0.99))
+        // Decode once to discover actual presentation times, including VFR gaps. The
+        // on-disk index keeps memory independent of program length.
+        let sourceIndex = try await decodedFrameIndex(ffmpegPath: ffmpegPath, input: sourceFile,
+            output: tempDir.appendingPathComponent("source.index"), duration: sourceDuration) { progress(min(0.1, $0 * 0.1)) }
+        progress(0.1)
+        let encodedIndex = sourceFile == encodedFile ? sourceIndex : try await decodedFrameIndex(
+            ffmpegPath: ffmpegPath, input: encodedFile, output: tempDir.appendingPathComponent("encoded.index"), duration: encodedDuration) { progress(0.1 + min(0.1, $0 * 0.1)) }
+        progress(0.2)
+        var sourceFirst = sourceIndex.lowerBound(seconds: sourceRange.start)
+        if sourceRange.start > 0 {
+            // Input seeking rounds to the demuxer's native timebase. Observe that
+            // actual first frame rather than imposing a different nanosecond trim.
+            let trimmed = try await decodedFrameIndex(ffmpegPath: ffmpegPath, input: sourceFile,
+                output: tempDir.appendingPathComponent("trim.index"), duration: sourceDuration,
+                firstFrameAfter: sourceRange.start) { _ in }
+            sourceFirst = sourceIndex.lowerBound(seconds: trimmed.seconds(at: 0))
+            guard sourceFirst < sourceIndex.count, sourceIndex.pts(at: sourceFirst) == trimmed.pts(at: 0) else {
+                throw AnalyticsError.parsingFailed("Could not verify the first decoded frame of the source trim")
+            }
         }
+        guard sourceFirst < sourceIndex.count else {
+            throw AnalyticsError.parsingFailed("No source video frames in the selected interval")
+        }
+        let sourceStart = sourceIndex.seconds(at: sourceFirst)
+        let encodedStart = encodedIndex.seconds(at: 0)
+        let overlap = min(max(0, (sourceRange.end ?? sourceIndex.endSeconds) - sourceStart),
+            max(0, sourceIndex.endSeconds - sourceStart), max(0, encodedIndex.endSeconds - encodedStart))
+        let eligibleEnd = encodedIndex.lowerBound(seconds: encodedStart + overlap)
+        guard eligibleEnd > 0, overlap > 0 else {
+            throw AnalyticsError.parsingFailed("No overlapping decoded video frames")
+        }
+        let sourceEnd = sourceIndex.lowerBound(seconds: min(sourceRange.end ?? sourceIndex.endSeconds, sourceIndex.endSeconds))
+        let actualFrameCount = min(frameCount, eligibleEnd)
+        var samples: [QualitySample] = []
+        for i in 0..<actualFrameCount {
+            try Task.checkCancellation()
+            let ordinal = actualFrameCount == 1 ? 0 : Int((Double(i) * Double(eligibleEnd - 1) / Double(actualFrameCount - 1)).rounded())
+            let seconds = encodedIndex.seconds(at: ordinal) - encodedStart
+            // Sample-and-hold: the reference frame visible at this output time.
+            var target = sourceStart + seconds
+            let next = sourceIndex.lowerBound(seconds: target)
+            let previous = max(sourceFirst, min(sourceEnd - 1, next - 1))
+            let nearest = next < sourceEnd && abs(sourceIndex.seconds(at: next) - target) < abs(sourceIndex.seconds(at: previous) - target) ? next : previous
+            // A coarser output timebase can round an otherwise identical frame
+            // just before its reference PTS. Absorb only that measured uncertainty.
+            let tolerance = encodedIndex.timestampTick / 2 + 0.000000001
+            if abs(sourceIndex.seconds(at: nearest) - target) <= tolerance { target = sourceIndex.seconds(at: nearest) }
+            var sourceOrdinal = min(sourceEnd - 1, max(sourceFirst, sourceIndex.upperBound(seconds: target) - 1))
+            let firstAtTarget = sourceIndex.lowerBound(seconds: target)
+            if firstAtTarget <= sourceOrdinal, firstAtTarget < sourceIndex.count,
+               abs(sourceIndex.seconds(at: firstAtTarget) - target) < 0.0000000005 {
+                let occurrence = ordinal - encodedIndex.lowerBound(seconds: encodedIndex.seconds(at: ordinal))
+                sourceOrdinal = min(sourceOrdinal, firstAtTarget + occurrence)
+            }
+            let sourceFrame = try await extractIndexedFrame(ffmpegPath: ffmpegPath, input: sourceFile,
+                index: sourceIndex, ordinal: sourceOrdinal, directory: tempDir, prefix: "source", scaleFilter: sourceScale)
+            let encodedFrame = try await extractIndexedFrame(ffmpegPath: ffmpegPath, input: encodedFile,
+                index: encodedIndex, ordinal: ordinal, directory: tempDir, prefix: "encoded", scaleFilter: encodedScale)
+            let score = try await compareFrames(ssimulacra2Path: ssimulacra2Path, source: sourceFrame, encoded: encodedFrame)
+            try Task.checkCancellation()
+            samples.append(QualitySample(frame: ordinal, seconds: seconds, score: score,
+                framePair: QualityFramePair(sourceFrame: sourceOrdinal, sourceSeconds: sourceIndex.seconds(at: sourceOrdinal),
+                    encodedFrame: ordinal, encodedSeconds: encodedIndex.seconds(at: ordinal))))
+            try FileManager.default.removeItem(at: sourceFrame)
+            try FileManager.default.removeItem(at: encodedFrame)
+            progress(min(0.2 + 0.8 * Double(i + 1) / Double(actualFrameCount), 0.99))
+        }
+        let scores = samples.map(\.score)
 
         guard !scores.isEmpty else {
             throw AnalyticsError.parsingFailed("No SSIMULACRA2 scores were computed")
         }
 
         let mean = scores.reduce(0, +) / Double(scores.count)
+        guard mean.isFinite else { throw AnalyticsError.parsingFailed("Nonfinite SSIMULACRA2 average") }
         progress(1.0)
 
         logger.info("SSIMULACRA2 complete: \(String(format: "%.1f", mean), privacy: .public) (sampled \(scores.count) frames)")
@@ -706,13 +750,15 @@ actor AnalyticsService {
             comparison: AnalyticsComparison(
                 resolution: comparisonResolution, width: resolution.width, height: resolution.height,
                 scaling: "bicubic", sourceRange: sourceRange, vmafModel: nil,
-                sampleCount: scores.count, sampleTimestamps: (0..<scores.count).map { Double($0) * interval },
+                sampleCount: scores.count, sampleTimestamps: samples.map(\.seconds),
+                sourceVideoStart: sourceStart, encodedVideoStart: encodedStart,
+                samplingPolicy: "Evenly spaced decoded frame ordinals; reference sample-and-hold with output timebase rounding tolerance and matching duplicate occurrence; verified FFmpeg input trim", comparedDuration: overlap,
                 pixelProcessing: "Resize before 16-bit RGB conversion (source: \(sourceFormat ?? "auto"), encoded: \(encodedFormat ?? "auto"))",
                 sourceTiming: nil, encodedTiming: nil,
                 warnings: sourceFormat == nil || encodedFormat == nil
                     ? ["Native pixel format could not be verified; FFmpeg selected the resize/conversion format."] : []
             ),
-            samples: scores.enumerated().map { QualitySample(frame: $0.offset, seconds: Double($0.offset) * interval, score: $0.element) }
+            samples: samples
         )
     }
 
@@ -727,56 +773,62 @@ actor AnalyticsService {
         return filter
     }
 
-    /// Extracts a single frame from a video at the given timestamp
-    private func extractFrame(ffmpegPath: String, input: URL, timestamp: Double, output: URL, scaleFilter: String?) async throws {
-        var args = [
-            "-nostdin",
-            "-ss", String(format: "%.3f", timestamp),
-            "-i", input.path
-        ]
-        if let scaleFilter = scaleFilter {
-            args += ["-vf", scaleFilter]
+    private func decodedFrameIndex(ffmpegPath: String, input: URL, output: URL, duration: Double,
+        firstFrameAfter: Double? = nil, progress: @escaping @Sendable (Double) -> Void) async throws -> DecodedQualityFrameIndex {
+        let collector = try DecodedQualityFrameCollector(url: output, duration: duration, progress: progress)
+        var arguments = ["-hide_banner", "-nostdin", "-nostats", "-xerror", "-copyts", "-start_at_zero"]
+        if let firstFrameAfter { arguments += ["-ss", String(format: "%.6f", firstFrameAfter)] }
+        arguments += ["-i", input.path, "-map", "0:v:0", "-an", "-vf", "showinfo@amc_native=checksum=0,settb=1/1000000000,showinfo@amc_index=checksum=0"]
+        if firstFrameAfter != nil { arguments += ["-frames:v", "1"] }
+        arguments += ["-fps_mode", "passthrough", "-f", "null", "-"]
+        let request = SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpegPath), arguments: arguments,
+            timeout: Self.metricTimeout, standardOutputCaptureLimit: 0,
+            standardErrorCaptureLimit: 32 * 1024, sensitiveValues: [ffmpegPath, input.path, output.path])
+        let result = try await subprocessRunner.run(request) { chunk in
+            if case .standardError = chunk.stream { collector.consume(chunk.data) }
         }
-        args += [
-            "-frames:v", "1",
-            "-pix_fmt", "rgb48be",
-            "-update", "1",
-            "-y",
-            output.path
-        ]
-        let request = SubprocessRequest(
-            executableURL: URL(fileURLWithPath: ffmpegPath),
-            arguments: args,
-            timeout: Self.frameExtractionTimeout,
-            standardOutputCaptureLimit: 0,
-            standardErrorCaptureLimit: 32 * 1024,
-            sensitiveValues: [ffmpegPath, input.path, output.path]
-        )
+        try Task.checkCancellation()
+        guard result.succeeded else {
+            throw AnalyticsError.metricFailed(.ssimulacra2, "Decoded frame discovery failed: " + request.redactedDiagnostic(result.standardErrorText, limit: 300))
+        }
+        return try collector.finish()
+    }
 
-        do {
+    /// Verify the timestamp embedded by the PNG muxer. Seeking is an optimization;
+    /// ordinal decoding is the authority for duplicate PTS and unseekable inputs.
+    private func extractIndexedFrame(ffmpegPath: String, input: URL, index: DecodedQualityFrameIndex,
+        ordinal: Int, directory: URL, prefix: String, scaleFilter: String) async throws -> URL {
+        let pts = index.pts(at: ordinal)
+        let pattern = directory.appendingPathComponent("\(prefix)-%d.png")
+        let expected = directory.appendingPathComponent("\(prefix)-\(pts).png")
+        let duplicate = (ordinal > 0 && index.pts(at: ordinal - 1) == pts)
+            || (ordinal + 1 < index.count && index.pts(at: ordinal + 1) == pts)
+        for useOrdinal in duplicate ? [true] : [false, true] {
+            try Task.checkCancellation()
+            var args = ["-hide_banner", "-nostdin", "-xerror", "-copyts", "-start_at_zero"]
+            if !useOrdinal && pts > 0 {
+                // Seek before the frame, never after a rounded fractional timestamp.
+                let microseconds = max(0, pts / 1000 - 2)
+                args += ["-ss", String(format: "%.6f", Double(microseconds) / 1_000_000)]
+            }
+            args += ["-i", input.path, "-map", "0:v:0", "-an", "-vf",
+                (useOrdinal ? "select=eq(n\\,\(ordinal))," : "") + scaleFilter + ",settb=1/1000000000",
+                "-enc_time_base", "filter", "-fps_mode", "passthrough", "-frames:v", "1",
+                "-pix_fmt", "rgb48be", "-frame_pts", "1", "-y", pattern.path]
+            let request = SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpegPath), arguments: args,
+                timeout: Self.frameExtractionTimeout, standardOutputCaptureLimit: 0,
+                standardErrorCaptureLimit: 32 * 1024, sensitiveValues: [ffmpegPath, input.path, pattern.path, directory.path])
             let result = try await subprocessRunner.run(request)
             try Task.checkCancellation()
-            guard result.succeeded else {
-                let diagnostic = request.redactedDiagnostic(
-                    result.standardErrorText.trimmingCharacters(in: .whitespacesAndNewlines),
-                    limit: 300
-                )
-                let suffix = diagnostic.isEmpty ? "" : ": \(diagnostic)"
-                throw AnalyticsError.metricFailed(
-                    .ssimulacra2,
-                    "Failed to extract frame at \(String(format: "%.1f", timestamp))s (exit \(result.terminationStatus))\(suffix)"
-                )
-            }
-        } catch is CancellationError {
-            throw AnalyticsError.cancelled
-        } catch let error as SubprocessRunnerError {
-            switch error {
-            case .failedToStart(_, let underlying):
-                throw AnalyticsError.metricFailed(.ssimulacra2, request.redactedDiagnostic(underlying, limit: 300))
-            case .timedOut:
-                throw AnalyticsError.metricFailed(.ssimulacra2, "Frame extraction exceeded the 10-minute limit")
+            let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { $0.lastPathComponent.hasPrefix(prefix + "-") && $0.pathExtension == "png" }
+            if result.succeeded, files.count == 1, files.first?.lastPathComponent == expected.lastPathComponent { return expected }
+            for file in files { try? FileManager.default.removeItem(at: file) }
+            if useOrdinal {
+                throw AnalyticsError.metricFailed(.ssimulacra2, "Could not verify decoded frame \(ordinal): " + request.redactedDiagnostic(result.standardErrorText, limit: 300))
             }
         }
+        throw AnalyticsError.parsingFailed("No verified video frame was extracted")
     }
 
     /// Compares two image files using ssimulacra2_rs and returns the score
@@ -820,7 +872,7 @@ actor AnalyticsService {
 
         // Output format: "Score: 97.53500802"
         let scoreString = output.hasPrefix("Score:") ? output.dropFirst(6).trimmingCharacters(in: .whitespaces) : output
-        guard let score = Double(scoreString) else {
+        guard let score = Double(scoreString), score.isFinite else {
             throw AnalyticsError.parsingFailed("Could not parse ssimulacra2_rs output: \(output)")
         }
 
@@ -1288,5 +1340,126 @@ private final class AnalyticsFFmpegProgressParser: @unchecked Sendable {
         guard cappedFraction - lastReportedProgress >= 0.01 else { return }
         lastReportedProgress = cappedFraction
         progress(cappedFraction)
+    }
+}
+
+/// Fixed-width, memory-mapped timestamps avoid retaining every decoded frame in RAM.
+private struct DecodedQualityFrameIndex: Sendable {
+    let data: Data
+    let endSeconds: Double
+    let timestampTick: Double
+    var count: Int { data.count / MemoryLayout<Int64>.size }
+    func pts(at index: Int) -> Int64 {
+        data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: index * 8, as: Int64.self) }
+    }
+    func seconds(at index: Int) -> Double { Double(pts(at: index)) / 1_000_000_000 }
+    func lowerBound(seconds: Double) -> Int { bound(seconds: seconds, inclusive: false) }
+    func upperBound(seconds: Double) -> Int { bound(seconds: seconds, inclusive: true) }
+    private func bound(seconds: Double, inclusive: Bool) -> Int {
+        var low = 0
+        var high = count
+        // Round to the indexing timebase, avoiding floating point noise at exact PTS.
+        let target = (seconds * 1_000_000_000).rounded()
+        while low < high {
+            let middle = (low + high) / 2
+            let value = Double(pts(at: middle))
+            if value < target || (inclusive && value == target) { low = middle + 1 } else { high = middle }
+        }
+        return low
+    }
+}
+
+/// Only FFmpeg's named showinfo filter contributes records. Output chunks can split
+/// lines anywhere; the parser retains one bounded line and batches index writes.
+private final class DecodedQualityFrameCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private let url: URL
+    private let handle: FileHandle
+    private let pattern = try! NSRegularExpression(pattern: #"n:\s*(\d+)\s+pts:\s*(-?\d+)"#)
+    private var pending = Data()
+    private var records = Data()
+    private var count = 0
+    private var lastPTS: Int64?
+    private var lastDuration: Int64 = 0
+    private var timestampTick = 0.0
+    private let timebasePattern = try! NSRegularExpression(pattern: #"config in time_base:\s*(\d+)/(\d+)"#)
+    private let durationPattern = try! NSRegularExpression(pattern: #"duration:\s*(\d+)"#)
+    private let duration: Double
+    private let progress: @Sendable (Double) -> Void
+    private var lastProgress = 0.0
+    private var failure: Error?
+
+    init(url: URL, duration: Double, progress: @escaping @Sendable (Double) -> Void) throws {
+        self.url = url
+        self.duration = duration
+        self.progress = progress
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+            throw AnalyticsError.parsingFailed("Could not create decoded frame index")
+        }
+        handle = try FileHandle(forWritingTo: url)
+    }
+    deinit { try? handle.close() }
+
+    func consume(_ data: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard failure == nil else { return }
+        pending.append(data)
+        while let newline = pending.firstIndex(of: 10) {
+            let line = String(decoding: pending[..<newline], as: UTF8.self)
+            pending.removeSubrange(...newline)
+            parse(line)
+        }
+        if pending.count > 128 * 1024 {
+            failure = AnalyticsError.parsingFailed("Oversized decoded frame record")
+        }
+    }
+
+    private func parse(_ line: String) {
+        guard failure == nil else { return }
+        let ns = line as NSString
+        if line.contains("showinfo@amc_native"),
+           let match = timebasePattern.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)),
+           let numerator = Double(ns.substring(with: match.range(at: 1))),
+           let denominator = Double(ns.substring(with: match.range(at: 2))), denominator > 0 {
+            timestampTick = max(timestampTick, numerator / denominator)
+        }
+        guard line.contains("showinfo@amc_index"), line.contains(" n:") else { return }
+        guard let match = pattern.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)),
+              let ordinal = Int(ns.substring(with: match.range(at: 1))), ordinal == count,
+              var pts = Int64(ns.substring(with: match.range(at: 2))),
+              lastPTS.map({ pts >= $0 }) ?? true else {
+            failure = AnalyticsError.parsingFailed("Invalid or nonmonotonic decoded video timestamps")
+            return
+        }
+        lastPTS = pts
+        if let match = durationPattern.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) {
+            lastDuration = Int64(ns.substring(with: match.range(at: 1))) ?? 0
+        } else { lastDuration = 0 }
+        let fraction = min(1, max(0, Double(pts) / 1_000_000_000 / duration))
+        if fraction - lastProgress >= 0.01 { lastProgress = fraction; progress(fraction) }
+        count += 1
+        withUnsafeBytes(of: &pts) { records.append(contentsOf: $0) }
+        if records.count >= 64 * 1024 { flush() }
+    }
+
+    private func flush() {
+        do { try handle.write(contentsOf: records); records.removeAll(keepingCapacity: true) }
+        catch { failure = error }
+    }
+
+    func finish() throws -> DecodedQualityFrameIndex {
+        lock.lock()
+        defer { lock.unlock() }
+        if !pending.isEmpty { parse(String(decoding: pending, as: UTF8.self)); pending.removeAll() }
+        flush()
+        try handle.close()
+        if let failure { throw failure }
+        guard count > 0 else { throw AnalyticsError.parsingFailed("No decoded video timestamps were found") }
+        // A missing final-frame duration cannot establish how long the last
+        // reference is visible. Conservatively exclude that frame instead of
+        // extending it through a possible audio-only tail.
+        let endSeconds = Double(lastPTS ?? 0) / 1_000_000_000 + Double(lastDuration) / 1_000_000_000
+        return DecodedQualityFrameIndex(data: try Data(contentsOf: url, options: .alwaysMapped), endSeconds: endSeconds, timestampTick: timestampTick)
     }
 }

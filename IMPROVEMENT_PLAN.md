@@ -2,6 +2,44 @@
 
 Last reviewed: 2026-10-18
 
+## Decoded SSIMULACRA2 sampling — 2026-10-18
+
+Owner: Codex. The frame limit now selects distinct decoded ordinals, including
+subsecond clips, with no one-per-second cap. Both inputs are decoded into
+memory-mapped timestamp indexes before sparse image extraction. PNG timestamps
+must match their indexed identities; duplicate timestamps and failed/missing seek
+outputs fall back to ordinal decoding. Nonfinite scores and nonmonotonic frame
+records are rejected. Indexing and extraction retain cancellation/drain ownership
+and remove scratch only after helpers finish.
+
+Reference matching uses sample-and-hold, with measured output timebase rounding
+uncertainty and duplicate occurrence matching. Actual FFmpeg trim-start frames
+are observed rather than inferred from requested times. Candidate references stay
+inside the exclusive trim end. Overlap uses decoded video end times, so long audio
+tails cannot keep a reference frame alive. JSON retains both frame identities and
+presentation timestamps, video origins, sampling policy and compared duration;
+the inspector and PDF use those measured origins/duration. Settings explain the
+upfront index pass. See [report semantics](docs/video-quality-report-format.md).
+No dependencies, bundled binaries or licenses changed.
+
+Validation: the final ad-hoc-signed Debug build and 1,440 unit tests pass with
+zero failures and one intentional benchmark skip
+(`/private/tmp/amc-sampling-reviewed-unit.xcresult`). Generated checks cover fractional CFR, VFR gaps, duplicate timestamps, delayed video, native trim
+rounding, audio-only tails, real unseekable raw H.264, successful empty seeks,
+nonfinite helper output and cancellation during discovery/extraction. A negative
+MKV fixture exposes a genuine decoded timestamp reset and is explicitly rejected.
+Seven localization tests and the 1,926-entry catalog audit also pass.
+Native SSIMULACRA2 inspection/PDF and existing timeline UI checks remain unverified:
+`/private/tmp/amc-sampling-native-ui.xcresult` shows a macOS Codex Computer Use
+screen/audio access prompt intercepting Run clicks. That privacy choice has been
+left to the user; no analysis helper was started by those intercepted clicks.
+
+Remaining completion work: analysis UI localization (a source/catalog audit found
+missing primary headings, inspector controls and audio help), playback timestamp
+integration and the existing paused MPEG-4 regrouping artifact. Release/device
+and sandbox qualification remain open. Historical reports without measured frame
+identities require rerunning to obtain the stronger timing guarantees.
+
 ## Video quality scoring and portable reports — 2026-10-18
 
 Owner: Codex. XPSNR now uses the minimum of FFmpeg's whole-program component
@@ -39,13 +77,8 @@ intercepted by an external FTP Sync window; explicit activation and enabled-stat
 waiting resolved that test interaction without touching the other app. The
 passing screenshot capture targets the analysis sheet directly.
 
-Remaining audit work: SSIMULACRA2 currently records requested extraction times
-rather than independently verified decoded frame timestamps, and limits sampling
-to at most one point per second. Its VFR sampling/alignment and density controls
-need qualification before declaring the video inspection workflow complete. A
-bundled VFR fixture with frames at 0, 0.25, 1 and 2.25 seconds extracts the
-1-second frame when requested at 0.5 seconds, confirming a half-second timestamp
-misstatement in the current sampling path.
+The sampling audit identified inaccurate requested timestamps and a one-per-second
+cap; these are addressed by the decoded sampling continuation above.
 The earlier playback timing/integration and paused regrouping limitations also
 remain open. The bilingual captures also show existing analysis headings and
 help text falling back to English; those source strings still need catalog

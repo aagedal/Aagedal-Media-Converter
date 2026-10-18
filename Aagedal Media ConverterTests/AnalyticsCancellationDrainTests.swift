@@ -29,12 +29,47 @@ final class AnalyticsCancellationDrainTests: XCTestCase {
         XCTAssertEqual(runCount, 1)
     }
 
-    func testSSIMULACRACancellationDrainsExtractionAndRemovesScratchBeforeReturning() async throws {
+    func testSSIMULACRACancellationDrainsDiscoveryAndRemovesScratchBeforeReturning() async throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let started = expectation(description: "Frame extraction started")
         let cancelled = expectation(description: "Frame extraction cancellation requested")
         let runner = AnalyticsDrainRunner(started: [started], cancelled: [cancelled])
+        let service = AnalyticsService(
+            subprocessRunner: runner,
+            ffmpegPathProvider: { "/fixture/ffmpeg" },
+            ssimulacra2PathProvider: { "/fixture/ssimulacra2" },
+            mediaInfoProvider: AnalyticsDrainMediaInfoProvider()
+        )
+        let run = startAnalysis(service: service, fixture: fixture, metrics: [.ssimulacra2])
+        await fulfillment(of: [started], timeout: 2)
+        let requests = await runner.requests
+        let framePath = try XCTUnwrap(requests.first?.sensitiveValues.first { $0.hasSuffix("source.index") })
+        let scratch = URL(fileURLWithPath: framePath).deletingLastPathComponent()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: scratch.path))
+
+        var cancellationReturned = false
+        let cancellation = Task {
+            await service.cancelAnalysis()
+            cancellationReturned = true
+        }
+        await fulfillment(of: [cancelled], timeout: 2)
+        XCTAssertFalse(cancellationReturned)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: scratch.path))
+        await runner.finish(run: 0)
+        await cancellation.value
+        await assertCancelled(run)
+        let runCount = await runner.runCount
+        XCTAssertEqual(runCount, 1, "Cancelled extraction must not start the second frame or comparison helper")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: scratch.path))
+    }
+
+    func testSSIMULACRACancellationDrainsExtractionAndRemovesScratchBeforeReturning() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let started = expectation(description: "Frame extraction started")
+        let cancelled = expectation(description: "Frame extraction cancellation requested")
+        let runner = AnalyticsDrainRunner(started: [started], cancelled: [cancelled], completeFrameDiscovery: true)
         let service = AnalyticsService(
             subprocessRunner: runner,
             ffmpegPathProvider: { "/fixture/ffmpeg" },
@@ -288,11 +323,13 @@ private actor AnalyticsDrainRunner: SubprocessRunning {
     private let started: [XCTestExpectation]
     private let cancelled: [XCTestExpectation]
     private var continuations: [Int: CheckedContinuation<Void, Never>] = [:]
+    private let completeFrameDiscovery: Bool
     private(set) var runCount = 0
     private(set) var cancelledRuns: [Int] = []
     private(set) var requests: [SubprocessRequest] = []
 
-    init(started: [XCTestExpectation], cancelled: [XCTestExpectation]) {
+    init(started: [XCTestExpectation], cancelled: [XCTestExpectation], completeFrameDiscovery: Bool = false) {
+        self.completeFrameDiscovery = completeFrameDiscovery
         self.started = started
         self.cancelled = cancelled
     }
@@ -301,6 +338,11 @@ private actor AnalyticsDrainRunner: SubprocessRunning {
         _ request: SubprocessRequest,
         outputHandler: (@Sendable (SubprocessOutputChunk) -> Void)?
     ) async throws -> SubprocessResult {
+        if completeFrameDiscovery, request.arguments.contains("null") {
+            outputHandler?(SubprocessOutputChunk(stream: .standardError,
+                data: Data("[showinfo@amc_index @ fixture] n: 0 pts: 0 duration:1000000000\n".utf8)))
+            return analyticsDrainResult()
+        }
         let run = runCount
         runCount += 1
         requests.append(request)

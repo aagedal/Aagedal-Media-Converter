@@ -978,7 +978,7 @@ private struct QualityInspectionView: View {
 
     private var timeline: QualityTimeline { timelines.first { $0.metric == selectedMetric } ?? QualityTimeline(result: MetricResult(metric: .vmaf, overallScore: 0, min: nil, max: nil, unit: "", channelScores: nil)) }
     private var playbackURL: URL { showingSource ? request.source : request.encoded }
-    private var loadID: String { "\(playbackURL.absoluteString)|\(timeline.sourceStart)|\(showingSource)" }
+    private var loadID: String { "\(playbackURL.absoluteString)|\(timeline.sourceStart)|\(timeline.encodedStart)|\(showingSource)" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -1128,7 +1128,7 @@ private struct QualityInspectionView: View {
             try Task.checkCancellation()
             assets[url] = asset
             player.isMuted = true
-            playbackSourceStart = showingSource ? timeline.sourceStart : 0
+            playbackSourceStart = showingSource ? timeline.sourceStart : timeline.encodedStart
             player.load(url: asset.url, startTime: timeline.playbackTime(for: position, source: showingSource))
             preparing = false
         } catch is CancellationError {

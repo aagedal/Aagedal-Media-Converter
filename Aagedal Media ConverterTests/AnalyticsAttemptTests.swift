@@ -258,7 +258,7 @@ final class AnalyticsAttemptTests: XCTestCase {
                 XCTAssertEqual(try XCTUnwrap(results.first { $0.metric == .ssimulacra2 }).overallScore, 100, accuracy: 0.1)
                 XCTAssertEqual(results.first?.comparison?.width, 128)
                 XCTAssertEqual(results.first?.comparison?.resolution, .encoded)
-                XCTAssertEqual(results.first { $0.metric == .ssimulacra2 }?.comparison?.sampleCount, 1)
+                XCTAssertEqual(results.first { $0.metric == .ssimulacra2 }?.comparison?.sampleCount, 2)
             }
             // AV2 is also supported as the reference input; test the opposite scaling policy.
             let reversed = try await service.runAnalytics(sourceFile: ivf, encodedFile: reference,
@@ -374,6 +374,147 @@ final class AnalyticsAttemptTests: XCTestCase {
             XCTAssertEqual(samples.count, 4, result.metric.rawValue)
             XCTAssertEqual(samples.map(\.seconds), [0, 0.25, 1, 2.25], result.metric.rawValue)
         }
+    }
+
+    func testSSIMULACRAUsesDecodedFramesAndRejectsTimestampResets() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fixtures: [(String, [String], Int, [Double]?)] = [
+            ("fractional.mp4", ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=30000/1001:d=0.3", "-c:v", "libx264"], 9, nil),
+            ("delayed.mp4", ["-f", "lavfi", "-i", "sine=duration=1", "-itsoffset", "0.4", "-f", "lavfi", "-i", "testsrc2=s=128x128:r=10:d=0.6", "-map", "1:v", "-map", "0:a", "-c:v", "libx264", "-c:a", "aac"], 6, [0, 0.1, 0.2, 0.3, 0.4, 0.5]),
+            ("vfr.mkv", ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=4:d=1", "-vf", "setpts=N*N/(4*TB)", "-fps_mode", "passthrough", "-c:v", "ffv1"], 4, [0, 0.25, 1, 2.25]),
+            ("duplicate.mkv", ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=10:d=1", "-vf", "setpts=floor(N/2)*1/(10*TB)", "-fps_mode", "passthrough", "-c:v", "ffv1"], 10, [0, 0, 0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4]),
+            ("negative.mkv", ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=30000/1001:d=1", "-vf", "setpts=PTS-0.2/TB", "-fps_mode", "passthrough", "-avoid_negative_ts", "disabled", "-c:v", "libx264"], -1, nil)
+        ]
+        for (name, arguments, count, expectedTimes) in fixtures {
+            let file = directory.appendingPathComponent(name)
+            let generated = try await SubprocessRunner().run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-nostdin"] + arguments + [file.path], timeout: .seconds(30)))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+            if count < 0 {
+                do {
+                    _ = try await AnalyticsService().runAnalytics(sourceFile: file, encodedFile: file,
+                        enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 100) { _, _ in }
+                    XCTFail("Accepted a decoded timestamp reset")
+                } catch AnalyticsError.parsingFailed { }
+                continue
+            }
+            let results = try await AnalyticsService().runAnalytics(sourceFile: file, encodedFile: file,
+                enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 100) { _, _ in }
+            let result = try XCTUnwrap(results.first)
+            let samples = try XCTUnwrap(result.samples)
+            XCTAssertEqual(samples.count, count, name)
+            XCTAssertEqual(Set(samples.map(\.frame)).count, count, name)
+            XCTAssertEqual(result.overallScore, 100, accuracy: 0.01, name)
+            if let expectedTimes {
+                XCTAssertEqual(samples.count, expectedTimes.count)
+                for (sample, seconds) in zip(samples, expectedTimes) { XCTAssertEqual(sample.seconds, seconds, accuracy: 0.000001, name) }
+            }
+            for sample in samples {
+                let pair = try XCTUnwrap(sample.framePair)
+                // Duplicate timestamps are paired by the frame visible at that time;
+                // identical inputs preserve ordinal identity to compare all frames.
+                XCTAssertEqual(pair.encodedFrame, sample.frame)
+                XCTAssertEqual(pair.encodedSeconds, sample.seconds + (result.comparison?.encodedVideoStart ?? 0), accuracy: 0.000001)
+            }
+            if name == "delayed.mp4" {
+                let timeline = QualityTimeline(result: result)
+                XCTAssertEqual(timeline.sourceStart, 0.4, accuracy: 0.000001)
+                XCTAssertEqual(timeline.encodedStart, 0.4, accuracy: 0.000001)
+                XCTAssertEqual(timeline.playbackTime(for: 0.2, source: true), 0.6, accuracy: 0.000001)
+                XCTAssertEqual(timeline.playbackTime(for: 0.2, source: false), 0.6, accuracy: 0.000001)
+            }
+            let roundTrip = try JSONDecoder().decode(MetricResult.self, from: JSONEncoder().encode(result))
+            XCTAssertEqual(roundTrip, result)
+        }
+    }
+
+    func testSSIMULACRADoesNotHoldReferenceThroughAudioOnlyTail() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("short-video-long-audio.mkv")
+        let encoded = directory.appendingPathComponent("long-video.mkv")
+        for (file, arguments) in [
+            (source, ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=2:d=1", "-f", "lavfi", "-i", "sine=duration=3", "-c:v", "ffv1", "-c:a", "pcm_s16le"]),
+            (encoded, ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=2:d=3", "-c:v", "ffv1"])
+        ] {
+            let generated = try await SubprocessRunner().run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-nostdin"] + arguments + [file.path], timeout: .seconds(30)))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        }
+        let results = try await AnalyticsService().runAnalytics(sourceFile: source, encodedFile: encoded,
+            enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 100) { _, _ in }
+        let result = try XCTUnwrap(results.first)
+        XCTAssertEqual(result.samples?.map(\.seconds), [0, 0.5])
+        XCTAssertEqual(result.overallScore, 100, accuracy: 0.01)
+    }
+
+    func testSSIMULACRAMatchesNativeFractionalTrimBoundary() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mp4")
+        let encoded = directory.appendingPathComponent("trimmed.mkv")
+        for arguments in [
+            ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=30000/1001:d=1", "-c:v", "libx264", source.path],
+            ["-ss", "0.400410", "-i", source.path, "-t", "0.4", "-c:v", "ffv1", encoded.path]
+        ] {
+            let generated = try await SubprocessRunner().run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-nostdin"] + arguments, timeout: .seconds(30)))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        }
+        let results = try await AnalyticsService().runAnalytics(sourceFile: source, encodedFile: encoded,
+            sourceRange: AnalyticsSourceRange(start: 0.400410, end: 0.800410),
+            enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 5) { _, _ in }
+        let result = try XCTUnwrap(results.first)
+        XCTAssertEqual(result.comparison?.sourceVideoStart ?? -1, 0.4004, accuracy: 0.000001)
+        XCTAssertEqual(result.overallScore, 100, accuracy: 0.01)
+    }
+
+    func testSSIMULACRAOrdinalFallbackOnRealUnseekableRawVideo() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("raw.h264")
+        let generated = try await SubprocessRunner().run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg),
+            arguments: ["-nostdin", "-f", "lavfi", "-i", "testsrc2=s=128x128:r=30000/1001:d=1", "-c:v", "libx264", file.path], timeout: .seconds(30)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let service = AnalyticsService(mediaInfoProvider: RawSamplingFixtureInfo())
+        let results = try await service.runAnalytics(sourceFile: file, encodedFile: file,
+            enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 3) { _, _ in }
+        let result = try XCTUnwrap(results.first)
+        XCTAssertEqual(result.samples?.map(\.frame), [0, 15, 29])
+        XCTAssertEqual(result.overallScore, 100, accuracy: 0.01)
+    }
+
+    func testSSIMULACRAHoldsVFRReferenceAcrossOutputFrameGaps() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("vfr.mkv")
+        let output = directory.appendingPathComponent("cfr.mkv")
+        for arguments in [
+            ["-f", "lavfi", "-i", "testsrc2=s=128x128:r=4:d=1", "-vf", "setpts=N*N/(4*TB)", "-fps_mode", "passthrough", "-c:v", "ffv1", source.path],
+            ["-i", source.path, "-vf", "fps=4", "-c:v", "ffv1", output.path]
+        ] {
+            let generated = try await SubprocessRunner().run(SubprocessRequest(executableURL: URL(fileURLWithPath: ffmpeg),
+                arguments: ["-nostdin"] + arguments, timeout: .seconds(30)))
+            XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        }
+        let results = try await AnalyticsService().runAnalytics(sourceFile: source, encodedFile: output,
+            enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 100) { _, _ in }
+        let samples = try XCTUnwrap(results.first?.samples)
+        let atHalfSecond = try XCTUnwrap(samples.first { abs($0.seconds - 0.5) < 0.000001 })
+        XCTAssertEqual(atHalfSecond.framePair?.sourceSeconds, 0.25,
+            "The visible reference at 0.5s is 0.25s; seeking forward to 1s compares future content")
+        XCTAssertEqual(atHalfSecond.framePair?.encodedSeconds, 0.5)
     }
 
     private func makeItem() -> VideoItem {
@@ -641,4 +782,10 @@ final class VideoQualityPDFTests: XCTestCase {
             XCTAssertEqual(document.page(at: index)?.bounds(for: .mediaBox).size, CGSize(width: 595, height: 842))
         }
     }
+}
+
+private struct RawSamplingFixtureInfo: AnalyticsMediaInfoProviding {
+    func duration(for file: URL) async -> Double? { 1.001 }
+    func resolution(for file: URL) async -> (width: Int, height: Int)? { (128, 128) }
+    func pixelFormat(for file: URL, ffmpegPath: String) async -> String? { "yuv420p" }
 }

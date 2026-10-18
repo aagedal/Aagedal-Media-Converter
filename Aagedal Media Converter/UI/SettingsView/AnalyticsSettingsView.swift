@@ -141,7 +141,7 @@ struct AnalyticsSettingsView: View {
                 .font(.caption)
                 .accessibilityIdentifier("analysis.ssimulacra2.frames")
 
-            Text("Number of frames sampled evenly across the video for comparison. More frames gives higher accuracy but takes longer.")
+            Text("Maximum number of distinct decoded frames to compare. Videos are indexed first; more samples take longer.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

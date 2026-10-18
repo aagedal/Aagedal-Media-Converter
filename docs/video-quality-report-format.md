@@ -63,14 +63,46 @@ footers are repeated; long text is paginated using actual visible character
 ranges. Native JSON and PDF saves hold security-scoped destination access and
 write atomically. Cancelling the save panel preserves the measurement.
 
-## Remaining timing qualification
+## SSIMULACRA2 frame sampling
 
-SSIMULACRA2 currently records the requested frame-extraction times, not separately
-verified decoded frame timestamps, and caps density at one sampled point per
-second. VFR frame identity/alignment and higher sampling densities remain under
-active audit. Per-frame FFmpeg metrics use their observed output timestamps.
+The frame limit applies to distinct decoded frame ordinals, including on short
+clips. The first and last eligible frames are included when the limit is at
+least two; intermediate ordinals are evenly spaced. Both videos are decoded to
+build disk-backed timestamp indexes before sparse PNG extraction. This adds an
+upfront decode pass and keeps retained index memory and image disk usage bounded.
+
+PNG filenames carry their actual nanosecond presentation timestamps. A seeked
+image is accepted only when its timestamp matches the indexed frame. Duplicate
+timestamps and failed/missing seek outputs use ordinal decoding from the start.
+Nonmonotonic timestamps are rejected rather than producing ambiguous scores.
+Source trim starts are observed with FFmpeg's actual input seeking, preserving
+native timebase rounding. A trim that cannot be decoded/verified fails explicitly.
+
+References use sample-and-hold matching, with only the measured output
+timebase rounding uncertainty absorbed at frame boundaries. Duplicate timestamps
+match their occurrence within the timestamp group, bounded by available reference
+frames. Overlap ends at the decoded video boundary, including the final frame's
+reported duration; audio-only tails cannot extend a reference. Unknown terminal
+frame duration is conservatively excluded.
+
+JSON comparison metadata retains `sampleTimestamps`, `samplingPolicy`,
+`sourceVideoStart`, `encodedVideoStart` and `comparedDuration`. Each sampled
+`QualitySample.framePair` records source/encoded decoded ordinals and file-relative
+presentation times. Sample `seconds` and graph positions are relative to the first
+encoded video frame. Inspection uses the measured source and encoded video origins.
+Older reports retain the legacy trim-based playback origin when fields are absent.
+PDF metadata includes the measured origins, compared duration and matching policy.
+SSIMULACRA2 helper scores must be finite; perfect matches score 100.
 
 ## Validation
+
+The decoded sampling continuation passes the final Debug build and full 1,440-test
+unit suite with zero failures and one intentional benchmark skip
+(`/private/tmp/amc-sampling-reviewed-unit.xcresult`). Generated sampling checks
+cover fractional CFR, VFR reference holds, duplicate timestamps, delayed starts,
+trim rounding and exclusive ends, trailing audio, real unseekable raw H.264,
+successful empty seeks, malformed/nonfinite scores and cancellation drainage.
+
 
 The final Debug build and 1,431 unit tests pass with zero failures and one
 intentional benchmark skip (`/private/tmp/amc-quality-final-unit.xcresult`). Generated examples cover grayscale, RGB, alpha-only
