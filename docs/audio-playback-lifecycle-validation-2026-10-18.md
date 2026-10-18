@@ -145,10 +145,19 @@ tests pass with zero failures and three intentional diagnostic skips
 [Native timing report](provenance/audio-meter-lifecycle-2026-10-18/app-consumer/native-timing-report.json),
 compressed traces and the `clean-lifecycle-*` reports are retained.
 
+A further regression test changes speed nine times 150 ms apart (1×–8×, as with
+repeated J/K/L shuttle presses) during muted AAC playback. The filter measures
+decoded samples ahead of MPV's tempo stage, so no history restart occurs. The
+meter stays available, short-term loudness keeps its history (−15.7 LUFS for
+the 440 Hz, 0.25-amplitude fixture), and readings resume within 0.6 s of the
+playhead. All 50 focused tests pass against the clean library; on the normal
+package the three history tests skip as intended and the other 28 player tests
+pass.
+
 The production pin, Source-default meter, bundled binaries and translations are
 unchanged. Remaining before playback history can ship: corresponding-source
-packaging and a production pin update, Release/thermal performance, speed-change
-continuity and physical loopback synchronization.
+packaging and a production pin update, Release/thermal performance and physical
+loopback synchronization.
 
 ## Original isolated lifecycle experiment
 

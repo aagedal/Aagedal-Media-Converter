@@ -189,6 +189,47 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testTimestampHistorySurvivesRepeatedShuttleSpeedChanges() async throws {
+        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
+            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
+        }
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-history-speed-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=40",
+                "-f", "lavfi", "-i", "aevalsrc=0.25*sin(2*PI*440*t):s=48000:d=40",
+                "-c:v", "mpeg4", "-c:a", "aac", source.path], timeout: .seconds(30)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop(); withExtendedLifetime(layer) {} }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        player.setPlaybackMeterEnabled(true)
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        // J/K/L shuttle presses can change speed several times per second.
+        try await waitForMeterCondition { player.playbackMeterSample?.shortTermLUFS != nil }
+        for rate: Float in [2, 4, 8, 1, 2, 4, 1, 2, 1] {
+            player.rate = rate
+            try await Task.sleep(for: .milliseconds(150))
+        }
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertFalse(player.playbackMeterUnavailable, "Speed changes must not disable the meter")
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        let sample = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertLessThan(abs(sample.seconds - player.timePos), 0.6, "Readings must resume near the playhead")
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[0]), -12.04, accuracy: 0.5)
+        XCTAssertTrue(player.playbackMeterHasTimestampHistory)
+        // The filter measures decoded samples ahead of MPV's tempo stage, so
+        // speed changes are not discontinuities and loudness keeps its history.
+        XCTAssertEqual(try XCTUnwrap(sample.shortTermLUFS, "Speed changes must not reset loudness"), -15.7, accuracy: 0.5)
+    }
+
+    @MainActor
     func testTimestampHistoryDoesNotPublishDelayedAudioBeforeMeasuredInterval() async throws {
         guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
             throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")

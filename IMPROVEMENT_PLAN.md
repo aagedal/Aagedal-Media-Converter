@@ -42,10 +42,10 @@ re-decode through the installed filter, so the first measured interval ends at
 0.079 s instead of about 2.2 s. A native SwiftUI preview UI test passes for both
 clocks: steady levels are correct, and all edges appear 0.125–0.375 s after the
 authored time, never early. The 3-second rewind leaves no stale samples. The
-lifecycle matrix passes six arm64 and two x86_64 cases; 49 focused tests and all
-1,462 normal-package unit tests pass. Shipping still needs source packaging, a
-production pin update, Release/thermal and speed-continuity checks, and physical
-synchronization. See [clean-library runtime qualification](docs/audio-playback-lifecycle-validation-2026-10-18.md#clean-library-runtime-qualification).
+lifecycle matrix passes six arm64 and two x86_64 cases; all 1,462 normal-package
+unit tests pass. Rapid 1×–8× shuttle speed changes keep the meter and its
+loudness history (50 focused tests pass). Shipping still needs source packaging,
+a production pin update, Release/thermal checks and physical synchronization. See [clean-library runtime qualification](docs/audio-playback-lifecycle-validation-2026-10-18.md#clean-library-runtime-qualification).
 The completion goal stays active.
 
 ## Quality-analysis input ownership — 2026-10-18
