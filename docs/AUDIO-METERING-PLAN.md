@@ -38,6 +38,37 @@ This qualifies paused frame preservation for the generated fixture, not physical
 speaker/video synchronization or all possible decoder/remote-file behavior. Source
 analysis algorithms, dependencies, bundled binaries and licenses are unchanged.
 
+## Optimized build qualification — 2026-10-18
+
+The arm64 Release test build succeeds with `ENABLE_TESTABILITY=YES` supplied on
+the command line, leaving repository Release settings unchanged. Without that
+override the test target cannot import the app's internal APIs. The optimized
+run passes all 185 checks in the analysis, audio routing/export, quality
+score/PDF, MPV lifecycle/seek and bookmark test classes. Evidence:
+`/private/tmp/amc-analysis-release-unit.xcresult`.
+
+The full run is **not green**: 1,443 tests execute, one benchmark is skipped,
+and four `ApplicationJobContractTests` MCP helper cases produce nine failed
+assertions/errors. The helper's `AMC_UI_TEST_AGENT_PORT_ID` fixture override is
+inside `#if DEBUG`, so these Release cases cannot use their isolated test ports.
+This run does not qualify the MCP helper for Release. Native analysis UI evidence
+remains the four passing Debug checks above; generated UI fixture import is also
+Debug-only and was not enabled in the Release app.
+
+Static bundle verification passes for 59 arm64 Mach-O images and 14 packaged
+license notices against `BundledDependencies.json`. This check uses a separate
+copy with only the injected XCTest bundle and its dSYM removed; no shipped app
+payload is changed. Evidence: `/private/tmp/amc-analysis-release-bundle-static.json`.
+The original test bundle correctly fails distribution validation on its external
+XCTest framework dependency. The app has an ad-hoc signature with the runtime flag, but this static check
+does not qualify Hardened Runtime enforcement, notarization or distribution
+signatures.
+
+Both project configurations set `ENABLE_APP_SANDBOX = NO`; the signed test app
+also has no App Sandbox entitlement. Existing bookmark tests and scoped source,
+preview and export access do not establish sandbox enforcement. Physical audio/
+video synchronization and device/thermal qualification remain open.
+
 ## First implementation
 
 - [x] Independent source-channel sample peak and RMS readings in the preview meter.

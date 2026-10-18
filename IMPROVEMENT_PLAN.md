@@ -20,6 +20,23 @@ and 1,443 unit tests pass with zero failures and one intentional benchmark skip
 silence and stereo phase (`/private/tmp/amc-regrouping-final-ui.xcresult`). See [method and evidence](docs/AUDIO-METERING-PLAN.md).
 No source measurement algorithms, dependencies, bundled binaries or licenses changed.
 
+## Release analysis qualification — 2026-10-18
+
+Owner: Codex. The arm64 optimized test build succeeds using a command-line
+`ENABLE_TESTABILITY=YES` override. All 185 analysis, report, audio routing,
+playback and bookmark checks pass. Static bundle validation passes for 59 Mach-O
+images and 14 packaged license notices after removing injected XCTest payloads
+from a separate copy. No dependencies or repository build settings changed.
+
+The full Release suite is not green: four MCP helper fixture tests produce nine
+failed assertions/errors because their isolated-port override is Debug-only.
+Generated native UI fixture import is also Debug-only, so native UI qualification
+remains the passing Debug evidence above. App Sandbox is disabled in both project
+configurations; enforcement, distribution signing, physical synchronization and
+device/thermal qualification remain open. See the
+[exact scope and results](docs/AUDIO-METERING-PLAN.md#optimized-build-qualification--2026-10-18).
+Localization is being continued separately by the user.
+
 ## Analysis controls and score guidance — 2026-10-18
 
 Owner: Codex. Added 75 catalog entries covering analysis tabs/settings, audio
