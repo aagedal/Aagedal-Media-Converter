@@ -66,6 +66,27 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // filter only runs while requested. Source inspection remains separate.
     @Published private(set) var playbackMeterSample: PlaybackAudioMeterSample?
     @Published private(set) var playbackMeterUnavailable = false
+    private(set) var playbackMeterHasTimestampHistory = false
+    private(set) var playbackMeterHistoryIngestSeconds: Double?
+    private var meterHistoryLastIngestSeconds: Double?
+    // Diagnostic opt-in until the clean dependency package and app clocks are qualified.
+    private let meterUsesHistory: Bool = {
+#if DEBUG
+        ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1"
+#else
+        false
+#endif
+    }()
+    private let meterClockProperty: String = {
+#if DEBUG
+        if ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_CLOCK"] == "audio-pts" { return "audio-pts" }
+#endif
+        return "time-pos"
+    }()
+    private var meterHistory = MPVAudioMeterHistory()
+    private var meterHistoryMisses = 0
+    private var meterHistoryInitialized = false
+    private var meterHistoryRestarts: [Double] = []
     static var supportsPlaybackMeter: Bool {
         (["astats", "ebur128"] as [String]).allSatisfy { name in
             name.withCString { avfilter_get_by_name($0) != nil }
@@ -90,6 +111,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         queue.async { [weak self] in
             guard let self else { return }
             self.meterEnabled = enabled && Self.supportsPlaybackMeter
+            self.meterHistoryRestarts.removeAll()
             self.resetPlaybackMeterLocked()
             self.meterTimer?.cancel()
             self.meterTimer = nil
@@ -107,25 +129,47 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         meterGeneration = (meterGeneration &+ 1) & ((1 << 62) - 1)
         meterGenerationLock.unlock()
         meterStartTime = nil
+        meterHistory.reset(generation: meterGeneration)
+        meterHistoryMisses = 0
+        meterHistoryInitialized = false
+        meterHistoryLastIngestSeconds = nil
         // Keep at most one outstanding query, even across reset/seek.
         if meterRunning, let mpv {
             let args = ["af", "remove", "@" + Self.meterLabel]
             _ = args.withUnsafeCStringArray { mpv_command(mpv, $0) }
         }
         meterRunning = false
-        DispatchQueue.main.async { self.playbackMeterSample = nil }
+        DispatchQueue.main.async {
+            self.playbackMeterSample = nil
+            self.playbackMeterHasTimestampHistory = false
+            self.playbackMeterHistoryIngestSeconds = nil
+        }
     }
 
     private func pollPlaybackMeterLocked() {
         guard meterEnabled, let mpv, meterPending == nil else { return }
+        if meterUsesHistory, meterHistory.needsFilterRestart {
+            let now = ProcessInfo.processInfo.systemUptime
+            meterHistoryRestarts.removeAll { now - $0 > 5 }
+            guard meterHistoryRestarts.count < 3 else {
+                meterEnabled = false
+                resetPlaybackMeterLocked()
+                DispatchQueue.main.async { self.playbackMeterUnavailable = true }
+                return
+            }
+            meterHistoryRestarts.append(now)
+            resetPlaybackMeterLocked()
+        }
         var paused: Int32 = 1
         var eof: Int32 = 1
         guard mpv_get_property(mpv, "pause", MPV_FORMAT_FLAG, &paused) >= 0,
               mpv_get_property(mpv, "eof-reached", MPV_FORMAT_FLAG, &eof) >= 0,
               paused == 0, eof == 0 else { return }
         if !meterRunning {
-            let filter = "@" + Self.meterLabel + ":lavfi=[ebur128=metadata=1:framelog=verbose,"
-                + "astats=metadata=1:reset=1:measure_perchannel=Peak_level+RMS_level:measure_overall=none]"
+            let graph = "ebur128=metadata=1:framelog=verbose,"
+                + "astats=metadata=1:reset=1:measure_perchannel=Peak_level+RMS_level:measure_overall=none"
+            let filter = "@" + Self.meterLabel + (meterUsesHistory
+                ? ":lavfi=graph=[" + graph + "]:amc-meter-history=yes" : ":lavfi=[" + graph + "]")
             let status = ["af", "add", filter].withUnsafeCStringArray { mpv_command(mpv, $0) }
             guard status >= 0 else {
                 meterEnabled = false
@@ -144,33 +188,99 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         guard event.reply_userdata == meterPending else { return }
         meterPending = nil
         guard meterEnabled, meterRunning,
-              event.reply_userdata == (Self.meterRequestMask | meterGeneration),
-              event.error >= 0, let data = event.data else { return }
+              event.reply_userdata == (Self.meterRequestMask | meterGeneration) else { return }
+        guard event.error >= 0, let data = event.data else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
         let property = data.assumingMemoryBound(to: mpv_event_property.self).pointee
-        guard property.format == MPV_FORMAT_NODE, let pointer = property.data else { return }
+        guard property.format == MPV_FORMAT_NODE, let pointer = property.data else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
         // Event-owned nodes must be copied before the next mpv_wait_event.
         let node = pointer.assumingMemoryBound(to: mpv_node.self).pointee
         guard node.format == MPV_FORMAT_NODE_MAP, let list = node.u.list?.pointee,
-              list.num > 0, list.num <= 512, let keys = list.keys, let values = list.values else { return }
+              list.num > 0, list.num <= 512, let keys = list.keys, let values = list.values else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
         var metadata: [String: String] = [:]
+        var copiedBytes = 0
         for index in 0..<Int(list.num) {
             guard let key = keys[index], values[index].format == MPV_FORMAT_STRING,
                   let value = values[index].u.string else { continue }
+            let keyBytes = strnlen(key, 4097)
+            let valueBytes = strnlen(value, 3 * 1024 * 1024 + 1)
+            copiedBytes += keyBytes + valueBytes
+            guard keyBytes <= 4096, copiedBytes <= 3 * 1024 * 1024 else {
+                missingPlaybackMeterHistoryLocked()
+                return
+            }
             metadata[String(cString: key)] = String(cString: value)
         }
         var time: Double = 0
-        guard let mpv, mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &time) >= 0,
-              time.isFinite else { return }
-        if meterStartTime == nil { meterStartTime = time }
-        let sample = MPVAudioMeterMetadata.sample(metadata, seconds: time,
-                                                 history: max(0, time - (meterStartTime ?? time)))
-        let generation = meterGeneration
+        guard let mpv, mpv_get_property(mpv, meterUsesHistory ? meterClockProperty : "time-pos", MPV_FORMAT_DOUBLE, &time) >= 0,
+              time.isFinite else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
+        let sample: PlaybackAudioMeterSample?
+        if meterUsesHistory {
+            guard let json = metadata["amc-meter-history-v1"] else {
+                missingPlaybackMeterHistoryLocked()
+                return
+            }
+            let ingestStarted = ProcessInfo.processInfo.systemUptime
+            let outcome = meterHistory.ingest(json: json, generation: meterGeneration)
+            meterHistoryLastIngestSeconds = ProcessInfo.processInfo.systemUptime - ingestStarted
+            if outcome.accepted, meterHistory.bufferedFrameCount > 0 {
+                meterHistoryMisses = 0
+                meterHistoryInitialized = true
+            } else if outcome.accepted {
+                missingPlaybackMeterHistoryLocked()
+            }
+            sample = meterHistory.sample(at: time, generation: meterGeneration)
+        } else {
+            if meterStartTime == nil { meterStartTime = time }
+            sample = MPVAudioMeterMetadata.sample(metadata, seconds: time,
+                history: max(0, time - (meterStartTime ?? time)))
+        }
+        publishPlaybackMeterSampleLocked(sample, generation: meterGeneration)
+    }
+
+    private func missingPlaybackMeterHistoryLocked() {
+        guard meterUsesHistory else { return }
+        publishPlaybackMeterSampleLocked(nil, generation: meterGeneration)
+        // Delayed tracks may not emit audio for many seconds. Initial absence is
+        // unavailable, but must not repeatedly recreate a graph before audio starts.
+        meterHistoryMisses = min(10, meterHistoryMisses + 1)
+        if meterHistoryInitialized {
+            meterHistory.markUnavailable(generation: meterGeneration)
+        } else if meterHistoryMisses >= 10 {
+            let generation = meterGeneration
+            DispatchQueue.main.async {
+                self.meterGenerationLock.lock()
+                let current = self.meterGeneration == generation
+                self.meterGenerationLock.unlock()
+                if current, self.meterRequested { self.playbackMeterUnavailable = true }
+            }
+        }
+    }
+
+    private func publishPlaybackMeterSampleLocked(_ sample: PlaybackAudioMeterSample?, generation: UInt64) {
+        let ingestSeconds = meterHistoryLastIngestSeconds
         DispatchQueue.main.async {
             self.meterGenerationLock.lock()
             let current = self.meterGeneration == generation
             self.meterGenerationLock.unlock()
             if current, self.meterRequested, self.isPlaying, self.isFileLoaded,
-               !self.reachedEnd, self.error == nil { self.playbackMeterSample = sample }
+               !self.reachedEnd, self.error == nil {
+                self.playbackMeterSample = sample
+                self.playbackMeterHasTimestampHistory = self.meterUsesHistory && sample != nil
+                self.playbackMeterHistoryIngestSeconds = ingestSeconds
+                if self.playbackMeterHasTimestampHistory { self.playbackMeterUnavailable = false }
+            }
         }
     }
 

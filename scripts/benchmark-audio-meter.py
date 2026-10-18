@@ -7,6 +7,7 @@ physical speaker latency, thermal behavior, or SwiftUI rendering cost.
 """
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -34,11 +35,18 @@ def summarize(runs):
                                     "delaySeconds": reading["playhead"] - 2 * epoch})
             previous = epoch
         delays = [entry["delaySeconds"] for entry in transitions]
+        ingest = sorted(item["historyIngestSeconds"] for item in run["readings"]
+                        if isinstance(item.get("historyIngestSeconds"), (int, float))
+                        and math.isfinite(item["historyIngestSeconds"]) and item["historyIngestSeconds"] >= 0)
         result.append({key: value for key, value in run.items() if key != "readings"} | {
             "cpuPercentOfOneCore": 100 * (run["hostCPUSeconds"] + run["childCPUSeconds"]) / run["wallSeconds"],
             "readingCount": sum(item.get("peak") is not None for item in run["readings"]),
             "transitions": transitions,
             "medianTransitionDelaySeconds": statistics.median(delays) if delays else None,
+            "historyIngestCount": len(ingest),
+            "medianHistoryIngestSeconds": statistics.median(ingest) if ingest else None,
+            "p95HistoryIngestSeconds": ingest[math.ceil(0.95 * len(ingest)) - 1] if ingest else None,
+            "maxHistoryIngestSeconds": max(ingest) if ingest else None,
         })
     return result
 
@@ -50,6 +58,7 @@ def main():
     parser.add_argument("--packages", type=Path)
     parser.add_argument("--rounds", type=int, choices=range(1, 6), default=3)
     parser.add_argument("--without-building", action="store_true")
+    parser.add_argument("--modes", nargs="+", choices=["off", "source", "playback"], default=["off", "source", "playback"])
     args = parser.parse_args()
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -65,7 +74,8 @@ def main():
         command += ["-clonedSourcePackagesDirPath", str(args.packages.resolve()),
                     "-disableAutomaticPackageResolution"]
     environment = os.environ | {"TEST_RUNNER_AMC_AUDIO_METER_BENCHMARK": "1",
-                                "TEST_RUNNER_AMC_AUDIO_METER_BENCHMARK_ROUNDS": str(args.rounds)}
+                                "TEST_RUNNER_AMC_AUDIO_METER_BENCHMARK_ROUNDS": str(args.rounds),
+                                "TEST_RUNNER_AMC_AUDIO_METER_BENCHMARK_MODES": ",".join(args.modes)}
     with (output / "xcodebuild.log").open("w") as log:
         subprocess.run(command, cwd=ROOT, env=environment, stdout=log,
                        stderr=subprocess.STDOUT, check=True, timeout=900 + args.rounds * 150)
@@ -82,7 +92,7 @@ def main():
             continue
         if isinstance(value, list) and value and isinstance(value[0], dict) and "hostCPUSeconds" in value[0]:
             runs.extend(value)
-    expected = args.rounds * 2 * 3
+    expected = args.rounds * 2 * len(args.modes)
     if len(runs) != expected:
         raise RuntimeError(f"Expected {expected} benchmark runs; found {len(runs)}. Inspect {output / 'xcodebuild.log'}")
     summaries = summarize(runs)

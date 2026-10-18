@@ -32,6 +32,16 @@ class AudioMeterBenchmarkReportTests(unittest.TestCase):
         self.assertAlmostEqual(report["transitions"][1]["delaySeconds"], 0.1)
         self.assertAlmostEqual(report["medianTransitionDelaySeconds"], -0.1)
 
+    def test_history_ingest_latency_uses_finite_observations_and_nearest_rank_percentile(self):
+        readings = [{"playhead": index, "historyIngestSeconds": index / 1000} for index in range(1, 21)]
+        readings += [{"playhead": 30, "historyIngestSeconds": float("nan")},
+                     {"playhead": 31, "historyIngestSeconds": -1}, {"playhead": 32}]
+        report = BENCHMARK.summarize([self.run_sample(readings)])[0]
+        self.assertEqual(report["historyIngestCount"], 20)
+        self.assertAlmostEqual(report["medianHistoryIngestSeconds"], 0.0105)
+        self.assertAlmostEqual(report["p95HistoryIngestSeconds"], 0.019)
+        self.assertAlmostEqual(report["maxHistoryIngestSeconds"], 0.020)
+
     def test_initial_value_missing_and_mixed_frames_are_not_edges(self):
         readings = [{"playhead": 0.1}, {"playhead": 2.2, "peak": -7.5},
                     {"playhead": 2.3, "peak": None}, {"playhead": 3.9, "peak": -8.25},

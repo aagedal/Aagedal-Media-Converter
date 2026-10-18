@@ -1,0 +1,16 @@
+{
+  "purpose": "isolated diagnostic app integration; not a distributable package",
+  "source_packages": "/private/tmp/amc-truepeak-build/SourcePackages",
+  "staged_packages": "/private/tmp/amc-history-app-packages",
+  "original_library_sha256": "9855abc54747df89df16e604f316e7ca17bd7e7c5ba72458d6f89a1c9d139301",
+  "candidate_library_sha256": "b7982a34df197dd1bf97796220e2fc58956717190be54dea764f593566ec2b06",
+  "architectures": [
+    "arm64",
+    "x86_64"
+  ],
+  "original_unchanged": true,
+  "build_records": [
+    "/private/tmp/amc-meter-app-verified-arm64/build.json",
+    "/private/tmp/amc-meter-app-verified-x86_64/build.json"
+  ]
+}

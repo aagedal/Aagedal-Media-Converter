@@ -8,6 +8,9 @@ final class AudioMeterBenchmarkTests: XCTestCase {
     private struct Reading: Codable {
         let playhead: Double
         let peak: Double?
+        let measuredSeconds: Double?
+        let timestampHistory: Bool
+        let historyIngestSeconds: Double?
     }
 
     private struct Run: Codable {
@@ -15,6 +18,7 @@ final class AudioMeterBenchmarkTests: XCTestCase {
         let round: Int
         let mode: String
         let audioOutput: String
+        let clock: String
         let wallSeconds: Double
         let hostCPUSeconds: Double
         let childCPUSeconds: Double
@@ -27,6 +31,12 @@ final class AudioMeterBenchmarkTests: XCTestCase {
         let environment = ProcessInfo.processInfo.environment
         guard environment["AMC_AUDIO_METER_BENCHMARK"] == "1" else {
             throw XCTSkip("Run scripts/benchmark-audio-meter.py to collect CPU and signal-transition evidence")
+        }
+        let modes = (environment["AMC_AUDIO_METER_BENCHMARK_MODES"] ?? "off,source,playback").components(separatedBy: ",")
+        guard !modes.isEmpty, Set(modes).count == modes.count,
+              Set(modes).isSubset(of: Set(["off", "source", "playback"])) else {
+            XCTFail("Benchmark modes must be a nonempty unique selection of off, source and playback")
+            return
         }
         let rounds = min(5, max(1, Int(environment["AMC_AUDIO_METER_BENCHMARK_ROUNDS"] ?? "") ?? 3))
         let directory = FileManager.default.temporaryDirectory
@@ -53,7 +63,6 @@ final class AudioMeterBenchmarkTests: XCTestCase {
             XCTAssertTrue(generated.succeeded, generated.standardErrorText)
             guard generated.succeeded else { return }
             for round in 0..<rounds {
-                let modes = ["off", "source", "playback"]
                 // Rotate order so decoder/filesystem warm-up does not always favor
                 // the same mode. Each Source run still owns a fresh window cache.
                 for offset in 0..<modes.count {
@@ -85,7 +94,6 @@ final class AudioMeterBenchmarkTests: XCTestCase {
         }
         XCTAssertTrue(player.isFileLoaded)
         XCTAssertNil(player.error)
-        let output = player.currentAudioOutput ?? "unknown"
         let cache = PlaybackAudioMeterCache()
         var chunk: PlaybackAudioMeterChunk?
         var window = -1
@@ -111,19 +119,30 @@ final class AudioMeterBenchmarkTests: XCTestCase {
                 }
             }
             let sample = mode == "source" ? chunk?.sample(at: player.timePos) : player.playbackMeterSample
-            readings.append(Reading(playhead: player.timePos, peak: sample?.peaks.first.flatMap { $0 }))
+            readings.append(Reading(playhead: player.timePos, peak: sample?.peaks.first.flatMap { $0 },
+                measuredSeconds: sample?.seconds, timestampHistory: mode == "playback" && player.playbackMeterHasTimestampHistory,
+                historyIngestSeconds: mode == "playback" ? player.playbackMeterHistoryIngestSeconds : nil))
             try await Task.sleep(for: .milliseconds(100))
         }
         let wall = ProcessInfo.processInfo.systemUptime - start
         let host = try cpuSeconds(children: false) - hostStart
         let child = try cpuSeconds(children: true) - childStart
+        let output = player.currentAudioOutput ?? "unknown"
+        XCTAssertNotEqual(output, "unknown", "Capture the backend after playback actually initializes it")
         XCTAssertNil(player.error)
         XCTAssertTrue(player.isPlaying)
         XCTAssertGreaterThan(player.timePos, 15, "A stalled output cannot produce a comparable run")
         if mode != "off" {
             XCTAssertGreaterThan(readings.compactMap(\.peak).count, 100, "Meter must produce actual readings")
         }
-        return Run(fixture: name, round: round, mode: mode, audioOutput: output, wallSeconds: wall,
+        if mode == "playback", ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" {
+            XCTAssertGreaterThan(readings.filter(\.timestampHistory).count, 100, "Diagnostic run must use actual timestamp history")
+            let measured = readings.filter { $0.timestampHistory && $0.measuredSeconds != nil }
+            XCTAssertGreaterThan(measured.filter { abs($0.playhead - ($0.measuredSeconds ?? $0.playhead)) > 0.000001 }.count, 80,
+                "Measured frame ends must not be replaced with receipt-time playhead labels")
+        }
+        return Run(fixture: name, round: round, mode: mode, audioOutput: output,
+                   clock: mode == "playback" ? (ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_CLOCK"] ?? "time-pos") : "time-pos", wallSeconds: wall,
                    hostCPUSeconds: host, childCPUSeconds: child, sourceWindows: windows, readings: readings)
     }
 

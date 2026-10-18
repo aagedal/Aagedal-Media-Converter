@@ -1,5 +1,86 @@
 # Playback meter lifecycle observations — 2026-10-18
 
+## App history consumer continuation
+
+The application now has a bounded Swift consumer for `amc-meter-history-v1` and
+an isolated Debug integration path. It preserves measured frame ends, buffers
+future readings until the explicitly selected clock reaches them, rejects stale
+generations and changed identities, and requests filter recreation after lost or
+discontinuous history. Loudness readiness counts contiguous decoded samples at
+their nominal sample rate; media timestamp spans can scale with frame speed and are not the LUFS
+window clock. Half-speed/double-speed frame regressions cover this distinction;
+unknown continuity suppresses LUFS until a fresh filter instance. Missing history
+after initialization invalidates immediately. Startup absence remains unavailable
+without repeatedly restarting a graph before a delayed track emits audio.
+
+The path is enabled only in Debug with `AMC_PLAYBACK_METER_HISTORY=1` and requires
+a history-capable diagnostic library. `AMC_PLAYBACK_METER_CLOCK` selects `time-pos`
+(default) or `audio-pts` for qualification. The production package pin, bundled
+binaries and Source-default behavior are unchanged. These switches do not expose
+an end-user preference or establish production readiness.
+
+Consumer validation covers malformed bounds/types, immutable repeated records,
+actual receive gaps versus harmless ring eviction, clock rewind, player/filter
+identity changes, future-frame gating, measured loudness history, and replay of
+retained AAC/lossless lifecycle captures. A native player regression additionally
+uses video with audio delayed twelve seconds: no future audio is published and
+video-only elapsed time does not warm up the loudness readings. All 46 integrated
+consumer/player checks pass with the byte-data cache and sample-count readiness
+gate in `/private/tmp/amc-history-sample-domain-integrated.xcresult`. The final normal-package
+Debug build and all 1,462 unit tests pass after the readiness correction, with
+zero failures and two intentional diagnostic skips
+(`/private/tmp/amc-history-sample-domain-normal-unit.xcresult`). The skipped
+cases require explicit performance/history opt-in. Four benchmark-report tests
+and the portable C history test also pass.
+
+The renderer workload uses the app's `MPVPlayer` and `MPVMetalLayer` with muted
+output. It has no visible SwiftUI window, so it qualifies app-player software
+clock behavior only. Known level changes every two seconds supply independent
+signal edges. Raw readings include actual measured ends, playhead, history-path
+confirmation, sampled ingest duration and the backend queried after playback
+initialization. CPU includes host plus reaped child CPU, expressed as one-core
+percentage. Ingest duration excludes event-queue waiting and SwiftUI rendering.
+The retained workload hashes precede the final sample-count loudness gate
+correction; its frame-speed-one inputs are unchanged by that correction. Final
+functional validation separately covers scaled frame speeds.
+
+A matched single-round workload observes the following `time-pos` results. CPU
+is host plus child CPU over approximately 17 seconds; this is not a statistical
+performance or thermal qualification.
+
+| Fixture / actual output | Before parsed cache | Final byte-data cache | Ingest P95 | Median edge delay |
+| --- | ---: | ---: | ---: | ---: |
+| Stereo AAC + video / AVFoundation | 2.345 CPU s | 0.612 CPU s | 1.72 ms | 0.167 s |
+| 5.1 FLAC audio / CoreAudio | 1.846 CPU s | 0.986 CPU s | 2.60 ms | 0.183 s |
+
+The runs retain seven/eight measured edges respectively. Cached parsed records
+are bounded to 128 and reused only after byte-exact identity checks. Each incoming
+raw record is converted once to owned UTF-8 `Data`; direct byte equality avoids
+Unicode-equivalence loopholes and repeated string-buffer conversion. An
+intermediate generic/string-buffer strategy had mixed or worse CPU results and
+was replaced; its raw observations remain available. Ingest timing measures only
+the operation itself, not queue waiting or display latency. An exploratory
+`audio-pts` AAC run queried the output too early; its backend is explicitly
+unconfirmed and it cannot qualify that backend/clock combination. The final
+repeat confirms AVFoundation/CoreAudio and records median edge delays of
+0.208/0.188 seconds. These differ from `time-pos` by less than the 100 ms polling
+granularity, so this single comparison does not establish a superior physical
+clock. `time-pos` remains the diagnostic default.
+
+Fresh diagnostic builds now record library and object hashes as well as probe
+hashes. The isolated app cache is an independent copy; its universal static
+library matches both fresh architecture builds and the normal cache's original
+library remains unchanged. [Build, staging and benchmark evidence](provenance/audio-meter-lifecycle-2026-10-18/app-consumer/)
+is retained separately from the earlier dependency-only experiment.
+
+Remaining work includes visible renderer/output qualification, startup coverage
+(the first AAC benchmark reading begins about 2.2 seconds into playback), speed/
+seek/reinsertion continuity, clean universal dependency packaging, app Release
+performance and physical synchronization. Diagnostic archive-member replacements
+are not distributable artifacts.
+
+## Original isolated lifecycle experiment
+
 This continues the [isolated AAC startup correction](audio-playback-aac-startup-validation-2026-10-17.md).
 The experimental probe now records explicit API acceptance, ordered MPV events,
 queried source/player state and history identity across lifecycle transitions.

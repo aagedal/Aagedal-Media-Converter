@@ -2,6 +2,36 @@
 
 Last reviewed: 2026-10-18
 
+## Playback history app consumer — 2026-10-18
+
+Owner: Codex. Added a bounded, byte-identity-validated Swift history consumer and
+Debug-only app-player integration. Future decoder frames wait for the selected
+clock to reach their measured ends; received gaps/discontinuities suppress LUFS
+and request a fresh filter instance. Initialization handles delayed tracks without
+recreating a graph before audio exists. Production dependencies, Source-default
+behavior, translations and bundled binaries are unchanged.
+
+All 46 integrated consumer/player checks pass, including nominal-sample loudness
+readiness at half/double frame speed, retained AAC/lossless capture replay, canonical-Unicode byte-identity rejection, lifecycle resets and
+video with audio delayed twelve seconds. A matched generated-signal workload
+retains seven AAC/AVFoundation and eight FLAC/CoreAudio transitions. With the
+final byte-data cache, sampled ingest P95 is 1.72/2.60 ms respectively; host plus
+child CPU is 0.612/0.986 seconds over 17 seconds, versus 2.345/1.846 before parsed
+record caching. These are individual Debug runs, not thermal or Release claims.
+Software edge delay remains about 0.17–0.18 seconds rather than the earlier
+seconds-ahead decoder labels. The final alternate-clock run confirms both
+outputs and about 0.19–0.21-second software edge delay. The final normal-package Debug build and all 1,462 unit tests pass with zero
+failures and two intentional diagnostic skips
+(`/private/tmp/amc-history-sample-domain-normal-unit.xcresult`). Four benchmark-
+report tests and the portable C history test also pass. See [method, scope and retained evidence](docs/audio-playback-lifecycle-validation-2026-10-18.md#app-history-consumer-continuation).
+
+The harness uses the actual player and Metal layer without a visible SwiftUI
+window. Visible renderer timing, complete startup/seek/speed/loudness continuity,
+clean universal dependency packaging, Release/device performance and physical
+synchronization remain open. A clean MPV-only source rebuild has been staged in
+`/private/tmp/amc-mpv-history-clean-20261018`, with original dependency inputs
+read-only. It has not yet been built or installed. The completion goal stays active.
+
 ## Quality-analysis input ownership — 2026-10-18
 
 Owner: Codex. Quality runs now acquire their own source/output scopes before file

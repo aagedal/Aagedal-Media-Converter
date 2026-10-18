@@ -1,5 +1,18 @@
 # Audio metering and analysis
 
+## Measured playback-history consumer — 2026-10-18
+
+The [app-consumer continuation](audio-playback-lifecycle-validation-2026-10-18.md#app-history-consumer-continuation)
+implements bounded frame-history parsing, immutable identity validation, future
+buffering and continuity-based loudness gates. All 46 isolated app-player checks
+pass, including a twelve-second audio delay. Debug-only switches select history
+transport and candidate `time-pos`/`audio-pts` clocks; the production pin and
+Source-default mode are unchanged. Matched signal-edge and CPU evidence is
+retained with the method, including the measured improvement from parsed-frame
+byte caching. This is app-player software-clock qualification, without a visible
+SwiftUI window or physical output measurements. Full renderer, startup/lifecycle,
+clean dependency packaging and Release/device qualification remain open.
+
 ## Paused grouped-preview refresh — 2026-10-18
 
 A native decoded-pixel regression reproduces the previously documented MPEG-4

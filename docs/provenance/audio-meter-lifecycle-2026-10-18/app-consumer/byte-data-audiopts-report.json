@@ -1,0 +1,125 @@
+{
+  "clock": "audio-pts",
+  "cache_strategy": "owned UTF-8 Data",
+  "configuration": "isolated diagnostic Debug app; muted actual audio output; backend confirmed after playback",
+  "consumer_sha256": "75d2d87d408e75a64a1f196b91eb9a91dbf803b4a7eeee727458ba563c842044",
+  "result_bundle": "/private/tmp/amc-history-app-data-audiopts.xcresult",
+  "runs": [
+    {
+      "fixture": "stereo-aac-video",
+      "clock": "audio-pts",
+      "audioOutput": "avfoundation",
+      "round": 1,
+      "sourceWindows": 0,
+      "childCPUSeconds": 0,
+      "wallSeconds": 17.07637441670522,
+      "hostCPUSeconds": 1.012619,
+      "mode": "playback",
+      "cpuPercentOfOneCore": 5.929941422515251,
+      "readingCount": 126,
+      "transitions": [
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.208,
+          "delaySeconds": 0.20800000000000018
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.207999999999999,
+          "delaySeconds": 0.2079999999999993
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.208,
+          "delaySeconds": 0.20800000000000018
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.208,
+          "delaySeconds": 0.20800000000000018
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.208,
+          "delaySeconds": 0.2079999999999984
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.20800000000000018,
+      "historyIngestCount": 162,
+      "medianHistoryIngestSeconds": 0.0012833749642595649,
+      "p95HistoryIngestSeconds": 0.0023117500822991133,
+      "maxHistoryIngestSeconds": 0.0026440833462402225
+    },
+    {
+      "fixture": "surround-flac-audio",
+      "clock": "audio-pts",
+      "audioOutput": "coreaudio",
+      "round": 1,
+      "sourceWindows": 0,
+      "childCPUSeconds": 0,
+      "wallSeconds": 17.100454666651785,
+      "hostCPUSeconds": 0.8849019999999999,
+      "mode": "playback",
+      "cpuPercentOfOneCore": 5.174727907823874,
+      "readingCount": 160,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.194110043333333,
+          "delaySeconds": 0.19411004333333315
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.186337460333333,
+          "delaySeconds": 0.1863374603333332
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.1694568343333325,
+          "delaySeconds": 0.16945683433333247
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.231445625666666,
+          "delaySeconds": 0.23144562566666593
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.169769918333332,
+          "delaySeconds": 0.16976991833333166
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.135461001666666,
+          "delaySeconds": 0.1354610016666662
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.226122918333333,
+          "delaySeconds": 0.2261229183333331
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.188791458999997,
+          "delaySeconds": 0.18879145899999727
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.18756445966666524,
+      "historyIngestCount": 163,
+      "medianHistoryIngestSeconds": 0.0011218333384022117,
+      "p95HistoryIngestSeconds": 0.0024472082732245326,
+      "maxHistoryIngestSeconds": 0.0026837916811928153
+    }
+  ],
+  "physical_alignment_qualified": false
+}
