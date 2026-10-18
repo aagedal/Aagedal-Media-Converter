@@ -79,6 +79,38 @@ seek/reinsertion continuity, clean universal dependency packaging, app Release
 performance and physical synchronization. Diagnostic archive-member replacements
 are not distributable artifacts.
 
+## Clean universal build continuation
+
+The clean MPV-only build in `/private/tmp/amc-mpv-history-clean-20261018`
+finished successfully. It exports the exact upstream commit rather than copying
+the dirty source cache, applies the five qualified MPVKit patches followed by
+the history/priming patches, and compiles all 219 units for each architecture.
+The static audit confirms arm64/x86_64 slices, unchanged 58-symbol public MPV
+APIs, ZIP integrity and matching framework/thin archive payloads. The XCFramework
+ZIP SHA-256 is `c044a49c961d7dde509deb5f72369dbefe4538f4481f9e65d9e52541f6a6bcac`.
+Only the isolated test cache receives this library; no production pin changes.
+
+`scripts/rebuild-mpv-meter-history.py` makes that staging procedure repeatable:
+
+```sh
+python3 scripts/rebuild-mpv-meter-history.py \
+  --recipe-root /path/to/qualified/MPVKit-recipe \
+  --source-cache /path/to/mpv-source-git-cache \
+  --output /private/tmp/new-mpv-history-build --jobs 4 --build
+```
+
+The output must be new and outside all input trees. Source, recipe, build output,
+temporary directories and module cache are owned copies; only installed dependency
+outputs are linked as inputs. The builder removes the FFmpeg build invocation and
+records all input patch, source, recipe, tool, archive, header and pkg-config hashes.
+Six tests cover dirty Git exports, write isolation, rejected inputs and failed
+build records. A real staging-only run also passes: all 834 staged source files
+match the already built source tree, and 1,644 dependency input files are hashed.
+That run did not invoke another build. Its compressed staging record and the
+[static build audit](provenance/audio-meter-lifecycle-2026-10-18/app-consumer/clean-rebuild-audit.json)
+retain the distinction. Runtime tests against the clean library, corresponding
+source packaging, signing and release qualification remain separate requirements.
+
 ## Original isolated lifecycle experiment
 
 This continues the [isolated AAC startup correction](audio-playback-aac-startup-validation-2026-10-17.md).

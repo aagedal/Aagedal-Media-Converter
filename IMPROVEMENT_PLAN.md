@@ -28,9 +28,16 @@ report tests and the portable C history test also pass. See [method, scope and r
 The harness uses the actual player and Metal layer without a visible SwiftUI
 window. Visible renderer timing, complete startup/seek/speed/loudness continuity,
 clean universal dependency packaging, Release/device performance and physical
-synchronization remain open. A clean MPV-only source rebuild has been staged in
-`/private/tmp/amc-mpv-history-clean-20261018`, with original dependency inputs
-read-only. It has not yet been built or installed. The completion goal stays active.
+synchronization remain open. A clean MPV-only source rebuild completed in
+`/private/tmp/amc-mpv-history-clean-20261018`, using the existing dependency inputs.
+Both architectures compiled all 219 translation units. Static checks confirm the
+same 58 public MPV symbols per architecture, valid archive paths and matching
+XCFramework/static archive payloads. The library is installed only in an isolated
+test cache; the production pin is unchanged. The reproducible builder records
+source, patch, recipe, tool and dependency hashes. Native timing qualification is
+in progress; source closure, runtime and distribution checks remain open. See
+[retained static audit](docs/provenance/audio-meter-lifecycle-2026-10-18/app-consumer/clean-rebuild-audit.json).
+The completion goal stays active.
 
 ## Quality-analysis input ownership — 2026-10-18
 
