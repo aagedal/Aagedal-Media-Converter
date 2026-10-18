@@ -6,6 +6,8 @@
 //
 
 import XCTest
+import AppKit
+import PDFKit
 
 final class Aagedal_Media_Converter_UITests: XCTestCase {
 
@@ -1423,6 +1425,159 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         }
     }
 
+    /// Drives the normal SwiftUI preview sheet and records the readings that
+    /// actually pass its display gate, against independently authored AAC edges.
+    @MainActor
+    func testMPVPlaybackMeterHistoryTimingInNativePreview() throws {
+        for clock in ["time-pos", "audio-pts"] {
+            launchApp(generatedFixture: true, realtimeInput: true,
+                      extraLaunchEnvironment: ["AMC_UI_TEST_METER_TIMING": "1",
+                                               "AMC_UI_TEST_METER_TRACE": "1",
+                                               "AMC_PLAYBACK_METER_HISTORY": "1",
+                                               "AMC_PLAYBACK_METER_CLOCK": clock], previewContainer: "mkv")
+            defer { terminateAndCleanFixtures() }
+            let queueItem = element("queue.item")
+            XCTAssertTrue(queueItem.waitForExistence(timeout: 30))
+            app.activate()
+            queueItem.rightClick()
+            app.menuItems["Preview / Trim"].click()
+            XCTAssertTrue(waitForValue("MPV ready", of: element("preview.media"), timeout: 30))
+            element("trim.audioMeter").click()
+            let mode = element("preview.audioMeter.mode")
+            XCTAssertTrue(mode.waitForExistence(timeout: 5))
+            mode.radioButtons["Playback"].click()
+            let trace = element("preview.audioMeter.timingTrace")
+            XCTAssertTrue(trace.waitForExistence(timeout: 5))
+
+            func rows() -> [[String: Any]] {
+                guard let json = trace.value as? String, let data = json.data(using: .utf8) else { return [] }
+                return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+            }
+            func waitForPosition(_ seconds: Double, segment: Int, timeout: TimeInterval) -> Bool {
+                let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let row = rows().last, let position = row["position"] as? Double,
+                          let currentSegment = row["segment"] as? Int else { return false }
+                    return currentSegment >= segment && position >= seconds && row["playing"] as? Bool == true
+                }, object: nil)
+                return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+            }
+            func pauseAndCapture(_ name: String) throws -> [[String: Any]] {
+                app.typeKey("k", modifierFlags: [])
+                let paused = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    guard let row = rows().last else { return false }
+                    return row["playing"] as? Bool == false && row["sampleEnd"] == nil
+                }, object: nil)
+                XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 5), .completed)
+                let json = try XCTUnwrap(trace.value as? String)
+                let attachment = XCTAttachment(data: Data(json.utf8), uniformTypeIdentifier: "public.json")
+                attachment.name = "native-meter-\(clock)-\(name).json"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+                return rows()
+            }
+            func capturePreview(_ name: String) {
+                let attachment = XCTAttachment(screenshot: app.sheets.firstMatch.screenshot())
+                attachment.name = name
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+            func validate(_ observations: [[String: Any]], segment: Int, edges: [Double]) {
+                XCTAssertLessThanOrEqual(observations.count, 300)
+                let playing = observations.filter {
+                    $0["segment"] as? Int == segment && $0["playing"] as? Bool == true
+                        && $0["playbackMode"] as? Bool == true
+                }
+                let measured = playing.filter {
+                    $0["sampleEnd"] is Double && ($0["peaks"] as? [Double])?.count == 2
+                        && ($0["rms"] as? [Double])?.count == 2
+                }
+                XCTAssertGreaterThan(measured.count, 10, "\(clock): too few visible playback measurements")
+                XCTAssertTrue(measured.allSatisfy { $0["timestampHistory"] as? Bool == true }, "\(clock): history was not active")
+                XCTAssertTrue(measured.allSatisfy { $0["unavailable"] as? Bool == false })
+                XCTAssertTrue(measured.contains { !(($0["audioOutput"] as? String) ?? "").isEmpty }, "\(clock): no active audio backend")
+                let future = measured.filter {
+                    ($0["sampleEnd"] as? Double ?? .infinity) > ($0["position"] as? Double ?? 0) + 0.15
+                }
+                XCTAssertTrue(future.isEmpty, "\(clock): measured ends led the visible playhead: \(future.prefix(3))")
+                let independentlyTimed = measured.filter {
+                    abs(($0["sampleEnd"] as? Double ?? 0) - ($0["position"] as? Double ?? 0)) > 0.001
+                }
+                XCTAssertGreaterThan(independentlyTimed.count, 5, "\(clock): measurements appear retimestamped to playhead polls")
+                let steady = measured.filter {
+                    guard let position = $0["position"] as? Double,
+                          let sampleEnd = $0["sampleEnd"] as? Double else { return false }
+                    // AAC may ring across an authored step. Exclude transition
+                    // windows in both presentation and measured-frame time.
+                    return position > 0.4 && [4.0, 7.0, 10.0].allSatisfy {
+                        abs(position - $0) > 0.2 && abs(sampleEnd - $0) > 0.2
+                    }
+                }
+                XCTAssertGreaterThan(steady.count, 5)
+                var incorrect: [String] = []
+                for row in steady {
+                    guard let position = row["position"] as? Double,
+                          let peaks = row["peaks"] as? [Double], peaks.count == 2,
+                          let rms = row["rms"] as? [Double], rms.count == 2 else { continue }
+                    let high = (position >= 4 && position < 7) || position >= 10
+                    let expected = high ? [-7.96, -20.0] : [-32.04, -44.08]
+                    for channel in 0..<2 {
+                        if abs(peaks[channel] - expected[channel]) > 2 || abs(rms[channel] - (expected[channel] - 3.01)) > 2 {
+                            incorrect.append("t=\(position) ch=\(channel) peak=\(peaks[channel]) rms=\(rms[channel])")
+                        }
+                    }
+                }
+                XCTAssertTrue(incorrect.isEmpty, "\(clock): steady AAC levels disagree with independent fixture: \(incorrect.prefix(5))")
+                for edge in edges {
+                    let rising = edge != 7
+                    let crossing = measured.first { row in
+                        guard let position = row["position"] as? Double, position >= edge - 0.5,
+                              let peak = (row["peaks"] as? [Double])?.first else { return false }
+                        return rising ? peak > -15 : peak < -25
+                    }
+                    let position = crossing?["position"] as? Double
+                    XCTAssertNotNil(position, "\(clock): missing edge \(edge)")
+                    if let position {
+                        XCTAssertGreaterThanOrEqual(position, edge, "\(clock): edge \(edge) appeared before its authored time")
+                        XCTAssertLessThanOrEqual(position, edge + 0.45, "\(clock): edge \(edge) arrived late")
+                    }
+                }
+            }
+
+            app.typeKey("l", modifierFlags: [])
+            let advanced = waitForPosition(11.5, segment: 0, timeout: 20)
+            if !advanced {
+                let diagnostic = XCTAttachment(string: "value=\(String(describing: trace.value))\nlabel=\(trace.label)\nrows=\(rows())")
+                diagnostic.name = "Native meter trace progress failure"
+                diagnostic.lifetime = .keepAlways
+                add(diagnostic)
+            }
+            XCTAssertTrue(advanced)
+            capturePreview("Native MPV history \(clock) high after ten-second edge")
+            let first = try pauseAndCapture("initial")
+            validate(first, segment: 0, edges: [4, 7, 10])
+            XCTAssertTrue(first.contains { $0["momentaryLUFS"] is Double }, "\(clock): visible momentary loudness was never measured")
+            XCTAssertTrue(first.contains { $0["shortTermLUFS"] is Double }, "\(clock): visible short-term loudness was never measured")
+
+            element("trim.timecode").click()
+            let input = element("trim.timecodeInput")
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.click()
+            input.typeKey("a", modifierFlags: .command)
+            input.typeText("00:00:03:00")
+            input.typeKey(.return, modifierFlags: [])
+            XCTAssertTrue(waitForValue("00:00:03:00", of: element("trim.timecode"), timeout: 10))
+            app.typeKey("l", modifierFlags: [])
+            XCTAssertTrue(waitForPosition(4.8, segment: 1, timeout: 10))
+            capturePreview("Native MPV history \(clock) after seek and repeated edge")
+            let replay = try pauseAndCapture("seek-replay")
+            validate(replay, segment: 1, edges: [4])
+            let replayEnds = replay.filter { $0["segment"] as? Int == 1 && $0["sampleEnd"] is Double }
+            XCTAssertTrue(replayEnds.allSatisfy { ($0["sampleEnd"] as? Double ?? .infinity) < 5.5 },
+                          "\(clock): old pre-seek samples survived rewind")
+            element("preview.close").click()
+        }
+    }
+
     @MainActor
     private func exercisePreview(container: String, expectedBackend: String) throws {
         launchApp(generatedFixture: true, previewContainer: container)
@@ -1566,22 +1721,148 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
     }
 
     @MainActor
+    func testVideoQualityPDFExportKeepsBothMetricTimelines() throws {
+        try verifyVideoQualityPDFExport(language: "en")
+    }
+
+    @MainActor
+    func testVideoQualityPDFExportUsesNorwegianTimelineLabels() throws {
+        try verifyVideoQualityPDFExport(language: "nb")
+    }
+
+    @MainActor
+    private func verifyVideoQualityPDFExport(language: String) throws {
+        launchApp(generatedFixture: true, language: language, locale: language == "nb" ? "nb_NO" : "en_US",
+                  additionalArguments: ["-analyticsEnabledMetrics", "(psnr, xpsnr)"])
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("toolbar.conversion").click()
+        XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        app.activate()
+        element("queue.analysis").click()
+        let run = element("analysis.video.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForEnabled(true, of: run, timeout: 10))
+        app.activate()
+        run.click()
+        XCTAssertTrue(element("analysis.result.psnr").waitForExistence(timeout: 30))
+        XCTAssertTrue(element("analysis.result.xpsnr").waitForExistence(timeout: 5))
+        let export = element("analysis.video.exportPDF")
+        XCTAssertTrue(export.isHittable)
+        app.activate()
+        export.click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(element("analysis.result.xpsnr").exists, "Cancelling export must preserve the measured report")
+        let url = URL(fileURLWithPath: "/private/tmp/amc-video-quality-\(UUID()).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        app.activate()
+        export.click()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(url.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: url.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        XCTAssertEqual(document.pageCount, 2)
+        for index in 0..<document.pageCount {
+            let page = try XCTUnwrap(document.page(at: index))
+            XCTAssertEqual(page.bounds(for: .mediaBox).size, CGSize(width: 595, height: 842))
+            XCTAssertTrue(try XCTUnwrap(page.string).contains(language == "nb" ? "Kvalitetstidslinje" : "Quality timeline"))
+        }
+        XCTAssertTrue(try XCTUnwrap(document.string).contains("XPSNR = min("))
+        XCTAssertTrue(element("analysis.result.xpsnr").exists, "Saving must preserve the measured report")
+        let sheet = app.sheets.firstMatch
+        XCTAssertTrue(sheet.exists)
+        let attachment = XCTAttachment(screenshot: sheet.screenshot())
+        attachment.name = "Video quality PDF export \(language)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testBundledSSIMULACRA2RunsFromAnalysisOverlay() throws {
-        launchApp(generatedFixture: true, additionalArguments: [
+        try verifyBundledSSIMULACRA2(language: "en")
+    }
+
+    @MainActor
+    func testSSIMULACRAInspectorUsesNorwegianLabels() throws {
+        try verifyBundledSSIMULACRA2(language: "nb")
+    }
+
+    @MainActor
+    private func verifyBundledSSIMULACRA2(language: String) throws {
+        launchApp(generatedFixture: true, language: language, locale: language == "nb" ? "nb_NO" : "en_US", additionalArguments: [
             "-analyticsEnabledMetrics", "(ssimulacra2)", "-ssimulacra2MaxFrames", "5"
         ])
         defer { terminateAndCleanFixtures() }
         XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
         element("toolbar.conversion").click()
         XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
+        app.activate()
         element("queue.analysis").click()
         XCTAssertTrue(element("analysis.ssimulacra2.frames").waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Not installed"].exists)
         XCTAssertTrue(element("analysis.video.run").isEnabled)
+        app.activate()
         element("analysis.video.run").click()
         XCTAssertTrue(element("analysis.result.ssimulacra2").waitForExistence(timeout: 45),
-                      "The signed bundled helper must run in the sandbox without any user installation")
-        attachWindowScreenshot(named: "Bundled SSIMULACRA2 - completed analysis")
+                      "The signed bundled helper must run without any user installation")
+        app.activate()
+        element("analysis.video.inspect").click()
+        XCTAssertTrue(element("analysis.inspection.metric").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts[language == "nb" ? "5 målte bilder" : "5 measured frames"].exists,
+                      "The requested frame density must reach the inspector on a short clip")
+        let play = element("analysis.inspection.play")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "enabled == true"), object: play)], timeout: 20), .completed)
+        app.sliders["analysis.inspection.position"].adjust(toNormalizedSliderPosition: 0.5)
+        let time = element("analysis.inspection.time")
+        let chosen = try XCTUnwrap(time.value as? String)
+        app.radioButtons[language == "nb" ? "Kilde" : "Source"].click()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "enabled == true"), object: play)], timeout: 20), .completed)
+        XCTAssertEqual(time.value as? String, chosen)
+        XCTAssertTrue(element("analysis.inspection.nearest").isHittable)
+        let attachment = XCTAttachment(screenshot: app.sheets.firstMatch.screenshot())
+        attachment.name = "Verified SSIMULACRA2 samples beside source playback \(language)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        element("analysis.inspection.close").click()
+        let url = URL(fileURLWithPath: "/private/tmp/amc-ssim-sampling-native-report-\(language).pdf")
+        try? FileManager.default.removeItem(at: url)
+        app.activate()
+        element("analysis.video.exportPDF").click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(url.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            FileManager.default.fileExists(atPath: url.path)
+        }, object: nil)], timeout: 10), .completed)
+        let document = try XCTUnwrap(PDFDocument(url: url))
+        let text = try XCTUnwrap(document.string).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        XCTAssertTrue(text.contains("decoded video starts"))
+        XCTAssertTrue(text.contains("output timebase rounding tolerance"))
     }
 
     @MainActor
@@ -1818,6 +2099,67 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(try XCTUnwrap(interval["peakDBTP"] as? Double), -6)
         XCTAssertEqual(try XCTUnwrap(interval["start"] as? Double), 1, accuracy: 0.2)
         XCTAssertEqual(try XCTUnwrap(interval["end"] as? Double), 2, accuracy: 0.2)
+    }
+
+    @MainActor
+    func testAudioRegroupingPreservesPausedVideoPixels() throws {
+        launchApp(generatedFixture: true, additionalArguments: ["-AMC_UI_TEST_GROUPED_PEAKS", "YES"], previewContainer: "mkv")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Audio"].click()
+        let open = element("analysis.audio.peaks")
+        XCTAssertTrue(open.waitForExistence(timeout: 15))
+        open.click()
+        let play = element("analysis.peaks.play")
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForEnabled(true, of: play, timeout: 20))
+        let slider = app.sliders["analysis.peaks.position"]
+        XCTAssertTrue(slider.exists)
+        slider.adjust(toNormalizedSliderPosition: 0.3)
+        let time = element("analysis.peaks.time")
+        let moved = NSPredicate { _, _ in
+            let text = (time.value as? String) ?? time.label
+            return (Double(text.replacingOccurrences(of: " s", with: "")) ?? 0) > 1
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: moved, object: time)], timeout: 5), .completed)
+        let video = element("analysis.peaks.video")
+        XCTAssertTrue(video.exists)
+        let baseline = video.screenshot()
+        let baselinePixels = try previewPixels(baseline)
+        let kind = element("analysis.peaks.kind")
+        for (index, title) in ["Mono pair", "5.1 multi-mono", "Audio track", "Mono pair"].enumerated() {
+            kind.click()
+            app.menuItems[title].click()
+            XCTAssertTrue(waitForEnabled(true, of: play, timeout: 20))
+            XCTAssertEqual(play.label, "Play", "Changing the audition program must leave the preview paused")
+            let regrouped = video.screenshot()
+            let pixels = try previewPixels(regrouped)
+            let difference = zip(baselinePixels, pixels).enumerated().reduce(0.0) { total, pair in
+                pair.offset % 4 == 3 ? total : total + abs(Double(pair.element.0) - Double(pair.element.1))
+            } / Double(64 * 36 * 3 * 255)
+            for (name, screenshot) in [("baseline", baseline), ("regrouped", regrouped)] {
+                let attachment = XCTAttachment(screenshot: screenshot)
+                attachment.name = "Paused video \(index) \(title) \(name) error=\(difference)"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+            XCTAssertLessThan(difference, 0.04, "Audio regrouping changed the paused decoded image without a video seek")
+        }
+    }
+
+    private func previewPixels(_ screenshot: XCUIScreenshot) throws -> [UInt8] {
+        let image = try XCTUnwrap(screenshot.image.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        var pixels = [UInt8](repeating: 0, count: 64 * 36 * 4)
+        try pixels.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: 64, height: 36,
+                bitsPerComponent: 8, bytesPerRow: 64 * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.interpolationQuality = .medium
+            context.draw(image, in: CGRect(x: 0, y: 0, width: 64, height: 36))
+        }
+        return pixels
     }
 
     @MainActor
@@ -2371,6 +2713,41 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(element("analysis.video.run").exists)
         app.radioButtons["Audio"].click()
         XCTAssertTrue(element("analysis.audio.report").exists, "Switching tabs must preserve completed loudness reports")
+        let export = element("analysis.audio.exportJSON")
+        XCTAssertTrue(export.isEnabled)
+        export.click()
+        let name = app.textFields["saveAsNameTextField"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(export.isEnabled, "Cancelling a save must preserve the completed report")
+        let reportURL = URL(fileURLWithPath: "/private/tmp/amc-loudness-export-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: reportURL) }
+        export.click()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.click()
+        name.typeKey("a", modifierFlags: .command)
+        name.typeText(reportURL.lastPathComponent)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        let folder = app.textFields["PathTextField"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.typeKey("a", modifierFlags: .command)
+        folder.typeText("/private/tmp")
+        app.typeKey(.return, modifierFlags: [])
+        app.dialogs["save-panel"].buttons["Save"].click()
+        let written = NSPredicate { _, _ in FileManager.default.fileExists(atPath: reportURL.path) }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: written, object: nil)], timeout: 10), .completed)
+        let report = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: reportURL)) as? [String: Any])
+        XCTAssertEqual(report["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(report["analysis"] as? String, "whole_program_loudness")
+        let measured = try XCTUnwrap((report["results"] as? [[String: Any]])?.first)
+        XCTAssertEqual((measured["presentation"] as? [String: Any])?["audioRelativeTrackIndices"] as? [Int], [0])
+        XCTAssertFalse(try XCTUnwrap(measured["samples"] as? [Any]).isEmpty)
+        attachWindowScreenshot(named: "Loudness report with JSON and PDF export")
+        element("analysis.audio.add").click()
+        XCTAssertFalse(element("analysis.audio.report").exists, "Changed selections must clear old results")
+        XCTAssertFalse(element("analysis.audio.exportJSON").exists)
+        element("analysis.audio.remove.2").click()
+        XCTAssertTrue(audioRun.isEnabled)
         app.sheets.firstMatch.buttons["Close"].click()
         element("toolbar.conversion").click()
         XCTAssertTrue(waitForValue("done", of: element("queue.item"), timeout: 40))
@@ -2380,6 +2757,26 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: videoRun)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 5), .completed)
         attachWindowScreenshot(named: "Unified analysis - ready after encoding")
+    }
+
+    @MainActor
+    func testLoudnessNorwegianExportAndSelectionInvalidation() throws {
+        launchApp(generatedFixture: true, language: "nb", locale: "nb_NO")
+        defer { terminateAndCleanFixtures() }
+        XCTAssertTrue(element("queue.analysis").waitForExistence(timeout: 20))
+        app.activate()
+        element("queue.analysis").click()
+        app.radioButtons["Lyd"].click()
+        let run = element("analysis.audio.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 15))
+        run.click()
+        XCTAssertTrue(element("analysis.audio.report").waitForExistence(timeout: 20))
+        XCTAssertEqual(element("analysis.audio.exportJSON").label, "Eksporter JSON")
+        XCTAssertEqual(element("analysis.audio.exportPDF").label, "Eksporter PDF")
+        attachWindowScreenshot(named: "Loudness report exports in Norwegian")
+        element("analysis.audio.add").click()
+        XCTAssertFalse(element("analysis.audio.report").exists)
+        XCTAssertFalse(element("analysis.audio.exportJSON").exists)
     }
 
     @MainActor
@@ -2698,6 +3095,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         language: String = "en",
         locale: String = "en_US",
         additionalArguments: [String] = [],
+        extraLaunchEnvironment: [String: String] = [:],
         damagedSchedules: Bool = false,
         damagedHistory: Bool = false,
         previewContainer: String? = nil,
@@ -2778,6 +3176,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
                 app.launchEnvironment["AMC_UI_TEST_REALTIME_INPUT"] = "1"
             }
         }
+        app.launchEnvironment.merge(extraLaunchEnvironment) { _, supplied in supplied }
         app.launch()
     }
 

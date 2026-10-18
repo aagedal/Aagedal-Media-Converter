@@ -64,6 +64,213 @@ final class MPVPreviewObservationTests: XCTestCase {
     }
 
     @MainActor
+    func testAudioRegroupingPreservesNearEOFPositionAndRejectsCancelledSelection() async throws {
+        let source = try await makeGroupedVideoFixture()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.stop() }
+        player.load(url: source, autostart: true)
+        try await waitForMeterCondition { player.isFileLoaded && player.reachedEnd && !player.isPlaying }
+        let position = player.timePos
+        XCTAssertGreaterThan(position, 0.97)
+        let ready = await player.selectAudioPresentation(.stereo(left: 0, right: 1))
+        XCTAssertTrue(ready)
+        try await waitForMeterCondition { !player.isPlaying && abs(player.timePos - position) < 0.02 }
+        XCTAssertEqual(player.timePos, position, accuracy: 0.02,
+                       "Refreshing the paused last frame must not rewind by the navigation EOF margin")
+        let graph = player.audioPresentationFilterGraph
+        let cancelled = Task { await player.selectAudioPresentation(.track(0)) }
+        cancelled.cancel()
+        let cancelledResult = await cancelled.value
+        XCTAssertFalse(cancelledResult)
+        XCTAssertEqual(player.audioPresentationFilterGraph, graph)
+        withExtendedLifetime(layer) {}
+    }
+
+    @MainActor
+    func testAudioRefreshWaitersDrainAcrossReplacementAndStop() async throws {
+        let source = try await makeGroupedVideoFixture()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.stop() }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        let replaced = Task { await player.selectAudioPresentation(.stereo(left: 0, right: 1)) }
+        await Task.yield()
+        player.load(url: source)
+        _ = try await NonJoiningTaskDeadline.run(timeout: .seconds(2)) { await replaced.value }
+        try await waitForMeterCondition { player.isFileLoaded }
+        XCTAssertEqual(player.audioPresentationFilterGraph, "", "An old readiness waiter cannot restore a replaced audio graph")
+        player.seek(to: 0.625)
+        let grouped = await player.selectAudioPresentation(.stereo(left: 0, right: 1))
+        XCTAssertTrue(grouped)
+        try await waitForMeterCondition { abs(player.timePos - 0.625) < 0.02 }
+        let changing = Task { await player.selectAudioPresentation(.track(0)) }
+        await Task.yield()
+        player.seek(to: 0.375)
+        let changed = await changing.value
+        XCTAssertTrue(changed)
+        try await waitForMeterCondition { abs(player.timePos - 0.375) < 0.02 }
+        XCTAssertFalse(player.isPlaying)
+        let stopped = Task { await player.selectAudioPresentation(.stereo(left: 1, right: 0)) }
+        await Task.yield()
+        player.stop()
+        _ = try await NonJoiningTaskDeadline.run(timeout: .seconds(2)) { await stopped.value }
+        XCTAssertEqual(player.audioPresentationFilterGraph, "")
+        withExtendedLifetime(layer) {}
+    }
+
+    @MainActor
+    private func makeGroupedVideoFixture() async throws -> URL {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-group-video-\(UUID().uuidString).mkv")
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "lavfi", "-i", "testsrc2=s=128x128:r=60:d=1",
+                        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
+                        "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000:duration=1",
+                        "-map", "0:v", "-map", "1:a", "-map", "2:a", "-c:v", "mpeg4", "-g", "60", "-c:a", "flac", file.path],
+            timeout: .seconds(20)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        return file
+    }
+
+    @MainActor
+    func testTimestampHistoryMeasuresStartupAndResumeWithoutDecoderReadAheadGap() async throws {
+        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
+            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
+        }
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-history-resume-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=8",
+                "-f", "lavfi", "-i", "aevalsrc=0.25*sin(2*PI*440*t):s=48000:d=8",
+                "-c:v", "mpeg4", "-c:a", "aac", source.path], timeout: .seconds(30)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop(); withExtendedLifetime(layer) {} }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        player.setPlaybackMeterEnabled(true)
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        XCTAssertLessThan(try XCTUnwrap(player.playbackMeterSample).seconds, 0.6,
+                          "Startup must measure decoded audio before the existing output buffer ends")
+        player.pause()
+        try await waitForMeterCondition { !player.isPlaying && player.playbackMeterSample == nil }
+        // Resume without a user seek: the output buffer must also be refreshed.
+        let pausedPosition = player.timePos
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        let resumed = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertLessThan(resumed.seconds - pausedPosition, 0.6)
+        XCTAssertNil(resumed.shortTermLUFS, "Pausing starts a fresh loudness history")
+        player.pause()
+        try await waitForMeterCondition { !player.isPlaying && player.playbackMeterSample == nil }
+        player.seek(to: 3)
+        try await waitForMeterCondition { abs(player.timePos - 3) < 0.03 }
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        let sought = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertGreaterThanOrEqual(sought.seconds, 3)
+        XCTAssertLessThan(sought.seconds, 3.6)
+        XCTAssertNil(sought.shortTermLUFS)
+        XCTAssertTrue(player.playbackMeterHasTimestampHistory)
+    }
+
+    @MainActor
+    func testTimestampHistorySurvivesRepeatedShuttleSpeedChanges() async throws {
+        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
+            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
+        }
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-history-speed-\(UUID().uuidString).mkv")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let generated = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=40",
+                "-f", "lavfi", "-i", "aevalsrc=0.25*sin(2*PI*440*t):s=48000:d=40",
+                "-c:v", "mpeg4", "-c:a", "aac", source.path], timeout: .seconds(30)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop(); withExtendedLifetime(layer) {} }
+        player.load(url: source)
+        try await waitForMeterCondition { player.isFileLoaded }
+        player.setPlaybackMeterEnabled(true)
+        player.play()
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        // J/K/L shuttle presses can change speed several times per second.
+        try await waitForMeterCondition { player.playbackMeterSample?.shortTermLUFS != nil }
+        for rate: Float in [2, 4, 8, 1, 2, 4, 1, 2, 1] {
+            player.rate = rate
+            try await Task.sleep(for: .milliseconds(150))
+        }
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertFalse(player.playbackMeterUnavailable, "Speed changes must not disable the meter")
+        try await waitForMeterCondition { player.playbackMeterSample != nil }
+        let sample = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertLessThan(abs(sample.seconds - player.timePos), 0.6, "Readings must resume near the playhead")
+        XCTAssertEqual(try XCTUnwrap(sample.peaks[0]), -12.04, accuracy: 0.5)
+        XCTAssertTrue(player.playbackMeterHasTimestampHistory)
+        // The filter measures decoded samples ahead of MPV's tempo stage, so
+        // speed changes are not discontinuities and loudness keeps its history.
+        XCTAssertEqual(try XCTUnwrap(sample.shortTermLUFS, "Speed changes must not reset loudness"), -15.7, accuracy: 0.5)
+    }
+
+    @MainActor
+    func testTimestampHistoryDoesNotPublishDelayedAudioBeforeMeasuredInterval() async throws {
+        guard ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1" else {
+            throw XCTSkip("Requires the isolated timestamp-history dependency and diagnostic opt-in")
+        }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-delayed-history-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("delayed.mkv")
+        let result = try await SubprocessRunner().run(SubprocessRequest(
+            executableURL: URL(fileURLWithPath: try XCTUnwrap(BinaryPathResolver.ffmpegPath)),
+            arguments: ["-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=18",
+                "-itsoffset", "12", "-f", "lavfi", "-i", "aevalsrc=0.5*sin(2*PI*1000*t):s=48000:d=6",
+                "-c:v", "mpeg4", "-c:a", "flac", source.path], timeout: .seconds(30)))
+        XCTAssertTrue(result.succeeded, result.standardErrorText)
+        let player = MPVPlayer()
+        let layer = MPVMetalLayer()
+        player.attachDrawable(layer)
+        player.isMuted = true
+        defer { player.setPlaybackMeterEnabled(false); player.stop(); withExtendedLifetime(layer) {} }
+        player.load(url: source, autostart: false)
+        try await waitForMeterCondition { player.isFileLoaded }
+        player.setPlaybackMeterEnabled(true)
+        player.play()
+        let deadline = ContinuousClock.now + .seconds(20)
+        var observedSilence = false
+        while player.timePos < 12, ContinuousClock.now < deadline {
+            observedSilence = true
+            XCTAssertNil(player.playbackMeterSample, "Decoder lookahead must not publish audio from twelve seconds in the future")
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(observedSilence)
+        XCTAssertGreaterThanOrEqual(player.timePos, 12)
+        try await waitForMeterCondition { player.playbackMeterHasTimestampHistory }
+        let sample = try XCTUnwrap(player.playbackMeterSample)
+        XCTAssertGreaterThanOrEqual(sample.seconds, 12.09999)
+        XCTAssertEqual(try XCTUnwrap(sample.peaks.first.flatMap { $0 }), -6.0206, accuracy: 0.05)
+        XCTAssertNil(sample.shortTermLUFS, "Loudness warm-up is measured audio, not twelve seconds of video-only time")
+        XCTAssertFalse(player.playbackMeterUnavailable)
+    }
+
+    @MainActor
     func testPackagedMPVCompressedMonoMeter() async throws {
         let source = FileManager.default.temporaryDirectory.appendingPathComponent("mpv-aac-meter-\(UUID().uuidString).mkv")
         defer { try? FileManager.default.removeItem(at: source) }
@@ -847,6 +1054,22 @@ final class MPVWakeupContextTests: XCTestCase {
 }
 
 final class MPVSeekSchedulerTests: XCTestCase {
+    func testCompletionStatusRequiresDecodedRestartAndResetsWithSource() throws {
+        var scheduler = MPVSeekScheduler()
+        let submission = try XCTUnwrap(scheduler.request(.init(time: 1.25, exact: true)))
+        XCTAssertNil(scheduler.lastCompletionSucceeded)
+        XCTAssertNil(scheduler.commandReplied(id: submission.id, succeeded: true))
+        XCTAssertNil(scheduler.lastCompletionSucceeded, "Command acceptance does not certify a visible frame")
+        scheduler.seekStarted()
+        XCTAssertNil(scheduler.playbackRestarted())
+        XCTAssertEqual(scheduler.lastCompletionSucceeded, true)
+        scheduler.reset()
+        XCTAssertNil(scheduler.lastCompletionSucceeded)
+        let failed = try XCTUnwrap(scheduler.request(.init(time: 2.25, exact: true)))
+        XCTAssertNil(scheduler.commandReplied(id: failed.id, succeeded: false))
+        XCTAssertEqual(scheduler.lastCompletionSucceeded, false)
+    }
+
     func testDragWaitsForDecodedFrameAndKeepsOnlyLatestTarget() throws {
         var scheduler = MPVSeekScheduler()
         let first = try XCTUnwrap(scheduler.request(.init(time: 10, exact: false)))

@@ -66,6 +66,27 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // filter only runs while requested. Source inspection remains separate.
     @Published private(set) var playbackMeterSample: PlaybackAudioMeterSample?
     @Published private(set) var playbackMeterUnavailable = false
+    private(set) var playbackMeterHasTimestampHistory = false
+    private(set) var playbackMeterHistoryIngestSeconds: Double?
+    private var meterHistoryLastIngestSeconds: Double?
+    // Diagnostic opt-in until the clean dependency package and app clocks are qualified.
+    private let meterUsesHistory: Bool = {
+#if DEBUG
+        ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_HISTORY"] == "1"
+#else
+        false
+#endif
+    }()
+    private let meterClockProperty: String = {
+#if DEBUG
+        if ProcessInfo.processInfo.environment["AMC_PLAYBACK_METER_CLOCK"] == "audio-pts" { return "audio-pts" }
+#endif
+        return "time-pos"
+    }()
+    private var meterHistory = MPVAudioMeterHistory()
+    private var meterHistoryMisses = 0
+    private var meterHistoryInitialized = false
+    private var meterHistoryRestarts: [Double] = []
     static var supportsPlaybackMeter: Bool {
         (["astats", "ebur128"] as [String]).allSatisfy { name in
             name.withCString { avfilter_get_by_name($0) != nil }
@@ -90,10 +111,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         queue.async { [weak self] in
             guard let self else { return }
             self.meterEnabled = enabled && Self.supportsPlaybackMeter
+            self.meterHistoryRestarts.removeAll()
             self.resetPlaybackMeterLocked()
             self.meterTimer?.cancel()
             self.meterTimer = nil
             guard self.meterEnabled else { return }
+            self.preparePlaybackMeterHistoryLocked()
             let timer = DispatchSource.makeTimerSource(queue: self.queue)
             timer.schedule(deadline: .now(), repeating: .milliseconds(100))
             timer.setEventHandler { [weak self] in self?.pollPlaybackMeterLocked() }
@@ -102,41 +125,90 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    private func resetPlaybackMeterLocked() {
+    private func resetPlaybackMeterLocked(removeFilter: Bool = true) {
         meterGenerationLock.lock()
         meterGeneration = (meterGeneration &+ 1) & ((1 << 62) - 1)
         meterGenerationLock.unlock()
         meterStartTime = nil
+        meterHistory.reset(generation: meterGeneration)
+        meterHistoryMisses = 0
+        meterHistoryInitialized = false
+        meterHistoryLastIngestSeconds = nil
         // Keep at most one outstanding query, even across reset/seek.
-        if meterRunning, let mpv {
+        if removeFilter, meterRunning, let mpv {
             let args = ["af", "remove", "@" + Self.meterLabel]
             _ = args.withUnsafeCStringArray { mpv_command(mpv, $0) }
         }
-        meterRunning = false
-        DispatchQueue.main.async { self.playbackMeterSample = nil }
+        if removeFilter { meterRunning = false }
+        DispatchQueue.main.async {
+            self.playbackMeterSample = nil
+            self.playbackMeterHasTimestampHistory = false
+            self.playbackMeterHistoryIngestSeconds = nil
+        }
     }
 
     private func pollPlaybackMeterLocked() {
         guard meterEnabled, let mpv, meterPending == nil else { return }
+        // A history installed before a seek must survive until decoding restarts.
+        // Do not accept metadata from the outgoing timeline during that interval.
+        if meterUsesHistory, seekScheduler.inFlight != nil { return }
+        if meterUsesHistory, meterHistory.needsFilterRestart {
+            let now = ProcessInfo.processInfo.systemUptime
+            meterHistoryRestarts.removeAll { now - $0 > 5 }
+            guard meterHistoryRestarts.count < 3 else {
+                meterEnabled = false
+                resetPlaybackMeterLocked()
+                DispatchQueue.main.async { self.playbackMeterUnavailable = true }
+                return
+            }
+            meterHistoryRestarts.append(now)
+            resetPlaybackMeterLocked()
+        }
         var paused: Int32 = 1
         var eof: Int32 = 1
         guard mpv_get_property(mpv, "pause", MPV_FORMAT_FLAG, &paused) >= 0,
               mpv_get_property(mpv, "eof-reached", MPV_FORMAT_FLAG, &eof) >= 0,
               paused == 0, eof == 0 else { return }
+        guard installPlaybackMeterFilterLocked() else { return }
+        let id = Self.meterRequestMask | meterGeneration
+        if mpv_get_property_async(mpv, id, "af-metadata/" + Self.meterLabel, MPV_FORMAT_NODE) >= 0 {
+            meterPending = id
+        }
+    }
+
+    @discardableResult
+    private func installPlaybackMeterFilterLocked() -> Bool {
+        guard meterEnabled, let mpv else { return false }
         if !meterRunning {
-            let filter = "@" + Self.meterLabel + ":lavfi=[ebur128=metadata=1:framelog=verbose,"
-                + "astats=metadata=1:reset=1:measure_perchannel=Peak_level+RMS_level:measure_overall=none]"
+            let graph = "ebur128=metadata=1:framelog=verbose,"
+                + "astats=metadata=1:reset=1:measure_perchannel=Peak_level+RMS_level:measure_overall=none"
+            let filter = "@" + Self.meterLabel + (meterUsesHistory
+                ? ":lavfi=graph=[" + graph + "]:amc-meter-history=yes" : ":lavfi=[" + graph + "]")
             let status = ["af", "add", filter].withUnsafeCStringArray { mpv_command(mpv, $0) }
             guard status >= 0 else {
                 meterEnabled = false
                 DispatchQueue.main.async { self.playbackMeterUnavailable = true }
-                return
+                return false
             }
             meterRunning = true
         }
-        let id = Self.meterRequestMask | meterGeneration
-        if mpv_get_property_async(mpv, id, "af-metadata/" + Self.meterLabel, MPV_FORMAT_NODE) >= 0 {
-            meterPending = id
+        return true
+    }
+
+    private func preparePlaybackMeterHistoryLocked() {
+        guard meterUsesHistory, meterEnabled, !meterRunning, let mpv,
+              installPlaybackMeterFilterLocked() else { return }
+        // Audio already queued before filter insertion has no measurements.
+        // Re-decode the current position through the installed graph, using the
+        // normal scheduler and preserving any newer user seek already in flight.
+        guard seekScheduler.inFlight == nil, seekScheduler.pending == nil else { return }
+        var seekable: Int32 = 0
+        var position: Double = 0
+        guard mpv_get_property(mpv, "seekable", MPV_FORMAT_FLAG, &seekable) >= 0, seekable != 0,
+              mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &position) >= 0,
+              position.isFinite, position >= 0 else { return }
+        if let submission = seekScheduler.request(.init(time: position, exact: true)) {
+            submitSeekLocked(submission)
         }
     }
 
@@ -144,33 +216,99 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         guard event.reply_userdata == meterPending else { return }
         meterPending = nil
         guard meterEnabled, meterRunning,
-              event.reply_userdata == (Self.meterRequestMask | meterGeneration),
-              event.error >= 0, let data = event.data else { return }
+              event.reply_userdata == (Self.meterRequestMask | meterGeneration) else { return }
+        guard event.error >= 0, let data = event.data else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
         let property = data.assumingMemoryBound(to: mpv_event_property.self).pointee
-        guard property.format == MPV_FORMAT_NODE, let pointer = property.data else { return }
+        guard property.format == MPV_FORMAT_NODE, let pointer = property.data else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
         // Event-owned nodes must be copied before the next mpv_wait_event.
         let node = pointer.assumingMemoryBound(to: mpv_node.self).pointee
         guard node.format == MPV_FORMAT_NODE_MAP, let list = node.u.list?.pointee,
-              list.num > 0, list.num <= 512, let keys = list.keys, let values = list.values else { return }
+              list.num > 0, list.num <= 512, let keys = list.keys, let values = list.values else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
         var metadata: [String: String] = [:]
+        var copiedBytes = 0
         for index in 0..<Int(list.num) {
             guard let key = keys[index], values[index].format == MPV_FORMAT_STRING,
                   let value = values[index].u.string else { continue }
+            let keyBytes = strnlen(key, 4097)
+            let valueBytes = strnlen(value, 3 * 1024 * 1024 + 1)
+            copiedBytes += keyBytes + valueBytes
+            guard keyBytes <= 4096, copiedBytes <= 3 * 1024 * 1024 else {
+                missingPlaybackMeterHistoryLocked()
+                return
+            }
             metadata[String(cString: key)] = String(cString: value)
         }
         var time: Double = 0
-        guard let mpv, mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &time) >= 0,
-              time.isFinite else { return }
-        if meterStartTime == nil { meterStartTime = time }
-        let sample = MPVAudioMeterMetadata.sample(metadata, seconds: time,
-                                                 history: max(0, time - (meterStartTime ?? time)))
-        let generation = meterGeneration
+        guard let mpv, mpv_get_property(mpv, meterUsesHistory ? meterClockProperty : "time-pos", MPV_FORMAT_DOUBLE, &time) >= 0,
+              time.isFinite else {
+            missingPlaybackMeterHistoryLocked()
+            return
+        }
+        let sample: PlaybackAudioMeterSample?
+        if meterUsesHistory {
+            guard let json = metadata["amc-meter-history-v1"] else {
+                missingPlaybackMeterHistoryLocked()
+                return
+            }
+            let ingestStarted = ProcessInfo.processInfo.systemUptime
+            let outcome = meterHistory.ingest(json: json, generation: meterGeneration)
+            meterHistoryLastIngestSeconds = ProcessInfo.processInfo.systemUptime - ingestStarted
+            if outcome.accepted, meterHistory.bufferedFrameCount > 0 {
+                meterHistoryMisses = 0
+                meterHistoryInitialized = true
+            } else if outcome.accepted {
+                missingPlaybackMeterHistoryLocked()
+            }
+            sample = meterHistory.sample(at: time, generation: meterGeneration)
+        } else {
+            if meterStartTime == nil { meterStartTime = time }
+            sample = MPVAudioMeterMetadata.sample(metadata, seconds: time,
+                history: max(0, time - (meterStartTime ?? time)))
+        }
+        publishPlaybackMeterSampleLocked(sample, generation: meterGeneration)
+    }
+
+    private func missingPlaybackMeterHistoryLocked() {
+        guard meterUsesHistory else { return }
+        publishPlaybackMeterSampleLocked(nil, generation: meterGeneration)
+        // Delayed tracks may not emit audio for many seconds. Initial absence is
+        // unavailable, but must not repeatedly recreate a graph before audio starts.
+        meterHistoryMisses = min(10, meterHistoryMisses + 1)
+        if meterHistoryInitialized {
+            meterHistory.markUnavailable(generation: meterGeneration)
+        } else if meterHistoryMisses >= 10 {
+            let generation = meterGeneration
+            DispatchQueue.main.async {
+                self.meterGenerationLock.lock()
+                let current = self.meterGeneration == generation
+                self.meterGenerationLock.unlock()
+                if current, self.meterRequested { self.playbackMeterUnavailable = true }
+            }
+        }
+    }
+
+    private func publishPlaybackMeterSampleLocked(_ sample: PlaybackAudioMeterSample?, generation: UInt64) {
+        let ingestSeconds = meterHistoryLastIngestSeconds
         DispatchQueue.main.async {
             self.meterGenerationLock.lock()
             let current = self.meterGeneration == generation
             self.meterGenerationLock.unlock()
             if current, self.meterRequested, self.isPlaying, self.isFileLoaded,
-               !self.reachedEnd, self.error == nil { self.playbackMeterSample = sample }
+               !self.reachedEnd, self.error == nil {
+                self.playbackMeterSample = sample
+                self.playbackMeterHasTimestampHistory = self.meterUsesHistory && sample != nil
+                self.playbackMeterHistoryIngestSeconds = ingestSeconds
+                if self.playbackMeterHasTimestampHistory { self.playbackMeterUnavailable = false }
+            }
         }
     }
 
@@ -378,7 +516,15 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func play() {
-        setFlag(MPVProperty.pause, false)
+        if meterUsesHistory {
+            queue.async { [weak self] in
+                guard let self else { return }
+                self.preparePlaybackMeterHistoryLocked()
+                self.setFlag(MPVProperty.pause, false)
+            }
+        } else {
+            setFlag(MPVProperty.pause, false)
+        }
     }
 
     func pause() {
@@ -449,6 +595,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         queue.async { [weak self] in
             guard let self, self.mpv != nil else { return }
             self.resetPlaybackMeterLocked()
+            if self.meterUsesHistory { self.installPlaybackMeterFilterLocked() }
             if let submission = self.seekScheduler.request(.init(time: time, exact: exact)) {
                 self.submitSeekLocked(submission)
             }
@@ -471,6 +618,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             if let next = seekScheduler.commandReplied(id: submission.id, succeeded: false) {
                 submitSeekLocked(next)
             }
+            completeAudioPresentationRefreshIfIdleLocked()
         }
     }
 
@@ -598,8 +746,23 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private var audioPresentationOwnsSelection = false // Event queue only.
+    private var audioPresentationRefresh: (id: UUID, generation: UInt64, continuation: CheckedContinuation<Bool, Never>, deadline: DispatchWorkItem)?
+
+    private func finishAudioPresentationRefreshLocked(id: UUID? = nil, succeeded: Bool) {
+        guard let refresh = audioPresentationRefresh, id == nil || id == refresh.id else { return }
+        audioPresentationRefresh = nil
+        refresh.deadline.cancel()
+        refresh.continuation.resume(returning: succeeded && refresh.generation == loadGeneration)
+    }
+
+    private func completeAudioPresentationRefreshIfIdleLocked() {
+        guard seekScheduler.inFlight == nil, seekScheduler.pending == nil,
+              let succeeded = seekScheduler.lastCompletionSucceeded else { return }
+        finishAudioPresentationRefreshLocked(succeeded: succeeded)
+    }
 
     private func resetAudioPresentationLocked() {
+        finishAudioPresentationRefreshLocked(succeeded: false)
         guard audioPresentationOwnsSelection, let mpv else { return }
         _ = mpv_set_property_string(mpv, "lavfi-complex", "")
         _ = mpv_set_property_string(mpv, "aid", "auto")
@@ -634,56 +797,101 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// a suspended caller can never apply its old selection after a newer one.
     @MainActor
     func selectAudioPresentation(_ presentation: LoudnessPresentation) async -> Bool {
-        guard isFileLoaded else { return false }
+        guard isFileLoaded, !Task.isCancelled else { return false }
         let trackIDs = audioTrackIndexes
         let graph = Self.audioPresentationGraph(presentation, trackIDs: trackIDs)
         let generation = loadGeneration
         playbackMeterSample = nil
-        return await withCheckedContinuation { continuation in
-            queue.async { [weak self] in
-                guard let self, let mpv = self.mpv, generation == self.loadGeneration else {
-                    continuation.resume(returning: false)
-                    return
-                }
-                self.resetPlaybackMeterLocked()
-                self.audioPresentationOwnsSelection = true
-                var paused: Int32 = 1
-                _ = mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused)
-                // Clear the previous source before validation, so failed grouping
-                // cannot leave an unrelated track audible when playback resumes.
-                _ = mpv_set_property_string(mpv, "lavfi-complex", "")
-                _ = mpv_set_property_string(mpv, "aid", "no")
-                guard let graph,
-                      graph.isEmpty || Self.supportsGroupedAudioPresentation else {
-                    continuation.resume(returning: false)
-                    return
-                }
-                if !graph.isEmpty {
-                    let selectedIDs = Set(presentation.streamIndices.map { trackIDs[$0] })
-                    let count = self.getInt(MPVProperty.trackListCount)
-                    let monoIDs = (0..<count).compactMap { index -> Int32? in
-                        guard self.getString("track-list/\(index)/type") == "audio",
-                              self.getInt("track-list/\(index)/demux-channel-count") == 1 else { return nil }
-                        return Int32(self.getInt("track-list/\(index)/id"))
-                    }
-                    guard selectedIDs.isSubset(of: Set(monoIDs)) else {
+        let cancellation = MPVPresentationCancellation()
+        let succeeded = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                queue.async { [weak self] in
+                    guard let self, let mpv = self.mpv, generation == self.loadGeneration,
+                          !cancellation.isCancelled else {
                         continuation.resume(returning: false)
                         return
                     }
-                }
-                let status: Int32
-                if case .track(let index) = presentation {
-                    status = mpv_set_property_string(mpv, "aid", String(trackIDs[index]))
-                } else {
-                    status = mpv_set_property_string(mpv, "lavfi-complex", graph)
-                }
-                if status < 0 {
+                    self.finishAudioPresentationRefreshLocked(succeeded: false)
+                    self.resetPlaybackMeterLocked()
+                    var actualPosition = 0.0
+                    let positionStatus = mpv_get_property(mpv, "time-pos", MPV_FORMAT_DOUBLE, &actualPosition)
+                    // Preserve a seek the user has already requested instead of
+                    // replacing it with an older published playback position.
+                    let desiredPosition = self.seekScheduler.pending?.time
+                        ?? self.seekScheduler.inFlight?.request.time ?? actualPosition
+                    var seekable: Int32 = 0
+                    _ = mpv_get_property(mpv, "seekable", MPV_FORMAT_FLAG, &seekable)
+                    let refreshVideo = self.getInt("vid") > 0 && seekable != 0
+                    self.audioPresentationOwnsSelection = true
+                    var paused: Int32 = 1
+                    _ = mpv_set_property(mpv, "pause", MPV_FORMAT_FLAG, &paused)
+                    // Clear the previous source before validation, so failed grouping
+                    // cannot leave an unrelated track audible when playback resumes.
                     _ = mpv_set_property_string(mpv, "lavfi-complex", "")
                     _ = mpv_set_property_string(mpv, "aid", "no")
+                    guard let graph,
+                          graph.isEmpty || Self.supportsGroupedAudioPresentation else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    if !graph.isEmpty {
+                        let selectedIDs = Set(presentation.streamIndices.map { trackIDs[$0] })
+                        let count = self.getInt(MPVProperty.trackListCount)
+                        let monoIDs = (0..<count).compactMap { index -> Int32? in
+                            guard self.getString("track-list/\(index)/type") == "audio",
+                                  self.getInt("track-list/\(index)/demux-channel-count") == 1 else { return nil }
+                            return Int32(self.getInt("track-list/\(index)/id"))
+                        }
+                        guard selectedIDs.isSubset(of: Set(monoIDs)) else {
+                            continuation.resume(returning: false)
+                            return
+                        }
+                    }
+                    let status: Int32
+                    if case .track(let index) = presentation {
+                        status = mpv_set_property_string(mpv, "aid", String(trackIDs[index]))
+                    } else {
+                        status = mpv_set_property_string(mpv, "lavfi-complex", graph)
+                    }
+                    if status < 0 {
+                        _ = mpv_set_property_string(mpv, "lavfi-complex", "")
+                        _ = mpv_set_property_string(mpv, "aid", "no")
+                    }
+                    guard status >= 0, !cancellation.isCancelled else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    guard refreshVideo else {
+                        continuation.resume(returning: true)
+                        return
+                    }
+                    guard positionStatus >= 0, desiredPosition.isFinite else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    // Internal redraw must not apply the public navigation EOF
+                    // margin: that would rewind valid frames near the video end.
+                    let target = max(0, desiredPosition)
+                    let deadline = DispatchWorkItem { [weak self] in
+                        self?.finishAudioPresentationRefreshLocked(id: cancellation.id, succeeded: false)
+                    }
+                    self.audioPresentationRefresh = (cancellation.id, generation, continuation, deadline)
+                    self.queue.asyncAfter(deadline: .now() + 15, execute: deadline)
+                    // Audio graph changes can invalidate inter-frame decoder state.
+                    // Readiness requires the exact refresh seek to decode a new frame,
+                    // not just acceptance of the property change or seek command.
+                    if let submission = self.seekScheduler.request(.init(time: target, exact: true)) {
+                        self.submitSeekLocked(submission)
+                    }
                 }
-                continuation.resume(returning: status >= 0)
+            }
+        } onCancel: {
+            cancellation.cancel()
+            self.queue.async { [weak self] in
+                self?.finishAudioPresentationRefreshLocked(id: cancellation.id, succeeded: false)
             }
         }
+        return succeeded && !Task.isCancelled && generation == loadGeneration
     }
 
     // MARK: - Subtitle Tracks
@@ -846,13 +1054,14 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     }
 
                 case MPV_EVENT_SEEK:
-                    resetPlaybackMeterLocked()
+                    resetPlaybackMeterLocked(removeFilter: !meterUsesHistory)
                     seekScheduler.seekStarted()
 
                 case MPV_EVENT_PLAYBACK_RESTART:
                     if let next = seekScheduler.playbackRestarted() {
                         submitSeekLocked(next)
                     }
+                    completeAudioPresentationRefreshIfIdleLocked()
 
                 case MPV_EVENT_COMMAND_REPLY:
                     if pointee.reply_userdata & Self.loadCommandMask != 0 {
@@ -868,6 +1077,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     ) {
                         submitSeekLocked(next)
                     }
+                    completeAudioPresentationRefreshIfIdleLocked()
 
                 case MPV_EVENT_GET_PROPERTY_REPLY:
                     receivePlaybackMeterLocked(pointee)
@@ -876,6 +1086,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     checkError(pointee.error)
 
                 case MPV_EVENT_SHUTDOWN:
+                    finishAudioPresentationRefreshLocked(succeeded: false)
                     seekScheduler.reset()
                     self.logger.info("MPV shutdown event")
                     if self.mpv != nil {
@@ -919,6 +1130,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                     }
 
                 case MPV_EVENT_END_FILE:
+                    finishAudioPresentationRefreshLocked(succeeded: false)
                     resetPlaybackMeterLocked()
                     seekScheduler.reset()
                     if let dataPtr = OpaquePointer(pointee.data) {
@@ -1042,6 +1254,7 @@ struct MPVSeekScheduler {
 
     private(set) var pending: Request?
     private(set) var inFlight: Submission?
+    private(set) var lastCompletionSucceeded: Bool?
     private var nextID: UInt64 = 0
     private var accepted = false
     private var started = false
@@ -1055,7 +1268,7 @@ struct MPVSeekScheduler {
 
     mutating func commandReplied(id: UInt64, succeeded: Bool) -> Submission? {
         guard inFlight?.id == id else { return nil }
-        if !succeeded { return finish() }
+        if !succeeded { return finish(succeeded: false) }
         accepted = true
         return finishIfReady()
     }
@@ -1079,6 +1292,7 @@ struct MPVSeekScheduler {
     mutating func reset() {
         pending = nil
         inFlight = nil
+        lastCompletionSucceeded = nil
         accepted = false
         started = false
         restarted = false
@@ -1086,10 +1300,11 @@ struct MPVSeekScheduler {
 
     private mutating func finishIfReady() -> Submission? {
         guard accepted, restarted else { return nil }
-        return finish()
+        return finish(succeeded: true)
     }
 
-    private mutating func finish() -> Submission? {
+    private mutating func finish(succeeded: Bool) -> Submission? {
+        lastCompletionSucceeded = succeeded
         inFlight = nil
         return takeNext()
     }
@@ -1114,4 +1329,13 @@ private extension Array where Element == String {
         defer { for pointer in pointers { if let pointer { free(UnsafeMutablePointer(mutating: pointer)) } } }
         return pointers.withUnsafeMutableBufferPointer { body($0.baseAddress!) }
     }
+}
+
+/// Cancellation can arrive before the event queue installs its readiness waiter.
+private final class MPVPresentationCancellation: @unchecked Sendable {
+    let id = UUID()
+    private let lock = NSLock()
+    private var cancelled = false
+    var isCancelled: Bool { lock.withLock { cancelled } }
+    func cancel() { lock.withLock { cancelled = true } }
 }

@@ -94,15 +94,15 @@ private struct VideoAnalysisTabView: View {
                 Divider()
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Compare source and encoded video").font(.headline)
-                    Text("Source: \(item.url.lastPathComponent)").font(.caption).lineLimit(1)
+                    Text(String(format: String(localized: "Source: %@"), item.url.lastPathComponent)).font(.caption).lineLimit(1)
                     if item.outputFileExists, let output = item.outputURL {
-                        Text("Encoded: \(output.lastPathComponent)").font(.caption).lineLimit(1)
+                        Text(String(format: String(localized: "Encoded: %@"), output.lastPathComponent)).font(.caption).lineLimit(1)
                     } else {
                         Text("Encode this file first to compare its video quality with the source.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     HStack {
-                        Button(item.analyticsResults == nil ? "Analyze Video" : "Run Selected Metrics Again") {
+                        Button(item.analyticsResults == nil ? String(localized: "Analyze Video") : String(localized: "Run Selected Metrics Again")) {
                             onRun(nil)
                         }
                         .disabled(!item.isReadyForAnalytics || item.analyticsStatus.isInProgress)
@@ -144,9 +144,9 @@ struct AudioAnalysisConfiguration: Identifiable {
 
         var title: String {
             switch self {
-            case .track: return "Audio track"
-            case .stereo: return "Mono pair"
-            case .surround: return "5.1 multi-mono"
+            case .track: return String(localized: "Audio track")
+            case .stereo: return String(localized: "Mono pair")
+            case .surround: return String(localized: "5.1 multi-mono")
             }
         }
 
@@ -184,6 +184,7 @@ struct LoudnessAnalysisView: View {
     @State private var isAnalyzing = false
     @State private var results: [LoudnessResults] = []
     @State private var activeResultID = ""
+    @State private var analysisTimestamp: Date?
     @State private var errorMessage: String?
     @State private var analysisTask: Task<Void, Never>?
     @State private var analysisID: UUID?
@@ -216,7 +217,7 @@ struct LoudnessAnalysisView: View {
                 } else {
                     selectionSection
                     HStack {
-                        Button(isAnalyzing ? "Analyzing…" : "Analyze Audio") { analyze() }
+                        Button(isAnalyzing ? String(localized: "Analyzing…") : String(localized: "Analyze Audio")) { analyze() }
                             .disabled(isAnalyzing || !canAnalyze)
                             .accessibilityIdentifier("analysis.audio.run")
                         Button("Detect Silence") {
@@ -254,7 +255,12 @@ struct LoudnessAnalysisView: View {
                             }
                         }
                         .accessibilityIdentifier("analysis.audio.report")
-                        Button("Export PDF") { exportPDF() }.disabled(isAnalyzing)
+                        Button("Export JSON") { exportLoudness(format: .json) }
+                            .disabled(isAnalyzing)
+                            .accessibilityIdentifier("analysis.audio.exportJSON")
+                        Button("Export PDF") { exportLoudness(format: .pdf) }
+                            .disabled(isAnalyzing)
+                            .accessibilityIdentifier("analysis.audio.exportPDF")
                     }
                     if results.count > 1 {
                         Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
@@ -266,7 +272,7 @@ struct LoudnessAnalysisView: View {
                             ForEach(results, id: \.presentation.id) { report in
                                 GridRow {
                                     Text(label(for: report.presentation)).lineLimit(1)
-                                    Text(report.integratedLUFS <= -70 ? "Below gate" : String(format: "%.1f LUFS", report.integratedLUFS))
+                                    Text(report.integratedLUFS <= -70 ? String(localized: "Below gate") : String(format: "%.1f LUFS", report.integratedLUFS))
                                     Text(report.maximumTruePeakDBTP.map { String(format: "%.1f dBTP", $0) } ?? "—")
                                 }
                             }
@@ -288,16 +294,7 @@ struct LoudnessAnalysisView: View {
             .padding(.vertical, 8)
         }
         .task(id: file) {
-            isProbing = true
-            tracks = []
-            let probed = await AudioRoutingService.fetchAudioTrackInfo(for: file)
-            guard !Task.isCancelled else { return }
-            tracks = probed
-            configurations = []
-            if !tracks.isEmpty { addConfiguration() }
-            isProbing = false
-        }
-        .onChange(of: selectedFileID) {
+            let probedFile = file
             analysisID = nil
             analysisTask?.cancel()
             analysisTask = nil
@@ -305,9 +302,22 @@ struct LoudnessAnalysisView: View {
             configurations = []
             isProbing = true
             results = []
+            analysisTimestamp = nil
             activeResultID = ""
             errorMessage = nil
             isAnalyzing = false
+            let probed = await AudioRoutingService.fetchAudioTrackInfo(for: probedFile)
+            guard !Task.isCancelled, file == probedFile else { return }
+            tracks = probed
+            if !tracks.isEmpty { addConfiguration() }
+            isProbing = false
+        }
+        .onChange(of: chosenPresentations) {
+            guard !isAnalyzing else { return }
+            results = []
+            activeResultID = ""
+            analysisTimestamp = nil
+            errorMessage = nil
         }
         .onDisappear {
             analysisID = nil
@@ -358,7 +368,7 @@ struct LoudnessAnalysisView: View {
         let duplicate = configurations.filter { $0.presentation == configuration.presentation }.count > 1
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Analysis \(number)", systemImage: "waveform")
+                Label(String(format: String(localized: "Analysis %lld"), Int64(number)), systemImage: "waveform")
                     .font(.headline)
                 Spacer()
                 Button {
@@ -368,7 +378,7 @@ struct LoudnessAnalysisView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Remove this analysis")
-                .accessibilityLabel("Remove Analysis \(number)")
+                .accessibilityLabel(String(format: String(localized: "Remove Analysis %lld"), Int64(number)))
                 .accessibilityIdentifier("analysis.audio.remove.\(number)")
             }
             Picker("Analyze", selection: configurationBinding(configuration.id, \.kind, fallback: configuration.kind)) {
@@ -386,7 +396,7 @@ struct LoudnessAnalysisView: View {
                       : [GridItem(.adaptive(minimum: 165))], alignment: .leading, spacing: 10) {
                 ForEach(Array(configuration.kind.roles.enumerated()), id: \.offset) { offset, role in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(role).font(.caption).foregroundStyle(.secondary)
+                        Text(role == "Center" ? String(localized: "Center channel") : Bundle.main.localizedString(forKey: role, value: nil, table: nil)).font(.caption).foregroundStyle(.secondary)
                         Picker(role, selection: Binding(
                             get: {
                                 let current = configurations.first(where: { $0.id == configuration.id }) ?? configuration
@@ -406,7 +416,7 @@ struct LoudnessAnalysisView: View {
                         // Otherwise macOS can retain the previous track title.
                         .id("\(configuration.id)-\(configuration.kind.rawValue)-\(offset)")
                         .labelsHidden()
-                        .accessibilityLabel("Analysis \(number) \(role)")
+                        .accessibilityLabel(String(format: String(localized: "Analysis %lld %@"), Int64(number), role == "Center" ? String(localized: "Center channel") : Bundle.main.localizedString(forKey: role, value: nil, table: nil)))
                         .accessibilityIdentifier("analysis.audio.track.\(number).\(offset)")
                     }
                 }
@@ -418,8 +428,8 @@ struct LoudnessAnalysisView: View {
                 Label("These tracks are already included in another analysis.", systemImage: "exclamationmark.circle")
                     .font(.caption).foregroundStyle(.orange)
             } else {
-                Text(configuration.kind == .track ? "Measures every channel in this track."
-                     : "Measures these mono tracks together as one program.")
+                Text(configuration.kind == .track ? String(localized: "Measures every channel in this track.")
+                     : String(localized: "Measures these mono tracks together as one program."))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -462,17 +472,23 @@ struct LoudnessAnalysisView: View {
         configurations.append(configuration)
     }
 
-    private func exportPDF() {
+    private func exportLoudness(format: AnalyticsExportFormat) {
+        guard let timestamp = analysisTimestamp, !results.isEmpty else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.pdf]
-        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_loudness.pdf"
+        panel.allowedContentTypes = [format == .json ? .json : .pdf]
+        panel.nameFieldStringValue = "\(file.deletingPathExtension().lastPathComponent)_loudness.\(format.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
         defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         do {
-            try AnalyticsExporter.exportLoudnessPDF(results: results, fileName: file.lastPathComponent, to: url)
+            switch format {
+            case .json:
+                try AnalyticsExporter.exportLoudnessJSON(results: results, sourceFile: file, timestamp: timestamp, to: url)
+            case .pdf:
+                try AnalyticsExporter.exportLoudnessPDF(results: results, fileName: file.lastPathComponent, timestamp: timestamp, to: url)
+            }
         } catch {
-            errorMessage = "PDF export failed: \(error.localizedDescription)"
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -486,6 +502,7 @@ struct LoudnessAnalysisView: View {
     private func analyze() {
         guard canAnalyze else { return }
         let chosen = chosenPresentations
+        analysisTimestamp = Date()
         results = []
         activeResultID = ""
         errorMessage = nil
@@ -525,7 +542,7 @@ struct LoudnessSummaryView: View {
     var body: some View {
         HStack(spacing: 22) {
             value("Integrated", text: results.integratedLUFS <= -70
-                  ? "Below gate" : String(format: "%.1f LUFS", results.integratedLUFS))
+                  ? String(localized: "Below gate") : String(format: "%.1f LUFS", results.integratedLUFS))
             value("Loudness range", text: String(format: "%.1f LU", results.loudnessRangeLU))
             value("Maximum true peak", text: results.maximumTruePeakDBTP.map {
                 String(format: "%.1f dBTP", $0)
@@ -535,7 +552,7 @@ struct LoudnessSummaryView: View {
 
     private func value(_ title: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(LocalizedStringKey(title)).font(.caption).foregroundStyle(.secondary)
             Text(text).font(.title3.bold())
         }
     }
@@ -716,7 +733,7 @@ struct AnalyticsResultsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(metric.displayName)
                             .font(.subheadline)
-                        Text(metric.description)
+                        Text(LocalizedStringKey(metric.description))
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -769,10 +786,12 @@ struct AnalyticsResultsView: View {
             Button("Export JSON") {
                 exportResults(format: .json)
             }
+            .accessibilityIdentifier("analysis.video.exportJSON")
 
             Button("Export PDF") {
                 exportResults(format: .pdf)
             }
+            .accessibilityIdentifier("analysis.video.exportPDF")
 
             Spacer()
 
@@ -794,6 +813,8 @@ struct AnalyticsResultsView: View {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
+        let access = SecurityScopedBookmarkManager.shared.startAccessing(url: url)
+        defer { SecurityScopedBookmarkManager.shared.stopAccessing(access) }
         do {
             switch format {
             case .json:
@@ -823,7 +844,7 @@ struct MetricScoreCard: View {
                 Text(result.metric.displayName)
                     .font(.headline)
                 Spacer()
-                Text(result.qualityRating)
+                Text(LocalizedStringKey(result.qualityRating))
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(ratingColor)
@@ -902,13 +923,13 @@ struct MetricScoreCard: View {
     private var scaleDescription: String {
         switch result.metric {
         case .vmaf:
-            return "Scale: 0-100. >93 Excellent, >80 Good, >60 Fair, <60 Poor"
+            return String(localized: "Scale: 0-100. ≥93 Excellent, ≥80 Good, ≥60 Fair, <60 Poor")
         case .psnr:
-            return "Scale: dB. >40 Excellent, >30 Good, >20 Fair, <20 Poor"
+            return String(localized: "Scale: dB. ≥40 Excellent, ≥30 Good, ≥20 Fair, <20 Poor")
         case .xpsnr:
-            return "Scale: dB. >42 Excellent, >32 Good, >22 Fair, <22 Poor"
+            return String(localized: "Scale: dB. ≥42 Excellent, ≥32 Good, ≥22 Fair, <22 Poor")
         case .ssimulacra2:
-            return "Scale: 0-100. >90 Excellent, >70 Good, >50 Fair, <50 Poor"
+            return String(localized: "Scale: up to 100 (perfect match); negative scores indicate severe distortion. ≥90 Excellent, ≥70 Good, ≥50 Fair, <50 Poor")
         }
     }
 }
@@ -957,7 +978,7 @@ private struct QualityInspectionView: View {
 
     private var timeline: QualityTimeline { timelines.first { $0.metric == selectedMetric } ?? QualityTimeline(result: MetricResult(metric: .vmaf, overallScore: 0, min: nil, max: nil, unit: "", channelScores: nil)) }
     private var playbackURL: URL { showingSource ? request.source : request.encoded }
-    private var loadID: String { "\(playbackURL.absoluteString)|\(timeline.sourceStart)|\(showingSource)" }
+    private var loadID: String { "\(playbackURL.absoluteString)|\(timeline.sourceStart)|\(timeline.encodedStart)|\(showingSource)" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -997,7 +1018,7 @@ private struct QualityInspectionView: View {
                         Button { player.togglePause() } label: {
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                         }
-                        .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                        .accessibilityLabel(player.isPlaying ? String(localized: "Pause") : String(localized: "Play"))
                         .accessibilityIdentifier("analysis.inspection.play")
                         .disabled(preparing || !player.isFileLoaded)
                         Slider(value: Binding(get: { position }, set: { seconds in seek(seconds) }), in: 0...timeline.duration)
@@ -1010,7 +1031,9 @@ private struct QualityInspectionView: View {
                             .accessibilityValue(position.formatted(.number.precision(.fractionLength(2))) + " s")
                             .monospacedDigit().font(.caption)
                     }
-                    Text(showingSource ? "Source time: \((position + timeline.sourceStart).formatted(.number.precision(.fractionLength(2)))) s. The graph uses encoded time." : "Encoded time. Click the graph or a low-score timestamp to seek and pause.")
+                    Text(showingSource
+                         ? String(format: String(localized: "Source time: %@ s. The graph uses encoded time."), (position + timeline.sourceStart).formatted(.number.precision(.fractionLength(2))))
+                         : String(localized: "Encoded time. Click the graph or a low-score timestamp to seek and pause."))
                         .font(.caption).foregroundStyle(.secondary)
                     if assets[playbackURL]?.url != nil, assets[playbackURL]?.url != playbackURL {
                         Text("AV2 inspection uses a lossless, video-only preview.")
@@ -1039,22 +1062,22 @@ private struct QualityInspectionView: View {
                             QualityTimelineChart(timeline: timeline, position: position, onSeek: { seconds in seek(seconds) })
                                 .frame(height: 235)
                             HStack {
-                                Text(verbatim: "5th percentile: \(score(timeline.fifthPercentile))")
+                                Text(String(format: String(localized: "5th percentile: %@"), score(timeline.fifthPercentile)))
                                     .fixedSize(horizontal: false, vertical: true)
                                     .accessibilityIdentifier("analysis.inspection.percentile")
                                 Spacer()
-                                Text("\(timeline.samples.count) measured frames")
+                                Text(String(format: String(localized: "%lld measured frames"), Int64(timeline.samples.count)))
                             }
                             .font(.caption).foregroundStyle(.secondary)
                             if let sample = timeline.sample(nearest: position) {
-                                Text(verbatim: "Nearest measured frame: \(sample.seconds.formatted(.number.precision(.fractionLength(3)))) s · \(score(sample.score))")
+                                Text(String(format: String(localized: "Nearest measured frame: %@ s · %@"), sample.seconds.formatted(.number.precision(.fractionLength(3))), score(sample.score)))
                                     .font(.caption).monospacedDigit()
                                     .fixedSize(horizontal: false, vertical: true)
                                     .accessibilityIdentifier("analysis.inspection.nearest")
                             }
                             Text(selectedMetric == .ssimulacra2
-                                 ? "Sampled frames only. Quality between these points was not measured."
-                                 : "Per-frame measurements. The graph preserves brief lows and highs when reducing detail.")
+                                 ? String(localized: "Sampled frames only. Quality between these points was not measured.")
+                                 : String(localized: "Per-frame measurements. The graph preserves brief lows and highs when reducing detail."))
                                 .font(.caption).foregroundStyle(.secondary)
                             Text("Lowest measured sections").font(.headline)
                             ForEach(timeline.worstSamples) { sample in
@@ -1067,7 +1090,7 @@ private struct QualityInspectionView: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .accessibilityIdentifier("analysis.inspection.low.\(sample.frame)")
-                                .accessibilityLabel("Inspect \(selectedMetric.displayName) score \(score(sample.score)) at \(sample.seconds) seconds")
+                                .accessibilityLabel(String(format: String(localized: "Inspect %@ score %@ at %@ seconds"), selectedMetric.displayName, score(sample.score), sample.seconds.formatted(.number.precision(.fractionLength(3)))))
                             }
                             if timeline.worstSamples.isEmpty {
                                 Text("All measured frames have infinite (perfect-match) scores.")
@@ -1107,7 +1130,7 @@ private struct QualityInspectionView: View {
             try Task.checkCancellation()
             assets[url] = asset
             player.isMuted = true
-            playbackSourceStart = showingSource ? timeline.sourceStart : 0
+            playbackSourceStart = showingSource ? timeline.sourceStart : timeline.encodedStart
             player.load(url: asset.url, startTime: timeline.playbackTime(for: position, source: showingSource))
             preparing = false
         } catch is CancellationError {
@@ -1173,7 +1196,7 @@ private struct QualityTimelineChart: View {
             .chartXScale(domain: 0...timeline.duration)
             .chartYScale(domain: bounds)
             .chartXAxisLabel("Encoded time (seconds)")
-            .chartYAxisLabel(timeline.metric == .psnr || timeline.metric == .xpsnr ? "dB" : "Score")
+            .chartYAxisLabel(timeline.metric == .psnr || timeline.metric == .xpsnr ? "dB" : String(localized: "Score"))
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     Rectangle().fill(.clear).contentShape(Rectangle())
@@ -1186,7 +1209,7 @@ private struct QualityTimelineChart: View {
                         })
                 }
             }
-            .accessibilityLabel("\(timeline.metric.displayName) quality timeline")
+            .accessibilityLabel(String(format: String(localized: "%@ quality timeline"), timeline.metric.displayName))
             .accessibilityIdentifier("analysis.inspection.chart")
             if hasInfiniteScores {
                 Text("∞ (perfect match) is drawn at the chart ceiling.").font(.caption2).foregroundStyle(.secondary)

@@ -4536,16 +4536,18 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: fixture.directory) }
         let ffmpegPath = "/private/tools/ffmpeg"
         let ssimulacra2Path = "/private/tools/ssimulacra2_rs"
-        let runner = SequencedRecordingSubprocessRunner { index, _, _ in
-            switch index {
-            case 0, 1:
-                return successfulSubprocessResult()
-            case 2:
-                return successfulSubprocessResult(standardOutput: "Score: 97.53500802\n")
-            default:
-                XCTFail("Unexpected analytics subprocess \(index)")
+        let runner = SequencedRecordingSubprocessRunner { _, request, handler in
+            if request.arguments.contains("null") {
+                handler?(SubprocessOutputChunk(stream: .standardError,
+                    data: Data("[showinfo@amc_index @ fixture] n: 0 pts: 0 pts_time:0 duration:1000000000\n".utf8)))
                 return successfulSubprocessResult()
             }
+            if request.arguments.first == "image" {
+                return successfulSubprocessResult(standardOutput: "Score: 97.53500802\n")
+            }
+            let output = try XCTUnwrap(request.arguments.last).replacingOccurrences(of: "%d", with: "0")
+            try Data([0]).write(to: URL(fileURLWithPath: output))
+            return successfulSubprocessResult()
         }
         let service = AnalyticsService(
             subprocessRunner: runner,
@@ -4567,17 +4569,104 @@ final class Aagedal_Media_Converter_Tests: XCTestCase {
 
         XCTAssertEqual(results.first?.overallScore, 97.53500802)
         let requests = runner.requests
-        XCTAssertEqual(requests.count, 3)
-        XCTAssertEqual(requests[0].executableURL.path, ffmpegPath)
-        XCTAssertEqual(requests[0].timeout, .seconds(10 * 60))
+        XCTAssertEqual(requests.count, 5)
+        XCTAssertEqual(requests[0].timeout, .seconds(12 * 60 * 60))
         XCTAssertEqual(requests[0].standardOutputCaptureLimit, 0)
-        XCTAssertEqual(requests[1].executableURL.path, ffmpegPath)
-        XCTAssertTrue(requests[1].arguments.contains("scale=640:360:flags=bicubic"))
-        XCTAssertEqual(requests[2].executableURL.path, ssimulacra2Path)
-        XCTAssertEqual(requests[2].arguments.first, "image")
-        XCTAssertEqual(requests[2].timeout, .seconds(2 * 60))
-        XCTAssertEqual(requests[2].standardOutputCaptureLimit, 4 * 1024)
-        XCTAssertFalse(requests[2].redactedCommandDescription.contains(ssimulacra2Path))
+        XCTAssertEqual(requests[2].executableURL.path, ffmpegPath)
+        XCTAssertEqual(requests[2].timeout, .seconds(10 * 60))
+        XCTAssertTrue(requests[2].arguments.contains { $0.contains("scale=640:360:flags=bicubic") })
+        XCTAssertEqual(requests[4].executableURL.path, ssimulacra2Path)
+        XCTAssertEqual(requests[4].arguments.first, "image")
+        XCTAssertEqual(requests[4].timeout, .seconds(2 * 60))
+        XCTAssertEqual(requests[4].standardOutputCaptureLimit, 4 * 1024)
+        XCTAssertFalse(requests[4].redactedCommandDescription.contains(ssimulacra2Path))
+    }
+
+    func testSSIMULACRAFallsBackWhenSuccessfulSeekProducesNoImage() async throws {
+        let fixture = try makeAnalyticsFixtureFiles()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let runner = SequencedRecordingSubprocessRunner { _, request, handler in
+            if request.arguments.contains("null") {
+                handler?(SubprocessOutputChunk(stream: .standardError, data: Data((
+                    "[showinfo@amc_index @ fixture] n: 0 pts: 0 duration:1000000000\n" +
+                    "[showinfo@amc_index @ fixture] n: 1 pts: 1000000000 duration:1000000000\n").utf8)))
+            } else if request.arguments.first == "image" {
+                return successfulSubprocessResult(standardOutput: "100")
+            } else if !request.arguments.contains("-ss") {
+                let ordinal = request.arguments.contains { $0.contains("select=eq(n") } ? "1000000000" : "0"
+                let path = try XCTUnwrap(request.arguments.last).replacingOccurrences(of: "%d", with: ordinal)
+                try Data([0]).write(to: URL(fileURLWithPath: path))
+            }
+            return successfulSubprocessResult()
+        }
+        let service = AnalyticsService(subprocessRunner: runner,
+            ffmpegPathProvider: { "/fixture/ffmpeg" }, ssimulacra2PathProvider: { "/fixture/ssimulacra2" },
+            mediaInfoProvider: StubAnalyticsMediaInfoProvider(duration: 2, resolution: (width: 128, height: 128)))
+        let results = try await service.runAnalytics(sourceFile: fixture.source, encodedFile: fixture.encoded,
+            enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 2) { _, _ in }
+        XCTAssertEqual(results.first?.samples?.map(\.seconds), [0, 1])
+        XCTAssertEqual(results.first?.overallScore, 100)
+        XCTAssertEqual(runner.requests.filter { $0.arguments.contains { $0.contains("select=eq(n") } }.count, 2)
+    }
+
+    func testSSIMULACRARoundingCannotSelectFrameBeyondTrimEnd() async throws {
+        let fixture = try makeAnalyticsFixtureFiles()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let sourcePath = fixture.source.path
+        let runner = SequencedRecordingSubprocessRunner { _, request, handler in
+            let isSource = request.arguments.contains(sourcePath)
+            let times: [Int64] = isSource ? [0, 100000000, 200000000] : [0, 199900000]
+            if request.arguments.contains("null") {
+                var log = "[showinfo@amc_native @ fixture] config in time_base: 1/1000\n"
+                for (index, pts) in times.enumerated() { log += "[showinfo@amc_index @ fixture] n: \(index) pts: \(pts) duration:100000000\n" }
+                handler?(SubprocessOutputChunk(stream: .standardError, data: Data(log.utf8)))
+            } else if request.arguments.first == "image" {
+                return successfulSubprocessResult(standardOutput: "100")
+            } else {
+                let seek = request.arguments.firstIndex(of: "-ss").flatMap { Double(request.arguments[$0 + 1]) } ?? 0
+                let pts = times.first { Double($0) / 1_000_000_000 >= seek } ?? 0
+                let path = try XCTUnwrap(request.arguments.last).replacingOccurrences(of: "%d", with: String(pts))
+                try Data([0]).write(to: URL(fileURLWithPath: path))
+            }
+            return successfulSubprocessResult()
+        }
+        let service = AnalyticsService(subprocessRunner: runner,
+            ffmpegPathProvider: { "/fixture/ffmpeg" }, ssimulacra2PathProvider: { "/fixture/ssimulacra2" },
+            mediaInfoProvider: StubAnalyticsMediaInfoProvider(duration: 1, resolution: (width: 128, height: 128)))
+        let results = try await service.runAnalytics(sourceFile: fixture.source, encodedFile: fixture.encoded,
+            sourceRange: AnalyticsSourceRange(start: 0, end: 0.2),
+            enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 2) { _, _ in }
+        let last = try XCTUnwrap(results.first?.samples?.last?.framePair)
+        XCTAssertEqual(last.encodedSeconds, 0.1999)
+        XCTAssertEqual(last.sourceSeconds, 0.1, "Timestamp rounding must respect the exclusive trim end")
+    }
+
+    func testSSIMULACRARejectsNonfiniteHelperScores() async throws {
+        let fixture = try makeAnalyticsFixtureFiles()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        for value in ["NaN", "inf", "-inf"] {
+            let runner = SequencedRecordingSubprocessRunner { _, request, handler in
+                if request.arguments.contains("null") {
+                    let line = "[showinfo@amc_index @ fixture] n: 0 pts: 0 duration:1000000000\n"
+                    // Exercise records split across arbitrary subprocess chunks.
+                    for byte in line.utf8 { handler?(SubprocessOutputChunk(stream: .standardError, data: Data([byte]))) }
+                } else if request.arguments.first == "image" {
+                    return successfulSubprocessResult(standardOutput: "Score: \(value)\n")
+                } else {
+                    let path = try XCTUnwrap(request.arguments.last).replacingOccurrences(of: "%d", with: "0")
+                    try Data([0]).write(to: URL(fileURLWithPath: path))
+                }
+                return successfulSubprocessResult()
+            }
+            let service = AnalyticsService(subprocessRunner: runner,
+                ffmpegPathProvider: { "/fixture/ffmpeg" }, ssimulacra2PathProvider: { "/fixture/ssimulacra2" },
+                mediaInfoProvider: StubAnalyticsMediaInfoProvider(duration: 1, resolution: (width: 128, height: 128)))
+            do {
+                _ = try await service.runAnalytics(sourceFile: fixture.source, encodedFile: fixture.encoded,
+                    enabledMetrics: [.ssimulacra2], vmafModel: .defaultModel, ssimulacra2MaxFrames: 1) { _, _ in }
+                XCTFail("Accepted nonfinite score \(value)")
+            } catch AnalyticsError.parsingFailed { }
+        }
     }
 
     func testAnalyticsMediaInfoDiscoveryDoesNotJoinTimedOutProvider() async throws {

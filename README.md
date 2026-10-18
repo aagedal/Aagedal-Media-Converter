@@ -36,6 +36,7 @@ brew tap aagedal/tap && brew install --cask aagedal-media-converter
 - **Batch Convert** almost every video and audio file (alternative to Shutter Encoder or Handbrake)
 - **Play** in full screen with TimeCode view and JKL playback controls (alternative to IINA or VLC)
 - **View and compare metadata**, including C2PA presence check (alternative to MediaInfo)
+- **Analyze** loudness, silence, peaks, stereo phase and encoded video quality
 - **Download** videos from websites, with support for scheduling and live stream download
 - **Screen recording** with system sound, and optional separate microphone track (alternative to OBS)
 - **Transcribe** video and audio files to SRT subtitles
@@ -127,6 +128,17 @@ In the trim player there is a camera button that allows capturing still images. 
 - Per file comment field, to add an optional comment to the file metadata. Useful for embedding credit information
 - Optional date tag (Generated [YYYYMMDD]), prefix and suffix in the comment field before the comment.
 - View and compare metadata
+
+### Media analysis
+
+![Verified SSIMULACRA2 samples beside source playback](docs/images/ssimulacra2-frame-inspection-en.png)
+Open the chart button on a queued file to inspect its Audio and Video reports.
+
+- Measure whole-program loudness and true peak for individual tracks, custom mono pairs or 5.1 mono groups; export complete JSON or PDF reports.
+- Find silence and peak intervals, compare channel balance, or check stereo correlation and mono fold-down. Jump to measured sections in the paused preview and export complete JSON measurements.
+- After encoding, compare video with VMAF, PSNR, XPSNR or sampled SSIMULACRA2. Inspect quality over time, switch source/output playback and jump to the lowest-scoring sections.
+- SSIMULACRA2 compares verified decoded frames up to the selected limit, including on short clips. Videos are indexed first; more samples take longer.
+- Export video quality as full-resolution JSON or paginated A4 PDF with timelines, component scores and comparison warnings. See [score interpretation and report details](docs/video-quality-report-format.md).
 
 ### 15-Second Autoplay Warning for VideoLoop presets
 Web browsers often refuse to autoplay long, looping videos with sound. The app shows a yellow ⚠️ icon when the VideoLoop presets are applied to clips longer than 15 seconds, encouraging you to trim the video or pick another preset.

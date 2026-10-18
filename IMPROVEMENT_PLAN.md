@@ -2,6 +2,258 @@
 
 Last reviewed: 2026-10-18
 
+## Playback history app consumer — 2026-10-18
+
+Owner: Codex. Added a bounded, byte-identity-validated Swift history consumer and
+Debug-only app-player integration. Future decoder frames wait for the selected
+clock to reach their measured ends; received gaps/discontinuities suppress LUFS
+and request a fresh filter instance. Initialization handles delayed tracks without
+recreating a graph before audio exists. Production dependencies, Source-default
+behavior, translations and bundled binaries are unchanged.
+
+All 46 integrated consumer/player checks pass, including nominal-sample loudness
+readiness at half/double frame speed, retained AAC/lossless capture replay, canonical-Unicode byte-identity rejection, lifecycle resets and
+video with audio delayed twelve seconds. A matched generated-signal workload
+retains seven AAC/AVFoundation and eight FLAC/CoreAudio transitions. With the
+final byte-data cache, sampled ingest P95 is 1.72/2.60 ms respectively; host plus
+child CPU is 0.612/0.986 seconds over 17 seconds, versus 2.345/1.846 before parsed
+record caching. These are individual Debug runs, not thermal or Release claims.
+Software edge delay remains about 0.17–0.18 seconds rather than the earlier
+seconds-ahead decoder labels. The final alternate-clock run confirms both
+outputs and about 0.19–0.21-second software edge delay. The final normal-package Debug build and all 1,462 unit tests pass with zero
+failures and two intentional diagnostic skips
+(`/private/tmp/amc-history-sample-domain-normal-unit.xcresult`). Four benchmark-
+report tests and the portable C history test also pass. See [method, scope and retained evidence](docs/audio-playback-lifecycle-validation-2026-10-18.md#app-history-consumer-continuation).
+
+The harness uses the actual player and Metal layer without a visible SwiftUI
+window. Visible renderer timing, complete startup/seek/speed/loudness continuity,
+clean universal dependency packaging, Release/device performance and physical
+synchronization remain open. A clean MPV-only source rebuild completed in
+`/private/tmp/amc-mpv-history-clean-20261018`, using the existing dependency inputs.
+Both architectures compiled all 219 translation units. Static checks confirm the
+same 58 public MPV symbols per architecture, valid archive paths and matching
+XCFramework/static archive payloads. The library is installed only in an isolated
+test cache; the production pin is unchanged. The reproducible builder records
+source, patch, recipe, tool and dependency hashes. See
+[retained static audit](docs/provenance/audio-meter-lifecycle-2026-10-18/app-consumer/clean-rebuild-audit.json).
+
+Runtime qualification against that clean library now passes. Startup and resume
+re-decode through the installed filter, so the first measured interval ends at
+0.079 s instead of about 2.2 s. A native SwiftUI preview UI test passes for both
+clocks: steady levels are correct, and all edges appear 0.125–0.375 s after the
+authored time, never early. The 3-second rewind leaves no stale samples. The
+lifecycle matrix passes six arm64 and two x86_64 cases; all 1,462 normal-package
+unit tests pass. Rapid 1×–8× shuttle speed changes keep the meter and its
+loudness history (50 focused tests pass). An optimized (`-O`) build costs at most
+5.8% of one core with history, and ingest P95 is ≤2.13 ms. CPU barely differs from
+Debug, so MPV's filters dominate the cost. Shipping still needs source packaging,
+a production pin update, a non-Debug enablement decision, sustained thermal runs
+and physical synchronization. See [clean-library runtime qualification](docs/audio-playback-lifecycle-validation-2026-10-18.md#clean-library-runtime-qualification).
+The completion goal stays active.
+
+## Quality-analysis input ownership — 2026-10-18
+
+Owner: Codex. Quality runs now acquire their own source/output scopes before file
+validation and share one cleanup owner with outstanding metadata reads. Helpers
+retain access through drain; nonjoining metadata deadlines retain scopes and AV2
+reconstructions until the actual reader returns. Default duration discovery uses
+the existing outer deadline. Cancellation checks prevent a late source timing
+read from starting another encoded read. No translation, measurement algorithm,
+dependency, bundled binary or license changed.
+
+All 14 access/cancellation regressions pass, including distinct/identical-input
+success, validation failure, helper drain, AV2 resolution timeout/cancellation,
+optional VMAF timeout with successful metric completion, and late timing return.
+The earlier 39 focused quality/report/lifecycle checks also pass. The final
+Debug build and all 1,448 unit tests pass, with zero failures and one benchmark
+skip (`/private/tmp/amc-analysis-access-unit.xcresult`). The optimized build and all 41 Release lifecycle/quality checks pass
+(`/private/tmp/amc-analysis-access-release.xcresult`). See [ownership details](docs/video-quality-report-format.md#input-access-and-cancellation-ownership).
+A parser that never returns retains its resources; sandbox enforcement and the
+other qualification limits below remain open.
+
+## Paused audio-group preview refresh — 2026-10-18
+
+Owner: Codex. A native pixel test reproduced the documented MPEG-4 regrouping
+corruption at a paused non-keyframe: normalized RGB error 0.410028 after selecting
+a mono pair. Group/track selection now submits a scheduler-owned exact refresh
+and waits for decoded restart rather than property acceptance. It captures the
+actual libmpv position, preserves newer seek targets, pause and near-EOF frames,
+and checks cancellation/source generation before returning. Owned waiters resolve
+on replacement/stop/EOF/shutdown/cancellation or a bounded deadline.
+
+The first corrected native run preserves identical pixels through four group/track
+transitions (all errors 0.0). Thirty-four focused playback tests and the final
+rapid-seek/EOF/cancellation/replacement cases pass. The final reviewed Debug build
+and 1,443 unit tests pass with zero failures and one intentional benchmark skip
+(`/private/tmp/amc-regrouping-final-unit.xcresult`). All four final native UI checks pass: paused pixels, grouped peak, grouped
+silence and stereo phase (`/private/tmp/amc-regrouping-final-ui.xcresult`). See [method and evidence](docs/AUDIO-METERING-PLAN.md).
+No source measurement algorithms, dependencies, bundled binaries or licenses changed.
+
+## Release analysis qualification — 2026-10-18
+
+Owner: Codex. The arm64 optimized test build succeeds using a command-line
+`ENABLE_TESTABILITY=YES` override. All 185 analysis, report, audio routing,
+playback and bookmark checks pass. Static bundle validation passes for 59 Mach-O
+images and 14 packaged license notices after removing injected XCTest payloads
+from a separate copy. No dependencies or repository build settings changed.
+
+The full Release suite is not green: four MCP helper fixture tests produce nine
+failed assertions/errors because their isolated-port override is Debug-only.
+Generated native UI fixture import is also Debug-only, so native UI qualification
+remains the passing Debug evidence above. App Sandbox is disabled in both project
+configurations; enforcement, distribution signing, physical synchronization and
+device/thermal qualification remain open. See the
+[exact scope and results](docs/AUDIO-METERING-PLAN.md#optimized-build-qualification--2026-10-18).
+Localization is being continued separately by the user.
+
+## Analysis controls and score guidance — 2026-10-18
+
+Owner: Codex. Added 75 catalog entries covering analysis tabs/settings, audio
+program controls, summary headings, quality inspection captions, status messages,
+accessibility descriptions and ratings. Dynamic strings now resolve translations
+explicitly. The audio center-channel noun has its own key rather than using an
+alignment verb. SSIMULACRA2 help correctly credits Cloudinary, describes negative
+scores and the perfect-match value, and uses inclusive rating thresholds. PDF
+ratings are localized. Other eight language translations remain marked for review.
+
+Validation: Debug build and 33 focused analysis/PDF tests pass after these display
+changes; seven localization tests and the 2,001-entry catalog audit pass. Both
+English/Norwegian native SSIMULACRA2 checks pass in
+`/private/tmp/amc-analysis-localized-ui.xcresult`, including five samples, preserved
+source/output positions and native PDF save/readback. Norwegian loudness report
+selection/invalidation passes in `/private/tmp/amc-analysis-localized-audio-ui.xcresult`.
+Both inspector captures and both native report pages were visually checked;
+updated EN/NB README images and method details retain that evidence.
+No dependencies, bundled binaries or licenses changed.
+
+Remaining display work: detailed assembled comparison/pixel-processing metadata,
+warnings and some shared track labels remain English; PDF numbers retain the
+existing decimal-point convention. These are distinct from the now-localized
+primary controls. The paused MPEG-4 continuation above addresses regrouping;
+playback timestamp integration plus Release/device and sandbox qualification
+remain open. The completion goal
+stays active.
+
+## Decoded SSIMULACRA2 sampling — 2026-10-18
+
+Owner: Codex. The frame limit now selects distinct decoded ordinals, including
+subsecond clips, with no one-per-second cap. Both inputs are decoded into
+memory-mapped timestamp indexes before sparse image extraction. PNG timestamps
+must match their indexed identities; duplicate timestamps and failed/missing seek
+outputs fall back to ordinal decoding. Nonfinite scores and nonmonotonic frame
+records are rejected. Indexing and extraction retain cancellation/drain ownership
+and remove scratch only after helpers finish.
+
+Reference matching uses sample-and-hold, with measured output timebase rounding
+uncertainty and duplicate occurrence matching. Actual FFmpeg trim-start frames
+are observed rather than inferred from requested times. Candidate references stay
+inside the exclusive trim end. Overlap uses decoded video end times, so long audio
+tails cannot keep a reference frame alive. JSON retains both frame identities and
+presentation timestamps, video origins, sampling policy and compared duration;
+the inspector and PDF use those measured origins/duration. Settings explain the
+upfront index pass. See [report semantics](docs/video-quality-report-format.md).
+No dependencies, bundled binaries or licenses changed.
+
+Validation: the final ad-hoc-signed Debug build and 1,440 unit tests pass with
+zero failures and one intentional benchmark skip
+(`/private/tmp/amc-sampling-reviewed-unit.xcresult`). Generated checks cover fractional CFR, VFR gaps, duplicate timestamps, delayed video, native trim
+rounding, audio-only tails, real unseekable raw H.264, successful empty seeks,
+nonfinite helper output and cancellation during discovery/extraction. A negative
+MKV fixture exposes a genuine decoded timestamp reset and is explicitly rejected.
+Seven localization tests and the 1,926-entry catalog audit also pass.
+Final English/Norwegian native SSIMULACRA2 inspection/PDF checks pass in
+`/private/tmp/amc-analysis-localized-ui.xcresult`; the existing graph seek/source
+switch check also passes in `/private/tmp/amc-sampling-unblocked-ui.xcresult`.
+The first attempt was intercepted by a macOS Codex Computer Use screen/audio
+access prompt; the user resolved it. A subsequent long-method PDF assertion was
+corrected to normalize ordinary text wrapping. The final reports and inspector
+captures were visually verified.
+
+Remaining completion work: analysis UI localization (a source/catalog audit found
+missing primary headings, inspector controls and audio help), playback timestamp
+integration and the existing paused MPEG-4 regrouping artifact. Release/device
+and sandbox qualification remain open. Historical reports without measured frame
+identities require rerunning to obtain the stronger timing guarantees.
+
+## Video quality scoring and portable reports — 2026-10-18
+
+Owner: Codex. XPSNR now uses the minimum of FFmpeg's whole-program component
+averages and the lowest color-plane score for each timeline frame. The prior
+luma-weighted arithmetic average of dB values could report infinity whenever a
+single chroma component matched, even with severe luma distortion. A bundled
+128 × 128 luma-only change now reports 18.7197 dB instead of infinity. New JSON
+records the aggregation method; historical reports retain their original values
+and should be rerun. Grayscale, RGB and alpha-bearing PSNR summaries retain their
+actual component names. XPSNR's alpha exclusion is explicit in comparison metadata.
+
+Video PDF reports now use paginated A4 pages with vector quality timelines,
+percentiles, distinct low-score sections, component scores and full comparison
+warnings. Long text continues onto extra pages; old reports without samples show
+an explicit rerun message. Native video JSON/PDF saves hold scoped destination
+access and write atomically. See [report and score semantics](docs/video-quality-report-format.md).
+English/Norwegian READMEs now expose the media-analysis workflow.
+
+Validation: the ad-hoc-signed Debug build passes. The final full unit suite
+executes 1,431 tests with no failures and one intentional benchmark skip
+(`/private/tmp/amc-quality-final-unit.xcresult`). Generated checks cover native
+grayscale/RGB/alpha, luma-only distortion with matching chroma, alpha-only
+changes, exponent values and malformed components. Eight final PDF pages were
+visually inspected: all four metrics and a four-page metadata-overflow case,
+with exact retained warning counts. Seven localization tests and the 1,926-entry
+catalog audit pass. Translations outside English/Norwegian await review.
+No dependencies, bundled binaries or licenses changed.
+
+Both final English/Norwegian native PDF checks pass in
+`/private/tmp/amc-quality-verified-ui.xcresult`, including save cancellation,
+readback of both metric timelines, and report preservation after saving. The
+existing interactive source/output timeline check also passes in
+`/private/tmp/amc-quality-report-ui.xcresult`. An earlier English rerun was
+intercepted by an external FTP Sync window; explicit activation and enabled-state
+waiting resolved that test interaction without touching the other app. The
+passing screenshot capture targets the analysis sheet directly.
+
+The sampling audit identified inaccurate requested timestamps and a one-per-second
+cap; these are addressed by the decoded sampling continuation above.
+The earlier playback timing/integration and paused regrouping limitations also
+remain open. The bilingual captures also show existing analysis headings and
+help text falling back to English; those source strings still need catalog
+coverage beyond the newly translated PDF timeline labels. Release/device and
+sandbox qualification are unchanged.
+
+## Source analysis report completion — 2026-10-18
+
+Owner: Codex. Whole-program loudness now exports complete schema-v1 JSON alongside
+PDF, with all timeline readings, explicit presentation/channel roles, null
+semantics and a stable analysis timestamp. Changed files or channel assignments
+clear prior reports; cancelled saves preserve them. File probes reject stale
+publication. See the [loudness report format](docs/audio-loudness-report-format.md).
+
+Grouped loudness and silence now validate complete mono source streams for
+matching rates, starts and sample counts and reject later timestamp gaps. Their
+merged measurements must retain every preflight sample. Loudness uses explicit
+role mapping and unpadded merging shared with peak analysis. A separately named
+true-peak branch supplies zero context at both edges, fixing FFmpeg's missing EOF
+interpolation without padding gated integrated loudness, LRA or timeline data.
+No dependencies, bundled binaries or licenses changed.
+
+Validation: the ad-hoc-signed Debug app and test targets build. The final full
+unit suite executes 1,424 tests with zero failures and one intentional benchmark
+skip (`/private/tmp/amc-analysis-complete-unit.xcresult`). Regressions cover
+unequal grouped lengths/rates/starts, later gaps, successful-but-truncated merged
+reports, different FLAC block sizes and final-sample impulses, one-sample
+programs from 8–192 kHz, preserved EBU weighting and full JSON reading retention.
+Seven localization tests, the 1,917-entry catalog audit and whitespace checks
+pass. Release/device synchronization and conformance certification remain open;
+current Debug/Release configurations disable App Sandbox, so save-panel checks
+do not qualify sandbox enforcement.
+
+All four English/Norwegian UI checks pass, including native JSON save/readback,
+configuration invalidation, tab persistence, conversion readiness and grouped
+silence navigation/export. Four captures were visually inspected; readable
+loudness export controls are retained in the audio roadmap. The existing paused
+MPEG-4 regrouping artifact remains visible in grouped preview; source measurements
+are independent of video reconfiguration.
+
 ## Playback meter lifecycle continuation — 2026-10-18
 
 Owner: Codex. The isolated timestamp probe now retains bounded command/event

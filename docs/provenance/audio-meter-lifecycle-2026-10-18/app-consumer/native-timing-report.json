@@ -1,0 +1,105 @@
+{
+  "status": "passed",
+  "result_bundle": "/private/tmp/amc-history-clean-native-baseline-ui.xcresult",
+  "library_sha256": "85495b831cb879edff36c47c400ababe68f58a456738cd68343b34eb926e5565",
+  "audio_output": "avfoundation",
+  "trace_runs": [
+    {
+      "clock": "audio-pts",
+      "phase": "seek-replay",
+      "segment": 1,
+      "raw_trace_sha256": "15132fa808b817a65f8ffcc737c74d90fb6d1e04efd6855850af25f674ba627a",
+      "compressed_trace_sha256": "93cb75ef72e31d7f8165a68e5a7f57abce97dd5689b43d2d9bc8e9257b2c8df4",
+      "observation_count": 244,
+      "visible_sample_count": 23,
+      "first_sample_end": 3.086667,
+      "edges": [
+        {
+          "authored_edge": 4,
+          "display_position": 4.167,
+          "measured_end": 4.086667,
+          "software_delay": 0.167
+        }
+      ]
+    },
+    {
+      "clock": "audio-pts",
+      "phase": "initial",
+      "segment": 0,
+      "raw_trace_sha256": "a0db871ce31df1c41fef5a1023f06735e0ddef029330f2c4a85aba2fa2a4fac7",
+      "compressed_trace_sha256": "00d6eb3a7b1d108866fa039d80182c424e1b63d29b13052fc1ad960a345ae34b",
+      "observation_count": 157,
+      "visible_sample_count": 107,
+      "first_sample_end": 0.078667,
+      "edges": [
+        {
+          "authored_edge": 4,
+          "display_position": 4.25,
+          "measured_end": 4.078667,
+          "software_delay": 0.25
+        },
+        {
+          "authored_edge": 7,
+          "display_position": 7.332999999999999,
+          "measured_end": 7.178667,
+          "software_delay": 0.333
+        },
+        {
+          "authored_edge": 10,
+          "display_position": 10.167,
+          "measured_end": 10.078667,
+          "software_delay": 0.167
+        }
+      ]
+    },
+    {
+      "clock": "time-pos",
+      "phase": "seek-replay",
+      "segment": 1,
+      "raw_trace_sha256": "283611c154100420968b79c3690b17ae1ea121deba179087c2597f7124c26a7b",
+      "compressed_trace_sha256": "07b12172219cf5a0e7ff57c67f0433411bcf3a6edde6581d158c19e068ca8bb0",
+      "observation_count": 241,
+      "visible_sample_count": 21,
+      "first_sample_end": 3.186667,
+      "edges": [
+        {
+          "authored_edge": 4,
+          "display_position": 4.208,
+          "measured_end": 4.186667,
+          "software_delay": 0.208
+        }
+      ]
+    },
+    {
+      "clock": "time-pos",
+      "phase": "initial",
+      "segment": 0,
+      "raw_trace_sha256": "948a45079faf94c050075885189146ac67db6760f8b2a30626ecdb0a18531702",
+      "compressed_trace_sha256": "2c908466a28299a7c034c1e82271db979fc1ce6eb9cc907602764b78682b9aad",
+      "observation_count": 157,
+      "visible_sample_count": 117,
+      "first_sample_end": 0.078667,
+      "edges": [
+        {
+          "authored_edge": 4,
+          "display_position": 4.125,
+          "measured_end": 4.078667,
+          "software_delay": 0.125
+        },
+        {
+          "authored_edge": 7,
+          "display_position": 7.375,
+          "measured_end": 7.278667,
+          "software_delay": 0.375
+        },
+        {
+          "authored_edge": 10,
+          "display_position": 10.125,
+          "measured_end": 10.078667,
+          "software_delay": 0.125
+        }
+      ]
+    }
+  ],
+  "physical_sync_qualified": false
+}

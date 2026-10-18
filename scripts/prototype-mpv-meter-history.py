@@ -135,6 +135,8 @@ def build(source, commands, products, output):
                 "decoder_compile_directory": decoder_entry["directory"],
                 "compile_commands_sha256": digest(commands), "input_library_sha256": digest(library),
                 "probe_source_sha256": digest(probe), "probe_sha256": digest(output / "probe"),
+                "library_sha256": digest(replacement),
+                "filter_object_sha256": digest(object_file), "decoder_object_sha256": digest(decoder_object),
                 "compile": command, "compile_directory": entry["directory"], "link": link,
                 "alignment_qualified": False, "installed": False}
     (output / "build.json").write_text(json.dumps(evidence, indent=2) + "\n")

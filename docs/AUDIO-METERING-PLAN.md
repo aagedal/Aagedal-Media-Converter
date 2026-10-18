@@ -1,5 +1,87 @@
 # Audio metering and analysis
 
+## Measured playback-history consumer — 2026-10-18
+
+The [app-consumer continuation](audio-playback-lifecycle-validation-2026-10-18.md#app-history-consumer-continuation)
+implements bounded frame-history parsing, immutable identity validation, future
+buffering and continuity-based loudness gates. All 46 isolated app-player checks
+pass, including a twelve-second audio delay. Debug-only switches select history
+transport and candidate `time-pos`/`audio-pts` clocks; the production pin and
+Source-default mode are unchanged. Matched signal-edge and CPU evidence is
+retained with the method, including the measured improvement from parsed-frame
+byte caching. This is app-player software-clock qualification, without a visible
+SwiftUI window or physical output measurements. Full renderer, startup/lifecycle,
+clean dependency packaging and Release/device qualification remain open.
+
+## Paused grouped-preview refresh — 2026-10-18
+
+A native decoded-pixel regression reproduces the previously documented MPEG-4
+regrouping artifact. The fixture has six mono FLAC tracks, 320 × 180 MPEG-4 video
+at 24 fps, a 12-frame GOP, and a paused non-keyframe at 1.792 s. Selecting a mono
+pair changed the visible image without a user video seek. Normalized mean absolute
+RGB difference at 64 × 36 was 0.410028, above the test's 0.04 tolerance. This is
+actual decoded preview corruption, not changed measurement values or window layout.
+
+Audio selection now captures the actual libmpv position on its event queue and
+requests an exact refresh through the existing seek scheduler after applying the
+new graph/track. A newer pending/in-flight user seek takes precedence. Readiness
+waits for command acceptance, a seek event and decoded playback restart, including
+any newer coalesced target. It preserves pause and valid near-EOF positions without
+applying the public navigation margin. Audio-only/unseekable behavior is unchanged.
+Cancellation, superseding selection, source replacement, stop, EOF/error and
+shutdown resolve the owned waiter safely; a 15-second deadline bounds readiness.
+Source generation is checked on the event queue and again before returning.
+
+The first corrected native run retains identical image pixels through mono pair,
+5.1, single track and mono-pair reselection: all four differences are 0.0. Result:
+`/private/tmp/amc-regrouping-refresh-ui.xcresult`. Thirty-four focused playback
+checks pass in `/private/tmp/amc-regrouping-lifecycle-unit.xcresult`; the final
+rapid-seek/replacement/stop and near-EOF/cancellation checks also pass in
+`/private/tmp/amc-regrouping-seek-races.xcresult`. The final reviewed Debug build
+and all 1,443 unit tests pass, with zero failures and one intentional benchmark
+skip (`/private/tmp/amc-regrouping-final-unit.xcresult`). All four final native UI checks pass: paused pixels, grouped peak, grouped
+silence and stereo phase (`/private/tmp/amc-regrouping-final-ui.xcresult`). The
+final pixel run again records 0.0 error for every transition; the Norwegian
+peak, silence and phase captures were also visually inspected.
+
+Paused preview evidence: [corrupt frame before the fix](images/audio-regrouping-before.png)
+and [preserved frame after the fix](images/audio-regrouping-after.png).
+
+This qualifies paused frame preservation for the generated fixture, not physical
+speaker/video synchronization or all possible decoder/remote-file behavior. Source
+analysis algorithms, dependencies, bundled binaries and licenses are unchanged.
+
+## Optimized build qualification — 2026-10-18
+
+The arm64 Release test build succeeds with `ENABLE_TESTABILITY=YES` supplied on
+the command line, leaving repository Release settings unchanged. Without that
+override the test target cannot import the app's internal APIs. The optimized
+run passes all 185 checks in the analysis, audio routing/export, quality
+score/PDF, MPV lifecycle/seek and bookmark test classes. Evidence:
+`/private/tmp/amc-analysis-release-unit.xcresult`.
+
+The full run is **not green**: 1,443 tests execute, one benchmark is skipped,
+and four `ApplicationJobContractTests` MCP helper cases produce nine failed
+assertions/errors. The helper's `AMC_UI_TEST_AGENT_PORT_ID` fixture override is
+inside `#if DEBUG`, so these Release cases cannot use their isolated test ports.
+This run does not qualify the MCP helper for Release. Native analysis UI evidence
+remains the four passing Debug checks above; generated UI fixture import is also
+Debug-only and was not enabled in the Release app.
+
+Static bundle verification passes for 59 arm64 Mach-O images and 14 packaged
+license notices against `BundledDependencies.json`. This check uses a separate
+copy with only the injected XCTest bundle and its dSYM removed; no shipped app
+payload is changed. Evidence: `/private/tmp/amc-analysis-release-bundle-static.json`.
+The original test bundle correctly fails distribution validation on its external
+XCTest framework dependency. The app has an ad-hoc signature with the runtime flag, but this static check
+does not qualify Hardened Runtime enforcement, notarization or distribution
+signatures.
+
+Both project configurations set `ENABLE_APP_SANDBOX = NO`; the signed test app
+also has no App Sandbox entitlement. Existing bookmark tests and scoped source,
+preview and export access do not establish sandbox enforcement. Physical audio/
+video synchronization and device/thermal qualification remain open.
+
 ## First implementation
 
 - [x] Independent source-channel sample peak and RMS readings in the preview meter.
@@ -68,9 +150,41 @@ remain required before considering it as the default meter.
 - [x] Export complete source silence reports as versioned JSON, with selected presentation, thresholds and every file-relative interval. See [report format](audio-silence-report-format.md).
 - [x] Expose custom mono-pair and 5.1 selection, grouped audition and JSON export in Detect Silence. Reject duplicate/non-mono inputs and unequal decoded start times.
 - [x] Extend grouped selection/audition to peak/channel-balance reports. Full decoded-timeline validation rejects unequal decoded lengths, sample rates, starts and discontinuities beyond a 1 ms rounding tolerance before grouped audition or scanning. Reordered roles, common delayed starts and one-sample final FLAC frames retain source gains/timing. Separate loudness reports retain EBU R128 channel weighting and LFE exclusion.
+- [x] Export whole-program loudness reports as versioned JSON with every reading, explicit presentation/channel roles, null semantics and stable analysis timestamps shared with PDF. Changed files or channel assignments invalidate prior reports. See [report format](audio-loudness-report-format.md).
+- [x] Validate full grouped loudness source timing and exact merged sample retention. Measure true peak on a separate zero-context branch so EOF interpolation includes the final source sample without padding integrated loudness, LRA or timelines.
 - [ ] Evaluate newer MPVKit/FFmpeg playback support, including ProRes RAW VideoToolbox acceleration and animated WebP. Confirm each component is actually enabled in the package and test representative files before advertising support.
 
+- [x] Extend full decoded-source timing and exact merged sample retention checks to grouped silence reports and audition, rejecting unequal lengths and later timestamp gaps. See [silence report format](audio-silence-report-format.md).
+
 ## Validation
+
+### Whole-program loudness and grouped silence — 2026-10-18
+
+Loudness now has complete schema-v1 JSON alongside PDF, with stable analysis
+start timestamps, all readings and channel roles. File/configuration changes
+invalidate measurements and cancelled saves preserve them. Full source timing
+and exact merged sample validation now protect grouped loudness and silence;
+unequal lengths and later gaps fail before publication. True-peak interpolation
+uses a separate zero-context branch, preserving unpadded gated loudness/LRA and
+timelines while retaining final-sample impulses. See the
+[loudness schema and method](audio-loudness-report-format.md) and
+[silence semantics](audio-silence-report-format.md).
+
+The final ad-hoc-signed Debug build and all 1,424 unit tests pass, with zero
+failures and one intentional benchmark skip. Result:
+`/private/tmp/amc-analysis-complete-unit.xcresult`. The seven localization tests,
+1,917-entry catalog audit and whitespace check pass. Release/device and sandbox
+qualification remain open; no dependencies, bundled binaries or licenses changed.
+
+All four English/Norwegian UI checks pass in
+`/private/tmp/amc-analysis-ui.xcresult`, covering native loudness JSON save/cancel
+and readback, configuration invalidation, tab persistence, conversion readiness,
+and grouped silence selection/navigation/export. Four report/preview captures
+were visually inspected. Export controls are readable; the existing paused
+MPEG-4 regrouping artifact is visible in these historical grouped captures and
+is independent of source measurements. The paused-refresh continuation above
+addresses it with a decoded-pixel regression. The new loudness captures are
+[English](images/audio-loudness-en.png) and [Norwegian](images/audio-loudness-nb.png).
 
 ### Stereo phase and mono compatibility — 2026-10-17
 

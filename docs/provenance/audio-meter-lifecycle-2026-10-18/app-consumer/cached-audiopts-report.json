@@ -1,0 +1,125 @@
+{
+  "clock": "audio-pts",
+  "configuration": "isolated diagnostic Debug app; parsed-record cache; muted actual audio output",
+  "runs": [
+    {
+      "clock": "audio-pts",
+      "fixture": "stereo-aac-video",
+      "sourceWindows": 0,
+      "mode": "playback",
+      "hostCPUSeconds": 1.4521099999999998,
+      "round": 1,
+      "childCPUSeconds": 0,
+      "wallSeconds": 17.081972125102766,
+      "audioOutput": "unknown",
+      "cpuPercentOfOneCore": 8.500833448065727,
+      "readingCount": 133,
+      "transitions": [
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.167,
+          "delaySeconds": 0.16699999999999982
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.208,
+          "delaySeconds": 0.20800000000000018
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.167,
+          "delaySeconds": 0.16699999999999982
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.25,
+          "delaySeconds": 0.25
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.208,
+          "delaySeconds": 0.2079999999999984
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.20800000000000018,
+      "historyIngestCount": 163,
+      "medianHistoryIngestSeconds": 0.004758249968290329,
+      "p95HistoryIngestSeconds": 0.01066116662696004,
+      "maxHistoryIngestSeconds": 0.014443166670389473
+    },
+    {
+      "clock": "audio-pts",
+      "fixture": "surround-flac-audio",
+      "sourceWindows": 0,
+      "mode": "playback",
+      "hostCPUSeconds": 2.059036,
+      "round": 1,
+      "childCPUSeconds": 0,
+      "wallSeconds": 17.007231374969706,
+      "audioOutput": "coreaudio",
+      "cpuPercentOfOneCore": 12.106826529274919,
+      "readingCount": 159,
+      "transitions": [
+        {
+          "sourceSeconds": 2,
+          "observedPlayhead": 2.2261154173333333,
+          "delaySeconds": 0.2261154173333333
+        },
+        {
+          "sourceSeconds": 4,
+          "observedPlayhead": 4.167468627666667,
+          "delaySeconds": 0.1674686276666666
+        },
+        {
+          "sourceSeconds": 6,
+          "observedPlayhead": 6.130109960333333,
+          "delaySeconds": 0.13010996033333289
+        },
+        {
+          "sourceSeconds": 8,
+          "observedPlayhead": 8.231477959666666,
+          "delaySeconds": 0.23147795966666607
+        },
+        {
+          "sourceSeconds": 10,
+          "observedPlayhead": 10.194114294333332,
+          "delaySeconds": 0.19411429433333183
+        },
+        {
+          "sourceSeconds": 12,
+          "observedPlayhead": 12.167466876666666,
+          "delaySeconds": 0.1674668766666656
+        },
+        {
+          "sourceSeconds": 14,
+          "observedPlayhead": 14.244791334999999,
+          "delaySeconds": 0.2447913349999986
+        },
+        {
+          "sourceSeconds": 16,
+          "observedPlayhead": 16.231451167666663,
+          "delaySeconds": 0.23145116766666263
+        }
+      ],
+      "medianTransitionDelaySeconds": 0.21011485583333256,
+      "historyIngestCount": 162,
+      "medianHistoryIngestSeconds": 0.009387812518980354,
+      "p95HistoryIngestSeconds": 0.01870625000447035,
+      "maxHistoryIngestSeconds": 0.021611500065773726
+    }
+  ],
+  "physical_alignment_qualified": false,
+  "limitations": [
+    "The initial AAC backend was queried before playback initialization and is unconfirmed. Repeat after querying the active output at the end of playback."
+  ]
+}
