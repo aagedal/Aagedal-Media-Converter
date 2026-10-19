@@ -7,6 +7,7 @@ import Foundation
 /// Parses yt-dlp output for progress information
 struct YTDLPProgressParser: Sendable {
     static let liveStatusPrefix = "__AMC_LIVE_STATUS__="
+    static let sourceDurationPrefix = "__AMC_SOURCE_DURATION__="
 
     struct ProgressInfo: Sendable {
         let progress: Double      // 0.0 to 1.0 (0.5 for downloads with unknown total)
@@ -131,6 +132,32 @@ struct YTDLPProgressParser: Sendable {
         }
 
         return nil
+    }
+
+    /// Parses the source-duration marker emitted by the `before_dl` print template.
+    static func parseSourceDuration(_ line: String) -> Double? {
+        guard line.hasPrefix(sourceDurationPrefix) else { return nil }
+        let value = line.dropFirst(sourceDurationPrefix.count)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let seconds = Double(value), seconds.isFinite, seconds > 0 else { return nil }
+        return seconds
+    }
+
+    /// Parses the output position from an ffmpeg stats line
+    /// (`frame=  209 fps= 83 ... time=00:00:12.85 bitrate=... speed=1.7x`).
+    /// Section downloads run through ffmpeg, which reports no percentage of its own.
+    /// Pre-roll is reported as negative time and clamps to zero.
+    static func parseFFmpegTime(_ line: String) -> Double? {
+        guard line.contains("speed="),
+              let match = line.range(of: #"time=-?\d+:\d{2}:\d{2}(\.\d+)?"#, options: .regularExpression)
+        else { return nil }
+        let value = line[match].dropFirst("time=".count)
+        guard !value.hasPrefix("-") else { return 0 }
+        let parts = value.split(separator: ":")
+        guard parts.count == 3,
+              let h = Double(parts[0]), let m = Double(parts[1]), let s = Double(parts[2])
+        else { return nil }
+        return h * 3600 + m * 60 + s
     }
 
     /// Parses the marker emitted by yt-dlp's `before_dl` print template.

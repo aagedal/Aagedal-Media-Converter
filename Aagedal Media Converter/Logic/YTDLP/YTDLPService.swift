@@ -156,6 +156,127 @@ struct YTDLPMetadata: Sendable {
 struct YTDLPDownloadResult: Sendable {
     let outputURL: URL
     let title: String
+    /// Full length of the source video as reported by the extractor, when known.
+    var sourceDuration: Double? = nil
+}
+
+/// A time range of the source video to download instead of the whole thing.
+///
+/// yt-dlp's `--download-sections` stream-copies, so cuts snap to keyframes. We
+/// therefore fetch `padding` extra seconds on each side and express the exact
+/// in/out points as trim points on the downloaded file (see `trimRange`).
+struct DownloadSection: Codable, Equatable, Sendable {
+    /// Requested in-point in source seconds.
+    let start: Double
+    /// Requested out-point in source seconds; nil means "to the end".
+    let end: Double?
+
+    static let padding: Double = 5
+
+    init?(start: Double, end: Double?) {
+        guard start.isFinite, start >= 0 else { return nil }
+        if let end {
+            guard end.isFinite, end > start else { return nil }
+        }
+        // A range starting at zero and running to the end is the whole video.
+        guard start > 0 || end != nil else { return nil }
+        self.start = start
+        self.end = end
+    }
+
+    var paddedStart: Double { max(0, start - Self.padding) }
+    var paddedEnd: Double? { end.map { $0 + Self.padding } }
+
+    /// Value for yt-dlp's `--download-sections`.
+    var ytdlpArgument: String {
+        let endValue = paddedEnd.map { Self.secondsArgument($0) } ?? "inf"
+        return "*\(Self.secondsArgument(paddedStart))-\(endValue)"
+    }
+
+    /// Filename-safe label so clips of the same video don't collide with each
+    /// other or with a full download (`--no-overwrites` would otherwise skip them).
+    var fileNameLabel: String {
+        let endLabel = end.map { Self.compactTime($0) } ?? "end"
+        return "clip \(Self.compactTime(start))-\(endLabel)"
+    }
+
+    /// Maps the requested range onto the downloaded file.
+    ///
+    /// The file starts at (or slightly before) `paddedStart`. MP4 output uses an
+    /// edit list so time zero is exactly `paddedStart`; Matroska/WebM instead shifts
+    /// the keyframe pre-roll to non-negative timestamps, putting `paddedStart` a few
+    /// seconds in. Because the cut end is exact in both cases, the pre-roll ("lead")
+    /// is whatever the file holds beyond the requested padded length.
+    func trimRange(fileDuration: Double, sourceDuration: Double?) -> (start: Double?, end: Double?) {
+        guard fileDuration > 0 else { return (nil, nil) }
+        let sourceEnd = sourceDuration.flatMap { $0 > 0 ? $0 : nil }
+        let effectiveEnd: Double? = {
+            switch (paddedEnd, sourceEnd) {
+            case let (end?, source?): return min(end, source)
+            case let (end?, nil): return end
+            case let (nil, source?): return source
+            case (nil, nil): return nil
+            }
+        }()
+
+        var lead: Double = 0
+        if let effectiveEnd {
+            let expectedLength = effectiveEnd - paddedStart
+            let measured = fileDuration - expectedLength
+            // Pre-roll never exceeds a GOP; anything larger means the estimate is off.
+            if measured > 0, measured < 15 { lead = measured }
+        }
+
+        let trimStart = lead + (start - paddedStart)
+        let trimEnd = end.map { lead + ($0 - paddedStart) }
+        return (
+            trimStart > 0.05 ? min(trimStart, fileDuration) : nil,
+            trimEnd.flatMap { $0 < fileDuration - 0.05 ? $0 : nil }
+        )
+    }
+
+    /// Parses "90", "1:30", "1:02:03" or "1:30.5" into seconds.
+    static func parseTime(_ text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
+        guard (1...3).contains(parts.count) else { return nil }
+        var total: Double = 0
+        for (index, part) in parts.enumerated() {
+            let isLast = index == parts.count - 1
+            guard !part.isEmpty,
+                  part.allSatisfy({ $0.isNumber || (isLast && $0 == ".") }),
+                  let value = Double(part), value >= 0 else { return nil }
+            // Minutes and seconds after a colon must stay below 60.
+            if index > 0, value >= 60 { return nil }
+            total = total * 60 + value
+        }
+        return total
+    }
+
+    /// Formats seconds as "m:ss" or "h:mm:ss", keeping fractional seconds if present.
+    static func formatTime(_ seconds: Double) -> String {
+        let whole = Int(seconds)
+        let fraction = seconds - Double(whole)
+        let h = whole / 3600, m = (whole % 3600) / 60, s = whole % 60
+        var result = h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+        if fraction >= 0.005 {
+            result += String(format: ".%02d", Int((fraction * 100).rounded()) % 100)
+        }
+        return result
+    }
+
+    private static func compactTime(_ seconds: Double) -> String {
+        let whole = Int(seconds)
+        let h = whole / 3600, m = (whole % 3600) / 60, s = whole % 60
+        if h > 0 { return String(format: "%dh%02dm%02ds", h, m, s) }
+        if m > 0 { return String(format: "%dm%02ds", m, s) }
+        return "\(s)s"
+    }
+
+    private static func secondsArgument(_ seconds: Double) -> String {
+        String(format: "%.3f", seconds)
+    }
 }
 
 /// One entry from a flat-playlist probe — enough to populate a queue row before
@@ -452,9 +573,12 @@ actor YTDLPService {
             }
         }
 
+        /// Splits on CR as well as LF: ffmpeg (used for section and HLS downloads)
+        /// redraws its stats line with bare carriage returns, which would otherwise
+        /// stay buffered and starve both progress and the stall watchdog.
         private static func removeCompleteLines(from buffer: inout Data) -> [String] {
             var lines: [String] = []
-            while let newline = buffer.firstIndex(of: 0x0A) {
+            while let newline = buffer.firstIndex(where: { $0 == 0x0A || $0 == 0x0D }) {
                 lines.append(String(decoding: buffer[..<newline], as: UTF8.self))
                 buffer.removeSubrange(...newline)
             }
@@ -723,6 +847,7 @@ actor YTDLPService {
     ///   - forceOverwrite: If true, overwrites existing files instead of skipping
     ///   - liveFromStart: Whether to rewind live streams to the beginning
     ///   - audioOnly: Whether to download only the audio track (no video)
+    ///   - section: Optional time range to download instead of the whole video
     ///   - progress: Callback for progress updates (progress 0-1, speed string, isLiveStream)
     ///   - titleUpdate: Callback when video title is discovered
     /// - Returns: The path to the downloaded file
@@ -732,6 +857,7 @@ actor YTDLPService {
         forceOverwrite: Bool = false,
         liveFromStart: Bool = false,
         audioOnly: Bool = false,
+        section: DownloadSection? = nil,
         control: YTDLPDownloadControl = YTDLPDownloadControl(),
         progress: @escaping @Sendable (Double, String?, Bool) -> Void,
         titleUpdate: @escaping @Sendable (String) -> Void = { _ in }
@@ -794,6 +920,14 @@ actor YTDLPService {
             outputTemplate = "%(title)s [%(id)s].%(ext)s"
         }
 
+        if let section {
+            args.append(contentsOf: ["--download-sections", section.ytdlpArgument])
+            outputTemplate = outputTemplate.replacingOccurrences(
+                of: ".%(ext)s", with: " (\(section.fileNameLabel)).%(ext)s"
+            )
+            logger.info("[YTDLPService] Downloading section \(section.ytdlpArgument, privacy: .public)")
+        }
+
         if liveFromStart {
             args.append(contentsOf: ["--live-from-start", "--no-part"])
             logger.info("[YTDLPService] Downloading live stream from start (no-part)")
@@ -838,6 +972,7 @@ actor YTDLPService {
             "--verbose",  // Enable verbose output to ensure we get stderr
             forceOverwrite ? "--force-overwrites" : "--no-overwrites",
             "--print", "before_dl:\(YTDLPProgressParser.liveStatusPrefix)%(live_status)s",
+            "--print", "before_dl:\(YTDLPProgressParser.sourceDurationPrefix)%(duration)s",
             "--print", "after_move:filepath",
             "-o", outputTemplate,
             // "--" ends flag parsing so a URL that somehow starts with "-" can't be
@@ -865,6 +1000,7 @@ actor YTDLPService {
             var firstError: String?
             var fileAlreadyExists: Bool = false
             var existingFilePath: String?
+            var sourceDuration: Double?
             var firstStdoutLogged: Bool = false
             var firstStderrLogged: Bool = false
             var firstProgressLogged: Bool = false
@@ -950,6 +1086,23 @@ actor YTDLPService {
             // yt-dlp's human-readable progress output.
             if YTDLPProgressParser.parseLiveStatus(trimmed) == true {
                 progress(0.1, nil, true)
+            }
+
+            if let duration = YTDLPProgressParser.parseSourceDuration(trimmed) {
+                parsedState.lock.lock()
+                parsedState.sourceDuration = duration
+                parsedState.lock.unlock()
+            }
+
+            // Section downloads run through ffmpeg; derive progress from its output
+            // position relative to the padded range being fetched.
+            if let section, let position = YTDLPProgressParser.parseFFmpegTime(trimmed) {
+                let sourceDuration = parsedState.read { $0.sourceDuration }
+                let rangeEnd = section.paddedEnd.map { end in sourceDuration.map { min(end, $0) } ?? end }
+                    ?? sourceDuration
+                if let rangeEnd, rangeEnd > section.paddedStart {
+                    progress(min(position / (rangeEnd - section.paddedStart), 0.99), nil, false)
+                }
             }
 
             // Parse progress from either stream
@@ -1123,6 +1276,7 @@ actor YTDLPService {
         let videoTitle = parsedState.read { $0.videoTitle }
         let fileAlreadyExists = parsedState.read { $0.fileAlreadyExists }
         let existingFilePath = parsedState.read { $0.existingFilePath }
+        let sourceDuration = parsedState.read { $0.sourceDuration }
 
         // Check if file already exists (detected via --no-overwrites)
         if fileAlreadyExists {
@@ -1180,7 +1334,7 @@ actor YTDLPService {
         // Report 100% progress
         progress(1.0, nil, false)
 
-        return YTDLPDownloadResult(outputURL: outputURL, title: videoTitle)
+        return YTDLPDownloadResult(outputURL: outputURL, title: videoTitle, sourceDuration: sourceDuration)
     }
 
 }

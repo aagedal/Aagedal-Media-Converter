@@ -10,8 +10,8 @@ struct URLInputOverlay: View {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "URLInput")
 
     @Binding var isPresented: Bool
-    var onSubmit: (String, Bool, Bool, Bool) -> Void
-    var onSchedule: ((String, Date, Bool, Bool, Bool) -> Void)?
+    var onSubmit: (String, Bool, Bool, Bool, DownloadSection?) -> Void
+    var onSchedule: ((String, Date, Bool, Bool, Bool, DownloadSection?) -> Void)?
 
     @State private var urlText = ""
     @State private var postVideos: [PostDownloadVideo] = []
@@ -33,6 +33,71 @@ struct URLInputOverlay: View {
     private var downloadDisabled: Bool {
         !DownloadManager.isValidURL(sanitizedURL)
             || (needsPostPicker && (postLoadedURL != sanitizedURL || selectedPostVideos.isEmpty))
+            || clipError != nil
+    }
+
+    // Clip (section) download state. Per-download, so not persisted.
+    @State private var isClipEnabled = false
+    @State private var clipStartText = ""
+    @State private var clipEndText = ""
+
+    /// Section downloads target one finite video: not playlists, multi-video posts,
+    /// or live recordings rewound from the start.
+    private var isClipAvailable: Bool {
+        !isPlaylistContext && !needsPostPicker && !downloadLiveFromStart
+    }
+
+    private var clipUnavailableReason: String? {
+        if isPlaylistContext { return "Clips aren't available for whole-playlist downloads" }
+        if needsPostPicker { return "Clips aren't available for multi-video posts" }
+        if downloadLiveFromStart { return "Clips aren't available with Record from start" }
+        return nil
+    }
+
+    private var isClipActive: Bool { isClipEnabled && isClipAvailable }
+
+    /// Parsed clip range, or an error message describing why the fields are invalid.
+    private var clipParseResult: Result<DownloadSection, ClipInputError>? {
+        guard isClipActive else { return nil }
+        let startText = clipStartText.trimmingCharacters(in: .whitespaces)
+        let endText = clipEndText.trimmingCharacters(in: .whitespaces)
+        let start: Double
+        if startText.isEmpty {
+            start = 0
+        } else if let parsed = DownloadSection.parseTime(startText) {
+            start = parsed
+        } else {
+            return .failure(ClipInputError("Start time isn't valid — use e.g. 1:30 or 1:02:03"))
+        }
+        var end: Double?
+        if !endText.isEmpty {
+            guard let parsed = DownloadSection.parseTime(endText) else {
+                return .failure(ClipInputError("End time isn't valid — use e.g. 4:10 or 1:02:03"))
+            }
+            end = parsed
+        }
+        if let end, end <= start {
+            return .failure(ClipInputError("End time must be after start time"))
+        }
+        guard let section = DownloadSection(start: start, end: end) else {
+            return .failure(ClipInputError("Set a start or end time"))
+        }
+        return .success(section)
+    }
+
+    private var clipSection: DownloadSection? {
+        if case .success(let section)? = clipParseResult { return section }
+        return nil
+    }
+
+    private var clipError: String? {
+        if case .failure(let error)? = clipParseResult { return error.message }
+        return nil
+    }
+
+    private struct ClipInputError: Error {
+        let message: String
+        init(_ message: String) { self.message = message }
     }
     @State private var history: [DownloadHistoryEntry] = []
     @State private var hasUnreadableHistory = false
@@ -172,6 +237,7 @@ struct URLInputOverlay: View {
             urlInputSection
             clipboardIndicator
             invalidURLWarning
+            clipSectionRow
             postPicker
             actionSection
             automationToggles
@@ -272,6 +338,72 @@ struct URLInputOverlay: View {
                 Spacer()
             }
         }
+    }
+
+    private var clipSectionRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Toggle(isOn: $isClipEnabled) {
+                    Label("Clip", systemImage: "scissors")
+                        .font(.subheadline)
+                }
+                .toggleStyle(.checkbox)
+                .accessibilityIdentifier("downloadClipToggle")
+                .help(clipUnavailableReason ?? "Download only part of the video")
+
+                clipTimeField("Start", text: $clipStartText, placeholder: "0:00", identifier: "downloadClipStartField")
+                Text("–")
+                    .foregroundStyle(.secondary)
+                clipTimeField("End", text: $clipEndText, placeholder: "end", identifier: "downloadClipEndField")
+
+                if let section = clipSection {
+                    Text(clipDurationText(section))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+            .disabled(!isClipAvailable)
+            .opacity(isClipAvailable ? 1.0 : 0.5)
+
+            if isClipActive {
+                if let clipError {
+                    Label(clipError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("Downloads \(Int(DownloadSection.padding)) s extra on each side; the exact in and out points are set as trim points in the queue.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func clipTimeField(_ label: LocalizedStringKey, text: Binding<String>, placeholder: String, identifier: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(.body, design: .monospaced))
+                .frame(width: 90)
+                .accessibilityIdentifier(identifier)
+                .onSubmit { submit() }
+                .onChange(of: text.wrappedValue) { _, newValue in
+                    // Typing a time implies the user wants a clip.
+                    if !newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                        isClipEnabled = true
+                    }
+                }
+        }
+    }
+
+    private func clipDurationText(_ section: DownloadSection) -> String {
+        guard let end = section.end else { return "from \(DownloadSection.formatTime(section.start)) to end" }
+        return "(\(DownloadSection.formatTime(end - section.start)))"
     }
 
     private var downloadButtonTitle: String {
@@ -685,23 +817,23 @@ struct URLInputOverlay: View {
         // Scheduling and whole-playlist don't compose yet (single-item persistence
         // model), so playlist always submits immediately.
         let isPlaylist = downloadWholePlaylist && Self.looksLikePlaylistURL(trimmed)
-        submitURL(trimmed, isPlaylist: isPlaylist)
+        submitURL(trimmed, isPlaylist: isPlaylist, section: isPlaylist ? nil : clipSection)
         isPresented = false
     }
 
-    private func submitURL(_ url: String, isPlaylist: Bool) {
+    private func submitURL(_ url: String, isPlaylist: Bool, section: DownloadSection? = nil) {
         if isScheduled, !isPlaylist, let onSchedule = onSchedule {
             // Round to the start of the minute (remove seconds)
             let calendar = Calendar.current
             let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: scheduledDate)
             let roundedDate = calendar.date(from: components) ?? scheduledDate
-            onSchedule(url, roundedDate, downloadLiveFromStart, downloadAudioOnly, isPlaylist)
+            onSchedule(url, roundedDate, downloadLiveFromStart, downloadAudioOnly, isPlaylist, section)
         } else {
-            onSubmit(url, downloadLiveFromStart, downloadAudioOnly, isPlaylist)
+            onSubmit(url, downloadLiveFromStart, downloadAudioOnly, isPlaylist, section)
         }
     }
 }
 
 #Preview {
-    URLInputOverlay(isPresented: .constant(true)) { _, _, _, _ in }
+    URLInputOverlay(isPresented: .constant(true)) { _, _, _, _, _ in }
 }
