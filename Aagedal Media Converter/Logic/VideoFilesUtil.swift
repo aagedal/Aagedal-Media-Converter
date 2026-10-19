@@ -837,6 +837,8 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     var downloadLiveFromStart: Bool = false
     /// Whether to download only the audio track (no video)
     var downloadAudioOnly: Bool = false
+    /// Source time range to download instead of the whole video (nil = whole video)
+    var downloadSection: DownloadSection? = nil
     /// Whether a live stream download is currently recording
     var isLiveStreamRecording: Bool = false
     /// Whether the download is in the process of stopping (provides immediate UI feedback)

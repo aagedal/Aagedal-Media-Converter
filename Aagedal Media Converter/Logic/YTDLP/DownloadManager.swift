@@ -67,7 +67,13 @@ class DownloadManager {
     /// Own post-download probes separately: the subprocess has already completed,
     /// but cancellation or a retry must still invalidate metadata and auto-encoding.
     @discardableResult
-    func loadDownloadedFileDetails(itemID: UUID, fileURL: URL, autoEncode: Bool) -> Task<Void, Never> {
+    func loadDownloadedFileDetails(
+        itemID: UUID,
+        fileURL: URL,
+        autoEncode: Bool,
+        section: DownloadSection? = nil,
+        sourceDuration: Double? = nil
+    ) -> Task<Void, Never> {
         let loader = detailsLoader
         return detailsTasks.start(itemID: itemID, timeout: .seconds(60)) {
             await loader(fileURL)
@@ -78,6 +84,14 @@ class DownloadManager {
                 self.updateItem(itemID) { item in
                     item.apply(details: details)
                     item.detailsLoaded = true
+                    // Section downloads carry padding; trim to the exact requested range.
+                    if let section {
+                        let trim = section.trimRange(
+                            fileDuration: details.durationSeconds, sourceDuration: sourceDuration
+                        )
+                        item.trimStart = trim.start
+                        item.trimEnd = trim.end
+                    }
                 }
                 if autoEncode {
                     self.onAutoEncode?(itemID)
@@ -223,7 +237,8 @@ class DownloadManager {
         items: Binding<[VideoItem]>,
         outputFolder: URL,
         liveFromStart: Bool = false,
-        audioOnly: Bool = false
+        audioOnly: Bool = false,
+        section: DownloadSection? = nil
     ) async -> UUID? {
         self.videoItems = items
         self.outputFolder = outputFolder
@@ -249,6 +264,7 @@ class DownloadManager {
         item.uploadEnabled = UserDefaults.standard.bool(forKey: AppConstants.autoUploadAfterDownloadKey)
         item.downloadLiveFromStart = liveFromStart
         item.downloadAudioOnly = audioOnly
+        item.downloadSection = section
 
         let itemID = item.id
 
@@ -273,7 +289,8 @@ class DownloadManager {
             liveFromStart: liveFromStart,
             autoEncode: item.autoEncodeAfterDownload,
             uploadEnabled: item.uploadEnabled,
-            audioOnly: audioOnly
+            audioOnly: audioOnly,
+            section: section
         ))
 
         return itemID
@@ -325,6 +342,7 @@ class DownloadManager {
             item.uploadEnabled = entry.uploadEnabled
             item.downloadLiveFromStart = entry.liveFromStart
             item.downloadAudioOnly = entry.audioOnly
+            item.downloadSection = entry.section
 
             let newItemID = item.id
             items.wrappedValue.append(item)
@@ -337,7 +355,8 @@ class DownloadManager {
                 liveFromStart: entry.liveFromStart,
                 autoEncode: entry.autoEncode,
                 uploadEnabled: entry.uploadEnabled,
-                audioOnly: entry.audioOnly
+                audioOnly: entry.audioOnly,
+                section: entry.section
             ))
         }
 
@@ -391,7 +410,8 @@ class DownloadManager {
             urlString: sourceURL,
             outputFolder: folder,
             liveFromStart: item.downloadLiveFromStart,
-            audioOnly: item.downloadAudioOnly
+            audioOnly: item.downloadAudioOnly,
+            section: item.downloadSection
         )
     }
 
@@ -413,7 +433,8 @@ class DownloadManager {
         items: Binding<[VideoItem]>,
         outputFolder: URL,
         liveFromStart: Bool = false,
-        audioOnly: Bool = false
+        audioOnly: Bool = false,
+        section: DownloadSection? = nil
     ) async -> UUID? {
         // Check if yt-dlp is available
         guard await isYTDLPConfigured() else {
@@ -445,6 +466,7 @@ class DownloadManager {
         item.downloadSpeed = nil
         item.downloadLiveFromStart = liveFromStart
         item.downloadAudioOnly = audioOnly
+        item.downloadSection = section
 
         // Apply default automation settings
         item.autoEncodeAfterDownload = UserDefaults.standard.bool(forKey: AppConstants.autoEncodeAfterDownloadKey)
@@ -461,7 +483,8 @@ class DownloadManager {
             urlString: urlString,
             outputFolder: outputFolder,
             liveFromStart: liveFromStart,
-            audioOnly: audioOnly
+            audioOnly: audioOnly,
+            section: section
         )
 
         return itemID
@@ -586,6 +609,7 @@ class DownloadManager {
         outputFolder: URL,
         liveFromStart: Bool,
         audioOnly: Bool,
+        section: DownloadSection? = nil,
         forceOverwrite: Bool = false
     ) -> Task<Void, Never> {
         let previous = downloadTasks[itemID]?.task
@@ -611,12 +635,12 @@ class DownloadManager {
             if forceOverwrite {
                 await self.performForceDownload(
                     itemID: itemID, urlString: urlString, outputFolder: outputFolder,
-                    liveFromStart: liveFromStart, audioOnly: audioOnly, control: control
+                    liveFromStart: liveFromStart, audioOnly: audioOnly, section: section, control: control
                 )
             } else {
                 await self.performDownload(
                     itemID: itemID, urlString: urlString, outputFolder: outputFolder,
-                    liveFromStart: liveFromStart, audioOnly: audioOnly, control: control
+                    liveFromStart: liveFromStart, audioOnly: audioOnly, section: section, control: control
                 )
             }
         }
@@ -631,6 +655,7 @@ class DownloadManager {
         outputFolder: URL,
         liveFromStart: Bool,
         audioOnly: Bool,
+        section: DownloadSection?,
         control: YTDLPDownloadControl
     ) async {
         let downloadStartTime = Date()
@@ -660,6 +685,7 @@ class DownloadManager {
                 forceOverwrite: false,
                 liveFromStart: liveFromStart,
                 audioOnly: audioOnly,
+                section: section,
                 control: control,
                 progress: { [weak self] progress, speed, isLiveStream in
                     Task { @MainActor in
@@ -754,7 +780,8 @@ class DownloadManager {
             if let item = findItem(itemID) {
                 let shouldAutoEncode = item.autoEncodeAfterDownload
                 loadDownloadedFileDetails(
-                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode
+                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode,
+                    section: section, sourceDuration: result.sourceDuration
                 )
             }
 
@@ -962,7 +989,8 @@ class DownloadManager {
             urlString: sourceURL,
             outputFolder: outputFolder,
             liveFromStart: item.downloadLiveFromStart,
-            audioOnly: item.downloadAudioOnly
+            audioOnly: item.downloadAudioOnly,
+            section: item.downloadSection
         )
     }
 
@@ -994,6 +1022,7 @@ class DownloadManager {
             outputFolder: outputFolder,
             liveFromStart: item.downloadLiveFromStart,
             audioOnly: item.downloadAudioOnly,
+            section: item.downloadSection,
             forceOverwrite: true
         )
     }
@@ -1005,6 +1034,7 @@ class DownloadManager {
         outputFolder: URL,
         liveFromStart: Bool,
         audioOnly: Bool,
+        section: DownloadSection?,
         control: YTDLPDownloadControl
     ) async {
         let folderAccess = SecurityScopedBookmarkManager.shared.startAccessing(url: outputFolder)
@@ -1025,6 +1055,7 @@ class DownloadManager {
                 forceOverwrite: true,
                 liveFromStart: liveFromStart,
                 audioOnly: audioOnly,
+                section: section,
                 control: control,
                 progress: { [weak self] progress, speed, isLiveStream in
                     Task { @MainActor in
@@ -1098,7 +1129,8 @@ class DownloadManager {
             if let item = findItem(itemID) {
                 let shouldAutoEncode = item.autoEncodeAfterDownload
                 loadDownloadedFileDetails(
-                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode
+                    itemID: itemID, fileURL: result.outputURL, autoEncode: shouldAutoEncode,
+                    section: section, sourceDuration: result.sourceDuration
                 )
             }
 
@@ -1351,8 +1383,9 @@ struct PersistedScheduledDownload: Codable, Equatable {
     let autoEncode: Bool
     let uploadEnabled: Bool
     let audioOnly: Bool
+    let section: DownloadSection?
 
-    init(itemID: UUID, url: String, scheduledTime: Date, liveFromStart: Bool, autoEncode: Bool, uploadEnabled: Bool, audioOnly: Bool) {
+    init(itemID: UUID, url: String, scheduledTime: Date, liveFromStart: Bool, autoEncode: Bool, uploadEnabled: Bool, audioOnly: Bool, section: DownloadSection? = nil) {
         self.itemID = itemID
         self.url = url
         self.scheduledTime = scheduledTime
@@ -1360,6 +1393,7 @@ struct PersistedScheduledDownload: Codable, Equatable {
         self.autoEncode = autoEncode
         self.uploadEnabled = uploadEnabled
         self.audioOnly = audioOnly
+        self.section = section
     }
 
     init(from decoder: Decoder) throws {
@@ -1374,6 +1408,8 @@ struct PersistedScheduledDownload: Codable, Equatable {
         audioOnly = container.contains(.audioOnly)
             ? try container.decode(Bool.self, forKey: .audioOnly)
             : false
+        // Back-compat: schedules persisted before section downloads have no key.
+        section = try container.decodeIfPresent(DownloadSection.self, forKey: .section)
     }
 }
 

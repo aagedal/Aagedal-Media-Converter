@@ -56,6 +56,27 @@ final class DownloadDetailsLifecycleTests: XCTestCase {
         XCTAssertEqual(encodedItems, [itemID])
     }
 
+    func testSectionDownloadAppliesExactTrimAfterDetailsLoad() async {
+        let section = DownloadSection(start: 60, end: 80)!
+        // WebM-style file: 5 s keyframe pre-roll ahead of the padded 55–85 range.
+        let details = VideoFileUtils.VideoItemDetails(
+            size: 1, duration: "00:00:35", durationSeconds: 35,
+            thumbnailData: nil, outputURL: nil, hasVideoStream: true, metadata: nil
+        )
+        let manager = DownloadManager { _ in details }
+        var items = [makeItem()]
+        let itemID = items[0].id
+        manager.videoItems = Binding(get: { items }, set: { items = $0 })
+
+        await manager.loadDownloadedFileDetails(
+            itemID: itemID, fileURL: items[0].url, autoEncode: false,
+            section: section, sourceDuration: 600
+        ).value
+
+        XCTAssertEqual(try XCTUnwrap(items[0].trimStart), 10, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(items[0].trimEnd), 30, accuracy: 0.001)
+    }
+
     private func makeItem() -> VideoItem {
         VideoItem(
             url: URL(fileURLWithPath: "/fixture/download.mov"), name: "download.mov", size: 0,
@@ -551,5 +572,87 @@ private final class DownloadDrainRunner: SubprocessRunning, @unchecked Sendable 
 
     func finish(run: Int) {
         lock.withLock { continuations.removeValue(forKey: run) }?.resume()
+    }
+}
+
+final class DownloadSectionTests: XCTestCase {
+    func testParseTimeAcceptsCommonFormsAndRejectsInvalidInput() {
+        XCTAssertEqual(DownloadSection.parseTime("90"), 90)
+        XCTAssertEqual(DownloadSection.parseTime("1:30"), 90)
+        XCTAssertEqual(DownloadSection.parseTime(" 1:02:03 "), 3723)
+        XCTAssertEqual(DownloadSection.parseTime("1:30.5"), 90.5)
+        XCTAssertEqual(DownloadSection.parseTime("75:00"), 4500)
+        for invalid in ["", "abc", "1:60", "1:2:3:4", "-5", "1:", ":30", "1.5:30", "1e3"] {
+            XCTAssertNil(DownloadSection.parseTime(invalid), invalid)
+        }
+    }
+
+    func testValidationAndYTDLPArgumentIncludePadding() {
+        XCTAssertNil(DownloadSection(start: 10, end: 10))
+        XCTAssertNil(DownloadSection(start: 0, end: nil))
+        XCTAssertNil(DownloadSection(start: -1, end: 5))
+        XCTAssertEqual(DownloadSection(start: 90, end: 250)?.ytdlpArgument, "*85.000-255.000")
+        XCTAssertEqual(DownloadSection(start: 2, end: nil)?.ytdlpArgument, "*0.000-inf")
+        XCTAssertEqual(DownloadSection(start: 0, end: 30)?.ytdlpArgument, "*0.000-35.000")
+        XCTAssertEqual(DownloadSection(start: 90, end: 3725)?.fileNameLabel, "clip 1m30s-1h02m05s")
+        XCTAssertEqual(DownloadSection(start: 5, end: nil)?.fileNameLabel, "clip 5s-end")
+    }
+
+    func testTrimRangeForMP4StartsAtPaddedStart() {
+        let section = DownloadSection(start: 60, end: 80)!
+        let trim = section.trimRange(fileDuration: 30.008, sourceDuration: 600)
+        XCTAssertEqual(try XCTUnwrap(trim.start), 5, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(trim.end), 25, accuracy: 0.01)
+    }
+
+    func testTrimRangeAccountsForMatroskaPreRoll() {
+        let section = DownloadSection(start: 60, end: 80)!
+        let trim = section.trimRange(fileDuration: 35, sourceDuration: 600)
+        XCTAssertEqual(try XCTUnwrap(trim.start), 10, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(trim.end), 30, accuracy: 0.001)
+    }
+
+    func testTrimRangeClampsToSourceEnd() {
+        // Out-point past the end of a 100 s video: file covers 55–100 plus 3 s pre-roll.
+        let section = DownloadSection(start: 60, end: 120)!
+        let trim = section.trimRange(fileDuration: 48, sourceDuration: 100)
+        XCTAssertEqual(try XCTUnwrap(trim.start), 8, accuracy: 0.001)
+        XCTAssertNil(trim.end)
+    }
+
+    func testTrimRangeNearVideoStartNeedsNoInPoint() {
+        let section = DownloadSection(start: 0, end: 20)!
+        let trim = section.trimRange(fileDuration: 25, sourceDuration: 600)
+        XCTAssertNil(trim.start)
+        XCTAssertEqual(try XCTUnwrap(trim.end), 20, accuracy: 0.001)
+    }
+
+    func testLegacyScheduleWithoutSectionDecodes() throws {
+        let section = DownloadSection(start: 30, end: 45)
+        let original = PersistedScheduledDownload(
+            itemID: UUID(), url: "https://example.com/video",
+            scheduledTime: Date(timeIntervalSince1970: 2_000_000_000),
+            liveFromStart: false, autoEncode: false, uploadEnabled: false, audioOnly: false,
+            section: section
+        )
+        let data = try JSONEncoder().encode(original)
+        XCTAssertEqual(try JSONDecoder().decode(PersistedScheduledDownload.self, from: data).section, section)
+
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "section")
+        let legacy = try JSONDecoder().decode(PersistedScheduledDownload.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(legacy.section)
+    }
+
+    func testParsesFFmpegPositionAndSourceDurationMarkers() {
+        XCTAssertEqual(YTDLPProgressParser.parseFFmpegTime(
+            "frame=  209 fps= 83 q=-1.0 size=  33KiB time=00:01:02.50 bitrate= 393.3kbits/s speed=0.275x"
+        ), 62.5)
+        XCTAssertEqual(YTDLPProgressParser.parseFFmpegTime(
+            "frame=   17 fps=0.0 q=-1.0 size=  33KiB time=-00:00:02.50 bitrate=N/A speed=N/A"
+        ), 0)
+        XCTAssertNil(YTDLPProgressParser.parseFFmpegTime("[download] time=00:00:01.00"))
+        XCTAssertEqual(YTDLPProgressParser.parseSourceDuration("__AMC_SOURCE_DURATION__=634.0"), 634)
+        XCTAssertNil(YTDLPProgressParser.parseSourceDuration("__AMC_SOURCE_DURATION__=NA"))
     }
 }
