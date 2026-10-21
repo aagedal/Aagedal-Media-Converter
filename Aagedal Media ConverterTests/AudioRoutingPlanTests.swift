@@ -373,6 +373,145 @@ final class AudioRoutingPlanTests: XCTestCase {
         ])
     }
 
+    func testCopiedTracksBypassDownmixGraphAndOwnCodecOverrides() {
+        let config = AudioRoutingConfig(inputTracks: tracks, outputTracks: [
+            OutputTrack(streamIndex: 1, downmixToStereo: true),
+            OutputTrack(streamIndex: 1, encoding: .copy),
+            OutputTrack(streamIndex: 0, encoding: .aac(bitrateKbps: 96)),
+            OutputTrack(streamIndex: 0)
+        ])
+        let plan = AudioRoutingService.makePlan(config: config)
+        XCTAssertEqual(plan.ffmpegArguments, [
+            "-filter_complex",
+            "[0:a:1]aresample=ochl=stereo[aout0];[0:a:0]anull[aout2];[0:a:0]anull[aout3]",
+            "-map", "[aout0]", "-map", "0:a:1", "-map", "[aout2]", "-map", "[aout3]"
+        ])
+        XCTAssertEqual(plan.codecArguments(passthroughByDefault: false), [
+            "-c:a:1", "copy", "-c:a:2", "aac", "-b:a:2", "96k"
+        ])
+
+        // Stream Copy copies untouched tracks and must encode the filtered one.
+        XCTAssertEqual(plan.mappingArguments(passthroughByDefault: true), [
+            "-filter_complex",
+            "[0:a:1]aresample=ochl=stereo[aout0];[0:a:0]anull[aout2]",
+            "-map", "[aout0]", "-map", "0:a:1", "-map", "[aout2]", "-map", "0:a:0"
+        ])
+        XCTAssertEqual(plan.codecArguments(passthroughByDefault: true), [
+            "-c:a:0", "aac", "-b:a:0", "192k", "-c:a:2", "aac", "-b:a:2", "96k"
+        ])
+        XCTAssertTrue(config.isCustomized)
+    }
+
+    func testCodecOverridesFollowPresetAudioCodec() {
+        var args = ["-c:v", "libx264", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0", "-map", "0:a?"]
+        let config = AudioRoutingConfig(inputTracks: tracks, outputTracks: [
+            OutputTrack(streamIndex: 1, encoding: .copy),
+            OutputTrack(streamIndex: 0, encoding: .aac(bitrateKbps: 128))
+        ])
+        FFMPEGCommandBuilder.applyAudioRouting(config: config, to: &args, codecOverrides: true)
+        XCTAssertEqual(args, [
+            "-c:v", "libx264", "-c:a", "aac", "-b:a", "192k", "-map", "0:v:0",
+            "-map", "0:a:1", "-map", "0:a:0",
+            "-c:a:0", "copy", "-c:a:1", "aac", "-b:a:1", "128k"
+        ])
+    }
+
+    func testEncodingOverrideRoundTripsAndLegacyRoutesDefaultToPreset() throws {
+        let config = AudioRoutingConfig(inputTracks: tracks, outputTracks: [
+            OutputTrack(streamIndex: 1, encoding: .aac(bitrateKbps: 160)), OutputTrack(streamIndex: 0)
+        ])
+        let decoded = try JSONDecoder().decode(AudioRoutingConfig.self, from: JSONEncoder().encode(config))
+        XCTAssertEqual(decoded.outputTracks.map(\.encoding), [.aac(bitrateKbps: 160), .preset])
+        XCTAssertEqual(try decodeRoute(["outputTrackIndices": [1]]).outputTracks.map(\.encoding), [.preset])
+    }
+
+    func testBulkEncodingAppliesToSelectionAndSkipsCopyForDownmixedTracks() {
+        var config = AudioRoutingConfig(inputTracks: tracks, outputTracks: [
+            OutputTrack(streamIndex: 0), OutputTrack(streamIndex: 1, downmixToStereo: true), OutputTrack(streamIndex: 0)
+        ])
+        let selection: Set<UUID> = [config.outputTracks[0].id, config.outputTracks[1].id]
+        config.setEncoding(.aac(bitrateKbps: 128), for: selection)
+        XCTAssertEqual(config.outputTracks.map(\.encoding), [.aac(bitrateKbps: 128), .aac(bitrateKbps: 128), .preset])
+        config.setEncoding(.copy, for: selection)
+        XCTAssertEqual(config.outputTracks.map(\.encoding), [.copy, .aac(bitrateKbps: 128), .preset])
+    }
+
+    func testGroupMoveShiftAndRemoveKeepRelativeOrder() {
+        let original = (0..<5).map { _ in OutputTrack(streamIndex: 0) }
+        let ids = original.map(\.id)
+        func order(_ config: AudioRoutingConfig) -> [Int] { config.outputTracks.map { ids.firstIndex(of: $0.id)! } }
+        var config = AudioRoutingConfig(inputTracks: tracks, outputTracks: original)
+
+        // Move tracks 1 and 3 as a block to the end, then to the front
+        config.moveTracks(ids: [ids[1], ids[3]], toInsertionIndex: 5)
+        XCTAssertEqual(order(config), [0, 2, 4, 1, 3])
+        config.moveTracks(ids: [ids[1], ids[3]], toInsertionIndex: 0)
+        XCTAssertEqual(order(config), [1, 3, 0, 2, 4])
+        // Dropping into a gap inside the moving block leaves the order unchanged
+        config.channelOperation = .swapChannels(trackIndex: 0)
+        config.moveTracks(ids: [ids[1], ids[3]], toInsertionIndex: 1)
+        XCTAssertEqual(order(config), [1, 3, 0, 2, 4])
+        XCTAssertNotNil(config.channelOperation)
+
+        // Shifting stops at the edges and never jumps over another selected track
+        config.shiftTracks(ids: [ids[1], ids[0]], by: -1)
+        XCTAssertEqual(order(config), [1, 0, 3, 2, 4])
+        config.shiftTracks(ids: [ids[3], ids[4]], by: 1)
+        XCTAssertEqual(order(config), [1, 0, 2, 3, 4])
+        XCTAssertNil(config.channelOperation)
+
+        config.removeTracks(ids: [ids[0], ids[4]])
+        XCTAssertEqual(order(config), [1, 2, 3])
+    }
+
+    func testStreamCopyRoutingDropsCopiesAndReencodesSelectedTracks() async throws {
+        let ffmpeg = try XCTUnwrap(BinaryPathResolver.ffmpegPath)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("rewrap-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let source = directory.appendingPathComponent("source.mkv")
+        let generated = try await SubprocessRunner().run(.init(executableURL: URL(fileURLWithPath: ffmpeg), arguments: [
+            "-hide_banner", "-nostdin",
+            "-f", "lavfi", "-i", "testsrc=d=1:s=64x64:r=25",
+            "-f", "lavfi", "-i", "sine=f=440:d=1:r=48000",
+            "-f", "lavfi", "-i", "sine=f=660:d=1:r=48000",
+            "-f", "lavfi", "-i", "anullsrc=cl=5.1:r=48000",
+            "-t", "1", "-map", "0", "-map", "1", "-map", "2", "-map", "3",
+            "-c:v", "mpeg4", "-c:a", "flac", "-ac:a:0", "2", source.path
+        ], timeout: .seconds(30)))
+        XCTAssertTrue(generated.succeeded, generated.standardErrorText)
+        let inputTracks = await AudioRoutingService.fetchAudioTrackInfo(for: source)
+        XCTAssertEqual(inputTracks.map(\.channels), [2, 1, 6])
+
+        let routes: [(String, [OutputTrack], [(codec: String, channels: Int)])] = [
+            ("mkv", [OutputTrack(streamIndex: 2), OutputTrack(streamIndex: 0, encoding: .aac(bitrateKbps: 96))],
+             [("flac", 6), ("aac", 2)]),
+            ("mkv", [OutputTrack(streamIndex: 2, downmixToStereo: true), OutputTrack(streamIndex: 1)],
+             [("aac", 2), ("flac", 1)]),
+            ("mp4", [OutputTrack(streamIndex: 1, encoding: .aac(bitrateKbps: 128))], [("aac", 1)])
+        ]
+        for (index, (fileExtension, outputTracks, expected)) in routes.enumerated() {
+            let output = directory.appendingPathComponent("out\(index).\(fileExtension)")
+            let command = await FFMPEGCommandBuilder.buildCommand(
+                inputURL: source, outputFileURL: output, preset: .streamCopy, comment: "",
+                includeDateTag: false, trimStart: nil, trimEnd: nil,
+                audioRoutingConfig: AudioRoutingConfig(inputTracks: inputTracks, outputTracks: outputTracks)
+            )
+            XCTAssertNil(command.preparationError)
+            let result = try await SubprocessRunner().run(.init(
+                executableURL: URL(fileURLWithPath: ffmpeg), arguments: ["-nostdin", "-y"] + command.arguments,
+                timeout: .seconds(30)))
+            XCTAssertTrue(result.succeeded, command.arguments.joined(separator: " ") + "\n" + result.standardErrorText)
+            let routed = await AudioRoutingService.fetchAudioTrackInfo(for: output)
+            // The probe reports container codec tags (A_FLAC, A_AAC, mp4a).
+            let codecs = routed.map { ($0.codec ?? "").lowercased() == "mp4a" ? "aac" : ($0.codec ?? "").lowercased() }
+            XCTAssertEqual(codecs.map { $0.replacingOccurrences(of: "a_", with: "") }, expected.map(\.codec), "route \(index)")
+            XCTAssertEqual(routed.map { $0.channels ?? 0 }, expected.map(\.channels), "route \(index)")
+            let metadata = try await BoundedVideoMetadataProbe.metadata(for: output)
+            XCTAssertNotNil(metadata.primaryVideoStream, "route \(index)")
+        }
+    }
+
     func testChannelOperationOwnsOutputCountInsteadOfSelectedTrackCount() {
         var config = AudioRoutingConfig(inputTracks: tracks, outputTrackIndices: [0])
         config.channelOperation = .splitToMono(trackIndex: 0)
