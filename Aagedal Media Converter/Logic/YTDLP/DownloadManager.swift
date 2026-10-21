@@ -524,6 +524,23 @@ class DownloadManager {
             return []
         }
 
+        return await startPlaylistDownload(entries: entries, items: items, outputFolder: outputFolder, audioOnly: audioOnly)
+    }
+
+    /// Adds one queue item per already-probed playlist entry (e.g. the subset the
+    /// user picked in the URL overlay), then downloads each sequentially.
+    /// - Returns: IDs of every queue item that was created (in entry order).
+    @discardableResult
+    func startPlaylistDownload(
+        entries: [YTDLPPlaylistEntry],
+        items: Binding<[VideoItem]>,
+        outputFolder: URL,
+        audioOnly: Bool = false
+    ) async -> [UUID] {
+        guard !entries.isEmpty else { return [] }
+        self.videoItems = items
+        self.outputFolder = outputFolder
+
         logger.info("Spawning \(entries.count) queue item(s) from playlist")
 
         // Snap the automation defaults once so every spawned item shares the same

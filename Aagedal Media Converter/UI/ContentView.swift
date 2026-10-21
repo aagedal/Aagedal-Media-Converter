@@ -872,13 +872,16 @@ struct ContentView: View {
             if showURLInputOverlay {
                 URLInputOverlay(
                     isPresented: $showURLInputOverlay,
-                    onSubmit: { urlString, liveFromStart, audioOnly, wholePlaylist, section in
-                        handleURLDownload(urlString, liveFromStart: liveFromStart, audioOnly: audioOnly, wholePlaylist: wholePlaylist, section: section)
+                    onSubmit: { urlString, liveFromStart, audioOnly, section in
+                        handleURLDownload(urlString, liveFromStart: liveFromStart, audioOnly: audioOnly, section: section)
                     },
-                    onSchedule: { urlString, scheduledDate, liveFromStart, audioOnly, _, section in
-                        // Scheduling for whole-playlist isn't supported yet — submit() in
-                        // URLInputOverlay routes the playlist case through onSubmit instead.
+                    onSchedule: { urlString, scheduledDate, liveFromStart, audioOnly, section in
+                        // Scheduling for playlists isn't supported yet — submit() in
+                        // URLInputOverlay routes the playlist case through onSubmitPlaylist instead.
                         handleScheduledDownload(urlString, at: scheduledDate, liveFromStart: liveFromStart, audioOnly: audioOnly, section: section)
+                    },
+                    onSubmitPlaylist: { entries, audioOnly in
+                        handlePlaylistDownload(entries, audioOnly: audioOnly)
                     }
                 )
             }
@@ -919,7 +922,7 @@ struct ContentView: View {
     }
 
     /// Handles URL download from the overlay
-    private func handleURLDownload(_ urlString: String, liveFromStart: Bool, audioOnly: Bool, wholePlaylist: Bool = false, section: DownloadSection? = nil) {
+    private func handleURLDownload(_ urlString: String, liveFromStart: Bool, audioOnly: Bool, section: DownloadSection? = nil) {
         Task {
             // Check if yt-dlp is configured
             guard await DownloadManager.shared.isYTDLPConfigured() else {
@@ -927,23 +930,31 @@ struct ContentView: View {
                 return
             }
 
-            if wholePlaylist {
-                await DownloadManager.shared.startPlaylistDownload(
-                    url: urlString,
-                    items: $droppedFiles,
-                    outputFolder: downloadFolderURL,
-                    audioOnly: audioOnly
-                )
-            } else {
-                await DownloadManager.shared.startDownload(
-                    url: urlString,
-                    items: $droppedFiles,
-                    outputFolder: downloadFolderURL,
-                    liveFromStart: liveFromStart,
-                    audioOnly: audioOnly,
-                    section: section
-                )
+            await DownloadManager.shared.startDownload(
+                url: urlString,
+                items: $droppedFiles,
+                outputFolder: downloadFolderURL,
+                liveFromStart: liveFromStart,
+                audioOnly: audioOnly,
+                section: section
+            )
+        }
+    }
+
+    /// Handles the playlist entries picked in the URL overlay
+    private func handlePlaylistDownload(_ entries: [YTDLPPlaylistEntry], audioOnly: Bool) {
+        Task {
+            guard await DownloadManager.shared.isYTDLPConfigured() else {
+                showYTDLPNotConfiguredAlert = true
+                return
             }
+
+            await DownloadManager.shared.startPlaylistDownload(
+                entries: entries,
+                items: $droppedFiles,
+                outputFolder: downloadFolderURL,
+                audioOnly: audioOnly
+            )
         }
     }
 
@@ -1899,13 +1910,22 @@ struct ContentView: View {
             if FileManager.default.fileExists(atPath: directory.path) {
                 try FileManager.default.removeItem(at: directory)
             }
-            if environment["AMC_UI_TEST_INSTAGRAM_PICKER"] == "1" || environment["AMC_UI_TEST_TWITTER_PICKER"] == "1" {
+            if environment["AMC_UI_TEST_INSTAGRAM_PICKER"] == "1" || environment["AMC_UI_TEST_TWITTER_PICKER"] == "1"
+                || environment["AMC_UI_TEST_PLAYLIST_PICKER"] == "1" {
                 let tools = AppConstants.ytdlpToolsDirectory
                 try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
                 let isTwitter = environment["AMC_UI_TEST_TWITTER_PICKER"] == "1"
-                let entries: [[String: Any]] = (1...(isTwitter ? 2 : 12)).map { index in
-                    ["title": "Carousel video", "playlist_index": index,
-                     "formats": (isTwitter || [4, 6, 8, 10, 11].contains(index)) ? [["url": "https://example.test/video.mp4"]] : []]
+                let entries: [[String: Any]]
+                if environment["AMC_UI_TEST_PLAYLIST_PICKER"] == "1" {
+                    entries = (1...3).map { index in
+                        ["title": "Playlist video \(index)", "url": "https://www.youtube.com/watch?v=video\(index)",
+                         "duration": 60 + index]
+                    }
+                } else {
+                    entries = (1...(isTwitter ? 2 : 12)).map { index in
+                        ["title": "Carousel video", "playlist_index": index,
+                         "formats": (isTwitter || [4, 6, 8, 10, 11].contains(index)) ? [["url": "https://example.test/video.mp4"]] : []]
+                    }
                 }
                 let data = try JSONSerialization.data(withJSONObject: ["entries": entries])
                 let json = String(decoding: data, as: UTF8.self)

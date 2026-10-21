@@ -321,6 +321,8 @@ struct PostDownloadVideo: Identifiable, Sendable {
     let url: String
     let title: String
     let thumbnailURL: URL?
+    /// Known for playlist entries; posts leave it unset.
+    var duration: Double? = nil
     var id: Int { slideIndex }
 }
 
