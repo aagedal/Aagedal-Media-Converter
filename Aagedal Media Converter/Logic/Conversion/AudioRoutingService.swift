@@ -138,7 +138,7 @@ enum AudioRoutingService {
             }
         }
         return .tracks(config.outputTracks.map {
-            AudioRoutingPlan.Track(streamIndex: $0.streamIndex, downmixToStereo: $0.downmixToStereo)
+            AudioRoutingPlan.Track(streamIndex: $0.streamIndex, downmixToStereo: $0.downmixToStereo, encoding: $0.encoding)
         })
     }
 
@@ -179,6 +179,24 @@ enum AudioRoutingService {
         // Warn if all tracks are removed
         if config.outputTrackIndices.isEmpty {
             messages.append("Warning: No audio tracks selected. Output will have no audio.")
+        }
+
+        if config.hasEncodingOverrides && !preset.supportsPerTrackAudioEncoding {
+            messages.append("Note: \(preset.displayName) encodes all audio itself. Per-track codec choices will be ignored.")
+        }
+
+        if preset == .streamCopy {
+            let encodesFilteredTrack = config.outputTracks.contains { track in
+                guard track.downmixToStereo else { return false }
+                if case .aac = track.encoding { return false }
+                return true
+            }
+            if config.channelOperation != nil || encodesFilteredTrack {
+                messages.append("Note: Stream Copy cannot copy filtered audio. Downmixed or channel-processed tracks will be encoded as AAC \(AudioTrackEncoding.streamCopyFallbackAACKbps) kbps.")
+            }
+        } else if preset.supportsPerTrackAudioEncoding,
+                  config.outputTracks.contains(where: { $0.downmixToStereo && $0.encoding == .copy }) {
+            messages.append("Note: Downmixed tracks cannot be copied and will use the preset's audio codec instead.")
         }
 
         // Warn about surround audio tracks without downmix
@@ -231,6 +249,13 @@ enum AudioRoutingPlan: Equatable, Sendable {
     struct Track: Equatable, Sendable {
         let streamIndex: Int
         let downmixToStereo: Bool
+        var encoding: AudioTrackEncoding = .preset
+
+        /// A copied track must bypass the filter graph; FFmpeg cannot stream copy filtered output.
+        func copiesSource(passthroughByDefault: Bool) -> Bool {
+            guard !downmixToStereo else { return false }
+            return encoding == .copy || (encoding == .preset && passthroughByDefault)
+        }
     }
 
     case tracks([Track])
@@ -248,16 +273,29 @@ enum AudioRoutingPlan: Equatable, Sendable {
     }
 
     var ffmpegArguments: [String] {
+        mappingArguments(passthroughByDefault: false)
+    }
+
+    /// Filter graph and output maps. With `passthroughByDefault` (Stream Copy), tracks
+    /// without a codec override are mapped directly so they can be copied.
+    func mappingArguments(passthroughByDefault: Bool) -> [String] {
         switch self {
         case .tracks(let tracks):
             guard tracks.contains(where: \.downmixToStereo) else {
                 return tracks.flatMap { ["-map", "0:a:\($0.streamIndex)"] }
             }
-            let filters = tracks.enumerated().map { index, track in
+            var filters: [String] = []
+            var maps: [String] = []
+            for (index, track) in tracks.enumerated() {
+                if track.copiesSource(passthroughByDefault: passthroughByDefault) {
+                    maps += ["-map", "0:a:\(track.streamIndex)"]
+                    continue
+                }
                 let filter = track.downmixToStereo ? "aresample=ochl=stereo" : "anull"
-                return "[0:a:\(track.streamIndex)]\(filter)[aout\(index)]"
+                filters.append("[0:a:\(track.streamIndex)]\(filter)[aout\(index)]")
+                maps += ["-map", "[aout\(index)]"]
             }
-            return Self.filtered(filters.joined(separator: ";"), outputs: tracks.indices.map { "aout\($0)" })
+            return ["-filter_complex", filters.joined(separator: ";")] + maps
         case .mergeToStereo(let indices):
             let inputs = indices.map { "[0:a:\($0)]" }.joined()
             let pan = indices.count == 2 ? "pan=stereo|c0<c0+c2|c1<c1+c3" : "pan=stereo|c0<c0|c1<c1"
@@ -271,6 +309,33 @@ enum AudioRoutingPlan: Equatable, Sendable {
             return Self.filtered("[0:a:\(index)]pan=stereo|c0=c1|c1=c0[aout]", outputs: ["aout"])
         case .extractChannel(let index, let channel):
             return Self.filtered("[0:a:\(index)]pan=mono|c0=c\(channel)[aout]", outputs: ["aout"])
+        }
+    }
+
+    /// Per-output-stream codec overrides (`-c:a:N`). These must follow the preset's own
+    /// audio codec options because FFmpeg applies the last matching stream specifier.
+    func codecArguments(passthroughByDefault: Bool) -> [String] {
+        let fallback = AudioTrackEncoding.aac(bitrateKbps: AudioTrackEncoding.streamCopyFallbackAACKbps)
+        let encodings: [AudioTrackEncoding?]
+        switch self {
+        case .tracks(let tracks):
+            encodings = tracks.map { track in
+                if track.copiesSource(passthroughByDefault: passthroughByDefault) {
+                    return passthroughByDefault ? nil : .copy
+                }
+                if case .aac = track.encoding { return track.encoding }
+                // Filtered output (or an impossible copy+downmix) under Stream Copy must be encoded.
+                return passthroughByDefault ? fallback : nil
+            }
+        case .mergeToStereo, .splitToMono, .swapChannels, .extractChannel:
+            encodings = Array(repeating: passthroughByDefault ? fallback : nil, count: outputStreamCount)
+        }
+        return encodings.enumerated().flatMap { index, encoding -> [String] in
+            switch encoding {
+            case nil, .preset?: return []
+            case .copy?: return ["-c:a:\(index)", "copy"]
+            case .aac(let kbps)?: return ["-c:a:\(index)", "aac", "-b:a:\(index)", "\(kbps)k"]
+            }
         }
     }
 

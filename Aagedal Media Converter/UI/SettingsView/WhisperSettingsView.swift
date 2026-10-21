@@ -480,9 +480,10 @@ struct WhisperSettingsView: View {
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        let kb = 1024.0
-        let mb = kb * 1024
-        let gb = mb * 1024
+        // Decimal units, matching Finder (1 MB = 1,000,000 bytes).
+        let kb = 1000.0
+        let mb = kb * 1000
+        let gb = mb * 1000
         let bytesDouble = Double(bytes)
 
         if bytesDouble < mb {

@@ -511,7 +511,10 @@ enum FFMPEGCommandBuilder {
                     // The generated video already owns its map; routed audio replaces the
                     // automatic source-audio map instead of adding another copy of it.
                     removeArgumentPair("-map", value: "0:a?", from: &arguments)
-                    applyAudioRouting(config: audioRoutingConfig, to: &ffmpegArgs, addVideoMap: false)
+                    applyAudioRouting(
+                        config: audioRoutingConfig, to: &ffmpegArgs, addVideoMap: false,
+                        codecOverrides: preset.supportsPerTrackAudioEncoding
+                    )
                     if AudioRoutingService.makePlan(config: audioRoutingConfig).outputStreamCount == 0 {
                         applyMute(to: &ffmpegArgs)
                     }
@@ -685,8 +688,20 @@ enum FFMPEGCommandBuilder {
         
         // Apply audio routing configuration if provided and preset supports audio and audio routing
         // Skip for image sequence inputs (no audio streams)
+        // Stream copy routes after its container-specific map adjustment below.
+        let streamCopyAudioRouting: AudioRoutingConfig?
         if !isImageSequenceInput, let audioRoutingConfig, preset.outputsAudioTrack, (capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting) {
-            applyAudioRouting(config: audioRoutingConfig, to: &ffmpegArgs)
+            if preset == .streamCopy {
+                streamCopyAudioRouting = audioRoutingConfig
+            } else {
+                applyAudioRouting(
+                    config: audioRoutingConfig, to: &ffmpegArgs,
+                    codecOverrides: preset.supportsPerTrackAudioEncoding
+                )
+                streamCopyAudioRouting = nil
+            }
+        } else {
+            streamCopyAudioRouting = nil
         }
 
         // Apply mute if requested - removes all audio from output
@@ -700,6 +715,10 @@ enum FFMPEGCommandBuilder {
 
         if preset == .streamCopy {
             adjustStreamCopyArguments(inputURL: inputURL, outputURL: outputFileURL, ffmpegArgs: &ffmpegArgs)
+            // An untouched route keeps the verbatim `-map 0` copy of every stream.
+            if let streamCopyAudioRouting, streamCopyAudioRouting.isCustomized {
+                applyStreamCopyAudioRouting(config: streamCopyAudioRouting, to: &ffmpegArgs)
+            }
         }
 
         arguments.append(contentsOf: trimPlan.durationArguments)
@@ -1111,7 +1130,10 @@ extension FFMPEGCommandBuilder {
            (capturedCodecSettings?.appliesAudioRouting ?? preset.appliesAudioRouting),
            audioRoutingConfig.isCustomized || !audioRoutingConfig.outputTracks.isEmpty {
             removeArgumentPair("-map", value: "1:a", from: &arguments)
-            applyAudioRoutingForNativePipeline(config: audioRoutingConfig, to: &ffmpegArgs)
+            applyAudioRoutingForNativePipeline(
+                config: audioRoutingConfig, to: &ffmpegArgs,
+                codecOverrides: preset.supportsPerTrackAudioEncoding
+            )
             if AudioRoutingService.makePlan(config: audioRoutingConfig).outputStreamCount == 0 {
                 applyMute(to: &ffmpegArgs)
             }
@@ -1147,7 +1169,11 @@ extension FFMPEGCommandBuilder {
 
     /// Applies audio routing for the native waveform pipeline where audio is input 1.
     /// Rewrites `0:a:X` references to `1:a:X` in the routing arguments.
-    private static func applyAudioRoutingForNativePipeline(config: AudioRoutingConfig, to ffmpegArgs: inout [String]) {
+    private static func applyAudioRoutingForNativePipeline(
+        config: AudioRoutingConfig,
+        to ffmpegArgs: inout [String],
+        codecOverrides: Bool
+    ) {
         // Get the standard audio routing arguments (which use 0:a:X)
         let standardArgs = AudioRoutingService.buildFFmpegMapArguments(config: config)
 
@@ -1185,6 +1211,11 @@ extension FFMPEGCommandBuilder {
         } else {
             // Simple map arguments — append them
             ffmpegArgs.append(contentsOf: rewrittenArgs)
+        }
+
+        if codecOverrides {
+            // Output-stream specifiers are input-agnostic, so no rewrite is needed.
+            ffmpegArgs.append(contentsOf: AudioRoutingService.makePlan(config: config).codecArguments(passthroughByDefault: false))
         }
     }
 
@@ -2044,10 +2075,25 @@ extension FFMPEGCommandBuilder {
 
     /// Applies audio routing configuration by replacing preset's audio map arguments
     /// with custom track selection, ordering, or channel-level operations
+    /// Stream copy keeps every non-audio stream from `-map 0` (or the MP4/MOV
+    /// subset), drops the source audio, and maps the routed tracks. Tracks without
+    /// a codec override inherit `-c copy`; filtered or AAC tracks get `-c:a:N`.
+    static func applyStreamCopyAudioRouting(config: AudioRoutingConfig, to ffmpegArgs: inout [String]) {
+        let plan = AudioRoutingService.makePlan(config: config)
+        removeArgumentPair("-map", value: "0:a?", from: &ffmpegArgs)
+        if ffmpegArgs.indices.contains(where: { ffmpegArgs[$0] == "-map" && ffmpegArgs.indices.contains($0 + 1) && ffmpegArgs[$0 + 1] == "0" }) {
+            ffmpegArgs += ["-map", "-0:a?"]
+        }
+        let routedArgs = plan.mappingArguments(passthroughByDefault: true) + plan.codecArguments(passthroughByDefault: true)
+        ffmpegArgs += routedArgs
+        logger.debug("Applied stream copy audio routing: \(routedArgs.joined(separator: " "))")
+    }
+
     static func applyAudioRouting(
         config: AudioRoutingConfig,
         to ffmpegArgs: inout [String],
-        addVideoMap: Bool = true
+        addVideoMap: Bool = true,
+        codecOverrides: Bool = false
     ) {
         // Check if there's already a video map - if not, we need to add one
         let hasVideoMap = ffmpegArgs.indices.contains { index in
@@ -2081,7 +2127,8 @@ extension FFMPEGCommandBuilder {
         }
 
         // Generate custom audio arguments (either simple -map or filter_complex)
-        let customAudioArgs = AudioRoutingService.buildFFmpegMapArguments(config: config)
+        let plan = AudioRoutingService.makePlan(config: config)
+        let customAudioArgs = plan.ffmpegArguments
 
         // Check if we're using filter_complex (channel operations)
         if customAudioArgs.contains("-filter_complex") {
@@ -2120,6 +2167,11 @@ extension FFMPEGCommandBuilder {
 
             ffmpegArgs.insert(contentsOf: customAudioArgs, at: insertionIndex)
             logger.debug("Applied audio routing with simple maps: \(customAudioArgs.joined(separator: " "))")
+        }
+
+        // Per-stream codec overrides must follow the preset's -c:a / -b:a to take effect.
+        if codecOverrides {
+            ffmpegArgs.append(contentsOf: plan.codecArguments(passthroughByDefault: false))
         }
     }
     

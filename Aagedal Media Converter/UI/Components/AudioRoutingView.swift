@@ -15,6 +15,16 @@ struct AudioRoutingView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var validationMessages: [String] = []
+    /// Output tracks selected for bulk codec changes (click, Shift-click, Cmd-click).
+    @State private var selectedOutputTrackIDs: Set<UUID> = []
+    @State private var selectionAnchorID: UUID?
+    /// Tracks being dragged, and the gap they would land in (0...count).
+    @State private var draggedOutputTrackIDs: Set<UUID> = []
+    @State private var dropInsertionIndex: Int?
+    /// Measured row heights for the drop delegates. A plain reference type on purpose:
+    /// storing these in observed state re-lays out the sheet on every measurement,
+    /// which loops forever.
+    @State private var outputRowHeights = OutputRowHeightStore()
     
     // Computed property for config binding with instant updates
     private var configBinding: Binding<AudioRoutingConfig> {
@@ -437,6 +447,14 @@ struct AudioRoutingView: View {
 
                 Spacer()
 
+                if !activeSelection.isEmpty {
+                    selectionToolbar
+                } else if config.outputTracks.count > 1 {
+                    Text("Click to select, Shift-click for a range")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 Text("\(config.outputTracks.count) tracks")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -464,6 +482,17 @@ struct AudioRoutingView: View {
                         ForEach(Array(config.outputTracks.enumerated()), id: \.element.id) { index, outputTrack in
                             outputTrackRow(outputTrack, position: index)
                         }
+
+                        // Drop target below the last row, for moving tracks to the end
+                        Color.clear
+                            .frame(height: 32)
+                            .contentShape(Rectangle())
+                            .onDrop(of: [.text], delegate: OutputTrackDropDelegate(
+                                position: config.outputTracks.count - 1,
+                                rowHeight: { 0 },
+                                insertionIndex: $dropInsertionIndex,
+                                perform: dropOutputTracks
+                            ))
                     }
                     .padding(.horizontal)
                 }
@@ -476,6 +505,7 @@ struct AudioRoutingView: View {
     private func outputTrackRow(_ outputTrack: OutputTrack, position: Int) -> some View {
         let baseTrackInfo = config.trackInfo(for: outputTrack.streamIndex)
         let trackInfo = baseTrackInfo?.applyingOverride(outputTrack.mcaOverride)
+        let isSelected = activeSelection.contains(outputTrack.id)
 
         return HStack(spacing: 12) {
             // Position indicator
@@ -576,6 +606,11 @@ struct AudioRoutingView: View {
                 .help(outputTrack.downmixToStereo ? "Keep original surround audio" : "Downmix to stereo for compatibility")
             }
 
+            // Per-track codec override (copy original / AAC)
+            if preset.supportsPerTrackAudioEncoding {
+                encodingMenu(for: outputTrack, trackInfo: trackInfo)
+            }
+
             // MCA labels picker (used by TV AVC-Intra MXF output)
             mcaLabelsMenu(for: outputTrack)
 
@@ -597,20 +632,291 @@ struct AudioRoutingView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(NSColor.controlBackgroundColor))
+                .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(NSColor.controlBackgroundColor))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                .stroke(isSelected ? Color.accentColor : Color.gray.opacity(0.2), lineWidth: isSelected ? 1.5 : 1)
         )
+        .overlay(alignment: .top) {
+            if isDraggingOutputTracks && dropInsertionIndex == position {
+                dropInsertionLine.offset(y: -5)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if isDraggingOutputTracks && dropInsertionIndex == config.outputTracks.count && position == config.outputTracks.count - 1 {
+                dropInsertionLine.offset(y: 5)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            handleOutputTrackClick(outputTrack.id)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            outputRowHeights.heights[outputTrack.id] = height
+        }
         .onDrag {
-            NSItemProvider(object: outputTrack.id.uuidString as NSString)
+            beginOutputTrackDrag(outputTrack.id)
+            return NSItemProvider(object: outputTrack.id.uuidString as NSString)
+        } preview: {
+            dragPreview(for: outputTrack, trackInfo: trackInfo)
         }
         .onDrop(of: [.text], delegate: OutputTrackDropDelegate(
             position: position,
-            config: configBinding,
-            onUpdate: updateValidation
+            rowHeight: { [outputRowHeights, id = outputTrack.id] in outputRowHeights.heights[id] ?? 0 },
+            insertionIndex: $dropInsertionIndex,
+            perform: dropOutputTracks
         ))
+    }
+
+    private var isDraggingOutputTracks: Bool {
+        !draggedOutputTrackIDs.isEmpty
+    }
+
+    private var dropInsertionLine: some View {
+        Capsule()
+            .fill(Color.accentColor)
+            .frame(height: 3)
+            .padding(.horizontal, 4)
+            .allowsHitTesting(false)
+    }
+
+    private func dragPreview(for outputTrack: OutputTrack, trackInfo: AudioTrackInfo?) -> some View {
+        let count = activeSelection.contains(outputTrack.id) ? activeSelection.count : 1
+        let title = count > 1 ? "\(count) tracks" : (trackInfo?.displayLabel ?? "Track \(outputTrack.streamIndex + 1)")
+        return Label(title, systemImage: count > 1 ? "square.stack" : "waveform")
+            .font(.callout.weight(.medium))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.accentColor.opacity(0.85)))
+            .foregroundColor(.white)
+    }
+
+    // MARK: - Output Track Reordering
+
+    /// Header controls shown while output tracks are selected.
+    private var selectionToolbar: some View {
+        let selection = activeSelection
+        let indices = config.outputTracks.indices.filter { selection.contains(config.outputTracks[$0].id) }
+        // Disabled when the selection is already packed against that edge
+        let canMoveUp = indices.enumerated().contains { $0.element != $0.offset }
+        let canMoveDown = indices.reversed().enumerated().contains { $0.element != config.outputTracks.count - 1 - $0.offset }
+
+        return HStack(spacing: 6) {
+            Text("\(selection.count) selected")
+                .font(.subheadline)
+                .foregroundColor(.accentColor)
+
+            Button {
+                shiftSelectedOutputTracks(by: -1)
+            } label: {
+                Image(systemName: "arrow.up")
+            }
+            .keyboardShortcut(.upArrow, modifiers: .command)
+            .disabled(!canMoveUp)
+            .help("Move selected tracks up (⌘↑)")
+
+            Button {
+                shiftSelectedOutputTracks(by: 1)
+            } label: {
+                Image(systemName: "arrow.down")
+            }
+            .keyboardShortcut(.downArrow, modifiers: .command)
+            .disabled(!canMoveDown)
+            .help("Move selected tracks down (⌘↓)")
+
+            Button {
+                removeSelectedOutputTracks()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .keyboardShortcut(.delete, modifiers: [])
+            .help("Remove selected tracks (⌫)")
+
+            Button("Deselect") {
+                clearOutputTrackSelection()
+            }
+            .buttonStyle(.link)
+            .font(.subheadline)
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+    }
+
+    private func shiftSelectedOutputTracks(by step: Int) {
+        withAnimation {
+            var updated = config
+            updated.shiftTracks(ids: activeSelection, by: step)
+            configBinding.wrappedValue = updated
+        }
+    }
+
+    private func removeSelectedOutputTracks() {
+        withAnimation {
+            var updated = config
+            updated.removeTracks(ids: activeSelection)
+            configBinding.wrappedValue = updated
+        }
+        clearOutputTrackSelection()
+    }
+
+    /// Dragging a selected row carries the whole selection; dragging an unselected
+    /// row selects it and moves it alone, as in Finder.
+    private func beginOutputTrackDrag(_ trackID: UUID) {
+        dropInsertionIndex = nil
+        if activeSelection.contains(trackID) {
+            draggedOutputTrackIDs = activeSelection
+        } else {
+            selectedOutputTrackIDs = [trackID]
+            selectionAnchorID = trackID
+            draggedOutputTrackIDs = [trackID]
+        }
+    }
+
+    private func endOutputTrackDrag() {
+        draggedOutputTrackIDs = []
+        dropInsertionIndex = nil
+    }
+
+    private func dropOutputTracks(at insertionIndex: Int, providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else {
+            endOutputTrackDrag()
+            return false
+        }
+        // The payload is the grabbed track's ID; only trust the remembered drag group
+        // when it contains that ID, so a stale group from a cancelled drag is ignored.
+        provider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
+            let draggedID = (data as? Data)
+                .flatMap { String(data: $0, encoding: .utf8) }
+                .flatMap(UUID.init(uuidString:))
+            DispatchQueue.main.async {
+                // SwiftUI can still deliver dropUpdated while the drop animates, which
+                // would re-show the insertion line; ending the drag here hides it for good.
+                let group = draggedOutputTrackIDs
+                endOutputTrackDrag()
+                guard let draggedID else { return }
+                let ids = group.contains(draggedID) ? group : [draggedID]
+                withAnimation {
+                    var updated = config
+                    updated.moveTracks(ids: ids, toInsertionIndex: insertionIndex)
+                    configBinding.wrappedValue = updated
+                }
+            }
+        }
+        return true
+    }
+
+    // MARK: - Output Track Selection
+
+    /// Selected tracks that still exist in the output list.
+    private var activeSelection: Set<UUID> {
+        selectedOutputTrackIDs.intersection(config.outputTracks.map(\.id))
+    }
+
+    /// Finder-style selection: click selects one, Cmd-click toggles, Shift-click
+    /// extends a range from the last clicked track.
+    private func handleOutputTrackClick(_ trackID: UUID) {
+        endOutputTrackDrag()  // clears any leftover from a drag cancelled outside the list
+        let modifiers = NSEvent.modifierFlags
+        let ids = config.outputTracks.map(\.id)
+
+        if modifiers.contains(.shift),
+           let anchor = selectionAnchorID,
+           let anchorIndex = ids.firstIndex(of: anchor),
+           let clickedIndex = ids.firstIndex(of: trackID) {
+            let range = min(anchorIndex, clickedIndex)...max(anchorIndex, clickedIndex)
+            let rangeIDs = Set(ids[range])
+            selectedOutputTrackIDs = modifiers.contains(.command)
+                ? activeSelection.union(rangeIDs)
+                : rangeIDs
+            return
+        }
+
+        if modifiers.contains(.command) || modifiers.contains(.shift) {
+            if selectedOutputTrackIDs.contains(trackID) {
+                selectedOutputTrackIDs.remove(trackID)
+            } else {
+                selectedOutputTrackIDs.insert(trackID)
+            }
+        } else if activeSelection == [trackID] {
+            selectedOutputTrackIDs = []
+        } else {
+            selectedOutputTrackIDs = [trackID]
+        }
+        selectionAnchorID = trackID
+    }
+
+    private func clearOutputTrackSelection() {
+        selectedOutputTrackIDs = []
+        selectionAnchorID = nil
+    }
+
+    /// Tracks a codec menu change on `outputTrack` applies to: the whole selection
+    /// when the track is part of a multi-track selection, otherwise just this track.
+    private func encodingTargets(for outputTrack: OutputTrack) -> Set<UUID> {
+        let selection = activeSelection
+        return selection.count > 1 && selection.contains(outputTrack.id) ? selection : [outputTrack.id]
+    }
+
+    /// Codec picker for one output track. "Preset" follows the export preset, which
+    /// for Stream Copy means the original stream is copied. Copy is unavailable for
+    /// downmixed tracks because FFmpeg cannot stream copy filtered audio.
+    @ViewBuilder
+    private func encodingMenu(for outputTrack: OutputTrack, trackInfo: AudioTrackInfo?) -> some View {
+        let isStreamCopy = preset == .streamCopy
+        let targetCount = encodingTargets(for: outputTrack).count
+        let sourceCodec = targetCount > 1 ? nil : trackInfo?.codec?.uppercased()
+        let copyLabel = sourceCodec.map { "Copy original (\($0))" } ?? "Copy original"
+        let streamCopyFallback = AudioTrackEncoding.aac(bitrateKbps: AudioTrackEncoding.streamCopyFallbackAACKbps)
+        let presetLabel = !isStreamCopy ? "Preset codec"
+            : outputTrack.downmixToStereo ? "Default (\(streamCopyFallback.shortLabel))" : copyLabel
+        let label: String = if case .aac = outputTrack.encoding {
+            outputTrack.encoding.shortLabel
+        } else if outputTrack.downmixToStereo {
+            isStreamCopy ? streamCopyFallback.shortLabel : "Preset"
+        } else {
+            outputTrack.encoding == .copy || isStreamCopy ? "Copy" : "Preset"
+        }
+
+        Menu {
+            if targetCount > 1 {
+                Text("Apply to \(targetCount) selected tracks")
+            }
+            encodingMenuButton(presetLabel, encoding: .preset, for: outputTrack)
+            if !isStreamCopy {
+                encodingMenuButton(copyLabel, encoding: .copy, for: outputTrack)
+                .disabled(targetCount == 1 && outputTrack.downmixToStereo)
+            }
+            Section("AAC") {
+                ForEach(AudioTrackEncoding.aacBitrateOptions, id: \.self) { kbps in
+                    encodingMenuButton("\(kbps) kbps", encoding: .aac(bitrateKbps: kbps), for: outputTrack)
+                }
+            }
+        } label: {
+            Text(label)
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .foregroundColor(outputTrack.encoding == .preset ? .secondary : .accentColor)
+        .help(outputTrack.downmixToStereo
+              ? "Audio codec for this track (downmixed tracks are always encoded)"
+              : "Audio codec for this track: copy the original stream or encode to AAC")
+    }
+
+    private func encodingMenuButton(_ title: String, encoding: AudioTrackEncoding, for outputTrack: OutputTrack) -> some View {
+        Button {
+            var updated = config
+            updated.setEncoding(encoding, for: encodingTargets(for: outputTrack))
+            configBinding.wrappedValue = updated
+        } label: {
+            if outputTrack.encoding == encoding {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
     }
 
     /// Popup-menu picker for the manual MCA-label override. Lives on each output
@@ -985,35 +1291,50 @@ struct AudioRoutingView: View {
 
 // MARK: - Drop Delegate for Reordering
 
+/// Unobserved storage for output row heights; see `AudioRoutingView.outputRowHeights`.
+final class OutputRowHeightStore {
+    var heights: [UUID: CGFloat] = [:]
+}
+
 struct OutputTrackDropDelegate: DropDelegate {
+    /// Row this delegate is attached to.
     let position: Int
-    @Binding var config: AudioRoutingConfig
-    let onUpdate: () -> Void
+    /// Row height, used to decide whether the cursor is above or below the middle.
+    /// Zero always means "below", which the end-of-list drop zone relies on.
+    let rowHeight: () -> CGFloat
+    @Binding var insertionIndex: Int?
+    let perform: (_ insertionIndex: Int, _ providers: [NSItemProvider]) -> Bool
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.text])
+    }
+
+    func dropEntered(info: DropInfo) {
+        insertionIndex = gap(for: info)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let gap = gap(for: info)
+        if insertionIndex != gap {
+            insertionIndex = gap
+        }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if insertionIndex == position || insertionIndex == position + 1 {
+            insertionIndex = nil
+        }
+    }
 
     func performDrop(info: DropInfo) -> Bool {
-        guard let itemProvider = info.itemProviders(for: [.text]).first else {
-            return false
-        }
+        let gap = insertionIndex ?? gap(for: info)
+        insertionIndex = nil
+        return perform(gap, info.itemProviders(for: [.text]))
+    }
 
-        // Capture the current output tracks to avoid accessing binding in closure
-        let currentTracks = config.outputTracks
-
-        itemProvider.loadItem(forTypeIdentifier: "public.text", options: nil) { data, error in
-            guard let data = data as? Data,
-                  let uuidString = String(data: data, encoding: .utf8),
-                  let draggedId = UUID(uuidString: uuidString),
-                  let sourceIndex = currentTracks.firstIndex(where: { $0.id == draggedId }) else {
-                return
-            }
-
-            DispatchQueue.main.async {
-                withAnimation {
-                    config.moveTrack(from: sourceIndex, to: position)
-                    onUpdate()
-                }
-            }
-        }
-
-        return true
+    private func gap(for info: DropInfo) -> Int {
+        let height = rowHeight()
+        return height > 0 && info.location.y < height / 2 ? position : position + 1
     }
 }

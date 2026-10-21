@@ -326,6 +326,28 @@ struct MCALabelOverride: Codable, Equatable, Sendable {
     var isEmpty: Bool { soundfield == nil && audioElement == nil }
 }
 
+// MARK: - Output Track Encoding
+
+/// Per-output-track codec choice. `.preset` follows the export preset (which for
+/// Stream Copy means passthrough), so existing routes keep their behaviour.
+enum AudioTrackEncoding: Equatable, Hashable, Sendable, Codable {
+    case preset
+    case copy
+    case aac(bitrateKbps: Int)
+
+    static let aacBitrateOptions = [96, 128, 160, 192, 256, 320]
+    /// Used when Stream Copy has to encode a filtered (downmixed / channel-operation) output.
+    static let streamCopyFallbackAACKbps = 192
+
+    var shortLabel: String {
+        switch self {
+        case .preset: return "Preset"
+        case .copy: return "Copy"
+        case .aac(let kbps): return "AAC \(kbps)k"
+        }
+    }
+}
+
 // MARK: - Output Track
 
 /// Represents a single output audio track with per-track options
@@ -338,18 +360,28 @@ struct OutputTrack: Equatable, Sendable, Identifiable {
     /// TV AVC-Intra MXF preset). When nil, AVC-Intra falls back to input MCA
     /// labels and then to standard channel-layout assumptions.
     var mcaOverride: MCALabelOverride?
+    /// Codec override for this output track. Only honoured by presets that report
+    /// `supportsPerTrackAudioEncoding`; other presets encode every track their own way.
+    var encoding: AudioTrackEncoding
 
-    init(id: UUID = UUID(), streamIndex: Int, downmixToStereo: Bool = false, mcaOverride: MCALabelOverride? = nil) {
+    init(
+        id: UUID = UUID(),
+        streamIndex: Int,
+        downmixToStereo: Bool = false,
+        mcaOverride: MCALabelOverride? = nil,
+        encoding: AudioTrackEncoding = .preset
+    ) {
         self.id = id
         self.streamIndex = streamIndex
         self.downmixToStereo = downmixToStereo
         self.mcaOverride = mcaOverride
+        self.encoding = encoding
     }
 }
 
 extension OutputTrack: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, streamIndex, downmixToStereo, mcaOverride
+        case id, streamIndex, downmixToStereo, mcaOverride, encoding
     }
 
     init(from decoder: Decoder) throws {
@@ -358,6 +390,7 @@ extension OutputTrack: Codable {
         streamIndex = try container.decode(Int.self, forKey: .streamIndex)
         downmixToStereo = try container.decodeIfPresent(Bool.self, forKey: .downmixToStereo) ?? false
         mcaOverride = try container.decodeIfPresent(MCALabelOverride.self, forKey: .mcaOverride)
+        encoding = try container.decodeIfPresent(AudioTrackEncoding.self, forKey: .encoding) ?? .preset
     }
 
     func encode(to encoder: Encoder) throws {
@@ -366,6 +399,9 @@ extension OutputTrack: Codable {
         try container.encode(streamIndex, forKey: .streamIndex)
         try container.encode(downmixToStereo, forKey: .downmixToStereo)
         try container.encodeIfPresent(mcaOverride, forKey: .mcaOverride)
+        if encoding != .preset {
+            try container.encode(encoding, forKey: .encoding)
+        }
     }
 }
 
@@ -450,6 +486,12 @@ struct AudioRoutingConfig: Equatable, Sendable {
         let hasDownmix = outputTracks.contains { $0.downmixToStereo }
         let hasDuplicates = outputTracks.count != Set(outputTrackIndices).count
         return outputTrackIndices != defaultOrder || channelOperation != nil || hasDownmix || hasDuplicates
+            || hasEncodingOverrides
+    }
+
+    /// Returns true if any output track overrides the preset's audio codec
+    var hasEncodingOverrides: Bool {
+        outputTracks.contains { $0.encoding != .preset }
     }
 
     /// Returns true if a channel operation is active
@@ -511,6 +553,44 @@ struct AudioRoutingConfig: Equatable, Sendable {
         channelOperation = nil
     }
 
+    /// Remove several output tracks at once.
+    mutating func removeTracks(ids: Set<UUID>) {
+        guard outputTracks.contains(where: { ids.contains($0.id) }) else { return }
+        outputTracks.removeAll { ids.contains($0.id) }
+        channelOperation = nil
+    }
+
+    /// Move a group of output tracks as one block, keeping their relative order.
+    /// `insertionIndex` is a gap in the current list (0 = before the first track,
+    /// `outputTracks.count` = after the last).
+    mutating func moveTracks(ids: Set<UUID>, toInsertionIndex insertionIndex: Int) {
+        let clamped = min(max(insertionIndex, 0), outputTracks.count)
+        let moving = outputTracks.filter { ids.contains($0.id) }
+        guard !moving.isEmpty else { return }
+        var remaining = outputTracks.filter { !ids.contains($0.id) }
+        let target = outputTracks[..<clamped].filter { !ids.contains($0.id) }.count
+        remaining.insert(contentsOf: moving, at: target)
+        guard remaining.map(\.id) != outputTracks.map(\.id) else { return }
+        outputTracks = remaining
+        channelOperation = nil
+    }
+
+    /// Shift each selected track one step up (negative) or down (positive). Selected
+    /// tracks already at the edge, or blocked by another selected track there, stay put.
+    mutating func shiftTracks(ids: Set<UUID>, by step: Int) {
+        guard step == -1 || step == 1 else { return }
+        var tracks = outputTracks
+        let order = step < 0 ? Array(tracks.indices) : Array(tracks.indices.reversed())
+        for index in order where ids.contains(tracks[index].id) {
+            let neighbour = index + step
+            guard tracks.indices.contains(neighbour), !ids.contains(tracks[neighbour].id) else { continue }
+            tracks.swapAt(index, neighbour)
+        }
+        guard tracks.map(\.id) != outputTracks.map(\.id) else { return }
+        outputTracks = tracks
+        channelOperation = nil
+    }
+
     /// Toggle downmix setting for a specific output track
     mutating func toggleDownmix(for trackId: UUID) {
         if let index = outputTracks.firstIndex(where: { $0.id == trackId }) {
@@ -522,6 +602,22 @@ struct AudioRoutingConfig: Equatable, Sendable {
     mutating func setDownmix(for trackId: UUID, downmix: Bool) {
         if let index = outputTracks.firstIndex(where: { $0.id == trackId }) {
             outputTracks[index].downmixToStereo = downmix
+        }
+    }
+
+    /// Set the codec override for a specific output track
+    mutating func setEncoding(_ encoding: AudioTrackEncoding, for trackId: UUID) {
+        if let index = outputTracks.firstIndex(where: { $0.id == trackId }) {
+            outputTracks[index].encoding = encoding
+        }
+    }
+
+    /// Set the codec override on several output tracks at once. Copy is skipped for
+    /// downmixed tracks, since FFmpeg cannot stream copy filtered audio.
+    mutating func setEncoding(_ encoding: AudioTrackEncoding, for trackIds: Set<UUID>) {
+        for index in outputTracks.indices where trackIds.contains(outputTracks[index].id) {
+            if encoding == .copy && outputTracks[index].downmixToStereo { continue }
+            outputTracks[index].encoding = encoding
         }
     }
 

@@ -429,10 +429,11 @@ final class AppIntentHandoffTests: XCTestCase {
             mergeClipsEnabled: false, defaults: defaults
         ))
 
-        var unsupportedRouting = ordinary
-        unsupportedRouting.audioRoutingConfig = AudioRoutingConfig(inputTracks: [])
-        XCTAssertNil(ManualApplicationJobBridge.makeRequest(
-            items: [unsupportedRouting], destinationFolderURL: folder, preset: .streamCopy,
+        // Stream Copy applies audio routing (track selection and per-track codecs).
+        var streamCopyRouting = ordinary
+        streamCopyRouting.audioRoutingConfig = AudioRoutingConfig(inputTracks: [])
+        XCTAssertNotNil(ManualApplicationJobBridge.makeRequest(
+            items: [streamCopyRouting], destinationFolderURL: folder, preset: .streamCopy,
             mergeClipsEnabled: false, defaults: defaults
         ))
 

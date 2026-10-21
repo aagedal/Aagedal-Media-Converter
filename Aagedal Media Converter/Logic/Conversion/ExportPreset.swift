@@ -1693,7 +1693,7 @@ enum ExportPreset: String, CaseIterable, Identifiable {
     var appliesAudioRouting: Bool {
         switch self {
         case .streamCopy:
-            return false // Stream copy cannot apply audio filters
+            return true // Track selection/order is copied; filtered or overridden tracks are encoded per stream
         case .imageSequence:
             return false // Image sequences have no audio
         case .dcp:
@@ -1707,6 +1707,20 @@ enum ExportPreset: String, CaseIterable, Identifiable {
             return Self.customAppliesAudioRouting(for: slot)
         default:
             return true // Built-in presets support audio routing
+        }
+    }
+
+    /// Presets whose output container accepts per-track codec overrides
+    /// (`AudioTrackEncoding`) from audio routing. Delivery formats with a fixed
+    /// audio specification (TV, DCP, IMF) and single-stream outputs are excluded.
+    var supportsPerTrackAudioEncoding: Bool {
+        switch self {
+        case .streamCopy, .h264, .h265, .av1, .lossless, .prores, .proxy:
+            return true
+        case .custom1, .custom2, .custom3, .custom4, .custom5, .custom6, .custom7, .custom8, .custom9, .custom10:
+            return appliesAudioRouting
+        default:
+            return false
         }
     }
 

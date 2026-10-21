@@ -338,7 +338,7 @@ final class CodecExportSettingsTests: XCTestCase {
         let metadataIndex = try XCTUnwrap(command.arguments.firstIndex(of: "-map_metadata"))
         XCTAssertEqual(command.arguments[metadataIndex + 1], "-1")
         XCTAssertFalse(captured.appliesCrop)
-        XCTAssertFalse(captured.appliesAudioRouting)
+        XCTAssertTrue(captured.appliesAudioRouting)
         XCTAssertEqual(CodecExportSettings(preset: .streamCopy, defaults: defaults)?.fileExtension, "mov")
     }
 
