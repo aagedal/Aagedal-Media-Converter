@@ -1025,9 +1025,10 @@ struct VideoItem: Identifiable, Equatable, Sendable {
     /// Formats a byte count as a human-readable string (<1 MB ⇒ KB, 1–600 MB ⇒ MB, ≥600 MB ⇒ GB).
     static func formatFileSize(_ bytes: Int64) -> String {
         let bytesDouble = Double(bytes)
-        let kb = 1024.0
-        let mb = kb * 1024
-        let gb = mb * 1024
+        // Decimal units, matching Finder (1 MB = 1,000,000 bytes).
+        let kb = 1000.0
+        let mb = kb * 1000
+        let gb = mb * 1000
 
         if bytesDouble < mb {
             return String(format: "%.0f KB", bytesDouble / kb)
