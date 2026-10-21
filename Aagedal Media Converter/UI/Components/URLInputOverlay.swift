@@ -10,8 +10,10 @@ struct URLInputOverlay: View {
     private static let logger = Logger(subsystem: "com.aagedal.MediaConverter", category: "URLInput")
 
     @Binding var isPresented: Bool
-    var onSubmit: (String, Bool, Bool, Bool, DownloadSection?) -> Void
-    var onSchedule: ((String, Date, Bool, Bool, Bool, DownloadSection?) -> Void)?
+    var onSubmit: (String, Bool, Bool, DownloadSection?) -> Void
+    var onSchedule: ((String, Date, Bool, Bool, DownloadSection?) -> Void)?
+    /// Receives the playlist entries the user picked, plus the audio-only flag.
+    var onSubmitPlaylist: (([YTDLPPlaylistEntry], Bool) -> Void)?
 
     @State private var urlText = ""
     @State private var postVideos: [PostDownloadVideo] = []
@@ -30,9 +32,12 @@ struct URLInputOverlay: View {
             || TwitterPostSelection.needsPicker(sanitizedURL)
     }
 
+    /// Posts and playlists share one video picker.
+    private var needsPicker: Bool { needsPostPicker || isPlaylistContext }
+
     private var downloadDisabled: Bool {
         !DownloadManager.isValidURL(sanitizedURL)
-            || (needsPostPicker && (postLoadedURL != sanitizedURL || selectedPostVideos.isEmpty))
+            || (needsPicker && (postLoadedURL != sanitizedURL || selectedPostVideos.isEmpty))
             || clipError != nil
     }
 
@@ -48,7 +53,7 @@ struct URLInputOverlay: View {
     }
 
     private var clipUnavailableReason: String? {
-        if isPlaylistContext { return "Clips aren't available for whole-playlist downloads" }
+        if isPlaylistContext { return "Clips aren't available for playlist downloads" }
         if needsPostPicker { return "Clips aren't available for multi-video posts" }
         if downloadLiveFromStart { return "Clips aren't available with Record from start" }
         return nil
@@ -141,7 +146,7 @@ struct URLInputOverlay: View {
     /// toggle is on. Used both to enable playlist behaviour at submit time and
     /// to disable the schedule UI (which doesn't compose with playlist).
     private var isPlaylistContext: Bool {
-        downloadWholePlaylist && Self.looksLikePlaylistURL(urlText)
+        downloadWholePlaylist && Self.looksLikePlaylistURL(sanitizedURL)
     }
 
     /// Heuristic: does this URL refer to a playlist, channel, or other multi-video
@@ -192,7 +197,7 @@ struct URLInputOverlay: View {
             // Input panel
             inputPanel
         }
-        .task(id: "\(sanitizedURL)|\(postRetry)") {
+        .task(id: "\(sanitizedURL)|\(isPlaylistContext)|\(postRetry)") {
             await loadPostVideos()
         }
         .onAppear {
@@ -407,47 +412,64 @@ struct URLInputOverlay: View {
     }
 
     private var downloadButtonTitle: String {
-        needsPostPicker ? "Download Selected (\(selectedPostVideos.count))" : "Download"
+        guard needsPicker else { return "Download" }
+        if !postVideos.isEmpty && selectedPostVideos.count == postVideos.count {
+            return "Download All (\(selectedPostVideos.count))"
+        }
+        return "Download Selected (\(selectedPostVideos.count))"
     }
 
     @ViewBuilder
     private var postPicker: some View {
-        if needsPostPicker {
+        if needsPicker {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Choose videos from this post")
+                    Text(isPlaylistContext ? "Choose videos from this playlist" : "Choose videos from this post")
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                     if !postVideos.isEmpty {
-                        Button(selectedPostVideos.count == postVideos.count ? "Deselect All" : "Select All") {
-                            selectedPostVideos = selectedPostVideos.count == postVideos.count
-                                ? [] : Set(postVideos.map(\.slideIndex))
-                        }
-                        .buttonStyle(.borderless)
+                        Toggle("Download all (\(postVideos.count))", isOn: Binding(
+                            get: { selectedPostVideos.count == postVideos.count },
+                            set: { selectedPostVideos = $0 ? Set(postVideos.map(\.slideIndex)) : [] }
+                        ))
+                        .toggleStyle(.checkbox)
                         .accessibilityIdentifier("postVideoSelectAll")
                     }
                 }
                 if postIsLoading {
                     HStack {
                         ProgressView().controlSize(.small)
-                        Text("Finding videos…").foregroundStyle(.secondary)
+                        Text(isPlaylistContext ? "Loading playlist…" : "Finding videos…").foregroundStyle(.secondary)
                     }
                 } else if let postError {
                     Text(postError).font(.caption).foregroundStyle(.orange)
                     Button("Retry") { postRetry += 1 }
                 } else if postLoadedURL == sanitizedURL {
                     if postVideos.isEmpty {
-                        Text("This post contains no downloadable videos.").foregroundStyle(.secondary)
+                        Text(isPlaylistContext ? "This playlist contains no videos." : "This post contains no downloadable videos.")
+                            .foregroundStyle(.secondary)
                     } else {
                         ScrollView {
-                            VStack(spacing: 6) {
-                                ForEach(postVideos) { video in
-                                    postVideoRow(video)
+                            // Lazy only for playlists: channels can have thousands of
+                            // entries, while posts are small and keep every row live.
+                            if isPlaylistContext {
+                                LazyVStack(spacing: 6) {
+                                    ForEach(postVideos) { video in
+                                        postVideoRow(video)
+                                    }
+                                }
+                            } else {
+                                VStack(spacing: 6) {
+                                    ForEach(postVideos) { video in
+                                        postVideoRow(video)
+                                    }
                                 }
                             }
                         }
                         .frame(height: min(CGFloat(postVideos.count) * 66, 240))
-                        Text("Photo slides are omitted. Choose one or more videos.")
+                        Text(isPlaylistContext
+                             ? "Downloads run one after another, each as its own queue item."
+                             : "Photo slides are omitted. Choose one or more videos.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -473,8 +495,13 @@ struct URLInputOverlay: View {
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(TwitterPostSelection.isPostURL(sanitizedURL) ? "Video \(video.slideIndex)" : "Slide \(video.slideIndex)").font(.callout.weight(.medium))
-                    Text(video.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    if isPlaylistContext {
+                        Text(video.title).font(.callout.weight(.medium)).lineLimit(1)
+                        Text(playlistRowDetail(video)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    } else {
+                        Text(TwitterPostSelection.isPostURL(sanitizedURL) ? "Video \(video.slideIndex)" : "Slide \(video.slideIndex)").font(.callout.weight(.medium))
+                        Text(video.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 Spacer()
             }
@@ -482,7 +509,17 @@ struct URLInputOverlay: View {
         .toggleStyle(.checkbox)
         .padding(6)
         .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
-        .accessibilityIdentifier(TwitterPostSelection.isPostURL(sanitizedURL) ? "twitterVideo\(video.slideIndex)" : "instagramSlide\(video.slideIndex)")
+        .accessibilityIdentifier(postVideoIdentifier(video))
+    }
+
+    private func postVideoIdentifier(_ video: PostDownloadVideo) -> String {
+        if isPlaylistContext { return "playlistVideo\(video.slideIndex)" }
+        return TwitterPostSelection.isPostURL(sanitizedURL) ? "twitterVideo\(video.slideIndex)" : "instagramSlide\(video.slideIndex)"
+    }
+
+    private func playlistRowDetail(_ video: PostDownloadVideo) -> String {
+        guard let duration = video.duration, duration > 0 else { return "#\(video.slideIndex)" }
+        return "#\(video.slideIndex) · \(DownloadSection.formatTime(duration.rounded()))"
     }
 
     @MainActor
@@ -493,16 +530,30 @@ struct URLInputOverlay: View {
         postLoadedURL = nil
         postError = nil
         postIsLoading = false
-        guard needsPostPicker, DownloadManager.isValidURL(url) else { return }
+        guard needsPicker, DownloadManager.isValidURL(url) else { return }
+        let isPlaylist = isPlaylistContext
         postIsLoading = true
         do {
-            let videos = try await postService.fetchPostVideos(url: url)
+            // Debounce: typing restarts this task, so only probe once the URL has
+            // settled. Partial URLs often still look valid and would otherwise
+            // spawn a failing yt-dlp probe (and flash an error) per keystroke.
+            try await Task.sleep(for: .milliseconds(400))
+            let videos: [PostDownloadVideo]
+            if isPlaylist {
+                videos = try await postService.fetchPlaylistEntries(url: url).enumerated().map { offset, entry in
+                    PostDownloadVideo(slideIndex: offset + 1, url: entry.url, title: entry.title,
+                                      thumbnailURL: entry.thumbnailURL, duration: entry.duration)
+                }
+            } else {
+                videos = try await postService.fetchPostVideos(url: url)
+            }
             try Task.checkCancellation()
-            guard sanitizedURL == url else { return }
+            guard sanitizedURL == url, isPlaylistContext == isPlaylist else { return }
             postVideos = videos
             postLoadedURL = url
-            // A single-video post requires no further choice.
-            if videos.count == 1 { selectedPostVideos = Set(videos.map(\.slideIndex)) }
+            // Playlists default to everything, matching the old whole-playlist
+            // behaviour; a single-video post requires no further choice.
+            if isPlaylist || videos.count == 1 { selectedPostVideos = Set(videos.map(\.slideIndex)) }
         } catch is CancellationError {
             return
         } catch {
@@ -530,7 +581,7 @@ struct URLInputOverlay: View {
             .toggleStyle(.checkbox)
             .disabled(isPlaylistContext)
             .opacity(isPlaylistContext ? 0.5 : 1.0)
-            .help(isPlaylistContext ? "Scheduling isn't supported for whole-playlist downloads" : "")
+            .help(isPlaylistContext ? "Scheduling isn't supported for playlist downloads" : "")
 
             DatePicker(
                 "",
@@ -594,9 +645,9 @@ struct URLInputOverlay: View {
                     isOn: $downloadWholePlaylist,
                     iconOn: "list.bullet.rectangle.fill",
                     iconOff: "list.bullet.rectangle",
-                    label: "Whole playlist",
+                    label: "Playlist",
                     color: .orange,
-                    help: "Add every video from the playlist or channel as separate queue items (downloads run sequentially)"
+                    help: "Choose videos from the playlist or channel to add as separate queue items (downloads run sequentially)"
                 )
             }
 
@@ -717,7 +768,7 @@ struct URLInputOverlay: View {
                     }
                 }
             }
-            .frame(maxHeight: needsPostPicker ? 100 : 220)
+            .frame(maxHeight: needsPicker ? 100 : 220)
             .onChange(of: historyIndex) { _, newValue in
                 // Keep the arrow-key selection inside the visible scroll area.
                 guard newValue >= 0 else { return }
@@ -802,38 +853,45 @@ struct URLInputOverlay: View {
         guard !sanitized.isEmpty, DownloadManager.isValidURL(sanitized) else { return }
         let trimmed = sanitized
         guard !downloadDisabled else { return }
-        if needsPostPicker {
-            let urls = postVideos.filter { selectedPostVideos.contains($0.slideIndex) }.map(\.url)
-            for url in urls {
-                submitURL(url, isPlaylist: false)
+        let selected = postVideos.filter { selectedPostVideos.contains($0.slideIndex) }
+
+        // Only honour the stored playlist preference when the URL actually looks
+        // like a playlist or channel — the toggle is hidden otherwise, so the
+        // stored value can carry over from a prior session. Scheduling and
+        // playlists don't compose yet (single-item persistence model), so a
+        // playlist always submits immediately and sequentially.
+        if isPlaylistContext, let onSubmitPlaylist {
+            onSubmitPlaylist(selected.map {
+                YTDLPPlaylistEntry(url: $0.url, title: $0.title, duration: $0.duration, thumbnailURL: $0.thumbnailURL)
+            }, downloadAudioOnly)
+            isPresented = false
+            return
+        }
+        if needsPicker {
+            for video in selected {
+                submitURL(video.url)
             }
             isPresented = false
             return
         }
 
-        // Only honour the stored "whole playlist" preference when the URL actually
-        // looks like a playlist or channel — the toggle is hidden in that case
-        // anyway, so the stored value can carry over from a prior session.
-        // Scheduling and whole-playlist don't compose yet (single-item persistence
-        // model), so playlist always submits immediately.
-        let isPlaylist = downloadWholePlaylist && Self.looksLikePlaylistURL(trimmed)
-        submitURL(trimmed, isPlaylist: isPlaylist, section: isPlaylist ? nil : clipSection)
+        submitURL(trimmed, section: clipSection)
         isPresented = false
     }
 
-    private func submitURL(_ url: String, isPlaylist: Bool, section: DownloadSection? = nil) {
-        if isScheduled, !isPlaylist, let onSchedule = onSchedule {
+    private func submitURL(_ url: String, section: DownloadSection? = nil) {
+        if isScheduled, !isPlaylistContext, let onSchedule = onSchedule {
             // Round to the start of the minute (remove seconds)
             let calendar = Calendar.current
             let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: scheduledDate)
             let roundedDate = calendar.date(from: components) ?? scheduledDate
-            onSchedule(url, roundedDate, downloadLiveFromStart, downloadAudioOnly, isPlaylist, section)
+            onSchedule(url, roundedDate, downloadLiveFromStart, downloadAudioOnly, section)
         } else {
-            onSubmit(url, downloadLiveFromStart, downloadAudioOnly, isPlaylist, section)
+            onSubmit(url, downloadLiveFromStart, downloadAudioOnly, section)
         }
     }
 }
 
 #Preview {
-    URLInputOverlay(isPresented: .constant(true)) { _, _, _, _, _ in }
+    URLInputOverlay(isPresented: .constant(true)) { _, _, _, _ in }
 }

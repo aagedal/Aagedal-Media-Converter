@@ -36,7 +36,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertEqual(download.label, "Download Selected (2)")
         attachWindowScreenshot(named: "Instagram carousel video selection")
         element("postVideoSelectAll").click()
-        XCTAssertEqual(download.label, "Download Selected (5)")
+        XCTAssertEqual(download.label, "Download All (5)")
         element("postVideoSelectAll").click()
         XCTAssertFalse(download.isEnabled)
         // Editing the post clears the previous choices.
@@ -62,7 +62,7 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertFalse(download.isEnabled)
         element("twitterVideo1").click()
         element("twitterVideo2").click()
-        XCTAssertEqual(download.label, "Download Selected (2)")
+        XCTAssertEqual(download.label, "Download All (2)")
         attachWindowScreenshot(named: "Twitter X post video selection")
         element("postVideoSelectAll").click()
         XCTAssertFalse(download.isEnabled)
@@ -72,6 +72,31 @@ final class Aagedal_Media_Converter_UITests: XCTestCase {
         XCTAssertTrue(download.isEnabled)
         XCTAssertEqual(download.label, "Download")
         XCTAssertFalse(element("twitterVideo2").exists)
+    }
+
+    @MainActor
+    func testYouTubePlaylistPickerDefaultsToDownloadAll() throws {
+        launchApp(
+            additionalArguments: ["-ytdlpBinarySource", "app", "-denoBinarySource", "app", "-ytdlpDownloadPlaylist", "YES"],
+            extraLaunchEnvironment: ["AMC_UI_TEST_PLAYLIST_PICKER": "1"]
+        )
+        defer { terminateAndCleanFixtures() }
+        let field = element("downloadURLField")
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.click()
+        field.typeKey("a", modifierFlags: .command)
+        field.typeText("https://www.youtube.com/playlist?list=PLexample")
+        XCTAssertTrue(element("playlistVideo3").waitForExistence(timeout: 15))
+        let download = element("downloadSubmitButton")
+        XCTAssertTrue(download.isEnabled)
+        XCTAssertEqual(download.label, "Download All (3)")
+        element("playlistVideo2").click()
+        XCTAssertEqual(download.label, "Download Selected (2)")
+        attachWindowScreenshot(named: "YouTube playlist video selection")
+        element("postVideoSelectAll").click()
+        XCTAssertEqual(download.label, "Download All (3)")
+        element("postVideoSelectAll").click()
+        XCTAssertFalse(download.isEnabled)
     }
 
     @MainActor
