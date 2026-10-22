@@ -1483,7 +1483,7 @@ struct ContentView: View {
         }
 
         // Build items and gather their independent metadata probes concurrently so the
-        // operation has one 15-second probe window regardless of card size.
+        // operation has at most two 15-second probe windows regardless of card size.
         var allItems = state.videoURLs.compactMap {
             importContext.makePlaceholder(from: $0)
         }

@@ -2355,13 +2355,17 @@ extension FFMPEGCommandBuilder {
 
     // MARK: - Conformance Merge Encoding
 
-    /// Maps a codec name (from ffprobe) to an FFmpeg encoder name.
+    /// Maps a codec name to an FFmpeg encoder name. Accepts ffprobe names and the
+    /// FourCC-style names SwiftMediaMetadata reports (e.g. `avc1` for XAVC MXF).
     static func ffmpegVideoEncoder(for codec: String) -> String? {
         switch codec.lowercased() {
-        case "h264", "avc":       return "libx264"
-        case "hevc", "h265":      return "libx265"
-        case "prores":            return "prores_ks"
-        case "av1":               return "libsvtav1"
+        case "h264", "avc", "avc1", "avc3":
+            return "libx264"
+        case "hevc", "h265", "hvc1", "hev1":
+            return "libx265"
+        case "prores", "apch", "apcn", "apcs", "apco", "ap4h", "ap4x":
+            return "prores_ks"
+        case "av1", "av01":       return "libsvtav1"
         case "mpeg2video":        return "mpeg2video"
         case "vp9":               return "libvpx-vp9"
         case "dnxhd":             return "dnxhd"
@@ -2439,7 +2443,12 @@ extension FFMPEGCommandBuilder {
             // Encoder-specific quality settings
             switch encoder {
             case "libx264":
-                args += ["-crf", "18", "-preset", "medium", "-profile:v", "high"]
+                args += ["-crf", "18", "-preset", "medium"]
+                // The High profile is 8-bit 4:2:0 only; let libx264 pick High 10 /
+                // 4:2:2 / 4:4:4 for other pixel formats (e.g. XAVC yuv422p10le).
+                if target.pixelFormat.map({ ["yuv420p", "yuvj420p", "nv12"].contains($0) }) ?? true {
+                    args += ["-profile:v", "high"]
+                }
             case "libx265":
                 args += ["-crf", "18", "-preset", "medium"]
             case "prores_ks":
