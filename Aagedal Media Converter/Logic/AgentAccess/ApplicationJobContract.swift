@@ -2690,6 +2690,35 @@ actor ApplicationJobService {
         }
     }
 
+    /// Request validation tightens between builds (and other builds share this
+    /// file). One stale entry must not block every new submission, so entries
+    /// whose requests no longer validate are dropped together with their
+    /// submission links; structural damage still fails the whole restore.
+    private static func droppingRequestsThatNoLongerValidate(
+        _ snapshot: ApplicationJobPersistenceSnapshot
+    ) -> ApplicationJobPersistenceSnapshot {
+        func isValid(_ request: ApplicationConversionRequest) -> Bool {
+            (try? ApplicationJobRegistry.validate(request)) != nil
+        }
+        let invalidPlanIDs = Set(snapshot.plans.filter { !isValid($0.request) }.map(\.id))
+        let invalidJobIDs = Set(snapshot.records.filter { !isValid($0.request) }.map(\.id))
+        guard !invalidPlanIDs.isEmpty || !invalidJobIDs.isEmpty else { return snapshot }
+        // A plan linked to a dropped record (or vice versa) cannot restore alone.
+        let droppedLinks = snapshot.submittedPlans.filter {
+            invalidPlanIDs.contains($0.planID) || invalidJobIDs.contains($0.jobID)
+        }
+        let droppedPlanIDs = invalidPlanIDs.union(droppedLinks.map(\.planID))
+        let droppedJobIDs = invalidJobIDs.union(droppedLinks.map(\.jobID))
+        return ApplicationJobPersistenceSnapshot(
+            schemaVersion: snapshot.schemaVersion,
+            records: snapshot.records.filter { !droppedJobIDs.contains($0.id) },
+            plans: snapshot.plans.filter { !droppedPlanIDs.contains($0.id) },
+            submittedPlans: snapshot.submittedPlans.filter {
+                !droppedPlanIDs.contains($0.planID) && !droppedJobIDs.contains($0.jobID)
+            }
+        )
+    }
+
     private func restoreHoldingGate(
         now: Date,
         interruptionDiagnostic: String
@@ -2701,13 +2730,14 @@ actor ApplicationJobService {
             }
             return []
         }
-        guard let store, let snapshot = try store.load() else {
+        guard let store, let loaded = try store.load() else {
             didRestore = true
             return []
         }
-        guard snapshot.schemaVersion == ApplicationJobPersistenceSnapshot.currentSchemaVersion else {
-            throw ApplicationJobPersistenceError.unsupportedSchema(snapshot.schemaVersion)
+        guard loaded.schemaVersion == ApplicationJobPersistenceSnapshot.currentSchemaVersion else {
+            throw ApplicationJobPersistenceError.unsupportedSchema(loaded.schemaVersion)
         }
+        let snapshot = Self.droppingRequestsThatNoLongerValidate(loaded)
 
         // Validate the complete snapshot before replacing any live state. Queue
         // observers can read the registry even when recovery reports an error.
